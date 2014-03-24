@@ -1,0 +1,12 @@
+#N canvas 601 0 469 115 10;
+#X obj 35 25 udpreceive 12345;
+#X obj 27 72 dac~;
+#X obj 180 27 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+1;
+#X text 200 27 switch mixing mode;
+#X text 189 45 90: drain number \, 1: channel number;
+#X obj 36 45 AOOunpackchannel 90 1;
+#X connect 0 0 5 0;
+#X connect 2 0 5 1;
+#X connect 5 0 1 0;
+#X connect 5 0 1 1;

@@ -1,0 +1,167 @@
+#N canvas 0 0 1405 791 10;
+#X obj 51 432 blob;
+#X obj 51 454 unblob;
+#X obj 50 280 pack~;
+#X obj 50 310 packOSC;
+#X text 48 257 use in combination with:;
+#X text 119 281 zexy library of johannes zmoelnig;
+#X text 146 343 osc library of martin peach;
+#X obj 50 331 unpackOSC;
+#X obj 50 353 pipelist;
+#X obj 50 375 routeOSC;
+#X obj 27 20 funpack~;
+#X obj 50 404 unpack~;
+#X text 121 403 zexy library of johannes zmoelnig;
+#X text 48 487 also recommended:;
+#X obj 50 511 udpsend;
+#X obj 49 535 udpreceive;
+#X text 144 522 net library of martin peach;
+#X text 93 20 -- similar to unpack~ but tries to avoid transmission
+errors;
+#X text 32 64 leftmost inlet: data inlet;
+#X text 31 96 left inlet in the middle: Sequence Number (modulo 99)
+has to be provided;
+#X text 29 136 right inlet in the middle: unique "stream" ID Number
+has to be provided;
+#X text 30 179 rightmost inlet: Mixing mode \; 0: Arithmetic Middle
+(default) \, 1: Summation of the "streams";
+#X obj 656 483 routeOSC /channel;
+#X obj 656 505 routeOSC /1;
+#X obj 656 417 routeOSC /AOO;
+#X obj 656 438 routeOSC /drain;
+#X obj 642 610 unblob;
+#X obj 807 555 list split 1;
+#X obj 716 555 list split 2;
+#X obj 716 579 list split 1;
+#X obj 656 374 unpackOSC;
+#X obj 656 395 pipelist;
+#X obj 629 691 dac~;
+#X obj 656 460 routeOSC /90;
+#X text 575 344 here udp/tcp interface possible;
+#X obj 571 70 blob;
+#X msg 911 29 format float;
+#X msg 969 53 format integer 1;
+#X msg 1016 152 format integer 32;
+#X msg 1138 31 format f;
+#X msg 1175 52 format i 1;
+#X msg 1218 151 format i 32;
+#X msg 802 127 [;
+#X msg 500 313 ];
+#X obj 525 267 list prepend;
+#X obj 525 288 list trim;
+#X obj 656 318 packOSC;
+#X obj 571 46 pack~;
+#X text 1007 30 default;
+#X msg 977 77 format integer 2;
+#X msg 1006 128 format integer 31;
+#X text 1040 101 ...;
+#X msg 1189 76 format i 2;
+#X text 1219 101 ...;
+#X msg 1208 127 format i 31;
+#X text 1140 11 short form;
+#X text 1213 32 default;
+#X obj 571 23 osc~ 400;
+#X obj 787 153 samplerate~;
+#X obj 787 173 list;
+#X obj 571 96 t b l b b b b;
+#X obj 762 194 list;
+#X obj 606 223 list;
+#X msg 762 214 sendtyped /AOO/drain/90/format iiis \$1 \$2 1 audio/pcm
+;
+#X text 1146 209 \$1: samplingrate \, \$2: blocksize \, 1: overlapping
+factor \, audio/pcm: MIME type;
+#X text 968 242 77: "stream" Identification Number \, \$1: Sequence
+Number \, 1: resampling factor \, \$2: resolution;
+#X obj 783 483 routeOSC /format;
+#X obj 783 504 list split 1;
+#X obj 783 525 list split 1;
+#X obj 529 555 list split 4;
+#X obj 621 555 list split 4;
+#X obj 621 578 list split 3;
+#X obj 656 527 t l l l l;
+#X text 695 611 Data inlet \, resolution inlet \, blocksize inlet;
+#X text 609 74 data outlet \, resolution outlet \, blocksize outlet
+;
+#X text 122 444 24.01.2010 Wolfgang Jaeger;
+#X obj 605 137 cnv 15 100 65 empty empty empty 20 12 0 14 -4034 -66577
+0;
+#X obj 606 142 i;
+#X obj 636 142 + 1;
+#X obj 635 164 select 98;
+#X obj 885 243 cnv 15 20 20 empty empty empty 20 12 0 14 -4034 -66577
+0;
+#X msg 606 244 sendtyped /AOO/drain/90/channel/1 iiiib 77 \$1 1 \$2
+;
+#X msg 635 185 0;
+#X obj 633 636 cnv 15 80 50 empty empty empty 20 12 0 14 -4034 -66577
+0;
+#X obj 642 662 funpack~;
+#X obj 695 642 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+1;
+#X text 716 658 Data inlet \, Sequence Number inlet \, "stream" Identification
+Number inlet \, Mode inlet (0 = arithmetic mixing \, 1 = summation)
+;
+#X connect 22 0 23 0;
+#X connect 23 0 72 0;
+#X connect 24 0 25 0;
+#X connect 25 0 33 0;
+#X connect 26 0 84 0;
+#X connect 27 0 84 2;
+#X connect 28 0 29 0;
+#X connect 29 1 84 1;
+#X connect 30 0 31 0;
+#X connect 30 1 31 1;
+#X connect 31 0 24 0;
+#X connect 33 0 22 0;
+#X connect 33 0 66 0;
+#X connect 35 0 60 0;
+#X connect 35 1 62 1;
+#X connect 35 2 59 1;
+#X connect 36 0 35 0;
+#X connect 37 0 35 0;
+#X connect 38 0 35 0;
+#X connect 39 0 35 0;
+#X connect 40 0 35 0;
+#X connect 41 0 35 0;
+#X connect 42 0 46 0;
+#X connect 43 0 46 0;
+#X connect 44 0 45 0;
+#X connect 45 0 46 0;
+#X connect 46 0 30 0;
+#X connect 47 0 35 0;
+#X connect 49 0 35 0;
+#X connect 50 0 35 0;
+#X connect 52 0 35 0;
+#X connect 54 0 35 0;
+#X connect 57 0 47 0;
+#X connect 58 0 59 0;
+#X connect 59 0 61 1;
+#X connect 60 0 43 0;
+#X connect 60 1 44 0;
+#X connect 60 2 77 0;
+#X connect 60 3 61 0;
+#X connect 60 4 58 0;
+#X connect 60 5 42 0;
+#X connect 61 0 63 0;
+#X connect 62 0 81 0;
+#X connect 63 0 46 0;
+#X connect 66 0 67 0;
+#X connect 67 1 68 0;
+#X connect 68 0 26 2;
+#X connect 69 1 26 0;
+#X connect 70 0 71 0;
+#X connect 71 1 26 1;
+#X connect 72 0 69 0;
+#X connect 72 1 70 0;
+#X connect 72 2 28 0;
+#X connect 72 3 27 0;
+#X connect 77 0 62 0;
+#X connect 77 0 78 0;
+#X connect 77 0 79 0;
+#X connect 78 0 77 1;
+#X connect 79 0 82 0;
+#X connect 81 0 44 1;
+#X connect 82 0 77 1;
+#X connect 84 0 32 0;
+#X connect 84 0 32 1;
+#X connect 85 0 84 3;
