@@ -23,11 +23,9 @@ content
 -------
  
 docu
-
  documentation, papers
  
 pd
-
  Pd library for OSC, first implementation for experiments
  
 Changelog
