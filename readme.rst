@@ -22,17 +22,15 @@ main git repository at OpenSource@IEM project in sourceforge::
 content
 -------
  
-docu
- documentation, papers
+docu -- documentation, papers
  
-pd
- Pd library for OSC, first implementation for experiments
+pd -- Pd library for OSC, first implementation for experiments
  
 Changelog
 ---------
 
 - New project page on Feb.2014 - winfried ritsch
-- checked in in sourcforge 
+- checked in in sourceforge repo (see above) 
  
 About Document
 --------------
