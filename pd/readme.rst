@@ -8,9 +8,11 @@ Pd library for Audio over OSC see docu in ../docu
 contact: ritsch_at_iem.at)
 
 abstractions
+
  abstractions for AOO library
 
 src
+
  Some externals needed for the audio over Ethernet implementation with pd first version.
 
 
