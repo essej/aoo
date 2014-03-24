@@ -10,7 +10,7 @@ A first implementation a library with externals for PureData (Pd).
 
 .. _Pd: http://puredata.info/
 
-More on message based audio system see doku/lac2014_aoo.pdf
+More on message based audio system see docu/lac2014_aoo.pdf
 
 source
 ------
@@ -22,10 +22,12 @@ main git repository at OpenSource@IEM project in sourceforge::
 content
 -------
  
-doku
+docu
+
  documentation, papers
  
 pd
+
  Pd library for OSC, first implementation for experiments
  
 Changelog
