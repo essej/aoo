@@ -12,8 +12,8 @@ A first implementation a library with externals for PureData (Pd).
 
 More on message based audio system see docu/lac2014_aoo.pdf
 
-source
-------
+download
+--------
 
 main git repository at OpenSource@IEM project in sourceforge::
 
@@ -21,7 +21,7 @@ main git repository at OpenSource@IEM project in sourceforge::
 
 content
 -------
- 
+
 docu -- documentation, papers
  
 pd -- Pd library for OSC, first implementation for experiments
@@ -31,6 +31,7 @@ Changelog
 
 - New project page on Feb.2014 - winfried ritsch
 - checked in in sourceforge repo (see above) 
+- added aao_lib
  
 About Document
 --------------

@@ -1,11 +1,11 @@
 /*
- * prototypes, structure definitions and macros for "audio over osc" 
- * 
+ * prototypes, structure definitions and macros for "audio over osc"
+ *
  * Copyright (c) 2014 Winfried Ritsch <ritsch_at_algo.mur.at>
- * 
+ *
  * This library is covered by the LGPL, read licences
  * at <http://www.gnu.org/licenses/>  for details
- * 
+ *
  */
 
 #ifndef __AOO_H__
@@ -24,7 +24,7 @@ int aoo_release(void);       /* release lib */
 int aoo_source_new(void);
 
 /* === drains  === */
-int aoo_drain_new(void);     /* setup new drain */
+int aoo_drain_new(int i);     /* setup new drain */
 int aoo_drain_start(int id);   /* start processing */
 int aoo_drain_perform(int id); /* start processing */
 int aoo_drain_stop(int id);    /* stop processing */
