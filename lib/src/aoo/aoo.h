@@ -18,10 +18,13 @@
 /* #include <math.h> */
 
 int aoo_setup(void);         /* initialize lib */
-/*int aoo_release(void);         /* release lib */
+int aoo_release(void);       /* release lib */
 
-/* drains  interface */
-int aoo_drain_new(int id);     /* setup new drain */
+/* === sources === */
+int aoo_source_new(void);
+
+/* === drains  === */
+int aoo_drain_new(void);     /* setup new drain */
 int aoo_drain_start(int id);   /* start processing */
 int aoo_drain_perform(int id); /* start processing */
 int aoo_drain_stop(int id);    /* stop processing */

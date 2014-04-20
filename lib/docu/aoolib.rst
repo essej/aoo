@@ -20,30 +20,19 @@ some new features needed. Main target is Linux.
 
 More on message based audio system see docu/lac2014_aoo.pdf
 
-source
-------
+
+
+repository
+----------
 
 main git repository at OpenSource@IEM project in sourceforge::
 
  git clone git://git.code.sf.net/p/iem/aoo iem-aoo
 
-content
--------
- 
-docu -- documentation, papers
- 
-pd -- Pd library for OSC, first implementation for experiments
- 
-Changelog
----------
-
-- New project page on Feb.2014 - winfried ritsch
-- checked in in sourceforge repo (see above) 
- 
 About Document
 --------------
 :authors: Winfried Ritsch,
-:date: march 2014 - ...
+:date: march 2014-
 :version: 0.1
  
  

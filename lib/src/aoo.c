@@ -5,23 +5,30 @@
  * 
  */
 
-/* initialize lib 
+#include "aoo/aoo.h"
+
+/* initialize lib
  * 
- * required: 
+ * required: none
  */
 
 int aoo_setup(void)
 {
-return -1;
+return 0;
 }
 
 /* release lib  * 
- * required: 
+ * required:  aoo_setup()
  */
+int aoo_release(void)
+{
+	return 0;
+}
 
-/* int aoo_release(void) {}         */
+/* === sources === */
 
-/* --- drains  --- */
+
+/* ===  drains  === */
 
 /* setup new drain  
  * 
