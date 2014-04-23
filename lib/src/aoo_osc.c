@@ -18,8 +18,8 @@
 #include "aoo/aoo_osc.h"
 
 /* static prototypes */
-static unsigned int make_format_head(osc_string sptr,char* drainname);
-static unsigned int make_channel_head(char* sptr,char* drainname,char* ch_name);
+static unsigned int make_format_head(char  **sptr,char* drainname);
+static unsigned int make_channel_head(char **sptr,char* drainname,char* ch_name);
 #define AOO_MAX_NAME_LEN 11 /* max string of drain or channel nr, since uint */
 
 /*****************************************************************************
@@ -50,7 +50,7 @@ osc_drain* osc_drain_new(unsigned int drain, unsigned int channels,
 
     osc->timestamp.val = 0ul; /* default */
 
-    /* secure free routine for only allocated */
+    /* free routine need  NULL pointers on unallocated memory */
     osc->format_head = NULL;
     osc->channel_head_size = NULL;
     osc->channel_head = NULL;
@@ -75,7 +75,7 @@ osc_drain* osc_drain_new(unsigned int drain, unsigned int channels,
 
     /* contruct format head cache */
     osc_drain_set_string(sd,drain);
-    if(!(n = make_format_head(osc->format_head,sd))) {
+    if(!(n = make_format_head(&osc->format_head,sd))) {
         free(osc);
         return NULL;
     }
@@ -106,7 +106,7 @@ osc_drain* osc_drain_new(unsigned int drain, unsigned int channels,
     for(i=0; i<channels; i++) {
 
         aoo_channel_set_string(sc,i);
-        if(!(n = make_channel_head((char *) osc->channel_head[i],sd,sc))) {
+        if(!(n = make_channel_head(&osc->channel_head[i],sd,sc))) {
             osc_drain_free(osc);
             return NULL;
         }
@@ -170,13 +170,13 @@ aoo_parser_ret osc_drain_parse(osc_drain* osc,
 
     memcpy(&osc->format ,readptr,sizeof(aoo_format_parameter));
 
-    /* how to validate format ? - leave it, except mimtype:
-     * read mimetype (only one now is "audio/pcm" hardcoded
+    /* how to validate format ? - leave it, except mimetype:
+     * read mimetype (only one now is "audio/pcm" hardcoded as AOO_MIME_PCM
      * it will be changed in future if compression formats are added)
      */
 
-    if(strncmp(osc->format.mimetype,"audio/pcm\0\0",
-               sizeof("audio/pcm\0\0")) != 0)
+    if(memcmp(osc->format.mimetype,AOO_MIME_PCM,
+               sizeof(AOO_MIME_PCM)) != 0)
         return OSC_PARSE_MIME_UNKOWN;
     readptr = addrptr + msglen; /* next message */
 
@@ -322,7 +322,6 @@ unsigned int osc_drain_announce(osc_drain* drain)
     if(!drain)
         return 0;
 
-
     /* Not implemented for now
 
         aoo_osc_announce_data.id.v[3] = AOO_ID;
@@ -358,11 +357,126 @@ unsigned int osc_drain_announce(osc_drain* drain)
   Remarks: if max blobsize is the biggest expected blob, mostly used constant
  ***************************************************************************/
 osc_src *osc_src_new(unsigned int drain,unsigned int channels,
-                             unsigned int max_blob_size)
+                             unsigned int blob_size)
 {
-    osc_src *source = NULL;
+    osc_src *src = NULL;
+    unsigned int n,len = 0;
+    char *format_head, **channel_head;
+    unsigned int fmt_len,*ch_len;
+    char sd[AOO_MAX_NAME_LEN],sc[AOO_MAX_NAME_LEN];
+    osc_blob bptr;
 
-    return source;
+    if(channels == 0 || channels > AOO_MAX_CHANNELS || drain > AOO_MAX_DRAIN)
+        return NULL;
+
+    if (!(src = malloc(sizeof(osc_src))))
+        return NULL;
+
+    /* allocated temp data */
+    format_head = NULL;
+    channel_head = NULL;
+    ch_len = NULL;
+
+    if((channel_head =calloc(channels,sizeof(char *))) == NULL)
+        goto exit_src_new;
+    if((ch_len = calloc(channels,sizeof(unsigned int))) == NULL)
+        goto exit_src_new;
+
+
+    /* prepare data */
+
+    osc_drain_set_string(sd,drain);
+    if(!(fmt_len = make_format_head(&format_head,sd))) {
+        free(src); src = NULL;
+        goto exit_src_new;
+    }
+
+    for(n=0;n<channels;n++){
+        aoo_channel_set_string(sc,n);
+        if(!(ch_len[n] = make_channel_head(&channel_head[n],sd,sc))){
+            free(src); src = NULL;
+            goto exit_src_new;
+        }
+
+    }
+
+    len = sizeof(OSC_BUNDLE) + sizeof(osc_timetag) + sizeof(osc_int)
+                  + fmt_len + sizeof(aoo_format_parameter);
+    for(n=0;n<channels;n++)
+        len += sizeof(osc_int) + ch_len[n] + sizeof(aoo_channel_parameter)
+               + blob_size;
+
+    if(len > AOO_MAX_BUNDLE_LEN) {
+        free(src); src = NULL;
+        goto exit_src_new;
+    }
+
+    /* construct bundle */
+
+    if(!(bptr = src->bundle = malloc(len))){
+        free(src); src = NULL;
+        goto exit_src_new;
+    }
+
+
+
+    /* bundle header */
+    memcpy(bptr,OSC_BUNDLE,sizeof(OSC_BUNDLE));
+    bptr +=  sizeof(OSC_BUNDLE);
+    src->timetag = bptr;
+    bptr +=  sizeof(osc_timetag);
+
+    /* format message */
+    *((osc_int *) bptr) = fmt_len + sizeof(aoo_format_parameter); /* msglen */
+    memcpy(bptr,format_head,fmt_len);
+    bptr +=  fmt_len;
+    src->format = bptr;
+    bptr +=  sizeof(aoo_format_parameter);
+    /* fill default paramter */
+    src->format->samplerate = 44100;
+    src->format->blocksize = 0;
+    src->format->overlap = 0;
+    strcpy(src->format->mimetype,AOO_MIME_PCM);
+    src->format->time_correction = 0.0;
+
+    for(n=0;n<channels;n++){
+
+
+        /* channel message */
+        *((osc_int *) bptr) = ch_len[n] + sizeof(aoo_channel_parameter)+blob_size; /* msglen */
+        memcpy(bptr,channel_head[n],ch_len[n]);
+        bptr +=  ch_len[n];
+        src->channel[n] = bptr;
+        bptr +=  sizeof(aoo_channel_parameter);
+
+        /* fill default paramter */
+        src->channel[n]->id = 0;
+        src->channel[n]->sequence = 0;
+        src->channel[n]->resolution = AOO_RESOLUTION_FLOAT;
+        src->channel[n]->resampling = 0;
+        src->channel[n]->blobsize = blob_size;
+
+        /* blobdata */
+        src->channel_data[n] = bptr;
+    }
+
+
+exit_src_new:
+
+    /* local allocated mem */
+    if(format_head)free(format_head);
+    if(channel_head){
+        for(n=0;n<channels;n++)
+            if(channel_head[n])
+                free(channel_head[n]);
+        free(channel_head);
+    }
+    if(ch_len)
+        free(ch_len);
+
+    return src;
+
+
 }
 
 
@@ -403,49 +517,52 @@ static inline unsigned int osc_string_expand4(char* sptr)
     return n;
 }
 
-static unsigned int make_format_head(char* sptr,char* drainname)
+static unsigned int make_format_head(char **sptr,char* drainname)
 {
     unsigned int len,n;
+    char *s;
 
     len = aoo_size4(sizeof(AOO_DRAIN) -1 + strlen(drainname)
                     + sizeof(AOO_FORMAT)+sizeof(AOO_FORMAT_TT))
           + aoo_size4(sizeof(AOO_FORMAT_TT_TC));
 
-    if((sptr = malloc(len)) == NULL)
+    if((*sptr = s = malloc(len)) == NULL)
         return 0;
 
-    strcpy(sptr,AOO_DRAIN);
-    strcat(sptr,drainname);
-    strcat(sptr,AOO_FORMAT);
+    strcpy(s,AOO_DRAIN);
+    strcat(s,drainname);
+    strcat(s,AOO_FORMAT);
 
     /* extent to 4 byte boundary */
-    n = osc_string_expand4(sptr);
-    sptr += n;
-    memcpy(sptr,AOO_FORMAT_TT_TC,sizeof(AOO_FORMAT_TT_TC));
+    n = osc_string_expand4(s);
+    s += n;
+    memcpy(s,AOO_FORMAT_TT_TC,sizeof(AOO_FORMAT_TT_TC));
     n += sizeof(AOO_FORMAT_TT_TC);
     return n;
 }
 
-static unsigned int make_channel_head(char* sptr,char* drainname,char* ch_name)
+static unsigned int make_channel_head(char **sptr,char* drainname,char* ch_name)
 {
     unsigned int len,n;
+    char *s;
 
     len = aoo_size4(sizeof(AOO_DRAIN) -1 + strlen(drainname)
                     + sizeof(AOO_FORMAT)+sizeof(AOO_FORMAT_TT))
           + aoo_size4(sizeof(AOO_FORMAT_TT_TC));
 
-    if((sptr = malloc(len)) == NULL)
+    if((*sptr = s = malloc(len)) == NULL)
         return 0;
 
-    strcpy(sptr,AOO_DRAIN);
-    strcat(sptr,drainname);
-    strcat(sptr,AOO_CHANNEL);
-    strcat(sptr,ch_name);
+    strcpy(s,AOO_DRAIN);
+    strcat(s,drainname);
+    strcat(s,AOO_CHANNEL);
+    strcat(s,ch_name);
     /* extent to 4 byte boundary */
-    n = osc_string_expand4(sptr);
-    sptr += n;
-    memcpy(sptr,AOO_CHANNEL_TT,sizeof(AOO_CHANNEL_TT));
+    n = osc_string_expand4(s);
+    s += n;
+    memcpy(s,AOO_CHANNEL_TT,sizeof(AOO_CHANNEL_TT));
     n += sizeof(AOO_CHANNEL_TT);
+
     return n;
 }
 

@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <CodeBlocks_layout_file>
 	<ActiveTarget name="release" />
-	<File name="../aoo.c" open="1" top="0" tabpos="1">
+	<File name="../aoo.c" open="0" top="0" tabpos="1">
 		<Cursor position="0" topLine="0" />
 	</File>
-	<File name="../aoo_osc.c" open="1" top="0" tabpos="2">
-		<Cursor position="0" topLine="0" />
+	<File name="../aoo/aoo_osc.h" open="1" top="0" tabpos="2">
+		<Cursor position="2567" topLine="63" />
 	</File>
-	<File name="../aoo_udp.c" open="1" top="1" tabpos="3">
+	<File name="../aoo_osc.c" open="1" top="1" tabpos="1">
+		<Cursor position="11431" topLine="470" />
+	</File>
+	<File name="../aoo_udp.c" open="0" top="0" tabpos="3">
 		<Cursor position="0" topLine="0" />
 	</File>
 </CodeBlocks_layout_file>

@@ -66,6 +66,7 @@ typedef union _OSC_TIMETAG {
 #define AOO_DRAIN  "/AoO/dr/"   /* 8 bytes without \0*/
 
 /* drain string is 4 bytes, so range is 0-9999 */
+#define AOO_MAX_DRAIN   9999
 #define osc_drain_set_string(s,n)     sprintf((s),"%04u",(n))
 
 /* format is last in address so needs one \0 */
@@ -75,11 +76,14 @@ typedef union _OSC_TIMETAG {
 
 /* format message data
    order of data in OSC message, do not change */
+/* hack since only one MIME/TYPE now  for efficiency*/
+#define AOO_MIME_SIZE 12
+#define AOO_MIME_PCM "audio/pcm\0\0" /* 12 byte incl \0 */
 typedef struct _AOO_FORMAT_PARAMETER {
     osc_int samplerate;
     osc_int blocksize;
     osc_int overlap;
-    osc_string mimetype;
+    char mimetype[AOO_MIME_SIZE];
     osc_float time_correction;
 } aoo_format_parameter;
 
@@ -89,6 +93,7 @@ typedef struct _AOO_FORMAT_PARAMETER {
 #define AOO_CHANNEL    "/ch/" /* 4 bytes without \0*/
 #define AOO_CHANNEL_TT ",iiifb\0"  /* 7 Bytes + \0 */
 /* channel string is 4 bytes, so range is 0-9999 */
+#define AOO_MAX_CHANNELS   9999
 #define aoo_channel_set_string(s,n)  sprintf((s),"%04u",(n))
 
 /* channel data without blob data, but blobsize
@@ -115,6 +120,16 @@ typedef enum {
     /* >=4 are number of bits per sample int */
     /* < 0 number of bits per sample unsigned int, not supported, maybe never */
 } aoo_resolution;
+/** Notes on resampling:
+    Resampling of channels means downsampled signals only if positive > 1
+    and downsampled if negativ < -2
+    example: -1,0,1 means no down or upsampling,
+             -2, -3, -4, --- downsampled data by 2, 3, 4
+             2 , 4, 8 means upsampled by factor 2, 4, 8
+    Numbers not (+/-)2^N should be avoided.
+    Antialising filter on downsampling (positive numbers) is weak !
+*/
+
 
 #define AOO_ANNOUNCE_ADR  "/announce\0\0\0" // 12 Bytes incl. terminating
 #define AOO_ANNOUNCE_TT ",iiiiiiiiiiiiiiiiiiiiiiiiis" // 27 Bytes + \0
@@ -145,10 +160,10 @@ typedef struct _AOO_DRAIN {
     aoo_format_parameter format;
 
     unsigned int format_head_size;
-    osc_string    format_head;
+    char *format_head;
 
-    unsigned int* channel_head_size;
-    osc_data**     channel_head;
+    unsigned int *channel_head_size;
+    char         **channel_head;
     aoo_channel_parameter* channel_parameter;
     osc_blob* channel_data;
 
@@ -193,19 +208,22 @@ typedef struct _AOO_SRC {
 
     unsigned int drain;
     unsigned int channels;
-
+    unsigned int max_blobsize;
+    osc_timetag *timetag;
     aoo_format_parameter* format;
+    aoo_channel_parameter **channel;
+    osc_blob  *channel_data;
 
     unsigned int bundlemaxsize;
     unsigned int bundlesize;
-    osc_data *bundle;
+    osc_blob bundle;
 } osc_src;
 
 
 
 /* source prototypes */
 osc_src* osc_src_new(unsigned int drain,unsigned int channels,
-                             unsigned int max_blob_size);
+                             unsigned int blob_size);
 int osc_src_format(osc_src* src,aoo_format_parameter* format);
 int osc_src_addchannel(osc_src* src, unsigned int ch_nr,osc_int samples,
                        osc_int id, osc_int resolution, osc_int resampling);
