@@ -4,11 +4,121 @@
  * at <http://www.gnu.org/licenses/>  for details
  *
  */
-#include "aoo/aoo_osc.h"
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <limits.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+/* #include <math.h> */
+
 #include "aoo/aoo.h"
+#include "aoo/aoo_osc.h"
+
+/* static prototypes */
+static unsigned int make_format_head(osc_string sptr,char* drainname);
+static unsigned int make_channel_head(char* sptr,char* drainname,char* ch_name);
+#define AOO_MAX_NAME_LEN 11 /* max string of drain or channel nr, since uint */
 
 /*****************************************************************************
-  Function: aoo_osc_parse
+  Function:	osc_drain_new
+
+  Summary:  generates new storage for a osc drain parser, for one drain.
+
+  Description:
+	for each drain one call is needed.
+
+  Precondition:
+  Parameters: None
+  Returns: aoo_osc *, used in parser or NULL if failure
+
+  Remarks: drain numbers and channel numbers has to be from 0 to 9999
+ ***************************************************************************/
+
+osc_drain* osc_drain_new(unsigned int drain, unsigned int channels,
+                                 int (*process_channel)(aoo_format_parameter *,aoo_channel_parameter *))
+{
+    int i,n;
+    char sd[AOO_MAX_NAME_LEN],sc[AOO_MAX_NAME_LEN];
+
+    osc_drain* osc;
+
+    if (!(osc = malloc(sizeof(osc_drain))))
+        return NULL;
+
+    osc->timestamp.val = 0ul; /* default */
+
+    /* secure free routine for only allocated */
+    osc->format_head = NULL;
+    osc->channel_head_size = NULL;
+    osc->channel_head = NULL;
+    osc->channel_parameter = NULL;
+    osc->channel_data = NULL;
+
+    if(drain > 9999) {
+        if(aoo_verbosity > AOO_VERBOSITY_INFO)
+            fprintf(stderr,"osc_drain_new: drain number to high");
+        free(osc);
+        return NULL;
+    }
+    osc->drain = drain;
+
+    if(channels > 9999) {
+        if(aoo_verbosity > AOO_VERBOSITY_INFO)
+            fprintf(stderr,"osc_drain_new: number of channels to high");
+        free(osc);
+        return NULL;
+    }
+    osc->channels = channels;
+
+    /* contruct format head cache */
+    osc_drain_set_string(sd,drain);
+    if(!(n = make_format_head(osc->format_head,sd))) {
+        free(osc);
+        return NULL;
+    }
+    osc->format_head_size = n;
+
+    /* contruct channel headers */
+    if((osc->channel_head_size = calloc(channels,sizeof(osc_int))) == NULL) {
+        osc_drain_free(osc);
+        return NULL;
+    }
+
+    if((osc->channel_head = calloc(channels,sizeof(osc_data *))) == NULL) {
+        osc_drain_free(osc);
+        return NULL;
+    }
+
+    if((osc->channel_parameter = calloc(channels,sizeof(aoo_channel_parameter)))
+            == NULL) {
+        osc_drain_free(osc);
+        return NULL;
+    }
+
+    if((osc->channel_data = calloc(channels,sizeof(osc_blob))) == NULL) {
+        osc_drain_free(osc);
+        return NULL;
+    }
+
+    for(i=0; i<channels; i++) {
+
+        aoo_channel_set_string(sc,i);
+        if(!(n = make_channel_head((char *) osc->channel_head[i],sd,sc))) {
+            osc_drain_free(osc);
+            return NULL;
+        }
+        osc->channel_head_size[i] = n;
+    }
+
+    return osc;
+}
+
+
+/*****************************************************************************
+  Function: osc_drain_parse
 
   Summary:
         receives OSC packages for a drain and extract audio data
@@ -16,349 +126,204 @@
   Description:
         test package for valid OSC message, parse it return audiodata
 
-  Precondition: aoo_osc_drain_new()
-  Parameters: None
-  Returns: None
+  Precondition: osc_drain_new called
+  Parameters: drain, data with datalen to parse
+  Returns: OSC_PARSE_NO_MATCH if no match with drain
+           OSC_PARSE_NOT_VALID  if bundle not an AoO message
+           OSC_NO_CHANNELS if matched but no channels parsed
+           or positiv number of channel parsed.
 
-  Remarks:
+  Remarks: parser can be called with different drain numbers in sequence
+    if one returns OSC_PARSE_NO_MATCH
  ***************************************************************************/
 
-aoo_parser_ret aoo_osc_parse(aoo_osc_drain *osc,unsigned int datalen, void * data)
+aoo_parser_ret osc_drain_parse(osc_drain* osc,
+                             unsigned int datalen, void* data)
 {
-    int n,channels;
-    char *s;
-    char *readptr = (char *) &data;
-    char *endptr = readptr + datalen;
-    char *addrptr = NULL;
-    unsigned int messages = 0;
-    drain=NULL;
+    unsigned int msglen;
+    unsigned int channel,processed;
+    char* readptr = (char *) &data;
+    char* endptr = readptr + datalen;
+    char* addrptr = NULL;
 
-    bool tc_flag=0;
-
-    /* message to short */
-    if(datalen < (sizeof(AOO_OSC_BUNDLE) + sizeof(osc_timetag)
-                  + sizeof(AOO_OSC_FORMAT_TT) + osc->header_len))
+    /* at least bundle and format message */
+    if(datalen < (sizeof(OSC_BUNDLE) + sizeof(osc_timetag) + sizeof(osc_int)
+                  + osc->format_head_size + sizeof(aoo_format_parameter)))
         return OSC_PARSE_NOT_VALID;
 
-    if (strcmp(readptr, AOO_OSC_BUNDLE) != 0)
+    if (strcmp(readptr, OSC_BUNDLE) != 0)
         return OSC_PARSE_NOT_VALID;
-    readptr += sizeof(AOO_OSC_BUNDLE);
-
-    osc->timestamp.val = *((osc_timetag *) readptr);
+    readptr += sizeof(OSC_BUNDLE);
+    osc->timestamp.val = *((uint64_t *) readptr);
     readptr += sizeof(osc_timetag);
     /* dont know how to validate timetag, so i dont */
 
-
-    /* --- first format message --- */
-    addrptr = readptr;
-    if(strcmp(AOO_OSC_DRAIN,readptr)) != 0)
+    /* --- first always format message with matching drain number --- */
+    msglen = *((osc_int *) readptr);
+    addrptr = readptr += sizeof(osc_int);
+    if((addrptr+(osc->format_head_size+sizeof(aoo_format_parameter))) > endptr)
         return OSC_PARSE_NOT_VALID;
+    if(memcmp(osc->format_head,readptr,osc->format_head_size) != 0)
+        return OSC_PARSE_NO_MATCH;
 
-    readptr += sizeof(AOO_OSC_DRAIN);
+    readptr += osc->format_head_size;
 
-    n=osc->drains+1;
-    while(n--){
-        s = osc->drain[n];
-        if(strcmp(s,readptr) == 0){
-            drain=s;
-            break;
-        }
-    }
-    if(!drain)
-        return OSC_PARSE_NO_DRAIN;
+    memcpy(&osc->format ,readptr,sizeof(aoo_format_parameter));
 
-    readptr += strlen(drain);
-    osc->format.drain = drain;
-    
-    if(strncmp(AOO_OSC_FORMAT,readptr,sizeof(AOO_OSC_FORMAT)) != 0)
-        return OSC_PARSE_NO_FORMAT;
+    /* how to validate format ? - leave it, except mimtype:
+     * read mimetype (only one now is "audio/pcm" hardcoded
+     * it will be changed in future if compression formats are added)
+     */
 
-    /* correct address to 4 bytes alignment */
-    /* readptr += sizeof(AOO_OSC_FORMAT); */
-
-    readptr = addrptr + size4(strlen(addrptr)+1);
-
-    if(strncmp(AOO_OSC_FORMAT_TT,readptr,sizeof(AOO_OSC_FORMAT)) == 0)
-        tc_flag = false;
-    else if(strncmp(AOO_OSC_FORMAT_TT_TC,readptr,sizeof(AOO_OSC_FORMAT)) == 0)
-        tc_flag = true;
-    else
-        return OSC_PARSE_NO_FORMAT;
-
-    readptr += sizeof(AOO_OSC_FORMAT_TT);
-    /* same size as AOO_OSC_FORMAT_TT_TC */
-
-    if(readptr+3*sizeof(osc_int) >= endptr)
-        return OSC_PARSE_NO_FORMAT;
-
-    osc->format.samplerate = (osc_int) *readptr;
-    readptr += sizeof(osc_int);
-    osc->format.blocksize = (osc_int) *readptr;
-    readptr += sizeof(osc_int);
-    osc->format.overlap = (osc_int) *readptr;
-    readptr += sizeof(osc_int);
-
-    /* read mimetype (only one now is "audio/pcm" hardcoded
-     * it will be changed in future if compression is accepted*/
-
-    if(strncmp("audio/pcm\0\0",readptr,sizeof("audio/pcm\0\0")) != 0)
+    if(strncmp(osc->format.mimetype,"audio/pcm\0\0",
+               sizeof("audio/pcm\0\0")) != 0)
         return OSC_PARSE_MIME_UNKOWN;
-
-    readptr += sizeof("audio/pcm\0\0");
-
-    if(tc_flag) {
-        osc->format.time_correction = *((osc_float *) readptr);
-        readptr += sizeof(osc_float);
-    } else
-        osc->format.time_correction = 0.0;
+    readptr = addrptr + msglen; /* next message */
 
     /* --- channel messages --- */
-    channels=0;
+    channel=0;
+    processed=0;
+    while(readptr < endptr) {
+        msglen = *((osc_int *) readptr);
+        addrptr = readptr += sizeof(osc_int);
 
-    while(readptr < endptr && channles < osc->channels) {
+        /* check for msgsize correctness is not done, but if data is enough */
+        if(readptr+msglen > endptr)
+            break;
 
-        /* check for size of message omitted */
-
-        char *p;
-        unsigned int channelnr;
         size_t ds;
-        aoo_channel channel;
+        /* not all channels have to be in bundle */
+        while(channel<osc->channels) {
 
-        /* in case of error, invalid bundle, break all, cannot resync */
-        if(strcmp(AOO_OSC_DRAIN,readptr)) != 0)
-            break;
-
-        readptr += sizeof(AOO_OSC_DRAIN);
-        
-        n=osc->drains+1;
-        while(n--){
-            s = osc->drain[n];
-            if(strcmp(s,readptr) == 0){
-                drain=s;
-                break;
-            }
-        }
-        if(!drain)
-            break;
-
-        readptr += strlen(drain);
-
-
-        if(strncmp(AOO_OSC_CHANNEL,readptr,sizeof(AOO_OSC_CHANNEL)) != 0)
-            return OSC_PARSE_NO_CHANNELS;
-        readptr += sizeof(AOO_OSC_CHANNEL);
-
-        channelnr = (unsigned int) stroul(readptr,&p,0);
-        if (errno != 0 || *p != 0 || p == str)
-            break;
-
-        /* correct address to 4 bytes alignment */
-        /* readptr += aoo_size4(strlen((char *) readptr)); */
-        readptr = addrptr + size4(strlen(addrptr)+1);
-
-        /* blob has at least size of datasize bytes */
-        if((readptr+4*sizeof(osc_int)+sizeof(osc_float)) >= endptr)
-            break;
-
-        channel.id = *((osc_int *) readptr);
-        readptr += sizeof(osc_int);
-        channel.sequence = *((osc_int *) readptr);
-        readptr += sizeof(osc_int);
-        channel.resolution = *((osc_int *) readptr);
-        readptr += sizeof(osc_int);
-        channel.resampling = *((osc_float *) readptr);
-        readptr += sizeof(osc_float);
-        ds = channel.datasize = *((osc_int *) readptr);
-        readptr += sizeof(osc_int);
-
-        if(ds == 0)
-            continue;
-
-        if((readptr + ds) < endptr) {
-
-            if((channel.data = malloc(ds) == NULL)
-               break;
-
-               memcpy(channel.data,readptr, ds);
-               readptr += ds;
-        }
-
-        /* see if process_channel can do something with this data */
-        if(process_channel)
-            if(process_channel(&osc->format,channel) >= 0)
+            if(memcmp(readptr,osc->channel_head[channel],
+                      osc->channel_head_size[channel]) != 0) {
                 channel++;
-               
-    } /* channel message */
-    if(channels > 0)
-        return channels;
+                continue; /* next one */
+            }
+            readptr += osc->channel_head_size[channel];
+            memcpy(&osc->channel_parameter[channel],readptr,
+                   sizeof(aoo_channel_parameter));
 
+            readptr += sizeof(aoo_channel_parameter);
+
+            if((ds = osc->channel_parameter[channel].blobsize) == 0)
+                break; // next message
+
+            if((readptr + ds) > endptr) /* to be sure */
+                break;
+
+            /* parsedata does not vanish until processed, so no copy anymore !
+
+            if((osc->channel.data[channel] = malloc(ds)) == NULL)
+                break;
+            else
+                memcpy(osc->channel.data[channel],readptr, ds);
+            */
+            /* can be optimized by directly feed channel, parameter, data */
+            osc->channel_data[channel] = readptr;
+
+            /* see if process_channel can do something with this data */
+            if(osc->process_channel)
+                if(osc->process_channel(channel,
+                                        &osc->format,
+                                        &osc->channel_parameter[channel],
+                                        osc->channel_data[channel]) >= 0)
+                    processed++;
+
+            break; // next message
+        }; /* channel messages */
+
+        /* next channel must have another channel number increasing */
+        channel++;
+        readptr = addrptr+msglen;
+    }; /* readptr < endptr */
+
+    if(processed > 0)
+        return processed;
     return OSC_PARSE_NO_CHANNELS;
 }
 
 /*****************************************************************************
-  Function: aoo_osc_send
-
-  Summary: send AoO Message as bundle
-
-  Description:
-        test package for valid OSC message, parse it ans stores values
-
-  Precondition:
-  Parameters: address string, typestring, data, len of data
-  Returns: None
-
-  Remarks: without checks.
- ***************************************************************************/
-void aoo_osc_send(osc_string drain,unsigned int channels,aoo_format format,
-                  unsigned int samples,void *audiodata)
-{
-
-    return;
-}
-
-/*****************************************************************************
-  Function:
-	aoo_osc_new, void aoo_osc_free
+  Function: void osc_drain_free
 
   Summary:
-    generates new storage for osc one drain parser.
+    free storage for osc drain parser.
 
   Description:
-	for each drain one parser is needed.
+    free allocated memory
 
-  Precondition:
-  Parameters: None
-  Returns: aoo_osc *, used in parser or NULL if failure
+  Precondition: None
+  Parameters: pointer to drain storage
 
-  Remarks:
+  Returns: None
+
+  Remarks: can be called even not all memory is located
  ***************************************************************************/
-/* asume drain string is shorter than 15 */
-#define OSC_MAX_HEADER sizeof(AOO_OSC_MESSAGE AOO_OSC_DRAIN)+16
-static void free_drains(aoo_osc_drain *osc)
+void osc_drain_free(osc_drain* osc)
 {
     int i;
-    if(osc->drain)
-        for(i=0;i<osc->drains;i++)
-            if(osc->drain[i])
-                free(osc->drain[i];
-}
-
-aoo_osc *aoo_osc_drain_new(unsigned int drains, osc_string drain,int channels
-                     int (*process_channel)(aoo_format *,aoo_channel *))
-{
-    int n,len;
-    
-    aoo_osc *osc;
-    char header[OSC_MAX_HEADER];
-
-    if (!(osc = malloc(sizeof(aoo_osc_drain))))
-        return NULL;
-
-    osc->data = NULL;
-    osc->format.time_correction = 0.0;
-
-    if(drains<=0 || drain == NULL){
-        free(osc);
-        return NULL;
-    }
-    
-    if(channels <= 0){
-        free(osc);
-        return NULL;
-    }
-    osc->channels = channels;
-
-    osc->drain=NULL;
-    osc->drains=drains;
-
-    /* drains + 1 for wildchar */
-    if(!(osc->drain = calloc(drains+1,sizeof(osc_string)))) {
-        free(osc);
-        return NULL;
-    }
-    for(n=0;n<drains;n++){
-        if(!(osc->drain[n] = malloc(strlen(drain[n])+1) {
-            free_drains(osc);
-            free(osc);
-            return NULL;
-        }
-        strcpy(osc->drain[n],drain[n]);
-    }
-    drain[drains]="*"; /* additional drain is wildchar */
-
-    osc->announce = false;
-    osc->announce_count = 0;
-
-    return osc;
-}
-
-
-void aoo_osc_drain_free(aoo_osc *osc)
-{
     if(osc == NULL)
         return;
-    if(osc->header)
-        free(osc->header);
+
+    /* free memory */
+    if(osc->format_head) {
+        free(osc->format_head);
+        osc->format_head = NULL;
+    }
+
+    if(osc->channel_head)
+        for(i=0; i<osc->channels; i++)
+            if(osc->channel_head[i])
+                free(osc->channel_head[i]);
+
+    free(osc->channel_head);
+    osc->channel_head = NULL;
+
+
+    if(osc->channel_data)
+        for(i=0; i<osc->channels; i++)
+            if(osc->channel_data[i])
+                free(osc->channel_data[i]);
+
+    free(osc->channel_data);
+    osc->channel_data = NULL;
+
+
+    if(osc->channel_parameter) {
+        free(osc->channel_parameter);
+        osc->channel_parameter = NULL;
+    }
+
     free(osc);
     return;
 }
 
 /*****************************************************************************
   Function:
-    void aoo_osc_announce(aoo_osc *osc)
+    void osc_drain_announce
 
   Summary:
-    send OSC Announce Message
+    send drain Announce Message
 
-  Description:
-    announce the IP and other Info to the network or client
+  Description: invite others on the net, to use this drain
+    should be broadcasted.
 
   Precondition: aoo_osc_new()
-  Parameters: pointer to osc
+  Parameters: pointer to drain
   Returns: None
 
-  Remarks: without checks.
+  Remarks: for UDP IP and other Info to the network or client must be
+    extracted from UDP info or some other used protocoll
  ***************************************************************************/
 
-void aoo_osc_announce(aoo_osc *osc)
+unsigned int osc_drain_announce(osc_drain* drain)
 {
 
-    if(!osc)
-        return;
+    if(!drain)
+        return 0;
 
 
     /* Not implemented for now
-
-        if (aooBcastIsPutReady() < 64u) // smallest debug msg
-            return;
-
-
-        aoo_osc_announce_data.ip[0].v[3] = AppConfig.MyIPAddr.v[0];
-        aoo_osc_announce_data.ip[1].v[3] = AppConfig.MyIPAddr.v[1];
-        aoo_osc_announce_data.ip[2].v[3] = AppConfig.MyIPAddr.v[2];
-        aoo_osc_announce_data.ip[3].v[3] = AppConfig.MyIPAddr.v[3];
-
-        aoo_osc_announce_data.netmask[0].v[3] = AppConfig.DefaultMask.v[0];
-        aoo_osc_announce_data.netmask[1].v[3] = AppConfig.DefaultMask.v[1];
-        aoo_osc_announce_data.netmask[2].v[3] = AppConfig.DefaultMask.v[2];
-        aoo_osc_announce_data.netmask[3].v[3] = AppConfig.DefaultMask.v[3];
-
-        aoo_osc_announce_data.gateway[0].v[3] = AppConfig.MyGateway.v[0];
-        aoo_osc_announce_data.gateway[1].v[3] = AppConfig.MyGateway.v[1];
-        aoo_osc_announce_data.gateway[2].v[3] = AppConfig.MyGateway.v[2];
-        aoo_osc_announce_data.gateway[3].v[3] = AppConfig.MyGateway.v[3];
-
-        aoo_osc_announce_data.remoteip[0].v[3] = aooClientIP.v[0];
-        aoo_osc_announce_data.remoteip[1].v[3] = aooClientIP.v[1];
-        aoo_osc_announce_data.remoteip[2].v[3] = aooClientIP.v[2];
-        aoo_osc_announce_data.remoteip[3].v[3] = aooClientIP.v[3];
-
-        aoo_osc_announce_data.mac[0].v[3] = AppConfig.MyMACAddr.v[0];
-        aoo_osc_announce_data.mac[1].v[3] = AppConfig.MyMACAddr.v[1];
-        aoo_osc_announce_data.mac[2].v[3] = AppConfig.MyMACAddr.v[2];
-        aoo_osc_announce_data.mac[3].v[3] = AppConfig.MyMACAddr.v[3];
-        aoo_osc_announce_data.mac[4].v[3] = AppConfig.MyMACAddr.v[4];
-        aoo_osc_announce_data.mac[5].v[3] = AppConfig.MyMACAddr.v[5];
 
         aoo_osc_announce_data.id.v[3] = AOO_ID;
 
@@ -370,14 +335,150 @@ void aoo_osc_announce(aoo_osc *osc)
 
         memcpy((void *) aoo_osc_announce_data.name, (void *) AppConfig.NetBIOSName, 16);
         aoo_osc_announce_data.name[15] = 0;
-
-        //    aooUDPut((BYTE *) AOO_OSC_ANNOUNCE_ADR, 12); //aoo_size4(AOO_OSC_ANNOUNCE_ADR));
-        //    aooUDPut((BYTE *) AOO_OSC_ANNOUNCE_TT, 28); //aoo_size4(AOO_OSC_ANNOUNCE_TT));
-        //    aooUDPSend((BYTE *) &aoo_osc_announce_data, sizeof(AOO_OSC_ANNOUNCE));
-        UDPPutROMArray(AOO_OSC_ANNOUNCE_ADR, 12);
-        UDPPutROMArray(AOO_OSC_ANNOUNCE_TT, 28);
-        UDPPutArray((BYTE *) & aoo_osc_announce_data, (4 * 24 + 16));
-        UDPFlush();
     */
-    return;
+    return 1;
 }
+
+
+/* ======================= SOURCES ========================================= */
+
+/*****************************************************************************
+  Function: osc_src_new
+
+  Summary: construct a new source mit parameter
+
+  Description:
+        allocates data variables and data space, which can be
+        used for transmit and process which writes data there.
+
+  Precondition: None
+  Parameters: drain, channels, max_blobsize
+  Returns: None
+
+  Remarks: if max blobsize is the biggest expected blob, mostly used constant
+ ***************************************************************************/
+osc_src *osc_src_new(unsigned int drain,unsigned int channels,
+                             unsigned int max_blob_size)
+{
+    osc_src *source = NULL;
+
+    return source;
+}
+
+
+/*****************************************************************************
+  Function: osc_src_format
+
+  Summary: construct a new source mit parameter
+
+  Description:
+        allocates data variables and data space, which can be
+        used for transmit and process which writes data there.
+
+  Precondition: None
+  Parameters: drain, channels, max_blobsize
+  Returns: None
+
+  Remarks: if max blobsize is the biggest expected blob, mostly used constant
+ ***************************************************************************/
+
+
+int osc_src_format(osc_src* src,aoo_format_parameter* format)
+{
+    return OSC_SRC_NOT_VALID;
+}
+
+
+/* --- helpers --- */
+
+/* expand an osc string to a 4 byte boundary by \0, return size */
+static inline unsigned int osc_string_expand4(char* sptr)
+{
+    unsigned int n;
+    if((n = strlen(sptr)) % 4) {
+        while(n++%4)
+            sptr[n-1]='\0';
+        n--;
+    }
+    return n;
+}
+
+static unsigned int make_format_head(char* sptr,char* drainname)
+{
+    unsigned int len,n;
+
+    len = aoo_size4(sizeof(AOO_DRAIN) -1 + strlen(drainname)
+                    + sizeof(AOO_FORMAT)+sizeof(AOO_FORMAT_TT))
+          + aoo_size4(sizeof(AOO_FORMAT_TT_TC));
+
+    if((sptr = malloc(len)) == NULL)
+        return 0;
+
+    strcpy(sptr,AOO_DRAIN);
+    strcat(sptr,drainname);
+    strcat(sptr,AOO_FORMAT);
+
+    /* extent to 4 byte boundary */
+    n = osc_string_expand4(sptr);
+    sptr += n;
+    memcpy(sptr,AOO_FORMAT_TT_TC,sizeof(AOO_FORMAT_TT_TC));
+    n += sizeof(AOO_FORMAT_TT_TC);
+    return n;
+}
+
+static unsigned int make_channel_head(char* sptr,char* drainname,char* ch_name)
+{
+    unsigned int len,n;
+
+    len = aoo_size4(sizeof(AOO_DRAIN) -1 + strlen(drainname)
+                    + sizeof(AOO_FORMAT)+sizeof(AOO_FORMAT_TT))
+          + aoo_size4(sizeof(AOO_FORMAT_TT_TC));
+
+    if((sptr = malloc(len)) == NULL)
+        return 0;
+
+    strcpy(sptr,AOO_DRAIN);
+    strcat(sptr,drainname);
+    strcat(sptr,AOO_CHANNEL);
+    strcat(sptr,ch_name);
+    /* extent to 4 byte boundary */
+    n = osc_string_expand4(sptr);
+    sptr += n;
+    memcpy(sptr,AOO_CHANNEL_TT,sizeof(AOO_CHANNEL_TT));
+    n += sizeof(AOO_CHANNEL_TT);
+    return n;
+}
+
+
+/* code reservoire: */
+
+
+/* if used with more than one drain name per drain,
+   but now removed, since not really useful and not so optimized
+
+aoo_osc_drain *aoo_osc_drain_new(unsigned int drains, osc_string *drain,
+        int channels, int (*process_channel)(aoo_format_parameter *,aoo_channel *))
+
+  ...
+
+    osc->drain=NULL;
+    osc->drains=drains;
+
+    // drains + 1 for wildchar
+    if(!(osc->drain = calloc(drains+1,sizeof(osc_string)))) {
+        free(osc);
+        return NULL;
+    }
+    for(n=0;n<drains;n++){
+        if(!(osc->drain[n] = malloc(strlen(drain[n])+1))) {
+            free_drains(osc);
+            free(osc);
+            return NULL;
+        }
+        strcpy(osc->drain[n],drain[n]);
+    }
+    drain[drains]="*"; // additional drain is wildchar
+
+*/
+
+

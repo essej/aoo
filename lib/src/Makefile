@@ -1,11 +1,11 @@
 #
-# AoO - audio over osc library 
-# 
+# AoO - audio over osc library
+#
 # Copyright (c) 2014 Winfried Ritsch <ritsch_at_algo.mur.at>
-# 
+#
 # This library is covered by the GPL, read licences
 # at <http://www.gnu.org/licenses/>  for details
-# 
+#
 #
 
 # --- edit down here ---
@@ -22,7 +22,7 @@ DISTDIR = aoo-$(VERSION)
 CFLAGS += -I. -D_REENTRANT -D_POSIX_PTHREAD_SEMANTICS
 CFLAGS += -Wall -fPIC -O2 -ffast-math
 CFLAGS += -march=native
-LDFLAGS += 
+LDFLAGS +=
 LDLIBS +=
 
 
@@ -30,9 +30,15 @@ AOO_SO = libaoo.so
 AOO_MAJ = $(AOO_SO).$(MAJVERS)
 AOO_MIN = $(AOO_MAJ).$(MINVERS)
 AOO_DEP =
-AOO_O = aoo.o
-AOO_H = aoo/aoo.h
+AOO_O = aoo.o aoo_osc.o aoo_udp.o
+AOO_H = aoo/aoo.h aoo/aoo_osc.h
 
+setdebug:
+    CFLAGS += -g
+
+debug: setdebug release
+
+release: $(AOO_MIN)
 
 $(AOO_MIN): $(AOO_O)
 	gcc -shared $(LDFLAGS) -Wl,-soname,$(AOO_MAJ) -o $(AOO_MIN) $(AOO_O) $(AOO_DEP)

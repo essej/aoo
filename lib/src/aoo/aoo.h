@@ -17,6 +17,20 @@
 #include <limits.h>
 /* #include <math.h> */
 
+/* max UDP length should be enough */
+#define AOO_MAX_MESSAGE_LEN 65536
+
+
+typedef enum {
+    AOO_VERBOSITY_NO = 0,
+    AOO_VERBOSITY_INFO = 1,
+    AOO_VERBOSITY_DETAIL = 2,
+    AOO_VERBOSITY_DEBUG = 3}
+aoo_verbosity_state;
+
+extern int aoo_verbosity;
+
+/* === prototypes === */
 int aoo_setup(void);         /* initialize lib */
 int aoo_release(void);       /* release lib */
 
@@ -24,7 +38,7 @@ int aoo_release(void);       /* release lib */
 int aoo_source_new(void);
 
 /* === drains  === */
-int aoo_drain_new(int i);     /* setup new drain */
+int aoo_drain_new(int id);     /* setup new drain */
 int aoo_drain_start(int id);   /* start processing */
 int aoo_drain_perform(int id); /* start processing */
 int aoo_drain_stop(int id);    /* stop processing */
