@@ -27,8 +27,23 @@ typedef enum {
     AOO_VERBOSITY_DETAIL = 2,
     AOO_VERBOSITY_DEBUG = 3}
 aoo_verbosity_state;
-
 extern int aoo_verbosity;
+
+/* =================================== AoO general ============================= */
+/* types */
+#define AOO_SAMPLE_FORMAT_FLOAT
+/* #define AOO_SAMPLE_FORMAT_DOUBLE, maybe sometime later as compile opt */
+
+typedef int32_t    aoo_signed_t;
+typedef uint32_t   aoo_unsigned_t;
+typedef float      aoo_float_t;
+typedef double     aoo_double_t;
+
+#if defined(AOO_SAMPLE_FORMAT_FLOAT)
+typedef aoo_float_t aoo_sample_t;
+#elif defined(AOO_SAMPLE_FORMAT_DOUBLE)
+typedef aoo_double_t aoo_sample_t;
+#endif
 
 /* === prototypes === */
 int aoo_setup(void);         /* initialize lib */

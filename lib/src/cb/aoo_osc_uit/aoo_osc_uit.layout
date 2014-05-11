@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_layout_file>
+	<ActiveTarget name="Debug" />
+	<File name="../../aoo/aoo.h" open="1" top="0" tabpos="4">
+		<Cursor position="1127" topLine="23" />
+	</File>
+	<File name="../../aoo/aoo_osc.h" open="1" top="0" tabpos="3">
+		<Cursor position="3713" topLine="105" />
+	</File>
+	<File name="../../aoo_osc.c" open="1" top="1" tabpos="2">
+		<Cursor position="23438" topLine="772" />
+	</File>
+	<File name="main.c" open="1" top="0" tabpos="1">
+		<Cursor position="5069" topLine="0" />
+	</File>
+</CodeBlocks_layout_file>

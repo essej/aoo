@@ -31,14 +31,19 @@ AOO_MAJ = $(AOO_SO).$(MAJVERS)
 AOO_MIN = $(AOO_MAJ).$(MINVERS)
 AOO_DEP =
 AOO_O = aoo.o aoo_osc.o aoo_udp.o
-AOO_H = aoo/aoo.h aoo/aoo_osc.h
+AOO_H = aoo/aoo.h aoo/aoo_osc.h Makefile
+AOO_U = aoo_osc
 
 setdebug:
     CFLAGS += -g
 
-debug: setdebug release
+debug: setdebug release $(AOO_U)
 
 release: $(AOO_MIN)
+
+$(AOO_U): aoo_osc.c
+	gcc -o $@  -DMAIN $(CFLAGS) $(LDFLAGS) $<
+	./$@
 
 $(AOO_MIN): $(AOO_O)
 	gcc -shared $(LDFLAGS) -Wl,-soname,$(AOO_MAJ) -o $(AOO_MIN) $(AOO_O) $(AOO_DEP)

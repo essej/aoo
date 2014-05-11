@@ -1,16 +1,25 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <CodeBlocks_layout_file>
-	<ActiveTarget name="release" />
-	<File name="../aoo.c" open="0" top="0" tabpos="1">
-		<Cursor position="0" topLine="0" />
+	<ActiveTarget name="debug" />
+	<File name="../Makefile" open="0" top="0" tabpos="5">
+		<Cursor position="922" topLine="12" />
 	</File>
-	<File name="../aoo/aoo_osc.h" open="1" top="0" tabpos="2">
-		<Cursor position="2567" topLine="63" />
+	<File name="../aoo.c" open="0" top="0" tabpos="4">
+		<Cursor position="369" topLine="0" />
 	</File>
-	<File name="../aoo_osc.c" open="1" top="1" tabpos="1">
-		<Cursor position="11431" topLine="470" />
+	<File name="../aoo/aoo.h" open="0" top="0" tabpos="6">
+		<Cursor position="590" topLine="0" />
 	</File>
-	<File name="../aoo_udp.c" open="0" top="0" tabpos="3">
-		<Cursor position="0" topLine="0" />
+	<File name="../aoo/aoo_osc.h" open="1" top="1" tabpos="2">
+		<Cursor position="6964" topLine="184" />
+	</File>
+	<File name="../aoo/aoo_udp.h" open="0" top="0" tabpos="3">
+		<Cursor position="734" topLine="0" />
+	</File>
+	<File name="../aoo_osc.c" open="1" top="0" tabpos="1">
+		<Cursor position="2363" topLine="53" />
+	</File>
+	<File name="../aoo_udp.c" open="0" top="0" tabpos="2">
+		<Cursor position="6362" topLine="242" />
 	</File>
 </CodeBlocks_layout_file>

@@ -75,22 +75,43 @@ int aoo_udp_insocket(int in_portno)
 }
 
 /*****************************************************************************
-  Function: aoo_udp_insocket, aoo_udp_read
+  Function: aoo_udp_insocket_close
 
   Summary:
-        reads data from an bind socket
+        free an open (bind) a UDP socket
+
+  Description:
+        close socket
+
+  Precondition:
+  Parameters: socket file descriptor
+  Returns: None
+
+  Remarks:
+ ***************************************************************************/
+
+void aoo_udp_insocket_close(int in_sockfd)
+{
+    close(in_sockfd);
+}
+
+/*****************************************************************************
+  Function: aoo_udp_read
+
+  Summary:
+        reads data from an bind socket to a provided buffer
 
   Description:
         Receiver for UDP packages to be parsed by aoo_parse
 
   Precondition:
-  Parameters: socketfd, bufsize and pointer to a buffer to read in
-  Returns: Errors as zero or negativ values and socketid as sucess
+  Parameters: socketfd, bufsize, pointer to a buffer
+  Returns: On error zero or negativ values and socketid as sucess
 
-  Remarks:
+  Remarks: has to be optimized with blocking select for better thread wait
  ***************************************************************************/
 
-int read_in(int in_sockfd,int bufsize, unsigned char *buf)
+int aoo_udp_read(int in_sockfd,int bufsize, unsigned char *buf)
 {
     int ret = -1;
     fd_set readset, writeset, exceptset;
@@ -110,7 +131,7 @@ int read_in(int in_sockfd,int bufsize, unsigned char *buf)
     if (select(maxfd, &readset, &writeset, &exceptset, 0) < 0)
     {
         perror("select");
-        exit(1);
+        return 0;
     }
     if(aoo_verbosity >= AOO_VERBOSITY_DEBUG)
         printf("selected; ");
@@ -123,8 +144,7 @@ int read_in(int in_sockfd,int bufsize, unsigned char *buf)
     if (ret < 0)
     {
         sockerror("recv (udp)");
-        close(in_sockfd);
-        exit(1);
+        return ret;
     }
 
     if(aoo_verbosity >= AOO_VERBOSITY_DEBUG)
@@ -134,22 +154,23 @@ int read_in(int in_sockfd,int bufsize, unsigned char *buf)
     return ret;
 }
 
+
 /*****************************************************************************
   Function: aoo_udp_outsocket
 
-  Summary: open an out socket, to send data
+  Summary: open an out socket to send to an IP or Hostname on a port number
 
   Description:
-        hostname and portno is needed for destination
+        hostname and port number is needed for destination
 
   Precondition:
   Parameters: hostname, out port number
-  Returns: outsocketfd
+  Returns: outsocketfd or negativ values on error
 
   Remarks: without checks.
  ***************************************************************************/
 
-int open_outsocket(char *hostname,int out_portno)
+int aoo_udp_outsocket(char *hostname,int out_portno)
 {
     struct sockaddr_in server;
     struct hostent *hp;
@@ -163,7 +184,7 @@ int open_outsocket(char *hostname,int out_portno)
     if (out_sockfd < 0)
     {
         sockerror("socket()");
-        exit(1);
+        return -1;
     }
     /* connect socket using hostname provided in command line */
     server.sin_family = AF_INET;
@@ -172,7 +193,7 @@ int open_outsocket(char *hostname,int out_portno)
     {
         fprintf(stderr, "%s: unknown host\n", hostname);
         close(out_sockfd);
-        exit(1);
+        return -1;
     }
     memcpy((char *)&server.sin_addr, (char *)hp->h_addr, hp->h_length);
 
@@ -194,12 +215,31 @@ int open_outsocket(char *hostname,int out_portno)
     {
         sockerror("connect");
         close(out_sockfd);
-        exit(1);
+        return -1;
     }
     return out_sockfd;
 }
 
+/*****************************************************************************
+  Function: aoo_udp_outsocket_close
 
+  Summary:
+        free an open (bind) a UDP socket for transmit
+
+  Description:
+        close socket
+
+  Precondition:
+  Parameters: socket file descriptor
+  Returns: None
+
+  Remarks:
+ ***************************************************************************/
+
+void aoo_udp_outsocket_close(int out_sockfd)
+{
+    close(out_sockfd);
+}
 
 
 /*****************************************************************************
@@ -213,15 +253,15 @@ int open_outsocket(char *hostname,int out_portno)
 	socket must be initialized before
 
   Precondition: aoo_udp_outsocket
-  Parameters: None
-  Returns: aoo_osc *, used in parser or NULL if failure
+  Parameters: out_socketfd as socket id, nsent as bytes in message and buf as pointer to buffer
+  Returns: number of bytes send and 0 or negative values on error
 
   Remarks:
  ***************************************************************************/
-int send_out(int out_sockfd, int nsend, unsigned char *buf)
+int aoo_udp_send(int out_sockfd, int nsend, unsigned char *buf)
 {
-    int nsent,res;
-    char *bp;
+    int nsent,res=0;
+    unsigned char *bp;
 
     for (bp = buf, nsent = 0; nsent < nsend;)
     {

@@ -19,9 +19,10 @@
 
 /* --- Prototypes --- */
 int aoo_udp_insocket(int in_portno);
-int read_in(int in_sockfd,int bufsize, unsigned char *buf);
-int open_outsocket(char *hostname,int out_portno);
-int send_out(int out_sockfd, int nsend, unsigned char *buf);
-
+void aoo_udp_insocket_close(int socketfd);
+int aoo_udp_read(int in_sockfd,int bufsize, unsigned char *buf);
+int aoo_udp_outsocket(char *hostname,int out_portno);
+void aoo_udp_outsocket_close(int socketfd);
+int aoo_udp_send(int out_sockfd, int nsend, unsigned char *buf);
 
 #endif /* __AOO_OSC_H__ */
