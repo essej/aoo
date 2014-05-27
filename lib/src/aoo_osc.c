@@ -127,7 +127,7 @@ osc_drain* osc_drain_new(unsigned int drain, unsigned int channels,
 }
 
 
-/*****************************************************************************
+/***************************************************************************
   Function: osc_drain_parse
 
   Summary:
@@ -163,6 +163,7 @@ osc_parser_ret osc_drain_parse(osc_drain* osc,
 
     if (strcmp(readptr, OSC_BUNDLE) != 0)
         return OSC_PARSE_NOT_VALID;
+
     readptr += sizeof(OSC_BUNDLE);
     osc->timetag.val = *((uint64_t *) readptr);
     readptr += sizeof(osc_timetag);

@@ -8,16 +8,16 @@
 		<Cursor position="369" topLine="0" />
 	</File>
 	<File name="../aoo/aoo.h" open="0" top="0" tabpos="6">
-		<Cursor position="590" topLine="0" />
+		<Cursor position="1259" topLine="31" />
 	</File>
-	<File name="../aoo/aoo_osc.h" open="1" top="1" tabpos="2">
-		<Cursor position="6964" topLine="184" />
+	<File name="../aoo/aoo_osc.h" open="0" top="0" tabpos="2">
+		<Cursor position="0" topLine="0" />
 	</File>
 	<File name="../aoo/aoo_udp.h" open="0" top="0" tabpos="3">
 		<Cursor position="734" topLine="0" />
 	</File>
-	<File name="../aoo_osc.c" open="1" top="0" tabpos="1">
-		<Cursor position="2363" topLine="53" />
+	<File name="../aoo_osc.c" open="0" top="0" tabpos="1">
+		<Cursor position="8190" topLine="225" />
 	</File>
 	<File name="../aoo_udp.c" open="0" top="0" tabpos="2">
 		<Cursor position="6362" topLine="242" />
