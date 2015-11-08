@@ -1,6 +1,13 @@
 Audio over OSC
 ==============
 
+Note this is not the master copy, has to be merged !!!!
+
+ origin  ssh://ritsch@git.code.sf.net/p/iem/aoo (fetch)
+ origin  ssh://ritsch@git.code.sf.net/p/iem/aoo (push)
+
+
+
 Audio over OSC is aimed to be a message based audio system using 
 Open Sound Control OSC_ as a syntax format.
 

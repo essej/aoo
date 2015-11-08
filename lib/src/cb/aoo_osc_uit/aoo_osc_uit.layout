@@ -1,16 +1,26 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <CodeBlocks_layout_file>
+	<FileVersion major="1" minor="0" />
 	<ActiveTarget name="Debug" />
-	<File name="../../aoo/aoo.h" open="1" top="0" tabpos="4">
-		<Cursor position="1127" topLine="23" />
+	<File name="../../aoo_osc.c" open="1" top="0" tabpos="2" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="0" topLine="0" />
+		</Cursor>
 	</File>
-	<File name="../../aoo/aoo_osc.h" open="1" top="0" tabpos="3">
-		<Cursor position="3713" topLine="105" />
+	<File name="../../aoo/aoo.h" open="1" top="0" tabpos="4" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="0" topLine="0" />
+		</Cursor>
 	</File>
-	<File name="../../aoo_osc.c" open="1" top="1" tabpos="2">
-		<Cursor position="23438" topLine="772" />
+	<File name="main.c" open="1" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="0" topLine="0" />
+		</Cursor>
 	</File>
-	<File name="main.c" open="1" top="0" tabpos="1">
-		<Cursor position="5069" topLine="0" />
+	<File name="../../aoo/aoo_osc.h" open="1" top="1" tabpos="3" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="0" topLine="39" />
+		</Cursor>
 	</File>
+	<EditorTabsLayout layout="04782670551d6ce6001cd8f500000002=0;aoo_osc_uit:main.c,1;aoo_osc_uit:../../aoo_osc.c,*2;aoo_osc_uit:../../aoo/aoo_osc.h,3;aoo_osc_uit:../../aoo/aoo.h@layout2|name=dummy;caption=;state=2098174;dir=3;layer=0;row=0;pos=0;prop=100000;bestw=718;besth=313;minw=718;minh=313;maxw=-1;maxh=-1;floatx=-1;floaty=-1;floatw=-1;floath=-1|name=04782670551d6ce6001cd8f500000002;caption=;state=2098172;dir=5;layer=0;row=0;pos=0;prop=100000;bestw=200;besth=200;minw=-1;minh=-1;maxw=-1;maxh=-1;floatx=-1;floaty=-1;floatw=-1;floath=-1|dock_size(5,0,0)=202|" />
 </CodeBlocks_layout_file>

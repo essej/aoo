@@ -1,25 +1,41 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <CodeBlocks_layout_file>
+	<FileVersion major="1" minor="0" />
 	<ActiveTarget name="debug" />
-	<File name="../Makefile" open="0" top="0" tabpos="5">
-		<Cursor position="922" topLine="12" />
+	<File name="../aoo_osc.c" open="0" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="2053" topLine="234" />
+		</Cursor>
 	</File>
-	<File name="../aoo.c" open="0" top="0" tabpos="4">
-		<Cursor position="369" topLine="0" />
+	<File name="../aoo/aoo_osc.h" open="0" top="0" tabpos="2" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="0" topLine="0" />
+		</Cursor>
 	</File>
-	<File name="../aoo/aoo.h" open="0" top="0" tabpos="6">
-		<Cursor position="1259" topLine="31" />
+	<File name="../aoo/aoo_udp.h" open="0" top="0" tabpos="3" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="0" topLine="0" />
+		</Cursor>
 	</File>
-	<File name="../aoo/aoo_osc.h" open="0" top="0" tabpos="2">
-		<Cursor position="0" topLine="0" />
+	<File name="../aoo_udp.c" open="0" top="0" tabpos="2" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="0" topLine="0" />
+		</Cursor>
 	</File>
-	<File name="../aoo/aoo_udp.h" open="0" top="0" tabpos="3">
-		<Cursor position="734" topLine="0" />
+	<File name="../aoo/aoo.h" open="0" top="0" tabpos="6" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="0" topLine="0" />
+		</Cursor>
 	</File>
-	<File name="../aoo_osc.c" open="0" top="0" tabpos="1">
-		<Cursor position="8190" topLine="225" />
+	<File name="../aoo.c" open="1" top="1" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="0" topLine="0" />
+		</Cursor>
 	</File>
-	<File name="../aoo_udp.c" open="0" top="0" tabpos="2">
-		<Cursor position="6362" topLine="242" />
+	<File name="../Makefile" open="0" top="0" tabpos="5" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="0" topLine="0" />
+		</Cursor>
 	</File>
+	<EditorTabsLayout layout="05214e40551d6c820073cfb400000002=*0;aoolib:../aoo.c@layout2|name=dummy;caption=;state=2098174;dir=3;layer=0;row=0;pos=0;prop=100000;bestw=718;besth=313;minw=718;minh=313;maxw=-1;maxh=-1;floatx=-1;floaty=-1;floatw=-1;floath=-1|name=05214e40551d6c820073cfb400000002;caption=;state=2098172;dir=5;layer=0;row=0;pos=0;prop=100000;bestw=200;besth=200;minw=-1;minh=-1;maxw=-1;maxh=-1;floatx=-1;floaty=-1;floatw=-1;floath=-1|dock_size(5,0,0)=202|" />
 </CodeBlocks_layout_file>
