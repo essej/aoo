@@ -428,12 +428,10 @@ int32_t aoo_source_send(aoo_source *src) {
     return src->send();
 }
 
-// /AoO/<sink>/data <src> <seq> <t> <channel_onset> [<numframes> <frame>] <data>
-
-#define AOO_DATA_HEADERSIZE 52
-// address pattern string: max 16 bytes
-// typetag string: max. 8 bytes
-// args (without blob data): 28 bytes
+#define AOO_DATA_HEADERSIZE 76
+// address pattern string: max 32 bytes
+// typetag string: max. 12 bytes
+// args (without blob data): 32 bytes
 bool aoo_source::send(){
     if (!format_){
         return false;
@@ -490,7 +488,7 @@ bool aoo_source::send(){
                 osc::OutboundPacketStream msg(buf, sizeof(buf));
 
                 if (sink.id != AOO_ID_WILDCARD){
-                    const int32_t max_addr_size = sizeof(AOO_FORMAT) + 16 + sizeof(AOO_DATA);
+                    const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_DATA);
                     char address[max_addr_size];
                     snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, sink.id, AOO_DATA);
 
