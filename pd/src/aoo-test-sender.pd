@@ -1,0 +1,57 @@
+#N canvas 330 249 446 491 12;
+#X obj 154 141 osc~ 440;
+#X msg 88 135 set \$1;
+#X obj 91 63 hradio 15 1 0 8 empty empty empty 0 -8 0 10 -262144 -1
+-1 1;
+#X msg 103 110 symbol *;
+#X obj 100 88 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X msg 39 139 clear;
+#X obj 221 141 osc~ 600;
+#X obj 181 106 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X obj 301 71 loadbang;
+#X msg 301 95 \; pd dsp 1;
+#X obj 152 252 loadbang;
+#X obj 100 166 r \$0-back;
+#X obj 90 271 spigot;
+#X obj 129 235 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
+1;
+#X msg 231 187 channel \$1;
+#X obj 231 167 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X obj 246 371 s \$0-back;
+#X obj 255 350 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
+-1 -1;
+#X msg 153 280 disconnect \, connect localhost 9999;
+#X obj 90 313 iemnet/udpsend;
+#X obj 246 322 iemnet/udpreceive 9998;
+#X obj 68 429 block~;
+#X msg 68 400 set \$1;
+#X msg 69 370 64;
+#X msg 104 371 128;
+#X msg 140 372 256;
+#X obj 88 200 aoo_pack~ 1 3;
+#X connect 0 0 26 0;
+#X connect 1 0 26 0;
+#X connect 2 0 1 0;
+#X connect 3 0 1 0;
+#X connect 4 0 1 0;
+#X connect 5 0 26 0;
+#X connect 6 0 26 1;
+#X connect 7 0 0 0;
+#X connect 8 0 9 0;
+#X connect 10 0 18 0;
+#X connect 11 0 26 0;
+#X connect 12 0 19 0;
+#X connect 13 0 12 1;
+#X connect 14 0 26 0;
+#X connect 15 0 14 0;
+#X connect 18 0 19 0;
+#X connect 20 0 17 0;
+#X connect 20 0 16 0;
+#X connect 22 0 21 0;
+#X connect 23 0 22 0;
+#X connect 24 0 22 0;
+#X connect 25 0 22 0;
+#X connect 26 0 12 0;

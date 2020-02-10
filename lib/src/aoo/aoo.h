@@ -1,62 +1,113 @@
-/*
- * prototypes, structure definitions and macros for "audio over osc"
- *
- * Copyright (c) 2014 Winfried Ritsch <ritsch_at_algo.mur.at>
- *
- * This library is covered by the LGPL, read licences
- * at <http://www.gnu.org/licenses/>  for details
- *
- */
+#pragma once
 
-#ifndef __AOO_H__
-#define __AOO_H__
-
-#include <unistd.h>
-#include <stdlib.h>
 #include <stdint.h>
-#include <limits.h>
-/* #include <math.h> */
 
-/* max UDP length should be enough */
-#define AOO_MAX_MESSAGE_LEN 65536
-
-
-typedef enum {
-    AOO_VERBOSITY_NO = 0,
-    AOO_VERBOSITY_INFO = 1,
-    AOO_VERBOSITY_DETAIL = 2,
-    AOO_VERBOSITY_DEBUG = 3}
-aoo_verbosity_state;
-extern int aoo_verbosity;
-
-/* =================================== AoO general ============================= */
-/* types */
-#define AOO_SAMPLE_FORMAT_FLOAT
-/* #define AOO_SAMPLE_FORMAT_DOUBLE, maybe sometime later as compile opt */
-
-typedef int32_t    aoo_signed_t;
-typedef uint32_t   aoo_unsigned_t;
-typedef float      aoo_float_t;
-typedef double     aoo_double_t;
-
-#if defined(AOO_SAMPLE_FORMAT_FLOAT)
-typedef aoo_float_t aoo_sample_t;
-#elif defined(AOO_SAMPLE_FORMAT_DOUBLE)
-typedef aoo_double_t aoo_sample_t;
+#ifdef __cplusplus
+extern "C"
+{
 #endif
 
-/* === prototypes === */
-int aoo_setup(void);         /* initialize lib */
-int aoo_release(void);       /* release lib */
+#ifndef AOO_SAMPLETYPE
+#define AOO_SAMPLETYPE float
+#endif
 
-/* === sources === */
-int aoo_source_new(void);
+typedef AOO_SAMPLETYPE aoo_sample;
 
-/* === drains  === */
-int aoo_drain_new(int id);     /* setup new drain */
-int aoo_drain_start(int id);   /* start processing */
-int aoo_drain_perform(int id); /* start processing */
-int aoo_drain_stop(int id);    /* stop processing */
-int aoo_drain_free(int id);    /* free new drain */
+#define AOO_MAXPACKETSIZE 1600
+#define AOO_DOMAIN "/AoO"
+#define AOO_FORMAT "/format"
+#define AOO_FORMAT_WILDCARD "/AoO/*/format"
+#define AOO_DATA "/data"
+#define AOO_DATA_WILDCARD "/AoO/*/data"
+#define AOO_REQUEST "/request"
+#define AOO_MIME_PCM "audio/pcm"
 
-#endif /* __AOO_H__ */
+typedef enum aoo_bitdepth {
+    AOO_INT16,
+    AOO_INT24,
+    AOO_FLOAT32,
+    AOO_FLOAT64
+} aoo_bitdepth;
+
+int32_t aoo_bytes_per_sample(aoo_bitdepth bd);
+
+// endpoint, data, size
+typedef void (*aoo_replyfn)(void *, const char *, int32_t);
+
+/*//////////////////// OSC ////////////////////////////*/
+
+// id: the source or sink ID
+// returns: the offset to the remaining address pattern
+
+#define AOO_ID_WILDCARD -1
+
+int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *id);
+
+/*//////////////////// AoO source /////////////////////*/
+
+typedef struct aoo_source aoo_source;
+
+typedef struct aoo_format
+{
+    const char *mime_type;
+    aoo_bitdepth bitdepth;
+    int32_t nchannels;
+    int32_t samplerate;
+    int32_t blocksize;
+    int32_t overlap;
+    void *reserved;
+} aoo_format;
+
+aoo_source * aoo_source_new(int32_t id);
+
+void aoo_source_free(aoo_source *src);
+
+void aoo_source_setformat(aoo_source *src, aoo_format *f);
+
+void aoo_source_setbuffersize(aoo_source *src, int32_t ms);
+
+
+// will send /AoO/<id>/start message
+void aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn);
+
+// will send /AoO/<id>/stop message
+void aoo_source_removesink(aoo_source *src, void *sink, int32_t id);
+
+// stop all sinks
+void aoo_source_removeall(aoo_source *src);
+
+void aoo_source_setsinkchannel(aoo_source *src, void *sink, int32_t id, int32_t chn);
+
+// e.g. /request
+void aoo_source_handlemessage(aoo_source *src, const char *data, int32_t n,
+                              void *sink, aoo_replyfn fn);
+
+int32_t aoo_source_send(aoo_source *src);
+
+int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n);
+
+/*//////////////////// AoO sink /////////////////////*/
+
+typedef struct aoo_sink aoo_sink;
+
+typedef void (*aoo_processfn)(const aoo_sample **data, int32_t n, void *user);
+
+aoo_sink * aoo_sink_new(int32_t id);
+
+void aoo_sink_free(aoo_sink *sink);
+
+void aoo_sink_setup(aoo_sink *sink, int32_t nchannels, int32_t sr, int32_t blocksize,
+                    aoo_processfn fn, void *user);
+
+void aoo_sink_setbuffersize(aoo_sink *sink, int32_t ms);
+
+// e.g. /start, /stop, /data.
+// Might reply with /AoO/<id>/request
+int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
+                            void *src, aoo_replyfn fn);
+
+int32_t aoo_sink_process(aoo_sink *sink);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
