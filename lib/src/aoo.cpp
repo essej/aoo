@@ -789,7 +789,8 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 }
             }
             // add new block
-            block = queue.insert(aoo::block (seq, tt, chn, size, nframes));
+            auto nbytes = src.format.blocksize * src.format.nchannels * samplesize;
+            block = queue.insert(aoo::block (seq, tt, chn, nbytes, nframes));
         }
 
         // add frame to block
@@ -955,10 +956,10 @@ namespace aoo {
 /*////////////////////////// source_block /////////////////////////////*/
 
 block::block(int32_t seq, time_tag tt, int32_t chn,
-                           int32_t size, int32_t nframes)
+                           int32_t nbytes, int32_t nframes)
     : sequence(seq), timetag(tt), channel(chn), numframes(nframes)
 {
-    buffer.resize(size);
+    buffer.resize(nbytes);
     // set missing frame bits to 1
     frames = 0;
     for (int i = 0; i < nframes; ++i){

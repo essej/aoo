@@ -69,7 +69,7 @@ struct time_tag {
 struct block {
     block(){}
     block(int32_t seq, time_tag tt, int32_t chn,
-                 int32_t size, int32_t nframes);
+                 int32_t nbytes, int32_t nframes);
     block(const block&) = default;
     block(block&&) = default;
     block& operator=(const block&) = default;
