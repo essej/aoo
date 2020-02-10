@@ -867,6 +867,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
         auto stride = std::max<int32_t>(src.format.blocksize, blocksize_);
         auto d = div(bufsize, stride);
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
+        nbuffers = std::max<int32_t>(1, nbuffers); // e.g. if buffersize_ is 0
         // resize audio buffer and initially fill with zeros.
         auto nchannels = src.format.nchannels;
         auto writesize = src.format.blocksize * nchannels;
