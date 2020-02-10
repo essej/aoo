@@ -45,31 +45,31 @@
 #endif
 
 // 0: error, 1: warning, 2: verbose, 3: debug
-#ifndef LOG_LEVEL
- #define LOG_LEVEL 2
+#ifndef LOGLEVEL
+ #define LOGLEVEL 2
 #endif
 
 #define DO_LOG(x) (std::cerr << x << std::endl)
 
-#if LOG_LEVEL >= 0
+#if LOGLEVEL >= 0
  #define LOG_ERROR(x) DO_LOG(x)
 #else
  #define LOG_ERROR(x)
 #endif
 
-#if LOG_LEVEL >= 1
+#if LOGLEVEL >= 1
  #define LOG_WARNING(x) DO_LOG(x)
 #else
  #define LOG_WARNING(x)
 #endif
 
-#if LOG_LEVEL >= 2
+#if LOGLEVEL >= 2
  #define LOG_VERBOSE(x) DO_LOG(x)
 #else
  #define LOG_VERBOSE(x)
 #endif
 
-#if LOG_LEVEL >= 3
+#if LOGLEVEL >= 3
  #define LOG_DEBUG(x) DO_LOG(x)
 #else
  #define LOG_DEBUG(x)
@@ -483,6 +483,7 @@ bool aoo_source::send(){
 
         // send a single frame to all sink
         auto send_data = [&](int32_t frame, const char* data, auto n){
+            LOG_DEBUG("send frame: " << frame << ", size: " << n);
             for (auto& sink : sinks_){
                 char buf[AOO_MAXPACKETSIZE];
                 osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -871,6 +872,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
         auto writesize = src.format.blocksize * nchannels;
         auto readsize = blocksize_ * nchannels;
         auto nsamples = nbuffers * stride * nchannels;
+        LOG_VERBOSE("read size " << readsize << ", write size " << writesize << ", nsamples " << nsamples << ", nbuffers " << nbuffers);
         src.audioqueue.resize(nsamples, readsize, writesize);
         while (src.audioqueue.write_available()){
             LOG_DEBUG("write zero block");
@@ -977,14 +979,20 @@ void block::add_frame(int which, const char *data, int32_t n){
     assert(data != nullptr);
     assert(buffer.data() != nullptr);
     if (which == numframes - 1){
-        // LOG_DEBUG("copy last " << n << " bytes");
+        LOG_DEBUG("copy last frame with " << n << " bytes");
         std::copy(data, data + n, buffer.end() - n);
     } else {
-        // LOG_DEBUG("copy frame " << which);
+        LOG_DEBUG("copy frame " << which << " with " << n << " bytes");
         std::copy(data, data + n, buffer.begin() + which * n);
     }
     frames &= ~(1 << which);
-    // LOG_DEBUG("frames: " << (unsigned)frames);
+#if 0
+    for (int i = 0; i < n; i += 4){
+        std::cerr << pcm_float32_to_sample(data + i) << " ";
+    }
+    std::cerr << std::endl;
+#endif
+    LOG_DEBUG("frames: " << (unsigned)frames);
 }
 
 /*////////////////////////// block_queue /////////////////////////////*/
