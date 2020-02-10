@@ -22,9 +22,9 @@ features
 * AoO sinks and sources can operate at different blocksizes
 * AoO sources can dynamically change the channel onset of the sink
 * format message to notify sinks about format changes:
-  /AoO/<sink>/format <src> <mime-type> <bitdepth> <nchannels> <samplerate> <blocksize> <overlap>
+  /AoO/<sink>/format <src> <salt> <mime-type> <bitdepth> <nchannels> <samplerate> <blocksize> <overlap>
 * data message to deliver audio data, large blocks are split across several frames:
-  /AoO/<sink>/data <src> <seq> <t> <channel_onset> <numframes> <frame> <data...>
+  /AoO/<sink>/data <src> <salt> <seq> <t> <channel_onset> <numframes> <frame> <data...>
 * request message from sink to source to ask about the format if necessary
   /AoO/<src>/request <sink>
 * invitation message broadcasted by sinks at low intervals, inviting sources to send audio
@@ -46,15 +46,17 @@ todo
 * interpolation of dropped packets
 * fade in/fade out
 * time correction (timestamps + DLL)
-* settable max. fragment size
+* settable max. OSC packet size
 * [aoo_send~] + [aoo_receive~] with integrated (threaded) network IO
+* replace oscpack with our own (optimized) OSC routines
+* unit tests!
 
 download
 --------
 
-main git repository at OpenSource@IEM project in sourceforge::
+main git repository at git.iem.at:
 
- git clone git://git.code.sf.net/p/iem/aoo iem-aoo
+ git clone https://git.iem.at/cm/aoo
 
 content
 -------

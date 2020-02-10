@@ -16,8 +16,10 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #define AOO_MAXPACKETSIZE 1600
 #define AOO_DOMAIN "/AoO"
 #define AOO_FORMAT "/format"
+#define AOO_FORMAT_NARGS 8
 #define AOO_FORMAT_WILDCARD "/AoO/*/format"
 #define AOO_DATA "/data"
+#define AOO_DATA_NARGS 8
 #define AOO_DATA_WILDCARD "/AoO/*/data"
 #define AOO_REQUEST "/request"
 #define AOO_MIME_PCM "audio/pcm"

@@ -31,6 +31,7 @@ class aoo_source {
     bool process(const aoo_sample **data, int32_t n);
  private:
     const int32_t id_;
+    int32_t salt_ = 0;
     std::unique_ptr<aoo_format> format_;
     int32_t bytespersample_ = 0;
     int32_t buffersize_ = 0;
@@ -113,13 +114,14 @@ private:
 };
 
 struct source_desc {
-    source_desc(void *endpoint, aoo_replyfn fn, int32_t id);
+    source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt);
     source_desc(source_desc&& other);
     source_desc& operator=(source_desc&& other);
     // data
     void *endpoint;
     aoo_replyfn fn;
     int32_t id;
+    int32_t salt;
     aoo_format format;
     std::atomic<int32_t> channel; // can be set dynamically!
     int32_t newest; // sequence number of most recent block
@@ -162,10 +164,9 @@ class aoo_sink {
     void request_format(void * endpoint, aoo_replyfn fn, int32_t id);
 
     void handle_format_message(void *endpoint, aoo_replyfn fn,
-                               int32_t id, const aoo_format& format);
+                               int32_t id, int32_t salt, const aoo_format& format);
 
     void handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
-                             int32_t seq, aoo::time_tag tt, int32_t chn,
-                             int32_t nframes, int32_t frame,
-                             const char *data, int32_t size);
+                             int32_t salt, int32_t seq, aoo::time_tag tt, int32_t chn,
+                             int32_t nframes, int32_t frame, const char *data, int32_t size);
 };

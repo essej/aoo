@@ -6,7 +6,9 @@
 #include <iostream>
 #include <algorithm>
 #include <cstring>
+#include <random>
 
+/*------------------ alloca -----------------------*/
 #ifdef _WIN32
 # include <malloc.h> // MSVC or mingw on windows
 # ifdef _MSC_VER
@@ -271,6 +273,11 @@ void aoo_source::set_format(aoo_format &f){
         LOG_ERROR("mime type " << f.mime_type << " not supported!");
         return;
     }
+    // make new salt
+    thread_local std::random_device dev;
+    thread_local std::mt19937 mt(dev());
+    std::uniform_int_distribution<int32_t> dist;
+    salt_ = dist(mt);
     format_ = std::make_unique<aoo_format>(f);
     bytespersample_ = aoo_bytes_per_sample(format_->bitdepth);
     sequence_ = 0;
@@ -278,7 +285,7 @@ void aoo_source::set_format(aoo_format &f){
     for (auto& sink : sinks_){
         send_format(sink);
     }
-    LOG_VERBOSE("aoo_source::setformat: mime type = " << format_->mime_type << ", sr = " << format_->samplerate
+    LOG_VERBOSE("aoo_source::setformat: salt = " << salt_ << ", mime type = " << format_->mime_type << ", sr = " << format_->samplerate
                 << ", blocksize = " << format_->blocksize << ", overlap = " << format_->overlap);
 }
 
@@ -428,10 +435,10 @@ int32_t aoo_source_send(aoo_source *src) {
     return src->send();
 }
 
-#define AOO_DATA_HEADERSIZE 76
+#define AOO_DATA_HEADERSIZE 80
 // address pattern string: max 32 bytes
 // typetag string: max. 12 bytes
-// args (without blob data): 32 bytes
+// args (without blob data): 36 bytes
 bool aoo_source::send(){
     if (!format_){
         return false;
@@ -482,6 +489,7 @@ bool aoo_source::send(){
         int32_t nframes = d.quot + (d.rem != 0);
 
         // send a single frame to all sink
+        // /AoO/<sink>/data <src> <salt> <seq> <t> <channel_onset> <numpackets> <packetnum> <data>
         auto send_data = [&](int32_t frame, const char* data, auto n){
             LOG_DEBUG("send frame: " << frame << ", size: " << n);
             for (auto& sink : sinks_){
@@ -499,7 +507,7 @@ bool aoo_source::send(){
                 }
 
                 // for now ignore timetag
-                msg << id_ << sequence_ << osc::TimeTag(0)
+                msg << id_ << salt_ << sequence_ << osc::TimeTag(0)
                     << sink.channel << nframes << frame << osc::Blob(data, n)
                     << osc::EndMessage;
 
@@ -550,7 +558,7 @@ bool aoo_source::process(const aoo_sample **data, int32_t n){
     }
 }
 
-// /AoO/<sink>/format <src> <mime> <bitdepth> <numchannels> <samplerate> <blocksize> <overlap>
+// /AoO/<sink>/format <src> <salt> <mime> <bitdepth> <numchannels> <samplerate> <blocksize> <overlap>
 
 void aoo_source::send_format(sink_desc &sink){
     if (format_){
@@ -567,7 +575,7 @@ void aoo_source::send_format(sink_desc &sink){
             msg << osc::BeginMessage(AOO_FORMAT_WILDCARD);
         }
 
-        msg << id_ << format_->mime_type << static_cast<int32_t>(format_->bitdepth)
+        msg << id_ << salt_ << format_->mime_type << static_cast<int32_t>(format_->bitdepth)
             << format_->nchannels << format_->samplerate << format_->blocksize
             << format_->overlap << osc::EndMessage;
 
@@ -638,11 +646,12 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
     }
 
     if (!strcmp(msg.AddressPattern() + onset, AOO_FORMAT)){
-        if (msg.ArgumentCount() == 7){
+        if (msg.ArgumentCount() == AOO_FORMAT_NARGS){
             auto it = msg.ArgumentsBegin();
             try {
-                // make format from arguments
                 int32_t id = (it++)->AsInt32();
+                int32_t salt = (it++)->AsInt32();
+                // get format from arguments
                 aoo_format format;
                 auto mimetype = (it++)->AsString();
                 if (!strcmp(mimetype, AOO_MIME_PCM)){
@@ -657,7 +666,7 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
                 format.blocksize = (aoo_bitdepth)(it++)->AsInt32();
                 format.overlap = (aoo_bitdepth)(it++)->AsInt32();
 
-                handle_format_message(endpoint, fn, id, format);
+                handle_format_message(endpoint, fn, id, salt, format);
             } catch (const osc::Exception& e){
                 LOG_ERROR(e.what());
             }
@@ -665,11 +674,12 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
             LOG_ERROR("wrong number of arguments for /format message");
         }
     } else if (!strcmp(msg.AddressPattern() + onset, AOO_DATA)){
-        if (msg.ArgumentCount() == 7){
+        if (msg.ArgumentCount() == AOO_DATA_NARGS){
             auto it = msg.ArgumentsBegin();
             try {
                 // get header from arguments
                 auto id = (it++)->AsInt32();
+                auto salt = (it++)->AsInt32();
                 auto seq = (it++)->AsInt32();
                 auto tt {(it++)->AsTimeTag()};
                 auto chn = (it++)->AsInt32();
@@ -679,7 +689,8 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
                 osc::osc_bundle_element_size_t blobsize;
                 (it++)->AsBlob(blobdata, blobsize);
 
-                handle_data_message(endpoint, fn, id, seq, tt, chn, nframes, frame, (const char *)blobdata, blobsize);
+                handle_data_message(endpoint, fn, id, salt, seq, tt,
+                                    chn, nframes, frame, (const char *)blobdata, blobsize);
             } catch (const osc::Exception& e){
                 LOG_ERROR(e.what());
             }
@@ -693,12 +704,13 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
 }
 
 void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
-                                     int32_t id, const aoo_format &format){
+                                     int32_t id, int32_t salt, const aoo_format &format){
     LOG_DEBUG("handle format message");
     if (id == AOO_ID_WILDCARD){
         // update all sources from this endpoint
         for (auto& src : sources_){
             if (src.endpoint == endpoint){
+                src.salt = salt;
                 src.format = format;
                 update_source(src);
             }
@@ -718,8 +730,10 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
         }
         if (src == sources_.end()){
             // not found - add new source
-            sources_.emplace_back(endpoint, fn, id);
+            sources_.emplace_back(endpoint, fn, id, salt);
             src = sources_.end() - 1;
+        } else {
+            src->salt = salt;
         }
         // update source
         src->format = format;
@@ -728,14 +742,15 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
 }
 
 void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
-                                   int32_t seq, aoo::time_tag tt, int32_t chn,
-                                   int32_t nframes, int32_t frame,
-                                   const char *data, int32_t size){
+                                   int32_t salt, int32_t seq, aoo::time_tag tt, int32_t chn,
+                                   int32_t nframes, int32_t frame, const char *data, int32_t size){
     // first try to find existing source
     auto result = std::find_if(sources_.begin(), sources_.end(), [&](auto& s){
         return (s.endpoint == endpoint) && (s.id == id);
     });
-    if (result != sources_.end()){
+    // check if the 'salt' values match, otherwise the source format has changed and we haven't noticed,
+    // e.g. because of dropped UDP packets.
+    if (result != sources_.end() && result->salt == salt){
         LOG_DEBUG("handle data message");
         auto& src = *result;
         auto samplesize = aoo_bytes_per_sample(src.format.bitdepth);
@@ -1097,17 +1112,16 @@ block& block_queue::operator[](int32_t i){
 
 /*////////////////////////// source_desc /////////////////////////////*/
 
-source_desc::source_desc(void *_endpoint, aoo_replyfn _fn, int32_t _id)
-    : endpoint(_endpoint), fn(_fn), id(_id), channel(0), newest(0)
+source_desc::source_desc(void *_endpoint, aoo_replyfn _fn, int32_t _id, int32_t _salt)
+    : endpoint(_endpoint), fn(_fn), id(_id), salt(_salt), channel(0), newest(0)
 {
     memset(&format, 0, sizeof(format));
 }
 
 source_desc::source_desc(source_desc &&other)
-    : endpoint(other.endpoint), fn(other.fn), id(other.id),
-      format(other.format), channel(other.channel.load()),
-      newest(other.newest), audioqueue(std::move(other.audioqueue)),
-      blockqueue(std::move(other.blockqueue))
+    : endpoint(other.endpoint), fn(other.fn), id(other.id), salt(other.salt),
+      format(other.format), channel(other.channel.load()), newest(other.newest),
+      audioqueue(std::move(other.audioqueue)), blockqueue(std::move(other.blockqueue))
 {
     // invalidate other
     other.endpoint = nullptr;
@@ -1118,6 +1132,7 @@ source_desc& source_desc::operator=(source_desc &&other){
     endpoint = other.endpoint;
     fn = other.fn;
     id = other.id;
+    salt = other.salt;
     format = other.format;
     channel = other.channel.load();
     newest = other.newest;
