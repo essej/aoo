@@ -64,6 +64,11 @@ static void aoo_pack_channel(t_aoo_pack *x, t_floatarg f)
     }
 }
 
+static void aoo_pack_packetsize(t_aoo_pack *x, t_floatarg f)
+{
+    aoo_source_setpacketsize(x->x_aoo_source, f);
+}
+
 static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (argc){
@@ -192,5 +197,6 @@ void aoo_pack_tilde_setup(void)
     class_addlist(aoo_pack_class, (t_method)aoo_pack_list);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_set, gensym("set"), A_GIMME, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_channel, gensym("channel"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_clear, gensym("clear"), A_NULL);
 }

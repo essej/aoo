@@ -33,6 +33,7 @@ features
   can run on different threads. The buffer also helps to avoid network jitter at the cost of latency.
   The size can be adjusted dynamically.
 * data messages can arrive out of order up to a certain bound (determined by buffer size)
+* settable UDP packet size for audio data (to optimize for local networks or the internet)
 * Pd externals:
   [aoo_source~] takes audio signals and outputs OSC messages (also accepts /request messages from sinks)
   [aoo_sink~] takes OSC messages from several sinks and turns them into audio signals

@@ -16,6 +16,8 @@ class aoo_source {
 
     void set_buffersize(int32_t ms);
 
+    void set_packetsize(int32_t nbytes);
+
     void add_sink(void *sink, int32_t id, aoo_replyfn fn);
 
     void remove_sink(void *sink, int32_t id);
@@ -35,6 +37,7 @@ class aoo_source {
     std::unique_ptr<aoo_format> format_;
     int32_t bytespersample_ = 0;
     int32_t buffersize_ = 0;
+    int32_t packetsize_ = AOO_DEFPACKETSIZE;
     int32_t sequence_ = 0;
     lfqueue<aoo_sample> lfqueue_;
     // sinks

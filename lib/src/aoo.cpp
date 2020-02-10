@@ -248,6 +248,11 @@ int32_t aoo_bytes_per_sample(aoo_bitdepth bd){
 /*//////////////////// AoO source /////////////////////*/
 
 
+#define AOO_DATA_HEADERSIZE 80
+// address pattern string: max 32 bytes
+// typetag string: max. 12 bytes
+// args (without blob data): 36 bytes
+
 aoo_source * aoo_source_new(int32_t id) {
     return new aoo_source(id);
 }
@@ -297,6 +302,23 @@ void aoo_source::set_buffersize(int32_t ms){
     buffersize_ = ms > 0 ? ms : 0;
     if (format_){
         update();
+    }
+}
+
+void aoo_source_setpacketsize(aoo_source *src, int32_t nbytes){
+    src->set_packetsize(nbytes);
+}
+
+void aoo_source::set_packetsize(int32_t nbytes){
+    int32_t minsize = AOO_DATA_HEADERSIZE + 64;
+    if (nbytes < minsize){
+        LOG_WARNING("packet size too small! setting to " << minsize);
+        packetsize_ = minsize;
+    } else if (nbytes > AOO_MAXPACKETSIZE){
+        LOG_WARNING("packet size too big! setting to " << AOO_MAXPACKETSIZE);
+        packetsize_ = AOO_MAXPACKETSIZE;
+    } else {
+        packetsize_ = nbytes;
     }
 }
 
@@ -435,10 +457,6 @@ int32_t aoo_source_send(aoo_source *src) {
     return src->send();
 }
 
-#define AOO_DATA_HEADERSIZE 80
-// address pattern string: max 32 bytes
-// typetag string: max. 12 bytes
-// args (without blob data): 36 bytes
 bool aoo_source::send(){
     if (!format_){
         return false;
@@ -484,8 +502,8 @@ bool aoo_source::send(){
 
         lfqueue_.read_commit();
 
-        const auto maxbytes = AOO_MAXPACKETSIZE - AOO_DATA_HEADERSIZE;
-        auto d = div(nbytes, maxbytes);
+        auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
+        auto d = div(nbytes, maxpacketsize);
         int32_t nframes = d.quot + (d.rem != 0);
 
         // send a single frame to all sink
@@ -517,8 +535,8 @@ bool aoo_source::send(){
 
         auto blobptr = blobdata;
         // send large frames (might be 0)
-        for (int32_t i = 0; i < d.quot; ++i, blobptr += maxbytes){
-            send_data(i, blobptr, maxbytes);
+        for (int32_t i = 0; i < d.quot; ++i, blobptr += maxpacketsize){
+            send_data(i, blobptr, maxpacketsize);
         }
         // send remaining bytes as a single frame (might be the only one!)
         if (d.rem){

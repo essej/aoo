@@ -13,7 +13,8 @@ extern "C"
 
 typedef AOO_SAMPLETYPE aoo_sample;
 
-#define AOO_MAXPACKETSIZE 1600
+#define AOO_MAXPACKETSIZE 4096 // ?
+#define AOO_DEFPACKETSIZE 512 // ?
 #define AOO_DOMAIN "/AoO"
 #define AOO_FORMAT "/format"
 #define AOO_FORMAT_NARGS 8
@@ -68,6 +69,7 @@ void aoo_source_setformat(aoo_source *src, aoo_format *f);
 
 void aoo_source_setbuffersize(aoo_source *src, int32_t ms);
 
+void aoo_source_setpacketsize(aoo_source *src, int32_t nbytes);
 
 // will send /AoO/<id>/start message
 void aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn);
