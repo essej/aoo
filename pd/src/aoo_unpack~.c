@@ -15,6 +15,8 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
+#define DEFBUFSIZE 10
+
 static t_class *aoo_unpack_class;
 
 typedef struct _aoo_unpack
@@ -100,7 +102,7 @@ static void * aoo_unpack_new(t_symbol *s, int argc, t_atom *argv)
     x->x_n = nchannels > 1 ? nchannels : 1;
 
     // arg #3: buffer size (ms)
-    aoo_unpack_buffersize(x, atom_getfloatarg(2, argc, argv));
+    aoo_unpack_buffersize(x, argc > 2 ? atom_getfloat(argv + 2) : DEFBUFSIZE);
 
     // make signal outlets
     for (int i = 0; i < x->x_n; ++i){

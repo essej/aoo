@@ -140,6 +140,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
 {
     t_aoo_pack *x = (t_aoo_pack *)pd_new(aoo_pack_class);
 
+    x->x_f = 0;
     x->x_clock = clock_new(x, (t_method)aoo_pack_tick);
 
     // arg #1: ID
