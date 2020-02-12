@@ -12,8 +12,15 @@
 # library name
 lib.name = aoo
 
-# input source file (class name == source file basename)
-class.sources = aoo_pack~.cpp aoo_unpack~.cpp aoo_route.cpp
+# input source file
+# weird HACK for pd-lib-builder: use .cpp extension although the actual sources are .c files;
+# this causes the sources files to be compiled with gcc but linked with g++ (needed for aoo lib).
+class.sources = aoo_pack~.cpp aoo_unpack~.cpp aoo_route.cpp aoo_send~.cpp aoo_receive~.cpp
+
+define forWindows
+    aoo_send~.class.ldlibs = -lws2_32
+    aoo_receive~.class.ldlibs = -lws2_32
+endef
 
 AOO = ../../lib/src
 

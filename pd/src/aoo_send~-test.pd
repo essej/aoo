@@ -1,0 +1,51 @@
+#N canvas 88 160 401 465 12;
+#X obj 98 170 osc~ 440;
+#X msg 88 119 set \$1;
+#X obj 88 49 hradio 15 1 0 8 empty empty empty 0 -8 0 10 -262144 -1
+-1 1;
+#X msg 103 94 symbol *;
+#X obj 100 72 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X msg 40 45 clear;
+#X obj 176 170 osc~ 600;
+#X obj 98 148 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X obj 252 80 loadbang;
+#X msg 252 104 \; pd dsp 1;
+#X obj 108 234 loadbang;
+#X msg 251 173 channel \$1;
+#X obj 251 153 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X msg 109 262 disconnect \, connect localhost 9999;
+#X obj 68 416 block~;
+#X msg 68 387 set \$1;
+#X msg 71 306 64;
+#X msg 106 307 128;
+#X msg 142 308 256;
+#X obj 69 347 t f f;
+#X obj 129 378 s \$0-blocksize;
+#X msg 249 222 packetsize \$1;
+#X obj 249 202 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X obj 88 200 aoo_send~ 1 2;
+#X connect 0 0 23 0;
+#X connect 1 0 23 0;
+#X connect 2 0 1 0;
+#X connect 3 0 1 0;
+#X connect 4 0 1 0;
+#X connect 5 0 23 0;
+#X connect 6 0 23 1;
+#X connect 7 0 0 0;
+#X connect 8 0 9 0;
+#X connect 10 0 13 0;
+#X connect 11 0 23 0;
+#X connect 12 0 11 0;
+#X connect 13 0 23 0;
+#X connect 15 0 14 0;
+#X connect 16 0 19 0;
+#X connect 17 0 19 0;
+#X connect 18 0 19 0;
+#X connect 19 0 15 0;
+#X connect 19 1 20 0;
+#X connect 21 0 23 0;
+#X connect 22 0 21 0;

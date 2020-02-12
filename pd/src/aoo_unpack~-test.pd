@@ -1,5 +1,5 @@
-#N canvas 946 24 284 187 12;
-#N canvas 966 84 530 670 sub 1;
+#N canvas 946 24 284 111 12;
+#N canvas 757 44 868 670 sub 1;
 #X obj 48 253 spigot;
 #X obj 87 231 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
