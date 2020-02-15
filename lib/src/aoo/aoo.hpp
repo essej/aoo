@@ -130,24 +130,27 @@ private:
 
 struct source_desc {
     source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt);
-    source_desc(source_desc&& other);
-    source_desc& operator=(source_desc&& other);
+    source_desc(source_desc&& other) = default;
+    source_desc& operator=(source_desc&& other) = default;
     // data
     void *endpoint;
     aoo_replyfn fn;
     int32_t id;
     int32_t salt;
     aoo_format format;
-    std::atomic<int32_t> channel; // can be set dynamically!
-    int32_t newest; // sequence number of most recent block
-    lfqueue<aoo_sample> audioqueue;
+    int32_t newest = 0; // sequence number of most recent block
     block_queue blockqueue;
+    lfqueue<aoo_sample> audioqueue;
+    struct info {
+        double sr;
+        int32_t channel;
+    };
+    lfqueue<info> infoqueue;
     time_dll dll;
     double starttime = 0;
     // methods
+    void handle_timetag(time_tag tt);
     void send(const char *data, int32_t n);
-    void setup_dll(time_tag tt);
-    void update_dll(time_tag tt);
 };
 
 } // aoo

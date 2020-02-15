@@ -814,14 +814,18 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             // push silent blocks to keep the buffer full, but leave room for one block!
             int count = 0;
             auto nsamples = src.audioqueue.write_size();
-            while (src.audioqueue.write_available() > 1){
+            while (src.audioqueue.write_available() > 1 && src.infoqueue.write_available() > 1){
                 auto ptr = src.audioqueue.write_data();
-
                 for (int i = 0; i < nsamples; ++i){
                     ptr[i] = 0;
                 }
-
                 src.audioqueue.write_commit();
+                // push nominal samplerate + default channel (0)
+                aoo::source_desc::info i;
+                i.sr = src.format.samplerate;
+                i.channel = 0;
+                src.infoqueue.write(i);
+
                 count++;
             }
             LOG_DEBUG("wrote " << count << " silent blocks for transmission gap");
@@ -832,26 +836,24 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 // if the queue is full, we have to drop a block;
                 // in this case we send a block of zeros to the audio buffer
                 auto nsamples = src.audioqueue.write_size();
-                if (src.audioqueue.write_available()){
+                if (src.audioqueue.write_available() && src.infoqueue.write_available()){
                     auto ptr = src.audioqueue.write_data();
-
                     for (int i = 0; i < nsamples; ++i){
                         ptr[i] = 0;
                     }
-
                     src.audioqueue.write_commit();
+                    // push nominal samplerate + default channel (0)
+                    aoo::source_desc::info i;
+                    i.sr = src.format.samplerate;
+                    i.channel = 0;
+                    src.infoqueue.write(i);
+
                     LOG_DEBUG("wrote silence for dropped block");
                 }
             }
             // add new block
             auto nbytes = src.format.blocksize * src.format.nchannels * samplesize;
             block = queue.insert(aoo::block (seq, tt, chn, nbytes, nframes));
-            // TODO what if we miss the first block?
-            if (src.starttime == 0){
-                src.setup_dll(tt);
-            } else {
-                src.update_dll(tt);
-            }
         }
 
         // add frame to block
@@ -867,7 +869,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
         block = queue.begin();
         int32_t count = 0;
         while ((block != queue.end()) && block->complete()
-               && src.audioqueue.write_available()){
+               && src.audioqueue.write_available() && src.infoqueue.write_available()){
             LOG_DEBUG("write samples (" << block->sequence << ")");
             auto nsamples = src.audioqueue.write_size();
 
@@ -903,9 +905,14 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
 
             src.audioqueue.write_commit();
 
-            // update sink channel for this source
-            // LATER make this block accurate
-            src.channel = block->channel;
+            // first handle timetag!
+            src.handle_timetag(block->timetag);
+
+            // push info
+            aoo::source_desc::info i;
+            i.sr = src.dll.samplerate();
+            i.channel = block->channel;
+            src.infoqueue.write(i);
 
             count++;
             block++;
@@ -934,14 +941,22 @@ void aoo_sink::update_source(aoo::source_desc &src){
         auto writesize = src.format.blocksize * nchannels;
         auto readsize = blocksize_ * nchannels;
         auto nsamples = nbuffers * stride * nchannels;
-        LOG_VERBOSE("read size " << readsize << ", write size " << writesize << ", nsamples " << nsamples << ", nbuffers " << nbuffers);
+        auto nwritebuffers = nsamples / writesize;
+        LOG_VERBOSE("read size " << readsize << ", write size " << writesize << ", nsamples " << nsamples <<
+                    ", nbuffers " << nbuffers << ", nwritebuffers " << nwritebuffers);
         src.audioqueue.resize(nsamples, readsize, writesize);
-        while (src.audioqueue.write_available()){
+        src.infoqueue.resize(nwritebuffers, 1, 1);
+        while (src.audioqueue.write_available() && src.infoqueue.write_available()){
             LOG_DEBUG("write zero block");
             src.audioqueue.write_commit();
+            // push nominal samplerate + default channel (0)
+            aoo::source_desc::info i;
+            i.sr = src.format.samplerate;
+            i.channel = 0;
+            src.infoqueue.write(i);
         }
         // resize block queue
-        src.blockqueue.resize(nbuffers * std::max<int32_t>(1, blocksize_ / src.format.blocksize));
+        src.blockqueue.resize(nwritebuffers);
         src.newest = 0;
         src.starttime = 0;
         LOG_VERBOSE("update source " << src.id << ": sr = " << src.format.samplerate
@@ -978,13 +993,14 @@ int32_t aoo_sink::process(){
 
     for (auto& src : sources_){
         // check if the source has enough samples
-        if (src.audioqueue.read_available()){
+        if (src.audioqueue.read_available() && src.infoqueue.read_available()){
             // sum source into sink (interleaved -> non-interleaved),
             // starting at the desired sink channel offset.
             // out of bound source channels are silently ignored.
+            auto info = src.infoqueue.read();
             auto ptr = src.audioqueue.read_data();
-            auto offset = src.channel.load();
             auto nchannels = src.format.nchannels;
+            auto offset = info.channel;
             for (int i = 0; i < blocksize_; ++i){
                 for (int j = 0; j < nchannels; ++j){
                     auto chn = j + offset;
@@ -1160,53 +1176,32 @@ block& block_queue::operator[](int32_t i){
 /*////////////////////////// source_desc /////////////////////////////*/
 
 source_desc::source_desc(void *_endpoint, aoo_replyfn _fn, int32_t _id, int32_t _salt)
-    : endpoint(_endpoint), fn(_fn), id(_id), salt(_salt), channel(0), newest(0)
+    : endpoint(_endpoint), fn(_fn), id(_id), salt(_salt)
 {
     memset(&format, 0, sizeof(format));
-}
-
-source_desc::source_desc(source_desc &&other)
-    : endpoint(other.endpoint), fn(other.fn), id(other.id), salt(other.salt),
-      format(other.format), channel(other.channel.load()), newest(other.newest),
-      audioqueue(std::move(other.audioqueue)), blockqueue(std::move(other.blockqueue))
-{
-    // invalidate other
-    other.endpoint = nullptr;
-    other.fn = nullptr;
-}
-
-source_desc& source_desc::operator=(source_desc &&other){
-    endpoint = other.endpoint;
-    fn = other.fn;
-    id = other.id;
-    salt = other.salt;
-    format = other.format;
-    channel = other.channel.load();
-    newest = other.newest;
-    audioqueue = std::move(other.audioqueue);
-    blockqueue = std::move(other.blockqueue);
-    // invalidate other
-    other.endpoint = nullptr;
-    other.fn = nullptr;
-    return *this;
 }
 
 void source_desc::send(const char *data, int32_t n){
     fn(endpoint, data, n);
 }
-void source_desc::setup_dll(time_tag tt){
-    starttime = tt.to_double();
-    dll.setup(format.samplerate, format.blocksize, AOO_DLL_BW, 0);
-}
-void source_desc::update_dll(time_tag tt){
-    auto elapsed = tt.to_double() - starttime;
-    dll.update(elapsed);
-#if AOO_DEBUG_DLL
-    fprintf(stderr, "timetag: %llu, seconds: %f\n", tt.to_uint64(), tt.to_double());
-    fprintf(stderr, "elapsed: %f, period: %f, samplerate: %f\n",
-            elapsed, dll.period(), dll.samplerate());
-    fflush(stderr);
-#endif
+
+void source_desc::handle_timetag(time_tag tt){
+    // update DLL and push samplerate
+    // TODO: handle out of order packets
+    if (starttime == 0){
+        starttime = tt.to_double();
+        dll.setup(format.samplerate, format.blocksize, AOO_DLL_BW, 0);
+    } else {
+        auto elapsed = tt.to_double() - starttime;
+        dll.update(elapsed);
+    #if AOO_DEBUG_DLL
+        fprintf(stderr, "SOURCE\n");
+        // fprintf(stderr, "timetag: %llu, seconds: %f\n", tt.to_uint64(), tt.to_double());
+        fprintf(stderr, "elapsed: %f, period: %f, samplerate: %f\n",
+                elapsed, dll.period(), dll.samplerate());
+        fflush(stderr);
+    #endif
+    }
 }
 
 } // aoo
