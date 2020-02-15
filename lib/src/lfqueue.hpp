@@ -5,6 +5,7 @@
 #include <vector>
 #include <cassert>
 
+namespace aoo {
 
 // a lock-free queue which supports different read and write sizes
 template<typename T>
@@ -55,6 +56,13 @@ class lfqueue {
         return balance_.load(std::memory_order_acquire) / rdsize_;
     }
 
+    T read() {
+        auto head = rdhead_;
+        rdhead_ = (head + 1) % capacity();
+        --balance_;
+        return data_[head];
+    }
+
     const T* read_data() const {
         return &data_[rdhead_];
     }
@@ -71,6 +79,13 @@ class lfqueue {
     // returns: the number of available *blocks* for writing
     int32_t write_available() const {
         return (capacity() - balance_.load(std::memory_order_acquire)) / wrsize_;
+    }
+
+    void write(T value) {
+        auto head = wrhead_;
+        data_[head] = value;
+        wrhead_ = (head + 1) % capacity();
+        ++balance_;
     }
 
     T* write_data() {
@@ -94,3 +109,5 @@ class lfqueue {
     int32_t wrsize_{0};
     std::vector<T> data_;
 };
+
+} // aoo
