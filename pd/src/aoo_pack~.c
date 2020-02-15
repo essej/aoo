@@ -103,7 +103,8 @@ static t_int * aoo_pack_perform(t_int *w)
 
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
-    if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n)){
+    uint64_t tt = aoo_osctime();
+    if (aoo_source_process(x->x_aoo_source,(const aoo_sample **)x->x_vec, n, tt)){
         clock_set(x->x_clock, 0);
     }
     return w + 3;

@@ -46,6 +46,8 @@ typedef void (*aoo_replyfn)(void *, const char *, int32_t);
 
 int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *id);
 
+uint64_t aoo_osctime(void);
+
 /*//////////////////// AoO source /////////////////////*/
 
 typedef struct aoo_source aoo_source;
@@ -88,7 +90,7 @@ void aoo_source_handlemessage(aoo_source *src, const char *data, int32_t n,
 
 int32_t aoo_source_send(aoo_source *src);
 
-int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n);
+int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, uint64_t t);
 
 /*//////////////////// AoO sink /////////////////////*/
 

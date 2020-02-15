@@ -176,7 +176,8 @@ static t_int * aoo_send_perform(t_int *w)
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
     if (x->x_addr.sin_family == AF_INET){
-        if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n)){
+        uint64_t tt = aoo_osctime();
+        if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n, tt)){
             pthread_cond_signal(&x->x_cond);
         }
     }

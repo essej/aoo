@@ -30,7 +30,7 @@ class aoo_source {
 
     bool send();
 
-    bool process(const aoo_sample **data, int32_t n);
+    bool process(const aoo_sample **data, int32_t n, uint64_t t);
  private:
     const int32_t id_;
     int32_t salt_ = 0;
@@ -39,7 +39,8 @@ class aoo_source {
     int32_t buffersize_ = 0;
     int32_t packetsize_ = AOO_DEFPACKETSIZE;
     int32_t sequence_ = 0;
-    lfqueue<aoo_sample> lfqueue_;
+    aoo::lfqueue<aoo_sample> audioqueue_;
+    aoo::lfqueue<uint64_t> ttqueue_;
     // sinks
     struct sink_desc {
         // data
@@ -64,10 +65,20 @@ struct time_tag {
     time_tag() = default;
     time_tag(uint64_t ui){
         seconds = ui >> 32;
-        fraction = ui & 0xFFFF;
+        nanos = (uint32_t)ui;
     }
-    uint32_t seconds = 0;
-    uint32_t fraction = 0;
+    union {
+        struct {
+            uint32_t seconds = 0;
+            uint32_t nanos = 0;
+        };
+    };
+    double to_double() const {
+        return (double)seconds + (double)nanos / 4294967296.0;
+    }
+    uint64_t to_uint64() const {
+        return (uint64_t)seconds << 32 | (uint64_t)nanos;
+    }
 };
 
 struct block {

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstring>
 #include <random>
+#include <chrono>
 
 /*------------------ alloca -----------------------*/
 #ifdef _WIN32
@@ -228,6 +229,20 @@ int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *id){
     return 0;
 }
 
+// OSC time stamp (NTP time)
+uint64_t aoo_osctime(void){
+    // use system clock (1970 epoch)
+    auto epoch = std::chrono::system_clock::now().time_since_epoch();
+    auto s = std::chrono::duration_cast<std::chrono::seconds>(epoch);
+    auto ns = epoch - s;
+    // add number of seconds between 1900 and 1970 (including leap years!)
+    auto seconds = s.count() + 2208988800UL;
+    // fractional part in nanoseconds mapped to the range of uint32_t
+    auto nanos = (double)ns.count() * 4.294967296; // 2^32 / 1e9
+    // seconds in the higher 4 bytes, nanos in the lower 4 bytes
+    return ((int64_t)seconds << 32) | (uint64_t)nanos;
+}
+
 /*//////////////////// AoO format /////////////////////*/
 
 int32_t aoo_bytes_per_sample(aoo_bitdepth bd){
@@ -331,7 +346,8 @@ void aoo_source::update(){
     int32_t nbuffers = d.quot + (d.rem != 0); // round up
     nbuffers = std::max<int32_t>(nbuffers, 1);
     // resize audio queue
-    lfqueue_.resize(nbuffers * nsamples, nsamples, nsamples);
+    audioqueue_.resize(nbuffers * nsamples, nsamples, nsamples);
+    ttqueue_.resize(nbuffers, 1, 1);
     LOG_DEBUG("aoo_source::update: nbuffers = " << nbuffers);
 }
 
@@ -461,7 +477,7 @@ bool aoo_source::send(){
     if (!format_){
         return false;
     }
-    if (lfqueue_.read_available()){
+    if (audioqueue_.read_available() && ttqueue_.read_available()){
         const auto nchannels = format_->nchannels;
         const auto blocksize = format_->blocksize;
         const auto samplesize = bytespersample_;
@@ -469,7 +485,7 @@ bool aoo_source::send(){
         // copy and convert audio samples to blob data (non-interleaved -> interleaved)
         const auto nbytes = samplesize * nchannels * blocksize;
         char * blobdata = (char *)alloca(nbytes);
-        auto ptr = lfqueue_.read_data();
+        auto ptr = audioqueue_.read_data();
 
         auto samples_to_blob = [&](auto fn){
             auto blobptr = blobdata;
@@ -500,7 +516,10 @@ bool aoo_source::send(){
             break;
         }
 
-        lfqueue_.read_commit();
+        audioqueue_.read_commit();
+
+        // read timetag
+        auto tt = ttqueue_.read();
 
         auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
         auto d = div(nbytes, maxpacketsize);
@@ -525,7 +544,7 @@ bool aoo_source::send(){
                 }
 
                 // for now ignore timetag
-                msg << id_ << salt_ << sequence_ << osc::TimeTag(0)
+                msg << id_ << salt_ << sequence_ << osc::TimeTag(tt)
                     << sink.channel << nframes << frame << osc::Blob(data, n)
                     << osc::EndMessage;
 
@@ -551,24 +570,28 @@ bool aoo_source::send(){
     }
 }
 
-int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n) {
-    return src->process(data, n);
+int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, uint64_t t) {
+    return src->process(data, n, t);
 }
 
-bool aoo_source::process(const aoo_sample **data, int32_t n){
+bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
     if (!format_){
         return false;
     }
     // LATER allow different blocksize in process()
     assert(n == format_->blocksize);
-    if (lfqueue_.write_available()){
-        auto ptr = lfqueue_.write_data();
+    if (audioqueue_.write_available() && ttqueue_.write_available()){
         // copy audio samples (non-interleaved!)
+        auto ptr = audioqueue_.write_data();
         int nchannels = format_->nchannels;
         for (int i = 0; i < nchannels; ++i, ptr += n){
             std::copy(data[i], data[i] + n, ptr);
         }
-        lfqueue_.write_commit();
+        audioqueue_.write_commit();
+
+        // push timetag
+        ttqueue_.write(t);
+
         return true;
     } else {
         // LOG_DEBUG("couldn't process");
