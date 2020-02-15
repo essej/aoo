@@ -25,6 +25,11 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #define AOO_REQUEST "/request"
 #define AOO_MIME_PCM "audio/pcm"
 
+// 0: error, 1: warning, 2: verbose, 3: debug
+#ifndef LOGLEVEL
+ #define LOGLEVEL 2
+#endif
+
 // time DLL:
 // default bandwidth
 #ifndef AOO_DLL_BW
@@ -32,7 +37,7 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #endif
 
 #ifndef AOO_DEBUG_DLL
-#define AOO_DEBUG_DLL 1
+#define AOO_DEBUG_DLL 0
 #endif
 
 typedef enum aoo_bitdepth {

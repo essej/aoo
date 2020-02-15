@@ -26,7 +26,8 @@ AOO = ../../lib/src
 
 cflags = -I$(AOO) \
     -Wno-unused -Wno-unused-parameter \
-    -DLOGLEVEL=2
+    -DLOGLEVEL=2 \
+    -DAOO_DEBUG_DLL=0
 
 common.sources = \
     $(AOO)/aoo.cpp \

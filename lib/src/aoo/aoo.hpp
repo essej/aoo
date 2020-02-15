@@ -128,6 +128,24 @@ private:
     int32_t capacity_ = 0;
 };
 
+class dynamic_resampler {
+public:
+    void setup(int32_t srfrom, int32_t srto, int32_t blocksize, int32_t nchannels);
+    void clear();
+    void update(double srfrom, double srto);
+    int32_t write_available();
+    void write(const aoo_sample* data, int32_t n);
+    int32_t read_available();
+    void read(aoo_sample* data, int32_t n);
+private:
+    std::vector<aoo_sample> buffer_;
+    int32_t nchannels_ = 0;
+    double rdpos_ = 0;
+    int32_t wrpos_ = 0;
+    int32_t balance_ = 0;
+    double ratio_ = 1.0;
+};
+
 struct source_desc {
     source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt);
     source_desc(source_desc&& other) = default;
@@ -148,6 +166,7 @@ struct source_desc {
     lfqueue<info> infoqueue;
     time_dll dll;
     double starttime = 0;
+    dynamic_resampler resampler;
     // methods
     void handle_timetag(time_tag tt);
     void send(const char *data, int32_t n);

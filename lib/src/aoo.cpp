@@ -47,11 +47,6 @@
  #error No byte order defined
 #endif
 
-// 0: error, 1: warning, 2: verbose, 3: debug
-#ifndef LOGLEVEL
- #define LOGLEVEL 2
-#endif
-
 #define DO_LOG(x) (std::cerr << x << std::endl)
 
 #if LOGLEVEL >= 0
@@ -956,10 +951,12 @@ void aoo_sink::update_source(aoo::source_desc &src){
             i.channel = 0;
             src.infoqueue.write(i);
         }
+        // setup resampler
+        src.resampler.setup(src.format.samplerate, samplerate_, stride, nchannels);
         // resize block queue
         src.blockqueue.resize(nwritebuffers);
         src.newest = 0;
-        src.starttime = 0;
+        src.starttime = 0; // notify time DLL to update
         LOG_VERBOSE("update source " << src.id << ": sr = " << src.format.samplerate
                     << ", blocksize = " << src.format.blocksize << ", nchannels = "
                     << src.format.nchannels << ", bufsize = " << nsamples);
@@ -1011,33 +1008,41 @@ int32_t aoo_sink::process(uint64_t t){
     double realsr = dll_.samplerate();
 
     for (auto& src : sources_){
-        // check if the source has enough samples
-        if (src.audioqueue.read_available() && src.infoqueue.read_available()){
+        int32_t offset = 0;
+        int32_t nsamples = src.audioqueue.read_size();
+        // write samples into resampler
+        while (src.audioqueue.read_available() && src.infoqueue.read_available()
+               && src.resampler.write_available() >= nsamples){
+            auto info = src.infoqueue.read();
+        #if AOO_DEBUG_DLL
+            fprintf(stderr, "RESAMPLE FACTOR: %f\n", realsr / info.sr);
+            fflush(stderr);
+        #endif
+            offset = info.channel;
+            src.resampler.update(info.sr, realsr);
+            src.resampler.write(src.audioqueue.read_data(), nsamples);
+            src.audioqueue.read_commit();
+        }
+        // read samples from resampler
+        if (src.resampler.read_available() >= nsamples){
+            auto buf = (aoo_sample *)alloca(nsamples * sizeof(aoo_sample));
+            src.resampler.read(buf, nsamples);
+            LOG_DEBUG("did read resampler");
+
             // sum source into sink (interleaved -> non-interleaved),
             // starting at the desired sink channel offset.
             // out of bound source channels are silently ignored.
-            auto info = src.infoqueue.read();
-            auto ptr = src.audioqueue.read_data();
             auto nchannels = src.format.nchannels;
-            auto offset = info.channel;
             for (int i = 0; i < blocksize_; ++i){
                 for (int j = 0; j < nchannels; ++j){
                     auto chn = j + offset;
                     // ignore out-of-bound source channels!
                     if (chn < nchannels_){
-                        buffer_[chn * blocksize_ + i] += *ptr;
+                        buffer_[chn * blocksize_ + i] += *buf;
                     }
-                    ptr++;
+                    buf++;
                 }
             }
-            src.audioqueue.read_commit();
-
-            auto resample = realsr / info.sr;
-        #if AOO_DEBUG_DLL
-            fprintf(stderr, "RESAMPLE FACTOR: %f\n", resample);
-            fflush(stderr);
-        #endif
-
             LOG_DEBUG("read samples");
             didsomething = true;
         }
@@ -1198,6 +1203,78 @@ block& block_queue::operator[](int32_t i){
     return blocks_[i];
 }
 
+/*////////////////////////// dynamic_resampler /////////////////////////////*/
+
+void dynamic_resampler::setup(int32_t srfrom, int32_t srto, int32_t blocksize, int32_t nchannels){
+    auto nsamples = blocksize * nchannels;
+    double ratio = srfrom > srto ? (double)srfrom / (double)srto : (double)srto / (double)srfrom;
+    buffer_.resize((double)nsamples * ratio * 2); // extra space for fluctuations
+    nchannels_ = nchannels;
+}
+
+void dynamic_resampler::clear(){
+    rdpos_ = 0;
+    wrpos_ = 0;
+    balance_ = 0;
+}
+
+void dynamic_resampler::update(double srfrom, double srto){
+    ratio_ = srto / srfrom;
+}
+
+int32_t dynamic_resampler::write_available(){
+    return (int32_t)buffer_.size() - balance_;
+}
+
+void dynamic_resampler::write(const aoo_sample *data, int32_t n){
+    auto size = (int32_t)buffer_.size();
+    auto end = wrpos_ + n;
+    int32_t n1, n2;
+    if (end > size){
+        n1 = size - wrpos_;
+        n2 = n - n1;
+    } else {
+        n1 = n;
+        n2 = 0;
+    }
+    std::copy(data, data + n1, &buffer_[wrpos_]);
+    std::copy(data, data + n2, &buffer_[0]);
+    wrpos_ += n;
+    if (wrpos_ >= size){
+        wrpos_ -= size;;
+    }
+    balance_ += n;
+    LOG_DEBUG("wrpos: " << wrpos_);
+    LOG_DEBUG("resampler: wrote " << n << " samples");
+}
+
+int32_t dynamic_resampler::read_available(){
+    return balance_ * ratio_;
+}
+
+void dynamic_resampler::read(aoo_sample *data, int32_t n){
+    auto size = (int32_t)buffer_.size();
+    auto limit = size / nchannels_;
+    double incr = 1. / ratio_;
+    assert(incr > 0);
+    for (int i = 0; i < n; i += nchannels_){
+        int32_t index = (int32_t)rdpos_;
+        double fract = rdpos_ - (double)index;
+        // LOG_DEBUG("index: " << index << ", fract: " << fract);
+        for (int j = 0; j < nchannels_; ++j){
+            double a = buffer_[index * nchannels_ + j];
+            double b = buffer_[((index + 1) * nchannels_ + j) % size];
+            data[i + j] = a + (b - a) * fract;
+        }
+        rdpos_ += incr;
+        if (rdpos_ >= limit){
+            rdpos_ -= limit;
+        }
+    }
+    balance_ -= n;
+    LOG_DEBUG("rdpos: " << rdpos_);
+    LOG_DEBUG("resampler: read " << n << " samples");
+}
 
 /*////////////////////////// source_desc /////////////////////////////*/
 
