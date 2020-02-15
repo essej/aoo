@@ -18,6 +18,36 @@ typedef int socklen_t;
 
 #define DEFBUFSIZE 10
 
+int socket_close(int socket)
+{
+#ifdef _WIN32
+    return closesocket(socket);
+#else
+    return close(socket);
+#endif
+}
+
+void socket_error_print(const char *label)
+{
+#ifdef _WIN32
+    int err = WSAGetLastError();
+    char str[1024];
+    str[0] = 0;
+    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0,
+                   err, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT), str,
+                   sizeof(str), NULL);
+#else
+    int err = errno;
+    const char *str = strerror(err);
+#endif
+    if (label){
+        fprintf(stderr, "%s: %s (%d)\n", label, str, err);
+    } else {
+        fprintf(stderr, "%s (%d)\n", str, err);
+    }
+    fflush(stderr);
+}
+
 /*////////////////////// socket listener //////////////////*/
 
 typedef struct _client {
@@ -100,13 +130,7 @@ static void* socket_listener_threadfn(void *y)
             }
         } else if (nbytes < 0){
             if (!x->quit){
-            #ifdef _WIN32
-                int err = WSAGetLastError();
-            #else
-                int err = errno;
-            #endif
-                fprintf(stderr, "recv: %s (%d)\n", strerror(err), err);
-                fflush(stderr);
+                socket_error_print("recv");
             }
             break;
         }
@@ -154,12 +178,18 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
 
         // bind socket
         int sock = socket(AF_INET, SOCK_DGRAM, 0);
+        if (sock < 0){
+            socket_error_print("socket");
+            return 0;
+        }
         struct sockaddr_in sa;
         memset(&sa, 0, sizeof(sa));
         sa.sin_family = AF_INET;
         sa.sin_addr.s_addr = INADDR_ANY;
         sa.sin_port = htons(port);
         if (bind(sock, (const struct sockaddr *)&sa, sizeof(sa)) < 0){
+            pd_error(x, "couldn't bind to port %d", port);
+            socket_close(sock);
             error("couldn't bind to port %d", port);
         #ifdef _WIN32
             closesocket(sock);
@@ -178,7 +208,7 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
         pthread_mutex_init(&x->mutex, 0);
         pthread_create(&x->thread, 0, socket_listener_threadfn, x);
 
-        post("new socket listener on port %d", x->port);
+        verbose(0, "new socket listener on port %d", x->port);
     }
     return x;
 }
@@ -257,7 +287,8 @@ static int aoo_receive_match(t_aoo_receive *x, t_aoo_receive *other)
         return 1;
     }
     if (x->x_id == other->x_id){
-        post("warning: aoo_receive~ with id %d already exists!", x->x_id);
+        pd_error(x, "aoo_receive~ with ID %d on port %d already exists!",
+                 x->x_id, x->x_listener->port);
         return 1;
     }
     return 0;

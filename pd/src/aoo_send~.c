@@ -16,6 +16,36 @@ typedef int socklen_t;
 #include <netdb.h>
 #endif
 
+int socket_close(int socket)
+{
+#ifdef _WIN32
+    return closesocket(socket);
+#else
+    return close(socket);
+#endif
+}
+
+void socket_error_print(const char *label)
+{
+#ifdef _WIN32
+    int err = WSAGetLastError();
+    char str[1024];
+    str[0] = 0;
+    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0,
+                   err, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT), str,
+                   sizeof(str), NULL);
+#else
+    int err = errno;
+    const char *str = strerror(err);
+#endif
+    if (label){
+        fprintf(stderr, "%s: %s (%d)\n", label, str, err);
+    } else {
+        fprintf(stderr, "%s (%d)\n", str, err);
+    }
+    fflush(stderr);
+}
+
 #define DEFBUFSIZE 10
 
 static t_class *aoo_send_class;
@@ -60,7 +90,10 @@ static void aoo_send_reply(t_aoo_send *x, const char *data, int32_t n)
 {
     // called while holding the lock (socket might close or address might change!)
     if (x->x_socket >= 0 && x->x_addr.sin_family == AF_INET){
-        sendto(x->x_socket, data, n, 0, (const struct sockaddr *)&x->x_addr, sizeof(x->x_addr));
+        if (sendto(x->x_socket, data, n, 0,
+                   (const struct sockaddr *)&x->x_addr, sizeof(x->x_addr)) < 0){
+            socket_error_print("sendto");
+        }
     }
 }
 
@@ -189,6 +222,15 @@ void aoo_send_connect(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     t_symbol *hostname = atom_getsymbolarg(0, argc, argv);
     int port = atom_getfloatarg(1, argc, argv);
 
+    if (x->x_socket < 0){
+        pd_error(x, "can't connect - no socket!");
+    }
+
+    if (port <= 0){
+        post("bad port number %d", port);
+        return;
+    }
+
     struct hostent *he = gethostbyname(hostname->s_name);
     if (he){
         pthread_mutex_lock(&x->x_mutex);
@@ -216,6 +258,8 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
         if (setsockopt(x->x_socket, SOL_SOCKET, SO_BROADCAST, (void *)&val, sizeof(val))){
             error("couldn't set SO_BROADCAST");
         }
+    } else {
+        socket_error_print("socket");
     }
     pthread_mutex_init(&x->x_mutex, 0);
     pthread_cond_init(&x->x_cond, 0);
@@ -261,11 +305,7 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 static void aoo_send_free(t_aoo_send *x)
 {
     pthread_mutex_lock(&x->x_mutex);
-#ifdef _WIN32
-    closesocket(x->x_socket);
-#else
-    close(x->x_socket);
-#endif
+    socket_close(x->x_socket);
     x->x_socket = -1;
     pthread_mutex_unlock(&x->x_mutex);
 
