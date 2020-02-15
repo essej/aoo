@@ -75,7 +75,7 @@ typedef struct _socket_listener
     // threading
     pthread_t thread;
     pthread_mutex_t mutex;
-    int quit;
+    int quit; // should be atomic, but works anyway
 } t_socket_listener;
 
 static void socket_listener_reply(t_client *x, const char *data, int32_t n)
@@ -91,7 +91,7 @@ static void* socket_listener_threadfn(void *y)
 {
     t_socket_listener *x = (t_socket_listener *)y;
 
-    while (1){
+    while (!x->quit){
         struct sockaddr_storage sa;
         socklen_t len = sizeof(sa);
         char buf[AOO_MAXPACKETSIZE];
@@ -129,10 +129,10 @@ static void* socket_listener_threadfn(void *y)
                 // not a valid AoO OSC message
             }
         } else if (nbytes < 0){
+            // ignore errors when quitting
             if (!x->quit){
                 socket_error_print("recv");
             }
-            break;
         }
     }
 
@@ -145,7 +145,7 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
 {
     // make bind symbol for port number
     char buf[64];
-    snprintf(buf, sizeof(buf), "__aoo__listener_%d", port);
+    snprintf(buf, sizeof(buf), "socket listener %d", port);
     t_symbol *s = gensym(buf);
     t_socket_listener *x = (t_socket_listener *)pd_findbyclass(s, socket_listener_class);
     if (x){
@@ -166,17 +166,8 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
         pthread_mutex_unlock(&x->mutex);
     } else {
         // make new socket listener
-        x = getbytes(sizeof(t_socket_listener));
-        x->pd = socket_listener_class;
-        x->sym = s;
-        pd_bind(&x->pd, s);
 
-        // add receiver
-        x->recv = (t_aoo_receive **)getbytes(sizeof(t_aoo_receive *));
-        x->recv[0] = r;
-        x->numrecv = 1;
-
-        // bind socket
+        // first create sockets
         int sock = socket(AF_INET, SOCK_DGRAM, 0);
         if (sock < 0){
             socket_error_print("socket");
@@ -190,14 +181,20 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
         if (bind(sock, (const struct sockaddr *)&sa, sizeof(sa)) < 0){
             pd_error(x, "couldn't bind to port %d", port);
             socket_close(sock);
-            error("couldn't bind to port %d", port);
-        #ifdef _WIN32
-            closesocket(sock);
-        #else
-            close(sock);
-        #endif
             return 0;
         }
+
+        // now create socket listener instance
+        x = getbytes(sizeof(t_socket_listener));
+        x->pd = socket_listener_class;
+        x->sym = s;
+        pd_bind(&x->pd, s);
+
+        // add receiver
+        x->recv = (t_aoo_receive **)getbytes(sizeof(t_aoo_receive *));
+        x->recv[0] = r;
+        x->numrecv = 1;
+
         x->socket = sock;
         x->port = port;
         x->clients = 0;
@@ -215,44 +212,63 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
 
 void socket_listener_release(t_socket_listener *x, t_aoo_receive *r)
 {
-    if (x->numrecv > 0){
-        if (x->numrecv == 1){
-            // last instance
-            pd_unbind(&x->pd, x->sym);
-        #if 0
-            // tell socket to stop receiving
-            shutdown(x->socket, SD_RECEIVE);
-        #endif
-            x->quit = 1;
-            // close socket (will release any blocking recv() call)
-        #ifdef _WIN32
-            closesocket(x->socket);
-        #else
-            close(x->socket);
-        #endif
-            pthread_join(x->thread, 0); // wait for thread
-            pthread_mutex_destroy(&x->mutex);
-            // free memory
-            if (x->numclients){
-                freebytes(x->clients, sizeof(t_client) * x->numclients);
+    if (x->numrecv > 1){
+        // just remove receiver from list
+        int n = x->numrecv;
+        for (int i = 0; i < n; ++i){
+            if (x->recv[i] == r){
+                memmove(&x->recv[i], x->recv[i + 1], n - (i + 1));
+                x->recv = (t_aoo_receive **)resizebytes(x->recv, n * sizeof(t_aoo_receive *),
+                                                        (n - 1) * sizeof(t_aoo_receive *));
+                x->numrecv--;
+                return;
             }
-            freebytes(x->recv, sizeof(t_aoo_receive*));
-            post("released socket listener on port %d", x->port);
-            freebytes(x, sizeof(*x));
-        } else {
-            // just remove receiver from list
-            int n = x->numrecv;
-            for (int i = 0; i < n; ++i){
-                if (x->recv[i] == r){
-                    memmove(&x->recv[i], x->recv[i + 1], n - (i + 1));
-                    x->recv = (t_aoo_receive **)resizebytes(x->recv, n * sizeof(t_aoo_receive *),
-                                                            (n - 1) * sizeof(t_aoo_receive *));
-                    x->numrecv--;
-                    return;
-                }
-            }
-            bug("socket_listener_release: receiver not found!");
         }
+        bug("socket_listener_release: receiver not found!");
+    } else if (x->numrecv == 1){
+        // last instance
+        pd_unbind(&x->pd, x->sym);
+        // notify the thread that we're done
+        x->quit = 1;
+        // wake up blocking recv() by sending an empty packet
+        int didit = 0;
+        int signal = socket(AF_INET, SOCK_DGRAM, 0);
+        if (signal >= 0){
+            struct sockaddr_in sa;
+            memset(&sa, 0, sizeof(sa));
+            sa.sin_family = AF_INET;
+            sa.sin_addr.s_addr = htonl(0x7f000001); // localhost
+            sa.sin_port = htons(x->port);
+            if (sendto(x->socket, 0, 0, 0, (struct sockaddr *)&sa, sizeof(sa)) < 0){
+                socket_error_print("sendto");
+                socket_close(signal);
+            } else {
+                didit = 1;
+            }
+        } else {
+            socket_error_print("socket");
+        }
+        if (!didit){
+            // force wakeup by closing the socket.
+            // this is not nice and probably undefined behavior,
+            // the MSDN docs explicitly forbid it!
+            socket_close(x->socket);
+        }
+        pthread_join(x->thread, 0); // wait for thread
+        pthread_mutex_destroy(&x->mutex);
+
+        if (didit){
+            socket_close(x->socket);
+            socket_close(signal);
+        }
+
+        // free memory
+        if (x->numclients){
+            freebytes(x->clients, sizeof(t_client) * x->numclients);
+        }
+        freebytes(x->recv, sizeof(t_aoo_receive*));
+        verbose(0, "released socket listener on port %d", x->port);
+        freebytes(x, sizeof(*x));
     } else {
         bug("socket_listener_release: negative refcount!");
     }
@@ -261,7 +277,7 @@ void socket_listener_release(t_socket_listener *x, t_aoo_receive *r)
 void socket_listener_setup(void)
 {
     socket_listener_class = class_new(gensym("aoo socket listener"), 0, 0,
-                                  sizeof(t_socket_listener), 0, A_NULL);
+                                  sizeof(t_socket_listener), CLASS_PD, A_NULL);
 }
 
 /*///////////////////// aoo_receive~ ////////////////////*/
@@ -280,6 +296,7 @@ typedef struct _aoo_receive
     pthread_mutex_t x_mutex;
 } t_aoo_receive;
 
+// called from socket listener
 static int aoo_receive_match(t_aoo_receive *x, t_aoo_receive *other)
 {
     if (x == other){
