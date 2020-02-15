@@ -168,6 +168,13 @@ static void aoo_send_clear(t_aoo_send *x)
     pthread_mutex_unlock(&x->x_mutex);
 }
 
+#if AOO_DEBUG_DLL
+static double aoo_tt_to_seconds(uint64_t tt)
+{
+    return (double)(tt >> 32) + (tt & 0xFFFFFFFF) / 4294967296.0;
+}
+#endif
+
 static t_int * aoo_send_perform(t_int *w)
 {
     t_aoo_send *x = (t_aoo_send *)(w[1]);
@@ -177,6 +184,17 @@ static t_int * aoo_send_perform(t_int *w)
 
     if (x->x_addr.sin_family == AF_INET){
         uint64_t tt = aoo_osctime();
+#if AOO_DEBUG_DLL
+        double s = aoo_tt_to_seconds(tt);
+        static double last = 0;
+        double diff = 0;
+        if (last > 0){
+            diff = s - last;
+        }
+        last = s;
+        fprintf(stderr, "tt: %I64u, time: %f, diff (ms): %f\n", tt, s, diff * 1000.0);
+        fflush(stderr);
+    #endif
         if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n, tt)){
             pthread_cond_signal(&x->x_cond);
         }

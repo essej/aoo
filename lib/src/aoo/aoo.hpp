@@ -2,6 +2,7 @@
 
 #include "aoo.h"
 #include "lfqueue.hpp"
+#include "time_dll.hpp"
 
 #include <vector>
 #include <memory>
@@ -141,10 +142,12 @@ struct source_desc {
     int32_t newest; // sequence number of most recent block
     lfqueue<aoo_sample> audioqueue;
     block_queue blockqueue;
+    time_dll dll;
+    double starttime = 0;
     // methods
-    void send(const char *data, int32_t n){
-        fn(endpoint, data, n);
-    }
+    void send(const char *data, int32_t n);
+    void setup_dll(time_tag tt);
+    void update_dll(time_tag tt);
 };
 
 } // aoo

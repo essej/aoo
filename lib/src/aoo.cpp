@@ -846,6 +846,12 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             // add new block
             auto nbytes = src.format.blocksize * src.format.nchannels * samplesize;
             block = queue.insert(aoo::block (seq, tt, chn, nbytes, nframes));
+            // TODO what if we miss the first block?
+            if (src.starttime == 0){
+                src.setup_dll(tt);
+            } else {
+                src.update_dll(tt);
+            }
         }
 
         // add frame to block
@@ -937,7 +943,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
         // resize block queue
         src.blockqueue.resize(nbuffers * std::max<int32_t>(1, blocksize_ / src.format.blocksize));
         src.newest = 0;
-
+        src.starttime = 0;
         LOG_VERBOSE("update source " << src.id << ": sr = " << src.format.samplerate
                     << ", blocksize = " << src.format.blocksize << ", nchannels = "
                     << src.format.nchannels << ", bufsize = " << nsamples);
@@ -1183,6 +1189,24 @@ source_desc& source_desc::operator=(source_desc &&other){
     other.endpoint = nullptr;
     other.fn = nullptr;
     return *this;
+}
+
+void source_desc::send(const char *data, int32_t n){
+    fn(endpoint, data, n);
+}
+void source_desc::setup_dll(time_tag tt){
+    starttime = tt.to_double();
+    dll.setup(format.samplerate, format.blocksize, AOO_DLL_BW, 0);
+}
+void source_desc::update_dll(time_tag tt){
+    auto elapsed = tt.to_double() - starttime;
+    dll.update(elapsed);
+#if AOO_DEBUG_DLL
+    fprintf(stderr, "timetag: %llu, seconds: %f\n", tt.to_uint64(), tt.to_double());
+    fprintf(stderr, "elapsed: %f, period: %f, samplerate: %f\n",
+            elapsed, dll.period(), dll.samplerate());
+    fflush(stderr);
+#endif
 }
 
 } // aoo
