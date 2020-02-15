@@ -167,7 +167,7 @@ class aoo_sink {
 
     int32_t handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn);
 
-    int32_t process();
+    int32_t process(uint64_t t);
  private:
     const int32_t id_;
     int32_t nchannels_ = 0;
@@ -178,6 +178,8 @@ class aoo_sink {
     aoo_processfn processfn_ = nullptr;
     void *user_ = nullptr;
     std::vector<aoo::source_desc> sources_;
+    aoo::time_dll dll_;
+    double starttime_ = 0;
     // helper methods
     void update_source(aoo::source_desc& src);
 

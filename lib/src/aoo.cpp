@@ -650,6 +650,7 @@ void aoo_sink::setup(int32_t nchannels, int32_t sr, int32_t blocksize,
     for (auto& src : sources_){
         update_source(src);
     }
+    starttime_ = 0;
 }
 
 void aoo_sink_setbuffersize(aoo_sink *sink, int32_t ms){
@@ -979,17 +980,35 @@ void aoo_sink::request_format(void *endpoint, aoo_replyfn fn, int32_t id){
     fn(endpoint, msg.Data(), msg.Size());
 }
 
-int32_t aoo_sink_process(aoo_sink *sink) {
-    return sink->process();
+int32_t aoo_sink_process(aoo_sink *sink, uint64_t t) {
+    return sink->process(t);
 }
 
-int32_t aoo_sink::process(){
+int32_t aoo_sink::process(uint64_t t){
     if (!processfn_){
         return 0;
     }
     std::fill(buffer_.begin(), buffer_.end(), 0);
 
     bool didsomething = false;
+
+    // update time DLL
+    aoo::time_tag tt(t);
+    if (starttime_ == 0){
+        starttime_ = tt.to_double();
+        dll_.setup(samplerate_, blocksize_, AOO_DLL_BW, 0);
+    } else {
+        auto elapsed = tt.to_double() - starttime_;
+        dll_.update(elapsed);
+    #if AOO_DEBUG_DLL
+        fprintf(stderr, "SINK\n");
+        fprintf(stderr, "elapsed: %f, period: %f, samplerate: %f\n",
+                elapsed, dll_.period(), dll_.samplerate());
+        fflush(stderr);
+    #endif
+    }
+
+    double realsr = dll_.samplerate();
 
     for (auto& src : sources_){
         // check if the source has enough samples
@@ -1012,6 +1031,13 @@ int32_t aoo_sink::process(){
                 }
             }
             src.audioqueue.read_commit();
+
+            auto resample = realsr / info.sr;
+        #if AOO_DEBUG_DLL
+            fprintf(stderr, "RESAMPLE FACTOR: %f\n", resample);
+            fflush(stderr);
+        #endif
+
             LOG_DEBUG("read samples");
             didsomething = true;
         }

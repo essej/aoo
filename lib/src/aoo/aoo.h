@@ -32,7 +32,7 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #endif
 
 #ifndef AOO_DEBUG_DLL
-#define AOO_DEBUG_DLL 0
+#define AOO_DEBUG_DLL 1
 #endif
 
 typedef enum aoo_bitdepth {
@@ -122,7 +122,7 @@ void aoo_sink_setbuffersize(aoo_sink *sink, int32_t ms);
 int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
                             void *src, aoo_replyfn fn);
 
-int32_t aoo_sink_process(aoo_sink *sink);
+int32_t aoo_sink_process(aoo_sink *sink, uint64_t t);
 
 #ifdef __cplusplus
 } // extern "C"

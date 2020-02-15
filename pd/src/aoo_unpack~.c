@@ -65,7 +65,8 @@ static t_int * aoo_unpack_perform(t_int *w)
     t_aoo_unpack *x = (t_aoo_unpack *)(w[1]);
     int n = (int)(w[2]);
 
-    if (!aoo_sink_process(x->x_aoo_sink)){
+    uint64_t t = aoo_osctime();
+    if (!aoo_sink_process(x->x_aoo_sink, t)){
         // output zeros
         for (int i = 0; i < x->x_n; ++i){
             memset(x->x_vec[i], 0, sizeof(t_float) * n);

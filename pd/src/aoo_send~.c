@@ -16,6 +16,10 @@ typedef int socklen_t;
 #include <netdb.h>
 #endif
 
+#ifndef AOO_DEBUG_OSCTIME
+#define AOO_DEBUG_OSCTIME 0
+#endif
+
 int socket_close(int socket)
 {
 #ifdef _WIN32
@@ -168,7 +172,7 @@ static void aoo_send_clear(t_aoo_send *x)
     pthread_mutex_unlock(&x->x_mutex);
 }
 
-#if AOO_DEBUG_DLL
+#if AOO_DEBUG_OSCTIME
 static double aoo_tt_to_seconds(uint64_t tt)
 {
     return (double)(tt >> 32) + (tt & 0xFFFFFFFF) / 4294967296.0;
@@ -184,7 +188,7 @@ static t_int * aoo_send_perform(t_int *w)
 
     if (x->x_addr.sin_family == AF_INET){
         uint64_t tt = aoo_osctime();
-#if AOO_DEBUG_DLL
+    #if AOO_DEBUG_OSCTIME
         double s = aoo_tt_to_seconds(tt);
         static double last = 0;
         double diff = 0;
