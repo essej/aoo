@@ -27,7 +27,11 @@ AOO = ../../lib/src
 cflags = -I$(AOO) \
     -Wno-unused -Wno-unused-parameter \
     -DLOGLEVEL=2 \
-    -DAOO_DEBUG_DLL=0
+    -DAOO_PD_OSCTIMEHACK=1 \
+    -DAOO_DLL_BW=0.001 \
+    -DAOO_DEBUG_DLL=0 \
+    -DAOO_DEBUG_OSCTIME=0 \
+    -DAOO_DEBUG_RESAMPLING=1
 
 common.sources = \
     aoo_common.c \

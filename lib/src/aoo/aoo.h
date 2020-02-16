@@ -33,11 +33,15 @@ typedef AOO_SAMPLETYPE aoo_sample;
 // time DLL:
 // default bandwidth
 #ifndef AOO_DLL_BW
-#define AOO_DLL_BW 0.012
+ #define AOO_DLL_BW 0.012
 #endif
 
 #ifndef AOO_DEBUG_DLL
-#define AOO_DEBUG_DLL 0
+ #define AOO_DEBUG_DLL 0
+#endif
+
+#ifndef AOO_DEBUG_RESAMPLING
+ #define AOO_DEBUG_RESAMPLING 0
 #endif
 
 typedef enum aoo_bitdepth {
@@ -61,7 +65,14 @@ typedef void (*aoo_replyfn)(void *, const char *, int32_t);
 
 int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *id);
 
-uint64_t aoo_osctime(void);
+uint64_t aoo_osctime_get(void);
+
+double aoo_osctime_toseconds(uint64_t t);
+
+uint64_t aoo_osctime_fromseconds(double s);
+
+uint64_t aoo_osctime_addseconds(uint64_t t, double s);
+
 
 /*//////////////////// AoO source /////////////////////*/
 

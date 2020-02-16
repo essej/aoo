@@ -148,7 +148,7 @@ private:
     int32_t nchannels_ = 0;
     double rdpos_ = 0;
     int32_t wrpos_ = 0;
-    int32_t balance_ = 0;
+    double balance_ = 0;
     double ratio_ = 1.0;
 };
 

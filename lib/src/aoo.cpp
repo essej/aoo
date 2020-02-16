@@ -836,6 +836,10 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             // either network problem or stream has temporarily stopped.
             // clear the block queue and fill audio buffer with zeros.
             queue.clear();
+        #if 1
+            // reset time DLL
+            src.starttime = 0;
+        #endif
             // push silent blocks to keep the buffer full, but leave room for one block!
             int count = 0;
             auto nsamples = src.audioqueue.write_size();
@@ -853,7 +857,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
 
                 count++;
             }
-            LOG_DEBUG("wrote " << count << " silent blocks for transmission gap");
+            LOG_VERBOSE("wrote " << count << " silent blocks for transmission gap");
         }
         auto block = queue.find(seq);
         if (!block){
@@ -873,7 +877,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                     i.channel = 0;
                     src.infoqueue.write(i);
 
-                    LOG_DEBUG("wrote silence for dropped block");
+                    LOG_VERBOSE("wrote silence for dropped block");
                 }
             }
             // add new block
@@ -897,7 +901,6 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                && src.audioqueue.write_available() && src.infoqueue.write_available()){
             LOG_DEBUG("write samples (" << block->sequence << ")");
             auto nsamples = src.audioqueue.write_size();
-
             auto ptr = src.audioqueue.write_data();
 
             // convert from source format to samples.
@@ -972,7 +975,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
         src.audioqueue.resize(nsamples, readsize, writesize);
         src.infoqueue.resize(nwritebuffers, 1, 1);
         while (src.audioqueue.write_available() && src.infoqueue.write_available()){
-            LOG_DEBUG("write zero block");
+            LOG_VERBOSE("write silent block");
             src.audioqueue.write_commit();
             // push nominal samplerate + default channel (0)
             aoo::source_desc::info i;
@@ -1022,15 +1025,15 @@ int32_t aoo_sink::process(uint64_t t){
     aoo::time_tag tt(t);
     if (starttime_ == 0){
         starttime_ = tt.to_double();
+        LOG_VERBOSE("setup time DLL for sink");
         dll_.setup(samplerate_, blocksize_, AOO_DLL_BW, 0);
     } else {
         auto elapsed = tt.to_double() - starttime_;
         dll_.update(elapsed);
     #if AOO_DEBUG_DLL
-        fprintf(stderr, "SINK\n");
-        fprintf(stderr, "elapsed: %f, period: %f, samplerate: %f\n",
-                elapsed, dll_.period(), dll_.samplerate());
-        fflush(stderr);
+        DO_LOG("SINK");
+        DO_LOG("elapsed: " << elapsed << ", period: " << dll_period()
+               << ", samplerate: " << dll_.samplerate());
     #endif
     }
 
@@ -1043,10 +1046,6 @@ int32_t aoo_sink::process(uint64_t t){
         while (src.audioqueue.read_available() && src.infoqueue.read_available()
                && src.resampler.write_available() >= nsamples){
             auto info = src.infoqueue.read();
-        #if AOO_DEBUG_DLL
-            fprintf(stderr, "RESAMPLE FACTOR: %f\n", realsr / info.sr);
-            fflush(stderr);
-        #endif
             offset = info.channel;
             src.resampler.update(info.sr, realsr);
             src.resampler.write(src.audioqueue.read_data(), nsamples);
@@ -1239,6 +1238,7 @@ void dynamic_resampler::setup(int32_t srfrom, int32_t srto, int32_t blocksize, i
     double ratio = srfrom > srto ? (double)srfrom / (double)srto : (double)srto / (double)srfrom;
     buffer_.resize((double)nsamples * ratio * 2); // extra space for fluctuations
     nchannels_ = nchannels;
+    clear();
 }
 
 void dynamic_resampler::clear(){
@@ -1249,6 +1249,9 @@ void dynamic_resampler::clear(){
 
 void dynamic_resampler::update(double srfrom, double srto){
     ratio_ = srto / srfrom;
+#if AOO_DEBUG_RESAMPLING
+    DO_LOG("resample factor: " << ratio_);
+#endif
 }
 
 int32_t dynamic_resampler::write_available(){
@@ -1273,8 +1276,9 @@ void dynamic_resampler::write(const aoo_sample *data, int32_t n){
         wrpos_ -= size;;
     }
     balance_ += n;
-    LOG_DEBUG("wrpos: " << wrpos_);
-    LOG_DEBUG("resampler: wrote " << n << " samples");
+#if AOO_DEBUG_RESAMPLING
+    DO_LOG("resampler: wrote " << n << " samples, new pos: " << wrpos_);
+#endif
 }
 
 int32_t dynamic_resampler::read_available(){
@@ -1300,9 +1304,11 @@ void dynamic_resampler::read(aoo_sample *data, int32_t n){
             rdpos_ -= limit;
         }
     }
-    balance_ -= n;
-    LOG_DEBUG("rdpos: " << rdpos_);
-    LOG_DEBUG("resampler: read " << n << " samples");
+    balance_ -= n / ratio_;
+#if AOO_DEBUG_RESAMPLING
+    DO_LOG("resampler: read " << n << " samples, new pos: " << rdpos_);
+    DO_LOG("balance: " << balance_);
+#endif
 }
 
 /*////////////////////////// source_desc /////////////////////////////*/
@@ -1321,6 +1327,7 @@ void source_desc::handle_timetag(time_tag tt){
     // update DLL and push samplerate
     // TODO: handle out of order packets
     if (starttime == 0){
+        LOG_VERBOSE("setup time DLL for source");
         starttime = tt.to_double();
         dll.setup(format.samplerate, format.blocksize, AOO_DLL_BW, 0);
     } else {
