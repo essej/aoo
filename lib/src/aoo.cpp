@@ -1233,10 +1233,12 @@ block& block_queue::operator[](int32_t i){
 
 /*////////////////////////// dynamic_resampler /////////////////////////////*/
 
+#define AOO_RESAMPLER_LATENCY 3
+
 void dynamic_resampler::setup(int32_t srfrom, int32_t srto, int32_t blocksize, int32_t nchannels){
     auto nsamples = blocksize * nchannels;
     double ratio = srfrom > srto ? (double)srfrom / (double)srto : (double)srto / (double)srfrom;
-    buffer_.resize((double)nsamples * ratio * 2); // extra space for fluctuations
+    buffer_.resize((int32_t)(nsamples * ratio + 0.5) * AOO_RESAMPLER_LATENCY); // extra space for fluctuations
     nchannels_ = nchannels;
     clear();
 }
@@ -1251,6 +1253,9 @@ void dynamic_resampler::update(double srfrom, double srto){
     ratio_ = srto / srfrom;
 #if AOO_DEBUG_RESAMPLING
     DO_LOG("resample factor: " << ratio_);
+#endif
+#if AOO_DEBUG_RESAMPLING
+    DO_LOG("balance: " << balance_ << ", size: " << buffer_.size());
 #endif
 }
 
@@ -1273,12 +1278,9 @@ void dynamic_resampler::write(const aoo_sample *data, int32_t n){
     std::copy(data, data + n2, &buffer_[0]);
     wrpos_ += n;
     if (wrpos_ >= size){
-        wrpos_ -= size;;
+        wrpos_ -= size;
     }
     balance_ += n;
-#if AOO_DEBUG_RESAMPLING
-    DO_LOG("resampler: wrote " << n << " samples, new pos: " << wrpos_);
-#endif
 }
 
 int32_t dynamic_resampler::read_available(){
@@ -1293,7 +1295,6 @@ void dynamic_resampler::read(aoo_sample *data, int32_t n){
     for (int i = 0; i < n; i += nchannels_){
         int32_t index = (int32_t)rdpos_;
         double fract = rdpos_ - (double)index;
-        // LOG_DEBUG("index: " << index << ", fract: " << fract);
         for (int j = 0; j < nchannels_; ++j){
             double a = buffer_[index * nchannels_ + j];
             double b = buffer_[((index + 1) * nchannels_ + j) % size];
@@ -1304,11 +1305,7 @@ void dynamic_resampler::read(aoo_sample *data, int32_t n){
             rdpos_ -= limit;
         }
     }
-    balance_ -= n / ratio_;
-#if AOO_DEBUG_RESAMPLING
-    DO_LOG("resampler: read " << n << " samples, new pos: " << rdpos_);
-    DO_LOG("balance: " << balance_);
-#endif
+    balance_ -= n * incr;
 }
 
 /*////////////////////////// source_desc /////////////////////////////*/
