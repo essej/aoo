@@ -16,10 +16,6 @@ typedef int socklen_t;
 #include <netdb.h>
 #endif
 
-#ifndef AOO_DEBUG_OSCTIME
-#define AOO_DEBUG_OSCTIME 0
-#endif
-
 int socket_close(int socket)
 {
 #ifdef _WIN32
@@ -172,12 +168,7 @@ static void aoo_send_clear(t_aoo_send *x)
     pthread_mutex_unlock(&x->x_mutex);
 }
 
-#if AOO_DEBUG_OSCTIME
-static double aoo_tt_to_seconds(uint64_t tt)
-{
-    return (double)(tt >> 32) + (tt & 0xFFFFFFFF) / 4294967296.0;
-}
-#endif
+uint64_t aoo_pd_osctime(int n, t_float sr);
 
 static t_int * aoo_send_perform(t_int *w)
 {
@@ -187,19 +178,8 @@ static t_int * aoo_send_perform(t_int *w)
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
     if (x->x_addr.sin_family == AF_INET){
-        uint64_t tt = aoo_osctime();
-    #if AOO_DEBUG_OSCTIME
-        double s = aoo_tt_to_seconds(tt);
-        static double last = 0;
-        double diff = 0;
-        if (last > 0){
-            diff = s - last;
-        }
-        last = s;
-        fprintf(stderr, "tt: %I64u, time: %f, diff (ms): %f\n", tt, s, diff * 1000.0);
-        fflush(stderr);
-    #endif
-        if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n, tt)){
+        uint64_t t = aoo_pd_osctime(n, x->x_format.samplerate);
+        if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n, t)){
             pthread_cond_signal(&x->x_cond);
         }
     }

@@ -23,6 +23,7 @@ typedef struct _aoo_unpack
 {
     t_object x_obj;
     t_float x_f;
+    t_float x_sr;
     aoo_sink *x_aoo_sink;
     t_sample **x_vec;
     int x_n;
@@ -60,12 +61,14 @@ static void aoo_unpack_process(const aoo_sample **data, int32_t n, t_aoo_unpack 
     }
 }
 
+uint64_t aoo_pd_osctime(int n, t_float sr);
+
 static t_int * aoo_unpack_perform(t_int *w)
 {
     t_aoo_unpack *x = (t_aoo_unpack *)(w[1]);
     int n = (int)(w[2]);
 
-    uint64_t t = aoo_osctime();
+    uint64_t t = aoo_pd_osctime(n, x->x_sr);
     if (!aoo_sink_process(x->x_aoo_sink, t)){
         // output zeros
         for (int i = 0; i < x->x_n; ++i){
@@ -79,12 +82,12 @@ static t_int * aoo_unpack_perform(t_int *w)
 static void aoo_unpack_dsp(t_aoo_unpack *x, t_signal **sp)
 {
     int n = (aoo_bitdepth)sp[0]->s_n;
-    int sr = sp[0]->s_sr;
+    x->x_sr = sp[0]->s_sr;
 
     for (int i = 0; i < x->x_n; ++i){
         x->x_vec[i] = sp[i]->s_vec;
     }
-    aoo_sink_setup(x->x_aoo_sink, x->x_n, sr, n,
+    aoo_sink_setup(x->x_aoo_sink, x->x_n, x->x_sr, n,
                    (aoo_processfn)aoo_unpack_process, x);
 
     dsp_add(aoo_unpack_perform, 2, (t_int)x, (t_int)sp[0]->s_n);

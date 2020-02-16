@@ -68,6 +68,12 @@ struct time_tag {
         seconds = ui >> 32;
         nanos = (uint32_t)ui;
     }
+    time_tag(double s){
+        seconds = (uint64_t)s;
+        double fract = s - (double)seconds;
+        nanos = fract * 4294967296.0;
+    }
+
     union {
         struct {
             uint32_t seconds = 0;

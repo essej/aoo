@@ -96,6 +96,8 @@ static void aoo_pack_clear(t_aoo_pack *x)
     aoo_source_removeall(x->x_aoo_source);
 }
 
+uint64_t aoo_pd_osctime(int n, t_float sr);
+
 static t_int * aoo_pack_perform(t_int *w)
 {
     t_aoo_pack *x = (t_aoo_pack *)(w[1]);
@@ -103,8 +105,8 @@ static t_int * aoo_pack_perform(t_int *w)
 
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
-    uint64_t tt = aoo_osctime();
-    if (aoo_source_process(x->x_aoo_source,(const aoo_sample **)x->x_vec, n, tt)){
+    uint64_t t = aoo_pd_osctime(n, x->x_format.samplerate);
+    if (aoo_source_process(x->x_aoo_source,(const aoo_sample **)x->x_vec, n, t)){
         clock_set(x->x_clock, 0);
     }
     return w + 3;

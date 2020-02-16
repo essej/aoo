@@ -30,6 +30,7 @@ cflags = -I$(AOO) \
     -DAOO_DEBUG_DLL=0
 
 common.sources = \
+    aoo_common.c \
     $(AOO)/aoo.cpp \
     $(AOO)/lib/oscpack/osc/OscTypes.cpp \
     $(AOO)/lib/oscpack/osc/OscReceivedElements.cpp \
