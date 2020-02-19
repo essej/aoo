@@ -136,7 +136,8 @@ private:
 
 class dynamic_resampler {
 public:
-    void setup(int32_t srfrom, int32_t srto, int32_t blocksize, int32_t nchannels);
+    void setup(int32_t srfrom, int32_t srto,
+               int32_t nfrom, int32_t nto, int32_t nchannels);
     void clear();
     void update(double srfrom, double srto);
     int32_t write_available();

@@ -370,8 +370,8 @@ void aoo_source::update(){
     int32_t nbuffers = d.quot + (d.rem != 0); // round up
     nbuffers = std::max<int32_t>(nbuffers, 1);
     // resize audio queue
-    audioqueue_.resize(nbuffers * nsamples, nsamples, nsamples);
-    ttqueue_.resize(nbuffers, 1, 1);
+    audioqueue_.resize(nbuffers * nsamples, nsamples);
+    ttqueue_.resize(nbuffers, 1);
     LOG_DEBUG("aoo_source::update: nbuffers = " << nbuffers);
 }
 
@@ -842,7 +842,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
         #endif
             // push silent blocks to keep the buffer full, but leave room for one block!
             int count = 0;
-            auto nsamples = src.audioqueue.write_size();
+            auto nsamples = src.audioqueue.blocksize();
             while (src.audioqueue.write_available() > 1 && src.infoqueue.write_available() > 1){
                 auto ptr = src.audioqueue.write_data();
                 for (int i = 0; i < nsamples; ++i){
@@ -864,7 +864,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             if (queue.full()){
                 // if the queue is full, we have to drop a block;
                 // in this case we send a block of zeros to the audio buffer
-                auto nsamples = src.audioqueue.write_size();
+                auto nsamples = src.audioqueue.blocksize();
                 if (src.audioqueue.write_available() && src.infoqueue.write_available()){
                     auto ptr = src.audioqueue.write_data();
                     for (int i = 0; i < nsamples; ++i){
@@ -900,7 +900,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
         while ((block != queue.end()) && block->complete()
                && src.audioqueue.write_available() && src.infoqueue.write_available()){
             LOG_DEBUG("write samples (" << block->sequence << ")");
-            auto nsamples = src.audioqueue.write_size();
+            auto nsamples = src.audioqueue.blocksize();
             auto ptr = src.audioqueue.write_data();
 
             // convert from source format to samples.
@@ -957,23 +957,16 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
 void aoo_sink::update_source(aoo::source_desc &src){
     // resize audio ring buffer
     if (src.format.mime_type){
+        LOG_DEBUG("update source");
         // recalculate buffersize from ms to samples
         double bufsize = (double)buffersize_ * src.format.samplerate * 0.001;
-        // make sure that the buffer size is divisible by the *larger* blocksize
-        auto stride = std::max<int32_t>(src.format.blocksize, blocksize_);
-        auto d = div(bufsize, stride);
+        auto d = div(bufsize, src.format.blocksize);
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         nbuffers = std::max<int32_t>(1, nbuffers); // e.g. if buffersize_ is 0
         // resize audio buffer and initially fill with zeros.
-        auto nchannels = src.format.nchannels;
-        auto writesize = src.format.blocksize * nchannels;
-        auto readsize = blocksize_ * nchannels;
-        auto nsamples = nbuffers * stride * nchannels;
-        auto nwritebuffers = nsamples / writesize;
-        LOG_VERBOSE("read size " << readsize << ", write size " << writesize << ", nsamples " << nsamples <<
-                    ", nbuffers " << nbuffers << ", nwritebuffers " << nwritebuffers);
-        src.audioqueue.resize(nsamples, readsize, writesize);
-        src.infoqueue.resize(nwritebuffers, 1, 1);
+        auto nsamples = src.format.nchannels * src.format.blocksize;
+        src.audioqueue.resize(nbuffers * nsamples, nsamples);
+        src.infoqueue.resize(nbuffers, 1);
         while (src.audioqueue.write_available() && src.infoqueue.write_available()){
             LOG_VERBOSE("write silent block");
             src.audioqueue.write_commit();
@@ -984,14 +977,15 @@ void aoo_sink::update_source(aoo::source_desc &src){
             src.infoqueue.write(i);
         }
         // setup resampler
-        src.resampler.setup(src.format.samplerate, samplerate_, stride, nchannels);
+        src.resampler.setup(src.format.samplerate, samplerate_,
+                            src.format.blocksize, blocksize_, src.format.nchannels);
         // resize block queue
-        src.blockqueue.resize(nwritebuffers);
+        src.blockqueue.resize(nbuffers);
         src.newest = 0;
         src.starttime = 0; // notify time DLL to update
         LOG_VERBOSE("update source " << src.id << ": sr = " << src.format.samplerate
                     << ", blocksize = " << src.format.blocksize << ", nchannels = "
-                    << src.format.nchannels << ", bufsize = " << nsamples);
+                    << src.format.nchannels << ", bufsize = " << nbuffers * nsamples);
     }
 }
 
@@ -1037,30 +1031,31 @@ int32_t aoo_sink::process(uint64_t t){
     #endif
     }
 
-    double realsr = dll_.samplerate();
-
     for (auto& src : sources_){
         int32_t offset = 0;
-        int32_t nsamples = src.audioqueue.read_size();
+        int32_t nchannels = src.format.nchannels;
+        int32_t nsamples = src.audioqueue.blocksize();
+        double sr = 0;
         // write samples into resampler
         while (src.audioqueue.read_available() && src.infoqueue.read_available()
                && src.resampler.write_available() >= nsamples){
             auto info = src.infoqueue.read();
             offset = info.channel;
-            src.resampler.update(info.sr, realsr);
+            sr = info.sr;
             src.resampler.write(src.audioqueue.read_data(), nsamples);
             src.audioqueue.read_commit();
         }
+        // update resampler
+        src.resampler.update(sr, dll_.samplerate());
         // read samples from resampler
-        if (src.resampler.read_available() >= nsamples){
-            auto buf = (aoo_sample *)alloca(nsamples * sizeof(aoo_sample));
-            src.resampler.read(buf, nsamples);
-            LOG_DEBUG("did read resampler");
+        auto readsamples = blocksize_ * nchannels;
+        if (src.resampler.read_available() >= readsamples){
+            auto buf = (aoo_sample *)alloca(readsamples * sizeof(aoo_sample));
+            src.resampler.read(buf, readsamples);
 
             // sum source into sink (interleaved -> non-interleaved),
             // starting at the desired sink channel offset.
             // out of bound source channels are silently ignored.
-            auto nchannels = src.format.nchannels;
             for (int i = 0; i < blocksize_; ++i){
                 for (int j = 0; j < nchannels; ++j){
                     auto chn = j + offset;
@@ -1235,15 +1230,17 @@ block& block_queue::operator[](int32_t i){
 
 #define AOO_RESAMPLER_LATENCY 3
 
-void dynamic_resampler::setup(int32_t srfrom, int32_t srto, int32_t blocksize, int32_t nchannels){
-    auto nsamples = blocksize * nchannels;
+void dynamic_resampler::setup(int32_t srfrom, int32_t srto, int32_t nfrom, int32_t nto, int32_t nchannels){
+    nchannels_ = nchannels;
+    blocksize_ = std::max<int32_t>(nfrom, nto);
+    auto nsamples = blocksize_ * nchannels_;
     double ratio = srfrom > srto ? (double)srfrom / (double)srto : (double)srto / (double)srfrom;
     buffer_.resize((int32_t)(nsamples * ratio + 0.5) * AOO_RESAMPLER_LATENCY); // extra space for fluctuations
-    nchannels_ = nchannels;
     clear();
 }
 
 void dynamic_resampler::clear(){
+    ratio_ = 1;
     rdpos_ = 0;
     wrpos_ = 0;
     balance_ = 0;

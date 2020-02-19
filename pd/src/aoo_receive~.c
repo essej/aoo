@@ -384,7 +384,7 @@ static t_int * aoo_receive_perform(t_int *w)
 
 static void aoo_receive_dsp(t_aoo_receive *x, t_signal **sp)
 {
-    int n = (aoo_bitdepth)sp[0]->s_n;
+    int n = (int)sp[0]->s_n;
     x->x_sr = sp[0]->s_sr;
 
     for (int i = 0; i < x->x_n; ++i){
