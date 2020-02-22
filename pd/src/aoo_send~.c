@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <errno.h>
 
 #ifdef _WIN32
 #include <winsock2.h>

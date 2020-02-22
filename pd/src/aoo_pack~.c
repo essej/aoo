@@ -3,6 +3,7 @@
 
 #include <string.h>
 #include <assert.h>
+#include <errno.h>
 
 #ifdef _WIN32
 # include <malloc.h> // MSVC or mingw on windows
