@@ -59,6 +59,38 @@ static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
     aoo_source_handlemessage(x->x_aoo_source, msg, argc, x, (aoo_replyfn)aoo_pack_reply);
 }
 
+static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
+{
+    t_symbol *type = atom_getsymbolarg(0, argc, argv);
+    if (type == gensym("audio/pcm")){
+        int bitdepth = atom_getfloatarg(1, argc, argv);
+        switch (bitdepth){
+        case 2:
+            x->x_format.bitdepth = AOO_INT16;
+            break;
+        case 3:
+            x->x_format.bitdepth = AOO_INT24;
+            break;
+        case 0: // default
+        case 4:
+            x->x_format.bitdepth = AOO_FLOAT32;
+            break;
+        case 8:
+            x->x_format.bitdepth = AOO_FLOAT64;
+            break;
+        default:
+            pd_error(x, "%s: bad bitdepth argument %d", classname(x), bitdepth);
+            return;
+        }
+
+        x->x_format.mime_type = type->s_name;
+
+        aoo_source_setformat(x->x_aoo_source, &x->x_format);
+    } else {
+        pd_error(x, "%s: unknown MIME type '%s'", classname(x), type->s_name);
+    }
+}
+
 static void aoo_pack_channel(t_aoo_pack *x, t_floatarg f)
 {
     if (f >= 0){
@@ -157,7 +189,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     int nchannels = atom_getfloatarg(1, argc, argv);
     memset(&x->x_format, 0, sizeof(x->x_format));
     x->x_format.nchannels = nchannels > 1 ? nchannels : 1;
-    // LATER make this settable
+    // default MIME type
     x->x_format.mime_type = AOO_MIME_PCM;
     x->x_format.bitdepth = AOO_FLOAT32;
 
@@ -203,6 +235,7 @@ void aoo_pack_tilde_setup(void)
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_loadbang, gensym("loadbang"), A_FLOAT, A_NULL);
     class_addlist(aoo_pack_class, (t_method)aoo_pack_list);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_set, gensym("set"), A_GIMME, A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_format, gensym("format"), A_GIMME, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_channel, gensym("channel"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_clear, gensym("clear"), A_NULL);
