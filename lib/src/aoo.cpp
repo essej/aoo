@@ -966,6 +966,9 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
     }
 }
 
+// extra space to compensate heavy jitter
+#define AOO_RCVBUFSIZE 2
+
 void aoo_sink::update_source(aoo::source_desc &src){
     // resize audio ring buffer
     if (src.format.mime_type){
@@ -991,7 +994,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
         // setup resampler
         src.resampler.setup(src.format.blocksize, blocksize_, src.format.nchannels);
         // resize block queue
-        src.blockqueue.resize(nbuffers);
+        src.blockqueue.resize(nbuffers * AOO_RCVBUFSIZE);
         src.newest = 0;
         src.lastsent = 0;
         src.starttime = 0; // notify time DLL to update
