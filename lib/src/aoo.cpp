@@ -700,6 +700,10 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
     osc::ReceivedPacket packet(data, n);
     osc::ReceivedMessage msg(packet);
 
+    if (samplerate_ == 0){
+        return 1; // not setup yet
+    }
+
     int32_t sink = 0;
     auto onset = aoo_parsepattern(data, n, &sink);
     if (!onset){
@@ -786,14 +790,6 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
         auto src = std::find_if(sources_.begin(), sources_.end(), [&](auto& s){
             return (s.endpoint == endpoint) && (s.id == id);
         });
-        // LATER support different samplerates
-        if (format.samplerate != samplerate_){
-            LOG_ERROR("sample rate mismatch!");
-            if (src != sources_.end()){
-                sources_.erase(src);
-            }
-            return;
-        }
         if (src == sources_.end()){
             // not found - add new source
             sources_.emplace_back(endpoint, fn, id, salt);
@@ -977,8 +973,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
             src.infoqueue.write(i);
         }
         // setup resampler
-        src.resampler.setup(src.format.samplerate, samplerate_,
-                            src.format.blocksize, blocksize_, src.format.nchannels);
+        src.resampler.setup(src.format.blocksize, blocksize_, src.format.nchannels);
         // resize block queue
         src.blockqueue.resize(nbuffers);
         src.newest = 0;
@@ -1003,6 +998,10 @@ void aoo_sink::request_format(void *endpoint, aoo_replyfn fn, int32_t id){
     fn(endpoint, msg.Data(), msg.Size());
 }
 
+#if AOO_DEBUG_RESAMPLING
+thread_local int32_t debug_counter = 0;
+#endif
+
 int32_t aoo_sink_process(aoo_sink *sink, uint64_t t) {
     return sink->process(t);
 }
@@ -1026,24 +1025,29 @@ int32_t aoo_sink::process(uint64_t t){
         dll_.update(elapsed);
     #if AOO_DEBUG_DLL
         DO_LOG("SINK");
-        DO_LOG("elapsed: " << elapsed << ", period: " << dll_period()
+        DO_LOG("elapsed: " << elapsed << ", period: " << dll_.period()
                << ", samplerate: " << dll_.samplerate());
     #endif
     }
 
     for (auto& src : sources_){
         int32_t offset = 0;
+        double sr = src.format.samplerate;
         int32_t nchannels = src.format.nchannels;
         int32_t nsamples = src.audioqueue.blocksize();
-        double sr = 0;
         // write samples into resampler
         while (src.audioqueue.read_available() && src.infoqueue.read_available()
                && src.resampler.write_available() >= nsamples){
+        #if AOO_DEBUG_RESAMPLING
+            if (debug_counter == 0){
+                DO_LOG("read available: " << src.audioqueue.read_available());
+            }
+        #endif
             auto info = src.infoqueue.read();
             offset = info.channel;
             sr = info.sr;
             src.resampler.write(src.audioqueue.read_data(), nsamples);
-            src.audioqueue.read_commit();
+            src.audioqueue.read_commit(); 
         }
         // update resampler
         src.resampler.update(sr, dll_.samplerate());
@@ -1228,14 +1232,12 @@ block& block_queue::operator[](int32_t i){
 
 /*////////////////////////// dynamic_resampler /////////////////////////////*/
 
-#define AOO_RESAMPLER_LATENCY 3
+#define AOO_RESAMPLER_SPACE 3
 
-void dynamic_resampler::setup(int32_t srfrom, int32_t srto, int32_t nfrom, int32_t nto, int32_t nchannels){
+void dynamic_resampler::setup(int32_t nfrom, int32_t nto, int32_t nchannels){
     nchannels_ = nchannels;
-    blocksize_ = std::max<int32_t>(nfrom, nto);
-    auto nsamples = blocksize_ * nchannels_;
-    double ratio = srfrom > srto ? (double)srfrom / (double)srto : (double)srto / (double)srfrom;
-    buffer_.resize((int32_t)(nsamples * ratio + 0.5) * AOO_RESAMPLER_LATENCY); // extra space for fluctuations
+    auto blocksize = std::max<int32_t>(nfrom, nto);
+    buffer_.resize(blocksize * nchannels_ * AOO_RESAMPLER_SPACE); // extra space for fluctuations
     clear();
 }
 
@@ -1249,15 +1251,22 @@ void dynamic_resampler::clear(){
 void dynamic_resampler::update(double srfrom, double srto){
     ratio_ = srto / srfrom;
 #if AOO_DEBUG_RESAMPLING
-    DO_LOG("resample factor: " << ratio_);
+    if (debug_counter == 100){
+        DO_LOG("srfrom: " << srfrom << ", srto: " << srto);
+        DO_LOG("resample factor: " << ratio_);
+        DO_LOG("balance: " << balance_ << ", size: " << buffer_.size());
+        debug_counter = 0;
+    } else {
+        debug_counter++;
+    }
+#endif
 #endif
 #if AOO_DEBUG_RESAMPLING
-    DO_LOG("balance: " << balance_ << ", size: " << buffer_.size());
 #endif
 }
 
 int32_t dynamic_resampler::write_available(){
-    return (int32_t)buffer_.size() - balance_;
+    return (double)buffer_.size() - balance_ + 0.5; // !
 }
 
 void dynamic_resampler::write(const aoo_sample *data, int32_t n){
