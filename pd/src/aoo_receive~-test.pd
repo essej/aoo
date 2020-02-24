@@ -1,13 +1,13 @@
-#N canvas 946 24 284 138 12;
-#N canvas 873 306 499 478 sub 1;
+#N canvas 946 24 284 48 12;
+#N canvas 130 210 756 551 sub 1;
 #X obj 127 187 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
-10 -262144 -1 -1 0 256;
+10 -262144 -1 -1 20 256;
 #X obj 273 248 line~;
 #X msg 273 214 \$1 50;
 #X obj 65 282 *~;
 #X obj 209 285 *~;
 #X obj 274 23 vsl 15 128 0 1 0 0 empty empty empty 0 -9 0 10 -262144
--1 -1 0 1;
+-1 -1 1900 1;
 #X obj 273 183 t f f;
 #X obj 319 233 - 100;
 #X floatatom 319 257 5 0 0 0 - - -;
@@ -28,6 +28,22 @@
 #X msg 80 187 0;
 #X obj 26 165 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
+#X obj 204 385 sigmund~;
+#X floatatom 204 409 10 0 0 0 - - -;
+#X obj 126 120 loadbang;
+#X msg 126 144 20;
+#X obj 205 432 moses 0;
+#X obj 205 456 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
+-1 -1;
+#X obj 205 478 f;
+#X obj 236 481 + 1;
+#X floatatom 236 508 8 0 0 0 - - -;
+#X msg 228 456 -1;
+#X obj 263 457 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
+-1 -1;
+#X obj 326 361 cplot~;
+#X obj 639 333 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
+-1 -1;
 #X obj 65 250 aoo_receive~ 1 2 9999;
 #X connect 0 0 11 0;
 #X connect 1 0 3 1;
@@ -41,18 +57,32 @@
 #X connect 7 0 8 0;
 #X connect 9 0 7 0;
 #X connect 10 0 6 0;
-#X connect 11 0 25 0;
+#X connect 11 0 38 0;
 #X connect 12 0 13 0;
 #X connect 17 0 16 0;
 #X connect 18 0 17 0;
 #X connect 19 0 17 0;
 #X connect 20 0 17 0;
-#X connect 21 0 25 0;
+#X connect 21 0 38 0;
 #X connect 22 0 21 0;
 #X connect 23 0 21 0;
 #X connect 24 0 21 0;
-#X connect 25 0 3 0;
-#X connect 25 1 4 0;
+#X connect 25 0 26 0;
+#X connect 26 0 29 0;
+#X connect 27 0 28 0;
+#X connect 28 0 0 0;
+#X connect 29 0 30 0;
+#X connect 30 0 31 0;
+#X connect 31 0 32 0;
+#X connect 32 0 31 1;
+#X connect 32 0 33 0;
+#X connect 34 0 31 0;
+#X connect 35 0 34 0;
+#X connect 37 0 36 2;
+#X connect 38 0 3 0;
+#X connect 38 0 25 0;
+#X connect 38 0 36 0;
+#X connect 38 1 4 0;
 #X restore 34 46 pd sub;
 #X obj 34 70 dac~;
 #X connect 0 0 1 0;
