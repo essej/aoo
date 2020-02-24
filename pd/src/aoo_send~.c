@@ -259,7 +259,7 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     x->x_socket = socket(AF_INET, SOCK_DGRAM, 0);
     if (x->x_socket >= 0){
         int val = 1;
-        if (setsockopt(x->x_socket, SOL_SOCKET, SO_BROADCAST, (void *)&val, sizeof(val))){
+        if (setsockopt(x->x_socket, SOL_SOCKET, SO_BROADCAST, (const char *)&val, sizeof(val))){
             error("couldn't set SO_BROADCAST");
         }
     } else {
@@ -318,7 +318,7 @@ static void aoo_send_free(t_aoo_send *x)
     pthread_join(x->x_thread, 0);
 
     pthread_mutex_destroy(&x->x_mutex);
-    pthread_condattr_destroy(&x->x_cond);
+    pthread_cond_destroy(&x->x_cond);
 
     aoo_source_free(x->x_aoo_source);
 

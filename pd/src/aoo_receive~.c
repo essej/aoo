@@ -115,7 +115,7 @@ static void* socket_listener_threadfn(void *y)
             }
             if (!c){
                 // add client
-                x->clients = resizebytes(x->clients, sizeof(t_client) * n, sizeof(t_client) * (n + 1));
+                x->clients = (t_client *)resizebytes(x->clients, sizeof(t_client) * n, sizeof(t_client) * (n + 1));
                 x->numclients = n + 1;
                 c = &x->clients[n];
                 c->socket = x->socket;
@@ -191,7 +191,7 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
         }
 
         // now create socket listener instance
-        x = getbytes(sizeof(t_socket_listener));
+        x = (t_socket_listener *)getbytes(sizeof(t_socket_listener));
         x->pd = socket_listener_class;
         x->sym = s;
         pd_bind(&x->pd, s);
