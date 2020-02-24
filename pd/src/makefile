@@ -15,7 +15,7 @@ lib.name = aoo
 # input source file
 # weird HACK for pd-lib-builder: use .cpp extension although the actual sources are .c files;
 # this causes the sources files to be compiled with gcc but linked with g++ (needed for aoo lib).
-class.sources = aoo_pack~.c aoo_unpack~.c aoo_route.c aoo_send~.c aoo_receive~.c
+class.sources = aoo_pack~.cpp aoo_unpack~.cpp aoo_route.cpp aoo_send~.cpp aoo_receive~.cpp
 
 define forWindows
     aoo_send~.class.ldlibs = -lws2_32
@@ -34,7 +34,7 @@ cflags = -I$(AOO) \
     -DAOO_DEBUG_RESAMPLING=1
 
 common.sources = \
-    aoo_common.c \
+    aoo_common.cpp \
     $(AOO)/aoo.cpp \
     $(AOO)/lib/oscpack/osc/OscTypes.cpp \
     $(AOO)/lib/oscpack/osc/OscReceivedElements.cpp \
