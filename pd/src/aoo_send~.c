@@ -277,6 +277,10 @@ void aoo_send_connect(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         memcpy(&x->x_addr.sin_addr, he->h_addr_list[0], he->h_length);
         x->x_addr.sin_family = AF_INET;
         x->x_addr.sin_port = htons(port);
+        // send format message (but only if the "dsp" method has been called)
+        if (x->x_format.blocksize){
+            aoo_source_setformat(x->x_aoo_source, &x->x_format);
+        }
         pthread_mutex_unlock(&x->x_mutex);
 
         post("connected to %s on port %d", he->h_name, port);
