@@ -28,7 +28,7 @@ cflags = -I$(AOO) \
     -Wno-unused -Wno-unused-parameter \
     -DLOGLEVEL=2 \
     -DAOO_PD_OSCTIMEHACK=0 \
-    -DAOO_DLL_BW=0.001 \
+    -DAOO_DLL_BW=0.0001 \
     -DAOO_DEBUG_DLL=0 \
     -DAOO_DEBUG_OSCTIME=0 \
     -DAOO_DEBUG_RESAMPLING=1

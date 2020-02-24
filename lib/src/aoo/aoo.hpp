@@ -163,6 +163,7 @@ struct source_desc {
     int32_t salt;
     aoo_format format;
     int32_t newest = 0; // sequence number of most recent block
+    int32_t lastsent = 0;
     block_queue blockqueue;
     lfqueue<aoo_sample> audioqueue;
     struct info {

@@ -868,6 +868,10 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                     }
                     src.audioqueue.write_commit();
                     // push nominal samplerate + default channel (0)
+                #if 1
+                    // reset time DLL
+                    src.starttime = 0;
+                #endif
                     aoo::source_desc::info i;
                     i.sr = src.format.samplerate;
                     i.channel = 0;
@@ -896,6 +900,14 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
         while ((block != queue.end()) && block->complete()
                && src.audioqueue.write_available() && src.infoqueue.write_available()){
             LOG_DEBUG("write samples (" << block->sequence << ")");
+            if ((block->sequence - src.lastsent) > 1){
+            #if 1
+                // reset time DLL
+                src.starttime = 0;
+            #endif
+            }
+            src.lastsent = block->sequence;
+
             auto nsamples = src.audioqueue.blocksize();
             auto ptr = src.audioqueue.write_data();
 
@@ -977,6 +989,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
         // resize block queue
         src.blockqueue.resize(nbuffers);
         src.newest = 0;
+        src.lastsent = 0;
         src.starttime = 0; // notify time DLL to update
         LOG_VERBOSE("update source " << src.id << ": sr = " << src.format.samplerate
                     << ", blocksize = " << src.format.blocksize << ", nchannels = "
