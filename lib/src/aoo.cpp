@@ -1281,9 +1281,6 @@ void dynamic_resampler::update(double srfrom, double srto){
         debug_counter++;
     }
 #endif
-#endif
-#if AOO_DEBUG_RESAMPLING
-#endif
 }
 
 int32_t dynamic_resampler::write_available(){
