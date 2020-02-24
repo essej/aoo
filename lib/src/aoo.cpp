@@ -751,7 +751,7 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
                 auto id = (it++)->AsInt32();
                 auto salt = (it++)->AsInt32();
                 auto seq = (it++)->AsInt32();
-                auto tt {(it++)->AsTimeTag()};
+                uint64_t tt = (it++)->AsTimeTag();
                 auto chn = (it++)->AsInt32();
                 auto nframes = (it++)->AsInt32();
                 auto frame = (it++)->AsInt32();
