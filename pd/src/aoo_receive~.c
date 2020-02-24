@@ -18,6 +18,8 @@ typedef int socklen_t;
 #include <netdb.h>
 #endif
 
+#define classname(x) class_getname(*(t_pd *)x)
+
 #ifndef AOO_DEBUG_OSCTIME
 #define AOO_DEBUG_OSCTIME 0
 #endif
@@ -151,7 +153,7 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
 {
     // make bind symbol for port number
     char buf[64];
-    snprintf(buf, sizeof(buf), "socket listener %d", port);
+    snprintf(buf, sizeof(buf), "aoo listener %d", port);
     t_symbol *s = gensym(buf);
     t_socket_listener *x = (t_socket_listener *)pd_findbyclass(s, socket_listener_class);
     if (x){
@@ -185,7 +187,7 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
         sa.sin_addr.s_addr = INADDR_ANY;
         sa.sin_port = htons(port);
         if (bind(sock, (const struct sockaddr *)&sa, sizeof(sa)) < 0){
-            pd_error(x, "couldn't bind to port %d", port);
+            pd_error(x, "%s: couldn't bind to port %d", classname(r), port);
             socket_close(sock);
             return 0;
         }
@@ -311,8 +313,8 @@ static int aoo_receive_match(t_aoo_receive *x, t_aoo_receive *other)
         return 1;
     }
     if (x->x_id == other->x_id){
-        pd_error(x, "aoo_receive~ with ID %d on port %d already exists!",
-                 x->x_id, x->x_listener->port);
+        pd_error(x, "%s with ID %d on port %d already exists!",
+                 classname(x), x->x_id, x->x_listener->port);
         return 1;
     }
     return 0;

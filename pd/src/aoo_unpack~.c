@@ -15,6 +15,8 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
+#define classname(x) class_getname(*(t_pd *)x)
+
 #define DEFBUFSIZE 10
 
 static t_class *aoo_unpack_class;

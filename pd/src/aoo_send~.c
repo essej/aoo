@@ -17,6 +17,8 @@ typedef int socklen_t;
 #include <netdb.h>
 #endif
 
+#define classname(x) class_getname(*(t_pd *)x)
+
 int socket_close(int socket)
 {
 #ifdef _WIN32
@@ -227,11 +229,11 @@ void aoo_send_connect(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     int port = atom_getfloatarg(1, argc, argv);
 
     if (x->x_socket < 0){
-        pd_error(x, "can't connect - no socket!");
+        pd_error(x, "%s: can't connect - no socket!", classname(x));
     }
 
     if (port <= 0){
-        post("bad port number %d", port);
+        pd_error(x, "%s: bad port number %d", classname(x), port);
         return;
     }
 
@@ -247,7 +249,7 @@ void aoo_send_connect(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     } else {
         aoo_send_disconnect(x);
 
-        error("couldn't resolve hostname '%s'", hostname->s_name);
+        pd_error(x, "%s: couldn't resolve hostname '%s'", classname(x), hostname->s_name);
     }
 }
 
@@ -260,7 +262,7 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     if (x->x_socket >= 0){
         int val = 1;
         if (setsockopt(x->x_socket, SOL_SOCKET, SO_BROADCAST, (const char *)&val, sizeof(val))){
-            error("couldn't set SO_BROADCAST");
+            pd_error(x, "%s: couldn't set SO_BROADCAST", classname(x));
         }
     } else {
         socket_error_print("socket");

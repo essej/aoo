@@ -16,6 +16,8 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
+#define classname(x) class_getname(*(t_pd *)x)
+
 static t_class *aoo_pack_class;
 
 typedef struct _aoo_pack
