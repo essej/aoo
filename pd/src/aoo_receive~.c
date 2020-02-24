@@ -391,8 +391,11 @@ static void aoo_receive_dsp(t_aoo_receive *x, t_signal **sp)
     for (int i = 0; i < x->x_n; ++i){
         x->x_vec[i] = sp[i]->s_vec;
     }
+
+    pthread_mutex_lock(&x->x_mutex);
     aoo_sink_setup(x->x_aoo_sink, x->x_n, x->x_sr, n,
                    (aoo_processfn)aoo_receive_process, x);
+    pthread_mutex_unlock(&x->x_mutex);
 
     dsp_add(aoo_receive_perform, 2, (t_int)x, (t_int)sp[0]->s_n);
 }
@@ -402,6 +405,7 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
     t_aoo_receive *x = (t_aoo_receive *)pd_new(aoo_receive_class);
 
     x->x_f = 0;
+    x->x_sr = 0;
     x->x_listener = 0;
     pthread_mutex_init(&x->x_mutex, 0);
 
