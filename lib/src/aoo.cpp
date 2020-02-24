@@ -819,12 +819,16 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
         auto& queue = src.blockqueue;
 
         if (seq < src.newest){
-            LOG_DEBUG("block " << seq << " out of order!");
+            LOG_VERBOSE("block " << seq << " out of order!");
+        }
+
+        if ((seq - src.newest) > 1){
+            LOG_VERBOSE("skipped " << (seq - src.newest - 1) << " blocks");
         }
 
         if ((src.newest - seq) > queue.capacity()){
             // block too old, discard!
-            LOG_DEBUG("discarded old block " << seq);
+            LOG_VERBOSE("discarded old block " << seq);
             return;
         }
         if ((seq - src.newest) > queue.capacity()){
@@ -877,7 +881,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                     i.channel = 0;
                     src.infoqueue.write(i);
 
-                    LOG_VERBOSE("wrote silence for dropped block");
+                    LOG_VERBOSE("wrote silence for dropped block " << queue.front().sequence);
                 }
             }
             // add new block
@@ -998,6 +1002,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
 }
 
 void aoo_sink::request_format(void *endpoint, aoo_replyfn fn, int32_t id){
+    LOG_DEBUG("request format");
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
