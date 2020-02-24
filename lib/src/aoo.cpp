@@ -82,16 +82,16 @@ bool is_pow2(int32_t i){
 // conversion routines between aoo_sample and PCM data
 union sample_conv {
     int8_t b[8];
-    int16_t i16;
-    int32_t i32;
+    int16_t s;
+    int32_t i;
     float f;
     double d;
 };
 
 void sample_to_pcm_int16(aoo_sample in, char *out){
     sample_conv c;
-    int32_t temp = in * 0x7fff;
-    c.i16 = (temp > INT16_MAX) ? INT16_MAX : (temp < INT16_MIN) ? INT16_MIN : temp;
+    int32_t temp = in * 0x7fff + 0.5f;
+    c.s = (temp > INT16_MAX) ? INT16_MAX : (temp < INT16_MIN) ? INT16_MIN : temp;
 #if BYTE_ORDER == BIG_ENDIAN
     memcpy(out, c.b, 2); // optimized away
 #else
@@ -101,18 +101,18 @@ void sample_to_pcm_int16(aoo_sample in, char *out){
 }
 
 void sample_to_pcm_int24(aoo_sample in, char *out){
-    const int32_t int24_max = 8388607;
-    const int32_t int24_min = -8388608;
     sample_conv c;
-    int32_t temp = in * 8388608;
-    c.i32 = (temp > int24_max) ? int24_max : (temp < int24_min) ? int24_min : temp;
-    // only copy the lower 3 bytes!
+    int32_t temp = in * 0x7fffffff + 0.5f;
+    c.i = (temp > INT32_MAX) ? INT32_MAX : (temp < INT32_MIN) ? INT32_MIN : temp;
+    // only copy the highest 3 bytes!
 #if BYTE_ORDER == BIG_ENDIAN
-    memcpy(out, c.b + 1, 3); // optimized away
-#else
-    out[0] = c.b[2];
+    out[0] = c.b[0];
     out[1] = c.b[1];
-    out[2] = c.b[0];
+    out[2] = c.b[2];
+#else
+    out[0] = c.b[3];
+    out[1] = c.b[2];
+    out[2] = c.b[1];
 #endif
 }
 
@@ -154,22 +154,24 @@ aoo_sample pcm_int16_to_sample(const char *in){
     c.b[0] = in[1];
     c.b[1] = in[0];
 #endif
-    return(aoo_sample)c.i16 / 32768.f;
+    return(aoo_sample)c.s / 32768.f;
 }
 
 aoo_sample pcm_int24_to_sample(const char *in){
     sample_conv c;
-    // copy to the lower 3 bytes!
+    // copy to the highest 3 bytes!
 #if BYTE_ORDER == BIG_ENDIAN
-    c.b[0] = 0;
-    memcpy(c.b + 1, in, 3); // optimized away
-#else
-    c.b[0] = in[2];
+    c.b[0] = in[0];
     c.b[1] = in[1];
-    c.b[2] = in[0];
+    c.b[2] = in[2];
     c.b[3] = 0;
+#else
+    c.b[0] = 0;
+    c.b[1] = in[2];
+    c.b[2] = in[1];
+    c.b[3] = in[0];
 #endif
-    return (aoo_sample)c.i32 / 8388608.f;
+    return (aoo_sample)c.i / 0x7fffffff;
 }
 
 aoo_sample pcm_float32_to_sample(const char *in){
