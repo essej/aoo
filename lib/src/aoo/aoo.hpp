@@ -64,6 +64,7 @@ class aoo_source {
     // helper methods
     void update();
     void send_format(sink_desc& sink);
+    int32_t make_salt();
 };
 
 namespace aoo {

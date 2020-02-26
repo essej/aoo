@@ -319,11 +319,7 @@ void aoo_source::set_format(aoo_format &f){
         LOG_ERROR("mime type " << f.mime_type << " not supported!");
         return;
     }
-    // make new salt
-    thread_local std::random_device dev;
-    thread_local std::mt19937 mt(dev());
-    std::uniform_int_distribution<int32_t> dist;
-    salt_ = dist(mt);
+    salt_ = make_salt();
     format_ = std::make_unique<aoo_format>(f);
     bytespersample_ = aoo_bytes_per_sample(format_->bitdepth);
     sequence_ = 0;
@@ -614,6 +610,11 @@ bool aoo_source::send(){
         }
 
         sequence_++;
+        // handle overflow (with 64 samples @ 44.1 kHz this happens every 36 days)
+        // for now just force a reset by changing the salt, LATER think how to handle this better
+        if (sequence_ == INT32_MAX){
+            salt_ = make_salt();
+        }
         return true;
     } else {
         // LOG_DEBUG("couldn't send");
@@ -673,6 +674,13 @@ void aoo_source::send_format(sink_desc &sink){
 
         sink.send(msg.Data(), msg.Size());
     }
+}
+
+int32_t aoo_source::make_salt(){
+    thread_local std::random_device dev;
+    thread_local std::mt19937 mt(dev());
+    std::uniform_int_distribution<int32_t> dist;
+    return dist(mt);
 }
 
 /*//////////////////// aoo_sink /////////////////////*/
