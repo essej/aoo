@@ -99,6 +99,8 @@ void aoo_source_setbuffersize(aoo_source *src, int32_t ms);
 
 void aoo_source_setpacketsize(aoo_source *src, int32_t nbytes);
 
+void aoo_source_settimefilter(aoo_source *src, double coeff);
+
 // will send /AoO/<id>/start message
 void aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn);
 
@@ -132,6 +134,8 @@ void aoo_sink_setup(aoo_sink *sink, int32_t nchannels, int32_t sr, int32_t block
                     aoo_processfn fn, void *user);
 
 void aoo_sink_setbuffersize(aoo_sink *sink, int32_t ms);
+
+void aoo_sink_settimefilter(aoo_sink *sink, double coeff);
 
 // e.g. /start, /stop, /data.
 // Might reply with /AoO/<id>/request

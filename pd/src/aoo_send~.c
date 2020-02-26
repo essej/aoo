@@ -123,6 +123,13 @@ static void aoo_send_packetsize(t_aoo_send *x, t_floatarg f)
     pthread_mutex_unlock(&x->x_mutex);
 }
 
+static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
+{
+    pthread_mutex_lock(&x->x_mutex);
+    aoo_source_settimefilter(x->x_aoo_source, f);
+    pthread_mutex_unlock(&x->x_mutex);
+}
+
 static void aoo_send_reply(t_aoo_send *x, const char *data, int32_t n)
 {
     // called while holding the lock (socket might close or address might change!)
@@ -379,4 +386,5 @@ void aoo_send_tilde_setup(void)
     class_addmethod(aoo_send_class, (t_method)aoo_send_channel, gensym("channel"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_clear, gensym("clear"), A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
 }

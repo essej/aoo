@@ -55,6 +55,11 @@ static void aoo_unpack_buffersize(t_aoo_unpack *x, t_floatarg f)
     aoo_sink_setbuffersize(x->x_aoo_sink, f);
 }
 
+static void aoo_unpack_timefilter(t_aoo_unpack *x, t_floatarg f)
+{
+    aoo_sink_settimefilter(x->x_aoo_sink, f);
+}
+
 static void aoo_unpack_process(const aoo_sample **data, int32_t n, t_aoo_unpack *x)
 {
     assert(sizeof(t_sample) == sizeof(aoo_sample));
@@ -136,4 +141,6 @@ void aoo_unpack_tilde_setup(void)
     class_addlist(aoo_unpack_class, (t_method)aoo_unpack_list);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_buffersize,
                     gensym("bufsize"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_timefilter,
+                    gensym("timefilter"), A_FLOAT, A_NULL);
 }

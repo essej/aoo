@@ -131,6 +131,11 @@ static void aoo_pack_clear(t_aoo_pack *x)
     aoo_source_removeall(x->x_aoo_source);
 }
 
+static void aoo_pack_timefilter(t_aoo_pack *x, t_floatarg f)
+{
+    aoo_source_settimefilter(x->x_aoo_source, f);
+}
+
 uint64_t aoo_pd_osctime(int n, t_float sr);
 
 static t_int * aoo_pack_perform(t_int *w)
@@ -239,4 +244,5 @@ void aoo_pack_tilde_setup(void)
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_channel, gensym("channel"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_clear, gensym("clear"), A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
 }

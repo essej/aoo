@@ -363,6 +363,15 @@ void aoo_source::set_packetsize(int32_t nbytes){
     }
 }
 
+void aoo_source_settimefilter(aoo_source *src, double bandwidth){
+    src->set_timefilter(bandwidth);
+}
+
+void aoo_source::set_timefilter(double bandwidth){
+    bandwidth_ = bandwidth;
+    starttime_ = 0; // will update
+}
+
 void aoo_source::update(){
     assert(format_ != nullptr);
     auto nsamples = format_->blocksize * format_->nchannels;
@@ -374,6 +383,7 @@ void aoo_source::update(){
     // resize audio queue
     audioqueue_.resize(nbuffers * nsamples, nsamples);
     ttqueue_.resize(nbuffers, 1);
+    starttime_ = 0;
     LOG_DEBUG("aoo_source::update: nbuffers = " << nbuffers);
 }
 
@@ -545,14 +555,29 @@ bool aoo_source::send(){
         audioqueue_.read_commit();
 
         // read timetag
-        auto tt = ttqueue_.read();
+        aoo::time_tag tt = ttqueue_.read();
+        if (starttime_ == 0){
+            LOG_VERBOSE("setup time DLL for source");
+            starttime_ = tt.to_double();
+            dll_.setup(format_->samplerate, format_->blocksize, bandwidth_, 0);
+        } else {
+            auto elapsed = tt.to_double() - starttime_;
+            dll_.update(elapsed);
+        #if AOO_DEBUG_DLL
+            fprintf(stderr, "SOURCE\n");
+            // fprintf(stderr, "timetag: %llu, seconds: %f\n", tt.to_uint64(), tt.to_double());
+            fprintf(stderr, "elapsed: %f, period: %f, samplerate: %f\n",
+                    elapsed, dll_.period(), dll_.samplerate());
+            fflush(stderr);
+        #endif
+        }
 
         auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
         auto d = div(nbytes, maxpacketsize);
         int32_t nframes = d.quot + (d.rem != 0);
 
         // send a single frame to all sink
-        // /AoO/<sink>/data <src> <salt> <seq> <t> <channel_onset> <numpackets> <packetnum> <data>
+        // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <numpackets> <packetnum> <data>
         auto send_data = [&](int32_t frame, const char* data, auto n){
             LOG_DEBUG("send frame: " << frame << ", size: " << n);
             for (auto& sink : sinks_){
@@ -570,7 +595,7 @@ bool aoo_source::send(){
                 }
 
                 // for now ignore timetag
-                msg << id_ << salt_ << sequence_ << osc::TimeTag(tt)
+                msg << id_ << salt_ << sequence_ << dll_.samplerate()
                     << sink.channel << nframes << frame << osc::Blob(data, n)
                     << osc::EndMessage;
 
@@ -679,6 +704,16 @@ void aoo_sink::setup(int32_t nchannels, int32_t sr, int32_t blocksize,
     starttime_ = 0;
 }
 
+void aoo_sink_settimefilter(aoo_sink *sink, double coeff){
+    sink->set_timefilter(coeff);
+}
+
+void aoo_sink::set_timefilter(double bandwidth){
+    bandwidth_ = bandwidth;
+    starttime_ = 0; // will update
+}
+
+
 void aoo_sink_setbuffersize(aoo_sink *sink, int32_t ms){
     sink->set_buffersize(ms);
 }
@@ -753,7 +788,7 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
                 auto id = (it++)->AsInt32();
                 auto salt = (it++)->AsInt32();
                 auto seq = (it++)->AsInt32();
-                uint64_t tt = (it++)->AsTimeTag();
+                auto sr = (it++)->AsDouble();
                 auto chn = (it++)->AsInt32();
                 auto nframes = (it++)->AsInt32();
                 auto frame = (it++)->AsInt32();
@@ -761,7 +796,7 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
                 osc::osc_bundle_element_size_t blobsize;
                 (it++)->AsBlob(blobdata, blobsize);
 
-                handle_data_message(endpoint, fn, id, salt, seq, tt,
+                handle_data_message(endpoint, fn, id, salt, seq, sr,
                                     chn, nframes, frame, (const char *)blobdata, blobsize);
             } catch (const osc::Exception& e){
                 LOG_ERROR(e.what());
@@ -806,7 +841,7 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
 }
 
 void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
-                                   int32_t salt, int32_t seq, aoo::time_tag tt, int32_t chn,
+                                   int32_t salt, int32_t seq, double sr, int32_t chn,
                                    int32_t nframes, int32_t frame, const char *data, int32_t size){
     // first try to find existing source
     auto result = std::find_if(sources_.begin(), sources_.end(), [&](auto& s){
@@ -838,10 +873,6 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             // either network problem or stream has temporarily stopped.
             // clear the block queue and fill audio buffer with zeros.
             queue.clear();
-        #if 1
-            // reset time DLL
-            src.starttime = 0;
-        #endif
             // push silent blocks to keep the buffer full, but leave room for one block!
             int count = 0;
             auto nsamples = src.audioqueue.blocksize();
@@ -874,10 +905,6 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                     }
                     src.audioqueue.write_commit();
                     // push nominal samplerate + default channel (0)
-                #if 1
-                    // reset time DLL
-                    src.starttime = 0;
-                #endif
                     aoo::source_desc::info i;
                     i.sr = src.format.samplerate;
                     i.channel = 0;
@@ -888,7 +915,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             }
             // add new block
             auto nbytes = src.format.blocksize * src.format.nchannels * samplesize;
-            block = queue.insert(aoo::block (seq, tt, chn, nbytes, nframes));
+            block = queue.insert(aoo::block (seq, sr, chn, nbytes, nframes));
         }
 
         // add frame to block
@@ -906,13 +933,6 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
         while ((block != queue.end()) && block->complete()
                && src.audioqueue.write_available() && src.infoqueue.write_available()){
             LOG_DEBUG("write samples (" << block->sequence << ")");
-            if ((block->sequence - src.lastsent) > 1){
-            #if 1
-                // reset time DLL
-                src.starttime = 0;
-            #endif
-            }
-            src.lastsent = block->sequence;
 
             auto nsamples = src.audioqueue.blocksize();
             auto ptr = src.audioqueue.write_data();
@@ -947,12 +967,9 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
 
             src.audioqueue.write_commit();
 
-            // first handle timetag!
-            src.handle_timetag(block->timetag);
-
             // push info
             aoo::source_desc::info i;
-            i.sr = src.dll.samplerate();
+            i.sr = sr;
             i.channel = block->channel;
             src.infoqueue.write(i);
 
@@ -998,8 +1015,6 @@ void aoo_sink::update_source(aoo::source_desc &src){
         // resize block queue
         src.blockqueue.resize(nbuffers * AOO_RCVBUFSIZE);
         src.newest = 0;
-        src.lastsent = 0;
-        src.starttime = 0; // notify time DLL to update
         LOG_VERBOSE("update source " << src.id << ": sr = " << src.format.samplerate
                     << ", blocksize = " << src.format.blocksize << ", nchannels = "
                     << src.format.nchannels << ", bufsize = " << nbuffers * nsamples);
@@ -1042,7 +1057,7 @@ int32_t aoo_sink::process(uint64_t t){
     if (starttime_ == 0){
         starttime_ = tt.to_double();
         LOG_VERBOSE("setup time DLL for sink");
-        dll_.setup(samplerate_, blocksize_, AOO_DLL_BW, 0);
+        dll_.setup(samplerate_, blocksize_, bandwidth_, 0);
     } else {
         auto elapsed = tt.to_double() - starttime_;
         dll_.update(elapsed);
@@ -1115,9 +1130,9 @@ namespace aoo {
 
 /*////////////////////////// source_block /////////////////////////////*/
 
-block::block(int32_t seq, time_tag tt, int32_t chn,
+block::block(int32_t seq, double sr, int32_t chn,
                            int32_t nbytes, int32_t nframes)
-    : sequence(seq), timetag(tt), channel(chn), numframes(nframes)
+    : sequence(seq), samplerate(sr), channel(chn), numframes(nframes)
 {
     buffer.resize(nbytes);
     // set missing frame bits to 1
@@ -1344,26 +1359,6 @@ source_desc::source_desc(void *_endpoint, aoo_replyfn _fn, int32_t _id, int32_t 
 
 void source_desc::send(const char *data, int32_t n){
     fn(endpoint, data, n);
-}
-
-void source_desc::handle_timetag(time_tag tt){
-    // update DLL and push samplerate
-    // TODO: handle out of order packets
-    if (starttime == 0){
-        LOG_VERBOSE("setup time DLL for source");
-        starttime = tt.to_double();
-        dll.setup(format.samplerate, format.blocksize, AOO_DLL_BW, 0);
-    } else {
-        auto elapsed = tt.to_double() - starttime;
-        dll.update(elapsed);
-    #if AOO_DEBUG_DLL
-        fprintf(stderr, "SOURCE\n");
-        // fprintf(stderr, "timetag: %llu, seconds: %f\n", tt.to_uint64(), tt.to_double());
-        fprintf(stderr, "elapsed: %f, period: %f, samplerate: %f\n",
-                elapsed, dll.period(), dll.samplerate());
-        fflush(stderr);
-    #endif
-    }
 }
 
 } // aoo

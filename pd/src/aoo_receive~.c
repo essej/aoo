@@ -337,6 +337,13 @@ static void aoo_receive_buffersize(t_aoo_receive *x, t_floatarg f)
     pthread_mutex_unlock(&x->x_mutex);
 }
 
+static void aoo_receive_timefilter(t_aoo_receive *x, t_floatarg f)
+{
+    pthread_mutex_lock(&x->x_mutex);
+    aoo_sink_settimefilter(x->x_aoo_sink, f);
+    pthread_mutex_unlock(&x->x_mutex);
+}
+
 void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
 {
     int port = f;
@@ -457,4 +464,6 @@ void aoo_receive_tilde_setup(void)
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_listen, gensym("listen"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_buffersize,
                     gensym("bufsize"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_timefilter,
+                    gensym("timefilter"), A_FLOAT, A_NULL);
 }

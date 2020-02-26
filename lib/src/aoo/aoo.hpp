@@ -19,6 +19,8 @@ class aoo_source {
 
     void set_packetsize(int32_t nbytes);
 
+    void set_timefilter(double bandwidth);
+
     void add_sink(void *sink, int32_t id, aoo_replyfn fn);
 
     void remove_sink(void *sink, int32_t id);
@@ -42,6 +44,9 @@ class aoo_source {
     int32_t sequence_ = 0;
     aoo::lfqueue<aoo_sample> audioqueue_;
     aoo::lfqueue<uint64_t> ttqueue_;
+    aoo::time_dll dll_;
+    double bandwidth_ = AOO_DLL_BW;
+    double starttime_ = 0;
     // sinks
     struct sink_desc {
         // data
@@ -86,11 +91,25 @@ struct time_tag {
     uint64_t to_uint64() const {
         return (uint64_t)seconds << 32 | (uint64_t)nanos;
     }
+    time_tag operator+(time_tag t){
+        time_tag result;
+        uint64_t ns = nanos + t.nanos;
+        result.nanos = ns & 0xFFFFFFFF;
+        result.seconds = seconds + t.seconds + (ns >> 32);
+        return result;
+    }
+    time_tag operator-(time_tag t){
+        time_tag result;
+        uint64_t ns = ((uint64_t)1 << 32) + nanos - t.nanos;
+        result.nanos = ns & 0xFFFFFFFF;
+        result.seconds = seconds - t.seconds - !(ns >> 32);
+        return result;
+    }
 };
 
 struct block {
     block(){}
-    block(int32_t seq, time_tag tt, int32_t chn,
+    block(int32_t seq, double sr, int32_t chn,
                  int32_t nbytes, int32_t nframes);
     block(const block&) = default;
     block(block&&) = default;
@@ -101,7 +120,7 @@ struct block {
     void add_frame(int which, const char *data, int32_t n);
     // data
     int32_t sequence = -1;
-    time_tag timetag;
+    double samplerate = 0;
     int32_t channel = 0;
     const char* data() const { return buffer.data(); }
     int32_t size() const { return buffer.size(); }
@@ -163,7 +182,6 @@ struct source_desc {
     int32_t salt;
     aoo_format format;
     int32_t newest = 0; // sequence number of most recent block
-    int32_t lastsent = 0;
     block_queue blockqueue;
     lfqueue<aoo_sample> audioqueue;
     struct info {
@@ -171,11 +189,8 @@ struct source_desc {
         int32_t channel;
     };
     lfqueue<info> infoqueue;
-    time_dll dll;
-    double starttime = 0;
     dynamic_resampler resampler;
     // methods
-    void handle_timetag(time_tag tt);
     void send(const char *data, int32_t n);
 };
 
@@ -188,6 +203,8 @@ class aoo_sink {
 
     void setup(int32_t nchannels, int32_t sr, int32_t blocksize,
                aoo_processfn fn, void *user);
+
+    void set_timefilter(double bandwidth);
 
     void set_buffersize(int32_t ms);
 
@@ -205,6 +222,7 @@ class aoo_sink {
     void *user_ = nullptr;
     std::vector<aoo::source_desc> sources_;
     aoo::time_dll dll_;
+    double bandwidth_ = AOO_DLL_BW;
     double starttime_ = 0;
     // helper methods
     void update_source(aoo::source_desc& src);
@@ -215,6 +233,6 @@ class aoo_sink {
                                int32_t id, int32_t salt, const aoo_format& format);
 
     void handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
-                             int32_t salt, int32_t seq, aoo::time_tag tt, int32_t chn,
+                             int32_t salt, int32_t seq, double sr, int32_t chn,
                              int32_t nframes, int32_t frame, const char *data, int32_t size);
 };
