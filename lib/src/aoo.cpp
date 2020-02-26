@@ -699,6 +699,7 @@ void aoo_sink::setup(int32_t nchannels, int32_t sr, int32_t blocksize,
     user_ = user;
     buffer_.resize(blocksize * nchannels);
     for (auto& src : sources_){
+        // don't need to lock
         update_source(src);
     }
     starttime_ = 0;
@@ -721,6 +722,7 @@ void aoo_sink_setbuffersize(aoo_sink *sink, int32_t ms){
 void aoo_sink::set_buffersize(int32_t ms){
     buffersize_ = ms > 0 ? ms : 0;
     for (auto& src : sources_){
+        // don't need to lock
         update_source(src);
     }
 }
@@ -817,6 +819,7 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
         // update all sources from this endpoint
         for (auto& src : sources_){
             if (src.endpoint == endpoint){
+                std::unique_lock<std::mutex> lock(mutex_); // !
                 src.salt = salt;
                 src.format = format;
                 update_source(src);
@@ -827,6 +830,7 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
         auto src = std::find_if(sources_.begin(), sources_.end(), [&](auto& s){
             return (s.endpoint == endpoint) && (s.id == id);
         });
+        std::unique_lock<std::mutex> lock(mutex_); // !
         if (src == sources_.end()){
             // not found - add new source
             sources_.emplace_back(endpoint, fn, id, salt);
@@ -1068,6 +1072,9 @@ int32_t aoo_sink::process(uint64_t t){
     #endif
     }
 
+    // the mutex is uncontended most of the time, but LATER we might replace
+    // this with a lockless and/or waitfree solution
+    std::unique_lock<std::mutex> lock(mutex_);
     for (auto& src : sources_){
         int32_t offset = 0;
         double sr = src.format.samplerate;
@@ -1112,6 +1119,7 @@ int32_t aoo_sink::process(uint64_t t){
             didsomething = true;
         }
     }
+    lock.unlock();
 
     if (didsomething){
         // set buffer pointers and pass to audio callback

@@ -7,6 +7,7 @@
 #include <vector>
 #include <memory>
 #include <atomic>
+#include <mutex>
 
 class aoo_source {
  public:
@@ -221,6 +222,7 @@ class aoo_sink {
     aoo_processfn processfn_ = nullptr;
     void *user_ = nullptr;
     std::vector<aoo::source_desc> sources_;
+    std::mutex mutex_; // LATER replace with a spinlock?
     aoo::time_dll dll_;
     double bandwidth_ = AOO_DLL_BW;
     double starttime_ = 0;
