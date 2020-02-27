@@ -25,7 +25,7 @@ typedef struct _aoo_pack
     t_object x_obj;
     t_float x_f;
     aoo_source *x_aoo_source;
-    aoo_format x_format;
+    aoo_source_settings x_settings;
     t_float **x_vec;
     t_clock *x_clock;
     t_outlet *x_out;
@@ -62,32 +62,38 @@ static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 {
     t_symbol *type = atom_getsymbolarg(0, argc, argv);
-    if (type == gensym("audio/pcm")){
-        int bitdepth = atom_getfloatarg(1, argc, argv);
+    if (type == gensym(AOO_CODEC_PCM)){
+        aoo_format fmt;
+        fmt.nchannels = x->x_settings.nchannels;
+        fmt.blocksize = argc > 1 ? atom_getfloat(argv + 1) : 64;
+        fmt.samplerate = argc > 2 ? atom_getfloat(argv + 2) : sys_getsr();
+
+        aoo_pcm_settings pcm;
+        int bitdepth = argc > 3 ? atom_getfloat(argv + 3) : 4;
         switch (bitdepth){
         case 2:
-            x->x_format.bitdepth = AOO_INT16;
+            pcm.bitdepth = AOO_INT16;
             break;
         case 3:
-            x->x_format.bitdepth = AOO_INT24;
+            pcm.bitdepth = AOO_INT24;
             break;
         case 0: // default
         case 4:
-            x->x_format.bitdepth = AOO_FLOAT32;
+            pcm.bitdepth = AOO_FLOAT32;
             break;
         case 8:
-            x->x_format.bitdepth = AOO_FLOAT64;
+            pcm.bitdepth = AOO_FLOAT64;
             break;
         default:
             pd_error(x, "%s: bad bitdepth argument %d", classname(x), bitdepth);
             return;
         }
+        fmt.codec = type->s_name;
+        fmt.settings = &pcm;
 
-        x->x_format.mime_type = type->s_name;
-
-        aoo_source_setformat(x->x_aoo_source, &x->x_format);
+        aoo_source_setformat(x->x_aoo_source, &fmt);
     } else {
-        pd_error(x, "%s: unknown MIME type '%s'", classname(x), type->s_name);
+        pd_error(x, "%s: unknown codec '%s'", classname(x), type->s_name);
     }
 }
 
@@ -101,7 +107,18 @@ static void aoo_pack_channel(t_aoo_pack *x, t_floatarg f)
 
 static void aoo_pack_packetsize(t_aoo_pack *x, t_floatarg f)
 {
-    aoo_source_setpacketsize(x->x_aoo_source, f);
+    x->x_settings.packetsize = f;
+    if (x->x_settings.blocksize){
+        aoo_source_setup(x->x_aoo_source, &x->x_settings);
+    }
+}
+
+static void aoo_pack_timefilter(t_aoo_pack *x, t_floatarg f)
+{
+    x->x_settings.time_filter_bandwidth = f;
+    if (x->x_settings.blocksize){
+        aoo_source_setup(x->x_aoo_source, &x->x_settings);
+    }
 }
 
 static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -131,11 +148,6 @@ static void aoo_pack_clear(t_aoo_pack *x)
     aoo_source_removeall(x->x_aoo_source);
 }
 
-static void aoo_pack_timefilter(t_aoo_pack *x, t_floatarg f)
-{
-    aoo_source_settimefilter(x->x_aoo_source, f);
-}
-
 uint64_t aoo_pd_osctime(int n, t_float sr);
 
 static t_int * aoo_pack_perform(t_int *w)
@@ -145,7 +157,7 @@ static t_int * aoo_pack_perform(t_int *w)
 
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
-    uint64_t t = aoo_pd_osctime(n, x->x_format.samplerate);
+    uint64_t t = aoo_pd_osctime(n, x->x_settings.samplerate);
     if (aoo_source_process(x->x_aoo_source,(const aoo_sample **)x->x_vec, n, t)){
         clock_set(x->x_clock, 0);
     }
@@ -154,11 +166,11 @@ static t_int * aoo_pack_perform(t_int *w)
 
 static void aoo_pack_dsp(t_aoo_pack *x, t_signal **sp)
 {
-    x->x_format.blocksize = sp[0]->s_n;
-    x->x_format.samplerate = sp[0]->s_sr;
-    aoo_source_setformat(x->x_aoo_source, &x->x_format);
+    x->x_settings.blocksize = sp[0]->s_n;
+    x->x_settings.samplerate = sp[0]->s_sr;
+    aoo_source_setup(x->x_aoo_source, &x->x_settings);
 
-    for (int i = 0; i < x->x_format.nchannels; ++i){
+    for (int i = 0; i < x->x_settings.nchannels; ++i){
         x->x_vec[i] = sp[i]->s_vec;
     }
 
@@ -189,14 +201,17 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     // arg #1: ID
     int src = atom_getfloatarg(0, argc, argv);
     x->x_aoo_source = aoo_source_new(src >= 0 ? src : 0);
+    memset(&x->x_settings, 0, sizeof(aoo_source_settings));
+    x->x_settings.buffersize = AOO_SOURCE_DEFBUFSIZE;
+    x->x_settings.packetsize = AOO_DEFPACKETSIZE;
+    x->x_settings.time_filter_bandwidth = AOO_DLL_BW;
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
-    memset(&x->x_format, 0, sizeof(x->x_format));
-    x->x_format.nchannels = nchannels > 1 ? nchannels : 1;
-    // default MIME type
-    x->x_format.mime_type = AOO_MIME_PCM;
-    x->x_format.bitdepth = AOO_FLOAT32;
+    if (nchannels < 1){
+        nchannels = 1;
+    }
+    x->x_settings.nchannels = nchannels;
 
     // arg #3: sink ID
     x->x_sink_id = -1;
@@ -216,9 +231,20 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
             inlet_new(&x->x_obj, &x->x_obj.ob_pd, &s_signal, &s_signal);
         }
     }
-    x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * x->x_format.nchannels);
+    x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * nchannels);
     // make message outlet
     x->x_out = outlet_new(&x->x_obj, 0);
+
+    // default format
+    aoo_format fmt;
+    fmt.blocksize = 64;
+    fmt.samplerate = sys_getsr();
+    fmt.nchannels = nchannels;
+    fmt.codec = AOO_CODEC_PCM;
+    aoo_pcm_settings pcm;
+    pcm.bitdepth = AOO_FLOAT32;
+    fmt.settings = &pcm;
+    aoo_source_setformat(x->x_aoo_source, &fmt);
 
     return x;
 }
@@ -226,7 +252,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
 static void aoo_pack_free(t_aoo_pack *x)
 {
     // clean up
-    freebytes(x->x_vec, sizeof(t_sample *) * x->x_format.nchannels);
+    freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
     clock_free(x->x_clock);
     aoo_source_free(x->x_aoo_source);
 }

@@ -9,6 +9,38 @@
 #include <atomic>
 #include <mutex>
 
+namespace aoo {
+
+struct format : public aoo_format {
+    format();
+    format(const aoo_format& f);
+    ~format();
+    format& operator=(const aoo_format& f);
+private:
+    void clear();
+    void copy(const aoo_format& f);
+};
+
+class dynamic_resampler {
+public:
+    void setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_t srto, int32_t nchannels);
+    void clear();
+    void update(double srfrom, double srto);
+    int32_t write_available();
+    void write(const aoo_sample* data, int32_t n);
+    int32_t read_available();
+    void read(aoo_sample* data, int32_t n);
+private:
+    std::vector<aoo_sample> buffer_;
+    int32_t nchannels_ = 0;
+    double rdpos_ = 0;
+    int32_t wrpos_ = 0;
+    double balance_ = 0;
+    double ratio_ = 1.0;
+};
+
+} // aoo
+
 class aoo_source {
  public:
     aoo_source(int32_t id);
@@ -16,11 +48,7 @@ class aoo_source {
 
     void set_format(aoo_format& f);
 
-    void set_buffersize(int32_t ms);
-
-    void set_packetsize(int32_t nbytes);
-
-    void set_timefilter(double bandwidth);
+    void setup(aoo_source_settings& settings);
 
     void add_sink(void *sink, int32_t id, aoo_replyfn fn);
 
@@ -38,13 +66,17 @@ class aoo_source {
  private:
     const int32_t id_;
     int32_t salt_ = 0;
-    std::unique_ptr<aoo_format> format_;
+    std::unique_ptr<aoo::format> format_;
+    int32_t nchannels_ = 0;
+    int32_t blocksize_ = 0;
+    int32_t samplerate_ = 0;
     int32_t bytespersample_ = 0;
     int32_t buffersize_ = 0;
     int32_t packetsize_ = AOO_DEFPACKETSIZE;
     int32_t sequence_ = 0;
+    aoo::dynamic_resampler resampler_;
     aoo::lfqueue<aoo_sample> audioqueue_;
-    aoo::lfqueue<uint64_t> ttqueue_;
+    aoo::lfqueue<double> srqueue_;
     aoo::time_dll dll_;
     double bandwidth_ = AOO_DLL_BW;
     double starttime_ = 0;
@@ -155,24 +187,6 @@ private:
     int32_t capacity_ = 0;
 };
 
-class dynamic_resampler {
-public:
-    void setup(int32_t nfrom, int32_t nto, int32_t nchannels);
-    void clear();
-    void update(double srfrom, double srto);
-    int32_t write_available();
-    void write(const aoo_sample* data, int32_t n);
-    int32_t read_available();
-    void read(aoo_sample* data, int32_t n);
-private:
-    std::vector<aoo_sample> buffer_;
-    int32_t nchannels_ = 0;
-    double rdpos_ = 0;
-    int32_t wrpos_ = 0;
-    double balance_ = 0;
-    double ratio_ = 1.0;
-};
-
 struct source_desc {
     source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt);
     source_desc(source_desc&& other) = default;
@@ -182,7 +196,7 @@ struct source_desc {
     aoo_replyfn fn;
     int32_t id;
     int32_t salt;
-    aoo_format format;
+    aoo::format format;
     int32_t newest = 0; // sequence number of most recent block
     block_queue blockqueue;
     lfqueue<aoo_sample> audioqueue;
@@ -205,12 +219,7 @@ class aoo_sink {
     aoo_sink(int32_t id)
         : id_(id) {}
 
-    void setup(int32_t nchannels, int32_t sr, int32_t blocksize,
-               aoo_processfn fn, void *user);
-
-    void set_timefilter(double bandwidth);
-
-    void set_buffersize(int32_t ms);
+    void setup(aoo_sink_settings& settings);
 
     int32_t handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn);
 

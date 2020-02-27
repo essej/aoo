@@ -31,7 +31,7 @@ cflags = -I$(AOO) \
     -DAOO_DLL_BW=0.0001 \
     -DAOO_DEBUG_DLL=0 \
     -DAOO_DEBUG_OSCTIME=0 \
-    -DAOO_DEBUG_RESAMPLING=1
+    -DAOO_DEBUG_RESAMPLING=0
 
 common.sources = \
     aoo_common.cpp \

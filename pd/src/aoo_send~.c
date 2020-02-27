@@ -58,7 +58,7 @@ typedef struct _aoo_send
     t_object x_obj;
     t_float x_f;
     aoo_source *x_aoo_source;
-    aoo_format x_format;
+    aoo_source_settings x_settings;
     t_float **x_vec;
     t_atom x_sink_id_arg;
     int32_t x_sink_id;
@@ -75,34 +75,40 @@ typedef struct _aoo_send
 static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     t_symbol *type = atom_getsymbolarg(0, argc, argv);
-    if (type == gensym("audio/pcm")){
-        int bitdepth = atom_getfloatarg(1, argc, argv);
+    if (type == gensym(AOO_CODEC_PCM)){
+        aoo_format fmt;
+        fmt.nchannels = x->x_settings.nchannels;
+        fmt.blocksize = argc > 1 ? atom_getfloat(argv + 1) : 64;
+        fmt.samplerate = argc > 2 ? atom_getfloat(argv + 2) : sys_getsr();
+
+        aoo_pcm_settings pcm;
+        int bitdepth = argc > 3 ? atom_getfloat(argv + 3) : 4;
         switch (bitdepth){
         case 2:
-            x->x_format.bitdepth = AOO_INT16;
+            pcm.bitdepth = AOO_INT16;
             break;
         case 3:
-            x->x_format.bitdepth = AOO_INT24;
+            pcm.bitdepth = AOO_INT24;
             break;
         case 0: // default
         case 4:
-            x->x_format.bitdepth = AOO_FLOAT32;
+            pcm.bitdepth = AOO_FLOAT32;
             break;
         case 8:
-            x->x_format.bitdepth = AOO_FLOAT64;
+            pcm.bitdepth = AOO_FLOAT64;
             break;
         default:
             pd_error(x, "%s: bad bitdepth argument %d", classname(x), bitdepth);
             return;
         }
-
-        x->x_format.mime_type = type->s_name;
+        fmt.codec = type->s_name;
+        fmt.settings = &pcm;
 
         pthread_mutex_lock(&x->x_mutex);
-        aoo_source_setformat(x->x_aoo_source, &x->x_format);
+        aoo_source_setformat(x->x_aoo_source, &fmt);
         pthread_mutex_unlock(&x->x_mutex);
     } else {
-        pd_error(x, "%s: unknown MIME type '%s'", classname(x), type->s_name);
+        pd_error(x, "%s: unknown codec '%s'", classname(x), type->s_name);
     }
 }
 
@@ -118,16 +124,22 @@ static void aoo_send_channel(t_aoo_send *x, t_floatarg f)
 
 static void aoo_send_packetsize(t_aoo_send *x, t_floatarg f)
 {
-    pthread_mutex_lock(&x->x_mutex);
-    aoo_source_setpacketsize(x->x_aoo_source, f);
-    pthread_mutex_unlock(&x->x_mutex);
+    x->x_settings.packetsize = f;
+    if (x->x_settings.blocksize){
+        pthread_mutex_lock(&x->x_mutex);
+        aoo_source_setup(x->x_aoo_source, &x->x_settings);
+        pthread_mutex_unlock(&x->x_mutex);
+    }
 }
 
 static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
 {
-    pthread_mutex_lock(&x->x_mutex);
-    aoo_source_settimefilter(x->x_aoo_source, f);
-    pthread_mutex_unlock(&x->x_mutex);
+    x->x_settings.time_filter_bandwidth = f;
+    if (x->x_settings.blocksize){
+        pthread_mutex_lock(&x->x_mutex);
+        aoo_source_setup(x->x_aoo_source, &x->x_settings);
+        pthread_mutex_unlock(&x->x_mutex);
+    }
 }
 
 static void aoo_send_reply(t_aoo_send *x, const char *data, int32_t n)
@@ -222,7 +234,7 @@ static t_int * aoo_send_perform(t_int *w)
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
     if (x->x_addr.sin_family == AF_INET){
-        uint64_t t = aoo_pd_osctime(n, x->x_format.samplerate);
+        uint64_t t = aoo_pd_osctime(n, x->x_settings.samplerate);
         if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n, t)){
             pthread_cond_signal(&x->x_cond);
         }
@@ -233,12 +245,12 @@ static t_int * aoo_send_perform(t_int *w)
 static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
 {
     pthread_mutex_lock(&x->x_mutex);
-    x->x_format.blocksize = sp[0]->s_n;
-    x->x_format.samplerate = sp[0]->s_sr;
-    aoo_source_setformat(x->x_aoo_source, &x->x_format);
+    x->x_settings.blocksize = sp[0]->s_n;
+    x->x_settings.samplerate = sp[0]->s_sr;
+    aoo_source_setup(x->x_aoo_source, &x->x_settings);
     pthread_mutex_unlock(&x->x_mutex);
 
-    for (int i = 0; i < x->x_format.nchannels; ++i){
+    for (int i = 0; i < x->x_settings.nchannels; ++i){
         x->x_vec[i] = sp[i]->s_vec;
     }
 
@@ -280,15 +292,9 @@ void aoo_send_connect(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
     struct hostent *he = gethostbyname(hostname->s_name);
     if (he){
-        pthread_mutex_lock(&x->x_mutex);
         memcpy(&x->x_addr.sin_addr, he->h_addr_list[0], he->h_length);
         x->x_addr.sin_family = AF_INET;
         x->x_addr.sin_port = htons(port);
-        // send format message (but only if the "dsp" method has been called)
-        if (x->x_format.blocksize){
-            aoo_source_setformat(x->x_aoo_source, &x->x_format);
-        }
-        pthread_mutex_unlock(&x->x_mutex);
 
         post("connected to %s on port %d", he->h_name, port);
     } else {
@@ -318,15 +324,17 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     // arg #1: ID
     int src = atom_getfloatarg(0, argc, argv);
     x->x_aoo_source = aoo_source_new(src >= 0 ? src : 0);
-    aoo_source_setbuffersize(x->x_aoo_source, DEFBUFSIZE);
+    memset(&x->x_settings, 0, sizeof(aoo_source_settings));
+    x->x_settings.buffersize = AOO_SOURCE_DEFBUFSIZE;
+    x->x_settings.packetsize = AOO_DEFPACKETSIZE;
+    x->x_settings.time_filter_bandwidth = AOO_DLL_BW;
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
-    memset(&x->x_format, 0, sizeof(x->x_format));
-    x->x_format.nchannels = nchannels > 1 ? nchannels : 1;
-    // default MIME type
-    x->x_format.mime_type = AOO_MIME_PCM;
-    x->x_format.bitdepth = AOO_FLOAT32;
+    if (nchannels < 1){
+        nchannels = 1;
+    }
+    x->x_settings.nchannels = nchannels;
 
     // arg #3: sink ID
     x->x_sink_id = -1;
@@ -342,11 +350,23 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 
     // make additional inlets
     if (nchannels > 1){
-        while (--nchannels){
+        int i = nchannels;
+        while (--i){
             inlet_new(&x->x_obj, &x->x_obj.ob_pd, &s_signal, &s_signal);
         }
     }
-    x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * x->x_format.nchannels);
+    x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * nchannels);
+
+    // default format
+    aoo_format fmt;
+    fmt.blocksize = 64;
+    fmt.samplerate = sys_getsr();
+    fmt.nchannels = nchannels;
+    fmt.codec = AOO_CODEC_PCM;
+    aoo_pcm_settings pcm;
+    pcm.bitdepth = AOO_FLOAT32;
+    fmt.settings = &pcm;
+    aoo_source_setformat(x->x_aoo_source, &fmt);
 
     pthread_create(&x->x_thread, 0, aoo_send_threadfn, x);
 
@@ -369,7 +389,7 @@ static void aoo_send_free(t_aoo_send *x)
 
     aoo_source_free(x->x_aoo_source);
 
-    freebytes(x->x_vec, sizeof(t_sample *) * x->x_format.nchannels);
+    freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
 }
 
 void aoo_send_tilde_setup(void)

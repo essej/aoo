@@ -25,10 +25,9 @@ typedef struct _aoo_unpack
 {
     t_object x_obj;
     t_float x_f;
-    t_float x_sr;
     aoo_sink *x_aoo_sink;
+    aoo_sink_settings x_settings;
     t_sample **x_vec;
-    int x_n;
     t_outlet *x_msgout;
     t_outlet *x_eventout;
 } t_aoo_unpack;
@@ -53,19 +52,25 @@ static void aoo_unpack_list(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv
 
 static void aoo_unpack_buffersize(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_sink_setbuffersize(x->x_aoo_sink, f);
+    x->x_settings.buffersize = f;
+    if (x->x_settings.blocksize){
+        aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
+    }
 }
 
 static void aoo_unpack_timefilter(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_sink_settimefilter(x->x_aoo_sink, f);
+    x->x_settings.time_filter_bandwidth = f;
+    if (x->x_settings.blocksize){
+        aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
+    }
 }
 
-static void aoo_unpack_process(const aoo_sample **data, int32_t n,
-                               const aoo_event *events, int32_t nevents, t_aoo_unpack *x)
+static void aoo_unpack_process(t_aoo_unpack *x, const aoo_sample **data, int32_t n,
+                               const aoo_event *events, int32_t nevents)
 {
     assert(sizeof(t_sample) == sizeof(aoo_sample));
-    for (int i = 0; i < x->x_n; ++i){
+    for (int i = 0; i < x->x_settings.nchannels; ++i){
         memcpy(x->x_vec[i], data[i], sizeof(aoo_sample) * n);
     }
     for (int i = 0; i < nevents; ++i){
@@ -87,10 +92,10 @@ static t_int * aoo_unpack_perform(t_int *w)
     t_aoo_unpack *x = (t_aoo_unpack *)(w[1]);
     int n = (int)(w[2]);
 
-    uint64_t t = aoo_pd_osctime(n, x->x_sr);
+    uint64_t t = aoo_pd_osctime(n, x->x_settings.samplerate);
     if (!aoo_sink_process(x->x_aoo_sink, t)){
         // output zeros
-        for (int i = 0; i < x->x_n; ++i){
+        for (int i = 0; i < x->x_settings.nchannels; ++i){
             memset(x->x_vec[i], 0, sizeof(t_float) * n);
         }
     }
@@ -100,16 +105,15 @@ static t_int * aoo_unpack_perform(t_int *w)
 
 static void aoo_unpack_dsp(t_aoo_unpack *x, t_signal **sp)
 {
-    int n = (int)sp[0]->s_n;
-    x->x_sr = sp[0]->s_sr;
+    int n = x->x_settings.blocksize = (int)sp[0]->s_n;
+    x->x_settings.samplerate = sp[0]->s_sr;
 
-    for (int i = 0; i < x->x_n; ++i){
+    for (int i = 0; i < x->x_settings.nchannels; ++i){
         x->x_vec[i] = sp[i]->s_vec;
     }
-    aoo_sink_setup(x->x_aoo_sink, x->x_n, x->x_sr, n,
-                   (aoo_processfn)aoo_unpack_process, x);
+    aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
 
-    dsp_add(aoo_unpack_perform, 2, (t_int)x, (t_int)sp[0]->s_n);
+    dsp_add(aoo_unpack_perform, 2, (t_int)x, (t_int)n);
 }
 
 static void * aoo_unpack_new(t_symbol *s, int argc, t_atom *argv)
@@ -119,19 +123,25 @@ static void * aoo_unpack_new(t_symbol *s, int argc, t_atom *argv)
     // arg #1: ID
     int id = atom_getfloatarg(0, argc, argv);
     x->x_aoo_sink = aoo_sink_new(id >= 0 ? id : 0);
+    memset(&x->x_settings, 0, sizeof(aoo_sink_settings));
+    x->x_settings.userdata = x;
+    x->x_settings.processfn = (aoo_processfn)aoo_unpack_process;
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
-    x->x_n = nchannels > 1 ? nchannels : 1;
+    if (nchannels < 1){
+        nchannels = 1;
+    }
+    x->x_settings.nchannels = nchannels;
 
     // arg #3: buffer size (ms)
-    aoo_unpack_buffersize(x, argc > 2 ? atom_getfloat(argv + 2) : DEFBUFSIZE);
+    x->x_settings.buffersize = argc > 2 ? atom_getfloat(argv + 2) : DEFBUFSIZE;
 
     // make signal outlets
-    for (int i = 0; i < x->x_n; ++i){
+    for (int i = 0; i < nchannels; ++i){
         outlet_new(&x->x_obj, &s_signal);
     }
-    x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * x->x_n);
+    x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * nchannels);
     // message outlet
     x->x_msgout = outlet_new(&x->x_obj, 0);
     // event outlet
@@ -143,7 +153,7 @@ static void * aoo_unpack_new(t_symbol *s, int argc, t_atom *argv)
 static void aoo_unpack_free(t_aoo_unpack *x)
 {
     // clean up
-    freebytes(x->x_vec, sizeof(t_sample *) * x->x_n);
+    freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
     aoo_sink_free(x->x_aoo_sink);
 }
 

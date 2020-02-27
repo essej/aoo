@@ -17,13 +17,16 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #define AOO_DEFPACKETSIZE 512 // ?
 #define AOO_DOMAIN "/AoO"
 #define AOO_FORMAT "/format"
-#define AOO_FORMAT_NARGS 8
+#define AOO_FORMAT_NARGS 7
 #define AOO_FORMAT_WILDCARD "/AoO/*/format"
 #define AOO_DATA "/data"
 #define AOO_DATA_NARGS 8
 #define AOO_DATA_WILDCARD "/AoO/*/data"
 #define AOO_REQUEST "/request"
-#define AOO_MIME_PCM "audio/pcm"
+
+#ifndef AOO_CLIP_OUTPUT
+#define AOO_CLIP_OUTPUT 0
+#endif
 
 // 0: error, 1: warning, 2: verbose, 3: debug
 #ifndef LOGLEVEL
@@ -44,17 +47,30 @@ typedef AOO_SAMPLETYPE aoo_sample;
  #define AOO_DEBUG_RESAMPLING 0
 #endif
 
-typedef enum aoo_bitdepth {
+typedef void (*aoo_replyfn)(
+        void *,         // endpoint
+        const char *,   // data
+        int32_t         // number of bytes
+);
+
+/*/////////////////// PCM codec ////////////////////////*/
+
+#define AOO_CODEC_PCM "pcm"
+
+typedef enum
+{
     AOO_INT16,
     AOO_INT24,
     AOO_FLOAT32,
     AOO_FLOAT64
-} aoo_bitdepth;
+} aoo_pcm_bitdepth;
 
-int32_t aoo_bytes_per_sample(aoo_bitdepth bd);
+int32_t aoo_pcm_bytes_per_sample(aoo_pcm_bitdepth bd);
 
-// endpoint, data, size
-typedef void (*aoo_replyfn)(void *, const char *, int32_t);
+typedef struct
+{
+    aoo_pcm_bitdepth bitdepth;
+} aoo_pcm_settings;
 
 /*//////////////////// OSC ////////////////////////////*/
 
@@ -76,30 +92,36 @@ uint64_t aoo_osctime_addseconds(uint64_t t, double s);
 
 /*//////////////////// AoO source /////////////////////*/
 
+#define AOO_SOURCE_DEFBUFSIZE 10
+
 typedef struct aoo_source aoo_source;
 
-typedef struct aoo_format
+typedef struct
 {
-    const char *mime_type;
-    aoo_bitdepth bitdepth;
     int32_t nchannels;
     int32_t samplerate;
     int32_t blocksize;
-    int32_t overlap;
-    void *reserved;
+    const char *codec;
+    void *settings;
 } aoo_format;
+
+typedef struct
+{
+    int32_t samplerate;
+    int32_t blocksize;
+    int32_t nchannels;
+    int32_t buffersize;
+    int32_t packetsize;
+    double time_filter_bandwidth;
+} aoo_source_settings;
 
 aoo_source * aoo_source_new(int32_t id);
 
 void aoo_source_free(aoo_source *src);
 
+void aoo_source_setup(aoo_source *src, aoo_source_settings *settings);
+
 void aoo_source_setformat(aoo_source *src, aoo_format *f);
-
-void aoo_source_setbuffersize(aoo_source *src, int32_t ms);
-
-void aoo_source_setpacketsize(aoo_source *src, int32_t nbytes);
-
-void aoo_source_settimefilter(aoo_source *src, double coeff);
 
 // will send /AoO/<id>/start message
 void aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn);
@@ -122,42 +144,62 @@ int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, 
 
 /*//////////////////// AoO sink /////////////////////*/
 
+#define AOO_SINK_DEFBUFSIZE 10
+
 typedef struct aoo_sink aoo_sink;
 
-typedef enum {
+// event types
+typedef enum
+{
     AOO_SOURCE_STATE_EVENT
 } aoo_event_type;
 
-typedef enum {
+// source state event
+typedef enum
+{
     AOO_SOURCE_STOP,
     AOO_SOURCE_PLAY
 } aoo_source_state;
 
-typedef struct {
+typedef struct
+{
     aoo_event_type type;
     void *endpoint;
     int32_t id;
     aoo_source_state state;
 } aoo_source_state_event;
 
-typedef union {
+// event union
+typedef union
+{
     aoo_event_type type;
     aoo_source_state_event source_state;
 } aoo_event;
 
-typedef void (*aoo_processfn)(const aoo_sample **data, int32_t n,
-                              const aoo_event *events, int32_t numevents, void *user);
+typedef void (*aoo_processfn)(
+        void *,                 // user data
+        const aoo_sample **,    // sample data
+        int32_t,                // number of samples per channel
+        const aoo_event *,      // event array
+        int32_t                 // number of events
+);
+
+typedef struct
+{
+    void *userdata;
+    aoo_processfn processfn;
+    int32_t samplerate;
+    int32_t blocksize;
+    int32_t nchannels;
+    int32_t buffersize;
+    double time_filter_bandwidth;
+} aoo_sink_settings;
 
 aoo_sink * aoo_sink_new(int32_t id);
 
 void aoo_sink_free(aoo_sink *sink);
 
-void aoo_sink_setup(aoo_sink *sink, int32_t nchannels, int32_t sr, int32_t blocksize,
-                    aoo_processfn fn, void *user);
-
-void aoo_sink_setbuffersize(aoo_sink *sink, int32_t ms);
-
-void aoo_sink_settimefilter(aoo_sink *sink, double coeff);
+void aoo_sink_setup(aoo_sink *sink, aoo_sink_settings *settings);
 
 // e.g. /start, /stop, /data.
 // Might reply with /AoO/<id>/request
