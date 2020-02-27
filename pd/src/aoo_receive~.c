@@ -58,10 +58,12 @@ void socket_error_print(const char *label)
 
 /*////////////////////// socket listener //////////////////*/
 
+// use linked list for persistent memory
 typedef struct _client {
     int socket;
     struct sockaddr_storage addr;
     int addrlen;
+    struct _client *next;
 } t_client;
 
 typedef struct _aoo_receive t_aoo_receive;
@@ -79,7 +81,6 @@ typedef struct _socket_listener
     int socket;
     int port;
     t_client *clients;
-    int numclients;
     // threading
     pthread_t thread;
     pthread_mutex_t mutex;
@@ -105,24 +106,27 @@ static void* socket_listener_threadfn(void *y)
         char buf[AOO_MAXPACKETSIZE];
         int nbytes = recvfrom(x->socket, buf, AOO_MAXPACKETSIZE, 0, (struct sockaddr *)&sa, &len);
         if (nbytes > 0){
-            t_client *c = 0;
             // try to find client
-            int n = x->numclients;
-            for (int i = 0; i < n; ++i){
-                if (len == x->clients[i].addrlen &&
-                    !memcmp(&sa, &x->clients[i].addr, len)){
-                    c = &x->clients[i];
+            t_client *client = 0;
+            for (t_client *c = x->clients; c; c = c->next){
+                if (len == c->addrlen &&
+                    !memcmp(&sa, &c->addr, len)){
+                    client = c;
                     break;
                 }
             }
-            if (!c){
+            if (!client){
                 // add client
-                x->clients = (t_client *)resizebytes(x->clients, sizeof(t_client) * n, sizeof(t_client) * (n + 1));
-                x->numclients = n + 1;
-                c = &x->clients[n];
-                c->socket = x->socket;
-                memcpy(&c->addr, &sa, len);
-                c->addrlen = len;
+                client = (t_client *)getbytes(sizeof(t_client));
+                client->socket = x->socket;
+                memcpy(&client->addr, &sa, len);
+                client->addrlen = len;
+                client->next = 0;
+                if (x->clients){
+                    x->clients->next = client;
+                } else {
+                    x->clients = client;
+                }
             }
             // forward OSC packet to matching receivers
             int32_t id = 0;
@@ -130,7 +134,7 @@ static void* socket_listener_threadfn(void *y)
                 pthread_mutex_lock(&x->mutex);
                 for (int i = 0; i < x->numrecv; ++i){
                     aoo_receive_handle_message(x->recv[i], id, buf, nbytes,
-                                               c, (aoo_replyfn)socket_listener_reply);
+                                               client, (aoo_replyfn)socket_listener_reply);
                 }
                 pthread_mutex_unlock(&x->mutex);
             } else {
@@ -206,7 +210,6 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
         x->socket = sock;
         x->port = port;
         x->clients = 0;
-        x->numclients = 0;
 
         // start thread
         x->quit = 0;
@@ -271,8 +274,11 @@ void socket_listener_release(t_socket_listener *x, t_aoo_receive *r)
         }
 
         // free memory
-        if (x->numclients){
-            freebytes(x->clients, sizeof(t_client) * x->numclients);
+        t_client *c = x->clients;
+        while (c){
+            t_client *next = c->next;
+            freebytes(c, sizeof(t_client));
+            c = next;
         }
         freebytes(x->recv, sizeof(t_aoo_receive*));
         verbose(0, "released socket listener on port %d", x->port);
