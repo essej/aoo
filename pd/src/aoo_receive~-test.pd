@@ -1,11 +1,11 @@
-#N canvas 946 24 284 95 12;
-#N canvas 645 117 756 551 sub 1;
+#N canvas 946 24 349 124 12;
+#N canvas 622 295 756 551 sub 1;
 #X obj 127 187 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 20 256;
 #X obj 327 250 line~;
 #X msg 327 216 \$1 50;
 #X obj 65 282 *~;
-#X obj 209 285 *~;
+#X obj 136 283 *~;
 #X obj 327 25 vsl 15 128 0 1 0 0 empty empty empty 0 -9 0 10 -262144
 -1 -1 0 1;
 #X obj 327 185 t f f;
@@ -17,7 +17,7 @@
 #X obj 43 89 loadbang;
 #X msg 43 113 \; pd dsp 1;
 #X obj 65 309 outlet~;
-#X obj 208 311 outlet~;
+#X obj 135 309 outlet~;
 #X obj 68 416 block~;
 #X msg 68 390 set \$1;
 #X msg 69 360 64;
@@ -45,6 +45,7 @@
 #X msg 207 213 timefilter \$1;
 #X obj 208 186 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
+#X obj 209 288 print;
 #X connect 0 0 11 0;
 #X connect 1 0 3 1;
 #X connect 1 0 4 1;
@@ -81,6 +82,7 @@
 #X connect 36 0 3 0;
 #X connect 36 0 25 0;
 #X connect 36 1 4 0;
+#X connect 36 2 39 0;
 #X connect 37 0 36 0;
 #X connect 38 0 37 0;
 #X restore 34 46 pd sub;

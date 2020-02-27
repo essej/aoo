@@ -1,4 +1,4 @@
-#N canvas 116 143 611 572 12;
+#N canvas 73 201 611 572 12;
 #X obj 102 262 osc~ 440;
 #X msg 95 203 set \$1;
 #X obj 95 133 hradio 15 1 0 8 empty empty empty 0 -8 0 10 -262144 -1
@@ -35,6 +35,14 @@
 #X obj 105 322 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X obj 82 424 t f;
+#X obj 292 514 aoo_send~ 2 2;
+#X obj 292 463 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X obj 292 485 osc~ 300;
+#X obj 380 487 osc~ 800;
+#X msg 271 398 disconnect \, connect localhost 9999;
+#X msg 281 431 set 1;
+#X msg 331 433 clear;
 #X connect 0 0 21 0;
 #X connect 1 0 21 0;
 #X connect 2 0 1 0;
@@ -62,3 +70,9 @@
 #X connect 27 0 21 0;
 #X connect 28 0 27 0;
 #X connect 29 0 15 0;
+#X connect 31 0 32 0;
+#X connect 32 0 30 0;
+#X connect 33 0 30 1;
+#X connect 34 0 30 0;
+#X connect 35 0 30 0;
+#X connect 36 0 30 0;

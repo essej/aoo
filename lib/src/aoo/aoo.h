@@ -124,7 +124,29 @@ int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, 
 
 typedef struct aoo_sink aoo_sink;
 
-typedef void (*aoo_processfn)(const aoo_sample **data, int32_t n, void *user);
+typedef enum {
+    AOO_SOURCE_STATE_EVENT
+} aoo_event_type;
+
+typedef enum {
+    AOO_SOURCE_STOP,
+    AOO_SOURCE_PLAY
+} aoo_source_state;
+
+typedef struct {
+    aoo_event_type type;
+    void *endpoint;
+    int32_t id;
+    aoo_source_state state;
+} aoo_source_state_event;
+
+typedef union {
+    aoo_event_type type;
+    aoo_source_state_event source_state;
+} aoo_event;
+
+typedef void (*aoo_processfn)(const aoo_sample **data, int32_t n,
+                              const aoo_event *events, int32_t numevents, void *user);
 
 aoo_sink * aoo_sink_new(int32_t id);
 

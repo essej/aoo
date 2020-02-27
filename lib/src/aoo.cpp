@@ -898,6 +898,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 aoo::source_desc::info i;
                 i.sr = src.format.samplerate;
                 i.channel = 0;
+                i.state = AOO_SOURCE_STOP;
                 src.infoqueue.write(i);
 
                 count++;
@@ -920,6 +921,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                     aoo::source_desc::info i;
                     i.sr = src.format.samplerate;
                     i.channel = 0;
+                    i.state = AOO_SOURCE_STOP;
                     src.infoqueue.write(i);
 
                     LOG_VERBOSE("wrote silence for dropped block " << queue.front().sequence);
@@ -983,6 +985,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             aoo::source_desc::info i;
             i.sr = sr;
             i.channel = block->channel;
+            i.state = AOO_SOURCE_PLAY;
             src.infoqueue.write(i);
 
             count++;
@@ -1020,8 +1023,9 @@ void aoo_sink::update_source(aoo::source_desc &src){
             aoo::source_desc::info i;
             i.sr = src.format.samplerate;
             i.channel = 0;
+            i.state = AOO_SOURCE_STOP;
             src.infoqueue.write(i);
-        }
+        };
         // setup resampler
         src.resampler.setup(src.format.blocksize, blocksize_, src.format.nchannels);
         // resize block queue
@@ -1056,6 +1060,8 @@ int32_t aoo_sink_process(aoo_sink *sink, uint64_t t) {
     return sink->process(t);
 }
 
+#define AOO_MAXNUMEVENTS 256
+
 int32_t aoo_sink::process(uint64_t t){
     if (!processfn_){
         return 0;
@@ -1080,6 +1086,10 @@ int32_t aoo_sink::process(uint64_t t){
     #endif
     }
 
+    // pre-allocate event array (max. 1 per source)
+    aoo_event *events = (aoo_event *)alloca(sizeof(aoo_event) * AOO_MAXNUMEVENTS);
+    size_t numevents = 0;
+
     // the mutex is uncontended most of the time, but LATER we might replace
     // this with a lockless and/or waitfree solution
     std::unique_lock<std::mutex> lock(mutex_);
@@ -1100,7 +1110,17 @@ int32_t aoo_sink::process(uint64_t t){
             offset = info.channel;
             sr = info.sr;
             src.resampler.write(src.audioqueue.read_data(), nsamples);
-            src.audioqueue.read_commit(); 
+            src.audioqueue.read_commit();
+            // check state
+            if (info.state != src.laststate && numevents < AOO_MAXNUMEVENTS){
+                aoo_event& event = events[numevents++];
+                event.source_state.type = AOO_SOURCE_STATE_EVENT;
+                event.source_state.endpoint = src.endpoint;
+                event.source_state.id = src.id;
+                event.source_state.state = info.state;
+
+                src.laststate = info.state;
+            }
         }
         // update resampler
         src.resampler.update(sr, dll_.samplerate());
@@ -1125,6 +1145,18 @@ int32_t aoo_sink::process(uint64_t t){
             }
             LOG_DEBUG("read samples");
             didsomething = true;
+        } else {
+            // buffer ran out -> send "stop" event
+            if (src.laststate != AOO_SOURCE_STOP && numevents < AOO_MAXNUMEVENTS){
+                aoo_event& event = events[numevents++];
+                event.source_state.type = AOO_SOURCE_STATE_EVENT;
+                event.source_state.endpoint = src.endpoint;
+                event.source_state.id = src.id;
+                event.source_state.state = AOO_SOURCE_STOP;
+
+                src.laststate = AOO_SOURCE_STOP;
+                didsomething = true;
+            }
         }
     }
     lock.unlock();
@@ -1135,7 +1167,7 @@ int32_t aoo_sink::process(uint64_t t){
         for (int i = 0; i < nchannels_; ++i){
             vec[i] = &buffer_[i * blocksize_];
         }
-        processfn_(vec, blocksize_, user_);
+        processfn_(vec, blocksize_, events, numevents, user_);
         return 1;
     } else {
         return 0;
@@ -1368,7 +1400,7 @@ void dynamic_resampler::read(aoo_sample *data, int32_t n){
 /*////////////////////////// source_desc /////////////////////////////*/
 
 source_desc::source_desc(void *_endpoint, aoo_replyfn _fn, int32_t _id, int32_t _salt)
-    : endpoint(_endpoint), fn(_fn), id(_id), salt(_salt)
+    : endpoint(_endpoint), fn(_fn), id(_id), salt(_salt), laststate(AOO_SOURCE_STOP)
 {
     memset(&format, 0, sizeof(format));
 }

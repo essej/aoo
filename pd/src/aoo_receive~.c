@@ -309,6 +309,7 @@ typedef struct _aoo_receive
     int x_n;
     t_socket_listener * x_listener;
     pthread_mutex_t x_mutex;
+    t_outlet *x_eventout;
 } t_aoo_receive;
 
 // called from socket listener
@@ -372,11 +373,35 @@ void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
     }
 }
 
-static void aoo_receive_process(const aoo_sample **data, int32_t n, t_aoo_receive *x)
+static void aoo_receive_process(const aoo_sample **data, int32_t n,
+                                const aoo_event *events, int32_t nevents, t_aoo_receive *x)
 {
     assert(sizeof(t_sample) == sizeof(aoo_sample));
+    // copy samples
     for (int i = 0; i < x->x_n; ++i){
         memcpy(x->x_vec[i], data[i], sizeof(aoo_sample) * n);
+    }
+    // handle events
+    for (int i = 0; i < nevents; ++i){
+        if (events[i].type == AOO_SOURCE_STATE_EVENT){
+            t_client *client = (t_client *)events[i].source_state.endpoint;
+            struct sockaddr_in *addr = (struct sockaddr_in *)&client->addr;
+            int32_t id = events[i].source_state.id;
+            aoo_source_state state = events[i].source_state.state;
+
+            t_atom msg[4];
+            const char *host = inet_ntoa(addr->sin_addr);
+            int port = ntohs(addr->sin_port);
+            if (!host){
+                fprintf(stderr, "inet_ntoa failed!\n");
+                continue;
+            }
+            SETSYMBOL(&msg[0], gensym(host));
+            SETFLOAT(&msg[1], port);
+            SETFLOAT(&msg[2], id);
+            SETFLOAT(&msg[3], state);
+            outlet_anything(x->x_eventout, gensym("source"), 4, msg);
+        }
     }
 }
 
@@ -446,6 +471,9 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
         outlet_new(&x->x_obj, &s_signal);
     }
     x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * x->x_n);
+
+    // event outlet
+    x->x_eventout = outlet_new(&x->x_obj, 0);
 
     return x;
 }

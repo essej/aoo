@@ -30,6 +30,7 @@ typedef struct _aoo_unpack
     t_sample **x_vec;
     int x_n;
     t_outlet *x_msgout;
+    t_outlet *x_eventout;
 } t_aoo_unpack;
 
 static void aoo_pack_reply(t_aoo_unpack *x, const char *data, int32_t n)
@@ -60,11 +61,22 @@ static void aoo_unpack_timefilter(t_aoo_unpack *x, t_floatarg f)
     aoo_sink_settimefilter(x->x_aoo_sink, f);
 }
 
-static void aoo_unpack_process(const aoo_sample **data, int32_t n, t_aoo_unpack *x)
+static void aoo_unpack_process(const aoo_sample **data, int32_t n,
+                               const aoo_event *events, int32_t nevents, t_aoo_unpack *x)
 {
     assert(sizeof(t_sample) == sizeof(aoo_sample));
     for (int i = 0; i < x->x_n; ++i){
         memcpy(x->x_vec[i], data[i], sizeof(aoo_sample) * n);
+    }
+    for (int i = 0; i < nevents; ++i){
+        if (events[i].type == AOO_SOURCE_STATE_EVENT){
+            int32_t id = events[i].source_state.id;
+            aoo_source_state state = events[i].source_state.state;
+            t_atom msg[2];
+            SETFLOAT(&msg[0], id);
+            SETFLOAT(&msg[1], state);
+            outlet_anything(x->x_eventout, gensym("source"), 2, msg);
+        }
     }
 }
 
@@ -122,6 +134,8 @@ static void * aoo_unpack_new(t_symbol *s, int argc, t_atom *argv)
     x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * x->x_n);
     // message outlet
     x->x_msgout = outlet_new(&x->x_obj, 0);
+    // event outlet
+    x->x_eventout = outlet_new(&x->x_obj, 0);
 
     return x;
 }

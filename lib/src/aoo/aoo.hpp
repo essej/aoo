@@ -189,8 +189,10 @@ struct source_desc {
     struct info {
         double sr;
         int32_t channel;
+        aoo_source_state state;
     };
     lfqueue<info> infoqueue;
+    aoo_source_state laststate;
     dynamic_resampler resampler;
     // methods
     void send(const char *data, int32_t n);
