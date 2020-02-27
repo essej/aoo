@@ -50,7 +50,11 @@ class lfqueue {
     }
     // returns: the number of available *blocks* for reading
     int32_t read_available() const {
-        return balance_.load(std::memory_order_acquire) / stride_;
+        if (stride_){
+            return balance_.load(std::memory_order_acquire) / stride_;
+        } else {
+            return 0;
+        }
     }
 
     T read() {
@@ -71,7 +75,11 @@ class lfqueue {
     }
     // returns: the number of available *blocks* for writing
     int32_t write_available() const {
-        return (capacity() - balance_.load(std::memory_order_acquire)) / stride_;
+        if (stride_){
+            return (capacity() - balance_.load(std::memory_order_acquire)) / stride_;
+        } else {
+            return 0;
+        }
     }
 
     void write(T value) {
