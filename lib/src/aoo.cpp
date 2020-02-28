@@ -138,6 +138,7 @@ int32_t aoo_pcm_bytes_per_sample(aoo_pcm_bitdepth bd){
     case AOO_FLOAT64:
         return 8;
     default:
+        assert(false);
         return 0;
     }
 }
@@ -1264,6 +1265,7 @@ block::block(int32_t seq, double sr, int32_t chn,
                            int32_t nbytes, int32_t nframes)
     : sequence(seq), samplerate(sr), channel(chn), numframes(nframes)
 {
+    assert(nbytes > 0);
     buffer.resize(nbytes);
     // set missing frame bits to 1
     frames = 0;
@@ -1330,6 +1332,7 @@ int32_t block_queue::capacity() const {
 
 block* block_queue::insert(block&& b){
     // find pos to insert
+    assert(capacity() > 0);
     int pos = 0;
     while (pos < size()){
         assert(blocks_[pos].sequence != b.sequence);
@@ -1341,7 +1344,7 @@ block* block_queue::insert(block&& b){
     if (full()){
         if (pos > 0){
             // move older blocks to the left
-            LOG_DEBUG("insert block and pop old block");
+            LOG_DEBUG("insert block at pos " << pos << " and pop old block");
             std::move(&blocks_[1], &blocks_[pos], &blocks_[0]);
             blocks_[pos-1] = std::move(b);
             return &blocks_[pos-1];
@@ -1352,7 +1355,7 @@ block* block_queue::insert(block&& b){
             return &blocks_[0];
         }
     } else {
-        LOG_DEBUG("insert block");
+        LOG_DEBUG("insert block at pos " << pos);
         // insert block (will move newer items to the right)
         blocks_.insert(blocks_.begin() + pos, std::move(b));
         return &blocks_[pos];
@@ -1379,10 +1382,12 @@ void block_queue::pop_back(){
 }
 
 block& block_queue::front(){
+    assert(!empty());
     return blocks_.front();
 }
 
 block& block_queue::back(){
+    assert(!empty());
     return blocks_.back();
 }
 

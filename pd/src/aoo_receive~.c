@@ -494,7 +494,10 @@ static void aoo_receive_free(t_aoo_receive *x)
     }
     // clean up
     freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
+
     aoo_sink_free(x->x_aoo_sink);
+
+    pthread_mutex_destroy(&x->x_mutex);
 }
 
 void aoo_receive_tilde_setup(void)
