@@ -7,7 +7,7 @@
 #X obj 66 285 *~;
 #X obj 137 286 *~;
 #X obj 327 25 vsl 15 128 0 1 0 0 empty empty empty 0 -9 0 10 -262144
--1 -1 1800 1;
+-1 -1 0 1;
 #X obj 327 185 t f f;
 #X obj 373 235 - 100;
 #X floatatom 373 259 5 0 0 0 - - -;
@@ -45,9 +45,6 @@
 #X obj 208 186 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X obj 211 336 print;
-#X obj 315 355 cplot~;
-#X obj 636 307 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
--1 -1;
 #X obj 65 248 aoo_receive~ 1 2 9999;
 #X obj 137 313 clip~ -1 1;
 #X obj 56 313 clip~ -1 1;
@@ -55,21 +52,21 @@
 #X connect 1 0 3 1;
 #X connect 1 0 4 1;
 #X connect 2 0 1 0;
-#X connect 3 0 43 0;
-#X connect 4 0 42 0;
+#X connect 3 0 41 0;
+#X connect 4 0 40 0;
 #X connect 5 0 10 0;
 #X connect 6 0 2 0;
 #X connect 6 1 9 0;
 #X connect 7 0 8 0;
 #X connect 9 0 7 0;
 #X connect 10 0 6 0;
-#X connect 11 0 41 0;
+#X connect 11 0 39 0;
 #X connect 12 0 13 0;
 #X connect 17 0 16 0;
 #X connect 18 0 17 0;
 #X connect 19 0 17 0;
 #X connect 20 0 17 0;
-#X connect 21 0 41 0;
+#X connect 21 0 39 0;
 #X connect 22 0 21 0;
 #X connect 23 0 21 0;
 #X connect 24 0 21 0;
@@ -84,16 +81,14 @@
 #X connect 32 0 33 0;
 #X connect 34 0 31 0;
 #X connect 35 0 34 0;
-#X connect 36 0 41 0;
+#X connect 36 0 39 0;
 #X connect 37 0 36 0;
-#X connect 40 0 39 2;
-#X connect 41 0 25 0;
-#X connect 41 0 39 0;
-#X connect 41 0 3 0;
-#X connect 41 1 4 0;
-#X connect 41 2 38 0;
-#X connect 42 0 15 0;
-#X connect 43 0 14 0;
+#X connect 39 0 25 0;
+#X connect 39 0 3 0;
+#X connect 39 1 4 0;
+#X connect 39 2 38 0;
+#X connect 40 0 15 0;
+#X connect 41 0 14 0;
 #X restore 34 46 pd sub;
 #X obj 34 70 dac~;
 #X connect 0 0 1 0;
