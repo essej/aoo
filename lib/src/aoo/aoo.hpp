@@ -114,12 +114,9 @@ struct time_tag {
         nanos = fract * 4294967296.0;
     }
 
-    union {
-        struct {
-            uint32_t seconds = 0;
-            uint32_t nanos = 0;
-        };
-    };
+    uint32_t seconds = 0;
+    uint32_t nanos = 0;
+
     double to_double() const {
         return (double)seconds + (double)nanos / 4294967296.0;
     }
