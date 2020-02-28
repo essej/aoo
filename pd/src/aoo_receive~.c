@@ -514,4 +514,6 @@ void aoo_receive_tilde_setup(void)
                     gensym("bufsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_timefilter,
                     gensym("timefilter"), A_FLOAT, A_NULL);
+
+    aoo_setup();
 }

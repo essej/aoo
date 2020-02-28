@@ -1,280 +1,39 @@
 #include "aoo/aoo.hpp"
+#include "aoo/aoo_utils.hpp"
+#include "aoo/aoo_pcm.h"
 
-#include "lib/oscpack/osc/OscOutboundPacketStream.h"
-#include "lib/oscpack/osc/OscReceivedElements.h"
+#include "oscpack/osc/OscOutboundPacketStream.h"
+#include "oscpack/osc/OscReceivedElements.h"
 
-#include <iostream>
 #include <algorithm>
 #include <cstring>
 #include <random>
 #include <chrono>
-
-/*------------------ alloca -----------------------*/
-#ifdef _WIN32
-# include <malloc.h> // MSVC or mingw on windows
-# ifdef _MSC_VER
-#  define alloca _alloca
-# endif
-#elif defined(__linux__) || defined(__APPLE__)
-# include <alloca.h> // linux, mac, mingw, cygwin
-#else
-# include <stdlib.h> // BSDs for example
-#endif
-
-/*------------------ endianess -------------------*/
-    // endianess check taken from Pure Data (d_osc.c)
-#if defined(__FreeBSD__) || defined(__APPLE__) || defined(__FreeBSD_kernel__) \
-    || defined(__OpenBSD__)
-#include <machine/endian.h>
-#endif
-
-#if defined(__linux__) || defined(__CYGWIN__) || defined(__GNU__) || \
-    defined(ANDROID)
-#include <endian.h>
-#endif
-
-#ifdef __MINGW32__
-#include <sys/param.h>
-#endif
-
-#ifdef _MSC_VER
-/* _MSVC lacks BYTE_ORDER and LITTLE_ENDIAN */
- #define LITTLE_ENDIAN 0x0001
- #define BYTE_ORDER LITTLE_ENDIAN
-#endif
-
-#if !defined(BYTE_ORDER) || !defined(LITTLE_ENDIAN)
- #error No byte order defined
-#endif
-
-#define DO_LOG(x) (std::cerr << x << std::endl)
-
-#if LOGLEVEL >= 0
- #define LOG_ERROR(x) DO_LOG(x)
-#else
- #define LOG_ERROR(x)
-#endif
-
-#if LOGLEVEL >= 1
- #define LOG_WARNING(x) DO_LOG(x)
-#else
- #define LOG_WARNING(x)
-#endif
-
-#if LOGLEVEL >= 2
- #define LOG_VERBOSE(x) DO_LOG(x)
-#else
- #define LOG_VERBOSE(x)
-#endif
-
-#if LOGLEVEL >= 3
- #define LOG_DEBUG(x) DO_LOG(x)
-#else
- #define LOG_DEBUG(x)
-#endif
+#include <unordered_map>
 
 namespace aoo {
 
-format::format(){
-    blocksize = 0;
-    nchannels = 0;
-    samplerate = 0;
-    codec = 0;
-    settings = 0;
+static std::unordered_map<std::string, std::unique_ptr<aoo::codec>> codec_dict;
+
+void register_codec(const char *name, const aoo_codec *codec){
+    LOG_VERBOSE("aoo: registered codec '" << name << "'");
+    codec_dict[name] = std::make_unique<aoo::codec>(codec);
 }
 
-// necessary to avoid tearing!
-format::format(const format &f){
-    copy(f);
-}
-
-format::format(const aoo_format &f){
-    copy(f);
-}
-
-format::~format(){
-    clear();
-}
-
-format& format::operator=(const aoo_format& f){
-    clear();
-    copy(f);
-    return *this;
-}
-
-void format::clear(){
-    if (settings && !strcmp(codec, AOO_CODEC_PCM)){
-        delete (aoo_pcm_settings *)settings;
-        settings = nullptr;
-    }
-}
-
-void format::copy(const aoo_format &f){
-    blocksize = f.blocksize;
-    nchannels = f.nchannels;
-    samplerate = f.samplerate;
-    if (!strcmp(f.codec, AOO_CODEC_PCM)){
-        codec = f.codec;
-        settings = new aoo_pcm_settings;
-        memcpy(settings, f.settings, sizeof(aoo_pcm_settings));
+const aoo::codec * find_codec(const std::string& name){
+    auto it = codec_dict.find(name);
+    if (it != codec_dict.end()){
+        return it->second.get();
     } else {
-        codec = nullptr;
-        settings = nullptr;
+        return nullptr;
     }
 }
-
-} // aoo
-
-/*/////////////////// PCM codec ////////////////////////*/
-
-int32_t aoo_pcm_bytes_per_sample(aoo_pcm_bitdepth bd){
-    switch (bd){
-    case AOO_INT16:
-        return 2;
-    case AOO_INT24:
-        return 3;
-    case AOO_FLOAT32:
-        return 4;
-    case AOO_FLOAT64:
-        return 8;
-    default:
-        assert(false);
-        return 0;
-    }
-}
-
-namespace {
 
 bool is_pow2(int32_t i){
     return (i & (i - 1)) == 0;
 }
 
-// conversion routines between aoo_sample and PCM data
-union sample_conv {
-    int8_t b[8];
-    int16_t s;
-    int32_t i;
-    float f;
-    double d;
-};
-
-void sample_to_pcm_int16(aoo_sample in, char *out){
-    sample_conv c;
-    int32_t temp = in * 0x7fff + 0.5f;
-    c.s = (temp > INT16_MAX) ? INT16_MAX : (temp < INT16_MIN) ? INT16_MIN : temp;
-#if BYTE_ORDER == BIG_ENDIAN
-    memcpy(out, c.b, 2); // optimized away
-#else
-    out[0] = c.b[1];
-    out[1] = c.b[0];
-#endif
-}
-
-void sample_to_pcm_int24(aoo_sample in, char *out){
-    sample_conv c;
-    int32_t temp = in * 0x7fffffff + 0.5f;
-    c.i = (temp > INT32_MAX) ? INT32_MAX : (temp < INT32_MIN) ? INT32_MIN : temp;
-    // only copy the highest 3 bytes!
-#if BYTE_ORDER == BIG_ENDIAN
-    out[0] = c.b[0];
-    out[1] = c.b[1];
-    out[2] = c.b[2];
-#else
-    out[0] = c.b[3];
-    out[1] = c.b[2];
-    out[2] = c.b[1];
-#endif
-}
-
-void sample_to_pcm_float32(aoo_sample in, char *out){
-    sample_conv c;
-    c.f = in;
-#if BYTE_ORDER == BIG_ENDIAN
-    memcpy(out, c.b, sizeof(float)); // optimized away
-#else
-    out[0] = c.b[3];
-    out[1] = c.b[2];
-    out[2] = c.b[1];
-    out[3] = c.b[0];
-#endif
-}
-
-void sample_to_pcm_float64(aoo_sample in, char *out){
-    sample_conv c;
-    c.d = in;
-#if BYTE_ORDER == BIG_ENDIAN
-    memcpy(out, c.b, sizeof(double)); // optimized away
-#else
-    out[0] = c.b[7];
-    out[1] = c.b[6];
-    out[2] = c.b[5];
-    out[3] = c.b[4];
-    out[4] = c.b[3];
-    out[5] = c.b[2];
-    out[6] = c.b[1];
-    out[7] = c.b[0];
-#endif
-}
-
-aoo_sample pcm_int16_to_sample(const char *in){
-    sample_conv c;
-#if BYTE_ORDER == BIG_ENDIAN
-    memcpy(c.b, in, 2); // optimized away
-#else
-    c.b[0] = in[1];
-    c.b[1] = in[0];
-#endif
-    return(aoo_sample)c.s / 32768.f;
-}
-
-aoo_sample pcm_int24_to_sample(const char *in){
-    sample_conv c;
-    // copy to the highest 3 bytes!
-#if BYTE_ORDER == BIG_ENDIAN
-    c.b[0] = in[0];
-    c.b[1] = in[1];
-    c.b[2] = in[2];
-    c.b[3] = 0;
-#else
-    c.b[0] = 0;
-    c.b[1] = in[2];
-    c.b[2] = in[1];
-    c.b[3] = in[0];
-#endif
-    return (aoo_sample)c.i / 0x7fffffff;
-}
-
-aoo_sample pcm_float32_to_sample(const char *in){
-    sample_conv c;
-#if BYTE_ORDER == BIG_ENDIAN
-    memcpy(c.b, in, sizeof(float)); // optimized away
-#else
-    c.b[0] = in[3];
-    c.b[1] = in[2];
-    c.b[2] = in[1];
-    c.b[3] = in[0];
-#endif
-    return c.f;
-}
-
-aoo_sample pcm_float64_to_sample(const char *in){
-    sample_conv c;
-#if BYTE_ORDER == BIG_ENDIAN
-    memcpy(c.b, in, sizeof(double)); // optimized away
-#else
-    c.b[0] = in[7];
-    c.b[1] = in[6];
-    c.b[2] = in[5];
-    c.b[3] = in[4];
-    c.b[4] = in[3];
-    c.b[5] = in[2];
-    c.b[6] = in[1];
-    c.b[7] = in[0];
-#endif
-    return c.d;
-}
-
-} // namespace
+} // aoo
 
 /*//////////////////// OSC ////////////////////////////*/
 
@@ -352,7 +111,7 @@ aoo_source * aoo_source_new(int32_t id) {
 }
 
 aoo_source::aoo_source(int32_t id)
-    : id_(id) {}
+    : id_(id){}
 
 void aoo_source_free(aoo_source *src){
     delete src;
@@ -367,22 +126,28 @@ void aoo_source_setformat(aoo_source *src, aoo_format *f) {
 }
 
 void aoo_source::set_format(aoo_format &f){
-    assert(is_pow2(f.blocksize));
-    if (strcmp(f.codec, AOO_CODEC_PCM)){
-        LOG_ERROR("codec '" << f.codec << "' not supported!");
-        return;
-    }
     salt_ = make_salt();
-    format_ = std::make_unique<aoo::format>(f);
-    auto *pcm = (aoo_pcm_settings *)f.settings;
-    bytespersample_ = aoo_pcm_bytes_per_sample(pcm->bitdepth);
+
+    if (!encoder_ || strcmp(encoder_->name(), f.codec)){
+        auto codec = aoo::find_codec(f.codec);
+        if (codec){
+            encoder_ = codec->create_encoder();
+        } else {
+            LOG_ERROR("codec '" << f.codec << "' not supported!");
+            return;
+        }
+        if (!encoder_){
+            LOG_ERROR("couldn't create encoder!");
+            return;
+        }
+    }
+    encoder_->setup(f);
+
     sequence_ = 0;
     update();
     for (auto& sink : sinks_){
         send_format(sink);
     }
-    LOG_VERBOSE("aoo_source::setformat: salt = " << salt_ << ", mime type = " << format_->codec << ", sr = " << format_->samplerate
-                << ", blocksize = " << format_->blocksize);
 }
 
 void aoo_source_setup(aoo_source *src, aoo_source_settings *settings){
@@ -413,19 +178,18 @@ void aoo_source::setup(aoo_source_settings &settings){
     bandwidth_ = settings.time_filter_bandwidth;
     starttime_ = 0; // will update
 
-    if (format_){
+    if (encoder_){
         update();
     }
 }
 
 void aoo_source::update(){
-    assert(format_ != nullptr);
-    if (format_->blocksize > 0 && format_->samplerate > 0
-            && blocksize_ > 0 && samplerate_ > 0){
-        auto nsamples = format_->blocksize * nchannels_;
+    assert(encoder_ != nullptr && encoder_->blocksize() > 0 && encoder_->samplerate() > 0);
+    if (blocksize_ > 0 && samplerate_ > 0 && nchannels_ > 0){
+        auto nsamples = encoder_->blocksize() * nchannels_;
         // recalculate buffersize from ms to samples
-        double bufsize = (double)buffersize_ * format_->samplerate * 0.001;
-        auto d = div(bufsize, format_->blocksize);
+        double bufsize = (double)buffersize_ * encoder_->samplerate() * 0.001;
+        auto d = div(bufsize, encoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         nbuffers = std::max<int32_t>(nbuffers, 1);
         // resize audio queue
@@ -433,9 +197,10 @@ void aoo_source::update(){
         srqueue_.resize(nbuffers, 1);
         LOG_DEBUG("aoo_source::update: nbuffers = " << nbuffers);
         // setup resampler
-        if (blocksize_ != format_->blocksize || samplerate_ != format_->samplerate){
-            resampler_.setup(blocksize_, format_->blocksize, samplerate_, format_->samplerate, nchannels_);
-            resampler_.update(samplerate_, format_->samplerate);
+        if (blocksize_ != encoder_->blocksize() || samplerate_ != encoder_->samplerate()){
+            resampler_.setup(blocksize_, encoder_->blocksize(),
+                             samplerate_, encoder_->samplerate(), nchannels_);
+            resampler_.update(samplerate_, encoder_->samplerate());
         } else {
             resampler_.clear();
         }
@@ -565,45 +330,20 @@ int32_t aoo_source_send(aoo_source *src) {
 }
 
 bool aoo_source::send(){
-    if (!format_){
+    if (!encoder_){
         return false;
     }
+
     if (audioqueue_.read_available() && srqueue_.read_available()){
-        const auto nchannels = format_->nchannels;
-        const auto blocksize = format_->blocksize;
-        const auto samplesize = bytespersample_;
+        const auto nchannels = encoder_->nchannels();
+        const auto blocksize = encoder_->blocksize();
 
-        // copy and convert audio samples to blob data (non-interleaved -> interleaved)
-        const auto nbytes = samplesize * nchannels * blocksize;
-        char * blobdata = (char *)alloca(nbytes);
-        auto ptr = audioqueue_.read_data();
+        // copy and convert audio samples to blob data
+        const auto blobmaxsize = sizeof(double) * nchannels * blocksize; // overallocate
+        char * blobdata = (char *)alloca(blobmaxsize);
 
-        auto samples_to_blob = [&](auto fn){
-            auto blobptr = blobdata;
-            auto n = nchannels * blocksize;
-            for (int i = 0; i < n; ++i){
-                fn(ptr[i], blobptr);
-                blobptr += samplesize;
-            }
-        };
-
-        switch (static_cast<aoo_pcm_settings *>(format_->settings)->bitdepth){
-        case AOO_INT16:
-            samples_to_blob(sample_to_pcm_int16);
-            break;
-        case AOO_INT24:
-            samples_to_blob(sample_to_pcm_int24);
-            break;
-        case AOO_FLOAT32:
-            samples_to_blob(sample_to_pcm_float32);
-            break;
-        case AOO_FLOAT64:
-            samples_to_blob(sample_to_pcm_float64);
-            break;
-        default:
-            // unknown bitdepth
-            break;
-        }
+        auto nbytes = encoder_->encode(audioqueue_.read_data(), audioqueue_.blocksize(),
+                                        blobdata, blobmaxsize);
 
         audioqueue_.read_commit();
 
@@ -633,8 +373,8 @@ bool aoo_source::send(){
                 }
 
                 // for now ignore timetag
-                msg << id_ << salt_ << sequence_ << sr
-                    << sink.channel << nframes << frame << osc::Blob(data, n)
+                msg << id_ << salt_ << sequence_ << sr << sink.channel
+                    << nbytes << nframes << frame << osc::Blob(data, n)
                     << osc::EndMessage;
 
                 sink.send(msg.Data(), msg.Size());
@@ -687,20 +427,20 @@ bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
     #endif
     }
 
-    if (!format_ || sinks_.empty()){
+    if (!encoder_ || sinks_.empty()){
         return false;
     }
 
     // non-interleaved -> interleaved
     auto insamples = blocksize_ * nchannels_;
-    auto outsamples = format_->blocksize * nchannels_;
+    auto outsamples = encoder_->blocksize() * nchannels_;
     auto *buf = (aoo_sample *)alloca(insamples * sizeof(aoo_sample));
     for (int i = 0; i < nchannels_; ++i){
         for (int j = 0; j < n; ++j){
             buf[j * nchannels_ + i] = data[i][j];
         }
     }
-    if (format_->blocksize != blocksize_ || format_->samplerate != samplerate_){
+    if (encoder_->blocksize() != blocksize_ || encoder_->samplerate() != samplerate_){
         // go through resampler
         if (resampler_.write_available() >= insamples){
             resampler_.write(buf, insamples);
@@ -717,7 +457,7 @@ bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
             audioqueue_.write_commit();
 
             // push samplerate
-            auto ratio = (double)format_->samplerate / (double)samplerate_;
+            auto ratio = (double)encoder_->samplerate() / (double)samplerate_;
             srqueue_.write(dll_.samplerate() * ratio);
         }
 
@@ -740,10 +480,10 @@ bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
     }
 }
 
-// /AoO/<sink>/format <src> <salt> <mime> <bitdepth> <numchannels> <samplerate> <blocksize> <overlap>
+// /AoO/<sink>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
 
 void aoo_source::send_format(sink_desc &sink){
-    if (format_){
+    if (encoder_){
         char buf[AOO_MAXPACKETSIZE];
         osc::OutboundPacketStream msg(buf, sizeof(buf));
 
@@ -757,11 +497,12 @@ void aoo_source::send_format(sink_desc &sink){
             msg << osc::BeginMessage(AOO_FORMAT_WILDCARD);
         }
 
-        auto bitdepth = static_cast<aoo_pcm_settings *>(format_->settings)->bitdepth;
+        auto settings = (char *)alloca(AOO_CODEC_MAXSETTINGSIZE);
+        int32_t nchannels, samplerate, blocksize;
+        auto setsize = encoder_->write(nchannels, samplerate, blocksize, settings, AOO_CODEC_MAXSETTINGSIZE);
 
-        msg << id_ << salt_ << format_->nchannels << format_->samplerate << format_->blocksize
-            << format_->codec << static_cast<int32_t>(bitdepth)
-            << osc::EndMessage;
+        msg << id_ << salt_ << nchannels << samplerate << blocksize
+            << encoder_->name() << osc::Blob(settings, setsize) << osc::EndMessage;
 
         sink.send(msg.Data(), msg.Size());
     }
@@ -813,7 +554,7 @@ int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
 }
 
 // /AoO/<sink>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <settings...>
-// /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> [<numpackets> <packetnum>] <data>
+// /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
 
 int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn){
     osc::ReceivedPacket packet(data, n);
@@ -841,22 +582,16 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
                 int32_t id = (it++)->AsInt32();
                 int32_t salt = (it++)->AsInt32();
                 // get format from arguments
-                aoo_format format;
-                format.nchannels = (it++)->AsInt32();
-                format.samplerate = (it++)->AsInt32();
-                format.blocksize = (it++)->AsInt32();
+                auto nchannels = (it++)->AsInt32();
+                auto samplerate = (it++)->AsInt32();
+                auto blocksize = (it++)->AsInt32();
                 auto codec = (it++)->AsString();
-                if (!strcmp(codec, AOO_CODEC_PCM)){
-                    format.codec = AOO_CODEC_PCM;
-                } else {
-                    LOG_ERROR("bad codec " << codec);
-                    return 1;
-                }
-                aoo_pcm_settings pcm;
-                pcm.bitdepth = (aoo_pcm_bitdepth)(it++)->AsInt32();
-                format.settings = &pcm;
+                const void *blobdata;
+                osc::osc_bundle_element_size_t blobsize;
+                (it++)->AsBlob(blobdata, blobsize);
 
-                handle_format_message(endpoint, fn, id, salt, format);
+                handle_format_message(endpoint, fn, id, salt, nchannels,
+                                      samplerate, blocksize, codec, (const char *)blobdata, blobsize);
             } catch (const osc::Exception& e){
                 LOG_ERROR(e.what());
             }
@@ -873,14 +608,15 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
                 auto seq = (it++)->AsInt32();
                 auto sr = (it++)->AsDouble();
                 auto chn = (it++)->AsInt32();
+                auto totalsize = (it++)->AsInt32();
                 auto nframes = (it++)->AsInt32();
                 auto frame = (it++)->AsInt32();
                 const void *blobdata;
                 osc::osc_bundle_element_size_t blobsize;
                 (it++)->AsBlob(blobdata, blobsize);
 
-                handle_data_message(endpoint, fn, id, salt, seq, sr,
-                                    chn, nframes, frame, (const char *)blobdata, blobsize);
+                handle_data_message(endpoint, fn, id, salt, seq, sr, chn, totalsize,
+                                    nframes, frame, (const char *)blobdata, blobsize);
             } catch (const osc::Exception& e){
                 LOG_ERROR(e.what());
             }
@@ -894,16 +630,37 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
 }
 
 void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
-                                     int32_t id, int32_t salt, const aoo_format &format){
+                                     int32_t id, int32_t salt,
+                                     int32_t nchannels, int32_t samplerate, int32_t blocksize,
+                                     const char *codec, const char *settings, int32_t size){
     LOG_DEBUG("handle format message");
+
+    auto update_format = [&](aoo::source_desc& src){
+        if (!src.decoder || strcmp(src.decoder->name(), codec)){
+            auto c = aoo::find_codec(codec);
+            if (c){
+                src.decoder = c->create_decoder();
+            } else {
+                LOG_ERROR("codec '" << codec << "' not supported!");
+                return;
+            }
+            if (!src.decoder){
+                LOG_ERROR("couldn't create decoder!");
+                return;
+            }
+        }
+        src.decoder->read(nchannels, samplerate, blocksize, settings, size);
+
+        update_source(src);
+    };
+
     if (id == AOO_ID_WILDCARD){
         // update all sources from this endpoint
         for (auto& src : sources_){
             if (src.endpoint == endpoint){
                 std::unique_lock<std::mutex> lock(mutex_); // !
                 src.salt = salt;
-                src.format = format;
-                update_source(src);
+                update_format(src);
             }
         }
     } else {
@@ -920,13 +677,12 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
             src->salt = salt;
         }
         // update source
-        src->format = format;
-        update_source(*src);
+        update_format(*src);
     }
 }
 
 void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
-                                   int32_t salt, int32_t seq, double sr, int32_t chn,
+                                   int32_t salt, int32_t seq, double sr, int32_t chn, int32_t totalsize,
                                    int32_t nframes, int32_t frame, const char *data, int32_t size){
     // first try to find existing source
     auto result = std::find_if(sources_.begin(), sources_.end(), [&](auto& s){
@@ -935,11 +691,16 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
     // check if the 'salt' values match, otherwise the source format has changed and we haven't noticed,
     // e.g. because of dropped UDP packets.
     if (result != sources_.end() && result->salt == salt){
-        LOG_DEBUG("handle data message");
         auto& src = *result;
-        auto bitdepth = static_cast<aoo_pcm_settings *>(src.format.settings)->bitdepth;
-        auto samplesize = aoo_pcm_bytes_per_sample(bitdepth);
         auto& queue = src.blockqueue;
+    #if 1
+        if (!src.decoder){
+            LOG_DEBUG("ignore data message");
+            return;
+        }
+    #else
+        assert(src.decoder != nullptr);
+    #endif
 
         if (seq < src.newest){
             LOG_VERBOSE("block " << seq << " out of order!");
@@ -970,7 +731,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 src.audioqueue.write_commit();
                 // push nominal samplerate + default channel (0)
                 aoo::source_desc::info i;
-                i.sr = src.format.samplerate;
+                i.sr = src.decoder->samplerate();
                 i.channel = 0;
                 i.state = AOO_SOURCE_STOP;
                 src.infoqueue.write(i);
@@ -993,7 +754,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                     src.audioqueue.write_commit();
                     // push nominal samplerate + default channel (0)
                     aoo::source_desc::info i;
-                    i.sr = src.format.samplerate;
+                    i.sr = src.decoder->samplerate();
                     i.channel = 0;
                     i.state = AOO_SOURCE_STOP;
                     src.infoqueue.write(i);
@@ -1002,8 +763,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 }
             }
             // add new block
-            auto nbytes = src.format.blocksize * src.format.nchannels * samplesize;
-            block = queue.insert(aoo::block (seq, sr, chn, nbytes, nframes));
+            block = queue.insert(aoo::block (seq, sr, chn, totalsize, nframes));
         }
 
         // add frame to block
@@ -1022,36 +782,8 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                && src.audioqueue.write_available() && src.infoqueue.write_available()){
             LOG_DEBUG("write samples (" << block->sequence << ")");
 
-            auto nsamples = src.audioqueue.blocksize();
-            auto ptr = src.audioqueue.write_data();
-
-            // convert from source format to samples.
-            // keep samples interleaved, so that we don't need
-            // an additional buffer for reblocking.
-            auto blob_to_samples = [&](auto convfn){
-                auto b = block->data();
-                for (int i = 0; i < nsamples; ++i, b += samplesize){
-                    ptr[i] = convfn(b);
-                }
-            };
-
-            switch (bitdepth){
-            case AOO_INT16:
-                blob_to_samples(pcm_int16_to_sample);
-                break;
-            case AOO_INT24:
-                blob_to_samples(pcm_int24_to_sample);
-                break;
-            case AOO_FLOAT32:
-                blob_to_samples(pcm_float32_to_sample);
-                break;
-            case AOO_FLOAT64:
-                blob_to_samples(pcm_float64_to_sample);
-                break;
-            default:
-                // unknown bitdepth
-                break;
-            }
+            src.decoder->decode(block->data(), block->size(),
+                                src.audioqueue.write_data(), src.audioqueue.blocksize());
 
             src.audioqueue.write_commit();
 
@@ -1079,15 +811,15 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
 
 void aoo_sink::update_source(aoo::source_desc &src){
     // resize audio ring buffer
-    if (src.format.codec && src.format.blocksize > 0 && src.format.samplerate > 0){
+    if (src.decoder && src.decoder->blocksize() > 0 && src.decoder->samplerate() > 0){
         LOG_DEBUG("update source");
         // recalculate buffersize from ms to samples
-        double bufsize = (double)buffersize_ * src.format.samplerate * 0.001;
-        auto d = div(bufsize, src.format.blocksize);
+        double bufsize = (double)buffersize_ * src.decoder->samplerate() * 0.001;
+        auto d = div(bufsize, src.decoder->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         nbuffers = std::max<int32_t>(1, nbuffers); // e.g. if buffersize_ is 0
         // resize audio buffer and initially fill with zeros.
-        auto nsamples = src.format.nchannels * src.format.blocksize;
+        auto nsamples = src.decoder->nchannels() * src.decoder->blocksize();
         src.audioqueue.resize(nbuffers * nsamples, nsamples);
         src.infoqueue.resize(nbuffers, 1);
         while (src.audioqueue.write_available() && src.infoqueue.write_available()){
@@ -1095,19 +827,20 @@ void aoo_sink::update_source(aoo::source_desc &src){
             src.audioqueue.write_commit();
             // push nominal samplerate + default channel (0)
             aoo::source_desc::info i;
-            i.sr = src.format.samplerate;
+            i.sr = src.decoder->samplerate();
             i.channel = 0;
             i.state = AOO_SOURCE_STOP;
             src.infoqueue.write(i);
         };
         // setup resampler
-        src.resampler.setup(src.format.blocksize, blocksize_, src.format.samplerate, samplerate_, src.format.nchannels);
+        src.resampler.setup(src.decoder->blocksize(), blocksize_,
+                            src.decoder->samplerate(), samplerate_, src.decoder->nchannels());
         // resize block queue
         src.blockqueue.resize(nbuffers * AOO_RCVBUFSIZE);
         src.newest = 0;
-        LOG_VERBOSE("update source " << src.id << ": sr = " << src.format.samplerate
-                    << ", blocksize = " << src.format.blocksize << ", nchannels = "
-                    << src.format.nchannels << ", bufsize = " << nbuffers * nsamples);
+        LOG_VERBOSE("update source " << src.id << ": sr = " << src.decoder->samplerate()
+                    << ", blocksize = " << src.decoder->blocksize() << ", nchannels = "
+                    << src.decoder->nchannels() << ", bufsize = " << nbuffers * nsamples);
     }
 }
 
@@ -1168,9 +901,12 @@ int32_t aoo_sink::process(uint64_t t){
     // this with a lockless and/or waitfree solution
     std::unique_lock<std::mutex> lock(mutex_);
     for (auto& src : sources_){
+        if (!src.decoder){
+            continue;
+        }
         int32_t offset = 0;
-        double sr = src.format.samplerate;
-        int32_t nchannels = src.format.nchannels;
+        double sr = src.decoder->samplerate();
+        int32_t nchannels = src.decoder->nchannels();
         int32_t nsamples = src.audioqueue.blocksize();
         // write samples into resampler
         while (src.audioqueue.read_available() && src.infoqueue.read_available()
@@ -1527,3 +1263,9 @@ void source_desc::send(const char *data, int32_t n){
 }
 
 } // aoo
+
+void aoo_setup(){
+    aoo_codec_pcm_setup(aoo::register_codec);
+}
+
+void aoo_close() {}

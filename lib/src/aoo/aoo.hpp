@@ -11,17 +11,6 @@
 
 namespace aoo {
 
-struct format : public aoo_format {
-    format();
-    format(const format& f);
-    format(const aoo_format& f);
-    ~format();
-    format& operator=(const aoo_format& f);
-private:
-    void clear();
-    void copy(const aoo_format& f);
-};
-
 class dynamic_resampler {
 public:
     void setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_t srto, int32_t nchannels);
@@ -38,6 +27,105 @@ private:
     int32_t wrpos_ = 0;
     double balance_ = 0;
     double ratio_ = 1.0;
+};
+
+class base_codec {
+public:
+    int32_t nchannels() const { return nchannels_; }
+    int32_t samplerate() const { return samplerate_; }
+    int32_t blocksize() const { return blocksize_; }
+protected:
+    int32_t nchannels_ = 0;
+    int32_t samplerate_ = 0;
+    int32_t blocksize_ = 0;
+};
+
+class encoder : public base_codec {
+public:
+    encoder(const aoo_codec *codec, void *obj)
+        : codec_(codec), obj_(obj){}
+    encoder(const aoo_codec&) = delete;
+    ~encoder(){
+        codec_->encoder_free(obj_);
+    }
+    const char *name() const {
+        return codec_->name;
+    }
+    void setup(aoo_format& fmt){
+        codec_->encoder_setup(obj_, &fmt);
+        // assing after validation!
+        nchannels_ = fmt.nchannels;
+        samplerate_ = fmt.samplerate;
+        blocksize_ = fmt.blocksize;
+    }
+    int32_t encode(const aoo_sample *s, int32_t n, char *buf, int32_t size){
+        return codec_->encoder_encode(obj_, s, n, buf, size);
+    }
+    int32_t write(int32_t& nchannels, int32_t& samplerate, int32_t& blocksize,
+                  char *buf, int32_t size){
+        return codec_->encoder_write(obj_,&nchannels, &samplerate,
+                                     &blocksize,buf, size);
+    }
+private:
+    const aoo_codec *codec_;
+    void *obj_;
+};
+
+class decoder : public base_codec {
+public:
+    decoder(const aoo_codec *codec, void *obj)
+        : codec_(codec), obj_(obj){}
+    decoder(const aoo_codec&) = delete;
+    ~decoder(){
+        codec_->decoder_free(obj_);
+    }
+    const char *name() const {
+        return codec_->name;
+    }
+    int32_t decode(const char *buf, int32_t size, aoo_sample *s, int32_t n){
+        return codec_->decoder_decode(obj_, buf, size, s, n);
+    }
+    int32_t read(int32_t nchannels, int32_t samplerate, int32_t blocksize,
+                 const char *opt, int32_t size){
+        auto result = codec_->decoder_read(obj_, nchannels, samplerate,
+                                    blocksize, opt, size);
+        if (result >= 0){
+            nchannels_ = nchannels;
+            samplerate_ = samplerate;
+            blocksize_ = blocksize;
+        }
+        return result;
+    }
+private:
+    const aoo_codec *codec_;
+    void *obj_;
+};
+
+class codec {
+public:
+    codec(const aoo_codec *c)
+        : codec_(c){}
+    const char *name() const {
+        return codec_->name;
+    }
+    std::unique_ptr<encoder> create_encoder() const {
+        auto obj = codec_->encoder_new();
+        if (obj){
+            return std::make_unique<encoder>(codec_, obj);
+        } else {
+            return nullptr;
+        }
+    }
+    std::unique_ptr<decoder> create_decoder() const {
+        auto obj = codec_->decoder_new();
+        if (obj){
+            return std::make_unique<decoder>(codec_, obj);
+        } else {
+            return nullptr;
+        }
+    }
+private:
+    const aoo_codec *codec_;
 };
 
 } // aoo
@@ -67,11 +155,10 @@ class aoo_source {
  private:
     const int32_t id_;
     int32_t salt_ = 0;
-    std::unique_ptr<aoo::format> format_;
+    std::unique_ptr<aoo::encoder> encoder_;
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
     int32_t samplerate_ = 0;
-    int32_t bytespersample_ = 0;
     int32_t buffersize_ = 0;
     int32_t packetsize_ = AOO_DEFPACKETSIZE;
     int32_t sequence_ = 0;
@@ -194,7 +281,7 @@ struct source_desc {
     aoo_replyfn fn;
     int32_t id;
     int32_t salt;
-    aoo::format format;
+    std::unique_ptr<aoo::decoder> decoder;
     int32_t newest = 0; // sequence number of most recent block
     block_queue blockqueue;
     lfqueue<aoo_sample> audioqueue;
@@ -242,9 +329,11 @@ class aoo_sink {
     void request_format(void * endpoint, aoo_replyfn fn, int32_t id);
 
     void handle_format_message(void *endpoint, aoo_replyfn fn,
-                               int32_t id, int32_t salt, const aoo_format& format);
+                               int32_t id, int32_t salt,
+                               int32_t nchannels, int32_t samplerate, int32_t blocksize,
+                               const char *codec, const char *setting, int32_t size);
 
     void handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
-                             int32_t salt, int32_t seq, double sr, int32_t chn,
+                             int32_t salt, int32_t seq, double sr, int32_t chn, int32_t totalsize,
                              int32_t nframes, int32_t frame, const char *data, int32_t size);
 };

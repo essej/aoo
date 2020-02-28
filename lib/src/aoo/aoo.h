@@ -20,7 +20,7 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #define AOO_FORMAT_NARGS 7
 #define AOO_FORMAT_WILDCARD "/AoO/*/format"
 #define AOO_DATA "/data"
-#define AOO_DATA_NARGS 8
+#define AOO_DATA_NARGS 9
 #define AOO_DATA_WILDCARD "/AoO/*/data"
 #define AOO_REQUEST "/request"
 
@@ -47,30 +47,8 @@ typedef AOO_SAMPLETYPE aoo_sample;
  #define AOO_DEBUG_RESAMPLING 0
 #endif
 
-typedef void (*aoo_replyfn)(
-        void *,         // endpoint
-        const char *,   // data
-        int32_t         // number of bytes
-);
-
-/*/////////////////// PCM codec ////////////////////////*/
-
-#define AOO_CODEC_PCM "pcm"
-
-typedef enum
-{
-    AOO_INT16,
-    AOO_INT24,
-    AOO_FLOAT32,
-    AOO_FLOAT64
-} aoo_pcm_bitdepth;
-
-int32_t aoo_pcm_bytes_per_sample(aoo_pcm_bitdepth bd);
-
-typedef struct
-{
-    aoo_pcm_bitdepth bitdepth;
-} aoo_pcm_settings;
+void aoo_setup(void);
+void aoo_close(void);
 
 /*//////////////////// OSC ////////////////////////////*/
 
@@ -90,6 +68,11 @@ uint64_t aoo_osctime_fromseconds(double s);
 
 uint64_t aoo_osctime_addseconds(uint64_t t, double s);
 
+typedef void (*aoo_replyfn)(
+        void *,         // endpoint
+        const char *,   // data
+        int32_t         // number of bytes
+);
 
 /*//////////////////// AoO source /////////////////////*/
 
@@ -97,16 +80,15 @@ uint64_t aoo_osctime_addseconds(uint64_t t, double s);
 
 typedef struct aoo_source aoo_source;
 
-typedef struct
+typedef struct aoo_format
 {
+    const char *codec;
     int32_t nchannels;
     int32_t samplerate;
     int32_t blocksize;
-    const char *codec;
-    void *settings;
 } aoo_format;
 
-typedef struct
+typedef struct aoo_source_settings
 {
     int32_t samplerate;
     int32_t blocksize;
@@ -150,19 +132,19 @@ int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, 
 typedef struct aoo_sink aoo_sink;
 
 // event types
-typedef enum
+typedef enum aoo_event_type
 {
     AOO_SOURCE_STATE_EVENT
 } aoo_event_type;
 
 // source state event
-typedef enum
+typedef enum aoo_source_state
 {
     AOO_SOURCE_STOP,
     AOO_SOURCE_PLAY
 } aoo_source_state;
 
-typedef struct
+typedef struct aoo_source_state_event
 {
     aoo_event_type type;
     void *endpoint;
@@ -171,7 +153,7 @@ typedef struct
 } aoo_source_state_event;
 
 // event union
-typedef union
+typedef union aoo_event
 {
     aoo_event_type type;
     aoo_source_state_event source_state;
@@ -185,7 +167,7 @@ typedef void (*aoo_processfn)(
         int32_t                 // number of events
 );
 
-typedef struct
+typedef struct aoo_sink_settings
 {
     void *userdata;
     aoo_processfn processfn;
@@ -208,6 +190,70 @@ int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
                             void *src, aoo_replyfn fn);
 
 int32_t aoo_sink_process(aoo_sink *sink, uint64_t t);
+
+
+/*//////////////////// Codec //////////////////////////*/
+
+#define AOO_CODEC_MAXSETTINGSIZE 256
+
+typedef void* (*aoo_codec_new)(void);
+
+typedef void (*aoo_codec_free)(void *);
+
+typedef void (*aoo_codec_setup)(void *, aoo_format *);
+
+typedef int32_t (*aoo_codec_writeformat)(
+        void *,         // the encoder instance
+        int32_t *,      // nchannels
+        int32_t *,      // samplerate
+        int32_t *,      // blocksize
+        char *,         // output buffer
+        int32_t         // buffer size
+);
+
+typedef int32_t (*aoo_codec_readformat)(
+        void *,         // the decoder instance
+        int32_t,        // nchannels
+        int32_t,        // samplerate
+        int32_t,        // blocksize
+        const char *,   // input buffer
+        int32_t         // number of bytes
+);
+
+typedef int32_t (*aoo_codec_encode)(
+        void *,             // the encoder instance
+        const aoo_sample *, // input samples (interleaved)
+        int32_t,            // number of samples
+        char *,             // output buffer
+        int32_t             // max. size of output buffer
+);
+
+typedef int32_t (*aoo_codec_decode)(
+        void *,         // the decoder instance
+        const char *,   // input bytes
+        int32_t,        // input size
+        aoo_sample *,   // output samples (interleaved)
+        int32_t         // number of samples
+
+);
+
+typedef struct aoo_codec
+{
+    const char *name;
+    // encoder
+    aoo_codec_new encoder_new;
+    aoo_codec_free encoder_free;
+    aoo_codec_setup encoder_setup;
+    aoo_codec_encode encoder_encode;
+    aoo_codec_writeformat encoder_write;
+    // decoder
+    aoo_codec_new decoder_new;
+    aoo_codec_free decoder_free;
+    aoo_codec_decode decoder_decode;
+    aoo_codec_readformat decoder_read;
+} aoo_codec;
+
+typedef void (*aoo_codec_registerfn)(const char *, const aoo_codec *);
 
 #ifdef __cplusplus
 } // extern "C"

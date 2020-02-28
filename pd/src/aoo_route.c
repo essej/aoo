@@ -86,4 +86,6 @@ void aoo_route_setup(void)
         (t_method)aoo_route_free, sizeof(t_aoo_route), 0, A_GIMME, A_NULL);
     class_addlist(aoo_route_class, (t_method)aoo_route_list);
     class_addmethod(aoo_route_class, (t_method)aoo_route_set, gensym("set"), A_FLOAT, A_NULL);
+
+    aoo_setup();
 }

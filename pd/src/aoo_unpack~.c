@@ -167,4 +167,6 @@ void aoo_unpack_tilde_setup(void)
                     gensym("bufsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_timefilter,
                     gensym("timefilter"), A_FLOAT, A_NULL);
+
+    aoo_setup();
 }

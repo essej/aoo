@@ -25,6 +25,7 @@ endef
 AOO = ../../lib/src
 
 cflags = -I$(AOO) \
+    -I$(AOO)/lib \
     -Wno-unused -Wno-unused-parameter \
     -DLOGLEVEL=2 \
     -DAOO_PD_OSCTIMEHACK=0 \
@@ -36,6 +37,7 @@ cflags = -I$(AOO) \
 common.sources = \
     aoo_common.cpp \
     $(AOO)/aoo.cpp \
+    $(AOO)/aoo_pcm.cpp \
     $(AOO)/lib/oscpack/osc/OscTypes.cpp \
     $(AOO)/lib/oscpack/osc/OscReceivedElements.cpp \
     $(AOO)/lib/oscpack/osc/OscOutboundPacketStream.cpp

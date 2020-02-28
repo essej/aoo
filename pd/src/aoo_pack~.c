@@ -1,5 +1,6 @@
 #include "m_pd.h"
 #include "aoo/aoo.h"
+#include "aoo/aoo_pcm.h"
 
 #include <string.h>
 #include <assert.h>
@@ -63,35 +64,33 @@ static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 {
     t_symbol *type = atom_getsymbolarg(0, argc, argv);
     if (type == gensym(AOO_CODEC_PCM)){
-        aoo_format fmt;
-        fmt.nchannels = x->x_settings.nchannels;
-        fmt.blocksize = argc > 1 ? atom_getfloat(argv + 1) : 64;
-        fmt.samplerate = argc > 2 ? atom_getfloat(argv + 2) : sys_getsr();
+        aoo_format_pcm fmt;
+        fmt.header.codec = AOO_CODEC_PCM;
+        fmt.header.nchannels = x->x_settings.nchannels;
+        fmt.header.blocksize = argc > 1 ? atom_getfloat(argv + 1) : 64;
+        fmt.header.samplerate = argc > 2 ? atom_getfloat(argv + 2) : sys_getsr();
 
-        aoo_pcm_settings pcm;
         int bitdepth = argc > 3 ? atom_getfloat(argv + 3) : 4;
         switch (bitdepth){
         case 2:
-            pcm.bitdepth = AOO_INT16;
+            fmt.bitdepth = AOO_PCM_INT16;
             break;
         case 3:
-            pcm.bitdepth = AOO_INT24;
+            fmt.bitdepth = AOO_PCM_INT24;
             break;
         case 0: // default
         case 4:
-            pcm.bitdepth = AOO_FLOAT32;
+            fmt.bitdepth = AOO_PCM_FLOAT32;
             break;
         case 8:
-            pcm.bitdepth = AOO_FLOAT64;
+            fmt.bitdepth = AOO_PCM_FLOAT64;
             break;
         default:
             pd_error(x, "%s: bad bitdepth argument %d", classname(x), bitdepth);
             return;
         }
-        fmt.codec = type->s_name;
-        fmt.settings = &pcm;
 
-        aoo_source_setformat(x->x_aoo_source, &fmt);
+        aoo_source_setformat(x->x_aoo_source, (aoo_format *)&fmt);
     } else {
         pd_error(x, "%s: unknown codec '%s'", classname(x), type->s_name);
     }
@@ -236,15 +235,13 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     x->x_out = outlet_new(&x->x_obj, 0);
 
     // default format
-    aoo_format fmt;
-    fmt.blocksize = 64;
-    fmt.samplerate = sys_getsr();
-    fmt.nchannels = nchannels;
-    fmt.codec = AOO_CODEC_PCM;
-    aoo_pcm_settings pcm;
-    pcm.bitdepth = AOO_FLOAT32;
-    fmt.settings = &pcm;
-    aoo_source_setformat(x->x_aoo_source, &fmt);
+    aoo_format_pcm fmt;
+    fmt.header.codec = AOO_CODEC_PCM;
+    fmt.header.blocksize = 64;
+    fmt.header.samplerate = sys_getsr();
+    fmt.header.nchannels = nchannels;
+    fmt.bitdepth = AOO_PCM_FLOAT32;
+    aoo_source_setformat(x->x_aoo_source, (aoo_format *)&fmt);
 
     return x;
 }
@@ -271,4 +268,6 @@ void aoo_pack_tilde_setup(void)
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_clear, gensym("clear"), A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
+
+    aoo_setup();
 }
