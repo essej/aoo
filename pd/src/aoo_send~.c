@@ -114,7 +114,7 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_send_channel(t_aoo_send *x, t_floatarg f)
 {
-    if (f >= 0){
+    if (f >= 0 && x->x_sink_id != AOO_ID_NONE){
         pthread_mutex_lock(&x->x_mutex);
         aoo_source_setsinkchannel(x->x_aoo_source, x, x->x_sink_id, f);
         x->x_sink_chn = f;
@@ -221,6 +221,7 @@ static void aoo_send_clear(t_aoo_send *x)
 {
     pthread_mutex_lock(&x->x_mutex);
     aoo_source_removeall(x->x_aoo_source);
+    x->x_sink_id = AOO_ID_NONE;
     pthread_mutex_unlock(&x->x_mutex);
 }
 

@@ -78,6 +78,7 @@ typedef struct
 // returns: the offset to the remaining address pattern
 
 #define AOO_ID_WILDCARD -1
+#define AOO_ID_NONE INT32_MIN
 
 int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *id);
 
