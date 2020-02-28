@@ -668,9 +668,6 @@ int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, 
 }
 
 bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
-    if (!format_){
-        return false;
-    }
     // update DLL
     aoo::time_tag tt(t);
     if (starttime_ == 0){
@@ -688,6 +685,11 @@ bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
         fflush(stderr);
     #endif
     }
+
+    if (!format_ || sinks_.empty()){
+        return false;
+    }
+
     // non-interleaved -> interleaved
     auto insamples = blocksize_ * nchannels_;
     auto outsamples = format_->blocksize * nchannels_;
