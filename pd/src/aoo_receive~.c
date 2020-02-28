@@ -16,6 +16,8 @@ typedef int socklen_t;
 #include <sys/select.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #endif
 
 #define classname(x) class_getname(*(t_pd *)x)
