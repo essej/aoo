@@ -293,9 +293,15 @@ void aoo_send_connect(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
     struct hostent *he = gethostbyname(hostname->s_name);
     if (he){
+        pthread_mutex_lock(&x->x_mutex);
         memcpy(&x->x_addr.sin_addr, he->h_addr_list[0], he->h_length);
         x->x_addr.sin_family = AF_INET;
         x->x_addr.sin_port = htons(port);
+        if (x->x_settings.blocksize){
+            // force time DLL update
+            aoo_source_setup(x->x_aoo_source, &x->x_settings);
+        }
+        pthread_mutex_unlock(&x->x_mutex);
 
         post("connected to %s on port %d", he->h_name, port);
     } else {
