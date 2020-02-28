@@ -13,6 +13,7 @@ namespace aoo {
 
 struct format : public aoo_format {
     format();
+    format(const format& f);
     format(const aoo_format& f);
     ~format();
     format& operator=(const aoo_format& f);

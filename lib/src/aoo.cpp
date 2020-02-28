@@ -83,6 +83,11 @@ format::format(){
     settings = 0;
 }
 
+// necessary to avoid tearing!
+format::format(const format &f){
+    copy(f);
+}
+
 format::format(const aoo_format &f){
     copy(f);
 }
