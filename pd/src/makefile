@@ -34,10 +34,13 @@ cflags = -I$(AOO) \
     -DAOO_DEBUG_OSCTIME=0 \
     -DAOO_DEBUG_RESAMPLING=0
 
+ldlibs = -lopus
+
 common.sources = \
     aoo_common.cpp \
     $(AOO)/aoo.cpp \
     $(AOO)/aoo_pcm.cpp \
+    $(AOO)/aoo_opus.cpp \
     $(AOO)/lib/oscpack/osc/OscTypes.cpp \
     $(AOO)/lib/oscpack/osc/OscReceivedElements.cpp \
     $(AOO)/lib/oscpack/osc/OscOutboundPacketStream.cpp

@@ -1,6 +1,7 @@
 #include "m_pd.h"
 #include "aoo/aoo.h"
 #include "aoo/aoo_pcm.h"
+#include "aoo/aoo_opus.h"
 
 #include <string.h>
 #include <assert.h>
@@ -75,40 +76,64 @@ typedef struct _aoo_send
 
 static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
-    t_symbol *type = atom_getsymbolarg(0, argc, argv);
-    if (type == gensym(AOO_CODEC_PCM)){
-        aoo_format_pcm fmt;
-        fmt.header.codec = AOO_CODEC_PCM;
-        fmt.header.nchannels = x->x_settings.nchannels;
-        fmt.header.blocksize = argc > 1 ? atom_getfloat(argv + 1) : 64;
-        fmt.header.samplerate = argc > 2 ? atom_getfloat(argv + 2) : sys_getsr();
+    t_symbol *codec = atom_getsymbolarg(0, argc, argv);
+    aoo_format_storage f;
+    f.header.nchannels = x->x_settings.nchannels;
+    f.header.blocksize = argc > 1 ? atom_getfloat(argv + 1) : 64;
+    f.header.samplerate = argc > 2 ? atom_getfloat(argv + 2) : sys_getsr();
+
+    if (codec == gensym(AOO_CODEC_PCM)){
+        aoo_format_pcm *fmt = (aoo_format_pcm *)&f;
+        fmt->header.codec = AOO_CODEC_PCM;
 
         int bitdepth = argc > 3 ? atom_getfloat(argv + 3) : 4;
         switch (bitdepth){
         case 2:
-            fmt.bitdepth = AOO_PCM_INT16;
+            fmt->bitdepth = AOO_PCM_INT16;
             break;
         case 3:
-            fmt.bitdepth = AOO_PCM_INT24;
+            fmt->bitdepth = AOO_PCM_INT24;
             break;
         case 0: // default
         case 4:
-            fmt.bitdepth = AOO_PCM_FLOAT32;
+            fmt->bitdepth = AOO_PCM_FLOAT32;
             break;
         case 8:
-            fmt.bitdepth = AOO_PCM_FLOAT64;
+            fmt->bitdepth = AOO_PCM_FLOAT64;
             break;
         default:
             pd_error(x, "%s: bad bitdepth argument %d", classname(x), bitdepth);
             return;
         }
+    } else if (codec == gensym(AOO_CODEC_OPUS)){
+        aoo_format_opus *fmt = (aoo_format_opus *)&f;
+        fmt->header.codec = AOO_CODEC_OPUS;
+        fmt->bitrate = argc > 3 ? atom_getfloat(argv + 3) : 0;
+        fmt->complexity = argc > 4 ? atom_getfloat(argv + 4) : 0;
 
-        pthread_mutex_lock(&x->x_mutex);
-        aoo_source_setformat(x->x_aoo_source, (aoo_format *)&fmt);
-        pthread_mutex_unlock(&x->x_mutex);
+        if (argc > 5){
+            t_symbol *type = atom_getsymbol(argv + 4);
+            if (type == gensym(AOO_OPUS_AUTO)){
+                fmt->type = AOO_OPUS_AUTO;
+            } else if (type == gensym("music")){
+                fmt->type = AOO_OPUS_SIGNAL_MUSIC;
+            } else if (type == gensym("voice")){
+                fmt->type = AOO_OPUS_SIGNAL_VOICE;
+            } else {
+                pd_error(x,"%s: unsupported type argument '%s'",
+                         classname(x), type->s_name);
+                return;
+            }
+        } else {
+            fmt->type = AOO_OPUS_AUTO;
+        }
     } else {
-        pd_error(x, "%s: unknown codec '%s'", classname(x), type->s_name);
+        pd_error(x, "%s: unknown codec '%s'", classname(x), codec->s_name);
+        return;
     }
+    pthread_mutex_lock(&x->x_mutex);
+    aoo_source_setformat(x->x_aoo_source, &f.header);
+    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_send_channel(t_aoo_send *x, t_floatarg f)

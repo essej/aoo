@@ -88,6 +88,12 @@ typedef struct aoo_format
     int32_t blocksize;
 } aoo_format;
 
+typedef struct aoo_format_storage
+{
+    aoo_format header;
+    char buf[256];
+} aoo_format_storage;
+
 typedef struct aoo_source_settings
 {
     int32_t samplerate;

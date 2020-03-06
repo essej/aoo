@@ -1,6 +1,7 @@
 #include "aoo/aoo.hpp"
 #include "aoo/aoo_utils.hpp"
 #include "aoo/aoo_pcm.h"
+#include "aoo/aoo_opus.h"
 
 #include "oscpack/osc/OscOutboundPacketStream.h"
 #include "oscpack/osc/OscReceivedElements.h"
@@ -1266,6 +1267,7 @@ void source_desc::send(const char *data, int32_t n){
 
 void aoo_setup(){
     aoo_codec_pcm_setup(aoo::register_codec);
+    aoo_codec_opus_setup(aoo::register_codec);
 }
 
 void aoo_close() {}

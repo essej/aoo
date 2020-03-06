@@ -1,4 +1,4 @@
-#N canvas 153 139 611 608 12;
+#N canvas 79 129 913 608 12;
 #X obj 108 274 osc~ 440;
 #X msg 97 218 set \$1;
 #X obj 97 148 hradio 15 1 0 8 empty empty empty 0 -8 0 10 -262144 -1
@@ -10,8 +10,8 @@
 #X obj 186 270 osc~ 600;
 #X obj 108 252 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X obj 442 299 loadbang;
-#X msg 442 323 \; pd dsp 1;
+#X obj 470 505 loadbang;
+#X msg 470 529 \; pd dsp 1;
 #X obj 72 16 loadbang;
 #X msg 255 298 channel \$1;
 #X obj 255 278 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
@@ -52,6 +52,14 @@
 #X obj 241 204 pack 64 44100 4;
 #X msg 241 234 format pcm \$1 \$2 \$3;
 #X obj 273 558 aoo_send~ 2 2;
+#X msg 466 348 format opus \$1;
+#X msg 467 165 64;
+#X msg 473 190 128;
+#X msg 479 213 256;
+#X msg 490 241 512;
+#X msg 496 267 1024;
+#X msg 503 296 2048;
+#X msg 512 318 4096;
 #X connect 0 0 21 0;
 #X connect 1 0 21 0;
 #X connect 2 0 1 0;
@@ -96,3 +104,11 @@
 #X connect 42 0 43 0;
 #X connect 43 0 44 0;
 #X connect 44 0 21 0;
+#X connect 46 0 21 0;
+#X connect 47 0 46 0;
+#X connect 48 0 46 0;
+#X connect 49 0 46 0;
+#X connect 50 0 46 0;
+#X connect 51 0 46 0;
+#X connect 52 0 46 0;
+#X connect 53 0 46 0;
