@@ -124,13 +124,37 @@ void encoder_free(void *enc){
     delete (codec *)enc;
 }
 
-void encoder_setup(void *enc, aoo_format *fmt){
-    assert(!strcmp(fmt->codec, AOO_CODEC_PCM));
+void encoder_setup(void *enc, aoo_format *f){
+    assert(!strcmp(f->codec, AOO_CODEC_PCM));
     auto c = static_cast<codec *>(enc);
+    auto fmt = reinterpret_cast<aoo_format_pcm *>(f);
 
-    // TODO: validate settings
+    // validate blocksize
+    if (fmt->header.blocksize <= 0){
+        LOG_WARNING("PCM: bad blocksize " << fmt->header.blocksize
+                    << ", using 64 samples");
+        fmt->header.blocksize = 64;
+    }
+    // validate samplerate
+    if (fmt->header.samplerate <= 0){
+        LOG_WARNING("PCM: bad samplerate " << fmt->header.samplerate
+                    << ", using 44100");
+        fmt->header.samplerate = 44100;
+    }
+    // validate channels
+    if (fmt->header.nchannels <= 0 || fmt->header.nchannels > 255){
+        LOG_WARNING("PCM: bad channel count " << fmt->header.nchannels
+                    << ", using 1 channel");
+        fmt->header.nchannels = 1;
+    }
+    // validate bitdepth
+    if (fmt->bitdepth < 0 || fmt->bitdepth > AOO_PCM_BITDEPTH_SIZE){
+        LOG_WARNING("PCM: bad bitdepth, using 32bit float");
+        fmt->bitdepth = AOO_PCM_FLOAT32;
+    }
+
+    // save and print settings
     memcpy(&c->format, fmt, sizeof(aoo_format_pcm));
-
     print_settings(c->format);
 }
 
@@ -183,7 +207,7 @@ int32_t encoder_write(void *enc, int32_t *nchannels,int32_t *samplerate,
 
         return 4;
     } else {
-        LOG_WARNING("PCM: couldn't write settings");
+        LOG_ERROR("PCM: couldn't write settings - buffer too small!");
         return -1;
     }
 }
@@ -201,6 +225,8 @@ int32_t decoder_decode(void *dec,
                        aoo_sample *s, int32_t n)
 {
     auto c = static_cast<codec *>(dec);
+    assert(c->format.header.blocksize != 0);
+
     auto samplesize = bytes_per_sample(c->format.bitdepth);
 
     assert(n >= (size / samplesize));
@@ -237,19 +263,17 @@ int32_t decoder_read(void *dec, int32_t nchannels, int32_t samplerate,
                      int32_t blocksize, const char *buf, int32_t size){
     if (size >= 4){
         auto c = static_cast<codec *>(dec);
-        // TODO validate
         c->format.header.nchannels = nchannels;
         c->format.header.samplerate = samplerate;
         c->format.header.blocksize = blocksize;
         c->format.bitdepth = (aoo_pcm_bitdepth)aoo::from_bytes<int32_t>(buf);
-
+        // TODO validate
         print_settings(c->format);
-
         return 4;
     } else {
-        LOG_WARNING("PCM: couldn't read settings");
-        return -1;
+        LOG_ERROR("PCM: couldn't read settings - not enough data!");
     }
+    return -1;
 }
 
 aoo_codec codec_class = {

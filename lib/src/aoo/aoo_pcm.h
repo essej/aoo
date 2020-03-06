@@ -16,7 +16,8 @@ typedef enum
     AOO_PCM_INT16,
     AOO_PCM_INT24,
     AOO_PCM_FLOAT32,
-    AOO_PCM_FLOAT64
+    AOO_PCM_FLOAT64,
+    AOO_PCM_BITDEPTH_SIZE
 } aoo_pcm_bitdepth;
 
 typedef struct aoo_format_pcm

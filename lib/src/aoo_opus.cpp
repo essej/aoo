@@ -49,8 +49,8 @@ void print_settings(const aoo_format_opus& f){
                 << "nchannels = " << f.header.nchannels
                 << ", blocksize = " << f.header.blocksize
                 << ", samplerate = " << f.header.samplerate
-                << ", bitrate = " << f.bitrate
-                << ", complexity = " << f.complexity
+                << ", bitrate = " << (!f.bitrate ? "auto" : std::to_string(f.bitrate))
+                << ", complexity = " << (!f.complexity ? "auto" : std::to_string(f.complexity))
                 << ", type = " << type);
 }
 
@@ -66,6 +66,7 @@ void encoder_setup(void *enc, aoo_format *f){
     assert(!strcmp(f->codec, AOO_CODEC_OPUS));
     auto c = static_cast<encoder *>(enc);
     auto fmt = reinterpret_cast<aoo_format_opus *>(f);
+
     // validate samplerate
     switch (fmt->header.samplerate){
     case 8000:
@@ -80,8 +81,8 @@ void encoder_setup(void *enc, aoo_format *f){
         fmt->header.samplerate = 48000;
         break;
     }
-    // validate channels
-    if (fmt->header.nchannels < 1 || fmt->header.nchannels > 255){
+    // validate channels (LATER support multichannel!)
+    if (fmt->header.nchannels < 1 || fmt->header.nchannels > 2){
         LOG_WARNING("Opus: channel count " << fmt->header.nchannels <<
                     " out of range - using 1 channels");
         fmt->header.nchannels = 1;
@@ -101,6 +102,21 @@ void encoder_setup(void *enc, aoo_format *f){
         }
         fmt->header.blocksize = minblocksize;
     }
+    // validate bitrate
+    if (fmt->bitrate < 0){
+        LOG_WARNING("Opus: bad bitrate!");
+        fmt->bitrate = 0; // auto
+    }
+    // validate complexity
+    if (fmt->complexity < 0 || fmt->complexity > 10){
+        LOG_WARNING("Opus: bad complexity!");
+        fmt->complexity = 0; // auto
+    }
+    // validate type
+    if (fmt->type < 0 || fmt->type > AOO_OPUS_TYPE_SIZE){
+        LOG_WARNING("Opus: bad type, using auto");
+        fmt->type = AOO_OPUS_AUTO;
+    }
 
     int error = 0;
     if (c->state){
@@ -119,7 +135,6 @@ void encoder_setup(void *enc, aoo_format *f){
 
     // save and print settings
     memcpy(&c->format, fmt, sizeof(aoo_format_opus));
-
     print_settings(*fmt);
 }
 
@@ -188,13 +203,14 @@ int32_t decoder_read(void *dec, int32_t nchannels, int32_t samplerate,
                      int32_t blocksize, const char *buf, int32_t size){
     if (size >= 12){
         auto c = static_cast<decoder *>(dec);
-        // TODO validate
         c->format.header.nchannels = nchannels;
         c->format.header.samplerate = samplerate;
         c->format.header.blocksize = blocksize;
         c->format.bitrate = aoo::from_bytes<int32_t>(buf);
         c->format.complexity = aoo::from_bytes<int32_t>(buf + 4);
         c->format.type = (aoo_opus_type)aoo::from_bytes<int32_t>(buf + 8);
+
+        // TODO validate format
 
         if (c->state){
             opus_decoder_destroy(c->state);
@@ -214,7 +230,7 @@ int32_t decoder_read(void *dec, int32_t nchannels, int32_t samplerate,
 
         return 12;
     } else {
-        LOG_WARNING("Opus: couldn't read settings");
+        LOG_ERROR("Opus: couldn't read settings - too little data!");
         return -1;
     }
 }

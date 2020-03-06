@@ -169,7 +169,7 @@ void aoo_source::setup(aoo_source_settings &settings){
         LOG_WARNING("packet size too small! setting to " << minpacketsize);
         packetsize_ = minpacketsize;
     } else if (settings.packetsize > AOO_MAXPACKETSIZE){
-        LOG_WARNING("packet size too big! setting to " << AOO_MAXPACKETSIZE);
+        LOG_WARNING("packet size too large! setting to " << AOO_MAXPACKETSIZE);
         packetsize_ = AOO_MAXPACKETSIZE;
     } else {
         packetsize_ = settings.packetsize;

@@ -53,7 +53,7 @@ public:
     }
     void setup(aoo_format& fmt){
         codec_->encoder_setup(obj_, &fmt);
-        // assing after validation!
+        // assign after validation!
         nchannels_ = fmt.nchannels;
         samplerate_ = fmt.samplerate;
         blocksize_ = fmt.blocksize;

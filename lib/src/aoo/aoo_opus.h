@@ -15,7 +15,8 @@ typedef enum
 {
     AOO_OPUS_AUTO,
     AOO_OPUS_SIGNAL_VOICE,
-    AOO_OPUS_SIGNAL_MUSIC
+    AOO_OPUS_SIGNAL_MUSIC,
+    AOO_OPUS_TYPE_SIZE
 } aoo_opus_type;
 
 typedef struct aoo_format_opus
