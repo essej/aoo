@@ -283,6 +283,8 @@ struct source_desc {
     int32_t salt;
     std::unique_ptr<aoo::decoder> decoder;
     int32_t newest = 0; // sequence number of most recent block
+    int32_t channel = 0; // recent channel onset
+    double samplerate = 0; // recent samplerate
     block_queue blockqueue;
     lfqueue<aoo_sample> audioqueue;
     struct info {

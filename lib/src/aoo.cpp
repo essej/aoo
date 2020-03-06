@@ -847,6 +847,8 @@ void aoo_sink::update_source(aoo::source_desc &src){
         // resize block queue
         src.blockqueue.resize(nbuffers * AOO_RCVBUFSIZE);
         src.newest = 0;
+        src.channel = 0;
+        src.samplerate = src.decoder->samplerate();
         LOG_VERBOSE("update source " << src.id << ": sr = " << src.decoder->samplerate()
                     << ", blocksize = " << src.decoder->blocksize() << ", nchannels = "
                     << src.decoder->nchannels() << ", bufsize = " << nbuffers * nsamples);
@@ -913,7 +915,6 @@ int32_t aoo_sink::process(uint64_t t){
         if (!src.decoder){
             continue;
         }
-        int32_t offset = 0;
         double sr = src.decoder->samplerate();
         int32_t nchannels = src.decoder->nchannels();
         int32_t nsamples = src.audioqueue.blocksize();
@@ -926,8 +927,8 @@ int32_t aoo_sink::process(uint64_t t){
             }
         #endif
             auto info = src.infoqueue.read();
-            offset = info.channel;
-            sr = info.sr;
+            src.channel = info.channel;
+            src.samplerate = info.sr;
             src.resampler.write(src.audioqueue.read_data(), nsamples);
             src.audioqueue.read_commit();
             // check state
@@ -942,7 +943,7 @@ int32_t aoo_sink::process(uint64_t t){
             }
         }
         // update resampler
-        src.resampler.update(sr, dll_.samplerate());
+        src.resampler.update(src.samplerate, dll_.samplerate());
         // read samples from resampler
         auto readsamples = blocksize_ * nchannels;
         if (src.resampler.read_available() >= readsamples){
@@ -952,14 +953,13 @@ int32_t aoo_sink::process(uint64_t t){
             // sum source into sink (interleaved -> non-interleaved),
             // starting at the desired sink channel offset.
             // out of bound source channels are silently ignored.
-            for (int i = 0; i < blocksize_; ++i){
-                for (int j = 0; j < nchannels; ++j){
-                    auto chn = j + offset;
-                    // ignore out-of-bound source channels!
-                    if (chn < nchannels_){
-                        buffer_[chn * blocksize_ + i] += *buf;
+            for (int i = 0; i < nchannels; ++i){
+                auto chn = i + src.channel;
+                // ignore out-of-bound source channels!
+                if (chn < nchannels_){
+                    for (int j = 0; j < blocksize_; ++j){
+                        buffer_[chn * blocksize_ + j] += buf[j * nchannels + i];
                     }
-                    buf++;
                 }
             }
             LOG_DEBUG("read samples");
