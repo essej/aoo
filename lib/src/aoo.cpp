@@ -266,16 +266,25 @@ void aoo_source_setsinkchannel(aoo_source *src, void *sink, int32_t id, int32_t 
 
 void aoo_source::set_sink_channel(void *sink, int32_t id, int32_t chn){
     if (chn < 0){
-        chn = 0;
+        LOG_ERROR("aoo_source: channel onset " << chn << " out of range!");
     }
-    auto result = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-        return (s.endpoint == sink) && (s.id == id);
-    });
-    if (result != sinks_.end()){
-        LOG_VERBOSE("aoo_source::set_sink_channel: " << chn);
-        result->channel = chn;
+    if (id == AOO_ID_WILDCARD){
+        for (auto& s : sinks_){
+            if (s.endpoint == sink){
+                LOG_VERBOSE("aoo_source: send to sink " << s.id << " on channel " << chn);
+                s.channel = chn;
+            }
+        }
     } else {
-        LOG_ERROR("aoo_source::set_sink_channel: sink not found!");
+        auto result = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
+            return (s.endpoint == sink) && (s.id == id);
+        });
+        if (result != sinks_.end()){
+            LOG_VERBOSE("aoo_source: send to sink " << result->id << " on channel " << chn);
+            result->channel = chn;
+        } else {
+            LOG_ERROR("aoo_source::set_sink_channel: sink not found!");
+        }
     }
 }
 
@@ -373,7 +382,6 @@ bool aoo_source::send(){
                     msg << osc::BeginMessage(AOO_DATA_WILDCARD);
                 }
 
-                // for now ignore timetag
                 msg << id_ << salt_ << sequence_ << sr << sink.channel
                     << nbytes << nframes << frame << osc::Blob(data, n)
                     << osc::EndMessage;
@@ -689,7 +697,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
     auto result = std::find_if(sources_.begin(), sources_.end(), [&](auto& s){
         return (s.endpoint == endpoint) && (s.id == id);
     });
-    // check if the 'salt' values match, otherwise the source format has changed and we haven't noticed,
+    // check if the 'salt' values match. the source format might have changed and we haven't noticed,
     // e.g. because of dropped UDP packets.
     if (result != sources_.end() && result->salt == salt){
         auto& src = *result;
