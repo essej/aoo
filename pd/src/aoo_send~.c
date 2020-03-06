@@ -138,10 +138,10 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_send_channel(t_aoo_send *x, t_floatarg f)
 {
-    if (f >= 0 && x->x_sink_id != AOO_ID_NONE){
+    x->x_sink_chn = f > 0 ? f : 0;
+    if (x->x_sink_id != AOO_ID_NONE){
         pthread_mutex_lock(&x->x_mutex);
-        aoo_source_setsinkchannel(x->x_aoo_source, x, x->x_sink_id, f);
-        x->x_sink_chn = f;
+        aoo_source_setsinkchannel(x->x_aoo_source, x, x->x_sink_id, x->x_sink_chn);
         pthread_mutex_unlock(&x->x_mutex);
     }
 }
@@ -229,15 +229,15 @@ static void aoo_send_set(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             } else {
                 return;
             }
+            aoo_source_setsinkchannel(x->x_aoo_source, x, AOO_ID_WILDCARD, x->x_sink_chn);
             x->x_sink_id = AOO_ID_WILDCARD;
         } else {
             int32_t id = atom_getfloat(argv);
             aoo_source_addsink(x->x_aoo_source, x, id, (aoo_replyfn)aoo_send_reply);
+            aoo_source_setsinkchannel(x->x_aoo_source, x, id, x->x_sink_chn);
             x->x_sink_id = id;
         }
         pthread_mutex_unlock(&x->x_mutex);
-
-        aoo_send_channel(x, atom_getfloatarg(1, argc, argv));
     }
 }
 

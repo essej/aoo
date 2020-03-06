@@ -123,9 +123,9 @@ static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_pack_channel(t_aoo_pack *x, t_floatarg f)
 {
-    if (f >= 0){
-        aoo_source_setsinkchannel(x->x_aoo_source, x, x->x_sink_id, f);
-        x->x_sink_chn = f;
+    x->x_sink_chn = f > 0 ? f : 0;
+    if (x->x_sink_id != AOO_ID_NONE){
+        aoo_source_setsinkchannel(x->x_aoo_source, x, x->x_sink_id, x->x_sink_chn);
     }
 }
 
@@ -157,10 +157,12 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
             } else {
                 return;
             }
+            aoo_source_setsinkchannel(x->x_aoo_source, x, AOO_ID_WILDCARD, x->x_sink_chn);
             x->x_sink_id = AOO_ID_WILDCARD;
         } else {
             int32_t id = atom_getfloat(argv);
             aoo_source_addsink(x->x_aoo_source, x, id, (aoo_replyfn)aoo_pack_reply);
+            aoo_source_setsinkchannel(x->x_aoo_source, x, id, x->x_sink_chn);
             x->x_sink_id = id;
         }
         aoo_pack_channel(x, atom_getfloatarg(1, argc, argv));
@@ -170,6 +172,7 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 static void aoo_pack_clear(t_aoo_pack *x)
 {
     aoo_source_removeall(x->x_aoo_source);
+    x->x_sink_id = AOO_ID_NONE;
 }
 
 uint64_t aoo_pd_osctime(int n, t_float sr);
