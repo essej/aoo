@@ -125,7 +125,8 @@ static void* socket_listener_threadfn(void *y)
                 client->addrlen = len;
                 client->next = 0;
                 if (x->clients){
-                    x->clients->next = client;
+                    client->next = x->clients;
+                    x->clients = client;
                 } else {
                     x->clients = client;
                 }
