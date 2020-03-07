@@ -30,6 +30,10 @@ typedef struct _aoo_unpack
     t_sample **x_vec;
     t_outlet *x_msgout;
     t_outlet *x_eventout;
+    aoo_event *x_eventbuf;
+    int x_eventbufsize;
+    int x_numevents;
+    t_clock *x_clock;
 } t_aoo_unpack;
 
 static void aoo_pack_reply(t_aoo_unpack *x, const char *data, int32_t n)
@@ -66,6 +70,20 @@ static void aoo_unpack_timefilter(t_aoo_unpack *x, t_floatarg f)
     }
 }
 
+static void aoo_unpack_tick(t_aoo_unpack *x)
+{
+    for (int i = 0; i < x->x_numevents; ++i){
+        if (x->x_eventbuf[i].type == AOO_SOURCE_STATE_EVENT){
+            aoo_source_state_event *e = &x->x_eventbuf[i].source_state;
+            t_atom msg[2];
+            SETFLOAT(&msg[0], e->id);
+            SETFLOAT(&msg[1], e->state);
+            outlet_anything(x->x_eventout, gensym("source"), 2, msg);
+        }
+    }
+    x->x_numevents = 0;
+}
+
 static void aoo_unpack_process(t_aoo_unpack *x, const aoo_sample **data, int32_t n,
                                const aoo_event *events, int32_t nevents)
 {
@@ -73,15 +91,21 @@ static void aoo_unpack_process(t_aoo_unpack *x, const aoo_sample **data, int32_t
     for (int i = 0; i < x->x_settings.nchannels; ++i){
         memcpy(x->x_vec[i], data[i], sizeof(aoo_sample) * n);
     }
-    for (int i = 0; i < nevents; ++i){
-        if (events[i].type == AOO_SOURCE_STATE_EVENT){
-            int32_t id = events[i].source_state.id;
-            aoo_source_state state = events[i].source_state.state;
-            t_atom msg[2];
-            SETFLOAT(&msg[0], id);
-            SETFLOAT(&msg[1], state);
-            outlet_anything(x->x_eventout, gensym("source"), 2, msg);
+    // handle events
+    if (nevents > 0){
+        // resize event buffer if necessary
+        if (nevents > x->x_eventbufsize){
+            x->x_eventbuf = (aoo_event *)resizebytes(x->x_eventbuf,
+                sizeof(aoo_event) * x->x_eventbufsize, sizeof(aoo_event) * nevents);
+            x->x_eventbufsize = nevents;
         }
+        // copy events
+        for (int i = 0; i < nevents; ++i){
+            x->x_eventbuf[i] = events[i];
+        }
+        x->x_numevents = nevents;
+
+        clock_delay(x->x_clock, 0);
     }
 }
 
@@ -119,6 +143,11 @@ static void aoo_unpack_dsp(t_aoo_unpack *x, t_signal **sp)
 static void * aoo_unpack_new(t_symbol *s, int argc, t_atom *argv)
 {
     t_aoo_unpack *x = (t_aoo_unpack *)pd_new(aoo_unpack_class);
+    // pre-allocate event buffer
+    x->x_eventbuf = getbytes(sizeof(aoo_event) * 16);
+    x->x_eventbufsize = 16;
+    x->x_numevents = 0;
+    x->x_clock = clock_new(x, (t_method)aoo_unpack_tick);
 
     // arg #1: ID
     int id = atom_getfloatarg(0, argc, argv);
@@ -154,6 +183,8 @@ static void aoo_unpack_free(t_aoo_unpack *x)
 {
     // clean up
     freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
+    freebytes(x->x_eventbuf, sizeof(aoo_event) * x->x_eventbufsize);
+    clock_free(x->x_clock);
     aoo_sink_free(x->x_aoo_sink);
 }
 
