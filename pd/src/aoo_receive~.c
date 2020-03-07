@@ -283,7 +283,7 @@ void socket_listener_release(t_socket_listener *x, t_aoo_receive *r)
             freebytes(c, sizeof(t_client));
             c = next;
         }
-        freebytes(x->recv, sizeof(t_aoo_receive*));
+        freebytes(x->recv, sizeof(t_aoo_receive*) * x->numrecv);
         verbose(0, "released socket listener on port %d", x->port);
         freebytes(x, sizeof(*x));
     } else {
