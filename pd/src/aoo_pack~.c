@@ -208,7 +208,8 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
 
     // make additional inlets
     if (nchannels > 1){
-        while (--nchannels){
+        int i = nchannels;
+        while (--i){
             inlet_new(&x->x_obj, &x->x_obj.ob_pd, &s_signal, &s_signal);
         }
     }
