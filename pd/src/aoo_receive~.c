@@ -26,7 +26,7 @@ typedef int socklen_t;
 #define AOO_DEBUG_OSCTIME 0
 #endif
 
-#define DEFBUFSIZE 10
+#define DEFBUFSIZE 20
 
 int socket_close(int socket)
 {

@@ -17,7 +17,7 @@
 
 #define classname(x) class_getname(*(t_pd *)x)
 
-#define DEFBUFSIZE 10
+#define DEFBUFSIZE 20
 
 static t_class *aoo_unpack_class;
 
