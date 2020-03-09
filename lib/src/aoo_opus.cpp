@@ -1,6 +1,5 @@
 #include "aoo/aoo_opus.h"
 #include "aoo/aoo_utils.hpp"
-#include "opus/include/opus.h"
 
 #include <cassert>
 #include <cstring>
@@ -33,11 +32,11 @@ struct decoder {
 
 void print_settings(const aoo_format_opus& f){
     const char *type;
-    switch (f.type){
-    case AOO_OPUS_SIGNAL_MUSIC:
+    switch (f.signal_type){
+    case OPUS_SIGNAL_MUSIC:
         type = "music";
         break;
-    case AOO_OPUS_SIGNAL_VOICE:
+    case OPUS_SIGNAL_VOICE:
         type = "voice";
         break;
     default:
@@ -49,9 +48,9 @@ void print_settings(const aoo_format_opus& f){
                 << "nchannels = " << f.header.nchannels
                 << ", blocksize = " << f.header.blocksize
                 << ", samplerate = " << f.header.samplerate
-                << ", bitrate = " << (!f.bitrate ? "auto" : std::to_string(f.bitrate))
-                << ", complexity = " << (!f.complexity ? "auto" : std::to_string(f.complexity))
-                << ", type = " << type);
+                << ", bitrate = " << f.bitrate
+                << ", complexity = " << f.complexity
+                << ", signal type = " << type);
 }
 
 void *encoder_new(){
@@ -102,21 +101,7 @@ void encoder_setup(void *enc, aoo_format *f){
         }
         fmt->header.blocksize = minblocksize;
     }
-    // validate bitrate
-    if (fmt->bitrate < 0){
-        LOG_WARNING("Opus: bad bitrate!");
-        fmt->bitrate = 0; // auto
-    }
-    // validate complexity
-    if (fmt->complexity < 0 || fmt->complexity > 10){
-        LOG_WARNING("Opus: bad complexity!");
-        fmt->complexity = 0; // auto
-    }
-    // validate type
-    if (fmt->type < 0 || fmt->type > AOO_OPUS_TYPE_SIZE){
-        LOG_WARNING("Opus: bad type, using auto");
-        fmt->type = AOO_OPUS_AUTO;
-    }
+    // bitrate, complexity and signal type should be validated by opus
 
     int error = 0;
     if (c->state){
@@ -128,7 +113,16 @@ void encoder_setup(void *enc, aoo_format *f){
                                        &error);
     if (error == OPUS_OK){
         assert(c->state != nullptr);
-        // TODO apply settings
+        // apply settings
+        // complexity
+        opus_encoder_ctl(c->state, OPUS_SET_COMPLEXITY(fmt->complexity));
+        opus_encoder_ctl(c->state, OPUS_GET_COMPLEXITY(&fmt->complexity));
+        // bitrate
+        opus_encoder_ctl(c->state, OPUS_SET_BITRATE(fmt->bitrate));
+        opus_encoder_ctl(c->state, OPUS_GET_BITRATE(&fmt->bitrate));
+        // signal type
+        opus_encoder_ctl(c->state, OPUS_SET_SIGNAL(fmt->signal_type));
+        opus_encoder_ctl(c->state, OPUS_GET_SIGNAL(&fmt->signal_type));
     } else {
         LOG_ERROR("Opus: opus_encoder_create() failed with error code " << error);
     }
@@ -165,7 +159,7 @@ int32_t encoder_write(void *enc, int32_t *nchannels,int32_t *samplerate,
         *blocksize = c->format.header.blocksize;
         aoo::to_bytes<int32_t>(c->format.bitrate, buf);
         aoo::to_bytes<int32_t>(c->format.complexity, buf + 4);
-        aoo::to_bytes<int32_t>(c->format.type, buf + 8);
+        aoo::to_bytes<int32_t>(c->format.signal_type, buf + 8);
 
         return 12;
     } else {
@@ -208,7 +202,7 @@ int32_t decoder_read(void *dec, int32_t nchannels, int32_t samplerate,
         c->format.header.blocksize = blocksize;
         c->format.bitrate = aoo::from_bytes<int32_t>(buf);
         c->format.complexity = aoo::from_bytes<int32_t>(buf + 4);
-        c->format.type = (aoo_opus_type)aoo::from_bytes<int32_t>(buf + 8);
+        c->format.signal_type = aoo::from_bytes<int32_t>(buf + 8);
 
         // TODO validate format
 
@@ -221,7 +215,16 @@ int32_t decoder_read(void *dec, int32_t nchannels, int32_t samplerate,
                                            &error);
         if (error == OPUS_OK){
             assert(c->state != nullptr);
-            // TODO apply settings
+            // apply settings
+            // complexity
+            opus_decoder_ctl(c->state, OPUS_SET_COMPLEXITY(c->format.complexity));
+            opus_decoder_ctl(c->state, OPUS_GET_COMPLEXITY(&c->format.complexity));
+            // bitrate
+            opus_decoder_ctl(c->state, OPUS_SET_BITRATE(c->format.bitrate));
+            opus_decoder_ctl(c->state, OPUS_GET_BITRATE(&c->format.bitrate));
+            // signal type
+            opus_decoder_ctl(c->state, OPUS_SET_SIGNAL(c->format.signal_type));
+            opus_decoder_ctl(c->state, OPUS_GET_SIGNAL(&c->format.signal_type));
         } else {
             LOG_ERROR("Opus: opus_decoder_create() failed with error code " << error);
         }

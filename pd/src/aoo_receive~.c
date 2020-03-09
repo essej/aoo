@@ -182,7 +182,7 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
     } else {
         // make new socket listener
 
-        // first create sockets
+        // first create socket
         int sock = socket(AF_INET, SOCK_DGRAM, 0);
         if (sock < 0){
             socket_error_print("socket");
