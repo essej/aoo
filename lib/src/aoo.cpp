@@ -783,31 +783,36 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             src.newest = seq;
         }
 
-        // Check if the *oldest* block is complete, so we can transfer it to the audio buffer.
-        // We can do the same for all subsequent blocks which have already been completed.
-        block = queue.begin();
-        int32_t count = 0;
-        while ((block != queue.end()) && block->complete()
-               && src.audioqueue.write_available() && src.infoqueue.write_available()){
-            LOG_DEBUG("write samples (" << block->sequence << ")");
+        if (!queue.empty()){
+            // Check if the *oldest* block is complete, so we can transfer it to the audio buffer.
+            // Do the same for subsequent blocks, but stop if a block is missing!
+            block = queue.begin();
+            int32_t count = 0;
+            int32_t start = block->sequence;
+            while ((block != queue.end()) && block->complete()
+                   && (block->sequence == (start + count))
+                   && src.audioqueue.write_available() && src.infoqueue.write_available())
+            {
+                LOG_DEBUG("write samples (" << block->sequence << ")");
 
-            src.decoder->decode(block->data(), block->size(),
-                                src.audioqueue.write_data(), src.audioqueue.blocksize());
+                src.decoder->decode(block->data(), block->size(),
+                                    src.audioqueue.write_data(), src.audioqueue.blocksize());
 
-            src.audioqueue.write_commit();
+                src.audioqueue.write_commit();
 
-            // push info
-            aoo::source_desc::info i;
-            i.sr = sr;
-            i.channel = block->channel;
-            i.state = AOO_SOURCE_PLAY;
-            src.infoqueue.write(i);
+                // push info
+                aoo::source_desc::info i;
+                i.sr = sr;
+                i.channel = block->channel;
+                i.state = AOO_SOURCE_PLAY;
+                src.infoqueue.write(i);
 
-            count++;
-            block++;
-        }
-        while (count--){
-            queue.pop_front();
+                count++;
+                block++;
+            }
+            while (count--){
+                queue.pop_front();
+            }
         }
     } else {
         // discard data and request format!
