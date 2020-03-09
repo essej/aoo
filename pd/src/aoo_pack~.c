@@ -31,7 +31,6 @@ typedef struct _aoo_pack
     t_float **x_vec;
     t_clock *x_clock;
     t_outlet *x_out;
-    t_atom x_sink_id_arg;
     int32_t x_sink_id;
     int32_t x_sink_chn;
 } t_aoo_pack;
@@ -106,6 +105,8 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
             if (*argv->a_w.w_symbol->s_name == '*'){
                 aoo_source_addsink(x->x_aoo_source, x, AOO_ID_WILDCARD, (aoo_replyfn)aoo_pack_reply);
             } else {
+                pd_error(x, "%s: bad argument '%s' to 'set' message!",
+                         classname(x), argv->a_w.w_symbol->s_name);
                 return;
             }
             aoo_source_setsinkchannel(x->x_aoo_source, x, AOO_ID_WILDCARD, x->x_sink_chn);
@@ -161,9 +162,11 @@ static void aoo_pack_loadbang(t_aoo_pack *x, t_floatarg f)
 {
     // LB_LOAD
     if (f == 0){
-        if (x->x_sink_id_arg.a_type != A_NULL){
+        if (x->x_sink_id != AOO_ID_NONE){
             // set sink ID
-            aoo_pack_set(x, 0, 1, &x->x_sink_id_arg);
+            t_atom a;
+            SETFLOAT(&a, x->x_sink_id);
+            aoo_pack_set(x, 0, 1, &a);
             aoo_pack_channel(x, x->x_sink_chn);
         }
     }
@@ -194,12 +197,10 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     x->x_settings.nchannels = nchannels;
 
     // arg #3: sink ID
-    x->x_sink_id = -1;
     if (argc > 2){
-        x->x_sink_id_arg.a_type = argv[2].a_type;
-        x->x_sink_id_arg.a_w = argv[2].a_w;
+        x->x_sink_id = atom_getfloat(argv + 2);
     } else {
-        x->x_sink_id_arg.a_type = A_NULL;
+        x->x_sink_id = AOO_ID_NONE;
     }
 
     // arg #4: sink channel
