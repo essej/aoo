@@ -1,0 +1,43 @@
+#N canvas 885 184 550 445 12;
+#X text 26 20 aoo_receive~: receive AOO audio streams;
+#X text 35 391 see also;
+#X obj 113 393 aoo_send~;
+#X msg 38 99 listen \$1;
+#X obj 38 75 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
+-262144 -1 -1 0 256;
+#X msg 102 72 0;
+#X text 37 53 port;
+#X text 136 72 stop listening;
+#X obj 38 290 aoo_receive~ 1 2 9999;
+#X text 73 239 creation arguments:;
+#X text 74 260 1) ID \, 2) num channels \, 3) [port] \, 4) [bufsize]
+;
+#X msg 53 152 bufsize \$1;
+#X obj 53 128 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 20 256;
+#X msg 65 205 timefilter \$1;
+#X obj 65 185 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X text 172 205 time DLL filter bandwidth (default: 0.0001);
+#X obj 38 317 env~;
+#X floatatom 38 341 5 0 0 0 - - -;
+#X obj 109 318 env~;
+#X floatatom 109 342 5 0 0 0 - - -;
+#X obj 182 319 print;
+#X text 230 321 events:;
+#X text 278 365 state: 0 (stop) \, 1 (play);
+#X text 228 343 [source <IP address> <port> <ID> <state>(;
+#X text 136 158 increase for jittery \, unreliable networks!;
+#X text 137 137 buffer size in ms (default: 20 ms);
+#X connect 3 0 8 0;
+#X connect 4 0 3 0;
+#X connect 5 0 3 0;
+#X connect 8 0 16 0;
+#X connect 8 1 18 0;
+#X connect 8 2 20 0;
+#X connect 11 0 8 0;
+#X connect 12 0 11 0;
+#X connect 13 0 8 0;
+#X connect 14 0 13 0;
+#X connect 16 0 17 0;
+#X connect 18 0 19 0;
