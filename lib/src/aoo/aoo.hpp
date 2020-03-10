@@ -128,6 +128,43 @@ private:
     const aoo_codec *codec_;
 };
 
+struct data_packet {
+    int32_t sequence;
+    double samplerate;
+    int32_t channel;
+    int32_t totalsize;
+    int32_t nframes;
+    int32_t framenum;
+    const char *data;
+    int32_t size;
+};
+
+class block {
+public:
+    block() = default;
+    block(int32_t seq, double sr, int32_t chn,
+          int32_t nbytes, int32_t nframes);
+    // methods
+    void set(int32_t seq, double sr, int32_t chn,
+             const char *data, int32_t nbytes,
+             int32_t nframes, int32_t framesize);
+    const char* data() const { return buffer_.data(); }
+    int32_t size() const { return buffer_.size(); }
+    bool complete() const;
+    void add_frame(int32_t which, const char *data, int32_t n);
+    void get_frame(int32_t which, const char *& data, int32_t& n);
+    int32_t num_frames() const { return numframes_; }
+    // data
+    int32_t sequence = -1;
+    double samplerate = 0;
+    int32_t channel = 0;
+protected:
+    std::vector<char> buffer_;
+    uint64_t frames_ = 0; // bitfield (later expand)
+    int32_t numframes_ = 0;
+    int32_t framesize_ = 0;
+};
+
 } // aoo
 
 class aoo_source {
@@ -183,6 +220,7 @@ class aoo_source {
     std::vector<sink_desc> sinks_;
     // helper methods
     void update();
+    void send_data(sink_desc& sink, const aoo::data_packet& packet);
     void send_format(sink_desc& sink);
     int32_t make_salt();
 };
@@ -224,29 +262,6 @@ struct time_tag {
         result.seconds = seconds - t.seconds - !(ns >> 32);
         return result;
     }
-};
-
-struct block {
-    block(){}
-    block(int32_t seq, double sr, int32_t chn,
-                 int32_t nbytes, int32_t nframes);
-    block(const block&) = default;
-    block(block&&) = default;
-    block& operator=(const block&) = default;
-    block& operator=(block&&) = default;
-    // methods
-    bool complete() const;
-    void add_frame(int which, const char *data, int32_t n);
-    // data
-    int32_t sequence = -1;
-    double samplerate = 0;
-    int32_t channel = 0;
-    const char* data() const { return buffer.data(); }
-    int32_t size() const { return buffer.size(); }
-private:
-    std::vector<char> buffer;
-    int32_t numframes = 0;
-    uint32_t frames = 0; // bitfield (later expand)
 };
 
 class block_queue {

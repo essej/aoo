@@ -347,57 +347,44 @@ bool aoo_source::send(){
     if (audioqueue_.read_available() && srqueue_.read_available()){
         const auto nchannels = encoder_->nchannels();
         const auto blocksize = encoder_->blocksize();
+        aoo::data_packet packet;
+        packet.sequence = sequence_;
+        packet.samplerate = srqueue_.read();
 
         // copy and convert audio samples to blob data
         const auto blobmaxsize = sizeof(double) * nchannels * blocksize; // overallocate
         char * blobdata = (char *)alloca(blobmaxsize);
 
-        auto nbytes = encoder_->encode(audioqueue_.read_data(), audioqueue_.blocksize(),
+        packet.totalsize = encoder_->encode(audioqueue_.read_data(), audioqueue_.blocksize(),
                                         blobdata, blobmaxsize);
 
         audioqueue_.read_commit();
 
-        // read samplerate
-        double sr = srqueue_.read();
-
         auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
-        auto d = div(nbytes, maxpacketsize);
-        int32_t nframes = d.quot + (d.rem != 0);
+        auto d = div(packet.totalsize, maxpacketsize);
+        packet.nframes = d.quot + (d.rem != 0);
 
         // send a single frame to all sink
-        // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <numpackets> <packetnum> <data>
-        auto send_data = [&](int32_t frame, const char* data, auto n){
+        // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
+        auto dosend = [&](int32_t frame, const char* data, auto n){
             LOG_DEBUG("send frame: " << frame << ", size: " << n);
+            packet.framenum = frame;
+            packet.data = data;
+            packet.size = n;
             for (auto& sink : sinks_){
-                char buf[AOO_MAXPACKETSIZE];
-                osc::OutboundPacketStream msg(buf, sizeof(buf));
-
-                if (sink.id != AOO_ID_WILDCARD){
-                    const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_DATA);
-                    char address[max_addr_size];
-                    snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, sink.id, AOO_DATA);
-
-                    msg << osc::BeginMessage(address);
-                } else {
-                    msg << osc::BeginMessage(AOO_DATA_WILDCARD);
-                }
-
-                msg << id_ << salt_ << sequence_ << sr << sink.channel
-                    << nbytes << nframes << frame << osc::Blob(data, n)
-                    << osc::EndMessage;
-
-                sink.send(msg.Data(), msg.Size());
+                packet.channel = sink.channel;
+                send_data(sink, packet);
             }
         };
 
         auto blobptr = blobdata;
         // send large frames (might be 0)
         for (int32_t i = 0; i < d.quot; ++i, blobptr += maxpacketsize){
-            send_data(i, blobptr, maxpacketsize);
+            dosend(i, blobptr, maxpacketsize);
         }
         // send remaining bytes as a single frame (might be the only one!)
         if (d.rem){
-            send_data(d.quot, blobptr, d.rem);
+            dosend(d.quot, blobptr, d.rem);
         }
 
         sequence_++;
@@ -487,6 +474,29 @@ bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
             return false;
         }
     }
+}
+
+// /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
+
+void aoo_source::send_data(sink_desc& sink, const aoo::data_packet& packet){
+    char buf[AOO_MAXPACKETSIZE];
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+    if (sink.id != AOO_ID_WILDCARD){
+        const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_DATA);
+        char address[max_addr_size];
+        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, sink.id, AOO_DATA);
+
+        msg << osc::BeginMessage(address);
+    } else {
+        msg << osc::BeginMessage(AOO_DATA_WILDCARD);
+    }
+
+    msg << id_ << salt_ << packet.sequence << packet.samplerate << packet.channel
+        << packet.totalsize << packet.nframes << packet.framenum
+        << osc::Blob(packet.data, packet.size) << osc::EndMessage;
+
+    sink.send(msg.Data(), msg.Size());
 }
 
 // /AoO/<sink>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
@@ -1009,46 +1019,68 @@ int32_t aoo_sink::process(uint64_t t){
 
 namespace aoo {
 
-/*////////////////////////// source_block /////////////////////////////*/
+/*////////////////////////// block /////////////////////////////*/
 
 block::block(int32_t seq, double sr, int32_t chn,
-                           int32_t nbytes, int32_t nframes)
-    : sequence(seq), samplerate(sr), channel(chn), numframes(nframes)
+             int32_t nbytes, int32_t nframes)
+    : sequence(seq), samplerate(sr), channel(chn),
+      numframes_(nframes), framesize_(0)
 {
     assert(nbytes > 0);
-    buffer.resize(nbytes);
+    buffer_.resize(nbytes);
     // set missing frame bits to 1
-    frames = 0;
+    frames_ = 0;
     for (int i = 0; i < nframes; ++i){
-        frames |= (1 << (uint64_t)i);
+        frames_ |= (1 << (uint64_t)i);
     }
     // LOG_DEBUG("initial frames: " << (unsigned)frames);
 }
 
-bool block::complete() const {
-    assert(buffer.data() != nullptr);
-    assert(sequence >= 0);
-    return frames == 0;
+void block::set(int32_t seq, double sr, int32_t chn,
+                const char *data, int32_t nbytes,
+                int32_t nframes, int32_t framesize)
+{
+    sequence = seq;
+    samplerate = sr;
+    channel = chn;
+    numframes_ = nframes;
+    framesize_ = framesize;
+    frames_ = 0; // no frames missing
+    buffer_.assign(data, data + nbytes);
 }
 
-void block::add_frame(int which, const char *data, int32_t n){
+bool block::complete() const {
+    assert(buffer_.data() != nullptr);
+    assert(sequence >= 0);
+    return frames_ == 0;
+}
+
+void block::add_frame(int32_t which, const char *data, int32_t n){
     assert(data != nullptr);
-    assert(buffer.data() != nullptr);
-    if (which == numframes - 1){
+    assert(buffer_.data() != nullptr);
+    if (which == numframes_ - 1){
         LOG_DEBUG("copy last frame with " << n << " bytes");
-        std::copy(data, data + n, buffer.end() - n);
+        std::copy(data, data + n, buffer_.end() - n);
     } else {
         LOG_DEBUG("copy frame " << which << " with " << n << " bytes");
-        std::copy(data, data + n, buffer.begin() + which * n);
+        std::copy(data, data + n, buffer_.begin() + which * n);
+        framesize_ = n; // LATER allow varying framesizes
     }
-    frames &= ~(1 << which);
-#if 0
-    for (int i = 0; i < n; i += 4){
-        std::cerr << pcm_float32_to_sample(data + i) << " ";
+    frames_ &= ~(1 << which);
+    LOG_DEBUG("frames: " << frames_);
+}
+
+void block::get_frame(int32_t which, const char *&data, int32_t &n){
+    auto onset = which * framesize_;
+    data = buffer_.data() + onset;
+    if (which == size() - 1){ // last frame
+        n = size() - onset;
+    } else {
+        n = framesize_;
     }
-    std::cerr << std::endl;
-#endif
-    LOG_DEBUG("frames: " << (unsigned)frames);
+}
+
+    }
 }
 
 /*////////////////////////// block_queue /////////////////////////////*/

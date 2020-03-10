@@ -23,6 +23,7 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #define AOO_DATA_NARGS 9
 #define AOO_DATA_WILDCARD "/AoO/*/data"
 #define AOO_REQUEST "/request"
+#define AOO_RESEND "/resend"
 
 #ifndef AOO_CLIP_OUTPUT
 #define AOO_CLIP_OUTPUT 0
