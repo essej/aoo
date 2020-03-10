@@ -49,6 +49,5 @@ common.sources = \
 datafiles = aoo_pack~-test.pd aoo_receive~-test.pd aoo_send~-test.pd aoo-test.pd aoo_unpack~-test.pd
 
 # include Makefile.pdlibbuilder from submodule directory 'pd-lib-builder'
-
 PDLIBBUILDER_DIR=pd-lib-builder
 include $(PDLIBBUILDER_DIR)/Makefile.pdlibbuilder

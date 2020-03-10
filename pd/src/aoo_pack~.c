@@ -37,9 +37,7 @@ typedef struct _aoo_pack
 
 static void aoo_pack_tick(t_aoo_pack *x)
 {
-    if (!aoo_source_send(x->x_aoo_source)){
-        bug("aoo_pack_tick");
-    }
+    aoo_source_send(x->x_aoo_source);
 }
 
 static void aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)

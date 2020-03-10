@@ -5,11 +5,49 @@
 #include "time_dll.hpp"
 
 #include <vector>
+#include <unordered_map>
 #include <memory>
 #include <atomic>
 #include <mutex>
 
 namespace aoo {
+
+struct time_tag {
+    time_tag() = default;
+    time_tag(uint64_t ui){
+        seconds = ui >> 32;
+        nanos = (uint32_t)ui;
+    }
+    time_tag(double s){
+        seconds = (uint64_t)s;
+        double fract = s - (double)seconds;
+        nanos = fract * 4294967296.0;
+    }
+
+    uint32_t seconds = 0;
+    uint32_t nanos = 0;
+
+    double to_double() const {
+        return (double)seconds + (double)nanos / 4294967296.0;
+    }
+    uint64_t to_uint64() const {
+        return (uint64_t)seconds << 32 | (uint64_t)nanos;
+    }
+    time_tag operator+(time_tag t){
+        time_tag result;
+        uint64_t ns = nanos + t.nanos;
+        result.nanos = ns & 0xFFFFFFFF;
+        result.seconds = seconds + t.seconds + (ns >> 32);
+        return result;
+    }
+    time_tag operator-(time_tag t){
+        time_tag result;
+        uint64_t ns = ((uint64_t)1 << 32) + nanos - t.nanos;
+        result.nanos = ns & 0xFFFFFFFF;
+        result.seconds = seconds - t.seconds - !(ns >> 32);
+        return result;
+    }
+};
 
 class dynamic_resampler {
 public:
@@ -141,9 +179,16 @@ struct data_packet {
 
 class block {
 public:
+    ~block();
     block() = default;
     block(int32_t seq, double sr, int32_t chn,
           int32_t nbytes, int32_t nframes);
+#if 0
+    block(const block&) = default;
+    block(block&&) = default;
+    block& operator=(const block&) = default;
+    block& operator=(block&&) = default;
+#endif
     // methods
     void set(int32_t seq, double sr, int32_t chn,
              const char *data, int32_t nbytes,
@@ -153,6 +198,7 @@ public:
     bool complete() const;
     void add_frame(int32_t which, const char *data, int32_t n);
     void get_frame(int32_t which, const char *& data, int32_t& n);
+    bool has_frame(int32_t which) const;
     int32_t num_frames() const { return numframes_; }
     // data
     int32_t sequence = -1;
@@ -163,6 +209,80 @@ protected:
     uint64_t frames_ = 0; // bitfield (later expand)
     int32_t numframes_ = 0;
     int32_t framesize_ = 0;
+};
+
+class block_queue {
+public:
+    void clear();
+    void resize(int32_t n);
+    bool empty() const;
+    bool full() const;
+    int32_t size() const;
+    int32_t capacity() const;
+    block* insert(int32_t seq, double sr, int32_t chn,
+                  int32_t nbytes, int32_t nframes);
+    block* find(int32_t seq);
+    void pop_front();
+    void pop_back();
+
+    block& front();
+    block& back();
+    block *begin();
+    block *end();
+    block& operator[](int32_t i);
+
+    friend std::ostream& operator<<(std::ostream& os, const block_queue& b);
+private:
+    std::vector<block> blocks_;
+    int32_t capacity_ = 0;
+};
+
+
+
+class block_ack {
+public:
+    block_ack(int32_t seq, int32_t maxretry);
+
+    bool check(double time, double interval);
+    int32_t sequence;
+private:
+    int32_t retransmit_count_;
+    double retransmit_timestamp_;
+};
+
+class block_ack_list {
+public:
+    block_ack* find(int32_t seq);
+    block_ack& get(int32_t seq);
+    void remove(int32_t seq);
+    void remove_before(int32_t seq);
+    void clear();
+    bool empty() const;
+    int32_t size() const;
+
+    friend std::ostream& operator<<(std::ostream& os, const block_ack_list& b);
+private:
+    std::unordered_map<int32_t, block_ack> data_;
+};
+
+#define AOO_RESEND_BUFSIZE 1000
+#define AOO_RESEND_MAXTRY 4
+#define AOO_RESEND_INTERVAL 0.005
+#define AOO_RESEND_MAXPACKETSIZE 256
+#define AOO_RESEND_MAXNUMFRAMES 64
+
+class history_buffer {
+public:
+    void clear();
+    void resize(int32_t n);
+    block * find(int32_t seq);
+    void push(int32_t seq, double sr,
+             const char *data, int32_t nbytes,
+             int32_t nframes, int32_t framesize);
+private:
+    std::vector<block> buffer_;
+    int32_t oldest_ = 0;
+    int32_t head_ = 0;
 };
 
 } // aoo
@@ -205,6 +325,7 @@ class aoo_source {
     aoo::time_dll dll_;
     double bandwidth_ = AOO_DLL_BW;
     double starttime_ = 0;
+    aoo::history_buffer history_;
     // sinks
     struct sink_desc {
         // data
@@ -220,72 +341,12 @@ class aoo_source {
     std::vector<sink_desc> sinks_;
     // helper methods
     void update();
-    void send_data(sink_desc& sink, const aoo::data_packet& packet);
+    void send_data(sink_desc& sink, const aoo::data_packet& d);
     void send_format(sink_desc& sink);
     int32_t make_salt();
 };
 
 namespace aoo {
-
-struct time_tag {
-    time_tag() = default;
-    time_tag(uint64_t ui){
-        seconds = ui >> 32;
-        nanos = (uint32_t)ui;
-    }
-    time_tag(double s){
-        seconds = (uint64_t)s;
-        double fract = s - (double)seconds;
-        nanos = fract * 4294967296.0;
-    }
-
-    uint32_t seconds = 0;
-    uint32_t nanos = 0;
-
-    double to_double() const {
-        return (double)seconds + (double)nanos / 4294967296.0;
-    }
-    uint64_t to_uint64() const {
-        return (uint64_t)seconds << 32 | (uint64_t)nanos;
-    }
-    time_tag operator+(time_tag t){
-        time_tag result;
-        uint64_t ns = nanos + t.nanos;
-        result.nanos = ns & 0xFFFFFFFF;
-        result.seconds = seconds + t.seconds + (ns >> 32);
-        return result;
-    }
-    time_tag operator-(time_tag t){
-        time_tag result;
-        uint64_t ns = ((uint64_t)1 << 32) + nanos - t.nanos;
-        result.nanos = ns & 0xFFFFFFFF;
-        result.seconds = seconds - t.seconds - !(ns >> 32);
-        return result;
-    }
-};
-
-class block_queue {
-public:
-    void clear();
-    void resize(int32_t n);
-    bool empty() const;
-    bool full() const;
-    int32_t size() const;
-    int32_t capacity() const;
-    block* insert(block&& b);
-    block* find(int32_t seq);
-    void pop_front();
-    void pop_back();
-
-    block& front();
-    block& back();
-    block *begin();
-    block *end();
-    block& operator[](int32_t i);
-private:
-    std::vector<block> blocks_;
-    int32_t capacity_ = 0;
-};
 
 struct source_desc {
     source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt);
@@ -297,10 +358,12 @@ struct source_desc {
     int32_t id;
     int32_t salt;
     std::unique_ptr<aoo::decoder> decoder;
-    int32_t newest = 0; // sequence number of most recent block
+    int32_t newest = 0; // sequence number of most recent incoming block
+    int32_t next = 0; // next outgoing block
     int32_t channel = 0; // recent channel onset
     double samplerate = 0; // recent samplerate
     block_queue blockqueue;
+    block_ack_list ack_list;
     lfqueue<aoo_sample> audioqueue;
     struct info {
         double sr;
@@ -312,6 +375,24 @@ struct source_desc {
     dynamic_resampler resampler;
     // methods
     void send(const char *data, int32_t n);
+};
+
+class threadsafe_counter {
+public:
+    threadsafe_counter()
+        : time_(0){}
+    threadsafe_counter(const threadsafe_counter& other)
+        : time_(other.time_.load()){}
+    threadsafe_counter& operator=(const threadsafe_counter& other){
+        time_ = other.time_.load();
+        return *this;
+    }
+    void reset() { time_ = 0; }
+    double get() const { return time_; }
+    void set(double t) { time_ = t; }
+    void advance(double t){ time_ = time_.load() + t; }
+private:
+    std::atomic<double> time_;
 };
 
 } // aoo
@@ -336,21 +417,27 @@ class aoo_sink {
     aoo_processfn processfn_ = nullptr;
     void *user_ = nullptr;
     std::vector<aoo::source_desc> sources_;
+    struct data_request {
+        int32_t sequence;
+        int32_t frame;
+    };
+    std::vector<data_request> retransmit_list_;
     std::mutex mutex_; // LATER replace with a spinlock?
     aoo::time_dll dll_;
     double bandwidth_ = AOO_DLL_BW;
     double starttime_ = 0;
+    aoo::threadsafe_counter elapsedtime_;
     // helper methods
     void update_source(aoo::source_desc& src);
 
     void request_format(void * endpoint, aoo_replyfn fn, int32_t id);
 
+    void request_data(aoo::source_desc& src);
+
     void handle_format_message(void *endpoint, aoo_replyfn fn,
-                               int32_t id, int32_t salt,
-                               int32_t nchannels, int32_t samplerate, int32_t blocksize,
-                               const char *codec, const char *setting, int32_t size);
+                               int32_t id, int32_t salt, const aoo_format& f,
+                               const char *setting, int32_t size);
 
     void handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
-                             int32_t salt, int32_t seq, double sr, int32_t chn, int32_t totalsize,
-                             int32_t nframes, int32_t frame, const char *data, int32_t size);
+                             int32_t salt, const aoo::data_packet& d);
 };

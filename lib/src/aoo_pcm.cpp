@@ -196,7 +196,7 @@ int32_t encoder_encode(void *enc,
     return n * samplesize;
 }
 
-int32_t encoder_write(void *enc, int32_t *nchannels,int32_t *samplerate,
+int32_t encoder_write(void *enc, int32_t *nchannels, int32_t *samplerate,
                       int32_t *blocksize, char *buf, int32_t size){
     if (size >= 4){
         auto c = static_cast<codec *>(enc);
