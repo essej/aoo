@@ -802,7 +802,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
 
                 // push info
                 aoo::source_desc::info i;
-                i.sr = sr;
+                i.sr = block->samplerate;
                 i.channel = block->channel;
                 i.state = AOO_SOURCE_PLAY;
                 src.infoqueue.write(i);
