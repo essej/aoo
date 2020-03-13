@@ -162,6 +162,7 @@ void aoo_source::setup(aoo_source_settings &settings){
     nchannels_ = settings.nchannels;
     samplerate_ = settings.samplerate;
     buffersize_ = std::max<int32_t>(settings.buffersize, 0);
+    resend_buffersize_ = std::max<int32_t>(settings.resend_buffersize, 0);
 
     // packet size
     const int32_t minpacketsize = AOO_DATA_HEADERSIZE + 64;
@@ -208,7 +209,7 @@ void aoo_source::update(){
         }
         // setup history buffer
         {
-            double bufsize = (double)AOO_RESEND_BUFSIZE * 0.001 * samplerate_;
+            double bufsize = (double)resend_buffersize_ * 0.001 * samplerate_;
             auto d = div(bufsize, encoder_->blocksize());
             int32_t nbuffers = d.quot + (d.rem != 0); // round up
             nbuffers = std::max<int32_t>(nbuffers, 1);
@@ -625,7 +626,11 @@ void aoo_sink::setup(aoo_sink_settings& settings){
     nchannels_ = settings.nchannels;
     samplerate_ = settings.samplerate;
     blocksize_ = settings.blocksize;
-    buffersize_ = std::max<int32_t>(settings.buffersize, 0);
+    buffersize_ = std::max<int32_t>(0, settings.buffersize);
+    resend_limit_ = std::max<int32_t>(0, settings.resend_limit);
+    resend_interval_ = std::max<int32_t>(0, settings.resend_interval);
+    resend_maxnumframes_ = std::max<int32_t>(1, settings.resend_maxnumframes);
+    resend_packetsize_ = std::max<int32_t>(64, std::min<int32_t>(AOO_MAXPACKETSIZE, settings.resend_packetsize));
     bandwidth_ = std::max<double>(0, std::min<double>(1, settings.time_filter_bandwidth));
     starttime_ = 0; // will update time DLL
     elapsedtime_.reset();
@@ -965,10 +970,10 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 if (!it->complete()){
                     // insert ack (if needed)
                     auto& ack = acklist.get(it->sequence);
-                    if (ack.check(elapsedtime_.get(), AOO_RESEND_INTERVAL)){
+                    if (ack.check(elapsedtime_.get(), resend_interval_ * 0.001)){
                         for (int i = 0; i < it->num_frames(); ++i){
                             if (!it->has_frame(i)){
-                                if (numframes < AOO_RESEND_MAXNUMFRAMES){
+                                if (numframes < resend_maxnumframes_){
                                     retransmit_list_.push_back(data_request { it->sequence, i });
                                     numframes++;
                                 } else {
@@ -990,8 +995,8 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                     for (int i = 0; i < missing; ++i){
                         // insert ack (if necessary)
                         auto& ack = acklist.get(next + i);
-                        if (ack.check(elapsedtime_.get(), AOO_RESEND_INTERVAL)){
-                            if (numframes + it->num_frames() <= AOO_RESEND_MAXNUMFRAMES){
+                        if (ack.check(elapsedtime_.get(), resend_interval_ * 0.001)){
+                            if (numframes + it->num_frames() <= resend_maxnumframes_){
                                 retransmit_list_.push_back(data_request { next + i, -1 }); // whole block
                                 numframes += it->num_frames();
                             } else {
@@ -1007,7 +1012,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             }
             resend_missing_done:
 
-            assert(numframes <= AOO_RESEND_MAXNUMFRAMES);
+            assert(numframes <= resend_maxnumframes_);
             if (numframes > 0){
                 LOG_DEBUG("requested " << numframes << " frames");
             }
@@ -1067,6 +1072,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
         src.next = -1;
         src.channel = 0;
         src.samplerate = src.decoder->samplerate();
+        src.ack_list.setup(resend_limit_);
         src.ack_list.clear();
         LOG_VERBOSE("update source " << src.id << ": sr = " << src.decoder->samplerate()
                     << ", blocksize = " << src.decoder->blocksize() << ", nchannels = "
@@ -1098,7 +1104,7 @@ void aoo_sink::request_data(aoo::source_desc& src){
     char address[maxaddrsize];
     snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, src.id, AOO_RESEND);
 
-    const int32_t maxdatasize = AOO_RESEND_MAXPACKETSIZE - maxaddrsize - 16;
+    const int32_t maxdatasize = resend_packetsize_ - maxaddrsize - 16;
     const int32_t maxrequests = maxdatasize / 10; // 2 * int32_t + overhead for typetags
     auto d = div(retransmit_list_.size(), maxrequests);
 
@@ -1338,9 +1344,9 @@ bool block::has_frame(int32_t which) const {
 
 /*////////////////////////// block_ack /////////////////////////////*/
 
-block_ack::block_ack(int32_t seq, int32_t maxretry)
+block_ack::block_ack(int32_t seq, int32_t limit)
     : sequence(seq) {
-    retransmit_count_ = maxretry;
+    retransmit_count_ = limit;
     retransmit_timestamp_ = -1e009;
 }
 
@@ -1364,6 +1370,10 @@ bool block_ack::check(double time, double interval){
 }
 
 /*////////////////////////// block_ack_list ///////////////////////////*/
+
+void block_ack_list::setup(int32_t limit){
+    limit_ = limit;
+}
 
 void block_ack_list::clear(){
     data_.clear();
@@ -1391,7 +1401,7 @@ block_ack& block_ack_list::get(int32_t seq){
     if (it != data_.end()){
         return it->second;
     } else {
-        return data_.emplace(seq, block_ack { seq, AOO_RESEND_MAXTRY }).first->second;
+        return data_.emplace(seq, block_ack { seq, limit_ }).first->second;
     }
 }
 

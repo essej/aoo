@@ -70,6 +70,18 @@ static void aoo_unpack_timefilter(t_aoo_unpack *x, t_floatarg f)
     }
 }
 
+int aoo_parseresend(void *x, aoo_sink_settings *s, int argc, t_atom *argv);
+
+static void aoo_unpack_resend(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (!aoo_parseresend(x, &x->x_settings, argc, argv)){
+        return;
+    }
+    if (x->x_settings.blocksize){
+        aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
+    }
+}
+
 static void aoo_unpack_tick(t_aoo_unpack *x)
 {
     for (int i = 0; i < x->x_numevents; ++i){
@@ -148,13 +160,18 @@ static void * aoo_unpack_new(t_symbol *s, int argc, t_atom *argv)
     x->x_eventbufsize = 16;
     x->x_numevents = 0;
     x->x_clock = clock_new(x, (t_method)aoo_unpack_tick);
+    // default settings
+    memset(&x->x_settings, 0, sizeof(aoo_sink_settings));
+    x->x_settings.userdata = x;
+    x->x_settings.processfn = (aoo_processfn)aoo_unpack_process;
+    x->x_settings.resend_limit = AOO_RESEND_LIMIT;
+    x->x_settings.resend_interval = AOO_RESEND_INTERVAL;
+    x->x_settings.resend_maxnumframes = AOO_RESEND_MAXNUMFRAMES;
+    x->x_settings.resend_packetsize = AOO_RESEND_PACKETSIZE;
 
     // arg #1: ID
     int id = atom_getfloatarg(0, argc, argv);
     x->x_aoo_sink = aoo_sink_new(id >= 0 ? id : 0);
-    memset(&x->x_settings, 0, sizeof(aoo_sink_settings));
-    x->x_settings.userdata = x;
-    x->x_settings.processfn = (aoo_processfn)aoo_unpack_process;
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
@@ -198,6 +215,8 @@ void aoo_unpack_tilde_setup(void)
                     gensym("bufsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_timefilter,
                     gensym("timefilter"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_resend,
+                    gensym("resend"), A_GIMME, A_NULL);
 
     aoo_setup();
 }

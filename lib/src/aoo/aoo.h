@@ -48,6 +48,12 @@ typedef AOO_SAMPLETYPE aoo_sample;
  #define AOO_DEBUG_RESAMPLING 0
 #endif
 
+#define AOO_RESEND_BUFSIZE 1000
+#define AOO_RESEND_LIMIT 4
+#define AOO_RESEND_INTERVAL 5
+#define AOO_RESEND_MAXNUMFRAMES 64
+#define AOO_RESEND_PACKETSIZE 256
+
 void aoo_setup(void);
 void aoo_close(void);
 
@@ -102,6 +108,7 @@ typedef struct aoo_source_settings
     int32_t nchannels;
     int32_t buffersize;
     int32_t packetsize;
+    int32_t resend_buffersize;
     double time_filter_bandwidth;
 } aoo_source_settings;
 
@@ -182,6 +189,10 @@ typedef struct aoo_sink_settings
     int32_t blocksize;
     int32_t nchannels;
     int32_t buffersize;
+    int32_t resend_limit;
+    int32_t resend_interval;
+    int32_t resend_maxnumframes;
+    int32_t resend_packetsize;
     double time_filter_bandwidth;
 } aoo_sink_settings;
 

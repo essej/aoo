@@ -1,4 +1,4 @@
-#N canvas 335 97 599 595 12;
+#N canvas 175 128 599 595 12;
 #X obj 29 491 aoo_send~ 1 2;
 #X msg 37 98 disconnect;
 #X msg 29 68 connect localhost 9999;

@@ -363,7 +363,21 @@ static void aoo_receive_timefilter(t_aoo_receive *x, t_floatarg f)
     }
 }
 
-void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
+int aoo_parseresend(void *x, aoo_sink_settings *s, int argc, t_atom *argv);
+
+static void aoo_receive_resend(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (!aoo_parseresend(x, &x->x_settings, argc, argv)){
+        return;
+    }
+    if (x->x_settings.blocksize){
+        pthread_mutex_lock(&x->x_mutex);
+        aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
+        pthread_mutex_unlock(&x->x_mutex);
+    }
+}
+
+static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
 {
     int port = f;
     if (x->x_listener){
@@ -483,14 +497,19 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
     x->x_eventbufsize = 16;
     x->x_numevents = 0;
     x->x_clock = clock_new(x, (t_method)aoo_receive_tick);
+    // default settings
+    memset(&x->x_settings, 0, sizeof(aoo_sink_settings));
+    x->x_settings.userdata = x;
+    x->x_settings.processfn = (aoo_processfn)aoo_receive_process;
+    x->x_settings.resend_limit = AOO_RESEND_LIMIT;
+    x->x_settings.resend_interval = AOO_RESEND_INTERVAL;
+    x->x_settings.resend_maxnumframes = AOO_RESEND_MAXNUMFRAMES;
+    x->x_settings.resend_packetsize = AOO_RESEND_PACKETSIZE;
 
     // arg #1: ID
     int id = atom_getfloatarg(0, argc, argv);
     x->x_id = id >= 0 ? id : 0;
     x->x_aoo_sink = aoo_sink_new(x->x_id);
-    memset(&x->x_settings, 0, sizeof(aoo_sink_settings));
-    x->x_settings.userdata = x;
-    x->x_settings.processfn = (aoo_processfn)aoo_receive_process;
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
@@ -546,6 +565,8 @@ void aoo_receive_tilde_setup(void)
                     gensym("bufsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_timefilter,
                     gensym("timefilter"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_resend,
+                    gensym("resend"), A_GIMME, A_NULL);
 
     aoo_setup();
 }

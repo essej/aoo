@@ -241,7 +241,7 @@ private:
 
 class block_ack {
 public:
-    block_ack(int32_t seq, int32_t maxretry);
+    block_ack(int32_t seq, int32_t limit);
 
     bool check(double time, double interval);
     int32_t sequence;
@@ -252,6 +252,7 @@ private:
 
 class block_ack_list {
 public:
+    void setup(int32_t limit);
     block_ack* find(int32_t seq);
     block_ack& get(int32_t seq);
     void remove(int32_t seq);
@@ -263,13 +264,8 @@ public:
     friend std::ostream& operator<<(std::ostream& os, const block_ack_list& b);
 private:
     std::unordered_map<int32_t, block_ack> data_;
+    int32_t limit_ = 0;
 };
-
-#define AOO_RESEND_BUFSIZE 1000
-#define AOO_RESEND_MAXTRY 4
-#define AOO_RESEND_INTERVAL 0.005
-#define AOO_RESEND_MAXPACKETSIZE 256
-#define AOO_RESEND_MAXNUMFRAMES 64
 
 class history_buffer {
 public:
@@ -318,6 +314,7 @@ class aoo_source {
     int32_t samplerate_ = 0;
     int32_t buffersize_ = 0;
     int32_t packetsize_ = AOO_DEFPACKETSIZE;
+    int32_t resend_buffersize_ = 0;
     int32_t sequence_ = 0;
     aoo::dynamic_resampler resampler_;
     aoo::lfqueue<aoo_sample> audioqueue_;
@@ -413,6 +410,10 @@ class aoo_sink {
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
     int32_t buffersize_ = 0;
+    int32_t resend_limit_ = 0;
+    int32_t resend_interval_ = 0;
+    int32_t resend_maxnumframes_ = 0;
+    int32_t resend_packetsize_ = 0;
     std::vector<aoo_sample> buffer_;
     aoo_processfn processfn_ = nullptr;
     void *user_ = nullptr;

@@ -56,6 +56,52 @@ uint64_t aoo_pd_osctime(int n, t_float sr)
     return t;
 }
 
+static int aoo_getarg(const char *name, void *x, int which, int argc, t_atom *argv, t_float *f, t_float def)
+{
+    if (argc > which){
+        if (argv[which].a_type == A_SYMBOL){
+            t_symbol *sym = argv[which].a_w.w_symbol;
+            if (sym == gensym("auto")){
+                *f = def;
+            } else {
+                pd_error(x, "%s: bad '%s' argument '%s'", classname(x), name, sym->s_name);
+                return 0;
+            }
+        } else {
+            *f = atom_getfloat(argv + which);
+        }
+    } else {
+        *f = def;
+    }
+    return 1;
+}
+
+int aoo_parseresend(void *x, aoo_sink_settings *s, int argc, t_atom *argv)
+{
+    t_float f;
+    if (aoo_getarg("limit", x, 0, argc, argv, &f, AOO_RESEND_LIMIT)){
+        s->resend_limit = f;
+    } else {
+        return 0;
+    }
+    if (aoo_getarg("interval", x, 1, argc, argv, &f, AOO_RESEND_INTERVAL)){
+        s->resend_interval = f;
+    } else {
+        return 0;
+    }
+    if (aoo_getarg("maxnumframes", x, 2, argc, argv, &f, AOO_RESEND_MAXNUMFRAMES)){
+        s->resend_maxnumframes = f;
+    } else {
+        return 0;
+    }
+    if (aoo_getarg("packetsize", x, 3, argc, argv, &f, AOO_RESEND_PACKETSIZE)){
+        s->resend_limit = f;
+    } else {
+        return 0;
+    }
+    return 1;
+}
+
 void aoo_defaultformat(aoo_format_storage *f, int nchannels)
 {
     aoo_format_pcm *fmt = (aoo_format_pcm *)f;

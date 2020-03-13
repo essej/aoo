@@ -186,6 +186,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     x->x_settings.buffersize = AOO_SOURCE_DEFBUFSIZE;
     x->x_settings.packetsize = AOO_DEFPACKETSIZE;
     x->x_settings.time_filter_bandwidth = AOO_DLL_BW;
+    x->x_settings.resend_buffersize = AOO_RESEND_BUFSIZE;
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
