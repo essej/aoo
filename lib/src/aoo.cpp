@@ -194,7 +194,7 @@ void aoo_source::update(){
             double bufsize = (double)buffersize_ * encoder_->samplerate() * 0.001;
             auto d = div(bufsize, encoder_->blocksize());
             int32_t nbuffers = d.quot + (d.rem != 0); // round up
-            nbuffers = std::max<int32_t>(nbuffers, 1);
+            nbuffers = std::max<int32_t>(nbuffers, 1); // need at least 1 buffer!
             audioqueue_.resize(nbuffers * nsamples, nsamples);
             srqueue_.resize(nbuffers, 1);
             LOG_DEBUG("aoo_source::update: nbuffers = " << nbuffers);
@@ -212,7 +212,7 @@ void aoo_source::update(){
             double bufsize = (double)resend_buffersize_ * 0.001 * samplerate_;
             auto d = div(bufsize, encoder_->blocksize());
             int32_t nbuffers = d.quot + (d.rem != 0); // round up
-            nbuffers = std::max<int32_t>(nbuffers, 1);
+            // empty buffer is allowed! (no resending)
             history_.resize(nbuffers);
         }
     }
@@ -341,6 +341,9 @@ void aoo_source::handle_message(const char *data, int32_t n, void *endpoint, aoo
             LOG_ERROR("wrong number of arguments for /request message");
         }
     } else if (!strcmp(msg.AddressPattern() + onset, AOO_RESEND)){
+        if (!history_.capacity()){
+            return;
+        }
         if (msg.ArgumentCount() >= 4){
             try {
                 auto it = msg.ArgumentsBegin();
