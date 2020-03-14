@@ -260,6 +260,7 @@ private:
 class history_buffer {
 public:
     void clear();
+    int32_t capacity() const;
     void resize(int32_t n);
     block * find(int32_t seq);
     void push(int32_t seq, double sr,

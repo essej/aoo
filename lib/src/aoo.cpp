@@ -1441,6 +1441,10 @@ void history_buffer::clear(){
     }
 }
 
+int32_t history_buffer::capacity() const {
+    return buffer_.size();
+}
+
 void history_buffer::resize(int32_t n){
     buffer_.resize(n);
     clear();
@@ -1448,11 +1452,33 @@ void history_buffer::resize(int32_t n){
 
 block * history_buffer::find(int32_t seq){
     if (seq >= oldest_){
+    #if 0
+        // linear search
         for (auto& block : buffer_){
             if (block.sequence == seq){
                 return &block;
             }
         }
+    #else
+        // binary search
+        // blocks are always pushed in chronological order,
+        // so the ranges [begin, head] and [head, end] will always be sorted.
+        auto dofind = [&](auto begin, auto end) -> block * {
+            auto result = std::lower_bound(begin, end, seq, [](auto& a, auto& b){
+                return a.sequence < b;
+            });
+            if (result != end && result->sequence == seq){
+                return &*result;
+            } else {
+                return nullptr;
+            }
+        };
+        auto result = dofind(buffer_.begin() + head_, buffer_.end());
+        if (!result){
+            result = dofind(buffer_.begin(), buffer_.begin() + head_);
+        }
+        return result;
+    #endif
     } else {
         LOG_VERBOSE("couldn't find block " << seq << " - too old");
     }
@@ -1463,7 +1489,9 @@ void history_buffer::push(int32_t seq, double sr,
                           const char *data, int32_t nbytes,
                           int32_t nframes, int32_t framesize)
 {
-    assert(!buffer_.empty());
+    if (buffer_.empty()){
+        return;
+    }
     assert(data != nullptr && nbytes > 0);
     // check if we're going to overwrite an existing block
     if (buffer_[head_].sequence >= 0){
