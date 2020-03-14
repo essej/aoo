@@ -465,7 +465,7 @@ bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
     }
 }
 
-// /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
+// /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
 void aoo_source::send_data(sink_desc& sink, const aoo::data_packet& d){
     char buf[AOO_MAXPACKETSIZE];

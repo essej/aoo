@@ -19,37 +19,43 @@ features
 * AoO sources can send audio to any sink at any time; if the sink ID is a wildcard,
   it will send to all sinks on the endpoint.
 * AoO sinks can listen to several sources at the same time
-* AoO sinks and sources can operate at different blocksizes
-* AoO sources can dynamically change the channel onset of the sink
-* format message to notify sinks about format changes:
-  /AoO/<sink>/format <src> <salt> <mime-type> <bitdepth> <nchannels> <samplerate> <blocksize> <overlap>
-* data message to deliver audio data, large blocks are split across several frames:
-  /AoO/<sink>/data <src> <salt> <seq> <t> <channel_onset> <numframes> <frame> <data...>
-* request message from sink to source to ask about the format if necessary
-  /AoO/<src>/request <sink>
-* invitation message broadcasted by sinks at low intervals, inviting sources to send audio
-  /AoO/<src>/invite
+* AoO sinks and sources can operate at different blocksizes and samplerates
+* AoO sources can dynamically change the channel onset
+* timing differences (e.g. because of clock drifts) are adjusted via a time DLL filter + dynamic resampling
+* the stream format can be set dynamically
+* plugin API to register codecs; currently only PCM (uncompressed) and Opus (compressed) are implemented
 * aoo_source and aoo_sink C++ classes have a lock-free ringbuffer, so that audio processing and network IO
-  can run on different threads. The buffer also helps to avoid network jitter at the cost of latency.
-  The size can be adjusted dynamically.
-* data messages can arrive out of order up to a certain bound (determined by buffer size)
+  can run on different threads.
+  In the case of aoo_sink, the buffer also helps to deal with network jitter, packet reordering
+  and packet loss at the cost of latency. The size can be adjusted dynamically.
+* aoo_sink can ask the source(s) to resend dropped packets, the settings are free adjustable.
 * settable UDP packet size for audio data (to optimize for local networks or the internet)
-* Pd externals:
-  [aoo_source~] takes audio signals and outputs OSC messages (also accepts /request messages from sinks)
-  [aoo_sink~] takes OSC messages from several sinks and turns them into audio signals
-  [aoo_route] takes OSC messages and routes them based on the sink ID
+
+Pd externals
+------------
+  [aoo_pack~] takes audio signals and outputs OSC messages (also accepts /request messages from sinks)
+  [aoo_unpack~] takes OSC messages from several sources and turns them into audio signals
+  [aoo_route] takes OSC messages and routes them based on the ID
+  [aoo_send~] send an AoO stream (with threaded network IO)
+  [aoo_receive~] receive one or more AoO streams (with threaded network IO)
+
+OSC messages
+------------
+* message to notify sinks about format changes:
+  /AoO/<sink>/format [i]<src> [i]<salt> [i]<nchannels> [i]<samplerate> [i]<blocksize> [s]<codec> [b]<options>
+* message to deliver audio data, large blocks are split across several frames:
+  /AoO/<sink>/data [i]<src> [i]<salt> [i]<seq> [d]<sr> [i]<channel_onset> [i]<totalsize> [i]<nframes> [i]<frame> [b]<data>
+* message from sink to source to request the format (e.g. the salt has changed)
+  /AoO/<src>/request [i]<sink>
+* message from sink to source to request dropped packets.
+  The arguments are pairs of sequence + frame (-1 = whole block)
+  /AoO/<src>/resend [i]<sink> [i]<salt> [ [i]<seq> [i]<frame> ... ]
 
 todo
 ----
 
-* resampling
-* overlap
-* interpolation of dropped packets
+* multichannel opus codec
 * fade in/fade out
-* time correction (timestamps + DLL)
-* settable max. OSC packet size
-* [aoo_send~] + [aoo_receive~] with integrated (threaded) network IO
-* replace oscpack with our own (optimized) OSC routines
 * unit tests!
 
 download
