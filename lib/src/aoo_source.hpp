@@ -5,28 +5,28 @@
 #include "lfqueue.hpp"
 #include "time_dll.hpp"
 
-class aoo_source {
+class aoo_source final : public aoo::isource {
  public:
     aoo_source(int32_t id);
     ~aoo_source();
 
-    void set_format(aoo_format& f);
+    void set_format(aoo_format& f) override;
 
-    void setup(aoo_source_settings& settings);
+    void setup(aoo_source_settings& settings) override;
 
-    void add_sink(void *sink, int32_t id, aoo_replyfn fn);
+    void add_sink(void *sink, int32_t id, aoo_replyfn fn) override;
 
-    void remove_sink(void *sink, int32_t id);
+    void remove_sink(void *sink, int32_t id) override;
 
-    void remove_all();
+    void remove_all() override;
 
-    void set_sink_channel(void *sink, int32_t id, int32_t chn);
+    void set_sink_channel(void *sink, int32_t id, int32_t chn) override;
 
-    void handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn);
+    void handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn) override;
 
-    bool send();
+    bool send() override;
 
-    bool process(const aoo_sample **data, int32_t n, uint64_t t);
+    bool process(const aoo_sample **data, int32_t n, uint64_t t) override;
  private:
     const int32_t id_;
     int32_t salt_ = 0;

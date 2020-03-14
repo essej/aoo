@@ -21,6 +21,18 @@ void source_desc::send(const char *data, int32_t n){
 
 /*//////////////////// aoo_sink /////////////////////*/
 
+namespace aoo {
+
+isink * isink::create(int32_t id){
+    return new aoo_sink(id);
+}
+
+void isink::destroy(isink *x){
+    delete x;
+}
+
+} // aoo
+
 aoo_sink * aoo_sink_new(int32_t id) {
     return new aoo_sink(id);
 }

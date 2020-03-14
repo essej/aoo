@@ -15,6 +15,18 @@
 // typetag string: max. 12 bytes
 // args (without blob data): 36 bytes
 
+namespace aoo {
+
+isource * isource::create(int32_t id){
+    return new aoo_source(id);
+}
+
+void isource::destroy(isource *x){
+    delete x;
+}
+
+} // aoo
+
 aoo_source * aoo_source_new(int32_t id) {
     return new aoo_source(id);
 }

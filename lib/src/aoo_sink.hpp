@@ -40,16 +40,17 @@ struct source_desc {
 
 } // aoo
 
-class aoo_sink {
+class aoo_sink final : public aoo::isink {
  public:
     aoo_sink(int32_t id)
         : id_(id) {}
 
-    void setup(aoo_sink_settings& settings);
+    void setup(aoo_sink_settings& settings) override;
 
-    int32_t handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn);
+    int32_t handle_message(const char *data, int32_t n,
+                           void *endpoint, aoo_replyfn fn) override;
 
-    int32_t process(uint64_t t);
+    int32_t process(uint64_t t) override;
  private:
     const int32_t id_;
     int32_t nchannels_ = 0;
