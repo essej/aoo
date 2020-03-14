@@ -33,11 +33,11 @@ features
 
 Pd externals
 ------------
-  [aoo_pack~] takes audio signals and outputs OSC messages (also accepts /request messages from sinks)
-  [aoo_unpack~] takes OSC messages from several sources and turns them into audio signals
-  [aoo_route] takes OSC messages and routes them based on the ID
-  [aoo_send~] send an AoO stream (with threaded network IO)
-  [aoo_receive~] receive one or more AoO streams (with threaded network IO)
+* [aoo_pack~] takes audio signals and outputs OSC messages (also accepts /request messages from sinks)
+* [aoo_unpack~] takes OSC messages from several sources and turns them into audio signals
+* [aoo_route] takes OSC messages and routes them based on the ID
+* [aoo_send~] send an AoO stream (with threaded network IO)
+* [aoo_receive~] receive one or more AoO streams (with threaded network IO)
 
 OSC messages
 ------------
