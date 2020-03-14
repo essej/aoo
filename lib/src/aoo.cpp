@@ -387,6 +387,8 @@ void aoo_source::handle_message(const char *data, int32_t n, void *endpoint, aoo
                             block->get_frame(framenum, d.data, d.size);
                             send_data(*sink, d);
                         }
+                    } else {
+                        LOG_VERBOSE("couldn't find block " << seq);
                     }
                 }
             } catch (const osc::Exception& e){
@@ -815,7 +817,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
 
         if (d.sequence < src.newest){
             if (acklist.find(d.sequence)){
-                LOG_DEBUG("retransmitted block " << d.sequence);
+                LOG_DEBUG("resent block " << d.sequence);
             } else {
                 LOG_VERBOSE("block " << d.sequence << " out of order!");
             }
@@ -1025,14 +1027,16 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
 
         #if 1
             // clean ack list
-            acklist.remove_before(src.next);
+            auto removed = acklist.remove_before(src.next);
+            if (removed > 0){
+                LOG_DEBUG("block_ack_list: removed " << removed << " outdated items");
+            }
         #endif
         } else {
             if (!acklist.empty()){
                 LOG_WARNING("bug: acklist not empty");
                 acklist.clear();
             }
-            assert(acklist.empty());
         }
     #if LOGLEVEL >= 3
         std::cerr << acklist << std::endl;
