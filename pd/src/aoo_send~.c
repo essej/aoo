@@ -104,6 +104,16 @@ static void aoo_send_packetsize(t_aoo_send *x, t_floatarg f)
     }
 }
 
+static void aoo_send_resend(t_aoo_send *x, t_floatarg f)
+{
+    x->x_settings.resend_buffersize = f;
+    if (x->x_settings.blocksize){
+        pthread_mutex_lock(&x->x_mutex);
+        aoo_source_setup(x->x_aoo_source, &x->x_settings);
+        pthread_mutex_unlock(&x->x_mutex);
+    }
+}
+
 static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
 {
     x->x_settings.time_filter_bandwidth = f;
@@ -378,6 +388,7 @@ void aoo_send_tilde_setup(void)
     class_addmethod(aoo_send_class, (t_method)aoo_send_format, gensym("format"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_channel, gensym("channel"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_resend, gensym("resend"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_clear, gensym("clear"), A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
 

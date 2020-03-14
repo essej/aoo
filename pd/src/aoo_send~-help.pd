@@ -1,15 +1,15 @@
-#N canvas 175 128 599 595 12;
-#X obj 29 491 aoo_send~ 1 2;
+#N canvas 175 128 599 650 12;
+#X obj 29 532 aoo_send~ 1 2;
 #X msg 37 98 disconnect;
 #X msg 29 68 connect localhost 9999;
 #X text 198 67 connect to an endpoint (IP address + port);
-#X text 131 490 creation arguments:;
-#X msg 50 144 set \$1;
-#X obj 50 124 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
-10 -262144 -1 -1 1 256;
-#X text 106 143 set sink ID;
-#X msg 59 173 clear;
-#X text 107 172 clear sink ID (stop sending);
+#X text 131 531 creation arguments:;
+#X msg 48 144 set \$1;
+#X obj 48 124 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X text 104 143 set sink ID;
+#X msg 55 173 clear;
+#X text 103 172 clear sink ID (stop sending);
 #N canvas 135 97 551 346 pcm 0;
 #X obj 31 302 outlet;
 #X msg 187 57 2;
@@ -61,7 +61,7 @@
 #X connect 16 0 13 0;
 #X connect 17 0 9 0;
 #X connect 27 0 0 0;
-#X restore 86 372 pd pcm;
+#X restore 86 413 pd pcm;
 #N canvas 104 170 832 547 opus 0;
 #X obj 50 454 outlet;
 #X msg 161 125 48000;
@@ -153,29 +153,34 @@
 #X connect 44 0 25 0;
 #X connect 45 0 25 0;
 #X connect 46 0 25 0;
-#X restore 92 401 pd opus;
-#X text 84 350 set format:;
-#X msg 69 224 channel \$1;
-#X obj 69 203 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X restore 92 442 pd opus;
+#X text 84 391 set format:;
+#X msg 62 222 channel \$1;
+#X obj 62 201 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X text 155 223 sink channel onset;
-#X obj 75 253 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X text 148 221 sink channel onset;
+#X obj 68 251 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X msg 75 272 packetsize \$1;
-#X text 181 270 max. UDP packet size (default: 512 bytes);
-#X obj 81 300 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X msg 68 270 packetsize \$1;
+#X text 174 268 max. UDP packet size (default: 512 bytes);
+#X obj 74 298 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X msg 81 319 timefilter \$1;
-#X text 185 320 time DLL filter bandwidth (default: 0.0001);
+#X msg 74 317 timefilter \$1;
+#X text 178 318 time DLL filter bandwidth (default: 0.0001);
 #X text 29 31 aoo_send~: send an AOO audio stream;
-#X text 27 540 see also;
-#X obj 102 541 aoo_receive~;
-#X obj 60 432 osc~ 440;
-#X obj 128 431 osc~ 220;
-#X text 131 512 1) ID \, 2) num channels \, 3) [sink ID] \, 4) [sink
+#X text 27 581 see also;
+#X obj 102 582 aoo_receive~;
+#X obj 60 473 osc~ 440;
+#X obj 128 472 osc~ 220;
+#X text 131 553 1) ID \, 2) num channels \, 3) [sink ID] \, 4) [sink
 channel onset], f 62;
-#X obj 60 458 *~ 0.25;
-#X obj 128 457 *~ 0.25;
+#X obj 60 499 *~ 0.25;
+#X obj 128 498 *~ 0.25;
+#X msg 79 364 resend \$1;
+#X obj 79 343 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X text 158 365 buffersize (ms) for resending lost packets (default:
+1000);
 #X connect 1 0 0 0;
 #X connect 2 0 0 0;
 #X connect 5 0 0 0;
@@ -193,3 +198,5 @@ channel onset], f 62;
 #X connect 26 0 29 0;
 #X connect 28 0 0 0;
 #X connect 29 0 0 1;
+#X connect 30 0 0 0;
+#X connect 31 0 30 0;

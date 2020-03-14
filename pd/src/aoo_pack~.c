@@ -85,6 +85,14 @@ static void aoo_pack_packetsize(t_aoo_pack *x, t_floatarg f)
     }
 }
 
+static void aoo_pack_resend(t_aoo_pack *x, t_floatarg f)
+{
+    x->x_settings.resend_buffersize = f;
+    if (x->x_settings.blocksize){
+        aoo_source_setup(x->x_aoo_source, &x->x_settings);
+    }
+}
+
 static void aoo_pack_timefilter(t_aoo_pack *x, t_floatarg f)
 {
     x->x_settings.time_filter_bandwidth = f;
@@ -244,6 +252,7 @@ void aoo_pack_tilde_setup(void)
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_format, gensym("format"), A_GIMME, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_channel, gensym("channel"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_resend, gensym("resend"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_clear, gensym("clear"), A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
 
