@@ -179,17 +179,9 @@ struct data_packet {
 
 class block {
 public:
-    ~block();
-    block() = default;
-    block(int32_t seq, double sr, int32_t chn,
-          int32_t nbytes, int32_t nframes);
-#if 0
-    block(const block&) = default;
-    block(block&&) = default;
-    block& operator=(const block&) = default;
-    block& operator=(block&&) = default;
-#endif
     // methods
+    void set(int32_t seq, double sr, int32_t chn,
+          int32_t nbytes, int32_t nframes);
     void set(int32_t seq, double sr, int32_t chn,
              const char *data, int32_t nbytes,
              int32_t nframes, int32_t framesize);
@@ -234,10 +226,8 @@ public:
     friend std::ostream& operator<<(std::ostream& os, const block_queue& b);
 private:
     std::vector<block> blocks_;
-    int32_t capacity_ = 0;
+    int32_t size_ = 0;
 };
-
-
 
 class block_ack {
 public:

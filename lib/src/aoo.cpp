@@ -1266,19 +1266,14 @@ namespace aoo {
 
 /*////////////////////////// block /////////////////////////////*/
 
-block::~block(){
-    if (buffer_.size() > 0){
-        assert(buffer_.data() != nullptr);
-    } else {
-        LOG_WARNING("block has size 0");
-    }
-}
-
-block::block(int32_t seq, double sr, int32_t chn,
+void block::set(int32_t seq, double sr, int32_t chn,
              int32_t nbytes, int32_t nframes)
-    : sequence(seq), samplerate(sr), channel(chn),
-      numframes_(nframes), framesize_(0)
 {
+    sequence = seq;
+    samplerate = sr;
+    channel = chn;
+    numframes_ = nframes;
+    framesize_ = 0;
     assert(nbytes > 0);
     buffer_.resize(nbytes);
     // set missing frame bits to 1
@@ -1303,6 +1298,9 @@ void block::set(int32_t seq, double sr, int32_t chn,
 }
 
 bool block::complete() const {
+    if (buffer_.data() == nullptr){
+        LOG_ERROR("buffer is 0!");
+    }
     assert(buffer_.data() != nullptr);
     assert(sequence >= 0);
     return frames_ == 0;
@@ -1480,83 +1478,133 @@ void history_buffer::push(int32_t seq, double sr,
 /*////////////////////////// block_queue /////////////////////////////*/
 
 void block_queue::clear(){
-    blocks_.clear();
+    size_ = 0;
 }
 
 void block_queue::resize(int32_t n){
-    // LATER remove older items instead of recent ones
-    blocks_.clear();
-    blocks_.reserve(n);
-    capacity_ = n;
+    blocks_.resize(n);
+    size_ = 0;
 }
 
 bool block_queue::empty() const {
-    return blocks_.empty();
+    return size_ == 0;
 }
 
 bool block_queue::full() const {
-    return (int32_t)blocks_.size() == capacity_;
+    return size_ == capacity();
 }
 
 int32_t block_queue::size() const {
-    return blocks_.size();
+    return size_;
 }
 
 int32_t block_queue::capacity() const {
-    return capacity_;
+    return blocks_.size();
 }
 
 block* block_queue::insert(int32_t seq, double sr, int32_t chn,
               int32_t nbytes, int32_t nframes){
-    block b(seq, sr, chn, nbytes, nframes);
-    // find pos to insert
     assert(capacity() > 0);
-    int pos = 0;
-    while (pos < size()){
-        assert(blocks_[pos].sequence != b.sequence);
-        if (blocks_[pos].sequence > b.sequence){
-            break;
+    // find pos to insert
+    block * it;
+    // first try the end, as it is the most likely position
+    // (blocks usually arrive in sequential order)
+    if (empty() || seq > back().sequence){
+        it = end();
+    } else {
+    #if 0
+        // linear search
+        it = begin();
+        for (; it != end(); ++it){
+            assert(it->sequence != seq);
+            if (it->sequence > seq){
+                break;
+            }
         }
-        pos++;
+    #else
+        // binary search
+        it = std::lower_bound(begin(), end(), seq, [](auto& a, auto& b){
+            return a.sequence < b;
+        });
+        assert(!(it != end() && it->sequence == seq));
+    #endif
     }
+    // move items if needed
     if (full()){
-        if (pos > 0){
-            // move older blocks to the left
-            LOG_DEBUG("insert block at pos " << pos << " and pop old block");
-            std::move(&blocks_[1], &blocks_[pos], &blocks_[0]);
-            blocks_[pos-1] = std::move(b);
-            return &blocks_[pos-1];
+        if (it > begin()){
+            LOG_DEBUG("insert block at pos " << (it - begin()) << " and pop old block");
+            // save first block
+            block temp = std::move(front());
+            // move blocks before 'it' to the left
+            std::move(begin() + 1, it, begin());
+            // adjust iterator and re-insert removed block
+            *(--it) = std::move(temp);
         } else {
-            // simply replace first item
+            // simply replace first block
             LOG_DEBUG("replace oldest block");
-            blocks_[0] = std::move(b);
-            return &blocks_[0];
         }
     } else {
-        LOG_DEBUG("insert block at pos " << pos);
-        // insert block (will move newer items to the right)
-        blocks_.insert(blocks_.begin() + pos, std::move(b));
-        return &blocks_[pos];
+        if (it != end()){
+            LOG_DEBUG("insert block at pos " << (it - begin()));
+            // save block past the end
+            block temp = std::move(*end());
+            // move blocks to the right
+            std::move_backward(it, end(), end() + 1);
+            // re-insert removed block at free slot (first moved item)
+            *it = std::move(temp);
+        } else {
+            // simply replace block past the end
+            LOG_DEBUG("append block");
+        }
+        size_++;
     }
+    // replace data
+    it->set(seq, sr, chn, nbytes, nframes);
+    return it;
 }
 
 block* block_queue::find(int32_t seq){
-    for (int32_t i = 0; i < size(); ++i){
+    // first try the end, as we most likely have to complete the most recent block
+    if (empty()){
+        return nullptr;
+    } else if (back().sequence == seq){
+        return &back();
+    }
+#if 0
+    // linear search
+    for (int32_t i = 0; i < size_; ++i){
         if (blocks_[i].sequence == seq){
             return &blocks_[i];
         }
     }
+#else
+    // binary search
+    auto result = std::lower_bound(begin(), end(), seq, [](auto& a, auto& b){
+        return a.sequence < b;
+    });
+    if (result != end() && result->sequence == seq){
+        return result;
+    }
+#endif
     return nullptr;
 }
 
 void block_queue::pop_front(){
     assert(!empty());
-    blocks_.erase(blocks_.begin());
+    if (size_ > 1){
+        // temporarily remove first block
+        block temp = std::move(front());
+        // move remaining blocks to the left
+        std::move(begin() + 1, end(), begin());
+        // re-insert removed block at free slot
+        back() = std::move(temp);
+    }
+    size_--;
 }
 
 void block_queue::pop_back(){
     assert(!empty());
-    blocks_.pop_back();
+    size_--;
 }
 
 block& block_queue::front(){
@@ -1566,7 +1614,7 @@ block& block_queue::front(){
 
 block& block_queue::back(){
     assert(!empty());
-    return blocks_.back();
+    return blocks_[size_ - 1];
 }
 
 block* block_queue::begin(){
@@ -1574,7 +1622,7 @@ block* block_queue::begin(){
 }
 
 block* block_queue::end(){
-    return begin() + size();
+    return blocks_.data() + size_;
 }
 
 block& block_queue::operator[](int32_t i){
@@ -1583,8 +1631,8 @@ block& block_queue::operator[](int32_t i){
 
 std::ostream& operator<<(std::ostream& os, const block_queue& b){
     os << "blockqueue (" << b.size() << " / " << b.capacity() << "): ";
-    for (auto it = b.blocks_.begin(); it != b.blocks_.end(); ++it){
-        os << it->sequence << " ";
+    for (int i = 0; i < b.size(); ++i){
+        os << b.blocks_[i].sequence << " ";
     }
     return os;
 }
