@@ -1345,32 +1345,174 @@ bool block::has_frame(int32_t which) const {
 
 /*////////////////////////// block_ack /////////////////////////////*/
 
+block_ack::block_ack()
+    : sequence(-1), count_(0), timestamp_(-1e009){}
+
 block_ack::block_ack(int32_t seq, int32_t limit)
     : sequence(seq) {
-    retransmit_count_ = limit;
-    retransmit_timestamp_ = -1e009;
+    count_ = limit;
+    timestamp_ = -1e009;
 }
 
 bool block_ack::check(double time, double interval){
-    if (retransmit_count_ > 0){
-        auto diff = time - retransmit_timestamp_;
+    if (count_ > 0){
+        auto diff = time - timestamp_;
         if (diff >= interval){
-            retransmit_timestamp_ = time;
-            retransmit_count_--;
+            timestamp_ = time;
+            count_--;
             LOG_DEBUG("request block " << sequence);
             return true;
         } else {
-//            LOG_DEBUG("don't retransmit block "
+//            LOG_DEBUG("don't resend block "
 //                        << sequence << ": need to wait");
         }
     } else {
-//        LOG_DEBUG("don't retransmit block "
+//        LOG_DEBUG("don't resend block "
 //                    << sequence << ": tried too many times");
     }
     return false;
 }
 
 /*////////////////////////// block_ack_list ///////////////////////////*/
+
+#if BLOCK_ACK_LIST_HASHTABLE
+
+block_ack_list::block_ack_list(){
+    data_.resize(initial_size_);
+    mask_ = data_.size() - 1;
+    oldest_ = INT32_MAX;
+}
+
+void block_ack_list::setup(int32_t limit){
+    limit_ = limit;
+}
+
+void block_ack_list::clear(){
+    for (auto& d : data_){
+        d.sequence = -1;
+    }
+    size_ = 0;
+    oldest_ = INT32_MAX;
+}
+
+int32_t block_ack_list::size() const {
+    return size_;
+}
+
+bool block_ack_list::empty() const {
+    return size_ == 0;
+}
+
+block_ack * block_ack_list::find(int32_t seq){
+    auto index = seq & mask_;
+    while (data_[index].sequence != seq){
+        if (data_[index].sequence < 0){
+            return nullptr;
+        }
+        index = (index + increment_) & mask_;
+    }
+    assert(data_[index].sequence >= 0);
+    assert(seq >= oldest_);
+    return &data_[index];
+}
+
+block_ack& block_ack_list::get(int32_t seq){
+    // try to find item
+    auto index = seq & mask_;
+    while (data_[index].sequence != seq){
+        if (data_[index].sequence < 0){
+            // hit empty item -> insert item
+            data_[index] = block_ack { seq, limit_ };
+            if (seq < oldest_){
+                oldest_ = seq;
+            }
+            // rehash if the table is more than 50% full
+            if (++size_ > (int32_t)(data_.size() >> 1)){
+                rehash();
+                auto b = find(seq);
+                assert(b != nullptr);
+                return *b;
+            }
+            break;
+        }
+        index = (index + increment_) & mask_;
+    }
+    assert(data_[index].sequence >= 0);
+    return data_[index];
+}
+
+bool block_ack_list::remove(int32_t seq){
+    auto b = find(seq);
+    if (b){
+        b->sequence = -1;
+        size_--;
+        if (empty()){
+            oldest_ = INT32_MAX;
+        }
+        assert(size_ >= 0);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+int32_t block_ack_list::remove_before(int32_t seq){
+    if (empty() || seq <= oldest_){
+        return 0;
+    }
+    int count = 0;
+    for (auto& d : data_){
+        if (d.sequence >= 0 && d.sequence < seq){
+            d.sequence = -1;
+            count++;
+        }
+    }
+    size_ -= count;
+    assert(size_ >= 0);
+    oldest_ = seq;
+    return count;
+}
+
+void block_ack_list::rehash(){
+    auto newsize = data_.size() << 1; // double the size
+    auto newmask = newsize - 1;
+    std::vector<block_ack> temp(newsize);
+#if LOGLEVEL >= 3
+    LOG_DEBUG("before rehash:");
+    std::cerr << *this << std::endl;
+#endif
+    // transfer items
+    for (auto& b : data_){
+        if (b.sequence >= 0){
+            auto index = b.sequence & newmask;
+            while (temp[index].sequence >= 0){
+                index = (index + increment_) & newmask;
+            }
+            // insert item
+            temp[index] = block_ack { b.sequence, limit_ };
+        }
+    }
+    data_ = std::move(temp);
+    mask_ = newmask;
+#if LOGLEVEL >= 3
+    LOG_DEBUG("after rehash:");
+    std::cerr << *this << std::endl;
+#endif
+}
+
+std::ostream& operator<<(std::ostream& os, const block_ack_list& b){
+    os << "acklist (" << b.size() << " / " << b.data_.size() << "): ";
+    for (auto& d : b.data_){
+        if (d.sequence >= 0){
+            os << d.sequence << " ";
+        }
+    }
+    return os;
+}
+
+#else
+
+block_ack_list::block_ack_list(){}
 
 void block_ack_list::setup(int32_t limit){
     limit_ = limit;
@@ -1389,47 +1531,100 @@ bool block_ack_list::empty() const {
 }
 
 block_ack * block_ack_list::find(int32_t seq){
-    auto it = data_.find(seq);
-    if (it != data_.end()){
-        return &it->second;
-    } else {
-        return nullptr;
+#if BLOCK_ACK_LIST_SORTED
+    // binary search
+    auto it = lower_bound(seq);
+    if (it != data_.end() && it->sequence == seq){
+        return &*it;
     }
+#else
+    // linear search
+    for (auto& b : data_){
+        if (b.sequence == seq){
+            return &b;
+        }
+    }
+#endif
+    return nullptr;
 }
 
 block_ack& block_ack_list::get(int32_t seq){
-    auto it = data_.find(seq);
-    if (it != data_.end()){
-        return it->second;
-    } else {
-        return data_.emplace(seq, block_ack { seq, limit_ }).first->second;
+#if BLOCK_ACK_LIST_SORTED
+    auto it = lower_bound(seq);
+    // insert if needed
+    if (it == data_.end() || it->sequence != seq){
+        it = data_.emplace(it, seq, limit_);
     }
+    return *it;
+#else
+    auto b = find(seq);
+    if (b){
+        return *b;
+    } else {
+        data_.emplace_back(seq, limit_);
+        return data_.back();
+    }
+#endif
 }
 
-void block_ack_list::remove(int32_t seq){
-    data_.erase(seq);
+bool block_ack_list::remove(int32_t seq){
+#if BLOCK_ACK_LIST_SORTED
+    auto it = lower_bound(seq);
+    if (it != data_.end() && it->sequence == seq){
+        data_.erase(it);
+        return true;
+    }
+#else
+    for (auto it = data_.begin(); it != data_.end(); ++it){
+        if (it->sequence == seq){
+            data_.erase(it);
+            return true;
+        }
+    }
+#endif
+    return false;
 }
 
-void block_ack_list::remove_before(int32_t seq){
+int32_t block_ack_list::remove_before(int32_t seq){
+    if (empty()){
+        return 0;
+    }
     int count = 0;
+#if BLOCK_ACK_LIST_SORTED
+    auto begin = data_.begin();
+    auto end = lower_bound(seq);
+    count = end - begin;
+    data_.erase(begin, end);
+#else
     for (auto it = data_.begin(); it != data_.end(); ){
-        if (it->second.sequence < seq){
+        if (it->sequence < seq){
             it = data_.erase(it);
             count++;
         } else {
             ++it;
         }
     }
-    LOG_DEBUG("block_ack_list: removed " << count << " outdated items");
+#endif
+    return count;
 }
+
+#if BLOCK_ACK_LIST_SORTED
+std::vector<block_ack>::iterator block_ack_list::lower_bound(int32_t seq){
+    return std::lower_bound(data_.begin(), data_.end(), seq, [](auto& a, auto& b){
+        return a.sequence < b;
+    });
+}
+#endif
 
 std::ostream& operator<<(std::ostream& os, const block_ack_list& b){
     os << "acklist (" << b.size() << "): ";
-    for (auto it = b.data_.begin(); it != b.data_.end(); ++it){
-        os << it->second.sequence << " ";
+    for (auto& d : b.data_){
+        os << d.sequence << " ";
     }
     return os;
 }
+
+#endif
 
 /*////////////////////////// history_buffer ///////////////////////////*/
 

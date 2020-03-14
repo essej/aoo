@@ -231,30 +231,50 @@ private:
 
 class block_ack {
 public:
+    block_ack();
     block_ack(int32_t seq, int32_t limit);
 
     bool check(double time, double interval);
     int32_t sequence;
 private:
-    int32_t retransmit_count_;
-    double retransmit_timestamp_;
+    int32_t count_;
+    double timestamp_;
 };
+
+#define BLOCK_ACK_LIST_HASHTABLE 1
+#define BLOCK_ACK_LIST_SORTED 1
 
 class block_ack_list {
 public:
+    block_ack_list();
+
     void setup(int32_t limit);
     block_ack* find(int32_t seq);
     block_ack& get(int32_t seq);
-    void remove(int32_t seq);
-    void remove_before(int32_t seq);
+    bool remove(int32_t seq);
+    int32_t remove_before(int32_t seq);
     void clear();
     bool empty() const;
     int32_t size() const;
 
     friend std::ostream& operator<<(std::ostream& os, const block_ack_list& b);
 private:
-    std::unordered_map<int32_t, block_ack> data_;
+#if !BLOCK_ACK_LIST_HASHTABLE
+#if BLOCK_ACK_LIST_SORTED
+    std::vector<block_ack>::iterator lower_bound(int32_t seq);
+#endif
+#else
+    void rehash();
+
+    static const int32_t increment_ = 13; // must be prime number
+    static const int32_t initial_size_ = 16; // must be power of 2
+
+    int32_t size_ = 0;
+    int32_t mask_ = 0;
+    int32_t oldest_ = 0;
+#endif
     int32_t limit_ = 0;
+    std::vector<block_ack> data_;
 };
 
 class history_buffer {
