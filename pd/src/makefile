@@ -27,7 +27,7 @@ AOO = ../../lib/src
 cflags = -I$(AOO) \
     -I$(AOO)/lib \
     -Wno-unused -Wno-unused-parameter \
-    -DLOGLEVEL=2 \
+    -DLOGLEVEL=1 \
     -DAOO_PD_OSCTIMEHACK=0 \
     -DAOO_DLL_BW=0.0001 \
     -DAOO_DEBUG_DLL=0 \
@@ -38,7 +38,9 @@ ldlibs = -lopus
 
 common.sources = \
     aoo_common.cpp \
-    $(AOO)/aoo.cpp \
+    $(AOO)/aoo_imp.cpp \
+    $(AOO)/aoo_source.cpp \
+    $(AOO)/aoo_sink.cpp \
     $(AOO)/aoo_pcm.cpp \
     $(AOO)/aoo_opus.cpp \
     $(AOO)/lib/oscpack/osc/OscTypes.cpp \
