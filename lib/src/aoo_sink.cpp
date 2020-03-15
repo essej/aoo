@@ -307,9 +307,9 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
         // add frame to block
         block->add_frame(d.framenum, (const char *)d.data, d.size);
 
-    #if 0
+    #if 1
         if (block->complete()){
-            // remove block from acklist
+            // remove block from acklist as early as possible
             acklist.remove(block->sequence);
         }
     #endif
@@ -356,8 +356,10 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             src.next = next;
             // pop blocks
             while (count--){
+            #if 0
                 // remove block from acklist
                 acklist.remove(queue.front().sequence);
+            #endif
                 // pop block
                 LOG_DEBUG("pop block " << queue.front().sequence);
                 queue.pop_front();

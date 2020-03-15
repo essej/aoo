@@ -26,7 +26,7 @@ const aoo::codec * find_codec(const std::string& name){
     }
 }
 
-bool is_pow2(int32_t i){
+constexpr bool is_pow2(int32_t i){
     return (i & (i - 1)) == 0;
 }
 
@@ -211,6 +211,7 @@ bool block_ack::check(double time, double interval){
 #if BLOCK_ACK_LIST_HASHTABLE
 
 block_ack_list::block_ack_list(){
+    static_assert(is_pow2(initial_size_), "initial_size_ must be a power of 2!");
     data_.resize(initial_size_);
     mask_ = data_.size() - 1;
     oldest_ = INT32_MAX;
@@ -242,7 +243,7 @@ block_ack * block_ack_list::find(int32_t seq){
         if (data_[index].sequence < 0){
             return nullptr;
         }
-        index = (index + increment_) & mask_;
+        index = (index + 1) & mask_;
     }
     assert(data_[index].sequence >= 0);
     assert(seq >= oldest_);
@@ -268,41 +269,71 @@ block_ack& block_ack_list::get(int32_t seq){
             }
             break;
         }
-        index = (index + increment_) & mask_;
+        index = (index + 1) & mask_;
     }
     assert(data_[index].sequence >= 0);
     return data_[index];
 }
 
 bool block_ack_list::remove(int32_t seq){
-    auto b = find(seq);
-    if (b){
-        b->sequence = -1;
-        size_--;
-        if (empty()){
-            oldest_ = INT32_MAX;
+    // first find the key
+    auto index = seq & mask_;
+    while (data_[index].sequence != seq){
+        if (data_[index].sequence < 0){
+            return false;
         }
-        assert(size_ >= 0);
-        return true;
-    } else {
-        return false;
+        index = (index + 1) & mask_;
     }
+    // clear block
+    data_[index].sequence = -1;
+    // check and fix subsequent blocks
+    auto i = index;
+    while (true){
+        i = (i + 1) & mask_;
+        if (data_[i].sequence < 0){
+            // hit empty cell!
+            break;
+        }
+        if (data_[i].sequence <= data_[index].sequence){
+            // found earlier block, move it to previous empty slot
+            data_[index] = data_[i];
+            data_[i].sequence = -1;
+            index = i; // new empty slot
+        }
+    }
+    if (seq == oldest_){
+        oldest_++;
+    }
+    size_--;
+    assert(size_ >= 0);
+    return true;
 }
 
 int32_t block_ack_list::remove_before(int32_t seq){
     if (empty() || seq <= oldest_){
         return 0;
     }
+    LOG_DEBUG("block_ack_list: oldest = " << oldest_);
+#if LOGLEVEL >= 3
+    LOG_DEBUG("before remove_before (" << seq << "):");
+    std::cerr << *this << std::endl;
+#endif
     int count = 0;
-    for (auto& d : data_){
+    // traverse table in reverse
+    // this way we're likely to create a hole in the table which will
+    // terminate the fixup process for the *next* removed block early on
+    for (int i = data_.size() - 1; i >= 0; --i){
+        auto& d = data_[i];
         if (d.sequence >= 0 && d.sequence < seq){
-            d.sequence = -1;
-            count++;
+            count += remove(d.sequence);
         }
     }
-    size_ -= count;
     assert(size_ >= 0);
     oldest_ = seq;
+#if LOGLEVEL >= 3
+    LOG_DEBUG("after remove_before:");
+    std::cerr << *this << std::endl;
+#endif
     return count;
 }
 
@@ -319,7 +350,7 @@ void block_ack_list::rehash(){
         if (b.sequence >= 0){
             auto index = b.sequence & newmask;
             while (temp[index].sequence >= 0){
-                index = (index + increment_) & newmask;
+                index = (index + 1) & newmask;
             }
             // insert item
             temp[index] = block_ack { b.sequence, limit_ };

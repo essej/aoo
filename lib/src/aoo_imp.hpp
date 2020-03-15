@@ -264,7 +264,6 @@ private:
 #else
     void rehash();
 
-    static const int32_t increment_ = 13; // must be prime number
     static const int32_t initial_size_ = 16; // must be power of 2
 
     int32_t size_ = 0;
