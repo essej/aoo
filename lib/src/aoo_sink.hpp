@@ -32,6 +32,7 @@ struct source_desc {
         aoo_source_state state;
     };
     lfqueue<info> infoqueue;
+    lfqueue<aoo_event> eventqueue;
     aoo_source_state laststate;
     dynamic_resampler resampler;
     // methods
@@ -51,6 +52,9 @@ class aoo_sink final : public aoo::isink {
                            void *endpoint, aoo_replyfn fn) override;
 
     int32_t process(uint64_t t) override;
+    bool events_available() override;
+
+    int32_t handle_events() override;
  private:
     const int32_t id_;
     int32_t nchannels_ = 0;
@@ -63,6 +67,7 @@ class aoo_sink final : public aoo::isink {
     int32_t resend_packetsize_ = 0;
     std::vector<aoo_sample> buffer_;
     aoo_processfn processfn_ = nullptr;
+    aoo_eventhandler eventhandler_ = nullptr;
     void *user_ = nullptr;
     std::vector<aoo::source_desc> sources_;
     struct data_request {

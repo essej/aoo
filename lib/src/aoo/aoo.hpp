@@ -37,6 +37,10 @@ public:
 
     virtual bool process(const aoo_sample **data, int32_t n, uint64_t t) = 0;
 
+    virtual bool events_available() = 0;
+
+    virtual int32_t handle_events() = 0;
+
     class deleter {
     public:
         void operator()(isource *x){
@@ -64,6 +68,12 @@ public:
 
     virtual int32_t process(uint64_t t) = 0;
 
+    virtual bool events_available() = 0;
+
+    virtual int32_t handle_events() = 0;
+
+    virtual void invite(void *endpoint, aoo_replyfn,
+                        int32_t id, int32_t chn) = 0;
 
     class deleter {
     public:

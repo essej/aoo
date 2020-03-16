@@ -306,6 +306,8 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     int src = atom_getfloatarg(0, argc, argv);
     x->x_aoo_source = aoo_source_new(src >= 0 ? src : 0);
     memset(&x->x_settings, 0, sizeof(aoo_source_settings));
+    x->x_settings.userdata = x;
+    x->x_settings.eventhandler = 0;
     x->x_settings.buffersize = AOO_SOURCE_DEFBUFSIZE;
     x->x_settings.packetsize = AOO_DEFPACKETSIZE;
     x->x_settings.time_filter_bandwidth = AOO_DLL_BW;

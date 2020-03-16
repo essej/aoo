@@ -78,6 +78,8 @@ void aoo_source_setup(aoo_source *src, aoo_source_settings *settings){
 }
 
 void aoo_source::setup(aoo_source_settings &settings){
+    eventhandler_ = settings.eventhandler;
+    user_ = settings.userdata;
     blocksize_ = settings.blocksize;
     nchannels_ = settings.nchannels;
     samplerate_ = settings.samplerate;
@@ -127,6 +129,8 @@ void aoo_source::update(){
         } else {
             resampler_.clear();
         }
+        // setup event queue
+        eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);
         // setup history buffer
         {
             double bufsize = (double)resend_buffersize_ * 0.001 * samplerate_;
@@ -475,6 +479,33 @@ bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
         }
     }
 }
+
+int32_t aoo_source_eventsavailable(aoo_source *src){
+    return src->events_available();
+}
+
+bool aoo_source::events_available(){
+    return eventqueue_.read_available() > 0;
+}
+
+int32_t aoo_source_handleevents(aoo_source *src){
+    return src->handle_events();
+}
+
+int32_t aoo_source::handle_events(){
+    auto n = eventqueue_.read_available();
+    if (n > 0){
+        // copy events
+        auto events = (aoo_event *)alloca(sizeof(aoo_event) * n);
+        for (int i = 0; i < n; ++i){
+            eventqueue_.read(events[i]);
+        }
+        // send events
+        eventhandler_(user_, events, n);
+    }
+    return n;
+}
+
 
 // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 

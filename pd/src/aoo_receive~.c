@@ -312,9 +312,6 @@ typedef struct _aoo_receive
     t_socket_listener * x_listener;
     pthread_mutex_t x_mutex;
     t_outlet *x_eventout;
-    aoo_event *x_eventbuf;
-    int x_eventbufsize;
-    int x_numevents;
     t_clock *x_clock;
 } t_aoo_receive;
 
@@ -401,9 +398,15 @@ static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
 
 static void aoo_receive_tick(t_aoo_receive *x)
 {
-    for (int i = 0; i < x->x_numevents; ++i){
-        if (x->x_eventbuf[i].type == AOO_SOURCE_STATE_EVENT){
-            aoo_source_state_event *e = &x->x_eventbuf[i].source_state;
+    aoo_sink_handleevents(x->x_aoo_sink);
+}
+
+static void aoo_receive_handleevents(t_aoo_receive *x,
+                                     const aoo_event *events, int32_t n)
+{
+    for (int i = 0; i < n; ++i){
+        if (events[i].type == AOO_SOURCE_STATE_EVENT){
+            const aoo_source_state_event *e = &events[i].source_state;
 
             t_client *client = (t_client *)e->endpoint;
             struct sockaddr_in *addr = (struct sockaddr_in *)&client->addr;
@@ -422,11 +425,10 @@ static void aoo_receive_tick(t_aoo_receive *x)
             outlet_anything(x->x_eventout, gensym("source"), 4, msg);
         }
     }
-    x->x_numevents = 0;
 }
 
-static void aoo_receive_process(t_aoo_receive *x, const aoo_sample **data, int32_t n,
-                                const aoo_event *events, int32_t nevents)
+static void aoo_receive_process(t_aoo_receive *x,
+                                const aoo_sample **data, int32_t n)
 {
     assert(sizeof(t_sample) == sizeof(aoo_sample));
     // copy samples
@@ -434,19 +436,7 @@ static void aoo_receive_process(t_aoo_receive *x, const aoo_sample **data, int32
         memcpy(x->x_vec[i], data[i], sizeof(aoo_sample) * n);
     }
     // handle events
-    if (nevents > 0){
-        // resize event buffer if necessary
-        if (nevents > x->x_eventbufsize){
-            x->x_eventbuf = (aoo_event *)resizebytes(x->x_eventbuf,
-                sizeof(aoo_event) * x->x_eventbufsize, sizeof(aoo_event) * nevents);
-            x->x_eventbufsize = nevents;
-        }
-        // copy events
-        for (int i = 0; i < nevents; ++i){
-            x->x_eventbuf[i] = events[i];
-        }
-        x->x_numevents = nevents;
-
+    if (aoo_sink_eventsavailable(x->x_aoo_sink)){
         clock_delay(x->x_clock, 0);
     }
 }
@@ -492,14 +482,11 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
     x->x_f = 0;
     x->x_listener = 0;
     pthread_mutex_init(&x->x_mutex, 0);
-    // pre-allocate event buffer
-    x->x_eventbuf = getbytes(sizeof(aoo_event) * 16);
-    x->x_eventbufsize = 16;
-    x->x_numevents = 0;
     x->x_clock = clock_new(x, (t_method)aoo_receive_tick);
     // default settings
     memset(&x->x_settings, 0, sizeof(aoo_sink_settings));
     x->x_settings.userdata = x;
+    x->x_settings.eventhandler = (aoo_eventhandler)aoo_receive_handleevents;
     x->x_settings.processfn = (aoo_processfn)aoo_receive_process;
     x->x_settings.resend_limit = AOO_RESEND_LIMIT;
     x->x_settings.resend_interval = AOO_RESEND_INTERVAL;
@@ -545,7 +532,6 @@ static void aoo_receive_free(t_aoo_receive *x)
     }
     // clean up
     freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
-    freebytes(x->x_eventbuf, sizeof(aoo_event) * x->x_eventbufsize);
     clock_free(x->x_clock);
 
     aoo_sink_free(x->x_aoo_sink);

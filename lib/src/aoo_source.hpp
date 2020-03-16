@@ -32,6 +32,10 @@ class aoo_source final : public aoo::isource {
     bool send() override;
 
     bool process(const aoo_sample **data, int32_t n, uint64_t t) override;
+
+    bool events_available() override;
+
+    int32_t handle_events() override;
  private:
     const int32_t id_;
     int32_t salt_ = 0;
@@ -46,6 +50,9 @@ class aoo_source final : public aoo::isource {
     aoo::dynamic_resampler resampler_;
     aoo::lfqueue<aoo_sample> audioqueue_;
     aoo::lfqueue<double> srqueue_;
+    aoo::lfqueue<aoo_event> eventqueue_;
+    aoo_eventhandler eventhandler_;
+    void *user_;
     aoo::time_dll dll_;
     double bandwidth_ = AOO_DLL_BW;
     double starttime_ = 0;

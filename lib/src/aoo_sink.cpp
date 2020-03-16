@@ -49,6 +49,7 @@ void aoo_sink_setup(aoo_sink *sink, aoo_sink_settings *settings) {
 
 void aoo_sink::setup(aoo_sink_settings& settings){
     processfn_ = settings.processfn;
+    eventhandler_ = settings.eventhandler;
     user_ = settings.userdata;
     nchannels_ = settings.nchannels;
     samplerate_ = settings.samplerate;
@@ -73,9 +74,6 @@ int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
                             void *src, aoo_replyfn fn) {
     return sink->handle_message(data, n, src, fn);
 }
-
-// /AoO/<sink>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <settings...>
-// /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
 
 int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn){
     osc::ReceivedPacket packet(data, n);
@@ -152,6 +150,8 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
     return 1; // ?
 }
 
+// /AoO/<sink>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <settings...>
+
 void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
                                      int32_t id, int32_t salt, const aoo_format& f,
                                      const char *settings, int32_t size){
@@ -202,6 +202,8 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
         update_format(*src);
     }
 }
+
+// /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
 
 void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                                    int32_t salt, const aoo::data_packet& d){
@@ -494,6 +496,8 @@ void aoo_sink::update_source(aoo::source_desc &src){
             i.state = AOO_SOURCE_STOP;
             src.infoqueue.write(i);
         };
+        // reset event queue
+        src.eventqueue.resize(AOO_EVENTQUEUESIZE, 1);
         // setup resampler
         src.resampler.setup(src.decoder->blocksize(), blocksize_,
                             src.decoder->samplerate(), samplerate_, src.decoder->nchannels());
@@ -511,6 +515,8 @@ void aoo_sink::update_source(aoo::source_desc &src){
     }
 }
 
+// /AoO/<src>/request <sink>
+
 void aoo_sink::request_format(void *endpoint, aoo_replyfn fn, int32_t id){
     LOG_DEBUG("request format");
     char buf[AOO_MAXPACKETSIZE];
@@ -525,6 +531,8 @@ void aoo_sink::request_format(void *endpoint, aoo_replyfn fn, int32_t id){
 
     fn(endpoint, msg.Data(), msg.Size());
 }
+
+// /AoO/<src>/resend <sink> <salt> <seq0> <frame0> <seq1> <frame1> ...
 
 void aoo_sink::request_data(aoo::source_desc& src){
     char buf[AOO_MAXPACKETSIZE];
@@ -592,10 +600,6 @@ int32_t aoo_sink::process(uint64_t t){
         elapsedtime_.set(elapsed);
     }
 
-    // pre-allocate event array (max. 1 per source)
-    aoo_event *events = (aoo_event *)alloca(sizeof(aoo_event) * AOO_MAXNUMEVENTS);
-    size_t numevents = 0;
-
     // the mutex is uncontended most of the time, but LATER we might replace
     // this with a lockless and/or waitfree solution
     std::unique_lock<std::mutex> lock(mutex_);
@@ -603,7 +607,6 @@ int32_t aoo_sink::process(uint64_t t){
         if (!src.decoder){
             continue;
         }
-        double sr = src.decoder->samplerate();
         int32_t nchannels = src.decoder->nchannels();
         int32_t nsamples = src.audioqueue.blocksize();
         // write samples into resampler
@@ -620,14 +623,14 @@ int32_t aoo_sink::process(uint64_t t){
             src.samplerate = info.sr;
             src.resampler.write(src.audioqueue.read_data(), nsamples);
             src.audioqueue.read_commit();
-            // check state
-            if (info.state != src.laststate && numevents < AOO_MAXNUMEVENTS){
-                aoo_event& event = events[numevents++];
+            if (info.state != src.laststate){
+                // push state change event
+                aoo_event event;
                 event.source_state.type = AOO_SOURCE_STATE_EVENT;
                 event.source_state.endpoint = src.endpoint;
                 event.source_state.id = src.id;
                 event.source_state.state = info.state;
-
+                src.eventqueue.write(event);
                 src.laststate = info.state;
             }
         }
@@ -654,14 +657,14 @@ int32_t aoo_sink::process(uint64_t t){
             LOG_DEBUG("read samples");
             didsomething = true;
         } else {
-            // buffer ran out -> send "stop" event
-            if (src.laststate != AOO_SOURCE_STOP && numevents < AOO_MAXNUMEVENTS){
-                aoo_event& event = events[numevents++];
+            // buffer ran out -> push "stop" event
+            if (src.laststate != AOO_SOURCE_STOP){
+                aoo_event event;
                 event.source_state.type = AOO_SOURCE_STATE_EVENT;
                 event.source_state.endpoint = src.endpoint;
                 event.source_state.id = src.id;
                 event.source_state.state = AOO_SOURCE_STOP;
-
+                src.eventqueue.write(event);
                 src.laststate = AOO_SOURCE_STOP;
                 didsomething = true;
             }
@@ -684,9 +687,52 @@ int32_t aoo_sink::process(uint64_t t){
         for (int i = 0; i < nchannels_; ++i){
             vec[i] = &buffer_[i * blocksize_];
         }
-        processfn_(user_, vec, blocksize_, events, numevents);
+        processfn_(user_, vec, blocksize_);
         return 1;
     } else {
         return 0;
     }
+}
+int32_t aoo_sink_eventsavailable(aoo_sink *sink){
+    return sink->events_available();
+}
+
+bool aoo_sink::events_available(){
+    // the mutex is uncontended most of the time, but LATER we might replace
+    // this with a lockless and/or waitfree solution
+    std::unique_lock<std::mutex> lock(mutex_);
+    for (auto& src : sources_){
+        if (src.eventqueue.read_available() > 0){
+            return true;
+        }
+    }
+    return false;
+}
+
+int32_t aoo_sink_handleevents(aoo_sink *sink){
+    return sink->handle_events();
+}
+
+int32_t aoo_sink::handle_events(){
+    if (!eventhandler_){
+        return 0;
+    }
+    int total = 0;
+    // the mutex is uncontended most of the time, but LATER we might replace
+    // this with a lockless and/or waitfree solution
+    std::unique_lock<std::mutex> lock(mutex_);
+    for (auto& src : sources_){
+        auto n = src.eventqueue.read_available();
+        if (n > 0){
+            // copy events
+            auto events = (aoo_event *)alloca(sizeof(aoo_event) * n);
+            for (int i = 0; i < n; ++i){
+                src.eventqueue.read(events[i]);
+            }
+            // send events
+            eventhandler_(user_, events, n);
+            total += n;
+        }
+    }
+    return total;
 }

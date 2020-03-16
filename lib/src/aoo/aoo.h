@@ -81,6 +81,44 @@ typedef void (*aoo_replyfn)(
         int32_t         // number of bytes
 );
 
+/*//////////////////// AoO events /////////////////////*/
+
+#define AOO_EVENTQUEUESIZE 64
+
+// event types
+typedef enum aoo_event_type
+{
+    AOO_SOURCE_STATE_EVENT
+} aoo_event_type;
+
+// source state event
+typedef enum aoo_source_state
+{
+    AOO_SOURCE_STOP,
+    AOO_SOURCE_PLAY
+} aoo_source_state;
+
+typedef struct aoo_source_state_event
+{
+    aoo_event_type type;
+    void *endpoint;
+    int32_t id;
+    aoo_source_state state;
+} aoo_source_state_event;
+
+// event union
+typedef union aoo_event
+{
+    aoo_event_type type;
+    aoo_source_state_event source_state;
+} aoo_event;
+
+typedef void (*aoo_eventhandler)(
+    void *,             // user
+    const aoo_event *,  // event array
+    int32_t             // number of events
+);
+
 /*//////////////////// AoO source /////////////////////*/
 
 #define AOO_SOURCE_DEFBUFSIZE 10
@@ -103,6 +141,8 @@ typedef struct aoo_format_storage
 
 typedef struct aoo_source_settings
 {
+    void *userdata;
+    aoo_eventhandler eventhandler;
     int32_t samplerate;
     int32_t blocksize;
     int32_t nchannels;
@@ -139,52 +179,27 @@ int32_t aoo_source_send(aoo_source *src);
 
 int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, uint64_t t);
 
+int32_t aoo_source_eventsavailable(aoo_source *src);
+
+int32_t aoo_source_handleevents(aoo_source *src);
+
 /*//////////////////// AoO sink /////////////////////*/
 
 #define AOO_SINK_DEFBUFSIZE 10
 
 typedef struct aoo_sink aoo_sink;
 
-// event types
-typedef enum aoo_event_type
-{
-    AOO_SOURCE_STATE_EVENT
-} aoo_event_type;
-
-// source state event
-typedef enum aoo_source_state
-{
-    AOO_SOURCE_STOP,
-    AOO_SOURCE_PLAY
-} aoo_source_state;
-
-typedef struct aoo_source_state_event
-{
-    aoo_event_type type;
-    void *endpoint;
-    int32_t id;
-    aoo_source_state state;
-} aoo_source_state_event;
-
-// event union
-typedef union aoo_event
-{
-    aoo_event_type type;
-    aoo_source_state_event source_state;
-} aoo_event;
-
 typedef void (*aoo_processfn)(
         void *,                 // user data
         const aoo_sample **,    // sample data
-        int32_t,                // number of samples per channel
-        const aoo_event *,      // event array
-        int32_t                 // number of events
+        int32_t                 // number of samples per channel
 );
 
 typedef struct aoo_sink_settings
 {
     void *userdata;
     aoo_processfn processfn;
+    aoo_eventhandler eventhandler;
     int32_t samplerate;
     int32_t blocksize;
     int32_t nchannels;
@@ -202,13 +217,15 @@ void aoo_sink_free(aoo_sink *sink);
 
 void aoo_sink_setup(aoo_sink *sink, aoo_sink_settings *settings);
 
-// e.g. /start, /stop, /data.
 // Might reply with /AoO/<id>/request
 int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
                             void *src, aoo_replyfn fn);
 
 int32_t aoo_sink_process(aoo_sink *sink, uint64_t t);
 
+int32_t aoo_sink_eventsavailable(aoo_sink *sink);
+
+int32_t aoo_sink_handleevents(aoo_sink *sink);
 
 /*//////////////////// Codec //////////////////////////*/
 
