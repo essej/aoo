@@ -416,7 +416,7 @@ bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
     #endif
     }
 
-    if (!encoder_ || sinks_.empty()){
+    if (!encoder_){
         return false;
     }
 
