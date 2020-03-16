@@ -614,7 +614,8 @@ int32_t aoo_sink::process(uint64_t t){
                 DO_LOG("read available: " << src.audioqueue.read_available());
             }
         #endif
-            auto info = src.infoqueue.read();
+            aoo::source_desc::info info;
+            src.infoqueue.read(info);
             src.channel = info.channel;
             src.samplerate = info.sr;
             src.resampler.write(src.audioqueue.read_data(), nsamples);

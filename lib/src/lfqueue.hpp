@@ -57,11 +57,11 @@ class lfqueue {
         }
     }
 
-    T read() {
-        auto head = rdhead_;
-        rdhead_ = (head + 1) % capacity();
+    void read(T& out) {
+        out = data_[rdhead_];
+        rdhead_ = (rdhead_ + 1) % capacity();
         --balance_;
-        return data_[head];
+        assert(balance_ >= 0);
     }
 
     const T* read_data() const {
@@ -82,11 +82,11 @@ class lfqueue {
         }
     }
 
-    void write(T value) {
-        auto head = wrhead_;
-        data_[head] = value;
-        wrhead_ = (head + 1) % capacity();
+    void write(const T& value) {
+        data_[wrhead_] = value;
+        wrhead_ = (wrhead_ + 1) % capacity();
         ++balance_;
+        assert(balance_ <= capacity());
     }
 
     T* write_data() {

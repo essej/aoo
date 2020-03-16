@@ -336,7 +336,7 @@ bool aoo_source::send(){
         const auto blocksize = encoder_->blocksize();
         aoo::data_packet d;
         d.sequence = sequence_;
-        d.samplerate = srqueue_.read();
+        srqueue_.read(d.samplerate);
 
         // copy and convert audio samples to blob data
         const auto blobmaxsize = sizeof(double) * nchannels * blocksize; // overallocate
