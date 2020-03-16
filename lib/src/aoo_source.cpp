@@ -244,16 +244,7 @@ void aoo_source::handle_message(const char *data, int32_t n, void *endpoint, aoo
             try {
                 auto it = msg.ArgumentsBegin();
                 auto id = it->AsInt32();
-                auto sink = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-                    return (s.endpoint == endpoint) && (s.id == id);
-                });
-                if (sink != sinks_.end()){
-                    // just resend format (the last format message might have been lost)
-                    send_format(*sink);
-                } else {
-                    // add new sink
-                    add_sink(endpoint, id, fn);
-                }
+                handle_request(endpoint, fn, id);
             } catch (const osc::Exception& e){
                 LOG_ERROR(e.what());
             }
@@ -264,53 +255,13 @@ void aoo_source::handle_message(const char *data, int32_t n, void *endpoint, aoo
         if (!history_.capacity()){
             return;
         }
-        if (msg.ArgumentCount() >= 4){
+        auto count = msg.ArgumentCount();
+        if (count >= 4){
             try {
                 auto it = msg.ArgumentsBegin();
-                // get ID
                 auto id = (it++)->AsInt32();
-                auto sink = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-                    return (s.endpoint == endpoint) && (s.id == id);
-                });
-                if (sink == sinks_.end()){
-                    LOG_VERBOSE("ignoring '/resend' message: sink not found");
-                    return;
-                }
-                // get salt
                 auto salt = (it++)->AsInt32();
-                if (salt != salt_){
-                    LOG_VERBOSE("ignoring '/resend' message: source has changed");
-                    return;
-                }
-                // get pairs of [seq, frame]
-                int npairs = (msg.ArgumentCount() - 2) / 2;
-                while (npairs--){
-                    auto seq = (it++)->AsInt32();
-                    auto framenum = (it++)->AsInt32();
-                    auto block = history_.find(seq);
-                    if (block){
-                        aoo::data_packet d;
-                        d.sequence = block->sequence;
-                        d.samplerate = block->samplerate;
-                        d.totalsize = block->size();
-                        d.nframes = block->num_frames();
-                        if (framenum < 0){
-                            // whole block
-                            for (int i = 0; i < d.nframes; ++i){
-                                d.framenum = i;
-                                block->get_frame(i, d.data, d.size);
-                                send_data(*sink, d);
-                            }
-                        } else {
-                            // single frame
-                            d.framenum = framenum;
-                            block->get_frame(framenum, d.data, d.size);
-                            send_data(*sink, d);
-                        }
-                    } else {
-                        LOG_VERBOSE("couldn't find block " << seq);
-                    }
-                }
+                handle_resend(endpoint, fn, id, salt, count - 2, it);
             } catch (const osc::Exception& e){
                 LOG_ERROR(e.what());
             }
@@ -322,6 +273,62 @@ void aoo_source::handle_message(const char *data, int32_t n, void *endpoint, aoo
     }
 }
 
+void aoo_source::handle_request(void *endpoint, aoo_replyfn fn, int32_t id){
+    auto sink = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
+        return (s.endpoint == endpoint) && (s.id == id);
+    });
+    if (sink != sinks_.end()){
+        // just resend format (the last format message might have been lost)
+        send_format(*sink);
+    } else {
+        // add new sink
+        add_sink(endpoint, id, fn);
+    }
+}
+
+void aoo_source::handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt,
+                               int32_t count, osc::ReceivedMessageArgumentIterator it){
+    auto sink = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
+        return (s.endpoint == endpoint) && (s.id == id);
+    });
+    if (sink == sinks_.end()){
+        LOG_VERBOSE("ignoring '/resend' message: sink not found");
+        return;
+    }
+    if (salt != salt_){
+        LOG_VERBOSE("ignoring '/resend' message: source has changed");
+        return;
+    }
+    // get pairs of [seq, frame]
+    int npairs = count / 2;
+    while (npairs--){
+        auto seq = (it++)->AsInt32();
+        auto framenum = (it++)->AsInt32();
+        auto block = history_.find(seq);
+        if (block){
+            aoo::data_packet d;
+            d.sequence = block->sequence;
+            d.samplerate = block->samplerate;
+            d.totalsize = block->size();
+            d.nframes = block->num_frames();
+            if (framenum < 0){
+                // whole block
+                for (int i = 0; i < d.nframes; ++i){
+                    d.framenum = i;
+                    block->get_frame(i, d.data, d.size);
+                    send_data(*sink, d);
+                }
+            } else {
+                // single frame
+                d.framenum = framenum;
+                block->get_frame(framenum, d.data, d.size);
+                send_data(*sink, d);
+            }
+        } else {
+            LOG_VERBOSE("couldn't find block " << seq);
+        }
+    }
+}
 int32_t aoo_source_send(aoo_source *src) {
     return src->send();
 }

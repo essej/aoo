@@ -5,6 +5,11 @@
 #include "lfqueue.hpp"
 #include "time_dll.hpp"
 
+// forward declaration
+namespace osc {
+    class ReceivedMessageArgumentIterator;
+}
+
 class aoo_source final : public aoo::isource {
  public:
     aoo_source(int32_t id);
@@ -60,7 +65,14 @@ class aoo_source final : public aoo::isource {
     std::vector<sink_desc> sinks_;
     // helper methods
     void update();
+
     void send_data(sink_desc& sink, const aoo::data_packet& d);
+
     void send_format(sink_desc& sink);
+
+    void handle_request(void *endpoint, aoo_replyfn fn, int32_t id);
+
+    void handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt,
+                        int32_t count, osc::ReceivedMessageArgumentIterator it);
     int32_t make_salt();
 };
