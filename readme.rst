@@ -30,6 +30,8 @@ features
   and packet loss at the cost of latency. The size can be adjusted dynamically.
 * aoo_sink can ask the source(s) to resend dropped packets, the settings are free adjustable.
 * settable UDP packet size for audio data (to optimize for local networks or the internet)
+* sinks automatically send pings to all its sources (at a configurable rate).
+  For example, sources might want to stop sending if they don't receive a ping in a certain time period.
 
 Pd externals
 ------------
