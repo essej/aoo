@@ -58,7 +58,7 @@ class aoo_sink final : public aoo::isink {
     int32_t blocksize_ = 0;
     int32_t buffersize_ = 0;
     int32_t resend_limit_ = 0;
-    int32_t resend_interval_ = 0;
+    float resend_interval_ = 0;
     int32_t resend_maxnumframes_ = 0;
     int32_t resend_packetsize_ = 0;
     std::vector<aoo_sample> buffer_;

@@ -55,7 +55,7 @@ void aoo_sink::setup(aoo_sink_settings& settings){
     blocksize_ = settings.blocksize;
     buffersize_ = std::max<int32_t>(0, settings.buffersize);
     resend_limit_ = std::max<int32_t>(0, settings.resend_limit);
-    resend_interval_ = std::max<int32_t>(0, settings.resend_interval);
+    resend_interval_ = std::max<int32_t>(0, settings.resend_interval) * 0.001;
     resend_maxnumframes_ = std::max<int32_t>(1, settings.resend_maxnumframes);
     resend_packetsize_ = std::max<int32_t>(64, std::min<int32_t>(AOO_MAXPACKETSIZE, settings.resend_packetsize));
     bandwidth_ = std::max<double>(0, std::min<double>(1, settings.time_filter_bandwidth));
@@ -399,7 +399,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 if (!it->complete()){
                     // insert ack (if needed)
                     auto& ack = acklist.get(it->sequence);
-                    if (ack.check(elapsedtime_.get(), resend_interval_ * 0.001)){
+                    if (ack.check(elapsedtime_.get(), resend_interval_)){
                         for (int i = 0; i < it->num_frames(); ++i){
                             if (!it->has_frame(i)){
                                 if (numframes < resend_maxnumframes_){
@@ -424,7 +424,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                     for (int i = 0; i < missing; ++i){
                         // insert ack (if necessary)
                         auto& ack = acklist.get(next + i);
-                        if (ack.check(elapsedtime_.get(), resend_interval_ * 0.001)){
+                        if (ack.check(elapsedtime_.get(), resend_interval_)){
                             if (numframes + it->num_frames() <= resend_maxnumframes_){
                                 retransmit_list_.push_back(data_request { next + i, -1 }); // whole block
                                 numframes += it->num_frames();
