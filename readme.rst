@@ -43,23 +43,24 @@ OSC messages
 ------------
 * message to notify sinks about format changes:
 
- /AoO/<sink>/format [i]<src> [i]<salt> [i]<nchannels> [i]<samplerate> [i]<blocksize> [s]<codec> [b]<options>
+ /AoO/<sink>/format src(i) salt(i) nchannels(i) samplerate(i) blocksize(i) codec(s) options(b)
 
 * message to deliver audio data, large blocks are split across several frames:
 
- /AoO/<sink>/data [i]<src> [i]<salt> [i]<seq> [d]<sr> [i]<channel_onset> [i]<totalsize> [i]<nframes> [i]<frame> [b]<data>
+ /AoO/<sink>/data src(i) salt(i) seq(i) samplerate(d) channel_onset(i) totalsize(i) nframes(i) frame(i) data(b)
 
 * message from sink to source to request the format (e.g. the salt has changed):
 
- /AoO/<src>/request [i]<sink>
+ /AoO/<src>/request sink(i)
 
 * message from sink to source to request dropped packets; the arguments are pairs of sequence + frame (-1 = whole block):
 
- /AoO/<src>/resend [i]<sink> [i]<salt> [ [i]<seq> [i]<frame> ... ]
+ /AoO/<src>/resend sink(i) salt(i) [ seq(i) frame(i) ... ]
 
 * ping message from sink to source (usually sent once per second):
 
- /AoO/<src>/ping [i]<sink>
+ /AoO/<src>/ping sink(i)
+
 
 todo
 ----
