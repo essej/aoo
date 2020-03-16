@@ -345,6 +345,10 @@ bool aoo_source::send(){
         d.totalsize = encoder_->encode(audioqueue_.read_data(), audioqueue_.blocksize(),
                                         blobdata, blobmaxsize);
 
+        if (d.totalsize == 0){
+            return true; // ?
+        }
+
         auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
         auto dv = div(d.totalsize, maxpacketsize);
         d.nframes = dv.quot + (dv.rem != 0);
