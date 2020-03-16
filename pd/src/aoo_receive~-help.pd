@@ -1,16 +1,16 @@
-#N canvas 456 130 695 596 12;
+#N canvas 608 67 693 649 12;
 #X text 26 20 aoo_receive~: receive AOO audio streams;
-#X text 35 546 see also;
-#X obj 113 548 aoo_send~;
+#X text 35 597 see also;
+#X obj 104 596 aoo_send~;
 #X msg 38 99 listen \$1;
 #X obj 38 75 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
 -262144 -1 -1 0 256;
 #X msg 102 72 0;
 #X text 37 53 port;
 #X text 136 72 stop listening;
-#X obj 38 445 aoo_receive~ 1 2 9999;
-#X text 76 391 creation arguments:;
-#X text 74 415 1) ID \, 2) num channels \, 3) [port] \, 4) [bufsize]
+#X obj 38 496 aoo_receive~ 1 2 9999;
+#X text 76 442 creation arguments:;
+#X text 74 466 1) ID \, 2) num channels \, 3) [port] \, 4) [bufsize]
 ;
 #X msg 53 152 bufsize \$1;
 #X obj 53 128 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
@@ -19,14 +19,13 @@
 #X obj 62 185 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X text 168 205 time DLL filter bandwidth (default: 0.0001);
-#X obj 38 472 env~;
-#X floatatom 38 496 5 0 0 0 - - -;
-#X obj 109 473 env~;
-#X floatatom 109 497 5 0 0 0 - - -;
-#X obj 182 474 print;
-#X text 230 476 events:;
-#X text 278 520 state: 0 (stop) \, 1 (play);
-#X text 228 498 [source <IP address> <port> <ID> <state>(;
+#X obj 38 523 env~;
+#X floatatom 38 547 5 0 0 0 - - -;
+#X obj 109 524 env~;
+#X floatatom 109 548 5 0 0 0 - - -;
+#X obj 182 525 print;
+#X text 203 497 events:;
+#X text 376 550 state: 0 (stop) \, 1 (play);
 #X text 137 151 increase for jittery \, unreliable networks!;
 #X text 138 130 buffer size in ms (default: 20 ms);
 #X msg 80 335 resend 0;
@@ -42,6 +41,13 @@ at once;
 #X text 243 360 all arguments are optional or can be "auto", f 44
 ;
 #X text 150 336 turn off;
+#X msg 79 408 ping \$1;
+#X obj 79 387 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X text 145 408 set ping interval in ms (default: 1000) \, 0 = off
+;
+#X text 232 526 source state event: [source <host> <port> <ID> <state>(
+, f 57;
 #X connect 3 0 8 0;
 #X connect 4 0 3 0;
 #X connect 5 0 3 0;
@@ -54,6 +60,8 @@ at once;
 #X connect 14 0 13 0;
 #X connect 16 0 17 0;
 #X connect 18 0 19 0;
+#X connect 25 0 8 0;
 #X connect 26 0 8 0;
-#X connect 27 0 8 0;
-#X connect 29 0 8 0;
+#X connect 28 0 8 0;
+#X connect 36 0 8 0;
+#X connect 37 0 36 0;

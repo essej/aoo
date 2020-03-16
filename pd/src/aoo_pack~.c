@@ -31,6 +31,7 @@ typedef struct _aoo_pack
     t_float **x_vec;
     t_clock *x_clock;
     t_outlet *x_out;
+    t_outlet *x_eventout;
     int32_t x_sink_id;
     int32_t x_sink_chn;
 } t_aoo_pack;
@@ -38,6 +39,20 @@ typedef struct _aoo_pack
 static void aoo_pack_tick(t_aoo_pack *x)
 {
     aoo_source_send(x->x_aoo_source);
+    aoo_source_handleevents(x->x_aoo_source);
+}
+
+static void aoo_pack_handleevents(t_aoo_pack *x,
+                                  const aoo_event *events, int32_t n)
+{
+    for (int i = 0; i < n; ++i){
+        if (events[i].type == AOO_PING_EVENT){
+            const aoo_ping_event *e = &events[i].ping;
+            t_atom msg;
+            SETFLOAT(&msg, e->id);
+            outlet_anything(x->x_eventout, gensym("ping"), 1, &msg);
+        }
+    }
 }
 
 static void aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)
@@ -192,7 +207,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     x->x_aoo_source = aoo_source_new(src >= 0 ? src : 0);
     memset(&x->x_settings, 0, sizeof(aoo_source_settings));
     x->x_settings.userdata = x;
-    x->x_settings.eventhandler = 0;
+    x->x_settings.eventhandler = (aoo_eventhandler)aoo_pack_handleevents;
     x->x_settings.buffersize = AOO_SOURCE_DEFBUFSIZE;
     x->x_settings.packetsize = AOO_DEFPACKETSIZE;
     x->x_settings.time_filter_bandwidth = AOO_DLL_BW;
@@ -223,8 +238,9 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
         }
     }
     x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * nchannels);
-    // make message outlet
+    // make outlets
     x->x_out = outlet_new(&x->x_obj, 0);
+    x->x_eventout = outlet_new(&x->x_obj, 0);
 
     // default format
     aoo_format_storage fmt;

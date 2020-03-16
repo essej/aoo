@@ -23,6 +23,8 @@ struct source_desc {
     int32_t next = 0; // next outgoing block
     int32_t channel = 0; // recent channel onset
     double samplerate = 0; // recent samplerate
+    double lastpingtime_ = 0;
+
     block_queue blockqueue;
     block_ack_list ack_list;
     lfqueue<aoo_sample> audioqueue;
@@ -65,6 +67,7 @@ class aoo_sink final : public aoo::isink {
     float resend_interval_ = 0;
     int32_t resend_maxnumframes_ = 0;
     int32_t resend_packetsize_ = 0;
+    float ping_interval_ = 0;
     std::vector<aoo_sample> buffer_;
     aoo_processfn processfn_ = nullptr;
     aoo_eventhandler eventhandler_ = nullptr;
@@ -86,6 +89,8 @@ class aoo_sink final : public aoo::isink {
     void request_format(void * endpoint, aoo_replyfn fn, int32_t id);
 
     void request_data(aoo::source_desc& src);
+
+    void ping(aoo::source_desc& src);
 
     void handle_format_message(void *endpoint, aoo_replyfn fn,
                                int32_t id, int32_t salt, const aoo_format& f,

@@ -24,6 +24,7 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #define AOO_DATA_WILDCARD "/AoO/*/data"
 #define AOO_REQUEST "/request"
 #define AOO_RESEND "/resend"
+#define AOO_PING "/ping"
 
 #ifndef AOO_CLIP_OUTPUT
 #define AOO_CLIP_OUTPUT 0
@@ -53,6 +54,8 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #define AOO_RESEND_INTERVAL 10
 #define AOO_RESEND_MAXNUMFRAMES 64
 #define AOO_RESEND_PACKETSIZE 256
+
+#define AOO_PING_INTERVAL 1000
 
 void aoo_setup(void);
 void aoo_close(void);
@@ -88,7 +91,8 @@ typedef void (*aoo_replyfn)(
 // event types
 typedef enum aoo_event_type
 {
-    AOO_SOURCE_STATE_EVENT
+    AOO_SOURCE_STATE_EVENT,
+    AOO_PING_EVENT
 } aoo_event_type;
 
 // source state event
@@ -97,6 +101,13 @@ typedef enum aoo_source_state
     AOO_SOURCE_STOP,
     AOO_SOURCE_PLAY
 } aoo_source_state;
+
+typedef struct aoo_ping_event
+{
+    aoo_event_type type;
+    void *endpoint;
+    int32_t id;
+} aoo_ping_event;
 
 typedef struct aoo_source_state_event
 {
@@ -111,6 +122,7 @@ typedef union aoo_event
 {
     aoo_event_type type;
     aoo_source_state_event source_state;
+    aoo_ping_event ping;
 } aoo_event;
 
 typedef void (*aoo_eventhandler)(
@@ -204,6 +216,7 @@ typedef struct aoo_sink_settings
     int32_t blocksize;
     int32_t nchannels;
     int32_t buffersize;
+    int32_t ping_interval;
     int32_t resend_limit;
     int32_t resend_interval;
     int32_t resend_maxnumframes;
@@ -222,6 +235,8 @@ int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
                             void *src, aoo_replyfn fn);
 
 int32_t aoo_sink_process(aoo_sink *sink, uint64_t t);
+
+void aoo_sink_ping(aoo_sink *sink);
 
 int32_t aoo_sink_eventsavailable(aoo_sink *sink);
 

@@ -55,13 +55,13 @@ void aoo_sink::setup(aoo_sink_settings& settings){
     samplerate_ = settings.samplerate;
     blocksize_ = settings.blocksize;
     buffersize_ = std::max<int32_t>(0, settings.buffersize);
+    ping_interval_ = std::max<int32_t>(0, settings.ping_interval) * 0.001;
     resend_limit_ = std::max<int32_t>(0, settings.resend_limit);
     resend_interval_ = std::max<int32_t>(0, settings.resend_interval) * 0.001;
     resend_maxnumframes_ = std::max<int32_t>(1, settings.resend_maxnumframes);
     resend_packetsize_ = std::max<int32_t>(64, std::min<int32_t>(AOO_MAXPACKETSIZE, settings.resend_packetsize));
     bandwidth_ = std::max<double>(0, std::min<double>(1, settings.time_filter_bandwidth));
-    starttime_ = 0; // will update time DLL
-    elapsedtime_.reset();
+    starttime_ = 0; // will update time DLL and reset timer
 
     buffer_.resize(blocksize_ * nchannels_);
     for (auto& src : sources_){
@@ -467,6 +467,8 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
     #if LOGLEVEL >= 3
         std::cerr << acklist << std::endl;
     #endif
+        // ping source
+        ping(src);
     } else {
         // discard data and request format!
         request_format(endpoint, fn, id);
@@ -507,6 +509,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
         src.next = -1;
         src.channel = 0;
         src.samplerate = src.decoder->samplerate();
+        src.lastpingtime_ = 0;
         src.ack_list.setup(resend_limit_);
         src.ack_list.clear();
         LOG_VERBOSE("update source " << src.id << ": sr = " << src.decoder->samplerate()
@@ -565,6 +568,32 @@ void aoo_sink::request_data(aoo::source_desc& src){
     }
 }
 
+// AoO/<id>/ping <sink>
+
+void aoo_sink::ping(aoo::source_desc& src){
+    if (ping_interval_ == 0){
+        return;
+    }
+    auto now = elapsedtime_.get();
+    if ((now - src.lastpingtime_) > ping_interval_){
+        char buffer[AOO_MAXPACKETSIZE];
+        osc::OutboundPacketStream msg(buffer, sizeof(buffer));
+
+        // make OSC address pattern
+        const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_PING);
+        char address[max_addr_size];
+        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, src.id, AOO_PING);
+
+        msg << osc::BeginMessage(address) << id_ << osc::EndMessage;
+
+        src.send(msg.Data(), msg.Size());
+
+        src.lastpingtime_ = now;
+
+        LOG_VERBOSE("send ping");
+    }
+}
+
 #if AOO_DEBUG_RESAMPLING
 thread_local int32_t debug_counter = 0;
 #endif
@@ -589,6 +618,7 @@ int32_t aoo_sink::process(uint64_t t){
         starttime_ = tt.to_double();
         LOG_VERBOSE("setup time DLL for sink");
         dll_.setup(samplerate_, blocksize_, bandwidth_, 0);
+        elapsedtime_.reset();
     } else {
         auto elapsed = tt.to_double() - starttime_;
         dll_.update(elapsed);

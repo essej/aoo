@@ -81,5 +81,8 @@ class aoo_source final : public aoo::isource {
 
     void handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt,
                         int32_t count, osc::ReceivedMessageArgumentIterator it);
+
+    void handle_ping(void *endpoint, aoo_replyfn fn, int32_t id);
+
     int32_t make_salt();
 };

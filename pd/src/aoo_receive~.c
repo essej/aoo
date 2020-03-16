@@ -360,6 +360,16 @@ static void aoo_receive_timefilter(t_aoo_receive *x, t_floatarg f)
     }
 }
 
+static void aoo_receive_ping(t_aoo_receive *x, t_floatarg f)
+{
+    x->x_settings.ping_interval = f > 0 ? f : 0;
+    if (x->x_settings.blocksize){
+        pthread_mutex_lock(&x->x_mutex);
+        aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
+        pthread_mutex_unlock(&x->x_mutex);
+    }
+}
+
 int aoo_parseresend(void *x, aoo_sink_settings *s, int argc, t_atom *argv);
 
 static void aoo_receive_resend(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
@@ -488,6 +498,7 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
     x->x_settings.userdata = x;
     x->x_settings.eventhandler = (aoo_eventhandler)aoo_receive_handleevents;
     x->x_settings.processfn = (aoo_processfn)aoo_receive_process;
+    x->x_settings.ping_interval = AOO_PING_INTERVAL;
     x->x_settings.resend_limit = AOO_RESEND_LIMIT;
     x->x_settings.resend_interval = AOO_RESEND_INTERVAL;
     x->x_settings.resend_maxnumframes = AOO_RESEND_MAXNUMFRAMES;
@@ -553,6 +564,8 @@ void aoo_receive_tilde_setup(void)
                     gensym("timefilter"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_resend,
                     gensym("resend"), A_GIMME, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_ping,
+                    gensym("ping"), A_FLOAT, A_NULL);
 
     aoo_setup();
 }

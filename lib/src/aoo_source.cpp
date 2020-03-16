@@ -272,6 +272,14 @@ void aoo_source::handle_message(const char *data, int32_t n, void *endpoint, aoo
         } else {
             LOG_ERROR("bad number of arguments for /resend message");
         }
+    } else if (!strcmp(msg.AddressPattern() + onset, AOO_PING)){
+        try {
+            auto it = msg.ArgumentsBegin();
+            auto id = it->AsInt32();
+            handle_ping(endpoint, fn, id);
+        } catch (const osc::Exception& e){
+            LOG_ERROR(e.what());
+        }
     } else {
         LOG_WARNING("unknown message '" << (msg.AddressPattern() + onset) << "'");
     }
@@ -333,6 +341,23 @@ void aoo_source::handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32
         }
     }
 }
+
+void aoo_source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id){
+    auto sink = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
+        return (s.endpoint == endpoint) && (s.id == id);
+    });
+    if (sink != sinks_.end()){
+        // push ping event
+        aoo_event event;
+        event.type = AOO_PING_EVENT;
+        event.ping.endpoint = endpoint;
+        event.ping.id = id;
+        eventqueue_.write(event);
+    } else {
+        LOG_WARNING("received ping from unknown sink!");
+    }
+}
+
 int32_t aoo_source_send(aoo_source *src) {
     return src->send();
 }

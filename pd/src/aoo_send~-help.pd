@@ -1,4 +1,4 @@
-#N canvas 175 128 599 650 12;
+#N canvas 228 40 599 681 12;
 #X obj 29 532 aoo_send~ 1 2;
 #X msg 37 98 disconnect;
 #X msg 29 68 connect localhost 9999;
@@ -6,7 +6,7 @@
 #X text 131 531 creation arguments:;
 #X msg 48 144 set \$1;
 #X obj 48 124 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
-10 -262144 -1 -1 0 256;
+10 -262144 -1 -1 1 256;
 #X text 104 143 set sink ID;
 #X msg 55 173 clear;
 #X text 103 172 clear sink ID (stop sending);
@@ -168,8 +168,8 @@
 #X msg 74 317 timefilter \$1;
 #X text 178 318 time DLL filter bandwidth (default: 0.0001);
 #X text 29 31 aoo_send~: send an AOO audio stream;
-#X text 27 581 see also;
-#X obj 102 582 aoo_receive~;
+#X text 28 635 see also;
+#X obj 103 636 aoo_receive~;
 #X obj 60 473 osc~ 440;
 #X obj 128 472 osc~ 220;
 #X text 131 553 1) ID \, 2) num channels \, 3) [sink ID] \, 4) [sink
@@ -181,6 +181,12 @@ channel onset], f 62;
 10 -262144 -1 -1 0 256;
 #X text 158 365 buffersize (ms) for resending lost packets (default:
 1000);
+#X text 42 558 events:;
+#X text 115 582 ping event: [ping <host> <port> <id>(;
+#X obj 29 582 route ping;
+#X obj 29 607 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
+-1;
+#X connect 0 0 35 0;
 #X connect 1 0 0 0;
 #X connect 2 0 0 0;
 #X connect 5 0 0 0;
@@ -200,3 +206,4 @@ channel onset], f 62;
 #X connect 29 0 0 1;
 #X connect 30 0 0 0;
 #X connect 31 0 30 0;
+#X connect 35 0 36 0;

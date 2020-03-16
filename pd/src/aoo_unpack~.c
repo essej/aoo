@@ -67,6 +67,14 @@ static void aoo_unpack_timefilter(t_aoo_unpack *x, t_floatarg f)
     }
 }
 
+static void aoo_unpack_ping(t_aoo_unpack *x, t_floatarg f)
+{
+    x->x_settings.ping_interval = f > 0 ? f : 0;
+    if (x->x_settings.blocksize){
+        aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
+    }
+}
+
 int aoo_parseresend(void *x, aoo_sink_settings *s, int argc, t_atom *argv);
 
 static void aoo_unpack_resend(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)
@@ -151,6 +159,7 @@ static void * aoo_unpack_new(t_symbol *s, int argc, t_atom *argv)
     x->x_settings.userdata = x;
     x->x_settings.eventhandler = (aoo_eventhandler)aoo_unpack_handleevents;
     x->x_settings.processfn = (aoo_processfn)aoo_unpack_process;
+    x->x_settings.ping_interval = AOO_PING_INTERVAL;
     x->x_settings.resend_limit = AOO_RESEND_LIMIT;
     x->x_settings.resend_interval = AOO_RESEND_INTERVAL;
     x->x_settings.resend_maxnumframes = AOO_RESEND_MAXNUMFRAMES;
@@ -203,6 +212,8 @@ void aoo_unpack_tilde_setup(void)
                     gensym("timefilter"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_resend,
                     gensym("resend"), A_GIMME, A_NULL);
+    class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_ping,
+                    gensym("ping"), A_FLOAT, A_NULL);
 
     aoo_setup();
 }

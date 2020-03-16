@@ -15,6 +15,8 @@ typedef int socklen_t;
 #include <sys/select.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #endif
 
 #define classname(x) class_getname(*(t_pd *)x)
@@ -62,6 +64,9 @@ typedef struct _aoo_send
     t_float **x_vec;
     int32_t x_sink_id;
     int32_t x_sink_chn;
+    // events
+    t_clock *x_clock;
+    t_outlet *x_eventout;
     // socket
     int x_socket;
     struct sockaddr_in x_addr;
@@ -72,6 +77,37 @@ typedef struct _aoo_send
 } t_aoo_send;
 
 int aoo_parseformat(void *x, aoo_format_storage *f, int argc, t_atom *argv);
+
+static void aoo_send_handleevents(t_aoo_send *x,
+                                  const aoo_event *events, int32_t n)
+{
+    for (int i = 0; i < n; ++i){
+        if (events[i].type == AOO_PING_EVENT){
+            const aoo_ping_event *e = &events[i].ping;
+            if (e->endpoint == x){
+                t_atom msg[3];
+                const char *host = inet_ntoa(x->x_addr.sin_addr);
+                int port = ntohs(x->x_addr.sin_port);
+                if (!host){
+                    fprintf(stderr, "inet_ntoa failed!\n");
+                    continue;
+                }
+                SETSYMBOL(&msg[0], gensym(host));
+                SETFLOAT(&msg[1], port);
+                SETFLOAT(&msg[2], e->id);
+                outlet_anything(x->x_eventout, gensym("ping"), 3, msg);
+            } else {
+                pd_error(x, "%s: received ping from unknown sink!",
+                         classname(x));
+            }
+        }
+    }
+}
+
+static void aoo_send_tick(t_aoo_send *x)
+{
+    aoo_source_handleevents(x->x_aoo_source);
+}
 
 static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
@@ -223,7 +259,11 @@ static t_int * aoo_send_perform(t_int *w)
         if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n, t)){
             pthread_cond_signal(&x->x_cond);
         }
+        if (aoo_source_eventsavailable(x->x_aoo_source)){
+            clock_set(x->x_clock, 0);
+        }
     }
+
     return w + 3;
 }
 
@@ -289,6 +329,8 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 {
     t_aoo_send *x = (t_aoo_send *)pd_new(aoo_send_class);
 
+    x->x_clock = clock_new(x, (t_method)aoo_send_tick);
+
     memset(&x->x_addr, 0, sizeof(x->x_addr));
     x->x_socket = socket(AF_INET, SOCK_DGRAM, 0);
     if (x->x_socket >= 0){
@@ -307,7 +349,7 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     x->x_aoo_source = aoo_source_new(src >= 0 ? src : 0);
     memset(&x->x_settings, 0, sizeof(aoo_source_settings));
     x->x_settings.userdata = x;
-    x->x_settings.eventhandler = 0;
+    x->x_settings.eventhandler = (aoo_eventhandler)aoo_send_handleevents;
     x->x_settings.buffersize = AOO_SOURCE_DEFBUFSIZE;
     x->x_settings.packetsize = AOO_DEFPACKETSIZE;
     x->x_settings.time_filter_bandwidth = AOO_DLL_BW;
@@ -339,6 +381,9 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     }
     x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * nchannels);
 
+    // make event outlet
+    x->x_eventout = outlet_new(&x->x_obj, 0);
+
     // default format
     aoo_format_storage fmt;
     aoo_defaultformat(&fmt, nchannels);
@@ -361,6 +406,8 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_send_free(t_aoo_send *x)
 {
+    clock_free(x->x_clock);
+
     pthread_mutex_lock(&x->x_mutex);
     socket_close(x->x_socket);
     x->x_socket = -1;

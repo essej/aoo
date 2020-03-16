@@ -42,20 +42,29 @@ Pd externals
 OSC messages
 ------------
 * message to notify sinks about format changes:
-  /AoO/<sink>/format [i]<src> [i]<salt> [i]<nchannels> [i]<samplerate> [i]<blocksize> [s]<codec> [b]<options>
+
+ /AoO/<sink>/format [i]<src> [i]<salt> [i]<nchannels> [i]<samplerate> [i]<blocksize> [s]<codec> [b]<options>
+
 * message to deliver audio data, large blocks are split across several frames:
-  /AoO/<sink>/data [i]<src> [i]<salt> [i]<seq> [d]<sr> [i]<channel_onset> [i]<totalsize> [i]<nframes> [i]<frame> [b]<data>
-* message from sink to source to request the format (e.g. the salt has changed)
-  /AoO/<src>/request [i]<sink>
-* message from sink to source to request dropped packets.
-  The arguments are pairs of sequence + frame (-1 = whole block)
-  /AoO/<src>/resend [i]<sink> [i]<salt> [ [i]<seq> [i]<frame> ... ]
+
+ /AoO/<sink>/data [i]<src> [i]<salt> [i]<seq> [d]<sr> [i]<channel_onset> [i]<totalsize> [i]<nframes> [i]<frame> [b]<data>
+
+* message from sink to source to request the format (e.g. the salt has changed):
+
+ /AoO/<src>/request [i]<sink>
+
+* message from sink to source to request dropped packets; the arguments are pairs of sequence + frame (-1 = whole block):
+
+ /AoO/<src>/resend [i]<sink> [i]<salt> [ [i]<seq> [i]<frame> ... ]
+
+* ping message from sink to source (usually sent once per second):
+
+ /AoO/<src>/ping [i]<sink>
 
 todo
 ----
 
-* multichannel opus codec
-* fade in/fade out
+* fade in/fade out ?
 * unit tests!
 
 download
@@ -63,7 +72,7 @@ download
 
 main git repository at git.iem.at:
 
- git clone https://git.iem.at/cm/aoo
+git clone https://git.iem.at/cm/aoo
 
 content
 -------
@@ -71,6 +80,7 @@ content
 docu -- documentation, papers
  
 pd -- Pd library for OSC, first implementation for experiments
+
 lib -- C++ library with a C interface, create and manage AoO sources/sinks
  
 Changelog
