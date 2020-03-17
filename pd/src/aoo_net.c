@@ -151,7 +151,8 @@ int endpoint_getaddress(const t_endpoint *e, t_atom *hostname, t_atom *port)
     return 1;
 }
 
-int endpoint_match(const t_endpoint *e, const struct sockaddr_storage *sa, socklen_t len)
+int endpoint_match(const t_endpoint *e, const struct sockaddr *sa)
 {
-    return (len == e->addrlen) && !memcmp(&e->addr, sa, len);
+    return (sa->sa_family == ((const struct sockaddr *)&e->addr)->sa_family)
+            && !memcmp(sa, &e->addr, e->addrlen);
 }

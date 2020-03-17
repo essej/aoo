@@ -71,7 +71,7 @@ static void* socket_listener_threadfn(void *y)
             // try to find client
             t_endpoint *client = 0;
             for (t_endpoint *c = x->clients; c; c = c->next){
-                if (endpoint_match(c, &sa, len)){
+                if (endpoint_match(c, (const struct sockaddr *)&sa)){
                     client = c;
                     break;
                 }
