@@ -261,7 +261,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             LOG_VERBOSE("skipped " << (d.sequence - src.newest - 1) << " blocks");
         }
 
-        if ((d.sequence - src.newest) > queue.capacity()){
+        if (src.newest > 0 && (d.sequence - src.newest) > queue.capacity()){
             // too large gap between incoming block and most recent block.
             // either network problem or stream has temporarily stopped.
 
