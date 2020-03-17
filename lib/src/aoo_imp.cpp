@@ -111,6 +111,64 @@ uint64_t aoo_osctime_addseconds(uint64_t t, double s){
 
 namespace aoo {
 
+/*////////////////////////// codec /////////////////////////////*/
+
+bool encoder::set_format(aoo_format& fmt){
+    auto result = codec_->encoder_setformat(obj_, &fmt);
+    if (result > 0){
+        // assign after validation!
+        nchannels_ = fmt.nchannels;
+        samplerate_ = fmt.samplerate;
+        blocksize_ = fmt.blocksize;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool decoder::set_format(aoo_format& fmt){
+    auto result = codec_->decoder_setformat(obj_, &fmt);
+    if (result > 0){
+        // assign after validation!
+        nchannels_ = fmt.nchannels;
+        samplerate_ = fmt.samplerate;
+        blocksize_ = fmt.blocksize;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+int32_t decoder::read_format(int32_t nchannels, int32_t samplerate, int32_t blocksize,
+             const char *opt, int32_t size){
+    auto result = codec_->decoder_readformat(obj_, nchannels, samplerate,
+                                blocksize, opt, size);
+    if (result >= 0){
+        nchannels_ = nchannels;
+        samplerate_ = samplerate;
+        blocksize_ = blocksize;
+    }
+    return result;
+}
+
+std::unique_ptr<encoder> codec::create_encoder() const {
+    auto obj = codec_->encoder_new();
+    if (obj){
+        return std::make_unique<encoder>(codec_, obj);
+    } else {
+        return nullptr;
+    }
+}
+std::unique_ptr<decoder> codec::create_decoder() const {
+    auto obj = codec_->decoder_new();
+    if (obj){
+        return std::make_unique<decoder>(codec_, obj);
+    } else {
+        return nullptr;
+    }
+}
+
+
 /*////////////////////////// spinlock //////////////////////////*/
 
 void spinlock::lock(){

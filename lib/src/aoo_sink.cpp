@@ -171,7 +171,7 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
                 return;
             }
         }
-        src.decoder->read(f.nchannels, f.samplerate, f.blocksize, settings, size);
+        src.decoder->read_format(f.nchannels, f.samplerate, f.blocksize, settings, size);
 
         update_source(src);
 
@@ -495,7 +495,6 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
 void aoo_sink::update_source(aoo::source_desc &src){
     // resize audio ring buffer
     if (src.decoder && src.decoder->blocksize() > 0 && src.decoder->samplerate() > 0){
-        LOG_DEBUG("update source");
         // recalculate buffersize from ms to samples
         double bufsize = (double)buffersize_ * src.decoder->samplerate() * 0.001;
         auto d = div(bufsize, src.decoder->blocksize());
@@ -506,7 +505,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
         src.audioqueue.resize(nbuffers * nsamples, nsamples);
         src.infoqueue.resize(nbuffers, 1);
         while (src.audioqueue.write_available() && src.infoqueue.write_available()){
-            LOG_VERBOSE("write silent block");
+            LOG_DEBUG("write silent block");
             src.audioqueue.write_commit();
             // push nominal samplerate + default channel (0)
             aoo::source_desc::info i;
@@ -529,7 +528,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
         src.laststate = AOO_SOURCE_STATE_STOP;
         src.ack_list.setup(resend_limit_);
         src.ack_list.clear();
-        LOG_VERBOSE("update source " << src.id << ": sr = " << src.decoder->samplerate()
+        LOG_DEBUG("update source " << src.id << ": sr = " << src.decoder->samplerate()
                     << ", blocksize = " << src.decoder->blocksize() << ", nchannels = "
                     << src.decoder->nchannels() << ", bufsize = " << nbuffers * nsamples);
     }

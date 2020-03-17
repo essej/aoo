@@ -28,7 +28,7 @@ AOO = ../../lib/src
 cflags = -I$(AOO) \
     -I$(AOO)/lib \
     -Wno-unused -Wno-unused-parameter \
-    -DLOGLEVEL=1 \
+    -DLOGLEVEL=2 \
     -DAOO_PD_OSCTIMEHACK=0 \
     -DAOO_DLL_BW=0.0001 \
     -DAOO_DEBUG_DLL=0 \

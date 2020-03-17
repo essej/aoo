@@ -62,7 +62,7 @@ void aoo_source::set_format(aoo_format &f){
             return;
         }
     }
-    encoder_->setup(f);
+    encoder_->set_format(f);
 
     sequence_ = 0;
     update();
@@ -580,7 +580,8 @@ void aoo_source::send_format(sink_desc &sink){
 
         auto settings = (char *)alloca(AOO_CODEC_MAXSETTINGSIZE);
         int32_t nchannels, samplerate, blocksize;
-        auto setsize = encoder_->write(nchannels, samplerate, blocksize, settings, AOO_CODEC_MAXSETTINGSIZE);
+        auto setsize = encoder_->write_format(nchannels, samplerate, blocksize,
+                                              settings, AOO_CODEC_MAXSETTINGSIZE);
 
         msg << id_ << salt_ << nchannels << samplerate << blocksize
             << encoder_->name() << osc::Blob(settings, setsize) << osc::EndMessage;

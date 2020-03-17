@@ -271,7 +271,9 @@ typedef void* (*aoo_codec_new)(void);
 
 typedef void (*aoo_codec_free)(void *);
 
-typedef void (*aoo_codec_setup)(void *, aoo_format *);
+typedef int32_t (*aoo_codec_setformat)(void *, aoo_format *);
+
+typedef int32_t (*aoo_codec_getformat)(void *, aoo_format_storage *);
 
 typedef int32_t (*aoo_codec_writeformat)(
         void *,         // the encoder instance
@@ -314,14 +316,17 @@ typedef struct aoo_codec
     // encoder
     aoo_codec_new encoder_new;
     aoo_codec_free encoder_free;
-    aoo_codec_setup encoder_setup;
+    aoo_codec_setformat encoder_setformat;
+    aoo_codec_getformat encoder_getformat;
+    aoo_codec_writeformat encoder_writeformat;
     aoo_codec_encode encoder_encode;
-    aoo_codec_writeformat encoder_write;
     // decoder
     aoo_codec_new decoder_new;
     aoo_codec_free decoder_free;
+    aoo_codec_setformat decoder_setformat;
+    aoo_codec_getformat decoder_getformat;
+    aoo_codec_readformat decoder_readformat;
     aoo_codec_decode decoder_decode;
-    aoo_codec_readformat decoder_read;
 } aoo_codec;
 
 typedef void (*aoo_codec_registerfn)(const char *, const aoo_codec *);
