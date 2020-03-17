@@ -77,9 +77,6 @@ public:
 
     virtual int32_t handle_events() = 0;
 
-    virtual void invite(void *endpoint, aoo_replyfn,
-                        int32_t id, int32_t chn) = 0;
-
     class deleter {
     public:
         void operator()(isink *x){
