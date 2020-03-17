@@ -13,8 +13,6 @@ extern "C"
 
 typedef AOO_SAMPLETYPE aoo_sample;
 
-#define AOO_MAXPACKETSIZE 4096 // ?
-#define AOO_DEFPACKETSIZE 512 // ?
 #define AOO_DOMAIN "/AoO"
 #define AOO_FORMAT "/format"
 #define AOO_FORMAT_NARGS 7
@@ -25,6 +23,9 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #define AOO_REQUEST "/request"
 #define AOO_RESEND "/resend"
 #define AOO_PING "/ping"
+#define AOO_INVITE "/invite"
+
+#define AOO_MAXPACKETSIZE 4096 // ?
 
 #ifndef AOO_CLIP_OUTPUT
 #define AOO_CLIP_OUTPUT 0
@@ -35,12 +36,6 @@ typedef AOO_SAMPLETYPE aoo_sample;
  #define LOGLEVEL 2
 #endif
 
-// time DLL:
-// default bandwidth
-#ifndef AOO_DLL_BW
- #define AOO_DLL_BW 0.012
-#endif
-
 #ifndef AOO_DEBUG_DLL
  #define AOO_DEBUG_DLL 0
 #endif
@@ -49,13 +44,47 @@ typedef AOO_SAMPLETYPE aoo_sample;
  #define AOO_DEBUG_RESAMPLING 0
 #endif
 
-#define AOO_RESEND_BUFSIZE 1000
-#define AOO_RESEND_LIMIT 5
-#define AOO_RESEND_INTERVAL 10
-#define AOO_RESEND_MAXNUMFRAMES 64
-#define AOO_RESEND_PACKETSIZE 256
+// default values
 
-#define AOO_PING_INTERVAL 1000
+#ifndef AOO_PACKETSIZE
+ #define AOO_PACKETSIZE 512
+#endif
+
+#ifndef AOO_SOURCE_BUFSIZE
+ #define AOO_SOURCE_BUFSIZE 10
+#endif
+
+#ifndef AOO_SINK_BUFSIZE
+ #define AOO_SINK_BUFSIZE 100
+#endif
+
+#ifndef AOO_RESEND_BUFSIZE
+ #define AOO_RESEND_BUFSIZE 1000
+#endif
+
+#ifndef AOO_TIMEFILTER_BANDWIDTH
+ #define AOO_TIMEFILTER_BANDWIDTH 0.012
+#endif
+
+#ifndef AOO_PING_INTERVAL
+ #define AOO_PING_INTERVAL 1000
+#endif
+
+#ifndef AOO_RESEND_LIMIT
+ #define AOO_RESEND_LIMIT 5
+#endif
+
+#ifndef AOO_RESEND_INTERVAL
+ #define AOO_RESEND_INTERVAL 10
+#endif
+
+#ifndef AOO_RESEND_MAXNUMFRAMES
+ #define AOO_RESEND_MAXNUMFRAMES 64
+#endif
+
+#ifndef AOO_RESEND_PACKETSIZE
+ #define AOO_RESEND_PACKETSIZE 256
+#endif
 
 void aoo_setup(void);
 
@@ -152,9 +181,26 @@ typedef void (*aoo_eventhandler)(
     int32_t             // number of events
 );
 
-/*//////////////////// AoO source /////////////////////*/
+/*//////////////////// AoO options ////////////////////*/
 
-#define AOO_SOURCE_DEFBUFSIZE 10
+typedef enum aoo_option
+{
+    aoo_opt_format = 0,             // aoo_format
+    aoo_opt_buffersize,             // int32_t
+    aoo_opt_timefilter_bandwidth,      // float
+    aoo_opt_channelonset,           // int32_t
+    aoo_opt_packetsize,             // int32_t
+    aoo_opt_ping_interval,          // int32_t
+    aoo_opt_resend_buffersize,      // int32_t
+    aoo_opt_resend_limit,           // int32_t
+    aoo_opt_resend_interval,        // int32_t
+    aoo_opt_resend_maxnumframes,    // int32_t
+    aoo_opt_resend_packetsize       // int32_t
+} aoo_option;
+
+#define AOO_ARG(x) &x, sizeof(x)
+
+/*//////////////////// AoO source /////////////////////*/
 
 typedef struct aoo_source aoo_source;
 
@@ -179,35 +225,25 @@ typedef struct aoo_source_settings
     int32_t samplerate;
     int32_t blocksize;
     int32_t nchannels;
-    int32_t buffersize;
-    int32_t packetsize;
-    int32_t resend_buffersize;
-    double time_filter_bandwidth;
 } aoo_source_settings;
 
 aoo_source * aoo_source_new(int32_t id);
 
 void aoo_source_free(aoo_source *src);
 
-void aoo_source_setup(aoo_source *src, aoo_source_settings *settings);
-
-void aoo_source_setformat(aoo_source *src, aoo_format *f);
-
-int32_t aoo_source_getformat(aoo_source *src, aoo_format_storage *f);
+int32_t aoo_source_setup(aoo_source *src, const aoo_source_settings *settings);
 
 // will send /AoO/<id>/start message
-void aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn);
+int32_t aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn);
 
 // will send /AoO/<id>/stop message
-void aoo_source_removesink(aoo_source *src, void *sink, int32_t id);
+int32_t aoo_source_removesink(aoo_source *src, void *sink, int32_t id);
 
 // stop all sinks
 void aoo_source_removeall(aoo_source *src);
 
-void aoo_source_setsinkchannel(aoo_source *src, void *sink, int32_t id, int32_t chn);
-
 // e.g. /request
-void aoo_source_handlemessage(aoo_source *src, const char *data, int32_t n,
+int32_t aoo_source_handlemessage(aoo_source *src, const char *data, int32_t n,
                               void *sink, aoo_replyfn fn);
 
 int32_t aoo_source_send(aoo_source *src);
@@ -218,9 +254,17 @@ int32_t aoo_source_eventsavailable(aoo_source *src);
 
 int32_t aoo_source_handleevents(aoo_source *src);
 
-/*//////////////////// AoO sink /////////////////////*/
+int32_t aoo_source_setoption(aoo_source *src, int32_t opt, void *p, int32_t size);
 
-#define AOO_SINK_DEFBUFSIZE 10
+int32_t aoo_source_getoption(aoo_source *src, int32_t opt, void *p, int32_t size);
+
+int32_t aoo_source_setsinkoption(aoo_source *src, void *endpoint, int32_t id,
+                              int32_t opt, void *p, int32_t size);
+
+int32_t aoo_source_getsinkoption(aoo_source *src, void *endpoint, int32_t id,
+                              int32_t opt, void *p, int32_t size);
+
+/*//////////////////// AoO sink /////////////////////*/
 
 typedef struct aoo_sink aoo_sink;
 
@@ -238,20 +282,13 @@ typedef struct aoo_sink_settings
     int32_t samplerate;
     int32_t blocksize;
     int32_t nchannels;
-    int32_t buffersize;
-    int32_t ping_interval;
-    int32_t resend_limit;
-    int32_t resend_interval;
-    int32_t resend_maxnumframes;
-    int32_t resend_packetsize;
-    double time_filter_bandwidth;
 } aoo_sink_settings;
 
 aoo_sink * aoo_sink_new(int32_t id);
 
 void aoo_sink_free(aoo_sink *sink);
 
-void aoo_sink_setup(aoo_sink *sink, aoo_sink_settings *settings);
+int32_t aoo_sink_setup(aoo_sink *sink, const aoo_sink_settings *settings);
 
 // Might reply with /AoO/<id>/request
 int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
@@ -259,14 +296,20 @@ int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
 
 int32_t aoo_sink_process(aoo_sink *sink, uint64_t t);
 
-void aoo_sink_ping(aoo_sink *sink);
-
-int32_t aoo_sink_getsourceformat(aoo_sink *sink, void *endpoint,
-                                 int32_t id, aoo_format_storage *f);
 
 int32_t aoo_sink_eventsavailable(aoo_sink *sink);
 
 int32_t aoo_sink_handleevents(aoo_sink *sink);
+
+int32_t aoo_sink_setoption(aoo_sink *sink, int32_t opt, void *p, int32_t size);
+
+int32_t aoo_sink_getoption(aoo_sink *sink, int32_t opt, void *p, int32_t size);
+
+int32_t aoo_sink_setsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
+                              int32_t opt, void *p, int32_t size);
+
+int32_t aoo_sink_getsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
+                              int32_t opt, void *p, int32_t size);
 
 /*//////////////////// Codec //////////////////////////*/
 

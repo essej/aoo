@@ -56,7 +56,7 @@ uint64_t aoo_pd_osctime(int n, t_float sr)
     return t;
 }
 
-static int aoo_getarg(const char *name, void *x, int which, int argc, t_atom *argv, t_float *f, t_float def)
+static int aoo_getarg(const char *name, void *x, int which, int argc, const t_atom *argv, t_float *f, t_float def)
 {
     if (argc > which){
         if (argv[which].a_type == A_SYMBOL){
@@ -76,26 +76,29 @@ static int aoo_getarg(const char *name, void *x, int which, int argc, t_atom *ar
     return 1;
 }
 
-int aoo_parseresend(void *x, aoo_sink_settings *s, int argc, t_atom *argv)
+int aoo_parseresend(void *x, int argc, const t_atom *argv,
+                    int32_t *limit, int32_t *interval,
+                    int32_t *maxnumframes,
+                    int32_t *packetsize)
 {
     t_float f;
     if (aoo_getarg("limit", x, 0, argc, argv, &f, AOO_RESEND_LIMIT)){
-        s->resend_limit = f;
+        *limit = f;
     } else {
         return 0;
     }
     if (aoo_getarg("interval", x, 1, argc, argv, &f, AOO_RESEND_INTERVAL)){
-        s->resend_interval = f;
+        *interval = f;
     } else {
         return 0;
     }
     if (aoo_getarg("maxnumframes", x, 2, argc, argv, &f, AOO_RESEND_MAXNUMFRAMES)){
-        s->resend_maxnumframes = f;
+        *maxnumframes = f;
     } else {
         return 0;
     }
     if (aoo_getarg("packetsize", x, 3, argc, argv, &f, AOO_RESEND_PACKETSIZE)){
-        s->resend_limit = f;
+        *packetsize = f;
     } else {
         return 0;
     }

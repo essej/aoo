@@ -41,52 +41,211 @@ void aoo_sink_free(aoo_sink *sink) {
     delete sink;
 }
 
-void aoo_sink_setup(aoo_sink *sink, aoo_sink_settings *settings) {
+int32_t aoo_sink_setup(aoo_sink *sink, const aoo_sink_settings *settings) {
     if (settings){
-        sink->setup(*settings);
+        return sink->setup(*settings);
     }
+    return 0;
 }
 
-void aoo_sink::setup(aoo_sink_settings& settings){
+int32_t aoo_sink::setup(const aoo_sink_settings& settings){
     processfn_ = settings.processfn;
     eventhandler_ = settings.eventhandler;
     user_ = settings.userdata;
-    nchannels_ = settings.nchannels;
-    samplerate_ = settings.samplerate;
-    blocksize_ = settings.blocksize;
-    buffersize_ = std::max<int32_t>(0, settings.buffersize);
-    ping_interval_ = std::max<int32_t>(0, settings.ping_interval) * 0.001;
-    resend_limit_ = std::max<int32_t>(0, settings.resend_limit);
-    resend_interval_ = std::max<int32_t>(0, settings.resend_interval) * 0.001;
-    resend_maxnumframes_ = std::max<int32_t>(1, settings.resend_maxnumframes);
-    resend_packetsize_ = std::max<int32_t>(64, std::min<int32_t>(AOO_MAXPACKETSIZE, settings.resend_packetsize));
-    bandwidth_ = std::max<double>(0, std::min<double>(1, settings.time_filter_bandwidth));
-    starttime_ = 0; // will update time DLL and reset timer
+    if (settings.nchannels > 0
+            && settings.samplerate > 0
+            && settings.blocksize > 0)
+    {
+        // only update if at least one value has changed
+        if (settings.nchannels != nchannels_
+                || settings.samplerate != samplerate_
+                || settings.blocksize != blocksize_)
+        {
+            nchannels_ = settings.nchannels;
+            samplerate_ = settings.samplerate;
+            blocksize_ = settings.blocksize;
 
-    buffer_.resize(blocksize_ * nchannels_);
-    for (auto& src : sources_){
-        // don't need to lock
-        update_source(src);
-    }
-}
-
-int32_t aoo_sink_getsourceformat(aoo_sink *sink, void *endpoint,
-                                 int32_t id, aoo_format_storage *f)
-{
-    return sink->get_source_format(endpoint, id, *f);
-}
-
-bool aoo_sink::get_source_format(void *endpoint, int32_t id,aoo_format_storage &f)
-{
-    for (auto& src : sources_){
-        if ((src.endpoint == endpoint) && (src.id == id)){
-            if (src.decoder){
-                return src.decoder->get_format(f);
-            }
-            return false;
+            buffer_.resize(blocksize_ * nchannels_);
+            // don't need to lock
+            update_sources();
         }
+
+        return 1;
     }
-    return false;
+    return 0;
+}
+
+template<typename T>
+T& as(void *p){
+    return *reinterpret_cast<T *>(p);
+}
+
+#define CHECKARG(type) assert(size == sizeof(type))
+
+int32_t aoo_sink_setoption(aoo_sink *sink, int32_t opt, void *p, int32_t size)
+{
+    return sink->set_option(opt, p, size);
+}
+
+int32_t aoo_sink::set_option(int32_t opt, void *ptr, int32_t size)
+{
+    switch (opt){
+    // buffer size
+    case aoo_opt_buffersize:
+    {
+        CHECKARG(int32_t);
+        auto bufsize = std::max<int32_t>(0, as<int32_t>(ptr));
+        if (bufsize != buffersize_){
+            buffersize_ = bufsize;
+            // we don't need to lock (the user might!)
+            update_sources();
+        }
+        break;
+    }
+    // ping interval
+    case aoo_opt_ping_interval:
+        CHECKARG(int32_t);
+        ping_interval_ = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
+        break;
+    // timefilter bandwidth
+    case aoo_opt_timefilter_bandwidth:
+        CHECKARG(float);
+        bandwidth_ = std::max<double>(0, std::min<double>(1, as<float>(ptr)));
+        starttime_ = 0; // will update time DLL and reset timer
+        break;
+    // resend limit
+    case aoo_opt_resend_limit:
+        CHECKARG(int32_t);
+        resend_limit_ = std::max<int32_t>(0, as<int32_t>(ptr));
+        break;
+    // resend interval
+    case aoo_opt_resend_interval:
+        CHECKARG(int32_t);
+        resend_interval_ = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
+        break;
+    // resend maxnumframes
+    case aoo_opt_resend_maxnumframes:
+        CHECKARG(int32_t);
+        resend_maxnumframes_ = std::max<int32_t>(1, as<int32_t>(ptr));
+        break;
+    // resend packetsize
+    case aoo_opt_resend_packetsize:
+        CHECKARG(int32_t);
+        resend_packetsize_ = std::max<int32_t>(
+                    64, std::min<int32_t>(AOO_MAXPACKETSIZE, as<int32_t>(ptr)));
+        break;
+    // unknown
+    default:
+        LOG_WARNING("aoo_sink: unknown option " << opt);
+        return 0;
+    }
+    return 1;
+}
+
+int32_t aoo_sink_getoption(aoo_sink *sink, int32_t opt, void *p, int32_t size)
+{
+    return sink->get_option(opt, p, size);
+}
+
+int32_t aoo_sink::get_option(int32_t opt, void *ptr, int32_t size)
+{
+    switch (opt){
+    // buffer size
+    case aoo_opt_buffersize:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = buffersize_;
+        break;
+    // ping interval
+    case aoo_opt_ping_interval:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = ping_interval_;
+        break;
+    // timefilter bandwidth
+    case aoo_opt_timefilter_bandwidth:
+        CHECKARG(float);
+        as<float>(ptr) = bandwidth_;
+        break;
+    // resend limit
+    case aoo_opt_resend_limit:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = resend_limit_;
+        break;
+    // resend interval
+    case aoo_opt_resend_interval:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = resend_interval_;
+        break;
+    // resend maxnumframes
+    case aoo_opt_resend_maxnumframes:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = resend_maxnumframes_;
+        break;
+    // resend packetsize
+    case aoo_opt_resend_packetsize:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = resend_packetsize_;
+        break;
+    // unknown
+    default:
+        LOG_WARNING("aoo_sink: unknown option " << opt);
+        return 0;
+    }
+    return 1;
+}
+
+int32_t aoo_sink_setsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
+                              int32_t opt, void *p, int32_t size)
+{
+    return sink->set_sourceoption(endpoint, id, opt, p, size);
+}
+
+int32_t aoo_sink::set_sourceoption(void *endpoint, int32_t id,
+                                   int32_t opt, void *ptr, int32_t size)
+{
+    auto src = find_source(endpoint, id);
+    if (src){
+        switch (opt){
+        case aoo_opt_format:
+            LOG_ERROR("aoo_sink: can't set source format!");
+            return 0;
+        default:
+            LOG_WARNING("aoo_sink: unknown source option " << opt);
+            return 0;
+        }
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+int32_t aoo_sink_getsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
+                              int32_t opt, void *p, int32_t size)
+{
+    return sink->get_sourceoption(endpoint, id, opt, p, size);
+}
+
+int32_t aoo_sink::get_sourceoption(void *endpoint, int32_t id,
+                              int32_t opt, void *p, int32_t size)
+{
+    auto src = find_source(endpoint, id);
+    if (src){
+        switch (opt){
+        case aoo_opt_format:
+            CHECKARG(aoo_format_storage);
+            if (src->decoder){
+                return src->decoder->get_format(as<aoo_format_storage>(p));
+            } else {
+                return 0;
+            }
+            break;
+        default:
+            LOG_WARNING("aoo_sink: unknown source option " << opt);
+            return 0;
+        }
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
@@ -213,14 +372,12 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
         }
     } else {
         // try to find existing source
-        auto src = std::find_if(sources_.begin(), sources_.end(), [&](auto& s){
-            return (s.endpoint == endpoint) && (s.id == id);
-        });
+        auto src = find_source(endpoint, id);
         std::unique_lock<std::mutex> lock(mutex_); // !
-        if (src == sources_.end()){
+        if (!src){
             // not found - add new source
             sources_.emplace_back(endpoint, fn, id, salt);
-            src = sources_.end() - 1;
+            src = &sources_.back();
         } else {
             src->salt = salt;
         }
@@ -234,77 +391,74 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
 void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                                    int32_t salt, const aoo::data_packet& d){
     // first try to find existing source
-    auto result = std::find_if(sources_.begin(), sources_.end(), [&](auto& s){
-        return (s.endpoint == endpoint) && (s.id == id);
-    });
+    auto src = find_source(endpoint, id);
     // check if the 'salt' values match. the source format might have changed and we haven't noticed,
     // e.g. because of dropped UDP packets.
-    if (result != sources_.end() && result->salt == salt){
-        auto& src = *result;
-        auto& queue = src.blockqueue;
-        auto& acklist = src.ack_list;
+    if (src && src->salt == salt){
+        auto& queue = src->blockqueue;
+        auto& acklist = src->ack_list;
     #if 1
-        if (!src.decoder){
+        if (!src->decoder){
             LOG_DEBUG("ignore data message");
             return;
         }
     #else
-        assert(src.decoder != nullptr);
+        assert(src->decoder != nullptr);
     #endif
         LOG_DEBUG("got block: seq = " << d.sequence << ", sr = " << d.samplerate
                   << ", chn = " << d.channel << ", totalsize = " << d.totalsize
                   << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
 
-        if (src.next < 0){
-            src.next = d.sequence;
+        if (src->next < 0){
+            src->next = d.sequence;
         }
 
-        if (d.sequence < src.next){
+        if (d.sequence < src->next){
             // block too old, discard!
             LOG_VERBOSE("discarded old block " << d.sequence);
             return;
         }
 
-        if (d.sequence < src.newest){
+        if (d.sequence < src->newest){
             // TODO the following distinction doesn't seem to work reliably.
             if (acklist.find(d.sequence)){
                 LOG_DEBUG("resent block " << d.sequence);
                 // record resending
-                src.streamstate.resent++;
+                src->streamstate.resent++;
             } else {
                 LOG_VERBOSE("block " << d.sequence << " out of order!");
                 // record reordering
-                src.streamstate.reordered++;
+                src->streamstate.reordered++;
             }
-        } else if ((d.sequence - src.newest) > 1){
-            LOG_VERBOSE("skipped " << (d.sequence - src.newest - 1) << " blocks");
+        } else if ((d.sequence - src->newest) > 1){
+            LOG_VERBOSE("skipped " << (d.sequence - src->newest - 1) << " blocks");
         }
 
-        if (src.newest > 0 && (d.sequence - src.newest) > queue.capacity()){
+        if (src->newest > 0 && (d.sequence - src->newest) > queue.capacity()){
             // too large gap between incoming block and most recent block.
             // either network problem or stream has temporarily stopped.
 
             // record dropped blocks
-            src.streamstate.lost += queue.size();
-            src.streamstate.gap += (d.sequence - src.newest - 1);
+            src->streamstate.lost += queue.size();
+            src->streamstate.gap += (d.sequence - src->newest - 1);
             // clear the block queue and fill audio buffer with zeros.
             queue.clear();
             acklist.clear();
-            src.next = d.sequence;
+            src->next = d.sequence;
             // push silent blocks to keep the buffer full, but leave room for one block!
             int count = 0;
-            auto nsamples = src.audioqueue.blocksize();
-            while (src.audioqueue.write_available() > 1 && src.infoqueue.write_available() > 1){
-                auto ptr = src.audioqueue.write_data();
+            auto nsamples = src->audioqueue.blocksize();
+            while (src->audioqueue.write_available() > 1 && src->infoqueue.write_available() > 1){
+                auto ptr = src->audioqueue.write_data();
                 for (int i = 0; i < nsamples; ++i){
                     ptr[i] = 0;
                 }
-                src.audioqueue.write_commit();
+                src->audioqueue.write_commit();
                 // push nominal samplerate + default channel (0)
                 aoo::source_desc::info i;
-                i.sr = src.decoder->samplerate();
+                i.sr = src->decoder->samplerate();
                 i.channel = 0;
-                src.infoqueue.write(i);
+                src->infoqueue.write(i);
 
                 count++;
             }
@@ -315,24 +469,24 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             if (queue.full()){
                 // if the queue is full, we have to drop a block;
                 // in this case we send a block of zeros to the audio buffer
-                auto nsamples = src.audioqueue.blocksize();
-                if (src.audioqueue.write_available() && src.infoqueue.write_available()){
-                    auto ptr = src.audioqueue.write_data();
+                auto nsamples = src->audioqueue.blocksize();
+                if (src->audioqueue.write_available() && src->infoqueue.write_available()){
+                    auto ptr = src->audioqueue.write_data();
                     for (int i = 0; i < nsamples; ++i){
                         ptr[i] = 0;
                     }
-                    src.audioqueue.write_commit();
+                    src->audioqueue.write_commit();
                     // push nominal samplerate + default channel (0)
                     aoo::source_desc::info i;
-                    i.sr = src.decoder->samplerate();
+                    i.sr = src->decoder->samplerate();
                     i.channel = 0;
-                    src.infoqueue.write(i);
+                    src->infoqueue.write(i);
                 }
                 LOG_VERBOSE("dropped block " << queue.front().sequence);
                 // remove block from acklist
                 acklist.remove(queue.front().sequence);
                 // record dropped block
-                src.streamstate.lost++;
+                src->streamstate.lost++;
             }
             // add new block
             block = queue.insert(d.sequence, d.samplerate, d.channel, d.totalsize, d.nframes);
@@ -352,8 +506,8 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
     #endif
 
         // update newest sequence number
-        if (d.sequence > src.newest){
-            src.newest = d.sequence;
+        if (d.sequence > src->newest){
+            src->newest = d.sequence;
         }
 
         // Transfer all consecutive complete blocks as long as
@@ -361,35 +515,35 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
         if (!queue.empty()){
             block = queue.begin();
             int32_t count = 0;
-            int32_t next = src.next;
+            int32_t next = src->next;
             while ((block != queue.end()) && block->complete()
                    && (block->sequence == next)
-                   && src.audioqueue.write_available() && src.infoqueue.write_available())
+                   && src->audioqueue.write_available() && src->infoqueue.write_available())
             {
                 LOG_DEBUG("write samples (" << block->sequence << ")");
 
-                auto ptr = src.audioqueue.write_data();
-                auto nsamples = src.audioqueue.blocksize();
+                auto ptr = src->audioqueue.write_data();
+                auto nsamples = src->audioqueue.blocksize();
                 assert(block->data() != nullptr && block->size() > 0 && ptr != nullptr && nsamples > 0);
-                if (src.decoder->decode(block->data(), block->size(), ptr, nsamples) <= 0){
+                if (src->decoder->decode(block->data(), block->size(), ptr, nsamples) <= 0){
                     LOG_VERBOSE("bad block: size = " << block->size() << ", nsamples = " << nsamples);
                     // decoder failed - fill with zeros
                     std::fill(ptr, ptr + nsamples, 0);
                 }
 
-                src.audioqueue.write_commit();
+                src->audioqueue.write_commit();
 
                 // push info
                 aoo::source_desc::info i;
                 i.sr = block->samplerate;
                 i.channel = block->channel;
-                src.infoqueue.write(i);
+                src->infoqueue.write(i);
 
                 next++;
                 count++;
                 block++;
             }
-            src.next = next;
+            src->next = next;
             // pop blocks
             while (count--){
             #if 0
@@ -400,13 +554,13 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 LOG_DEBUG("pop block " << queue.front().sequence);
                 queue.pop_front();
             }
-            LOG_DEBUG("next: " << src.next);
+            LOG_DEBUG("next: " << src->next);
         }
 
     #if 1
         // pop outdated blocks (shouldn't really happen...)
         while (!queue.empty() &&
-               (src.newest - queue.front().sequence) >= queue.capacity())
+               (src->newest - queue.front().sequence) >= queue.capacity())
         {
             auto old = queue.front().sequence;
             LOG_VERBOSE("pop outdated block " << old);
@@ -415,11 +569,11 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             // pop block
             queue.pop_front();
             // update 'next'
-            if (src.next <= old){
-                src.next = old + 1;
+            if (src->next <= old){
+                src->next = old + 1;
             }
             // record dropped block
-            src.streamstate.lost++;
+            src->streamstate.lost++;
         }
     #endif
 
@@ -455,7 +609,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
 
             // resend missing blocks before any (half)completed blocks
             LOG_DEBUG("resend missing blocks");
-            int32_t next = src.next;
+            int32_t next = src->next;
             for (auto it = queue.begin(); it != queue.end(); ++it){
                 auto missing = it->sequence - next;
                 if (missing > 0){
@@ -485,11 +639,11 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             }
 
             // request data
-            request_data(*result);
+            request_data(*src);
 
         #if 1
             // clean ack list
-            auto removed = acklist.remove_before(src.next);
+            auto removed = acklist.remove_before(src->next);
             if (removed > 0){
                 LOG_DEBUG("block_ack_list: removed " << removed << " outdated items");
             }
@@ -504,10 +658,25 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
         std::cerr << acklist << std::endl;
     #endif
         // ping source
-        ping(src);
+        ping(*src);
     } else {
         // discard data and request format!
         request_format(endpoint, fn, id);
+    }
+}
+
+aoo::source_desc * aoo_sink::find_source(void *endpoint, int32_t id){
+    for (auto& src : sources_){
+        if ((src.endpoint == endpoint) && (src.id == id)){
+            return &src;
+        }
+    }
+    return nullptr;
+}
+
+void aoo_sink::update_sources(){
+    for (auto& src : sources_){
+        update_source(src);
     }
 }
 
@@ -545,6 +714,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
         src.samplerate = src.decoder->samplerate();
         src.lastpingtime = 0;
         src.laststate = AOO_SOURCE_STATE_STOP;
+        src.streamstate.reset();
         src.ack_list.setup(resend_limit_);
         src.ack_list.clear();
         LOG_DEBUG("update source " << src.id << ": sr = " << src.decoder->samplerate()

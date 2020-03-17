@@ -11,11 +11,13 @@ namespace aoo {
 
 struct stream_state {
     stream_state() = default;
+
     stream_state(stream_state&& other)
         : lost(other.lost.load()),
           reordered(other.reordered.load()),
           resent(other.resent.load()),
           gap(other.gap.load()){}
+
     stream_state& operator=(stream_state&& other){
         lost = other.lost.load();
         reordered = other.reordered.load();
@@ -23,6 +25,14 @@ struct stream_state {
         gap = other.gap.load();
         return *this;
     }
+
+    void reset(){
+        lost = 0;
+        reordered = 0;
+        resent = 0;
+        gap = 0;
+    }
+
     std::atomic<int32_t> lost{0};
     std::atomic<int32_t> reordered{0};
     std::atomic<int32_t> resent{0};
@@ -67,10 +77,7 @@ class aoo_sink final : public aoo::isink {
     aoo_sink(int32_t id)
         : id_(id) {}
 
-    void setup(aoo_sink_settings& settings) override;
-
-    bool get_source_format(void *endpoint, int32_t id,
-                           aoo_format_storage &f) override;
+    int32_t setup(const aoo_sink_settings& settings) override;
 
     int32_t handle_message(const char *data, int32_t n,
                            void *endpoint, aoo_replyfn fn) override;
@@ -79,17 +86,27 @@ class aoo_sink final : public aoo::isink {
     bool events_available() override;
 
     int32_t handle_events() override;
+
+    int32_t set_option(int32_t opt, void *ptr, int32_t size) override;
+
+    int32_t get_option(int32_t opt, void *ptr, int32_t size) override;
+
+    int32_t set_sourceoption(void *endpoint, int32_t id,
+                             int32_t opt, void *ptr, int32_t size) override;
+
+    int32_t get_sourceoption(void *endpoint, int32_t id,
+                             int32_t opt, void *ptr, int32_t size) override;
  private:
     const int32_t id_;
     int32_t nchannels_ = 0;
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
-    int32_t buffersize_ = 0;
-    int32_t resend_limit_ = 0;
-    float resend_interval_ = 0;
-    int32_t resend_maxnumframes_ = 0;
-    int32_t resend_packetsize_ = 0;
-    float ping_interval_ = 0;
+    int32_t buffersize_ = AOO_SINK_BUFSIZE;
+    int32_t resend_limit_ = AOO_RESEND_LIMIT;
+    float resend_interval_ = AOO_RESEND_INTERVAL * 0.001;
+    int32_t resend_maxnumframes_ = AOO_RESEND_MAXNUMFRAMES;
+    int32_t resend_packetsize_ = AOO_RESEND_PACKETSIZE;
+    float ping_interval_ = AOO_PING_INTERVAL * 0.001;
     std::vector<aoo_sample> buffer_;
     aoo_processfn processfn_ = nullptr;
     aoo_eventhandler eventhandler_ = nullptr;
@@ -102,10 +119,14 @@ class aoo_sink final : public aoo::isink {
     std::vector<data_request> retransmit_list_;
     std::mutex mutex_; // LATER replace with a spinlock?
     aoo::time_dll dll_;
-    double bandwidth_ = AOO_DLL_BW;
+    double bandwidth_ = AOO_TIMEFILTER_BANDWIDTH;
     double starttime_ = 0;
     aoo::threadsafe_counter elapsedtime_;
     // helper methods
+    aoo::source_desc *find_source(void *endpoint, int32_t id);
+
+    void update_sources();
+
     void update_source(aoo::source_desc& src);
 
     void request_format(void * endpoint, aoo_replyfn fn, int32_t id);
