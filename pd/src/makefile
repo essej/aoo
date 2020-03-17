@@ -17,9 +17,10 @@ lib.name = aoo
 # this causes the sources files to be compiled with gcc but linked with g++ (needed for aoo lib).
 class.sources = aoo_pack~.cpp aoo_unpack~.cpp aoo_route.cpp aoo_send~.cpp aoo_receive~.cpp
 
+ldlibs = -lopus
+
 define forWindows
-    aoo_send~.class.ldlibs = -lws2_32
-    aoo_receive~.class.ldlibs = -lws2_32
+    ldlibs += -lws2_32
 endef
 
 AOO = ../../lib/src
@@ -38,6 +39,7 @@ ldlibs = -lopus
 
 common.sources = \
     aoo_common.cpp \
+    aoo_net.cpp \
     $(AOO)/aoo_imp.cpp \
     $(AOO)/aoo_source.cpp \
     $(AOO)/aoo_sink.cpp \

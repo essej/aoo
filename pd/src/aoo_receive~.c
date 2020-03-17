@@ -1,24 +1,22 @@
 #include "m_pd.h"
 #include "aoo/aoo.h"
 
+#include "aoo_common.h"
+#include "aoo_net.h"
+
+#ifndef _WIN32
+  #include <sys/select.h>
+  #include <unistd.h>
+  #include <netdb.h>
+  #include <netinet/in.h>
+  #include <arpa/inet.h>
+#endif
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <inttypes.h>
 #include <errno.h>
-
-#ifdef _WIN32
-#include <winsock2.h>
-typedef int socklen_t;
-#else
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <unistd.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#endif
 
 #define classname(x) class_getname(*(t_pd *)x)
 
@@ -28,45 +26,7 @@ typedef int socklen_t;
 
 #define DEFBUFSIZE 20
 
-int socket_close(int socket)
-{
-#ifdef _WIN32
-    return closesocket(socket);
-#else
-    return close(socket);
-#endif
-}
-
-void socket_error_print(const char *label)
-{
-#ifdef _WIN32
-    int err = WSAGetLastError();
-    char str[1024];
-    str[0] = 0;
-    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0,
-                   err, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT), str,
-                   sizeof(str), NULL);
-#else
-    int err = errno;
-    const char *str = strerror(err);
-#endif
-    if (label){
-        fprintf(stderr, "%s: %s (%d)\n", label, str, err);
-    } else {
-        fprintf(stderr, "%s (%d)\n", str, err);
-    }
-    fflush(stderr);
-}
-
 /*////////////////////// socket listener //////////////////*/
-
-// use linked list for persistent memory
-typedef struct _client {
-    int socket;
-    struct sockaddr_storage addr;
-    int addrlen;
-    struct _client *next;
-} t_client;
 
 typedef struct _aoo_receive t_aoo_receive;
 
@@ -82,17 +42,17 @@ typedef struct _socket_listener
     // socket
     int socket;
     int port;
-    t_client *clients;
+    t_endpoint *clients;
     // threading
     pthread_t thread;
     pthread_mutex_t mutex;
     int quit; // should be atomic, but works anyway
 } t_socket_listener;
 
-static void socket_listener_reply(t_client *x, const char *data, int32_t n)
+static void socket_listener_reply(t_endpoint *x, const char *data, int32_t n)
 {
     // no check or synchronization needed
-    sendto(x->socket, data, n, 0, (const struct sockaddr *)&x->addr, x->addrlen);
+    endpoint_send(x, data, n);
 }
 
 static void aoo_receive_handle_message(t_aoo_receive *x, int32_t id,
@@ -109,17 +69,16 @@ static void* socket_listener_threadfn(void *y)
         int nbytes = recvfrom(x->socket, buf, AOO_MAXPACKETSIZE, 0, (struct sockaddr *)&sa, &len);
         if (nbytes > 0){
             // try to find client
-            t_client *client = 0;
-            for (t_client *c = x->clients; c; c = c->next){
-                if (len == c->addrlen &&
-                    !memcmp(&sa, &c->addr, len)){
+            t_endpoint *client = 0;
+            for (t_endpoint *c = x->clients; c; c = c->next){
+                if (endpoint_match(c, &sa, len)){
                     client = c;
                     break;
                 }
             }
             if (!client){
                 // add client
-                client = (t_client *)getbytes(sizeof(t_client));
+                client = (t_endpoint *)getbytes(sizeof(t_endpoint));
                 client->socket = x->socket;
                 memcpy(&client->addr, &sa, len);
                 client->addrlen = len;
@@ -183,17 +142,13 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
         // make new socket listener
 
         // first create socket
-        int sock = socket(AF_INET, SOCK_DGRAM, 0);
+        int sock = socket_udp();
         if (sock < 0){
             socket_error_print("socket");
             return 0;
         }
-        struct sockaddr_in sa;
-        memset(&sa, 0, sizeof(sa));
-        sa.sin_family = AF_INET;
-        sa.sin_addr.s_addr = INADDR_ANY;
-        sa.sin_port = htons(port);
-        if (bind(sock, (const struct sockaddr *)&sa, sizeof(sa)) < 0){
+
+        if (socket_bind(sock, port) < 0){
             pd_error(x, "%s: couldn't bind to port %d", classname(r), port);
             socket_close(sock);
             return 0;
@@ -224,7 +179,7 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
     return x;
 }
 
-void socket_listener_release(t_socket_listener *x, t_aoo_receive *r)
+static void socket_listener_release(t_socket_listener *x, t_aoo_receive *r)
 {
     if (x->numrecv > 1){
         // just remove receiver from list
@@ -244,24 +199,8 @@ void socket_listener_release(t_socket_listener *x, t_aoo_receive *r)
         pd_unbind(&x->pd, x->sym);
         // notify the thread that we're done
         x->quit = 1;
-        // wake up blocking recv() by sending an empty packet
-        int didit = 0;
-        int signal = socket(AF_INET, SOCK_DGRAM, 0);
-        if (signal >= 0){
-            struct sockaddr_in sa;
-            memset(&sa, 0, sizeof(sa));
-            sa.sin_family = AF_INET;
-            sa.sin_addr.s_addr = htonl(0x7f000001); // localhost
-            sa.sin_port = htons(x->port);
-            if (sendto(x->socket, 0, 0, 0, (struct sockaddr *)&sa, sizeof(sa)) < 0){
-                socket_error_print("sendto");
-                socket_close(signal);
-            } else {
-                didit = 1;
-            }
-        } else {
-            socket_error_print("socket");
-        }
+        // try to wake up socket
+        int didit = socket_signal(x->socket, x->port);
         if (!didit){
             // force wakeup by closing the socket.
             // this is not nice and probably undefined behavior,
@@ -273,14 +212,13 @@ void socket_listener_release(t_socket_listener *x, t_aoo_receive *r)
 
         if (didit){
             socket_close(x->socket);
-            socket_close(signal);
         }
 
         // free memory
-        t_client *c = x->clients;
+        t_endpoint *c = x->clients;
         while (c){
-            t_client *next = c->next;
-            freebytes(c, sizeof(t_client));
+            t_endpoint *next = c->next;
+            endpoint_free(c);
             c = next;
         }
         freebytes(x->recv, sizeof(t_aoo_receive*) * x->numrecv);
@@ -291,7 +229,7 @@ void socket_listener_release(t_socket_listener *x, t_aoo_receive *r)
     }
 }
 
-void socket_listener_setup(void)
+static void socket_listener_setup(void)
 {
     socket_listener_class = class_new(gensym("aoo socket listener"), 0, 0,
                                   sizeof(t_socket_listener), CLASS_PD, A_NULL);
@@ -370,8 +308,6 @@ static void aoo_receive_ping(t_aoo_receive *x, t_floatarg f)
     }
 }
 
-int aoo_parseresend(void *x, aoo_sink_settings *s, int argc, t_atom *argv);
-
 static void aoo_receive_resend(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (!aoo_parseresend(x, &x->x_settings, argc, argv)){
@@ -413,21 +349,14 @@ static void aoo_receive_tick(t_aoo_receive *x)
 
 static int32_t aoo_eventheader_to_atoms(const aoo_event_header *e, int argc, t_atom *argv)
 {
-    if (argc < 3){
-        return 0;
+    if (argc >= 3){
+        t_endpoint *c = (t_endpoint *)e->endpoint;
+        if (endpoint_getaddress(c, argv, argv + 1)){
+            SETFLOAT(argv + 2, e->id);
+            return 1;
+         }
     }
-    t_client *client = (t_client *)e->endpoint;
-    struct sockaddr_in *addr = (struct sockaddr_in *)&client->addr;
-    const char *host = inet_ntoa(addr->sin_addr);
-    int port = ntohs(addr->sin_port);
-    if (!host){
-        fprintf(stderr, "inet_ntoa failed!\n");
-        return 0;
-    }
-    SETSYMBOL(&argv[0], gensym(host));
-    SETFLOAT(&argv[1], port);
-    SETFLOAT(&argv[2], e->id);
-    return 1;
+    return 0;
 }
 
 static void aoo_receive_handleevents(t_aoo_receive *x,
@@ -513,8 +442,6 @@ static void aoo_receive_process(t_aoo_receive *x,
         clock_delay(x->x_clock, 0);
     }
 }
-
-uint64_t aoo_pd_osctime(int n, t_float sr);
 
 static t_int * aoo_receive_perform(t_int *w)
 {

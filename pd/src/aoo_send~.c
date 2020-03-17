@@ -1,55 +1,16 @@
 #include "m_pd.h"
 #include "aoo/aoo.h"
 
+#include "aoo_common.h"
+#include "aoo_net.h"
+
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <errno.h>
 
-#ifdef _WIN32
-#include <winsock2.h>
-typedef int socklen_t;
-#else
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <unistd.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#endif
-
 #define classname(x) class_getname(*(t_pd *)x)
-
-int socket_close(int socket)
-{
-#ifdef _WIN32
-    return closesocket(socket);
-#else
-    return close(socket);
-#endif
-}
-
-void socket_error_print(const char *label)
-{
-#ifdef _WIN32
-    int err = WSAGetLastError();
-    char str[1024];
-    str[0] = 0;
-    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0,
-                   err, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT), str,
-                   sizeof(str), NULL);
-#else
-    int err = errno;
-    const char *str = strerror(err);
-#endif
-    if (label){
-        fprintf(stderr, "%s: %s (%d)\n", label, str, err);
-    } else {
-        fprintf(stderr, "%s (%d)\n", str, err);
-    }
-    fflush(stderr);
-}
 
 #define DEFBUFSIZE 10
 
@@ -69,14 +30,12 @@ typedef struct _aoo_send
     t_outlet *x_eventout;
     // socket
     int x_socket;
-    struct sockaddr_in x_addr;
+    t_endpoint *x_endpoint;
     // threading
     pthread_t x_thread;
     pthread_cond_t x_cond;
     pthread_mutex_t x_mutex;
 } t_aoo_send;
-
-int aoo_parseformat(void *x, aoo_format_storage *f, int argc, t_atom *argv);
 
 static void aoo_send_handleevents(t_aoo_send *x,
                                   const aoo_event *events, int32_t n)
@@ -85,15 +44,10 @@ static void aoo_send_handleevents(t_aoo_send *x,
         if (events[i].type == AOO_PING_EVENT){
             if (events[i].header.endpoint == x){
                 t_atom msg[3];
-                const char *host = inet_ntoa(x->x_addr.sin_addr);
-                int port = ntohs(x->x_addr.sin_port);
-                if (!host){
-                    fprintf(stderr, "inet_ntoa failed!\n");
+                if (!endpoint_getaddress(x->x_endpoint, msg, msg + 1)){
                     continue;
                 }
-                SETSYMBOL(&msg[0], gensym(host));
-                SETFLOAT(&msg[1], port);
-                SETFLOAT(&msg[2], events[i].header.id);
+                SETFLOAT(msg + 2, events[i].header.id);
                 outlet_anything(x->x_eventout, gensym("ping"), 3, msg);
             } else {
                 pd_error(x, "%s: received ping from unknown sink!",
@@ -162,9 +116,8 @@ static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
 static void aoo_send_reply(t_aoo_send *x, const char *data, int32_t n)
 {
     // called while holding the lock (socket might close or address might change!)
-    if (x->x_socket >= 0 && x->x_addr.sin_family == AF_INET){
-        if (sendto(x->x_socket, data, n, 0,
-                   (const struct sockaddr *)&x->x_addr, sizeof(x->x_addr)) < 0){
+    if (x->x_endpoint){
+        if (endpoint_send(x->x_endpoint, data, n) < 0){
             socket_error_print("sendto");
         }
     }
@@ -180,26 +133,15 @@ void *aoo_send_threadfn(void *y)
         while (aoo_source_send(x->x_aoo_source)) ;
         // check for pending incoming packets
         while (1){
-            // non-blocking receive via select()
-            struct timeval tv;
-            tv.tv_sec = 0;
-            tv.tv_usec = 0;
-            fd_set rdset;
-            FD_ZERO(&rdset);
-            FD_SET(x->x_socket, &rdset);
-            if (select(x->x_socket + 1, &rdset, 0, 0, &tv) > 0){
-                if (FD_ISSET(x->x_socket, &rdset)){
-                    // receive packet
-                    char buf[AOO_MAXPACKETSIZE];
-                    int nbytes = recv(x->x_socket, buf, AOO_MAXPACKETSIZE, 0);
-                    if (nbytes > 0){
-                        aoo_source_handlemessage(x->x_aoo_source, buf, nbytes,
-                                                 x, (aoo_replyfn)aoo_send_reply);
-                        continue; // check for more
-                    }
-                }
+            // receive packet
+            char buf[AOO_MAXPACKETSIZE];
+            int nbytes = socket_receive(x->x_socket, buf, AOO_MAXPACKETSIZE, 1);
+            if (nbytes > 0){
+                aoo_source_handlemessage(x->x_aoo_source, buf, nbytes,
+                                         x, (aoo_replyfn)aoo_send_reply);
+            } else {
+                break;
             }
-            break;
         }
         // wait for more
         pthread_cond_wait(&x->x_cond, &x->x_mutex);
@@ -244,8 +186,6 @@ static void aoo_send_clear(t_aoo_send *x)
     pthread_mutex_unlock(&x->x_mutex);
 }
 
-uint64_t aoo_pd_osctime(int n, t_float sr);
-
 static t_int * aoo_send_perform(t_int *w)
 {
     t_aoo_send *x = (t_aoo_send *)(w[1]);
@@ -253,7 +193,7 @@ static t_int * aoo_send_perform(t_int *w)
 
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
-    if (x->x_addr.sin_family == AF_INET){
+    if (x->x_endpoint){
         uint64_t t = aoo_pd_osctime(n, x->x_settings.samplerate);
         if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n, t)){
             pthread_cond_signal(&x->x_cond);
@@ -283,9 +223,12 @@ static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
 
 void aoo_send_disconnect(t_aoo_send *x)
 {
-    pthread_mutex_lock(&x->x_mutex);
-    memset(&x->x_addr, 0, sizeof(x->x_addr));
-    pthread_mutex_unlock(&x->x_mutex);
+    if (x->x_endpoint){
+        pthread_mutex_lock(&x->x_mutex);
+        endpoint_free(x->x_endpoint);
+        x->x_endpoint = 0;
+        pthread_mutex_unlock(&x->x_mutex);
+    }
 }
 
 void aoo_send_connect(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
@@ -302,27 +245,27 @@ void aoo_send_connect(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         return;
     }
 
-    struct hostent *he = gethostbyname(hostname->s_name);
-    if (he){
+    t_endpoint *e = endpoint_new(hostname->s_name, port, x->x_socket);
+    if (e){
         pthread_mutex_lock(&x->x_mutex);
-        memcpy(&x->x_addr.sin_addr, he->h_addr_list[0], he->h_length);
-        x->x_addr.sin_family = AF_INET;
-        x->x_addr.sin_port = htons(port);
+        if (x->x_endpoint){
+            endpoint_free(x->x_endpoint);
+        }
+        x->x_endpoint = e; // assign while locked!
         if (x->x_settings.blocksize){
             // force time DLL update
             aoo_source_setup(x->x_aoo_source, &x->x_settings);
         }
         pthread_mutex_unlock(&x->x_mutex);
 
-        post("connected to %s on port %d", he->h_name, port);
+        t_atom ahost, aport;
+        if (endpoint_getaddress(e, &ahost, &aport)){
+            post("connected to %s on port %d", ahost.a_w.w_symbol->s_name, port);
+        }
     } else {
-        aoo_send_disconnect(x);
-
         pd_error(x, "%s: couldn't resolve hostname '%s'", classname(x), hostname->s_name);
     }
 }
-
-void aoo_defaultformat(aoo_format_storage *f, int nchannels);
 
 static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 {
@@ -330,16 +273,9 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 
     x->x_clock = clock_new(x, (t_method)aoo_send_tick);
 
-    memset(&x->x_addr, 0, sizeof(x->x_addr));
-    x->x_socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (x->x_socket >= 0){
-        int val = 1;
-        if (setsockopt(x->x_socket, SOL_SOCKET, SO_BROADCAST, (const char *)&val, sizeof(val))){
-            pd_error(x, "%s: couldn't set SO_BROADCAST", classname(x));
-        }
-    } else {
-        socket_error_print("socket");
-    }
+    x->x_endpoint = 0;
+    x->x_socket = socket_udp();
+
     pthread_mutex_init(&x->x_mutex, 0);
     pthread_cond_init(&x->x_cond, 0);
 
@@ -408,8 +344,10 @@ static void aoo_send_free(t_aoo_send *x)
     clock_free(x->x_clock);
 
     pthread_mutex_lock(&x->x_mutex);
-    socket_close(x->x_socket);
-    x->x_socket = -1;
+    if (x->x_socket >= 0){
+        socket_close(x->x_socket);
+    }
+    x->x_socket = -1; // sentinel
     pthread_mutex_unlock(&x->x_mutex);
 
     // notify thread and join
@@ -420,6 +358,10 @@ static void aoo_send_free(t_aoo_send *x)
     pthread_cond_destroy(&x->x_cond);
 
     aoo_source_free(x->x_aoo_source);
+
+    if (x->x_endpoint){
+        endpoint_free(x->x_endpoint);
+    }
 
     freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
 }

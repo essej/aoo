@@ -1,6 +1,8 @@
 #include "m_pd.h"
 #include "aoo/aoo.h"
 
+#include "aoo_common.h"
+
 #include <string.h>
 #include <assert.h>
 
@@ -74,8 +76,6 @@ static void aoo_unpack_ping(t_aoo_unpack *x, t_floatarg f)
         aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
     }
 }
-
-int aoo_parseresend(void *x, aoo_sink_settings *s, int argc, t_atom *argv);
 
 static void aoo_unpack_resend(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)
 {

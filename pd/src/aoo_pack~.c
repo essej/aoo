@@ -3,6 +3,8 @@
 #include "aoo/aoo_pcm.h"
 #include "aoo/aoo_opus.h"
 
+#include "aoo_common.h"
+
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
@@ -71,8 +73,6 @@ static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
     }
     aoo_source_handlemessage(x->x_aoo_source, msg, argc, x, (aoo_replyfn)aoo_pack_reply);
 }
-
-int aoo_parseformat(void *x, aoo_format_storage *f, int argc, t_atom *argv);
 
 static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 {
@@ -147,8 +147,6 @@ static void aoo_pack_clear(t_aoo_pack *x)
     x->x_sink_id = AOO_ID_NONE;
 }
 
-uint64_t aoo_pd_osctime(int n, t_float sr);
-
 static t_int * aoo_pack_perform(t_int *w)
 {
     t_aoo_pack *x = (t_aoo_pack *)(w[1]);
@@ -191,8 +189,6 @@ static void aoo_pack_loadbang(t_aoo_pack *x, t_floatarg f)
         }
     }
 }
-
-void aoo_defaultformat(aoo_format_storage *f, int nchannels);
 
 static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
 {
