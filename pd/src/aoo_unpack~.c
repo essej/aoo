@@ -96,12 +96,56 @@ static void aoo_unpack_handleevents(t_aoo_unpack *x,
                                     const aoo_event *events, int32_t n)
 {
     for (int i = 0; i < n; ++i){
-        if (events[i].type == AOO_SOURCE_STATE_EVENT){
+        t_atom msg[3];
+        switch (events[i].type){
+        case AOO_FORMAT_EVENT:
+        {
+            SETFLOAT(&msg[0], events[i].header.id);
+            outlet_anything(x->x_eventout, gensym("format"), 1, msg);
+            break;
+        }
+        case AOO_SOURCE_STATE_EVENT:
+        {
             const aoo_source_state_event *e = &events[i].source_state;
-            t_atom msg[2];
-            SETFLOAT(&msg[0], e->id);
+            SETFLOAT(&msg[0], e->header.id);
             SETFLOAT(&msg[1], e->state);
-            outlet_anything(x->x_eventout, gensym("source"), 2, msg);
+            outlet_anything(x->x_eventout, gensym("source_state"), 2, msg);
+            break;
+        }
+        case AOO_BLOCK_LOSS_EVENT:
+        {
+            const aoo_block_loss_event *e = &events[i].block_loss;
+            SETFLOAT(&msg[0], e->header.id);
+            SETFLOAT(&msg[1], e->count);
+            outlet_anything(x->x_eventout, gensym("block_loss"), 2, msg);
+            break;
+        }
+        case AOO_BLOCK_REORDER_EVENT:
+        {
+            const aoo_block_reorder_event *e = &events[i].block_reorder;
+            SETFLOAT(&msg[0], e->header.id);
+            SETFLOAT(&msg[1], e->count);
+            outlet_anything(x->x_eventout, gensym("block_reorder"), 2, msg);
+            break;
+        }
+        case AOO_BLOCK_RESEND_EVENT:
+        {
+            const aoo_block_reorder_event *e = &events[i].block_resend;
+            SETFLOAT(&msg[0], e->header.id);
+            SETFLOAT(&msg[1], e->count);
+            outlet_anything(x->x_eventout, gensym("block_resend"), 2, msg);
+            break;
+        }
+        case AOO_BLOCK_GAP_EVENT:
+        {
+            const aoo_block_gap_event *e = &events[i].block_gap;
+            SETFLOAT(&msg[0], e->header.id);
+            SETFLOAT(&msg[1], e->count);
+            outlet_anything(x->x_eventout, gensym("block_gap"), 2, msg);
+            break;
+        }
+        default:
+            break;
         }
     }
 }

@@ -83,8 +83,7 @@ static void aoo_send_handleevents(t_aoo_send *x,
 {
     for (int i = 0; i < n; ++i){
         if (events[i].type == AOO_PING_EVENT){
-            const aoo_ping_event *e = &events[i].ping;
-            if (e->endpoint == x){
+            if (events[i].header.endpoint == x){
                 t_atom msg[3];
                 const char *host = inet_ntoa(x->x_addr.sin_addr);
                 int port = ntohs(x->x_addr.sin_port);
@@ -94,7 +93,7 @@ static void aoo_send_handleevents(t_aoo_send *x,
                 }
                 SETSYMBOL(&msg[0], gensym(host));
                 SETFLOAT(&msg[1], port);
-                SETFLOAT(&msg[2], e->id);
+                SETFLOAT(&msg[2], events[i].header.id);
                 outlet_anything(x->x_eventout, gensym("ping"), 3, msg);
             } else {
                 pd_error(x, "%s: received ping from unknown sink!",

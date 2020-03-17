@@ -350,8 +350,8 @@ void aoo_source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id){
         // push ping event
         aoo_event event;
         event.type = AOO_PING_EVENT;
-        event.ping.endpoint = endpoint;
-        event.ping.id = id;
+        event.header.endpoint = endpoint;
+        event.header.id = id;
         eventqueue_.write(event);
     } else {
         LOG_WARNING("received ping from unknown sink!");

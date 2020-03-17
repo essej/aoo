@@ -411,28 +411,91 @@ static void aoo_receive_tick(t_aoo_receive *x)
     aoo_sink_handleevents(x->x_aoo_sink);
 }
 
+static int32_t aoo_eventheader_to_atoms(const aoo_event_header *e, int argc, t_atom *argv)
+{
+    if (argc < 3){
+        return 0;
+    }
+    t_client *client = (t_client *)e->endpoint;
+    struct sockaddr_in *addr = (struct sockaddr_in *)&client->addr;
+    const char *host = inet_ntoa(addr->sin_addr);
+    int port = ntohs(addr->sin_port);
+    if (!host){
+        fprintf(stderr, "inet_ntoa failed!\n");
+        return 0;
+    }
+    SETSYMBOL(&argv[0], gensym(host));
+    SETFLOAT(&argv[1], port);
+    SETFLOAT(&argv[2], e->id);
+    return 1;
+}
+
 static void aoo_receive_handleevents(t_aoo_receive *x,
                                      const aoo_event *events, int32_t n)
 {
     for (int i = 0; i < n; ++i){
-        if (events[i].type == AOO_SOURCE_STATE_EVENT){
-            const aoo_source_state_event *e = &events[i].source_state;
-
-            t_client *client = (t_client *)e->endpoint;
-            struct sockaddr_in *addr = (struct sockaddr_in *)&client->addr;
-
-            t_atom msg[4];
-            const char *host = inet_ntoa(addr->sin_addr);
-            int port = ntohs(addr->sin_port);
-            if (!host){
-                fprintf(stderr, "inet_ntoa failed!\n");
+        t_atom msg[4];
+        switch (events[i].type){
+        case AOO_FORMAT_EVENT:
+        {
+            if (!aoo_eventheader_to_atoms(&events[i].header, 4, msg)){
                 continue;
             }
-            SETSYMBOL(&msg[0], gensym(host));
-            SETFLOAT(&msg[1], port);
-            SETFLOAT(&msg[2], e->id);
+            outlet_anything(x->x_eventout, gensym("format"), 3, msg);
+            break;
+        }
+        case AOO_SOURCE_STATE_EVENT:
+        {
+            const aoo_source_state_event *e = &events[i].source_state;
+            if (!aoo_eventheader_to_atoms(&e->header, 4, msg)){
+                continue;
+            }
             SETFLOAT(&msg[3], e->state);
-            outlet_anything(x->x_eventout, gensym("source"), 4, msg);
+            outlet_anything(x->x_eventout, gensym("state"), 4, msg);
+            break;
+        }
+        case AOO_BLOCK_LOSS_EVENT:
+        {
+            const aoo_block_loss_event *e = &events[i].block_loss;
+            if (!aoo_eventheader_to_atoms(&e->header, 4, msg)){
+                continue;
+            }
+            SETFLOAT(&msg[3], e->count);
+            outlet_anything(x->x_eventout, gensym("block_loss"), 4, msg);
+            break;
+        }
+        case AOO_BLOCK_REORDER_EVENT:
+        {
+            const aoo_block_reorder_event *e = &events[i].block_reorder;
+            if (!aoo_eventheader_to_atoms(&e->header, 4, msg)){
+                continue;
+            }
+            SETFLOAT(&msg[3], e->count);
+            outlet_anything(x->x_eventout, gensym("block_reorder"), 4, msg);
+            break;
+        }
+        case AOO_BLOCK_RESEND_EVENT:
+        {
+            const aoo_block_resend_event *e = &events[i].block_resend;
+            if (!aoo_eventheader_to_atoms(&e->header, 4, msg)){
+                continue;
+            }
+            SETFLOAT(&msg[3], e->count);
+            outlet_anything(x->x_eventout, gensym("block_resend"), 4, msg);
+            break;
+        }
+        case AOO_BLOCK_GAP_EVENT:
+        {
+            const aoo_block_gap_event *e = &events[i].block_gap;
+            if (!aoo_eventheader_to_atoms(&e->header, 4, msg)){
+                continue;
+            }
+            SETFLOAT(&msg[3], e->count);
+            outlet_anything(x->x_eventout, gensym("block_gap"), 4, msg);
+            break;
+        }
+        default:
+            break;
         }
     }
 }

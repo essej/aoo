@@ -11,7 +11,7 @@ namespace aoo {
 /*////////////////////////// source_desc /////////////////////////////*/
 
 source_desc::source_desc(void *_endpoint, aoo_replyfn _fn, int32_t _id, int32_t _salt)
-    : endpoint(_endpoint), fn(_fn), id(_id), salt(_salt), laststate(AOO_SOURCE_STOP) {}
+    : endpoint(_endpoint), fn(_fn), id(_id), salt(_salt), laststate(AOO_SOURCE_STATE_STOP) {}
 
 void source_desc::send(const char *data, int32_t n){
     fn(endpoint, data, n);
@@ -174,6 +174,13 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
         src.decoder->read(f.nchannels, f.samplerate, f.blocksize, settings, size);
 
         update_source(src);
+
+        // called with mutex locked, so we don't have to synchronize with the process() method!
+        aoo_event event;
+        event.header.type = AOO_FORMAT_EVENT;
+        event.header.endpoint = src.endpoint;
+        event.header.id = src.id;
+        src.eventqueue.write(event);
     };
 
     if (id == AOO_ID_WILDCARD){
@@ -240,10 +247,15 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
         }
 
         if (d.sequence < src.newest){
+            // TODO the following distinction doesn't seem to work reliably.
             if (acklist.find(d.sequence)){
                 LOG_DEBUG("resent block " << d.sequence);
+                // record resending
+                src.streamstate.resent++;
             } else {
                 LOG_VERBOSE("block " << d.sequence << " out of order!");
+                // record reordering
+                src.streamstate.reordered++;
             }
         } else if ((d.sequence - src.newest) > 1){
             LOG_VERBOSE("skipped " << (d.sequence - src.newest - 1) << " blocks");
@@ -252,6 +264,10 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
         if ((d.sequence - src.newest) > queue.capacity()){
             // too large gap between incoming block and most recent block.
             // either network problem or stream has temporarily stopped.
+
+            // record dropped blocks
+            src.streamstate.lost += queue.size();
+            src.streamstate.gap += (d.sequence - src.newest - 1);
             // clear the block queue and fill audio buffer with zeros.
             queue.clear();
             acklist.clear();
@@ -269,7 +285,6 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 aoo::source_desc::info i;
                 i.sr = src.decoder->samplerate();
                 i.channel = 0;
-                i.state = AOO_SOURCE_STOP;
                 src.infoqueue.write(i);
 
                 count++;
@@ -292,12 +307,13 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                     aoo::source_desc::info i;
                     i.sr = src.decoder->samplerate();
                     i.channel = 0;
-                    i.state = AOO_SOURCE_STOP;
                     src.infoqueue.write(i);
                 }
                 LOG_VERBOSE("dropped block " << queue.front().sequence);
                 // remove block from acklist
                 acklist.remove(queue.front().sequence);
+                // record dropped block
+                src.streamstate.lost++;
             }
             // add new block
             block = queue.insert(d.sequence, d.samplerate, d.channel, d.totalsize, d.nframes);
@@ -348,7 +364,6 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 aoo::source_desc::info i;
                 i.sr = block->samplerate;
                 i.channel = block->channel;
-                i.state = AOO_SOURCE_PLAY;
                 src.infoqueue.write(i);
 
                 next++;
@@ -384,6 +399,8 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             if (src.next <= old){
                 src.next = old + 1;
             }
+            // record dropped block
+            src.streamstate.lost++;
         }
     #endif
 
@@ -495,7 +512,6 @@ void aoo_sink::update_source(aoo::source_desc &src){
             aoo::source_desc::info i;
             i.sr = src.decoder->samplerate();
             i.channel = 0;
-            i.state = AOO_SOURCE_STOP;
             src.infoqueue.write(i);
         };
         // reset event queue
@@ -509,7 +525,8 @@ void aoo_sink::update_source(aoo::source_desc &src){
         src.next = -1;
         src.channel = 0;
         src.samplerate = src.decoder->samplerate();
-        src.lastpingtime_ = 0;
+        src.lastpingtime = 0;
+        src.laststate = AOO_SOURCE_STATE_STOP;
         src.ack_list.setup(resend_limit_);
         src.ack_list.clear();
         LOG_VERBOSE("update source " << src.id << ": sr = " << src.decoder->samplerate()
@@ -575,7 +592,7 @@ void aoo_sink::ping(aoo::source_desc& src){
         return;
     }
     auto now = elapsedtime_.get();
-    if ((now - src.lastpingtime_) > ping_interval_){
+    if ((now - src.lastpingtime) > ping_interval_){
         char buffer[AOO_MAXPACKETSIZE];
         osc::OutboundPacketStream msg(buffer, sizeof(buffer));
 
@@ -588,7 +605,7 @@ void aoo_sink::ping(aoo::source_desc& src){
 
         src.send(msg.Data(), msg.Size());
 
-        src.lastpingtime_ = now;
+        src.lastpingtime = now;
 
         LOG_VERBOSE("send ping");
     }
@@ -653,15 +670,39 @@ int32_t aoo_sink::process(uint64_t t){
             src.samplerate = info.sr;
             src.resampler.write(src.audioqueue.read_data(), nsamples);
             src.audioqueue.read_commit();
-            if (info.state != src.laststate){
-                // push state change event
-                aoo_event event;
-                event.source_state.type = AOO_SOURCE_STATE_EVENT;
-                event.source_state.endpoint = src.endpoint;
-                event.source_state.id = src.id;
-                event.source_state.state = info.state;
+
+            // record stream state
+            auto lost = std::atomic_exchange(&src.streamstate.lost, 0);
+            auto reordered = std::atomic_exchange(&src.streamstate.reordered, 0);
+            auto resent = std::atomic_exchange(&src.streamstate.resent, 0);
+            auto gap = std::atomic_exchange(&src.streamstate.gap, 0);
+
+            aoo_event event;
+            event.header.endpoint = src.endpoint;
+            event.header.id = src.id;
+            if (lost > 0){
+                // push packet loss event
+                event.header.type = AOO_BLOCK_LOSS_EVENT;
+                event.block_loss.count = lost;
                 src.eventqueue.write(event);
-                src.laststate = info.state;
+            }
+            if (reordered > 0){
+                // push packet reorder event
+                event.header.type = AOO_BLOCK_REORDER_EVENT;
+                event.block_reorder.count = reordered;
+                src.eventqueue.write(event);
+            }
+            if (resent > 0){
+                // push packet resend event
+                event.header.type = AOO_BLOCK_RESEND_EVENT;
+                event.block_resend.count = resent;
+                src.eventqueue.write(event);
+            }
+            if (gap > 0){
+                // push packet gap event
+                event.header.type = AOO_BLOCK_GAP_EVENT;
+                event.block_gap.count = gap;
+                src.eventqueue.write(event);
             }
         }
         // update resampler
@@ -684,18 +725,29 @@ int32_t aoo_sink::process(uint64_t t){
                     }
                 }
             }
-            LOG_DEBUG("read samples");
             didsomething = true;
+            LOG_DEBUG("read samples");
+
+            if (src.laststate != AOO_SOURCE_STATE_START){
+                // push "start" event
+                aoo_event event;
+                event.header.type = AOO_SOURCE_STATE_EVENT;
+                event.header.endpoint = src.endpoint;
+                event.header.id = src.id;
+                event.source_state.state = AOO_SOURCE_STATE_START;
+                src.eventqueue.write(event);
+                src.laststate = AOO_SOURCE_STATE_START;
+            }
         } else {
             // buffer ran out -> push "stop" event
-            if (src.laststate != AOO_SOURCE_STOP){
+            if (src.laststate != AOO_SOURCE_STATE_STOP){
                 aoo_event event;
-                event.source_state.type = AOO_SOURCE_STATE_EVENT;
-                event.source_state.endpoint = src.endpoint;
-                event.source_state.id = src.id;
-                event.source_state.state = AOO_SOURCE_STOP;
+                event.header.type = AOO_SOURCE_STATE_EVENT;
+                event.header.endpoint = src.endpoint;
+                event.header.id = src.id;
+                event.source_state.state = AOO_SOURCE_STATE_STOP;
                 src.eventqueue.write(event);
-                src.laststate = AOO_SOURCE_STOP;
+                src.laststate = AOO_SOURCE_STATE_STOP;
                 didsomething = true;
             }
         }

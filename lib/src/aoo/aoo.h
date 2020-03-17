@@ -58,7 +58,10 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #define AOO_PING_INTERVAL 1000
 
 void aoo_setup(void);
+
 void aoo_close(void);
+
+struct aoo_format;
 
 /*//////////////////// OSC ////////////////////////////*/
 
@@ -91,38 +94,56 @@ typedef void (*aoo_replyfn)(
 // event types
 typedef enum aoo_event_type
 {
+    AOO_PING_EVENT,
+    AOO_FORMAT_EVENT,
     AOO_SOURCE_STATE_EVENT,
-    AOO_PING_EVENT
+    AOO_BLOCK_LOSS_EVENT,
+    AOO_BLOCK_REORDER_EVENT,
+    AOO_BLOCK_RESEND_EVENT,
+    AOO_BLOCK_GAP_EVENT
 } aoo_event_type;
+
+typedef struct aoo_event_header
+{
+    aoo_event_type type;
+    void *endpoint;
+    int32_t id;
+} aoo_event_header;
 
 // source state event
 typedef enum aoo_source_state
 {
-    AOO_SOURCE_STOP,
-    AOO_SOURCE_PLAY
+    AOO_SOURCE_STATE_STOP,
+    AOO_SOURCE_STATE_START
 } aoo_source_state;
-
-typedef struct aoo_ping_event
-{
-    aoo_event_type type;
-    void *endpoint;
-    int32_t id;
-} aoo_ping_event;
 
 typedef struct aoo_source_state_event
 {
-    aoo_event_type type;
-    void *endpoint;
-    int32_t id;
-    aoo_source_state state;
+    aoo_event_header header;
+    int32_t state;
 } aoo_source_state_event;
+
+struct _aoo_block_event
+{
+    aoo_event_header header;
+    int32_t count;
+};
+
+typedef struct _aoo_block_event aoo_block_loss_event;
+typedef struct _aoo_block_event aoo_block_reorder_event;
+typedef struct _aoo_block_event aoo_block_resend_event;
+typedef struct _aoo_block_event aoo_block_gap_event;
 
 // event union
 typedef union aoo_event
 {
     aoo_event_type type;
+    aoo_event_header header;
     aoo_source_state_event source_state;
-    aoo_ping_event ping;
+    aoo_block_loss_event block_loss;
+    aoo_block_reorder_event block_reorder;
+    aoo_block_resend_event block_resend;
+    aoo_block_gap_event block_gap;
 } aoo_event;
 
 typedef void (*aoo_eventhandler)(

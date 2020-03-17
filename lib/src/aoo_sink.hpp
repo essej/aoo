@@ -9,6 +9,26 @@
 
 namespace aoo {
 
+struct stream_state {
+    stream_state() = default;
+    stream_state(stream_state&& other)
+        : lost(other.lost.load()),
+          reordered(other.reordered.load()),
+          resent(other.resent.load()),
+          gap(other.gap.load()){}
+    stream_state& operator=(stream_state&& other){
+        lost = other.lost.load();
+        reordered = other.reordered.load();
+        resent = other.resent.load();
+        gap = other.gap.load();
+        return *this;
+    }
+    std::atomic<int32_t> lost{0};
+    std::atomic<int32_t> reordered{0};
+    std::atomic<int32_t> resent{0};
+    std::atomic<int32_t> gap{0};
+};
+
 struct source_desc {
     source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt);
     source_desc(source_desc&& other) = default;
@@ -23,19 +43,18 @@ struct source_desc {
     int32_t next = 0; // next outgoing block
     int32_t channel = 0; // recent channel onset
     double samplerate = 0; // recent samplerate
-    double lastpingtime_ = 0;
-
+    double lastpingtime = 0;
+    aoo_source_state laststate;
+    stream_state streamstate;
     block_queue blockqueue;
     block_ack_list ack_list;
     lfqueue<aoo_sample> audioqueue;
     struct info {
         double sr;
         int32_t channel;
-        aoo_source_state state;
     };
     lfqueue<info> infoqueue;
     lfqueue<aoo_event> eventqueue;
-    aoo_source_state laststate;
     dynamic_resampler resampler;
     // methods
     void send(const char *data, int32_t n);
