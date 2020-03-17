@@ -69,6 +69,9 @@ class aoo_sink final : public aoo::isink {
 
     void setup(aoo_sink_settings& settings) override;
 
+    bool get_source_format(void *endpoint, int32_t id,
+                           aoo_format_storage &f) override;
+
     int32_t handle_message(const char *data, int32_t n,
                            void *endpoint, aoo_replyfn fn) override;
 

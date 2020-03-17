@@ -193,6 +193,8 @@ void aoo_source_setup(aoo_source *src, aoo_source_settings *settings);
 
 void aoo_source_setformat(aoo_source *src, aoo_format *f);
 
+int32_t aoo_source_getformat(aoo_source *src, aoo_format_storage *f);
+
 // will send /AoO/<id>/start message
 void aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn);
 
@@ -258,6 +260,9 @@ int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
 int32_t aoo_sink_process(aoo_sink *sink, uint64_t t);
 
 void aoo_sink_ping(aoo_sink *sink);
+
+int32_t aoo_sink_getsourceformat(aoo_sink *sink, void *endpoint,
+                                 int32_t id, aoo_format_storage *f);
 
 int32_t aoo_sink_eventsavailable(aoo_sink *sink);
 

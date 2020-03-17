@@ -20,6 +20,8 @@ public:
 
     virtual void set_format(aoo_format& f) = 0;
 
+    virtual bool get_format(aoo_format_storage& f) = 0;
+
     virtual void setup(aoo_source_settings& settings) = 0;
 
     virtual void add_sink(void *sink, int32_t id, aoo_replyfn fn) = 0;
@@ -62,6 +64,9 @@ public:
     static void destroy(isink *x);
 
     virtual void setup(aoo_sink_settings& settings) = 0;
+
+    virtual bool get_source_format(void *endpoint, int32_t id,
+                                      aoo_format_storage& f) = 0;
 
     virtual int32_t handle_message(const char *data, int32_t n,
                                    void *endpoint, aoo_replyfn fn) = 0;

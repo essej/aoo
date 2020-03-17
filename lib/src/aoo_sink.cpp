@@ -70,6 +70,27 @@ void aoo_sink::setup(aoo_sink_settings& settings){
     }
 }
 
+int32_t aoo_sink_getsourceformat(aoo_sink *sink, void *endpoint,
+                                 int32_t id, aoo_format_storage *f)
+{
+    return sink->get_source_format(endpoint, id, *f);
+}
+
+bool aoo_sink::get_source_format(void *endpoint, int32_t id,aoo_format_storage &f)
+{
+    // source list might be changed concurrrently!
+    std::unique_lock<std::mutex> lock(mutex_); // !
+    for (auto& src : sources_){
+        if ((src.endpoint == endpoint) && (src.id == id)){
+            if (src.decoder){
+                return src.decoder->get_format(f);
+            }
+            return false;
+        }
+    }
+    return false;
+}
+
 int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
                             void *src, aoo_replyfn fn) {
     return sink->handle_message(data, n, src, fn);

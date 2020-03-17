@@ -17,6 +17,8 @@ class aoo_source final : public aoo::isource {
 
     void set_format(aoo_format& f) override;
 
+    bool get_format(aoo_format_storage &f) override;
+
     void setup(aoo_source_settings& settings) override;
 
     void add_sink(void *sink, int32_t id, aoo_replyfn fn) override;

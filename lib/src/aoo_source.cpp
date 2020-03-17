@@ -71,6 +71,18 @@ void aoo_source::set_format(aoo_format &f){
     }
 }
 
+int32_t aoo_source_getformat(aoo_source *src, aoo_format_storage *f){
+    return src->get_format(*f);
+}
+
+bool aoo_source::get_format(aoo_format_storage &f){
+    if (encoder_){
+        return encoder_->get_format(f);
+    } else {
+        return 0;
+    }
+}
+
 void aoo_source_setup(aoo_source *src, aoo_source_settings *settings){
     if (settings){
         src->setup(*settings);
