@@ -8,6 +8,20 @@
 #include <chrono>
 #include <algorithm>
 
+// for spinlock
+// Intel
+#if defined(__i386__) || defined(_M_IX86) || defined(__x86_64__) || defined(_M_X64)
+  #define CPU_INTEL
+  #include <immintrin.h>
+// ARM
+#elif defined(__arm__) || defined(_M_ARM) || defined(__aarch64__)
+  #define CPU_ARM
+  #include <intrinsics.h>
+#else
+// fallback
+  #include <thread>
+#endif
+
 namespace aoo {
 
 static std::unordered_map<std::string, std::unique_ptr<aoo::codec>> codec_dict;
@@ -96,6 +110,32 @@ uint64_t aoo_osctime_addseconds(uint64_t t, double s){
 }
 
 namespace aoo {
+
+/*////////////////////////// spinlock //////////////////////////*/
+
+void spinlock::lock(){
+    // only try to modify the shared state if the lock seems to be available.
+    // this should prevent unnecessary cache invalidation.
+    do {
+        while (locked_.load(std::memory_order_relaxed)){
+        #if defined(CPU_INTEL)
+            _mm_pause();
+        #elif defined(CPU_ARM)
+            __yield();
+        #else // fallback
+            std::this_thread::sleep_for(std::chrono::microseconds(0));
+        #endif
+        }
+    } while (locked_.exchange(true, std::memory_order_acquire));
+}
+
+void spinlock::unlock(){
+    locked_.store(false, std::memory_order_release);
+}
+
+padded_spinlock::padded_spinlock(){
+    static_assert(sizeof(padded_spinlock) == CACHELINE_SIZE, "");
+}
 
 /*////////////////////////// block /////////////////////////////*/
 

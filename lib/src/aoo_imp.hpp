@@ -45,6 +45,26 @@ struct time_tag {
     }
 };
 
+// simple spin lock
+
+class spinlock {
+public:
+    void lock();
+    void unlock();
+protected:
+    std::atomic_bool locked_{false};
+};
+
+static const size_t CACHELINE_SIZE = 64;
+
+class alignas(CACHELINE_SIZE) padded_spinlock : public spinlock {
+public:
+    padded_spinlock();
+private:
+    // pad and align to prevent false sharing
+    char pad_[CACHELINE_SIZE - sizeof(locked_)];
+};
+
 class dynamic_resampler {
 public:
     void setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_t srto, int32_t nchannels);
