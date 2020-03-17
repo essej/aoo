@@ -117,6 +117,7 @@ int aoo_parseformat(void *x, aoo_format_storage *f, int argc, t_atom *argv)
     t_symbol *codec = atom_getsymbolarg(0, argc, argv);
     f->header.blocksize = argc > 1 ? atom_getfloat(argv + 1) : 64;
     f->header.samplerate = argc > 2 ? atom_getfloat(argv + 2) : sys_getsr();
+    // omit nchannels
 
     if (codec == gensym(AOO_CODEC_PCM)){
         aoo_format_pcm *fmt = (aoo_format_pcm *)f;
@@ -211,4 +212,60 @@ int aoo_parseformat(void *x, aoo_format_storage *f, int argc, t_atom *argv)
         return 0;
     }
     return 1;
+}
+
+int aoo_printformat(const aoo_format_storage *f, int argc, t_atom *argv)
+{
+    if (argc < 3){
+        return 0;
+    }
+    t_symbol *codec = gensym(f->header.codec);
+    SETSYMBOL(argv, codec);
+    SETFLOAT(argv + 1, f->header.blocksize);
+    SETFLOAT(argv + 2, f->header.samplerate);
+    // omit nchannels
+
+    if (codec == gensym(AOO_CODEC_PCM) && argc >= 4){
+        // pcm <blocksize> <samplerate> <bitdepth>
+        aoo_format_pcm *fmt = (aoo_format_pcm *)f;
+        int nbits;
+        switch (fmt->bitdepth){
+        case AOO_PCM_INT16:
+            nbits = 2;
+            break;
+        case AOO_PCM_INT24:
+            nbits = 3;
+            break;
+        case AOO_PCM_FLOAT32:
+            nbits = 4;
+            break;
+        case AOO_PCM_FLOAT64:
+            nbits = 8;
+            break;
+        default:
+            nbits = 0;
+        }
+        SETFLOAT(argv + 3, nbits);
+        return 4;
+    } else if (codec == gensym(AOO_CODEC_OPUS) && argc >= 6){
+        // opus <blocksize> <samplerate> <bitrate> <complexity> <signaltype>
+        aoo_format_opus *fmt = (aoo_format_opus *)f;
+        SETFLOAT(argv + 3, fmt->bitrate);
+        SETFLOAT(argv + 4, fmt->complexity);
+        t_symbol *signaltype;
+        switch (fmt->signal_type){
+        case OPUS_SIGNAL_MUSIC:
+            signaltype = gensym("music");
+            break;
+        case OPUS_SIGNAL_VOICE:
+            signaltype = gensym("voice");
+            break;
+        default:
+            signaltype = gensym("auto");
+            break;
+        }
+        SETSYMBOL(argv + 5, signaltype);
+        return 6;
+    }
+    return 0;
 }
