@@ -96,12 +96,17 @@ static void aoo_unpack_handleevents(t_aoo_unpack *x,
                                     const aoo_event *events, int32_t n)
 {
     for (int i = 0; i < n; ++i){
-        t_atom msg[3];
+        t_atom msg[32];
         switch (events[i].type){
         case AOO_FORMAT_EVENT:
         {
-            SETFLOAT(&msg[0], events[i].header.id);
-            outlet_anything(x->x_eventout, gensym("format"), 1, msg);
+            const aoo_event_header *e = &events[i].header;
+            aoo_format_storage f;
+            if (aoo_sink_getsourceformat(x->x_aoo_sink, e->endpoint, e->id, &f)){
+                SETFLOAT(&msg[0], events[i].header.id);
+                int fsize = aoo_printformat(&f, 31, msg + 1); // skip first atom
+                outlet_anything(x->x_eventout, gensym("format"), fsize + 1, msg);
+            }
             break;
         }
         case AOO_SOURCE_STATE_EVENT:

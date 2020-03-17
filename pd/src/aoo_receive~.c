@@ -347,14 +347,12 @@ static void aoo_receive_tick(t_aoo_receive *x)
     aoo_sink_handleevents(x->x_aoo_sink);
 }
 
-static int32_t aoo_eventheader_to_atoms(const aoo_event_header *e, int argc, t_atom *argv)
+static int32_t aoo_eventheader_to_atoms(const aoo_event_header *e, t_atom *argv)
 {
-    if (argc >= 3){
-        t_endpoint *c = (t_endpoint *)e->endpoint;
-        if (endpoint_getaddress(c, argv, argv + 1)){
-            SETFLOAT(argv + 2, e->id);
-            return 1;
-         }
+    t_endpoint *c = (t_endpoint *)e->endpoint;
+    if (endpoint_getaddress(c, argv, argv + 1)){
+        SETFLOAT(argv + 2, e->id);
+        return 1;
     }
     return 0;
 }
@@ -363,20 +361,28 @@ static void aoo_receive_handleevents(t_aoo_receive *x,
                                      const aoo_event *events, int32_t n)
 {
     for (int i = 0; i < n; ++i){
-        t_atom msg[4];
+        t_atom msg[32];
         switch (events[i].type){
         case AOO_FORMAT_EVENT:
         {
-            if (!aoo_eventheader_to_atoms(&events[i].header, 4, msg)){
+            const aoo_event_header *e = &events[i].header;
+            if (!aoo_eventheader_to_atoms(e, msg)){
                 continue;
             }
-            outlet_anything(x->x_eventout, gensym("format"), 3, msg);
+            aoo_format_storage f;
+            pthread_mutex_lock(&x->x_mutex);
+            int success = aoo_sink_getsourceformat(x->x_aoo_sink, e->endpoint, e->id, &f);
+            pthread_mutex_unlock(&x->x_mutex);
+            if (success){
+                int fsize = aoo_printformat(&f, 29, msg + 3); // skip first three atoms
+                outlet_anything(x->x_eventout, gensym("format"), fsize + 3, msg);
+            }
             break;
         }
         case AOO_SOURCE_STATE_EVENT:
         {
             const aoo_source_state_event *e = &events[i].source_state;
-            if (!aoo_eventheader_to_atoms(&e->header, 4, msg)){
+            if (!aoo_eventheader_to_atoms(&e->header, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->state);
@@ -386,7 +392,7 @@ static void aoo_receive_handleevents(t_aoo_receive *x,
         case AOO_BLOCK_LOSS_EVENT:
         {
             const aoo_block_loss_event *e = &events[i].block_loss;
-            if (!aoo_eventheader_to_atoms(&e->header, 4, msg)){
+            if (!aoo_eventheader_to_atoms(&e->header, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
@@ -396,7 +402,7 @@ static void aoo_receive_handleevents(t_aoo_receive *x,
         case AOO_BLOCK_REORDER_EVENT:
         {
             const aoo_block_reorder_event *e = &events[i].block_reorder;
-            if (!aoo_eventheader_to_atoms(&e->header, 4, msg)){
+            if (!aoo_eventheader_to_atoms(&e->header, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
@@ -406,7 +412,7 @@ static void aoo_receive_handleevents(t_aoo_receive *x,
         case AOO_BLOCK_RESEND_EVENT:
         {
             const aoo_block_resend_event *e = &events[i].block_resend;
-            if (!aoo_eventheader_to_atoms(&e->header, 4, msg)){
+            if (!aoo_eventheader_to_atoms(&e->header, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
@@ -416,7 +422,7 @@ static void aoo_receive_handleevents(t_aoo_receive *x,
         case AOO_BLOCK_GAP_EVENT:
         {
             const aoo_block_gap_event *e = &events[i].block_gap;
-            if (!aoo_eventheader_to_atoms(&e->header, 4, msg)){
+            if (!aoo_eventheader_to_atoms(&e->header, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
