@@ -1,4 +1,4 @@
-#N canvas 608 67 693 649 12;
+#N canvas 464 71 696 653 12;
 #X text 26 20 aoo_receive~: receive AOO audio streams;
 #X text 35 597 see also;
 #X obj 104 596 aoo_send~;
@@ -23,9 +23,6 @@
 #X floatatom 38 547 5 0 0 0 - - -;
 #X obj 109 524 env~;
 #X floatatom 109 548 5 0 0 0 - - -;
-#X obj 182 525 print;
-#X text 203 497 events:;
-#X text 376 550 state: 0 (stop) \, 1 (play);
 #X text 137 151 increase for jittery \, unreliable networks!;
 #X text 138 130 buffer size in ms (default: 20 ms);
 #X msg 80 335 resend 0;
@@ -46,22 +43,39 @@ at once;
 10 -262144 -1 -1 0 256;
 #X text 145 408 set ping interval in ms (default: 1000) \, 0 = off
 ;
-#X text 232 526 source state event: [source <host> <port> <ID> <state>(
-, f 57;
+#N canvas 764 124 630 452 events 0;
+#X obj 37 36 inlet;
+#X text 34 148 [format <host> <port> <ID> <codec> <blocksize> <samplerate>
+...(, f 65;
+#X text 34 95 [state <host> <port> <ID> <state>(;
+#X text 33 201 [block_loss <host> <port> <ID> <count>(, f 40;
+#X obj 37 60 print aoo_receive~;
+#X text 34 256 [block_reorder <host> <port> <ID> <count>(;
+#X text 69 119 the source has change its state (0: stop \, 1: start)
+;
+#X text 69 174 the source format has changed;
+#X text 71 229 blocks have been lost;
+#X text 71 284 blocks arrived out of order;
+#X text 34 312 [block_resend <host> <port> <ID> <count>(;
+#X text 71 339 blocks have been resent;
+#X text 33 369 [block_gap <host> <port> <ID> <count>(;
+#X text 70 396 large gap between blocks;
+#X connect 0 0 4 0;
+#X restore 182 525 pd events;
 #X connect 3 0 8 0;
 #X connect 4 0 3 0;
 #X connect 5 0 3 0;
 #X connect 8 0 16 0;
 #X connect 8 1 18 0;
-#X connect 8 2 20 0;
+#X connect 8 2 36 0;
 #X connect 11 0 8 0;
 #X connect 12 0 11 0;
 #X connect 13 0 8 0;
 #X connect 14 0 13 0;
 #X connect 16 0 17 0;
 #X connect 18 0 19 0;
+#X connect 22 0 8 0;
+#X connect 23 0 8 0;
 #X connect 25 0 8 0;
-#X connect 26 0 8 0;
-#X connect 28 0 8 0;
-#X connect 36 0 8 0;
-#X connect 37 0 36 0;
+#X connect 33 0 8 0;
+#X connect 34 0 33 0;
