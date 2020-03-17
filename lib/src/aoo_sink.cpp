@@ -78,8 +78,6 @@ int32_t aoo_sink_getsourceformat(aoo_sink *sink, void *endpoint,
 
 bool aoo_sink::get_source_format(void *endpoint, int32_t id,aoo_format_storage &f)
 {
-    // source list might be changed concurrrently!
-    std::unique_lock<std::mutex> lock(mutex_); // !
     for (auto& src : sources_){
         if ((src.endpoint == endpoint) && (src.id == id)){
             if (src.decoder){
