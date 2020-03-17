@@ -68,7 +68,7 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     f.header.nchannels = x->x_settings.nchannels;
     if (aoo_parseformat(x, &f, argc, argv)){
         pthread_mutex_lock(&x->x_mutex);
-        aoo_source_setformat(x->x_aoo_source, &f.header);
+        aoo_source_setoption(x->x_aoo_source, aoo_opt_format, AOO_ARG(f.header));
         pthread_mutex_unlock(&x->x_mutex);
     }
 }
@@ -78,39 +78,34 @@ static void aoo_send_channel(t_aoo_send *x, t_floatarg f)
     x->x_sink_chn = f > 0 ? f : 0;
     if (x->x_sink_id != AOO_ID_NONE){
         pthread_mutex_lock(&x->x_mutex);
-        aoo_source_setsinkchannel(x->x_aoo_source, x, x->x_sink_id, x->x_sink_chn);
+        aoo_source_setsinkoption(x->x_aoo_source, x, x->x_sink_id,
+                                 aoo_opt_channelonset, AOO_ARG(x->x_sink_chn));
         pthread_mutex_unlock(&x->x_mutex);
     }
 }
 
 static void aoo_send_packetsize(t_aoo_send *x, t_floatarg f)
 {
-    x->x_settings.packetsize = f;
-    if (x->x_settings.blocksize){
-        pthread_mutex_lock(&x->x_mutex);
-        aoo_source_setup(x->x_aoo_source, &x->x_settings);
-        pthread_mutex_unlock(&x->x_mutex);
-    }
+    pthread_mutex_lock(&x->x_mutex);
+    int32_t packetsize = f;
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_packetsize, AOO_ARG(packetsize));
+    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_send_resend(t_aoo_send *x, t_floatarg f)
 {
-    x->x_settings.resend_buffersize = f;
-    if (x->x_settings.blocksize){
-        pthread_mutex_lock(&x->x_mutex);
-        aoo_source_setup(x->x_aoo_source, &x->x_settings);
-        pthread_mutex_unlock(&x->x_mutex);
-    }
+    pthread_mutex_lock(&x->x_mutex);
+    int32_t bufsize = f;
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_resend_buffersize, AOO_ARG(bufsize));
+    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
 {
-    x->x_settings.time_filter_bandwidth = f;
-    if (x->x_settings.blocksize){
-        pthread_mutex_lock(&x->x_mutex);
-        aoo_source_setup(x->x_aoo_source, &x->x_settings);
-        pthread_mutex_unlock(&x->x_mutex);
-    }
+    pthread_mutex_lock(&x->x_mutex);
+    float bandwidth;
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_timefilter_bandwidth, AOO_ARG(bandwidth));
+    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_send_reply(t_aoo_send *x, const char *data, int32_t n)
@@ -166,12 +161,14 @@ static void aoo_send_set(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
                          classname(x), argv->a_w.w_symbol->s_name);
                 return;
             }
-            aoo_source_setsinkchannel(x->x_aoo_source, x, AOO_ID_WILDCARD, x->x_sink_chn);
+            aoo_source_setsinkoption(x->x_aoo_source, x, AOO_ID_WILDCARD,
+                                     aoo_opt_channelonset, AOO_ARG(x->x_sink_chn));
             x->x_sink_id = AOO_ID_WILDCARD;
         } else {
             int32_t id = atom_getfloat(argv);
             aoo_source_addsink(x->x_aoo_source, x, id, (aoo_replyfn)aoo_send_reply);
-            aoo_source_setsinkchannel(x->x_aoo_source, x, id, x->x_sink_chn);
+            aoo_source_setsinkoption(x->x_aoo_source, x, id,
+                                     aoo_opt_channelonset, AOO_ARG(x->x_sink_chn));
             x->x_sink_id = id;
         }
         pthread_mutex_unlock(&x->x_mutex);
@@ -195,10 +192,10 @@ static t_int * aoo_send_perform(t_int *w)
 
     if (x->x_endpoint){
         uint64_t t = aoo_pd_osctime(n, x->x_settings.samplerate);
-        if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n, t)){
+        if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n, t) > 0){
             pthread_cond_signal(&x->x_cond);
         }
-        if (aoo_source_eventsavailable(x->x_aoo_source)){
+        if (aoo_source_eventsavailable(x->x_aoo_source) > 0){
             clock_set(x->x_clock, 0);
         }
     }
@@ -285,10 +282,6 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     memset(&x->x_settings, 0, sizeof(aoo_source_settings));
     x->x_settings.userdata = x;
     x->x_settings.eventhandler = (aoo_eventhandler)aoo_send_handleevents;
-    x->x_settings.buffersize = AOO_SOURCE_DEFBUFSIZE;
-    x->x_settings.packetsize = AOO_DEFPACKETSIZE;
-    x->x_settings.time_filter_bandwidth = AOO_DLL_BW;
-    x->x_settings.resend_buffersize = AOO_RESEND_BUFSIZE;
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
@@ -322,7 +315,7 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     // default format
     aoo_format_storage fmt;
     aoo_defaultformat(&fmt, nchannels);
-    aoo_source_setformat(x->x_aoo_source, &fmt.header);
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_format, AOO_ARG(fmt.header));
 
     // create thread
     pthread_create(&x->x_thread, 0, aoo_send_threadfn, x);

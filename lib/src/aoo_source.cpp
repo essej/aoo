@@ -40,13 +40,219 @@ void aoo_source_free(aoo_source *src){
 
 aoo_source::~aoo_source() {}
 
-void aoo_source_setformat(aoo_source *src, aoo_format *f) {
-    if (f){
-        src->set_format(*f);
+template<typename T>
+T& as(void *p){
+    return *reinterpret_cast<T *>(p);
+}
+
+#define CHECKARG(type) assert(size == sizeof(type))
+
+int32_t aoo_source_setoption(aoo_source *src, int32_t opt, void *p, int32_t size)
+{
+    return src->set_option(opt, p, size);
+}
+
+int32_t aoo_source::set_option(int32_t opt, void *ptr, int32_t size)
+{
+    switch (opt){
+    // format
+    case aoo_opt_format:
+        CHECKARG(aoo_format);
+        return set_format(as<aoo_format>(ptr));
+    // buffersize
+    case aoo_opt_buffersize:
+    {
+        CHECKARG(int32_t);
+        auto bufsize = std::max<int32_t>(as<int32_t>(ptr), 0);
+        if (bufsize != buffersize_){
+            buffersize_ = bufsize;
+            update();
+        }
+        break;
+    }
+    // packetsize
+    case aoo_opt_packetsize:
+    {
+        CHECKARG(int32_t);
+        const int32_t minpacketsize = AOO_DATA_HEADERSIZE + 64;
+        auto packetsize = as<int32_t>(ptr);
+        if (packetsize < minpacketsize){
+            LOG_WARNING("packet size too small! setting to " << minpacketsize);
+            packetsize_ = minpacketsize;
+        } else if (packetsize > AOO_MAXPACKETSIZE){
+            LOG_WARNING("packet size too large! setting to " << AOO_MAXPACKETSIZE);
+            packetsize_ = AOO_MAXPACKETSIZE;
+        } else {
+            packetsize_ = packetsize;
+        }
+        break;
+    }
+    // timefilter bandwidth
+    case aoo_opt_timefilter_bandwidth:
+        CHECKARG(float);
+        // time filter
+        bandwidth_ = as<float>(ptr);
+        starttime_ = 0; // will update
+        break;
+    // resend buffer size
+    case aoo_opt_resend_buffersize:
+    {
+        CHECKARG(int32_t);
+        // empty buffer is allowed! (no resending)
+        auto bufsize = std::max<int32_t>(as<int32_t>(ptr), 0);
+        if (bufsize != resend_buffersize_){
+            resend_buffersize_ = bufsize;
+            update_historybuffer();
+        }
+        break;
+    }
+    // unknown
+    default:
+        LOG_WARNING("aoo_source: unknown option " << opt);
+        return 0;
+    }
+    return 1;
+}
+
+int32_t aoo_source_getoption(aoo_source *src, int32_t opt, void *p, int32_t size)
+{
+    return src->get_option(opt, p, size);
+}
+
+int32_t aoo_source::get_option(int32_t opt, void *ptr, int32_t size)
+{
+    switch (opt){
+    // format
+    case aoo_opt_format:
+        CHECKARG(aoo_format_storage);
+        if (encoder_){
+            return encoder_->get_format(as<aoo_format_storage>(ptr));
+        } else {
+            return 0;
+        }
+        break;
+    // buffer size
+    case aoo_opt_buffersize:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = buffersize_;
+        break;
+    // time filter bandwidth
+    case aoo_opt_timefilter_bandwidth:
+        CHECKARG(float);
+        as<float>(ptr) = bandwidth_;
+        break;
+    // resend buffer size
+    case aoo_opt_resend_buffersize:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = resend_buffersize_;
+        break;
+    // packetsize
+    case aoo_opt_packetsize:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = packetsize_;
+        break;
+    // unknown
+    default:
+        LOG_WARNING("aoo_source: unknown option " << opt);
+        return 0;
+    }
+    return 1;
+}
+
+int32_t aoo_source_setsinkoption(aoo_source *src, void *endpoint, int32_t id,
+                              int32_t opt, void *p, int32_t size)
+{
+    return src->set_sinkoption(endpoint, id, opt, p, size);
+}
+
+int32_t aoo_source::set_sinkoption(void *endpoint, int32_t id,
+                                   int32_t opt, void *ptr, int32_t size)
+{
+    if (id == AOO_ID_WILDCARD){
+        switch (opt){
+        // channel onset
+        case aoo_opt_channelonset:
+        {
+            CHECKARG(int32_t);
+            auto chn = as<int32_t>(ptr);
+            for (auto& sink : sinks_){
+                if (sink.endpoint == endpoint){
+                    sink.channel = chn;
+                }
+            }
+            LOG_VERBOSE("aoo_source: send to all sinks on channel " << chn);
+            break;
+        }
+        // unknown
+        default:
+            LOG_WARNING("aoo_source: unknown sink option " << opt);
+            return 0;
+        }
+        return 1;
+    } else {
+        auto sink = find_sink(endpoint, id);
+        if (sink){
+            switch (opt){
+            // channel onset
+            case aoo_opt_channelonset:
+            {
+                CHECKARG(int32_t);
+                auto chn = as<int32_t>(ptr);
+                sink->channel = chn;
+                LOG_VERBOSE("aoo_source: send to sink " << sink->id
+                            << " on channel " << chn);
+                break;
+            }
+            // unknown
+            default:
+                LOG_WARNING("aoo_source: unknown sink option " << opt);
+                return 0;
+            }
+            return 1;
+        } else {
+            LOG_ERROR("aoo_source: couldn't set option " << opt
+                      << " - sink not found!");
+            return 0;
+        }
     }
 }
 
-void aoo_source::set_format(aoo_format &f){
+int32_t aoo_source_getsinkoption(aoo_source *src, void *endpoint, int32_t id,
+                              int32_t opt, void *p, int32_t size)
+{
+    return src->get_sinkoption(endpoint, id, opt, p, size);
+}
+
+int32_t aoo_source::get_sinkoption(void *endpoint, int32_t id,
+                              int32_t opt, void *p, int32_t size)
+{
+    if (id == AOO_ID_WILDCARD){
+        LOG_ERROR("aoo_source: can't use wildcard ID to get sink option");
+        return 0;
+    }
+
+    auto sink = find_sink(endpoint, id);
+    if (sink){
+        switch (opt){
+        // channel onset
+        case aoo_opt_channelonset:
+            CHECKARG(int32_t);
+            as<int32_t>(p) = sink->channel;
+            break;
+        // unknown
+        default:
+            LOG_WARNING("aoo_source: unknown sink option " << opt);
+            return 0;
+        }
+        return 1;
+    } else {
+        LOG_ERROR("aoo_source: couldn't get option " << opt
+                  << " - sink not found!");
+        return 0;
+    }
+}
+
+int32_t aoo_source::set_format(aoo_format &f){
     salt_ = make_salt();
 
     if (!encoder_ || strcmp(encoder_->name(), f.codec)){
@@ -55,85 +261,77 @@ void aoo_source::set_format(aoo_format &f){
             encoder_ = codec->create_encoder();
         } else {
             LOG_ERROR("codec '" << f.codec << "' not supported!");
-            return;
+            return 0;
         }
         if (!encoder_){
             LOG_ERROR("couldn't create encoder!");
-            return;
+            return 0;
         }
     }
     encoder_->set_format(f);
 
     sequence_ = 0;
+
     update();
+
     for (auto& sink : sinks_){
         send_format(sink);
     }
+
+    return 1;
 }
 
-int32_t aoo_source_getformat(aoo_source *src, aoo_format_storage *f){
-    return src->get_format(*f);
-}
-
-bool aoo_source::get_format(aoo_format_storage &f){
-    if (encoder_){
-        return encoder_->get_format(f);
-    } else {
-        return 0;
-    }
-}
-
-void aoo_source_setup(aoo_source *src, aoo_source_settings *settings){
+int32_t aoo_source_setup(aoo_source *src, const aoo_source_settings *settings){
     if (settings){
-        src->setup(*settings);
+        return src->setup(*settings);
     }
+    return 0;
 }
 
-void aoo_source::setup(aoo_source_settings &settings){
-    eventhandler_ = settings.eventhandler;
-    user_ = settings.userdata;
-    blocksize_ = settings.blocksize;
-    nchannels_ = settings.nchannels;
-    samplerate_ = settings.samplerate;
-    buffersize_ = std::max<int32_t>(settings.buffersize, 0);
-    resend_buffersize_ = std::max<int32_t>(settings.resend_buffersize, 0);
+int32_t aoo_source::setup(const aoo_source_settings &settings){
+    if (settings.nchannels > 0
+            && settings.samplerate > 0
+            && settings.nchannels > 0)
+    {
+        eventhandler_ = settings.eventhandler;
+        user_ = settings.userdata;
 
-    // packet size
-    const int32_t minpacketsize = AOO_DATA_HEADERSIZE + 64;
-    if (settings.packetsize < minpacketsize){
-        LOG_WARNING("packet size too small! setting to " << minpacketsize);
-        packetsize_ = minpacketsize;
-    } else if (settings.packetsize > AOO_MAXPACKETSIZE){
-        LOG_WARNING("packet size too large! setting to " << AOO_MAXPACKETSIZE);
-        packetsize_ = AOO_MAXPACKETSIZE;
-    } else {
-        packetsize_ = settings.packetsize;
+        // only update if at least one value has changed
+        if (settings.nchannels != nchannels_
+                || settings.samplerate != samplerate_
+                || settings.blocksize != blocksize_)
+        {
+            nchannels_ = settings.nchannels;
+            samplerate_ = settings.samplerate;
+            blocksize_ = settings.blocksize;
+
+            update();
+        }
+        return 1;
     }
 
-    // time filter
-    bandwidth_ = settings.time_filter_bandwidth;
-    starttime_ = 0; // will update
-
-    if (encoder_){
-        update();
-    }
+    return 0;
 }
 
 void aoo_source::update(){
-    assert(encoder_ != nullptr && encoder_->blocksize() > 0 && encoder_->samplerate() > 0);
-    if (blocksize_ > 0 && samplerate_ > 0 && nchannels_ > 0){
+    if (!encoder_){
+        return;
+    }
+    assert(encoder_->blocksize() > 0 && encoder_->samplerate() > 0);
+
+    if (blocksize_ > 0){
+        assert(samplerate_ > 0 && nchannels_ > 0);
         // setup audio buffer
-        {
-            auto nsamples = encoder_->blocksize() * nchannels_;
-            double bufsize = (double)buffersize_ * encoder_->samplerate() * 0.001;
-            auto d = div(bufsize, encoder_->blocksize());
-            int32_t nbuffers = d.quot + (d.rem != 0); // round up
-            nbuffers = std::max<int32_t>(nbuffers, 1); // need at least 1 buffer!
-            audioqueue_.resize(nbuffers * nsamples, nsamples);
-            srqueue_.resize(nbuffers, 1);
-            LOG_DEBUG("aoo_source::update: nbuffers = " << nbuffers);
-        }
-        // setup resampler
+        auto nsamples = encoder_->blocksize() * nchannels_;
+        double bufsize = (double)buffersize_ * encoder_->samplerate() * 0.001;
+        auto d = div(bufsize, encoder_->blocksize());
+        int32_t nbuffers = d.quot + (d.rem != 0); // round up
+        nbuffers = std::max<int32_t>(nbuffers, 1); // need at least 1 buffer!
+        audioqueue_.resize(nbuffers * nsamples, nsamples);
+        srqueue_.resize(nbuffers, 1);
+        LOG_DEBUG("aoo_source::update: nbuffers = " << nbuffers);
+
+        // resampler
         if (blocksize_ != encoder_->blocksize() || samplerate_ != encoder_->samplerate()){
             resampler_.setup(blocksize_, encoder_->blocksize(),
                              samplerate_, encoder_->samplerate(), nchannels_);
@@ -141,59 +339,69 @@ void aoo_source::update(){
         } else {
             resampler_.clear();
         }
-        // setup event queue
+
+        // event queue
         eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);
-        // setup history buffer
-        {
-            double bufsize = (double)resend_buffersize_ * 0.001 * samplerate_;
-            auto d = div(bufsize, encoder_->blocksize());
-            int32_t nbuffers = d.quot + (d.rem != 0); // round up
-            // empty buffer is allowed! (no resending)
-            history_.resize(nbuffers);
+
+        // history buffer
+        update_historybuffer();
+
+        // reset time DLL to be on the safe side
+        starttime_ = 0; // will update
+    }
+}
+
+aoo_source::sink_desc * aoo_source::find_sink(void *endpoint, int32_t id){
+    for (auto& sink : sinks_){
+        if ((sink.endpoint == endpoint) && (sink.id == id)){
+            return &sink;
         }
     }
+    return nullptr;
 }
 
-void aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn) {
-    src->add_sink(sink, id, fn);
+int32_t aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn) {
+    return src->add_sink(sink, id, fn);
 }
 
-void aoo_source::add_sink(void *sink, int32_t id, aoo_replyfn fn){
+int32_t aoo_source::add_sink(void *endpoint, int32_t id, aoo_replyfn fn){
     if (id == AOO_ID_WILDCARD){
-        // remove all existing descriptors matching sink
-        remove_sink(sink, AOO_ID_WILDCARD);
+        LOG_WARNING("aoo_source::add_sink: can't use wildcard ID (yet)");
+        return 0;
     }
-    auto result = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-        return (s.endpoint == sink) && (s.id == id);
-    });
-    if (result == sinks_.end()){
-        sink_desc sd = { sink, fn, id, 0 };
+    if (!find_sink(endpoint, id)){
+        sink_desc sd = { endpoint, fn, id, 0 };
         sinks_.push_back(sd);
         send_format(sd);
+        return 1;
     } else {
         LOG_WARNING("aoo_source::add_sink: sink already added!");
+        return 0;
     }
 }
 
-void aoo_source_removesink(aoo_source *src, void *sink, int32_t id) {
-    src->remove_sink(sink, id);
+int32_t aoo_source_removesink(aoo_source *src, void *sink, int32_t id) {
+    return src->remove_sink(sink, id);
 }
 
-void aoo_source::remove_sink(void *sink, int32_t id){
+int32_t aoo_source::remove_sink(void *endpoint, int32_t id){
     if (id == AOO_ID_WILDCARD){
         // remove all descriptors matching sink (ignore id)
         auto it = std::remove_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-            return s.endpoint == sink;
+            return s.endpoint == endpoint;
         });
         sinks_.erase(it, sinks_.end());
+        return 1;
     } else {
         auto result = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-            return (s.endpoint == sink) && (s.id == id);
+            return (s.endpoint == endpoint) && (s.id == id);
         });
         if (result != sinks_.end()){
             sinks_.erase(result);
+            return 1;
         } else {
             LOG_WARNING("aoo_source::remove_sink: sink not found!");
+            return 0;
         }
     }
 }
@@ -206,41 +414,13 @@ void aoo_source::remove_all(){
     sinks_.clear();
 }
 
-void aoo_source_setsinkchannel(aoo_source *src, void *sink, int32_t id, int32_t chn){
-    src->set_sink_channel(sink, id, chn);
-}
-
-void aoo_source::set_sink_channel(void *sink, int32_t id, int32_t chn){
-    if (chn < 0){
-        LOG_ERROR("aoo_source: channel onset " << chn << " out of range!");
-    }
-    if (id == AOO_ID_WILDCARD){
-        for (auto& s : sinks_){
-            if (s.endpoint == sink){
-                LOG_VERBOSE("aoo_source: send to sink " << s.id << " on channel " << chn);
-                s.channel = chn;
-            }
-        }
-    } else {
-        auto result = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-            return (s.endpoint == sink) && (s.id == id);
-        });
-        if (result != sinks_.end()){
-            LOG_VERBOSE("aoo_source: send to sink " << result->id << " on channel " << chn);
-            result->channel = chn;
-        } else {
-            LOG_ERROR("aoo_source::set_sink_channel: sink not found!");
-        }
-    }
-}
-
-void aoo_source_handlemessage(aoo_source *src, const char *data, int32_t n,
+int32_t aoo_source_handlemessage(aoo_source *src, const char *data, int32_t n,
                               void *sink, aoo_replyfn fn) {
-    src->handle_message(data, n, sink, fn);
+    return src->handle_message(data, n, sink, fn);
 }
 
 // /AoO/<src>/request <sink>
-void aoo_source::handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn){
+int32_t aoo_source::handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn){
     osc::ReceivedPacket packet(data, n);
     osc::ReceivedMessage msg(packet);
 
@@ -248,11 +428,11 @@ void aoo_source::handle_message(const char *data, int32_t n, void *endpoint, aoo
     auto onset = aoo_parsepattern(data, n, &src);
     if (!onset){
         LOG_WARNING("not an AoO message!");
-        return;
+        return 0;
     }
     if (src != id_ && src != AOO_ID_WILDCARD){
         LOG_WARNING("wrong source ID!");
-        return;
+        return 0;
     }
 
     if (!strcmp(msg.AddressPattern() + onset, AOO_REQUEST)){
@@ -261,6 +441,7 @@ void aoo_source::handle_message(const char *data, int32_t n, void *endpoint, aoo
                 auto it = msg.ArgumentsBegin();
                 auto id = it->AsInt32();
                 handle_request(endpoint, fn, id);
+                return 1;
             } catch (const osc::Exception& e){
                 LOG_ERROR(e.what());
             }
@@ -269,7 +450,7 @@ void aoo_source::handle_message(const char *data, int32_t n, void *endpoint, aoo
         }
     } else if (!strcmp(msg.AddressPattern() + onset, AOO_RESEND)){
         if (!history_.capacity()){
-            return;
+            return 0;
         }
         auto count = msg.ArgumentCount();
         if (count >= 4){
@@ -278,6 +459,7 @@ void aoo_source::handle_message(const char *data, int32_t n, void *endpoint, aoo
                 auto id = (it++)->AsInt32();
                 auto salt = (it++)->AsInt32();
                 handle_resend(endpoint, fn, id, salt, count - 2, it);
+                return 1;
             } catch (const osc::Exception& e){
                 LOG_ERROR(e.what());
             }
@@ -289,19 +471,19 @@ void aoo_source::handle_message(const char *data, int32_t n, void *endpoint, aoo
             auto it = msg.ArgumentsBegin();
             auto id = it->AsInt32();
             handle_ping(endpoint, fn, id);
+            return 1;
         } catch (const osc::Exception& e){
             LOG_ERROR(e.what());
         }
     } else {
         LOG_WARNING("unknown message '" << (msg.AddressPattern() + onset) << "'");
     }
+    return 0;
 }
 
 void aoo_source::handle_request(void *endpoint, aoo_replyfn fn, int32_t id){
-    auto sink = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-        return (s.endpoint == endpoint) && (s.id == id);
-    });
-    if (sink != sinks_.end()){
+    auto sink = find_sink(endpoint, id);
+    if (sink){
         // just resend format (the last format message might have been lost)
         send_format(*sink);
     } else {
@@ -312,10 +494,8 @@ void aoo_source::handle_request(void *endpoint, aoo_replyfn fn, int32_t id){
 
 void aoo_source::handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt,
                                int32_t count, osc::ReceivedMessageArgumentIterator it){
-    auto sink = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-        return (s.endpoint == endpoint) && (s.id == id);
-    });
-    if (sink == sinks_.end()){
+    auto sink = find_sink(endpoint, id);
+    if (!sink){
         LOG_VERBOSE("ignoring '/resend' message: sink not found");
         return;
     }
@@ -355,10 +535,8 @@ void aoo_source::handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32
 }
 
 void aoo_source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id){
-    auto sink = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-        return (s.endpoint == endpoint) && (s.id == id);
-    });
-    if (sink != sinks_.end()){
+    auto sink = find_sink(endpoint, id);
+    if (sink){
         // push ping event
         aoo_event event;
         event.type = AOO_PING_EVENT;
@@ -374,9 +552,9 @@ int32_t aoo_source_send(aoo_source *src) {
     return src->send();
 }
 
-bool aoo_source::send(){
+int32_t aoo_source::send(){
     if (!encoder_){
-        return false;
+        return 0;
     }
 
     if (audioqueue_.read_available() && srqueue_.read_available()){
@@ -394,7 +572,7 @@ bool aoo_source::send(){
                                         blobdata, blobmaxsize);
 
         if (d.totalsize == 0){
-            return true; // ?
+            return 1; // ?
         }
 
         auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
@@ -434,10 +612,10 @@ bool aoo_source::send(){
         if (sequence_ == INT32_MAX){
             salt_ = make_salt();
         }
-        return true;
+        return 1;
     } else {
         // LOG_DEBUG("couldn't send");
-        return false;
+        return 0;
     }
 }
 
@@ -445,7 +623,7 @@ int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, 
     return src->process(data, n, t);
 }
 
-bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
+int32_t aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
     // update DLL
     aoo::time_tag tt(t);
     if (starttime_ == 0){
@@ -465,7 +643,7 @@ bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
     }
 
     if (!encoder_){
-        return false;
+        return 0;
     }
 
     // non-interleaved -> interleaved
@@ -498,7 +676,7 @@ bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
             srqueue_.write(dll_.samplerate() * ratio);
         }
 
-        return true;
+        return 1;
     } else {
         // bypass resampler
         if (audioqueue_.write_available() && srqueue_.write_available()){
@@ -509,10 +687,10 @@ bool aoo_source::process(const aoo_sample **data, int32_t n, uint64_t t){
             // push samplerate
             srqueue_.write(dll_.samplerate());
 
-            return true;
+            return 1;
         } else {
             LOG_DEBUG("couldn't process");
-            return false;
+            return 0;
         }
     }
 }
@@ -607,4 +785,13 @@ int32_t aoo_source::make_salt(){
     thread_local std::mt19937 mt(dev());
     std::uniform_int_distribution<int32_t> dist;
     return dist(mt);
+}
+
+void aoo_source::update_historybuffer(){
+    if (samplerate_ > 0 && encoder_){
+        double bufsize = (double)resend_buffersize_ * 0.001 * samplerate_;
+        auto d = div(bufsize, encoder_->blocksize());
+        int32_t nbuffers = d.quot + (d.rem != 0); // round up
+        history_.resize(nbuffers);
+    }
 }

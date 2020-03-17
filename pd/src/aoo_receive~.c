@@ -280,45 +280,69 @@ static void aoo_receive_handle_message(t_aoo_receive *x, int32_t id,
 
 static void aoo_receive_buffersize(t_aoo_receive *x, t_floatarg f)
 {
-    x->x_settings.buffersize = f;
-    if (x->x_settings.blocksize){
-        pthread_mutex_lock(&x->x_mutex);
-        aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
-        pthread_mutex_unlock(&x->x_mutex);
-    }
+    pthread_mutex_lock(&x->x_mutex);
+    int32_t bufsize = f;
+    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_buffersize, AOO_ARG(bufsize));
+    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_receive_timefilter(t_aoo_receive *x, t_floatarg f)
 {
-    x->x_settings.time_filter_bandwidth = f;
-    if (x->x_settings.blocksize){
-        pthread_mutex_lock(&x->x_mutex);
-        aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
-        pthread_mutex_unlock(&x->x_mutex);
-    }
+    pthread_mutex_lock(&x->x_mutex);
+    float bandwidth = f;
+    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_timefilter_bandwidth, AOO_ARG(bandwidth));
+    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_receive_ping(t_aoo_receive *x, t_floatarg f)
 {
-    x->x_settings.ping_interval = f > 0 ? f : 0;
-    if (x->x_settings.blocksize){
-        pthread_mutex_lock(&x->x_mutex);
-        aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
-        pthread_mutex_unlock(&x->x_mutex);
-    }
+    pthread_mutex_lock(&x->x_mutex);
+    int32_t interval = f;
+    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_ping_interval, AOO_ARG(interval));
+    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_receive_resend(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
 {
-    if (!aoo_parseresend(x, &x->x_settings, argc, argv)){
+    int32_t limit, interval, maxnumframes, packetsize;
+    if (!aoo_parseresend(x, argc, argv, &limit, &interval, &maxnumframes, &packetsize)){
         return;
     }
-    if (x->x_settings.blocksize){
-        pthread_mutex_lock(&x->x_mutex);
-        aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
-        pthread_mutex_unlock(&x->x_mutex);
-    }
+    pthread_mutex_lock(&x->x_mutex);
+    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_limit, AOO_ARG(limit));
+    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_interval, AOO_ARG(interval));
+    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_maxnumframes, AOO_ARG(maxnumframes));
+    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_packetsize, AOO_ARG(packetsize));
+    pthread_mutex_unlock(&x->x_mutex);
 }
+
+#if 0
+static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (argc < 2){
+        pd_error(x, "%s: too few arguments for 'invite' method", classname(x));
+        return;
+    }
+
+    struct sockaddr_in sockaddr;
+    t_symbol *hostname = atom_getsymbol(argv);
+    struct hostent *he = gethostbyname(hostname->s_name);
+    if (!he){
+        pd_error(x, "%s: couldn't resolve hostname '%s'", classname(x), hostname->s_name);
+        return;
+    }
+    int port = atom_getfloat(argv + 1);
+    int channel = argc > 2 ? atom_getfloat(argv + 2) : 0;
+
+    sockaddr.sin_family = AF_INET;
+    memcpy(&sockaddr.sin_addr, he->h_addr_list[0], he->h_length);
+    sockaddr.sin_port = htons(port);
+
+    pthread_mutex_lock(&x->x_mutex);
+    aoo_sink_invite(x->x_aoo_sink,
+    pthread_mutex_unlock(&x->x_mutex);
+}
+#endif
 
 static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
 {
@@ -371,7 +395,8 @@ static void aoo_receive_handleevents(t_aoo_receive *x,
             }
             aoo_format_storage f;
             pthread_mutex_lock(&x->x_mutex);
-            int success = aoo_sink_getsourceformat(x->x_aoo_sink, e->endpoint, e->id, &f);
+            int success = aoo_sink_getsourceoption(x->x_aoo_sink, e->endpoint, e->id,
+                                                   aoo_opt_format, AOO_ARG(f));
             pthread_mutex_unlock(&x->x_mutex);
             if (success){
                 int fsize = aoo_printformat(&f, 29, msg + 3); // skip first three atoms
@@ -444,7 +469,7 @@ static void aoo_receive_process(t_aoo_receive *x,
         memcpy(x->x_vec[i], data[i], sizeof(aoo_sample) * n);
     }
     // handle events
-    if (aoo_sink_eventsavailable(x->x_aoo_sink)){
+    if (aoo_sink_eventsavailable(x->x_aoo_sink) > 0){
         clock_delay(x->x_clock, 0);
     }
 }
@@ -455,7 +480,7 @@ static t_int * aoo_receive_perform(t_int *w)
     int n = (int)(w[2]);
 
     uint64_t t = aoo_pd_osctime(n, x->x_settings.samplerate);
-    if (!aoo_sink_process(x->x_aoo_sink, t)){
+    if (aoo_sink_process(x->x_aoo_sink, t) <= 0){
         // output zeros
         for (int i = 0; i < x->x_settings.nchannels; ++i){
             memset(x->x_vec[i], 0, sizeof(t_float) * n);
@@ -494,11 +519,6 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
     x->x_settings.userdata = x;
     x->x_settings.eventhandler = (aoo_eventhandler)aoo_receive_handleevents;
     x->x_settings.processfn = (aoo_processfn)aoo_receive_process;
-    x->x_settings.ping_interval = AOO_PING_INTERVAL;
-    x->x_settings.resend_limit = AOO_RESEND_LIMIT;
-    x->x_settings.resend_interval = AOO_RESEND_INTERVAL;
-    x->x_settings.resend_maxnumframes = AOO_RESEND_MAXNUMFRAMES;
-    x->x_settings.resend_packetsize = AOO_RESEND_PACKETSIZE;
 
     // arg #1: ID
     int id = atom_getfloatarg(0, argc, argv);

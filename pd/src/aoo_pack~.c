@@ -79,7 +79,7 @@ static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
     aoo_format_storage f;
     f.header.nchannels = x->x_settings.nchannels;
     if (aoo_parseformat(x, &f, argc, argv)){
-        aoo_source_setformat(x->x_aoo_source, &f.header);
+        aoo_source_setoption(x->x_aoo_source, aoo_opt_format, AOO_ARG(f.header));
     }
 }
 
@@ -87,32 +87,27 @@ static void aoo_pack_channel(t_aoo_pack *x, t_floatarg f)
 {
     x->x_sink_chn = f > 0 ? f : 0;
     if (x->x_sink_id != AOO_ID_NONE){
-        aoo_source_setsinkchannel(x->x_aoo_source, x, x->x_sink_id, x->x_sink_chn);
+        aoo_source_setsinkoption(x->x_aoo_source, x, x->x_sink_id,
+                                 aoo_opt_channelonset, AOO_ARG(x->x_sink_chn));
     }
 }
 
 static void aoo_pack_packetsize(t_aoo_pack *x, t_floatarg f)
 {
-    x->x_settings.packetsize = f;
-    if (x->x_settings.blocksize){
-        aoo_source_setup(x->x_aoo_source, &x->x_settings);
-    }
+    int32_t packetsize = f;
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_packetsize, AOO_ARG(packetsize));
 }
 
 static void aoo_pack_resend(t_aoo_pack *x, t_floatarg f)
 {
-    x->x_settings.resend_buffersize = f;
-    if (x->x_settings.blocksize){
-        aoo_source_setup(x->x_aoo_source, &x->x_settings);
-    }
+    int32_t bufsize = f;
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_resend_buffersize, AOO_ARG(bufsize));
 }
 
 static void aoo_pack_timefilter(t_aoo_pack *x, t_floatarg f)
 {
-    x->x_settings.time_filter_bandwidth = f;
-    if (x->x_settings.blocksize){
-        aoo_source_setup(x->x_aoo_source, &x->x_settings);
-    }
+    float bandwidth;
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_timefilter_bandwidth, AOO_ARG(bandwidth));
 }
 
 static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -129,12 +124,14 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
                          classname(x), argv->a_w.w_symbol->s_name);
                 return;
             }
-            aoo_source_setsinkchannel(x->x_aoo_source, x, AOO_ID_WILDCARD, x->x_sink_chn);
+            aoo_source_setsinkoption(x->x_aoo_source, x, AOO_ID_WILDCARD,
+                                     aoo_opt_channelonset, AOO_ARG(x->x_sink_chn));
             x->x_sink_id = AOO_ID_WILDCARD;
         } else {
             int32_t id = atom_getfloat(argv);
             aoo_source_addsink(x->x_aoo_source, x, id, (aoo_replyfn)aoo_pack_reply);
-            aoo_source_setsinkchannel(x->x_aoo_source, x, id, x->x_sink_chn);
+            aoo_source_setsinkoption(x->x_aoo_source, x, id,
+                                     aoo_opt_channelonset, AOO_ARG(x->x_sink_chn));
             x->x_sink_id = id;
         }
         aoo_pack_channel(x, atom_getfloatarg(1, argc, argv));
@@ -155,7 +152,7 @@ static t_int * aoo_pack_perform(t_int *w)
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
     uint64_t t = aoo_pd_osctime(n, x->x_settings.samplerate);
-    if (aoo_source_process(x->x_aoo_source,(const aoo_sample **)x->x_vec, n, t)){
+    if (aoo_source_process(x->x_aoo_source,(const aoo_sample **)x->x_vec, n, t) > 0){
         clock_set(x->x_clock, 0);
     }
     return w + 3;
@@ -203,10 +200,6 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     memset(&x->x_settings, 0, sizeof(aoo_source_settings));
     x->x_settings.userdata = x;
     x->x_settings.eventhandler = (aoo_eventhandler)aoo_pack_handleevents;
-    x->x_settings.buffersize = AOO_SOURCE_DEFBUFSIZE;
-    x->x_settings.packetsize = AOO_DEFPACKETSIZE;
-    x->x_settings.time_filter_bandwidth = AOO_DLL_BW;
-    x->x_settings.resend_buffersize = AOO_RESEND_BUFSIZE;
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
@@ -240,7 +233,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     // default format
     aoo_format_storage fmt;
     aoo_defaultformat(&fmt, nchannels);
-    aoo_source_setformat(x->x_aoo_source, &fmt.header);
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_format, AOO_ARG(fmt.header));
 
     return x;
 }

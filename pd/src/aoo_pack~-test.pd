@@ -1,4 +1,4 @@
-#N canvas 32 17 737 759 12;
+#N canvas 150 22 737 759 12;
 #X obj 168 119 osc~ 440;
 #X msg 88 135 set \$1;
 #X obj 91 63 hradio 15 1 0 8 empty empty empty 0 -8 0 10 -262144 -1
@@ -73,6 +73,7 @@
 -1 -1 0 256;
 #X obj 419 316 metro 1000;
 #X msg 341 159 format pcm 256 44100 2;
+#X obj 175 229 print;
 #X connect 0 0 23 0;
 #X connect 1 0 23 0;
 #X connect 2 0 1 0;
@@ -93,6 +94,7 @@
 #X connect 21 0 24 0;
 #X connect 22 0 24 0;
 #X connect 23 0 34 0;
+#X connect 23 1 61 0;
 #X connect 24 0 19 0;
 #X connect 24 1 25 0;
 #X connect 26 0 23 0;
