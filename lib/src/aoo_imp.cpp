@@ -8,6 +8,11 @@
 #include <chrono>
 #include <algorithm>
 
+// for shared_lock
+#ifdef _WIN32
+#include <synchapi.h>
+#endif
+
 // for spinlock
 // Intel
 #if defined(__i386__) || defined(_M_IX86) || defined(__x86_64__) || defined(_M_X64)
@@ -194,6 +199,61 @@ void spinlock::unlock(){
 padded_spinlock::padded_spinlock(){
     static_assert(sizeof(padded_spinlock) == CACHELINE_SIZE, "");
 }
+
+/*////////////////////// shared_mutex ///////////////////*/
+
+#ifdef _WIN32
+shared_mutex::shared_mutex() {
+    InitializeSRWLock((PSRWLOCK)& rwlock_);
+}
+// exclusive
+void shared_mutex::lock() {
+    AcquireSRWLockExclusive((PSRWLOCK)&rwlock_);
+}
+bool shared_mutex::try_lock() {
+    return TryAcquireSRWLockExclusive((PSRWLOCK)&rwlock_);
+}
+void shared_mutex::unlock() {
+    ReleaseSRWLockExclusive((PSRWLOCK)&rwlock_);
+}
+// shared
+void shared_mutex::lock_shared() {
+    AcquireSRWLockShared((PSRWLOCK)&rwlock_);
+}
+bool shared_mutex::try_lock_shared() {
+    return TryAcquireSRWLockShared((PSRWLOCK)&rwlock_);
+}
+void shared_mutex::unlock_shared() {
+    ReleaseSRWLockShared((PSRWLOCK)&rwlock_);
+}
+#else
+shared_mutex::shared_mutex() {
+    pthread_rwlock_init(&rwlock_, nullptr);
+}
+shared_mutex::~shared_mutex() {
+    pthread_rwlock_destroy(&rwlock_);
+}
+// exclusive
+void shared_mutex::lock() {
+    pthread_rwlock_wrlock(&rwlock_);
+}
+bool shared_mutex::try_lock() {
+    return pthread_rwlock_trywrlock(&rwlock_) == 0;
+}
+void shared_mutex::unlock() {
+    pthread_rwlock_unlock(&rwlock_);
+}
+// shared
+void shared_mutex::lock_shared() {
+    pthread_rwlock_rdlock(&rwlock_);
+}
+bool shared_mutex::try_lock_shared() {
+    return pthread_rwlock_tryrdlock(&rwlock_) == 0;
+}
+void shared_mutex::unlock_shared() {
+    pthread_rwlock_unlock(&rwlock_);
+}
+#endif
 
 /*////////////////////////// block /////////////////////////////*/
 

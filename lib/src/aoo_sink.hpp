@@ -5,8 +5,6 @@
 #include "lfqueue.hpp"
 #include "time_dll.hpp"
 
-#include <mutex>
-
 namespace aoo {
 
 struct stream_state {
@@ -83,6 +81,7 @@ class aoo_sink final : public aoo::isink {
                            void *endpoint, aoo_replyfn fn) override;
 
     int32_t process(uint64_t t) override;
+
     bool events_available() override;
 
     int32_t handle_events() override;
@@ -117,7 +116,7 @@ class aoo_sink final : public aoo::isink {
         int32_t frame;
     };
     std::vector<data_request> retransmit_list_;
-    std::mutex mutex_; // LATER replace with a spinlock?
+    aoo::shared_mutex mutex_; // LATER replace with a spinlock?
     aoo::time_dll dll_;
     double bandwidth_ = AOO_TIMEFILTER_BANDWIDTH;
     double starttime_ = 0;

@@ -379,7 +379,7 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
         // update all sources from this endpoint
         for (auto& src : sources_){
             if (src.endpoint == endpoint){
-                std::unique_lock<std::mutex> lock(mutex_); // !
+                aoo::unique_lock lock(mutex_); // writer lock!
                 src.salt = salt;
                 update_format(src);
             }
@@ -387,7 +387,7 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
     } else {
         // try to find existing source
         auto src = find_source(endpoint, id);
-        std::unique_lock<std::mutex> lock(mutex_); // !
+        aoo::unique_lock lock(mutex_); // writer lock!
         if (!src){
             // not found - add new source
             sources_.emplace_back(endpoint, fn, id, salt);
@@ -856,7 +856,7 @@ int32_t aoo_sink::process(uint64_t t){
 
     // the mutex is uncontended most of the time, but LATER we might replace
     // this with a lockless and/or waitfree solution
-    std::unique_lock<std::mutex> lock(mutex_);
+    aoo::shared_lock lock(mutex_);
     for (auto& src : sources_){
         if (!src.decoder){
             continue;
@@ -989,7 +989,7 @@ int32_t aoo_sink_eventsavailable(aoo_sink *sink){
 bool aoo_sink::events_available(){
     // the mutex is uncontended most of the time, but LATER we might replace
     // this with a lockless and/or waitfree solution
-    std::unique_lock<std::mutex> lock(mutex_);
+    aoo::shared_lock lock(mutex_);
     for (auto& src : sources_){
         if (src.eventqueue.read_available() > 0){
             return true;
@@ -1009,7 +1009,7 @@ int32_t aoo_sink::handle_events(){
     int total = 0;
     // the mutex is uncontended most of the time, but LATER we might replace
     // this with a lockless and/or waitfree solution
-    std::unique_lock<std::mutex> lock(mutex_);
+    aoo::shared_lock lock(mutex_);
     for (auto& src : sources_){
         auto n = src.eventqueue.read_available();
         if (n > 0){

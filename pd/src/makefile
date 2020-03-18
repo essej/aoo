@@ -23,6 +23,14 @@ define forWindows
     ldlibs += -lws2_32
 endef
 
+define forDarwin
+    ldlibs += -lpthread
+endef
+
+define forLinux
+    ldlibs += -pthread
+endef
+
 AOO = ../../lib/src
 
 cflags = -I$(AOO) \

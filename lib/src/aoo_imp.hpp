@@ -6,6 +6,12 @@
 #include <memory>
 #include <atomic>
 
+// for shared_lock
+#include <shared_mutex>
+#ifndef _WIN32
+#include <pthread.h>
+#endif
+
 namespace aoo {
 
 struct time_tag {
@@ -55,6 +61,8 @@ protected:
     std::atomic_bool locked_{false};
 };
 
+// padded spin lock
+
 static const size_t CACHELINE_SIZE = 64;
 
 class alignas(CACHELINE_SIZE) padded_spinlock : public spinlock {
@@ -64,6 +72,40 @@ private:
     // pad and align to prevent false sharing
     char pad_[CACHELINE_SIZE - sizeof(locked_)];
 };
+
+/*//////////////////////// shared_mutex //////////////////////////*/
+
+// The std::mutex implementation on Windows is bad on both MSVC and MinGW:
+// the MSVC version apparantely has some additional overhead; winpthreads (MinGW) doesn't even use the obvious
+// platform primitive (SRWLOCK), they rather roll their own mutex based on atomics and Events, which is bad for our use case.
+//
+// Older OSX versions (OSX 10.11 and below) don't have std:shared_mutex...
+//
+// Even on Linux, there's some overhead for things we don't need, so we use pthreads directly.
+
+class shared_mutex {
+public:
+    shared_mutex();
+    shared_mutex(const shared_mutex&) = delete;
+    shared_mutex& operator==(const shared_mutex&) = delete;
+    // exclusive
+    void lock();
+    bool try_lock();
+    void unlock();
+    // shared
+    void lock_shared();
+    bool try_lock_shared();
+    void unlock_shared();
+private:
+#ifdef _WIN32
+    void* rwlock_; // avoid including windows headers (SWRLOCK is pointer sized)
+#else
+    pthread_rwlock_t rwlock_;
+#endif
+};
+
+using shared_lock = std::shared_lock<shared_mutex>;
+using unique_lock = std::unique_lock<shared_mutex>;
 
 class dynamic_resampler {
 public:
