@@ -21,20 +21,6 @@ void source_desc::send(const char *data, int32_t n){
 
 /*//////////////////// aoo_sink /////////////////////*/
 
-namespace aoo {
-
-isink * isink::create(int32_t id){
-    return new aoo_sink(id);
-}
-
-void isink::destroy(isink *x){
-    // cast to correct type because isink
-    // doesn't have a virtual destructor!
-    delete static_cast<aoo_sink *>(x);
-}
-
-} // aoo
-
 aoo_sink * aoo_sink_new(int32_t id) {
     return new aoo_sink(id);
 }

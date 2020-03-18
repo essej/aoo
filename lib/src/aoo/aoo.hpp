@@ -43,7 +43,7 @@ public:
     static isource * create(int32_t id);
 
     // destroy the AoO source instance
-    static void destroy(isource *x);
+    static void destroy(isource *src);
 
     // Call from any thread - synchronize with network and audio thread!
     virtual int32_t setup(const aoo_source_settings& settings) = 0;
@@ -140,6 +140,14 @@ protected:
     ~isource(){} // non-virtual!
 };
 
+inline isource * isource::create(int32_t id){
+    return reinterpret_cast<isource *>(aoo_source_new(id));
+}
+
+inline void isource::destroy(isource *src){
+    aoo_source_free(reinterpret_cast<aoo_source *>(src));
+}
+
 /*//////////////////////// AoO sink ///////////////////////*/
 
 class isink {
@@ -157,7 +165,7 @@ public:
     static isink * create(int32_t id);
 
     // destroy the AoO sink instance
-    static void destroy(isink *x);
+    static void destroy(isink *sink);
 
     // Call from any thread - synchronize with network and audio thread!
     virtual int32_t setup(const aoo_sink_settings& settings) = 0;
@@ -249,5 +257,13 @@ protected:
 
     ~isink(){} // non-virtual!
 };
+
+inline isink * isink::create(int32_t id){
+    return reinterpret_cast<isink *>(aoo_sink_new(id));
+}
+
+inline void isink::destroy(isink *sink){
+    aoo_sink_free(reinterpret_cast<aoo_sink *>(sink));
+}
 
 } // aoo

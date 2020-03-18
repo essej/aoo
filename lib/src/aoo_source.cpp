@@ -15,20 +15,6 @@
 // typetag string: max. 12 bytes
 // args (without blob data): 36 bytes
 
-namespace aoo {
-
-isource * isource::create(int32_t id){
-    return new aoo_source(id);
-}
-
-void isource::destroy(isource *x){
-    // cast to correct type because isource
-    // doesn't have a virtual destructor!
-    delete static_cast<aoo_source *>(x);
-}
-
-} // aoo
-
 aoo_source * aoo_source_new(int32_t id) {
     return new aoo_source(id);
 }
