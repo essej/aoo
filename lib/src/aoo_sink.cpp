@@ -70,6 +70,9 @@ int32_t aoo_sink::setup(const aoo_sink_settings& settings){
             update_sources();
         }
 
+        // always reset time DLL to be on the safe side
+        starttime_ = 0; // will update
+
         return 1;
     }
     return 0;
@@ -795,7 +798,7 @@ void aoo_sink::ping(aoo::source_desc& src){
 
         src.lastpingtime = now;
 
-        LOG_VERBOSE("send ping");
+        LOG_DEBUG("send ping");
     }
 }
 

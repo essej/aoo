@@ -307,6 +307,9 @@ int32_t aoo_source::setup(const aoo_source_settings &settings){
 
             update();
         }
+
+        // always reset time DLL to be on the safe side
+        starttime_ = 0; // will update
         return 1;
     }
 
