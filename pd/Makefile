@@ -15,7 +15,9 @@ lib.name = aoo
 # input source file
 # weird HACK for pd-lib-builder: use .cpp extension although the actual sources are .c files;
 # this causes the sources files to be compiled with gcc but linked with g++ (needed for aoo lib).
-class.sources = aoo_pack~.cpp aoo_unpack~.cpp aoo_route.cpp aoo_send~.cpp aoo_receive~.cpp
+
+class.sources = src/aoo_pack~.cpp src/aoo_unpack~.cpp src/aoo_route.cpp \
+                src/aoo_send~.cpp src/aoo_receive~.cpp
 
 ldlibs = -lopus
 
@@ -31,10 +33,11 @@ define forLinux
     ldlibs += -pthread
 endef
 
-AOO = ../../lib/src
+AOO = ../lib
 
 cflags = -I$(AOO) \
-    -I$(AOO)/lib \
+    -I$(AOO)/src \
+    -I$(AOO)/src/lib \
     -Wno-unused -Wno-unused-parameter \
     -DLOGLEVEL=2 \
     -DAOO_PD_OSCTIMEHACK=0 \
@@ -46,16 +49,16 @@ cflags = -I$(AOO) \
 ldlibs = -lopus
 
 common.sources = \
-    aoo_common.cpp \
-    aoo_net.cpp \
-    $(AOO)/aoo_imp.cpp \
-    $(AOO)/aoo_source.cpp \
-    $(AOO)/aoo_sink.cpp \
-    $(AOO)/aoo_pcm.cpp \
-    $(AOO)/aoo_opus.cpp \
-    $(AOO)/lib/oscpack/osc/OscTypes.cpp \
-    $(AOO)/lib/oscpack/osc/OscReceivedElements.cpp \
-    $(AOO)/lib/oscpack/osc/OscOutboundPacketStream.cpp
+    src/aoo_common.cpp \
+    src/aoo_net.cpp \
+    $(AOO)/src/aoo_imp.cpp \
+    $(AOO)/src/aoo_source.cpp \
+    $(AOO)/src/aoo_sink.cpp \
+    $(AOO)/src/aoo_pcm.cpp \
+    $(AOO)/src/aoo_opus.cpp \
+    $(AOO)/src/lib/oscpack/osc/OscTypes.cpp \
+    $(AOO)/src/lib/oscpack/osc/OscReceivedElements.cpp \
+    $(AOO)/src/lib/oscpack/osc/OscOutboundPacketStream.cpp
 
 
 # all extra files to be included in binary distribution of the library
