@@ -18,35 +18,51 @@ public:
             destroy(x);
         }
     };
-
+    // smart pointer for AoO source instance
     using pointer = std::unique_ptr<isource, deleter>;
 
     virtual ~isource(){}
 
+    // create a new AoO source instance
     static isource * create(int32_t id);
 
+    // destroy the AoO source instance
     static void destroy(isource *x);
 
+    // Call from any thread - synchronize with network and audio thread!
     virtual int32_t setup(const aoo_source_settings& settings) = 0;
 
+    // Call from any thread - synchronize with network and audio thread!
     virtual int32_t add_sink(void *sink, int32_t id, aoo_replyfn fn) = 0;
 
+    // Call from any thread - synchronize with network and audio thread!
     virtual int32_t remove_sink(void *sink, int32_t id) = 0;
 
+    // Call from any thread - synchronize with network and audio thread!
     virtual void remove_all() = 0;
 
+    // Call from the network thread.
     virtual int32_t handle_message(const char *data, int32_t n,
                                 void *endpoint, aoo_replyfn fn) = 0;
 
+    // Call from the network thread.
     virtual int32_t send() = 0;
 
-    virtual int32_t process(const aoo_sample **data, int32_t n, uint64_t t) = 0;
+    // Call from the audio thread.
+    // data:        array of channel data (non-interleaved)
+    // nsamples:    number of samples per channel
+    // t:           current NTP timestamp (see aoo_osctime_get)
+    virtual int32_t process(const aoo_sample **data,
+                            int32_t nsamples, uint64_t t) = 0;
 
+    // Call from any thread - always thread safe!
     virtual bool events_available() = 0;
 
+    // Call from any thread - always thread safe!
     virtual int32_t handle_events() = 0;
 
     //---------------------- options ----------------------//
+    // Call from any thread - synchronize with network and audio thread!
 
     int32_t set_format(aoo_format& f){
         return set_option(aoo_opt_format, AOO_ARG(f));
@@ -116,27 +132,35 @@ public:
             destroy(x);
         }
     };
-
+    // smart pointer for AoO sink instance
     using pointer = std::unique_ptr<isink, deleter>;
 
     virtual ~isink(){}
 
+    // create a new AoO sink instance
     static isink * create(int32_t id);
 
+    // destroy the AoO sink instance
     static void destroy(isink *x);
 
+    // Call from any thread - synchronize with network and audio thread!
     virtual int32_t setup(const aoo_sink_settings& settings) = 0;
 
+    // Call from the network thread.
     virtual int32_t handle_message(const char *data, int32_t n,
                                    void *endpoint, aoo_replyfn fn) = 0;
 
+    // Call from the audio thread.
     virtual int32_t process(uint64_t t) = 0;
 
+    // Call from any thread - always thread safe!
     virtual bool events_available() = 0;
 
+    // Call from any thread - always thread safe!
     virtual int32_t handle_events() = 0;
 
     //---------------------- options ----------------------//
+    // Call from any thread - synchronize with network and audio thread!
 
     int32_t set_buffersize(int32_t n){
         return set_option(aoo_opt_buffersize, AOO_ARG(n));
