@@ -22,7 +22,9 @@ isource * isource::create(int32_t id){
 }
 
 void isource::destroy(isource *x){
-    delete x;
+    // cast to correct type because isource
+    // doesn't have a virtual destructor!
+    delete static_cast<aoo_source *>(x);
 }
 
 } // aoo
@@ -702,7 +704,7 @@ int32_t aoo_source_eventsavailable(aoo_source *src){
     return src->events_available();
 }
 
-bool aoo_source::events_available(){
+int32_t aoo_source::events_available(){
     return eventqueue_.read_available() > 0;
 }
 

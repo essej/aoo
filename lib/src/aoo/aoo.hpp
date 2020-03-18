@@ -8,6 +8,24 @@
 
 namespace aoo {
 
+// NOTE: aoo::isource and aoo::isink don't define virtual destructors
+// and have to be destroyed with their respective destroy() method.
+// We provide a custom deleter and shared pointer to automate this task.
+//
+// The absence of a virtual destructor allows for ABI independent
+// C++ interfaces on Windows (where the vtable layout is stable
+// because of COM) and usually also on other platforms.
+// (Compilers use different strategies for virtual destructors,
+// some even put more than 1 entry in the vtable.)
+// Also, we only use standard C types as function parameters
+// and return types.
+//
+// In practice this means you only have to build 'aoo' once as a
+// shared library and can then use it with the C++ interface in
+// applications built with different compilers resp. compiler versions.
+//
+// If you want to be on the safe safe, use the C interface :-)
+
 /*//////////////////////// AoO source ///////////////////////*/
 
 class isource {
@@ -20,8 +38,6 @@ public:
     };
     // smart pointer for AoO source instance
     using pointer = std::unique_ptr<isource, deleter>;
-
-    virtual ~isource(){}
 
     // create a new AoO source instance
     static isource * create(int32_t id);
@@ -56,7 +72,7 @@ public:
                             int32_t nsamples, uint64_t t) = 0;
 
     // Call from any thread - always thread safe!
-    virtual bool events_available() = 0;
+    virtual int32_t events_available() = 0;
 
     // Call from any thread - always thread safe!
     virtual int32_t handle_events() = 0;
@@ -120,6 +136,8 @@ protected:
                                    int32_t opt, void *ptr, int32_t size) = 0;
     virtual int32_t get_sinkoption(void *endpoint, int32_t id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
+
+    ~isource(){} // non-virtual!
 };
 
 /*//////////////////////// AoO sink ///////////////////////*/
@@ -134,8 +152,6 @@ public:
     };
     // smart pointer for AoO sink instance
     using pointer = std::unique_ptr<isink, deleter>;
-
-    virtual ~isink(){}
 
     // create a new AoO sink instance
     static isink * create(int32_t id);
@@ -154,7 +170,7 @@ public:
     virtual int32_t process(uint64_t t) = 0;
 
     // Call from any thread - always thread safe!
-    virtual bool events_available() = 0;
+    virtual int32_t events_available() = 0;
 
     // Call from any thread - always thread safe!
     virtual int32_t handle_events() = 0;
@@ -230,6 +246,8 @@ protected:
                                    int32_t opt, void *ptr, int32_t size) = 0;
     virtual int32_t get_sourceoption(void *endpoint, int32_t id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
+
+    ~isink(){} // non-virtual!
 };
 
 } // aoo

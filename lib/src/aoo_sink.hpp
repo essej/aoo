@@ -82,7 +82,7 @@ class aoo_sink final : public aoo::isink {
 
     int32_t process(uint64_t t) override;
 
-    bool events_available() override;
+    int32_t events_available() override;
 
     int32_t handle_events() override;
 

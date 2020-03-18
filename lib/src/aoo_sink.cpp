@@ -28,7 +28,9 @@ isink * isink::create(int32_t id){
 }
 
 void isink::destroy(isink *x){
-    delete x;
+    // cast to correct type because isink
+    // doesn't have a virtual destructor!
+    delete static_cast<aoo_sink *>(x);
 }
 
 } // aoo
@@ -986,7 +988,7 @@ int32_t aoo_sink_eventsavailable(aoo_sink *sink){
     return sink->events_available();
 }
 
-bool aoo_sink::events_available(){
+int32_t aoo_sink::events_available(){
     // the mutex is uncontended most of the time, but LATER we might replace
     // this with a lockless and/or waitfree solution
     aoo::shared_lock lock(mutex_);

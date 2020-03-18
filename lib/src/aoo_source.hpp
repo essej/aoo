@@ -29,7 +29,7 @@ class aoo_source final : public aoo::isource {
 
     int32_t process(const aoo_sample **data, int32_t n, uint64_t t) override;
 
-    bool events_available() override;
+    int32_t events_available() override;
 
     int32_t handle_events() override;
 
