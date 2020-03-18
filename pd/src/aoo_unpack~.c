@@ -35,13 +35,14 @@ typedef struct _aoo_unpack
     t_clock *x_clock;
 } t_aoo_unpack;
 
-static void aoo_pack_reply(t_aoo_unpack *x, const char *data, int32_t n)
+static int32_t aoo_pack_reply(t_aoo_unpack *x, const char *data, int32_t n)
 {
     t_atom *a = (t_atom *)alloca(n * sizeof(t_atom));
     for (int i = 0; i < n; ++i){
         SETFLOAT(&a[i], (unsigned char)data[i]);
     }
     outlet_list(x->x_msgout, &s_list, n, a);
+    return 1;
 }
 
 static void aoo_unpack_list(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)

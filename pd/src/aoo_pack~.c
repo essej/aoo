@@ -56,13 +56,14 @@ static void aoo_pack_handleevents(t_aoo_pack *x,
     }
 }
 
-static void aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)
+static int32_t aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)
 {
     t_atom *a = (t_atom *)alloca(n * sizeof(t_atom));
     for (int i = 0; i < n; ++i){
         SETFLOAT(&a[i], (unsigned char)data[i]);
     }
     outlet_list(x->x_out, &s_list, n, a);
+    return 1;
 }
 
 static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -124,17 +125,18 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
                          classname(x), argv->a_w.w_symbol->s_name);
                 return;
             }
-            aoo_source_setsinkoption(x->x_aoo_source, x, AOO_ID_WILDCARD,
-                                     aoo_opt_channelonset, AOO_ARG(x->x_sink_chn));
             x->x_sink_id = AOO_ID_WILDCARD;
         } else {
             int32_t id = atom_getfloat(argv);
             aoo_source_addsink(x->x_aoo_source, x, id, (aoo_replyfn)aoo_pack_reply);
-            aoo_source_setsinkoption(x->x_aoo_source, x, id,
-                                     aoo_opt_channelonset, AOO_ARG(x->x_sink_chn));
             x->x_sink_id = id;
         }
-        aoo_pack_channel(x, atom_getfloatarg(1, argc, argv));
+        // set channel (if provided)
+        if (argc > 1){
+            int32_t chn = atom_getfloat(argv + 1);
+            x->x_sink_chn = chn > 0 ? chn : 0;
+        }
+        aoo_pack_channel(x, x->x_sink_chn);
     }
 }
 

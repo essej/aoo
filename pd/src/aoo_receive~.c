@@ -49,11 +49,6 @@ typedef struct _socket_listener
     int quit; // should be atomic, but works anyway
 } t_socket_listener;
 
-static void socket_listener_reply(t_endpoint *x, const char *data, int32_t n)
-{
-    // no check or synchronization needed
-    endpoint_send(x, data, n);
-}
 
 static void aoo_receive_handle_message(t_aoo_receive *x, int32_t id,
                                 const char * data, int32_t n, void *src, aoo_replyfn fn);
@@ -64,25 +59,15 @@ static void* socket_listener_threadfn(void *y)
 
     while (!x->quit){
         struct sockaddr_storage sa;
-        socklen_t len = sizeof(sa);
+        socklen_t len;
         char buf[AOO_MAXPACKETSIZE];
-        int nbytes = recvfrom(x->socket, buf, AOO_MAXPACKETSIZE, 0, (struct sockaddr *)&sa, &len);
+        int nbytes = socket_receive(x->socket, buf, AOO_MAXPACKETSIZE, &sa, &len, 0);
         if (nbytes > 0){
             // try to find client
-            t_endpoint *client = 0;
-            for (t_endpoint *c = x->clients; c; c = c->next){
-                if (endpoint_match(c, (const struct sockaddr *)&sa)){
-                    client = c;
-                    break;
-                }
-            }
+            t_endpoint *client = endpoint_find(x->clients, &sa);
             if (!client){
                 // add client
-                client = (t_endpoint *)getbytes(sizeof(t_endpoint));
-                client->socket = x->socket;
-                memcpy(&client->addr, &sa, len);
-                client->addrlen = len;
-                client->next = 0;
+                client = endpoint_new(x->socket, &sa, len);
                 if (x->clients){
                     client->next = x->clients;
                     x->clients = client;
@@ -96,7 +81,7 @@ static void* socket_listener_threadfn(void *y)
                 pthread_mutex_lock(&x->mutex);
                 for (int i = 0; i < x->numrecv; ++i){
                     aoo_receive_handle_message(x->recv[i], id, buf, nbytes,
-                                               client, (aoo_replyfn)socket_listener_reply);
+                                               client, (aoo_replyfn)endpoint_send);
                 }
                 pthread_mutex_unlock(&x->mutex);
             } else {
@@ -374,7 +359,11 @@ static void aoo_receive_tick(t_aoo_receive *x)
 static int32_t aoo_eventheader_to_atoms(const aoo_event_header *e, t_atom *argv)
 {
     t_endpoint *c = (t_endpoint *)e->endpoint;
-    if (endpoint_getaddress(c, argv, argv + 1)){
+    t_symbol *host;
+    int port;
+    if (endpoint_getaddress(c, &host, &port)){
+        SETSYMBOL(argv, host);
+        SETFLOAT(argv + 1, port);
         SETFLOAT(argv + 2, e->id);
         return 1;
     }

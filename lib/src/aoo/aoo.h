@@ -110,7 +110,7 @@ uint64_t aoo_osctime_fromseconds(double s);
 
 uint64_t aoo_osctime_addseconds(uint64_t t, double s);
 
-typedef void (*aoo_replyfn)(
+typedef int32_t (*aoo_replyfn)(
         void *,         // endpoint
         const char *,   // data
         int32_t         // number of bytes

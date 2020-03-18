@@ -15,6 +15,8 @@ typedef int socklen_t;
 #include <errno.h>
 #include <string.h>
 
+/*///////////////////////// socket /////////////////////////////////*/
+
 void socket_error_print(const char *label)
 {
 #ifdef _WIN32
@@ -71,7 +73,9 @@ int socket_close(int socket)
 #endif
 }
 
-int socket_receive(int socket, char *buf, int size, int nonblocking)
+int socket_receive(int socket, char *buf, int size,
+                   struct sockaddr_storage *sa, socklen_t *len,
+                   int nonblocking)
 {
     if (nonblocking){
         // non-blocking receive via select()
@@ -89,7 +93,12 @@ int socket_receive(int socket, char *buf, int size, int nonblocking)
             return 0;
         }
     }
-    return recv(socket, buf, size, 0);
+    if (sa && len){
+        *len = sizeof(struct sockaddr_storage); // initialize len!
+        return recvfrom(socket, buf, size, 0, (struct sockaddr *)sa, len);
+    } else {
+        return recv(socket, buf, size, 0);
+    }
 }
 
 int socket_signal(int socket, int port)
@@ -108,22 +117,36 @@ int socket_signal(int socket, int port)
     }
 }
 
-t_endpoint * endpoint_new(const char *host, int port, int socket)
+int socket_getaddr(const char *hostname, int port,
+                   struct sockaddr_storage *sa, socklen_t *len)
 {
-    struct hostent *he = gethostbyname(host);
+    struct hostent *he = gethostbyname(hostname);
     if (he){
-        t_endpoint *e = (t_endpoint *)getbytes(sizeof(t_endpoint));
-        e->socket = socket;
-        e->next = 0;
-        struct sockaddr_in *addr = (struct sockaddr_in *)&e->addr;
+        struct sockaddr_in *addr = (struct sockaddr_in *)sa;
+        // zero out to make sure that memcmp() works! see socket_match()
+        memset(addr, 0, sizeof(*addr));
         addr->sin_family = AF_INET;
-        memcpy(&addr->sin_addr, he->h_addr_list[0], he->h_length);
-        e->addrlen = sizeof(struct sockaddr_in);
         addr->sin_port = htons(port);
-        return e;
+        memcpy(&addr->sin_addr, he->h_addr_list[0], he->h_length);
+        *len = sizeof(struct sockaddr_in);
+        return 1;
     } else {
         return 0;
     }
+}
+
+/*//////////////////// endpoint ///////////////////////*/
+
+t_endpoint * endpoint_new(int socket, const struct sockaddr_storage *sa, socklen_t len)
+{
+    t_endpoint *e = (t_endpoint *)getbytes(sizeof(t_endpoint));
+    if (e){
+        e->socket = socket;
+        memcpy(&e->addr, sa, len);
+        e->addrlen = len;
+        e->next = 0;
+    }
+    return e;
 }
 
 void endpoint_free(t_endpoint *e)
@@ -133,11 +156,15 @@ void endpoint_free(t_endpoint *e)
 
 int endpoint_send(t_endpoint *e, const char *data, int size)
 {
-    return sendto(e->socket, data, size, 0,
+    int result = sendto(e->socket, data, size, 0,
                        (const struct sockaddr *)&e->addr, sizeof(e->addr));
+    if (result < 0){
+        socket_error_print("sendto");
+    }
+    return result;
 }
 
-int endpoint_getaddress(const t_endpoint *e, t_atom *hostname, t_atom *port)
+int endpoint_getaddress(const t_endpoint *e, t_symbol **hostname, int *port)
 {
     struct sockaddr_in *addr = (struct sockaddr_in *)&e->addr;
     const char *host = inet_ntoa(addr->sin_addr);
@@ -145,14 +172,17 @@ int endpoint_getaddress(const t_endpoint *e, t_atom *hostname, t_atom *port)
         fprintf(stderr, "inet_ntoa failed!\n");
         return 0;
     }
-    int portno = ntohs(addr->sin_port);
-    SETSYMBOL(hostname, gensym(host));
-    SETFLOAT(port, portno);
+    *hostname = gensym(host);
+    *port = ntohs(addr->sin_port);
     return 1;
 }
 
-int endpoint_match(const t_endpoint *e, const struct sockaddr *sa)
+t_endpoint * endpoint_find(t_endpoint *e, const struct sockaddr_storage *sa)
 {
-    return (sa->sa_family == ((const struct sockaddr *)&e->addr)->sa_family)
-            && !memcmp(sa, &e->addr, e->addrlen);
+    for (t_endpoint *ep = e; ep; ep = ep->next){
+        if ((sa->ss_family == ((const struct sockaddr *)&e->addr)->sa_family)
+            && !memcmp(sa, &e->addr, e->addrlen))
+            return ep;
+    }
+    return 0;
 }

@@ -15,9 +15,14 @@ int socket_close(int socket);
 
 int socket_bind(int socket, int port);
 
-int socket_receive(int socket, char *buf, int size, int nonblocking);
+int socket_receive(int socket, char *buf, int size,
+                   struct sockaddr_storage *sa, socklen_t *len,
+                   int nonblocking);
 
 int socket_signal(int socket, int port);
+
+int socket_getaddr(const char *hostname, int port,
+                   struct sockaddr_storage *sa, socklen_t *len);
 
 void socket_error_print(const char *label);
 
@@ -25,16 +30,16 @@ void socket_error_print(const char *label);
 typedef struct _endpoint {
     int socket;
     struct sockaddr_storage addr;
-    int addrlen;
+    socklen_t addrlen;
     struct _endpoint *next;
 } t_endpoint;
 
-t_endpoint * endpoint_new(const char *host, int port, int socket);
+t_endpoint * endpoint_new(int socket, const struct sockaddr_storage *sa, socklen_t len);
 
 void endpoint_free(t_endpoint *e);
 
 int endpoint_send(t_endpoint *e, const char *data, int size);
 
-int endpoint_getaddress(const t_endpoint *e, t_atom *hostname, t_atom *port);
+int endpoint_getaddress(const t_endpoint *e, t_symbol **hostname, int *port);
 
-int endpoint_match(const t_endpoint *e, const struct sockaddr *sa);
+t_endpoint * endpoint_find(t_endpoint *e, const struct sockaddr_storage *sa);
