@@ -490,8 +490,7 @@ void aoo_source::handle_request(void *endpoint, aoo_replyfn fn, int32_t id){
         // just resend format (the last format message might have been lost)
         send_format(*sink);
     } else {
-        // add new sink
-        add_sink(endpoint, id, fn);
+        LOG_WARNING("ignoring '/request' message: sink not found");
     }
 }
 
@@ -499,7 +498,7 @@ void aoo_source::handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32
                                int32_t count, osc::ReceivedMessageArgumentIterator it){
     auto sink = find_sink(endpoint, id);
     if (!sink){
-        LOG_VERBOSE("ignoring '/resend' message: sink not found");
+        LOG_WARNING("ignoring '/resend' message: sink not found");
         return;
     }
     if (salt != salt_){
@@ -547,7 +546,7 @@ void aoo_source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id){
         event.header.id = id;
         eventqueue_.write(event);
     } else {
-        LOG_WARNING("received ping from unknown sink!");
+        LOG_WARNING("ignoring '/ping' message: sink not found");
     }
 }
 
