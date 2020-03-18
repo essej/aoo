@@ -102,10 +102,10 @@ class aoo_sink final : public aoo::isink {
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
     int32_t buffersize_ = AOO_SINK_BUFSIZE;
+    int32_t packetsize_ = AOO_PACKETSIZE;
     int32_t resend_limit_ = AOO_RESEND_LIMIT;
     float resend_interval_ = AOO_RESEND_INTERVAL * 0.001;
     int32_t resend_maxnumframes_ = AOO_RESEND_MAXNUMFRAMES;
-    int32_t resend_packetsize_ = AOO_RESEND_PACKETSIZE;
     float ping_interval_ = AOO_PING_INTERVAL * 0.001;
     std::vector<aoo_sample> buffer_;
     aoo_processfn processfn_ = nullptr;

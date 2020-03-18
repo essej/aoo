@@ -82,10 +82,6 @@ typedef AOO_SAMPLETYPE aoo_sample;
  #define AOO_RESEND_MAXNUMFRAMES 64
 #endif
 
-#ifndef AOO_RESEND_PACKETSIZE
- #define AOO_RESEND_PACKETSIZE 256
-#endif
-
 void aoo_setup(void);
 
 void aoo_close(void);
@@ -194,8 +190,7 @@ typedef enum aoo_option
     aoo_opt_resend_buffersize,      // int32_t
     aoo_opt_resend_limit,           // int32_t
     aoo_opt_resend_interval,        // int32_t
-    aoo_opt_resend_maxnumframes,    // int32_t
-    aoo_opt_resend_packetsize       // int32_t
+    aoo_opt_resend_maxnumframes     // int32_t
 } aoo_option;
 
 #define AOO_ARG(x) &x, sizeof(x)

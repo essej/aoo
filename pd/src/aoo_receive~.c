@@ -279,6 +279,14 @@ static void aoo_receive_timefilter(t_aoo_receive *x, t_floatarg f)
     pthread_mutex_unlock(&x->x_mutex);
 }
 
+static void aoo_receive_packetsize(t_aoo_receive *x, t_floatarg f)
+{
+    pthread_mutex_lock(&x->x_mutex);
+    int32_t packetsize = f;
+    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_packetsize, AOO_ARG(packetsize));
+    pthread_mutex_unlock(&x->x_mutex);
+}
+
 static void aoo_receive_ping(t_aoo_receive *x, t_floatarg f)
 {
     pthread_mutex_lock(&x->x_mutex);
@@ -289,15 +297,14 @@ static void aoo_receive_ping(t_aoo_receive *x, t_floatarg f)
 
 static void aoo_receive_resend(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
 {
-    int32_t limit, interval, maxnumframes, packetsize;
-    if (!aoo_parseresend(x, argc, argv, &limit, &interval, &maxnumframes, &packetsize)){
+    int32_t limit, interval, maxnumframes;
+    if (!aoo_parseresend(x, argc, argv, &limit, &interval, &maxnumframes)){
         return;
     }
     pthread_mutex_lock(&x->x_mutex);
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_limit, AOO_ARG(limit));
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_interval, AOO_ARG(interval));
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_maxnumframes, AOO_ARG(maxnumframes));
-    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_packetsize, AOO_ARG(packetsize));
     pthread_mutex_unlock(&x->x_mutex);
 }
 
@@ -567,6 +574,8 @@ void aoo_receive_tilde_setup(void)
                     gensym("bufsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_timefilter,
                     gensym("timefilter"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_packetsize,
+                    gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_resend,
                     gensym("resend"), A_GIMME, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_ping,

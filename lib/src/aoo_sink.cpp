@@ -116,6 +116,23 @@ int32_t aoo_sink::set_option(int32_t opt, void *ptr, int32_t size)
         bandwidth_ = std::max<double>(0, std::min<double>(1, as<float>(ptr)));
         starttime_ = 0; // will update time DLL and reset timer
         break;
+    // packetsize
+    case aoo_opt_packetsize:
+    {
+        CHECKARG(int32_t);
+        const int32_t minpacketsize = 64;
+        auto packetsize = as<int32_t>(ptr);
+        if (packetsize < minpacketsize){
+            LOG_WARNING("packet size too small! setting to " << minpacketsize);
+            packetsize_ = minpacketsize;
+        } else if (packetsize > AOO_MAXPACKETSIZE){
+            LOG_WARNING("packet size too large! setting to " << AOO_MAXPACKETSIZE);
+            packetsize_ = AOO_MAXPACKETSIZE;
+        } else {
+            packetsize_ = packetsize;
+        }
+        break;
+    }
     // resend limit
     case aoo_opt_resend_limit:
         CHECKARG(int32_t);
@@ -130,12 +147,6 @@ int32_t aoo_sink::set_option(int32_t opt, void *ptr, int32_t size)
     case aoo_opt_resend_maxnumframes:
         CHECKARG(int32_t);
         resend_maxnumframes_ = std::max<int32_t>(1, as<int32_t>(ptr));
-        break;
-    // resend packetsize
-    case aoo_opt_resend_packetsize:
-        CHECKARG(int32_t);
-        resend_packetsize_ = std::max<int32_t>(
-                    64, std::min<int32_t>(AOO_MAXPACKETSIZE, as<int32_t>(ptr)));
         break;
     // unknown
     default:
@@ -168,6 +179,11 @@ int32_t aoo_sink::get_option(int32_t opt, void *ptr, int32_t size)
         CHECKARG(float);
         as<float>(ptr) = bandwidth_;
         break;
+    // resend packetsize
+    case aoo_opt_packetsize:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = packetsize_;
+        break;
     // resend limit
     case aoo_opt_resend_limit:
         CHECKARG(int32_t);
@@ -182,11 +198,6 @@ int32_t aoo_sink::get_option(int32_t opt, void *ptr, int32_t size)
     case aoo_opt_resend_maxnumframes:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = resend_maxnumframes_;
-        break;
-    // resend packetsize
-    case aoo_opt_resend_packetsize:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = resend_packetsize_;
         break;
     // unknown
     default:
@@ -746,6 +757,9 @@ void aoo_sink::request_format(void *endpoint, aoo_replyfn fn, int32_t id){
 // /AoO/<src>/resend <sink> <salt> <seq0> <frame0> <seq1> <frame1> ...
 
 void aoo_sink::request_data(aoo::source_desc& src){
+    if (retransmit_list_.empty()){
+        return;
+    }
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
@@ -754,8 +768,8 @@ void aoo_sink::request_data(aoo::source_desc& src){
     char address[maxaddrsize];
     snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, src.id, AOO_RESEND);
 
-    const int32_t maxdatasize = resend_packetsize_ - maxaddrsize - 16;
-    const int32_t maxrequests = maxdatasize / 10; // 2 * int32_t + overhead for typetags
+    const int32_t maxdatasize = packetsize_ - maxaddrsize - 16; // id + salt + padding
+    const int32_t maxrequests = maxdatasize / 10; // 2 * (int32_t + typetag)
     auto d = div(retransmit_list_.size(), maxrequests);
 
     auto dorequest = [&](const data_request* data, int32_t n){
@@ -774,6 +788,8 @@ void aoo_sink::request_data(aoo::source_desc& src){
     if (d.rem > 0){
         dorequest(retransmit_list_.data() + retransmit_list_.size() - d.rem, d.rem);
     }
+
+    retransmit_list_.clear(); // not really necessary
 }
 
 // AoO/<id>/ping <sink>

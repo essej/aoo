@@ -1,15 +1,15 @@
-#N canvas 464 71 696 653 12;
-#X text 35 597 see also;
-#X obj 104 596 aoo_send~;
+#N canvas 719 88 721 682 12;
+#X text 35 622 see also;
+#X obj 104 621 aoo_send~;
 #X msg 38 99 listen \$1;
 #X obj 38 75 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
 -262144 -1 -1 0 256;
 #X msg 102 72 0;
 #X text 37 53 port;
 #X text 136 72 stop listening;
-#X obj 38 496 aoo_receive~ 1 2 9999;
-#X text 76 442 creation arguments:;
-#X text 74 466 1) ID \, 2) num channels \, 3) [port] \, 4) [bufsize]
+#X obj 38 521 aoo_receive~ 1 2 9999;
+#X text 101 467 creation arguments:;
+#X text 99 491 1) ID \, 2) num channels \, 3) [port] \, 4) [bufsize]
 ;
 #X msg 53 152 bufsize \$1;
 #X obj 53 128 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
@@ -18,29 +18,26 @@
 #X obj 62 185 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X text 168 205 time DLL filter bandwidth (default: 0.0001);
-#X obj 38 523 env~;
-#X floatatom 38 547 5 0 0 0 - - -;
-#X obj 109 524 env~;
-#X floatatom 109 548 5 0 0 0 - - -;
+#X obj 38 548 env~;
+#X floatatom 38 572 5 0 0 0 - - -;
+#X obj 109 549 env~;
+#X floatatom 109 573 5 0 0 0 - - -;
 #X text 137 151 increase for jittery \, unreliable networks!;
 #X text 138 130 buffer size in ms (default: 20 ms);
-#X msg 80 335 resend 0;
-#X msg 75 302 resend;
-#X text 128 303 turn on (auto);
-#X msg 68 267 resend 4 10 16 128;
-#X text 66 240 resend lost packets (on by default):;
-#X text 245 265 1) limit = number of attempts per frame;
-#X text 245 287 2) interval (ms) = time between attempts;
-#X text 245 334 4) packetsize = max. UDP packet size;
-#X text 245 310 3) maxnumframes = max. number of frames to request
+#X msg 102 430 resend 0;
+#X msg 97 395 resend;
+#X text 150 396 turn on (auto);
+#X text 88 335 resend lost packets (on by default):;
+#X text 266 382 2) interval (ms) = time between attempts;
+#X text 266 405 3) maxnumframes = max. number of frames to request
 at once;
-#X text 243 360 all arguments are optional or can be "auto", f 44
+#X text 266 431 all arguments are optional or can be "auto", f 44
 ;
-#X text 150 336 turn off;
-#X msg 79 408 ping \$1;
-#X obj 79 387 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X text 172 431 turn off;
+#X msg 81 307 ping \$1;
+#X obj 81 286 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X text 145 408 set ping interval in ms (default: 1000) \, 0 = off
+#X text 147 307 set ping interval in ms (default: 1000) \, 0 = off
 ;
 #N canvas 764 124 630 452 events 0;
 #X obj 37 36 inlet;
@@ -60,17 +57,23 @@ at once;
 #X text 33 369 [block_gap <host> <port> <ID> <count>(;
 #X text 70 396 large gap between blocks;
 #X connect 0 0 4 0;
-#X restore 182 525 pd events;
+#X restore 182 550 pd events;
 #X text 35 24 aoo_receive~: receive one or more AoO audio streams;
-#X msg 289 551 \; pd dsp \$1;
-#X obj 289 528 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X msg 289 576 \; pd dsp \$1;
+#X obj 289 553 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
+#X obj 71 234 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X msg 71 258 packetsize \$1;
+#X text 179 256 max. UDP packet size (default: 512 bytes);
+#X msg 90 362 resend 4 10 16;
+#X text 266 360 1) limit = max. number of attempts per frame;
 #X connect 2 0 7 0;
 #X connect 3 0 2 0;
 #X connect 4 0 2 0;
 #X connect 7 0 15 0;
 #X connect 7 1 17 0;
-#X connect 7 2 35 0;
+#X connect 7 2 32 0;
 #X connect 10 0 7 0;
 #X connect 11 0 10 0;
 #X connect 12 0 7 0;
@@ -79,7 +82,9 @@ at once;
 #X connect 17 0 18 0;
 #X connect 21 0 7 0;
 #X connect 22 0 7 0;
-#X connect 24 0 7 0;
-#X connect 32 0 7 0;
-#X connect 33 0 32 0;
-#X connect 38 0 37 0;
+#X connect 29 0 7 0;
+#X connect 30 0 29 0;
+#X connect 35 0 34 0;
+#X connect 36 0 37 0;
+#X connect 37 0 7 0;
+#X connect 39 0 7 0;

@@ -78,8 +78,7 @@ static int aoo_getarg(const char *name, void *x, int which, int argc, const t_at
 
 int aoo_parseresend(void *x, int argc, const t_atom *argv,
                     int32_t *limit, int32_t *interval,
-                    int32_t *maxnumframes,
-                    int32_t *packetsize)
+                    int32_t *maxnumframes)
 {
     t_float f;
     if (aoo_getarg("limit", x, 0, argc, argv, &f, AOO_RESEND_LIMIT)){
@@ -94,11 +93,6 @@ int aoo_parseresend(void *x, int argc, const t_atom *argv,
     }
     if (aoo_getarg("maxnumframes", x, 2, argc, argv, &f, AOO_RESEND_MAXNUMFRAMES)){
         *maxnumframes = f;
-    } else {
-        return 0;
-    }
-    if (aoo_getarg("packetsize", x, 3, argc, argv, &f, AOO_RESEND_PACKETSIZE)){
-        *packetsize = f;
     } else {
         return 0;
     }

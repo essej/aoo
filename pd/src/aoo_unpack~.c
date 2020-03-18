@@ -72,16 +72,21 @@ static void aoo_unpack_ping(t_aoo_unpack *x, t_floatarg f)
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_ping_interval, AOO_ARG(interval));
 }
 
+static void aoo_unpack_packetsize(t_aoo_unpack *x, t_floatarg f)
+{
+    int32_t packetsize = f;
+    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_packetsize, AOO_ARG(packetsize));
+}
+
 static void aoo_unpack_resend(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)
 {
-    int32_t limit, interval, maxnumframes, packetsize;
-    if (!aoo_parseresend(x, argc, argv, &limit, &interval, &maxnumframes, &packetsize)){
+    int32_t limit, interval, maxnumframes;
+    if (!aoo_parseresend(x, argc, argv, &limit, &interval, &maxnumframes)){
         return;
     }
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_limit, AOO_ARG(limit));
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_interval, AOO_ARG(interval));
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_maxnumframes, AOO_ARG(maxnumframes));
-    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_packetsize, AOO_ARG(packetsize));
 }
 
 static void aoo_unpack_tick(t_aoo_unpack *x)
@@ -254,6 +259,8 @@ void aoo_unpack_tilde_setup(void)
                     gensym("bufsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_timefilter,
                     gensym("timefilter"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_packetsize,
+                    gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_resend,
                     gensym("resend"), A_GIMME, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_ping,

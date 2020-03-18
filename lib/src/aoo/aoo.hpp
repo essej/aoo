@@ -154,6 +154,14 @@ public:
         return get_option(aoo_opt_timefilter_bandwidth, AOO_ARG(f));
     }
 
+    int32_t set_packetsize(int32_t n){
+        return set_option(aoo_opt_packetsize, AOO_ARG(n));
+    }
+
+    int32_t get_packetsize(int32_t& n){
+        return get_option(aoo_opt_packetsize, AOO_ARG(n));
+    }
+
     int32_t set_ping_interval(int32_t n){
         return set_option(aoo_opt_ping_interval, AOO_ARG(n));
     }
@@ -184,14 +192,6 @@ public:
 
     int32_t get_resend_maxnumframes(int32_t& n){
         return get_option(aoo_opt_resend_maxnumframes, AOO_ARG(n));
-    }
-
-    int32_t set_resend_packetsize(int32_t n){
-        return set_option(aoo_opt_resend_packetsize, AOO_ARG(n));
-    }
-
-    int32_t get_resend_packetsize(int32_t& n){
-        return get_option(aoo_opt_resend_packetsize, AOO_ARG(n));
     }
 
     //----------------- source options -------------------//
