@@ -1,7 +1,7 @@
 #pragma once
 
 #include "aoo.h"
-#include "opus/include/opus_multistream.h"
+#include "opus/opus_multistream.h"
 
 #ifdef __cplusplus
 extern "C"
