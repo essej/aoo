@@ -32,7 +32,11 @@ aoo_source * aoo_source_new(int32_t id) {
 }
 
 aoo_source::aoo_source(int32_t id)
-    : id_(id){}
+    : id_(id)
+{
+    // event queue
+    eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);
+}
 
 void aoo_source_free(aoo_source *src){
     delete src;
@@ -342,9 +346,6 @@ void aoo_source::update(){
         } else {
             resampler_.clear();
         }
-
-        // event queue
-        eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);
 
         // history buffer
         update_historybuffer();
