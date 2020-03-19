@@ -158,6 +158,8 @@ typedef enum aoo_event_type
     AOO_PING_EVENT,
     // sink: source added
     AOO_SOURCE_ADD_EVENT,
+    // sink: source removed (non implemented yet)
+    AOO_SOURCE_REMOVE_EVENT,
     // sink: source format changed
     AOO_SOURCE_FORMAT_EVENT,
     // sink: source changed state
@@ -174,9 +176,9 @@ typedef enum aoo_event_type
 
 typedef struct aoo_endpoint_event
 {
-    aoo_event_type type;
-    void *endpoint;
+    int32_t type;
     int32_t id;
+    void *endpoint;
 } aoo_endpoint_event;
 
 typedef aoo_endpoint_event aoo_source_event;
