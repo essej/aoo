@@ -12,26 +12,9 @@
 # library name
 lib.name = aoo
 
-# input source file
-# weird HACK for pd-lib-builder: use .cpp extension although the actual sources are .c files;
-# this causes the sources files to be compiled with gcc but linked with g++ (needed for aoo lib).
-
-class.sources = src/aoo_pack~.cpp src/aoo_unpack~.cpp src/aoo_route.cpp \
-                src/aoo_send~.cpp src/aoo_receive~.cpp
-
-ldlibs = -lopus
-
-define forWindows
-    ldlibs += -lws2_32
-endef
-
-define forDarwin
-    ldlibs += -lpthread
-endef
-
-define forLinux
-    ldlibs += -pthread
-endef
+# input source files
+class.sources = src/aoo_pack~.c src/aoo_unpack~.c src/aoo_route.c \
+                src/aoo_send~.c src/aoo_receive~.c
 
 AOO = ../lib
 
@@ -39,6 +22,9 @@ cflags = -I$(AOO) \
     -I$(AOO)/src \
     -I$(AOO)/src/lib \
     -Wno-unused -Wno-unused-parameter \
+    -fvisibility=hidden \
+    -DAOO_BUILD \
+    -DDLL_EXPORT \
     -DLOGLEVEL=2 \
     -DAOO_PD_OSCTIMEHACK=0 \
     -DAOO_TIMEFILTER_BANDWIDTH=0.0001 \
@@ -46,11 +32,13 @@ cflags = -I$(AOO) \
     -DAOO_DEBUG_OSCTIME=0 \
     -DAOO_DEBUG_RESAMPLING=0
 
-ldlibs = -lopus
+ldlibs =
 
 common.sources = \
     src/aoo_common.cpp \
-    src/aoo_net.cpp \
+    src/aoo_net.cpp
+
+shared.sources = \
     $(AOO)/src/aoo_imp.cpp \
     $(AOO)/src/aoo_source.cpp \
     $(AOO)/src/aoo_sink.cpp \
@@ -60,6 +48,20 @@ common.sources = \
     $(AOO)/src/lib/oscpack/osc/OscReceivedElements.cpp \
     $(AOO)/src/lib/oscpack/osc/OscOutboundPacketStream.cpp
 
+shared.ldlibs = -lopus
+
+define forWindows
+    ldlibs += -lws2_32
+    shared.ldlibs += -static-libstdc++ -static-libgcc
+endef
+
+define forDarwin
+    ldlibs += -lpthread
+endef
+
+define forLinux
+    ldlibs += -pthread
+endef
 
 # all extra files to be included in binary distribution of the library
 datafiles = aoo_pack~-test.pd aoo_receive~-test.pd aoo_send~-test.pd aoo-test.pd aoo_unpack~-test.pd

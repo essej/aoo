@@ -1,5 +1,4 @@
 #include "m_pd.h"
-#include "aoo/aoo.h"
 
 #include "aoo_common.h"
 #include "aoo_net.h"
@@ -381,7 +380,7 @@ static void aoo_send_free(t_aoo_send *x)
     clock_free(x->x_clock);
 }
 
-void aoo_send_tilde_setup(void)
+EXPORT void aoo_send_tilde_setup(void)
 {
     aoo_send_class = class_new(gensym("aoo_send~"), (t_newmethod)(void *)aoo_send_new,
         (t_method)aoo_send_free, sizeof(t_aoo_send), 0, A_GIMME, A_NULL);

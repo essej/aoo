@@ -1,5 +1,4 @@
 #include "m_pd.h"
-#include "aoo/aoo.h"
 
 #include "aoo_common.h"
 #include "aoo_net.h"
@@ -562,7 +561,7 @@ static void aoo_receive_free(t_aoo_receive *x)
     pthread_mutex_destroy(&x->x_mutex);
 }
 
-void aoo_receive_tilde_setup(void)
+EXPORT void aoo_receive_tilde_setup(void)
 {
     socket_listener_setup();
 

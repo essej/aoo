@@ -1,5 +1,7 @@
 #include "m_pd.h"
 #include "aoo/aoo.h"
+#include "aoo_common.h"
+
 #include <string.h>
 
 static t_class *aoo_route_class;
@@ -80,7 +82,7 @@ static void aoo_route_free(t_aoo_route *x)
     freebytes(x->x_ids, sizeof(int) * x->x_n);
 }
 
-void aoo_route_setup(void)
+EXPORT void aoo_route_setup(void)
 {
     aoo_route_class = class_new(gensym("aoo_route"), (t_newmethod)(void *)aoo_route_new,
         (t_method)aoo_route_free, sizeof(t_aoo_route), 0, A_GIMME, A_NULL);

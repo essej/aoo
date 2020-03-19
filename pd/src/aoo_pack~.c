@@ -1,7 +1,4 @@
 #include "m_pd.h"
-#include "aoo/aoo.h"
-#include "aoo/aoo_pcm.h"
-#include "aoo/aoo_opus.h"
 
 #include "aoo_common.h"
 
@@ -248,7 +245,7 @@ static void aoo_pack_free(t_aoo_pack *x)
     aoo_source_free(x->x_aoo_source);
 }
 
-void aoo_pack_tilde_setup(void)
+EXPORT void aoo_pack_tilde_setup(void)
 {
     aoo_pack_class = class_new(gensym("aoo_pack~"), (t_newmethod)(void *)aoo_pack_new,
         (t_method)aoo_pack_free, sizeof(t_aoo_pack), 0, A_GIMME, A_NULL);

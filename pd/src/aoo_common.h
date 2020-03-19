@@ -1,7 +1,24 @@
 #pragma once
 
 #include "m_pd.h"
+
+// hack for pd-lib-builder
+#ifdef AOO_BUILD
+#undef AOO_BUILD
+#endif
+
 #include "aoo/aoo.h"
+#include "aoo/aoo_pcm.h"
+#include "aoo/aoo_opus.h"
+
+// setup function
+#ifdef _WIN32
+#define EXPORT __declspec(dllexport)
+#elif __GNUC__ >= 4
+#define EXPORT __attribute__((visibility("default")))
+#else
+#define EXPORT
+#endif
 
 uint64_t aoo_pd_osctime(int n, t_float sr);
 

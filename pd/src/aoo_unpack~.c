@@ -1,5 +1,4 @@
 #include "m_pd.h"
-#include "aoo/aoo.h"
 
 #include "aoo_common.h"
 
@@ -249,7 +248,7 @@ static void aoo_unpack_free(t_aoo_unpack *x)
     aoo_sink_free(x->x_aoo_sink);
 }
 
-void aoo_unpack_tilde_setup(void)
+EXPORT void aoo_unpack_tilde_setup(void)
 {
     aoo_unpack_class = class_new(gensym("aoo_unpack~"), (t_newmethod)(void *)aoo_unpack_new,
         (t_method)aoo_unpack_free, sizeof(t_aoo_unpack), 0, A_GIMME, A_NULL);
