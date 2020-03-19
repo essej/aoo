@@ -223,6 +223,12 @@ static void socket_listener_setup(void)
 
 static t_class *aoo_receive_class;
 
+typedef struct _source
+{
+    t_endpoint *s_endpoint;
+    int32_t s_id;
+} t_source;
+
 typedef struct _aoo_receive
 {
     t_object x_obj;
@@ -231,8 +237,12 @@ typedef struct _aoo_receive
     aoo_sink_settings x_settings;
     int32_t x_id;
     t_sample **x_vec;
+    // sinks
+    t_source *x_sources;
+    int x_numsources;
     t_socket_listener * x_listener;
     pthread_mutex_t x_mutex;
+    // events
     t_outlet *x_eventout;
     t_clock *x_clock;
 } t_aoo_receive;
@@ -307,6 +317,24 @@ static void aoo_receive_resend(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
     pthread_mutex_unlock(&x->x_mutex);
 }
 
+static void aoo_receive_listsources(t_aoo_receive *x)
+{
+    for (int i = 0; i < x->x_numsources; ++i){
+        t_source *s = &x->x_sources[i];
+        t_symbol *host;
+        int port;
+        if (endpoint_getaddress(s->s_endpoint, &host, &port)){
+            t_atom msg[3];
+            SETSYMBOL(msg, host);
+            SETFLOAT(msg + 1, port);
+            SETFLOAT(msg + 2, s->s_id);
+            outlet_anything(x->x_eventout, gensym("source"), 3, msg);
+        } else {
+            pd_error(x, "%s: couldn't get endpoint address for source", classname(x));
+        }
+    }
+}
+
 static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
 {
     int port = f;
@@ -357,6 +385,21 @@ static void aoo_receive_handleevents(t_aoo_receive *x,
         case AOO_SOURCE_ADD_EVENT:
         {
             const aoo_source_event *e = &events[i].source;
+
+            // first add to source list
+            int oldsize = x->x_numsources;
+            if (oldsize){
+                x->x_sources = (t_source *)resizebytes(x->x_sources,
+                    oldsize * sizeof(t_source), (oldsize + 1) * sizeof(t_source));
+            } else {
+                x->x_sources = (t_source *)getbytes(sizeof(t_source));
+            }
+            t_source *s = &x->x_sources[oldsize];
+            s->s_endpoint = e->endpoint;
+            s->s_id = e->id;
+            x->x_numsources++;
+
+            // output event
             if (!aoo_sourceevent_to_atoms(e, msg)){
                 continue;
             }
@@ -488,18 +531,20 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
 
     x->x_f = 0;
     x->x_listener = 0;
-    pthread_mutex_init(&x->x_mutex, 0);
+    x->x_sources = 0;
+    x->x_numsources = 0;
     x->x_clock = clock_new(x, (t_method)aoo_receive_tick);
-    // default settings
-    memset(&x->x_settings, 0, sizeof(aoo_sink_settings));
-    x->x_settings.userdata = x;
-    x->x_settings.eventhandler = (aoo_eventhandler)aoo_receive_handleevents;
-    x->x_settings.processfn = (aoo_processfn)aoo_receive_process;
+    pthread_mutex_init(&x->x_mutex, 0);
 
     // arg #1: ID
     int id = atom_getfloatarg(0, argc, argv);
     x->x_id = id >= 0 ? id : 0;
     x->x_aoo_sink = aoo_sink_new(x->x_id);
+
+    memset(&x->x_settings, 0, sizeof(aoo_sink_settings));
+    x->x_settings.userdata = x;
+    x->x_settings.eventhandler = (aoo_eventhandler)aoo_receive_handleevents;
+    x->x_settings.processfn = (aoo_processfn)aoo_receive_process;
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
@@ -533,13 +578,17 @@ static void aoo_receive_free(t_aoo_receive *x)
     if (x->x_listener){
         socket_listener_release(x->x_listener, x);
     }
-    // clean up
-    freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
-    clock_free(x->x_clock);
 
     aoo_sink_free(x->x_aoo_sink);
 
     pthread_mutex_destroy(&x->x_mutex);
+
+    freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
+    if (x->x_sources){
+        freebytes(x->x_sources, x->x_numsources * sizeof(t_source));
+    }
+
+    clock_free(x->x_clock);
 }
 
 EXPORT void aoo_receive_tilde_setup(void)
@@ -560,6 +609,8 @@ EXPORT void aoo_receive_tilde_setup(void)
                     gensym("resend"), A_GIMME, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_ping,
                     gensym("ping"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_listsources,
+                    gensym("list_sources"), A_NULL);
 
     aoo_setup();
 }

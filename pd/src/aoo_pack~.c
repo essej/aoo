@@ -196,6 +196,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     // arg #1: ID
     int src = atom_getfloatarg(0, argc, argv);
     x->x_aoo_source = aoo_source_new(src >= 0 ? src : 0);
+
     memset(&x->x_settings, 0, sizeof(aoo_source_settings));
     x->x_settings.userdata = x;
     x->x_settings.eventhandler = (aoo_eventhandler)aoo_pack_handleevents;

@@ -213,15 +213,15 @@ static void * aoo_unpack_new(t_symbol *s, int argc, t_atom *argv)
 {
     t_aoo_unpack *x = (t_aoo_unpack *)pd_new(aoo_unpack_class);
     x->x_clock = clock_new(x, (t_method)aoo_unpack_tick);
-    // default settings
-    memset(&x->x_settings, 0, sizeof(aoo_sink_settings));
-    x->x_settings.userdata = x;
-    x->x_settings.eventhandler = (aoo_eventhandler)aoo_unpack_handleevents;
-    x->x_settings.processfn = (aoo_processfn)aoo_unpack_process;
 
     // arg #1: ID
     int id = atom_getfloatarg(0, argc, argv);
     x->x_aoo_sink = aoo_sink_new(id >= 0 ? id : 0);
+
+    memset(&x->x_settings, 0, sizeof(aoo_sink_settings));
+    x->x_settings.userdata = x;
+    x->x_settings.eventhandler = (aoo_eventhandler)aoo_unpack_handleevents;
+    x->x_settings.processfn = (aoo_processfn)aoo_unpack_process;
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);

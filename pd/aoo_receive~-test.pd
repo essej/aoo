@@ -1,6 +1,6 @@
 #N canvas 946 24 446 99 12;
-#N canvas 760 223 756 551 sub 1;
-#X obj 127 187 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#N canvas 787 202 756 551 sub 1;
+#X obj 127 164 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 500 256;
 #X obj 327 250 line~;
 #X msg 327 216 \$1 50;
@@ -13,9 +13,9 @@
 #X floatatom 373 259 5 0 0 0 - - -;
 #X obj 373 211 rmstodb;
 #X obj 327 161 pow 2;
-#X msg 123 214 bufsize \$1;
-#X obj 43 89 loadbang;
-#X msg 43 113 \; pd dsp 1;
+#X msg 123 191 bufsize \$1;
+#X obj 43 66 loadbang;
+#X msg 43 90 \; pd dsp 1;
 #X obj 57 342 outlet~;
 #X obj 137 344 outlet~;
 #X obj 70 464 block~;
@@ -23,14 +23,14 @@
 #X msg 71 408 64;
 #X msg 105 409 128;
 #X msg 141 410 256;
-#X msg 41 213 listen \$1;
-#X msg 42 186 9999;
-#X msg 80 187 0;
-#X obj 26 165 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X msg 41 190 listen \$1;
+#X msg 42 163 9999;
+#X msg 80 164 0;
+#X obj 26 142 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X obj 190 406 sigmund~;
 #X floatatom 190 430 10 0 0 0 - - -;
-#X obj 126 120 loadbang;
+#X obj 126 97 loadbang;
 #X obj 191 453 moses 0;
 #X obj 191 477 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
 -1 -1;
@@ -40,22 +40,24 @@
 #X msg 214 477 -1;
 #X obj 249 478 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
 -1 -1;
-#X msg 207 213 timefilter \$1;
-#X obj 208 186 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X msg 207 190 timefilter \$1;
+#X obj 208 163 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X obj 65 248 aoo_receive~ 1 2 9999;
 #X obj 137 313 clip~ -1 1;
 #X obj 56 313 clip~ -1 1;
-#X msg 126 144 500;
-#X msg 162 145 100;
-#X msg 193 146 20;
-#X obj 291 303 aoo_receive~ 2 2 9999;
-#X obj 363 341 env~;
-#X floatatom 363 365 5 0 0 0 - - -;
-#X obj 292 340 env~;
-#X floatatom 292 364 5 0 0 0 - - -;
-#X obj 435 330 print B;
+#X msg 126 121 500;
+#X msg 162 122 100;
+#X msg 193 123 20;
+#X obj 291 314 aoo_receive~ 2 2 9999;
+#X obj 363 352 env~;
+#X floatatom 363 376 5 0 0 0 - - -;
+#X obj 292 351 env~;
+#X floatatom 292 375 5 0 0 0 - - -;
+#X obj 435 341 print B;
 #X obj 211 336 print A;
+#X msg 65 219 list_sources;
+#X msg 291 287 list_sources;
 #X connect 0 0 11 0;
 #X connect 1 0 3 1;
 #X connect 1 0 4 1;
@@ -104,6 +106,8 @@
 #X connect 43 2 48 0;
 #X connect 44 0 45 0;
 #X connect 46 0 47 0;
+#X connect 50 0 37 0;
+#X connect 51 0 43 0;
 #X restore 34 46 pd sub;
 #X obj 34 70 dac~;
 #X connect 0 0 1 0;

@@ -15,6 +15,12 @@
 
 static t_class *aoo_send_class;
 
+typedef struct _sink
+{
+    t_endpoint *s_endpoint;
+    int32_t s_id;
+} t_sink;
+
 typedef struct _aoo_send
 {
     t_object x_obj;
@@ -22,6 +28,9 @@ typedef struct _aoo_send
     aoo_source *x_aoo_source;
     aoo_source_settings x_settings;
     t_float **x_vec;
+    // sinks
+    t_sink *x_sinks;
+    int x_numsinks;
     // events
     t_clock *x_clock;
     t_outlet *x_eventout;
@@ -200,6 +209,22 @@ void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     int32_t id;
     if (aoo_send_getsinkarg(x, argc, argv, &sa, &len, &id)){
         t_endpoint *e = endpoint_find(x->x_endpoints, &sa);
+        if (e){
+            // check if sink exists
+            for (int i = 0; i < x->x_numsinks; ++i){
+                if ((x->x_sinks[i].s_endpoint == e) &&
+                    (x->x_sinks[i].s_id == id))
+                {
+                    t_symbol *host;
+                    int port;
+                    if (endpoint_getaddress(e, &host, &port)){
+                        pd_error(x, "%s: sink %s %d %d already added!",
+                                 classname(x), host->s_name, port, id);
+                        return;
+                    }
+                }
+            }
+        }
 
         // enter critical section
         pthread_mutex_lock(&x->x_mutex);
@@ -225,10 +250,24 @@ void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         // leave critical section
         pthread_mutex_unlock(&x->x_mutex);
 
+        // add sink to list
+        int oldsize = x->x_numsinks;
+        if (oldsize){
+            x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
+                oldsize * sizeof(t_sink), (oldsize + 1) * sizeof(t_sink));
+        } else {
+            x->x_sinks = (t_sink *)getbytes(sizeof(t_sink));
+        }
+        t_sink *sink = &x->x_sinks[oldsize];
+        sink->s_endpoint = e;
+        sink->s_id = id;
+        x->x_numsinks++;
+
+        // print message
         t_symbol *host;
         int port;
         if (endpoint_getaddress(e, &host, &port)){
-            post("added sink %s %d %d", host->s_name, port, id);
+            verbose(0, "added sink %s %d %d", host->s_name, port, id);
         }
     }
 }
@@ -245,13 +284,48 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     int32_t id;
     if (aoo_send_getsinkarg(x, argc, argv, &sa, &len, &id)){
         t_endpoint *e = endpoint_find(x->x_endpoints, &sa);
-        if (!e){
-            pd_error(x, "%s: couldn't find sink!", classname(x));
+        t_sink *sink = 0;
+        if (e){
+            // check if sink exists
+            for (int i = 0; i < x->x_numsinks; ++i){
+                if ((x->x_sinks[i].s_endpoint == e) &&
+                    (x->x_sinks[i].s_id == id))
+                {
+                    sink = &x->x_sinks[i];
+                }
+            }
+        }
+        if (!sink){
+            t_symbol *host = atom_getsymbol(argv);
+            int port = atom_getfloat(argv + 1);
+            pd_error(x, "%s: couldn't find sink %s %d %d!",
+                     classname(x), host->s_name, port, id);
             return;
         }
+
         pthread_mutex_lock(&x->x_mutex);
         aoo_source_removesink(x->x_aoo_source, e, id);
         pthread_mutex_unlock(&x->x_mutex);
+
+        // remove from list
+        int oldsize = x->x_numsinks;
+        if (oldsize > 1){
+            memmove(sink, sink + 1,
+                    (x->x_sinks + oldsize - (sink + 1)) * sizeof(t_sink));
+            x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
+                oldsize * sizeof(t_sink), (oldsize - 1) * sizeof(t_sink));
+        } else {
+            freebytes(x->x_sinks, sizeof(t_sink));
+            x->x_sinks = 0;
+        }
+        x->x_numsinks--;
+
+        // print message
+        t_symbol *host;
+        int port;
+        if (endpoint_getaddress(e, &host, &port)){
+            verbose(0, "removed sink %s %d %d", host->s_name, port, id);
+        }
     }
 }
 
@@ -260,6 +334,30 @@ static void aoo_send_clear(t_aoo_send *x)
     pthread_mutex_lock(&x->x_mutex);
     aoo_source_removeall(x->x_aoo_source);
     pthread_mutex_unlock(&x->x_mutex);
+
+    // clear sink list
+    if (x->x_numsinks){
+        freebytes(x->x_sinks, x->x_numsinks * sizeof(t_sink));
+        x->x_numsinks = 0;
+    }
+}
+
+static void aoo_send_listsinks(t_aoo_send *x)
+{
+    for (int i = 0; i < x->x_numsinks; ++i){
+        t_sink *s = &x->x_sinks[i];
+        t_symbol *host;
+        int port;
+        if (endpoint_getaddress(s->s_endpoint, &host, &port)){
+            t_atom msg[3];
+            SETSYMBOL(msg, host);
+            SETFLOAT(msg + 1, port);
+            SETFLOAT(msg + 2, s->s_id);
+            outlet_anything(x->x_eventout, gensym("sink"), 3, msg);
+        } else {
+            pd_error(x, "%s: couldn't get endpoint address for sink", classname(x));
+        }
+    }
 }
 
 static t_int * aoo_send_perform(t_int *w)
@@ -302,6 +400,8 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 
     x->x_clock = clock_new(x, (t_method)aoo_send_tick);
     x->x_endpoints = 0;
+    x->x_sinks = 0;
+    x->x_numsinks = 0;
     x->x_socket = socket_udp();
     if (x->x_socket < 0){
         pd_error(x, "%s: couldn't create socket", classname(x));
@@ -312,6 +412,7 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     // arg #1: ID
     int src = atom_getfloatarg(0, argc, argv);
     x->x_aoo_source = aoo_source_new(src >= 0 ? src : 0);
+
     memset(&x->x_settings, 0, sizeof(aoo_source_settings));
     x->x_settings.userdata = x;
     x->x_settings.eventhandler = (aoo_eventhandler)aoo_send_handleevents;
@@ -359,10 +460,10 @@ static void aoo_send_free(t_aoo_send *x)
         pthread_join(x->x_thread, 0);
     }
 
+    aoo_source_free(x->x_aoo_source);
+
     pthread_mutex_destroy(&x->x_mutex);
     pthread_cond_destroy(&x->x_cond);
-
-    aoo_source_free(x->x_aoo_source);
 
     if (x->x_socket >= 0){
         socket_close(x->x_socket);
@@ -376,6 +477,9 @@ static void aoo_send_free(t_aoo_send *x)
     }
 
     freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
+    if (x->x_sinks){
+        freebytes(x->x_sinks, x->x_numsinks * sizeof(t_sink));
+    }
 
     clock_free(x->x_clock);
 }
@@ -394,6 +498,7 @@ EXPORT void aoo_send_tilde_setup(void)
     class_addmethod(aoo_send_class, (t_method)aoo_send_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_resend, gensym("resend"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_listsinks, gensym("list_sinks"), A_NULL);
 
     aoo_setup();
 }
