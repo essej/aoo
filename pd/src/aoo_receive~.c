@@ -307,34 +307,6 @@ static void aoo_receive_resend(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
     pthread_mutex_unlock(&x->x_mutex);
 }
 
-#if 0
-static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
-{
-    if (argc < 2){
-        pd_error(x, "%s: too few arguments for 'invite' method", classname(x));
-        return;
-    }
-
-    struct sockaddr_in sockaddr;
-    t_symbol *hostname = atom_getsymbol(argv);
-    struct hostent *he = gethostbyname(hostname->s_name);
-    if (!he){
-        pd_error(x, "%s: couldn't resolve hostname '%s'", classname(x), hostname->s_name);
-        return;
-    }
-    int port = atom_getfloat(argv + 1);
-    int channel = argc > 2 ? atom_getfloat(argv + 2) : 0;
-
-    sockaddr.sin_family = AF_INET;
-    memcpy(&sockaddr.sin_addr, he->h_addr_list[0], he->h_length);
-    sockaddr.sin_port = htons(port);
-
-    pthread_mutex_lock(&x->x_mutex);
-    aoo_sink_invite(x->x_aoo_sink,
-    pthread_mutex_unlock(&x->x_mutex);
-}
-#endif
-
 static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
 {
     int port = f;
