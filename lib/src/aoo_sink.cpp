@@ -11,7 +11,10 @@ namespace aoo {
 /*////////////////////////// source_desc /////////////////////////////*/
 
 source_desc::source_desc(void *_endpoint, aoo_replyfn _fn, int32_t _id, int32_t _salt)
-    : endpoint(_endpoint), fn(_fn), id(_id), salt(_salt), laststate(AOO_SOURCE_STATE_STOP) {}
+    : endpoint(_endpoint), fn(_fn), id(_id), salt(_salt), laststate(AOO_SOURCE_STATE_STOP)
+{
+    eventqueue.resize(AOO_EVENTQUEUESIZE, 1);
+}
 
 void source_desc::send(const char *data, int32_t n){
     fn(endpoint, data, n);
@@ -365,9 +368,9 @@ void sink::handle_format_message(void *endpoint, aoo_replyfn fn,
 
         // called with mutex locked, so we don't have to synchronize with the process() method!
         aoo_event event;
-        event.header.type = AOO_FORMAT_EVENT;
-        event.header.endpoint = src.endpoint;
-        event.header.id = src.id;
+        event.type = AOO_SOURCE_FORMAT_EVENT;
+        event.source.endpoint = src.endpoint;
+        event.source.id = src.id;
         src.eventqueue.write(event);
     };
 
@@ -388,6 +391,12 @@ void sink::handle_format_message(void *endpoint, aoo_replyfn fn,
             // not found - add new source
             sources_.emplace_back(endpoint, fn, id, salt);
             src = &sources_.back();
+            // called with mutex locked, so we don't have to synchronize with the process() method!
+            aoo_event event;
+            event.type = AOO_SOURCE_ADD_EVENT;
+            event.source.endpoint = src->endpoint;
+            event.source.id = src->id;
+            src->eventqueue.write(event);
         } else {
             src->salt = salt;
         }
@@ -711,8 +720,10 @@ void sink::update_source(aoo::source_desc &src){
             i.channel = 0;
             src.infoqueue.write(i);
         };
-        // reset event queue
-        src.eventqueue.resize(AOO_EVENTQUEUESIZE, 1);
+    #if 0
+        // don't touch the event queue once constructed
+        src.eventqueue.reset();
+    #endif
         // setup resampler
         src.resampler.setup(src.decoder->blocksize(), blocksize_,
                             src.decoder->samplerate(), samplerate_, src.decoder->nchannels());
@@ -883,29 +894,29 @@ int32_t aoo::sink::process(uint64_t t){
             auto gap = std::atomic_exchange(&src.streamstate.gap, 0);
 
             aoo_event event;
-            event.header.endpoint = src.endpoint;
-            event.header.id = src.id;
+            event.source.endpoint = src.endpoint;
+            event.source.id = src.id;
             if (lost > 0){
                 // push packet loss event
-                event.header.type = AOO_BLOCK_LOSS_EVENT;
+                event.type = AOO_BLOCK_LOSS_EVENT;
                 event.block_loss.count = lost;
                 src.eventqueue.write(event);
             }
             if (reordered > 0){
                 // push packet reorder event
-                event.header.type = AOO_BLOCK_REORDER_EVENT;
+                event.type = AOO_BLOCK_REORDER_EVENT;
                 event.block_reorder.count = reordered;
                 src.eventqueue.write(event);
             }
             if (resent > 0){
                 // push packet resend event
-                event.header.type = AOO_BLOCK_RESEND_EVENT;
+                event.type = AOO_BLOCK_RESEND_EVENT;
                 event.block_resend.count = resent;
                 src.eventqueue.write(event);
             }
             if (gap > 0){
                 // push packet gap event
-                event.header.type = AOO_BLOCK_GAP_EVENT;
+                event.type = AOO_BLOCK_GAP_EVENT;
                 event.block_gap.count = gap;
                 src.eventqueue.write(event);
             }
@@ -936,9 +947,9 @@ int32_t aoo::sink::process(uint64_t t){
             if (src.laststate != AOO_SOURCE_STATE_START){
                 // push "start" event
                 aoo_event event;
-                event.header.type = AOO_SOURCE_STATE_EVENT;
-                event.header.endpoint = src.endpoint;
-                event.header.id = src.id;
+                event.type = AOO_SOURCE_STATE_EVENT;
+                event.source.endpoint = src.endpoint;
+                event.source.id = src.id;
                 event.source_state.state = AOO_SOURCE_STATE_START;
                 src.eventqueue.write(event);
                 src.laststate = AOO_SOURCE_STATE_START;
@@ -947,9 +958,9 @@ int32_t aoo::sink::process(uint64_t t){
             // buffer ran out -> push "stop" event
             if (src.laststate != AOO_SOURCE_STATE_STOP){
                 aoo_event event;
-                event.header.type = AOO_SOURCE_STATE_EVENT;
-                event.header.endpoint = src.endpoint;
-                event.header.id = src.id;
+                event.type = AOO_SOURCE_STATE_EVENT;
+                event.source.endpoint = src.endpoint;
+                event.source.id = src.id;
                 event.source_state.state = AOO_SOURCE_STATE_STOP;
                 src.eventqueue.write(event);
                 src.laststate = AOO_SOURCE_STATE_STOP;

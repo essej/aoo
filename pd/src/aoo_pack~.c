@@ -47,7 +47,7 @@ static void aoo_pack_handleevents(t_aoo_pack *x,
     for (int i = 0; i < n; ++i){
         if (events[i].type == AOO_PING_EVENT){
             t_atom msg;
-            SETFLOAT(&msg, events[i].header.id);
+            SETFLOAT(&msg, events[i].sink.id);
             outlet_anything(x->x_eventout, gensym("ping"), 1, &msg);
         }
     }

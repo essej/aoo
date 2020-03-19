@@ -1,4 +1,4 @@
-#N canvas 719 88 721 682 12;
+#N canvas 482 56 721 682 12;
 #X text 35 622 see also;
 #X obj 104 621 aoo_send~;
 #X msg 38 99 listen \$1;
@@ -39,24 +39,26 @@ at once;
 10 -262144 -1 -1 0 256;
 #X text 147 307 set ping interval in ms (default: 1000) \, 0 = off
 ;
-#N canvas 764 124 630 452 events 0;
-#X obj 37 36 inlet;
-#X text 34 148 [format <host> <port> <ID> <codec> <blocksize> <samplerate>
-...(, f 65;
-#X text 34 95 [state <host> <port> <ID> <state>(;
-#X text 33 201 [block_loss <host> <port> <ID> <count>(, f 40;
-#X obj 37 60 print aoo_receive~;
-#X text 34 256 [block_reorder <host> <port> <ID> <count>(;
-#X text 69 119 the source has change its state (0: stop \, 1: start)
+#N canvas 764 124 557 479 events 0;
+#X obj 37 32 inlet;
+#X text 33 236 [block_loss <host> <port> <ID> <count>(, f 40;
+#X obj 37 56 print aoo_receive~;
+#X text 34 291 [block_reorder <host> <port> <ID> <count>(;
+#X text 69 154 the source has change its state (0: stop \, 1: start)
 ;
-#X text 69 174 the source format has changed;
-#X text 71 229 blocks have been lost;
-#X text 71 284 blocks arrived out of order;
-#X text 34 312 [block_resend <host> <port> <ID> <count>(;
-#X text 71 339 blocks have been resent;
-#X text 33 369 [block_gap <host> <port> <ID> <count>(;
-#X text 70 396 large gap between blocks;
-#X connect 0 0 4 0;
+#X text 69 209 the source format has changed;
+#X text 71 264 blocks have been lost;
+#X text 71 319 blocks arrived out of order;
+#X text 34 347 [block_resend <host> <port> <ID> <count>(;
+#X text 71 374 blocks have been resent;
+#X text 33 404 [block_gap <host> <port> <ID> <count>(;
+#X text 70 431 large gap between blocks;
+#X text 34 130 [source_state <host> <port> <ID> <state>(;
+#X text 34 183 [source_format <host> <port> <ID> <codec> <blocksize>
+<samplerate> ...(, f 74;
+#X text 72 108 a source has been added;
+#X text 33 86 [source_add <host> <port> <ID>(, f 33;
+#X connect 0 0 2 0;
 #X restore 182 550 pd events;
 #X text 35 24 aoo_receive~: receive one or more AoO audio streams;
 #X msg 289 576 \; pd dsp \$1;

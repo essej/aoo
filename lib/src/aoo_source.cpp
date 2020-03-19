@@ -535,8 +535,8 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id){
         // push ping event
         aoo_event event;
         event.type = AOO_PING_EVENT;
-        event.header.endpoint = endpoint;
-        event.header.id = id;
+        event.sink.endpoint = endpoint;
+        event.sink.id = id;
         eventqueue_.write(event);
     } else {
         LOG_WARNING("ignoring '/ping' message: sink not found");

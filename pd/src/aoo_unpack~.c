@@ -99,23 +99,30 @@ static void aoo_unpack_handleevents(t_aoo_unpack *x,
     for (int i = 0; i < n; ++i){
         t_atom msg[32];
         switch (events[i].type){
-        case AOO_FORMAT_EVENT:
+        case AOO_SOURCE_ADD_EVENT:
         {
-            const aoo_event_header *e = &events[i].header;
+            const aoo_source_event *e = &events[i].source;
+            SETFLOAT(&msg[0], e->id);
+            outlet_anything(x->x_eventout, gensym("source_add"), 1, msg);
+            break;
+        }
+        case AOO_SOURCE_FORMAT_EVENT:
+        {
+            const aoo_source_event *e = &events[i].source;
             aoo_format_storage f;
             if (aoo_sink_getsourceoption(x->x_aoo_sink, e->endpoint, e->id,
                                          aoo_opt_format, AOO_ARG(f)) > 0)
             {
-                SETFLOAT(&msg[0], events[i].header.id);
+                SETFLOAT(&msg[0], events[i].source.id);
                 int fsize = aoo_printformat(&f, 31, msg + 1); // skip first atom
-                outlet_anything(x->x_eventout, gensym("format"), fsize + 1, msg);
+                outlet_anything(x->x_eventout, gensym("source_format"), fsize + 1, msg);
             }
             break;
         }
         case AOO_SOURCE_STATE_EVENT:
         {
             const aoo_source_state_event *e = &events[i].source_state;
-            SETFLOAT(&msg[0], e->header.id);
+            SETFLOAT(&msg[0], e->source.id);
             SETFLOAT(&msg[1], e->state);
             outlet_anything(x->x_eventout, gensym("source_state"), 2, msg);
             break;
@@ -123,7 +130,7 @@ static void aoo_unpack_handleevents(t_aoo_unpack *x,
         case AOO_BLOCK_LOSS_EVENT:
         {
             const aoo_block_loss_event *e = &events[i].block_loss;
-            SETFLOAT(&msg[0], e->header.id);
+            SETFLOAT(&msg[0], e->source.id);
             SETFLOAT(&msg[1], e->count);
             outlet_anything(x->x_eventout, gensym("block_loss"), 2, msg);
             break;
@@ -131,7 +138,7 @@ static void aoo_unpack_handleevents(t_aoo_unpack *x,
         case AOO_BLOCK_REORDER_EVENT:
         {
             const aoo_block_reorder_event *e = &events[i].block_reorder;
-            SETFLOAT(&msg[0], e->header.id);
+            SETFLOAT(&msg[0], e->source.id);
             SETFLOAT(&msg[1], e->count);
             outlet_anything(x->x_eventout, gensym("block_reorder"), 2, msg);
             break;
@@ -139,7 +146,7 @@ static void aoo_unpack_handleevents(t_aoo_unpack *x,
         case AOO_BLOCK_RESEND_EVENT:
         {
             const aoo_block_reorder_event *e = &events[i].block_resend;
-            SETFLOAT(&msg[0], e->header.id);
+            SETFLOAT(&msg[0], e->source.id);
             SETFLOAT(&msg[1], e->count);
             outlet_anything(x->x_eventout, gensym("block_resend"), 2, msg);
             break;
@@ -147,7 +154,7 @@ static void aoo_unpack_handleevents(t_aoo_unpack *x,
         case AOO_BLOCK_GAP_EVENT:
         {
             const aoo_block_gap_event *e = &events[i].block_gap;
-            SETFLOAT(&msg[0], e->header.id);
+            SETFLOAT(&msg[0], e->source.id);
             SETFLOAT(&msg[1], e->count);
             outlet_anything(x->x_eventout, gensym("block_gap"), 2, msg);
             break;

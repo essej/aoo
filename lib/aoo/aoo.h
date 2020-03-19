@@ -156,8 +156,10 @@ typedef enum aoo_event_type
 {
     // source: received a ping from sink
     AOO_PING_EVENT,
+    // sink: source added
+    AOO_SOURCE_ADD_EVENT,
     // sink: source format changed
-    AOO_FORMAT_EVENT,
+    AOO_SOURCE_FORMAT_EVENT,
     // sink: source changed state
     AOO_SOURCE_STATE_EVENT,
     // sink: blocks have been lost
@@ -170,12 +172,15 @@ typedef enum aoo_event_type
     AOO_BLOCK_GAP_EVENT
 } aoo_event_type;
 
-typedef struct aoo_event_header
+typedef struct aoo_endpoint_event
 {
     aoo_event_type type;
     void *endpoint;
     int32_t id;
-} aoo_event_header;
+} aoo_endpoint_event;
+
+typedef aoo_endpoint_event aoo_source_event;
+typedef aoo_endpoint_event aoo_sink_event;
 
 typedef enum aoo_source_state
 {
@@ -185,13 +190,13 @@ typedef enum aoo_source_state
 
 typedef struct aoo_source_state_event
 {
-    aoo_event_header header;
+    aoo_source_event source;
     int32_t state;
 } aoo_source_state_event;
 
 struct _aoo_block_event
 {
-    aoo_event_header header;
+    aoo_source_event source;
     int32_t count;
 };
 
@@ -204,7 +209,8 @@ typedef struct _aoo_block_event aoo_block_gap_event;
 typedef union aoo_event
 {
     aoo_event_type type;
-    aoo_event_header header;
+    aoo_source_event source;
+    aoo_sink_event sink;
     aoo_source_state_event source_state;
     aoo_block_loss_event block_loss;
     aoo_block_reorder_event block_reorder;
