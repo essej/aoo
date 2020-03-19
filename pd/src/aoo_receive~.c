@@ -49,8 +49,10 @@ typedef struct _socket_listener
 } t_socket_listener;
 
 
-static void aoo_receive_handle_message(t_aoo_receive *x, int32_t id,
-                                const char * data, int32_t n, void *src, aoo_replyfn fn);
+static int32_t aoo_receive_getid(t_aoo_receive *x);
+
+static void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
+                                       int32_t n, void *src, aoo_replyfn fn);
 
 static void* socket_listener_threadfn(void *y)
 {
@@ -74,13 +76,18 @@ static void* socket_listener_threadfn(void *y)
                     x->clients = client;
                 }
             }
-            // forward OSC packet to matching receivers
+            // get sink ID
             int32_t id = 0;
             if (aoo_parsepattern(buf, nbytes, &id) > 0){
                 pthread_mutex_lock(&x->mutex);
+                // forward OSC packet to matching receiver(s)
                 for (int i = 0; i < x->numrecv; ++i){
-                    aoo_receive_handle_message(x->recv[i], id, buf, nbytes,
-                                               client, (aoo_replyfn)endpoint_send);
+                    if ((id == AOO_ID_WILDCARD) ||
+                        (id == aoo_receive_getid(x->recv[i])))
+                    {
+                        aoo_receive_handle_message(x->recv[i], buf, nbytes,
+                            client, (aoo_replyfn)endpoint_send);
+                    }
                 }
                 pthread_mutex_unlock(&x->mutex);
             } else {
@@ -97,7 +104,21 @@ static void* socket_listener_threadfn(void *y)
     return 0;
 }
 
-static int aoo_receive_match(t_aoo_receive *x, t_aoo_receive *other);
+static int aoo_receive_match(t_aoo_receive *target, t_aoo_receive *x, int port)
+{
+    if (target == x){
+        bug("socket_listener_add: receiver already added!");
+        return 1;
+    }
+    int id1 = aoo_receive_getid(target);
+    int id2 = aoo_receive_getid(x);
+    if (id1 == id2){
+        pd_error(target, "%s with ID %d on port %d already exists!",
+                 classname(target), id1, port);
+        return 1;
+    }
+    return 0;
+}
 
 t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
 {
@@ -111,7 +132,7 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
         pthread_mutex_lock(&x->mutex);
     #if 1
         for (int i = 0; i < x->numrecv; ++i){
-            if (aoo_receive_match(x->recv[i], r)){
+            if (aoo_receive_match(r, x->recv[i], port)){
                 pthread_mutex_unlock(&x->mutex);
                 return 0;
             }
@@ -247,29 +268,17 @@ typedef struct _aoo_receive
     t_clock *x_clock;
 } t_aoo_receive;
 
-// called from socket listener
-static int aoo_receive_match(t_aoo_receive *x, t_aoo_receive *other)
+static int32_t aoo_receive_getid(t_aoo_receive *x)
 {
-    if (x == other){
-        bug("socket_listener_add: receiver already added!");
-        return 1;
-    }
-    if (x->x_id == other->x_id){
-        pd_error(x, "%s with ID %d on port %d already exists!",
-                 classname(x), x->x_id, x->x_listener->port);
-        return 1;
-    }
-    return 0;
+    return x->x_id;
 }
 
-static void aoo_receive_handle_message(t_aoo_receive *x, int32_t id,
-                                const char * data, int32_t n, void *src, aoo_replyfn fn)
+static void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
+                                       int32_t n, void *src, aoo_replyfn fn)
 {
-    if (id == AOO_ID_WILDCARD || id == x->x_id){
-        pthread_mutex_lock(&x->x_mutex);
-        aoo_sink_handlemessage(x->x_aoo_sink, data, n, src, fn);
-        pthread_mutex_unlock(&x->x_mutex);
-    }
+    pthread_mutex_lock(&x->x_mutex);
+    aoo_sink_handlemessage(x->x_aoo_sink, data, n, src, fn);
+    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_receive_buffersize(t_aoo_receive *x, t_floatarg f)
