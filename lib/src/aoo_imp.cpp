@@ -29,12 +29,15 @@
 
 namespace aoo {
 
-static std::unordered_map<std::string, std::unique_ptr<aoo::codec>> codec_dict;
+/*//////////////// utility ////////////////*/
 
-void register_codec(const char *name, const aoo_codec *codec){
-    LOG_VERBOSE("aoo: registered codec '" << name << "'");
-    codec_dict[name] = std::make_unique<aoo::codec>(codec);
+constexpr bool is_pow2(int32_t i){
+    return (i & (i - 1)) == 0;
 }
+
+/*////////////// codec plugins ///////////////*/
+
+static std::unordered_map<std::string, std::unique_ptr<aoo::codec>> codec_dict;
 
 const aoo::codec * find_codec(const std::string& name){
     auto it = codec_dict.find(name);
@@ -45,11 +48,17 @@ const aoo::codec * find_codec(const std::string& name){
     }
 }
 
-constexpr bool is_pow2(int32_t i){
-    return (i & (i - 1)) == 0;
-}
-
 } // aoo
+
+int32_t aoo_register_codec(const char *name, const aoo_codec *codec){
+    if (aoo::codec_dict.count(name) != 0){
+        LOG_WARNING("aoo: codec " << name << " already registered!");
+        return 0;
+    }
+    aoo::codec_dict[name] = std::make_unique<aoo::codec>(codec);
+    LOG_VERBOSE("aoo: registered codec '" << name << "'");
+    return 1;
+}
 
 /*//////////////////// OSC ////////////////////////////*/
 
@@ -999,8 +1008,8 @@ void dynamic_resampler::read(aoo_sample *data, int32_t n){
 } // aoo
 
 void aoo_setup(){
-    aoo_codec_pcm_setup(aoo::register_codec);
-    aoo_codec_opus_setup(aoo::register_codec);
+    aoo_codec_pcm_setup(aoo_register_codec);
+    aoo_codec_opus_setup(aoo_register_codec);
 }
 
 void aoo_close() {}

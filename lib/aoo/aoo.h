@@ -515,8 +515,13 @@ typedef struct aoo_codec
     aoo_codec_decode decoder_decode;
 } aoo_codec;
 
-// the function type passed to codec plugins to register themselves
-typedef void (*aoo_codec_registerfn)(const char *, const aoo_codec *);
+// register an external codec plugin
+AOO_API int32_t aoo_register_codec(const char *name, const aoo_codec *codec);
+
+// The type of 'aoo_register_codec', which gets passed to codec setup functions.
+// For now, plugins are registered statically - or manually by the user.
+// Later we might want to automatically look for codec plugins.
+typedef int32_t (*aoo_codec_registerfn)(const char *, const aoo_codec *);
 
 #ifdef __cplusplus
 } // extern "C"
