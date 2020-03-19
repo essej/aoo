@@ -7,17 +7,21 @@ extern "C"
 {
 #endif
 
-#ifndef AOO_EXTERN
+#ifndef AOO_API
 # if defined(_WIN32)
-#  if defined(AOO_BUILD) && defined(DLL_EXPORT)
-#   define AOO_EXTERN __declspec(dllexport) __cdecl extern
+#  if defined(AOO_BUILD)
+#     if defined(DLL_EXPORT)
+#       define AOO_API __declspec(dllexport) __cdecl
+#     else
+#       define AOO_API __cdecl
+#     endif
 #  else
-#   define AOO_EXTERN __cdecl extern
+#   define AOO_API __declspec(dllimport) __cdecl
 #  endif
 # elif defined(__GNUC__) && defined(AOO_BUILD)
-#  define AOO_EXTERN __attribute__ ((visibility ("default"))) __cdecl extern
+#  define AOO_API __attribute__ ((visibility ("default"))) __cdecl
 # else
-#  define AOO_EXTERN __cdecl extern
+#  define AOO_API __cdecl
 # endif
 #endif
 
@@ -105,10 +109,10 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #endif
 
 // setup AoO library - call only once!
-AOO_EXTERN void aoo_setup(void);
+AOO_API void aoo_setup(void);
 
 // close AoO library - call only once!
-AOO_EXTERN void aoo_close(void);
+AOO_API void aoo_close(void);
 
 struct aoo_format;
 
@@ -122,19 +126,19 @@ struct aoo_format;
 
 // get the ID from an AoO OSC message, e.g. in /AoO/<id>/data
 // returns 1 on success, 0 on fail
-AOO_EXTERN int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *id);
+AOO_API int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *id);
 
 // get the current NTP time
-AOO_EXTERN uint64_t aoo_osctime_get(void);
+AOO_API uint64_t aoo_osctime_get(void);
 
 // convert NTP time to seconds
-AOO_EXTERN double aoo_osctime_toseconds(uint64_t t);
+AOO_API double aoo_osctime_toseconds(uint64_t t);
 
 // convert seconds to NTP time
-AOO_EXTERN uint64_t aoo_osctime_fromseconds(double s);
+AOO_API uint64_t aoo_osctime_fromseconds(double s);
 
 // add seconds to NTP timestamp
-AOO_EXTERN uint64_t aoo_osctime_addseconds(uint64_t t, double s);
+AOO_API uint64_t aoo_osctime_addseconds(uint64_t t, double s);
 
 // reply function for endpoints
 typedef int32_t (*aoo_replyfn)(
@@ -338,51 +342,51 @@ typedef struct aoo_source_settings
 } aoo_source_settings;
 
 // create a new AoO source instance
-AOO_EXTERN aoo_source * aoo_source_new(int32_t id);
+AOO_API aoo_source * aoo_source_new(int32_t id);
 
 // destroy the AoO source instance
-AOO_EXTERN void aoo_source_free(aoo_source *src);
+AOO_API void aoo_source_free(aoo_source *src);
 
-AOO_EXTERN int32_t aoo_source_setup(aoo_source *src, const aoo_source_settings *settings);
-
-// Call from any thread - synchronize with network and audio thread!
-AOO_EXTERN int32_t aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn);
+AOO_API int32_t aoo_source_setup(aoo_source *src, const aoo_source_settings *settings);
 
 // Call from any thread - synchronize with network and audio thread!
-AOO_EXTERN int32_t aoo_source_removesink(aoo_source *src, void *sink, int32_t id);
+AOO_API int32_t aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn);
 
 // Call from any thread - synchronize with network and audio thread!
-AOO_EXTERN void aoo_source_removeall(aoo_source *src);
+AOO_API int32_t aoo_source_removesink(aoo_source *src, void *sink, int32_t id);
+
+// Call from any thread - synchronize with network and audio thread!
+AOO_API void aoo_source_removeall(aoo_source *src);
 
 // Call from the network thread.
-AOO_EXTERN int32_t aoo_source_handlemessage(aoo_source *src, const char *data, int32_t n,
+AOO_API int32_t aoo_source_handlemessage(aoo_source *src, const char *data, int32_t n,
                                  void *sink, aoo_replyfn fn);
 
 // Call from the network thread.
-AOO_EXTERN int32_t aoo_source_send(aoo_source *src);
+AOO_API int32_t aoo_source_send(aoo_source *src);
 
 // Call from the audio thread.
 // data:        array of channel data (non-interleaved)
 // nsamples:    number of samples per channel
 // t:           current NTP timestamp (see aoo_osctime_get)
-AOO_EXTERN int32_t aoo_source_process(aoo_source *src, const aoo_sample **data,
+AOO_API int32_t aoo_source_process(aoo_source *src, const aoo_sample **data,
                            int32_t nsamples, uint64_t t);
 
 // Call from any thread - always thread safe!
-AOO_EXTERN int32_t aoo_source_eventsavailable(aoo_source *src);
+AOO_API int32_t aoo_source_eventsavailable(aoo_source *src);
 
 // Call from any thread - always thread safe!
-AOO_EXTERN int32_t aoo_source_handleevents(aoo_source *src);
+AOO_API int32_t aoo_source_handleevents(aoo_source *src);
 
 // Call from any thread - synchronize with network and audio thread!
-AOO_EXTERN int32_t aoo_source_setoption(aoo_source *src, int32_t opt, void *p, int32_t size);
+AOO_API int32_t aoo_source_setoption(aoo_source *src, int32_t opt, void *p, int32_t size);
 
-AOO_EXTERN int32_t aoo_source_getoption(aoo_source *src, int32_t opt, void *p, int32_t size);
+AOO_API int32_t aoo_source_getoption(aoo_source *src, int32_t opt, void *p, int32_t size);
 
-AOO_EXTERN int32_t aoo_source_setsinkoption(aoo_source *src, void *endpoint, int32_t id,
+AOO_API int32_t aoo_source_setsinkoption(aoo_source *src, void *endpoint, int32_t id,
                                  int32_t opt, void *p, int32_t size);
 
-AOO_EXTERN int32_t aoo_source_getsinkoption(aoo_source *src, void *endpoint, int32_t id,
+AOO_API int32_t aoo_source_getsinkoption(aoo_source *src, void *endpoint, int32_t id,
                                  int32_t opt, void *p, int32_t size);
 
 /*//////////////////// AoO sink /////////////////////*/
@@ -413,39 +417,39 @@ typedef struct aoo_sink_settings
 } aoo_sink_settings;
 
 // create a new AoO sink instance
-AOO_EXTERN aoo_sink * aoo_sink_new(int32_t id);
+AOO_API aoo_sink * aoo_sink_new(int32_t id);
 
 // destroy the AoO sink instance
-AOO_EXTERN void aoo_sink_free(aoo_sink *sink);
+AOO_API void aoo_sink_free(aoo_sink *sink);
 
 // Call from any thread - synchronize with network and audio thread!
-AOO_EXTERN int32_t aoo_sink_setup(aoo_sink *sink, const aoo_sink_settings *settings);
+AOO_API int32_t aoo_sink_setup(aoo_sink *sink, const aoo_sink_settings *settings);
 
 // Call from the network thread.
-AOO_EXTERN int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
+AOO_API int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
                             void *src, aoo_replyfn fn);
 
 // Call from the audio thread.
-AOO_EXTERN int32_t aoo_sink_process(aoo_sink *sink, uint64_t t);
+AOO_API int32_t aoo_sink_process(aoo_sink *sink, uint64_t t);
 
 // Call from any thread - always thread safe!
-AOO_EXTERN int32_t aoo_sink_eventsavailable(aoo_sink *sink);
+AOO_API int32_t aoo_sink_eventsavailable(aoo_sink *sink);
 
 // Call from any thread - always thread safe!
-AOO_EXTERN int32_t aoo_sink_handleevents(aoo_sink *sink);
+AOO_API int32_t aoo_sink_handleevents(aoo_sink *sink);
 
 // Call from any thread - synchronize with network and audio thread!
-AOO_EXTERN int32_t aoo_sink_setoption(aoo_sink *sink, int32_t opt, void *p, int32_t size);
+AOO_API int32_t aoo_sink_setoption(aoo_sink *sink, int32_t opt, void *p, int32_t size);
 
-AOO_EXTERN int32_t aoo_sink_getoption(aoo_sink *sink, int32_t opt, void *p, int32_t size);
+AOO_API int32_t aoo_sink_getoption(aoo_sink *sink, int32_t opt, void *p, int32_t size);
 
-AOO_EXTERN int32_t aoo_sink_setsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
+AOO_API int32_t aoo_sink_setsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
                               int32_t opt, void *p, int32_t size);
 
-AOO_EXTERN int32_t aoo_sink_getsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
+AOO_API int32_t aoo_sink_getsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
                               int32_t opt, void *p, int32_t size);
 
-/*//////////////////// Codec //////////////////////////*/
+/*//////////////////// Codec API //////////////////////////*/
 
 #define AOO_CODEC_MAXSETTINGSIZE 256
 
