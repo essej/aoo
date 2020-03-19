@@ -163,6 +163,7 @@ int32_t aoo::source::set_sinkoption(void *endpoint, int32_t id,
                                    int32_t opt, void *ptr, int32_t size)
 {
     if (id == AOO_ID_WILDCARD){
+        // set option on all sinks on the given endpoint
         switch (opt){
         // channel onset
         case aoo_opt_channelonset:
@@ -221,7 +222,7 @@ int32_t aoo::source::get_sinkoption(void *endpoint, int32_t id,
                               int32_t opt, void *p, int32_t size)
 {
     if (id == AOO_ID_WILDCARD){
-        LOG_ERROR("aoo_source: can't use wildcard ID to get sink option");
+        LOG_ERROR("aoo_source: can't use wildcard to get sink option");
         return 0;
     }
 
@@ -360,18 +361,19 @@ int32_t aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn 
 
 int32_t aoo::source::add_sink(void *endpoint, int32_t id, aoo_replyfn fn){
     if (id == AOO_ID_WILDCARD){
-        LOG_WARNING("aoo::source::add_sink: can't use wildcard ID (yet)");
-        return 0;
-    }
-    if (!find_sink(endpoint, id)){
-        sink_desc sd = { endpoint, fn, id, 0 };
-        sinks_.push_back(sd);
-        send_format(sd);
-        return 1;
+        // first remove all sinks on the given endpoint!
+        remove_sink(endpoint, AOO_ID_WILDCARD);
     } else {
-        LOG_WARNING("aoo::source::add_sink: sink already added!");
-        return 0;
+        if (find_sink(endpoint, id)){
+            LOG_WARNING("aoo_source: sink already added!");
+            return 0;
+        }
     }
+    // add sink descriptor
+    sink_desc sd = { endpoint, fn, id, 0 };
+    sinks_.push_back(sd);
+    send_format(sd);
+    return 1;
 }
 
 int32_t aoo_source_removesink(aoo_source *src, void *sink, int32_t id) {
@@ -380,7 +382,7 @@ int32_t aoo_source_removesink(aoo_source *src, void *sink, int32_t id) {
 
 int32_t aoo::source::remove_sink(void *endpoint, int32_t id){
     if (id == AOO_ID_WILDCARD){
-        // remove all descriptors matching sink (ignore id)
+        // remove all sinks on the given endpoint
         auto it = std::remove_if(sinks_.begin(), sinks_.end(), [&](auto& s){
             return s.endpoint == endpoint;
         });
@@ -394,7 +396,7 @@ int32_t aoo::source::remove_sink(void *endpoint, int32_t id){
             sinks_.erase(result);
             return 1;
         } else {
-            LOG_WARNING("aoo::source::remove_sink: sink not found!");
+            LOG_WARNING("aoo_source: sink not found!");
             return 0;
         }
     }
@@ -421,11 +423,15 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
     int32_t src = 0;
     auto onset = aoo_parsepattern(data, n, &src);
     if (!onset){
-        LOG_WARNING("not an AoO message!");
+        LOG_WARNING("aoo_source: not an AoO message!");
         return 0;
     }
-    if (src != id_ && src != AOO_ID_WILDCARD){
-        LOG_WARNING("wrong source ID!");
+    if (src == AOO_ID_WILDCARD){
+        LOG_WARNING("aoo_source: can't handle wildcard messages (yet)!");
+        return 0;
+    }
+    if (src != id_){
+        LOG_WARNING("aoo_source: wrong source ID!");
         return 0;
     }
 
@@ -452,7 +458,9 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
                 auto it = msg.ArgumentsBegin();
                 auto id = (it++)->AsInt32();
                 auto salt = (it++)->AsInt32();
+
                 handle_resend(endpoint, fn, id, salt, count - 2, it);
+
                 return 1;
             } catch (const osc::Exception& e){
                 LOG_ERROR(e.what());
@@ -464,7 +472,9 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
         try {
             auto it = msg.ArgumentsBegin();
             auto id = it->AsInt32();
+
             handle_ping(endpoint, fn, id);
+
             return 1;
         } catch (const osc::Exception& e){
             LOG_ERROR(e.what());
@@ -483,7 +493,7 @@ void source::handle_request(void *endpoint, aoo_replyfn fn, int32_t id){
         // just resend format (the last format message might have been lost)
         send_format(*sink);
     } else {
-        LOG_WARNING("ignoring '/request' message: sink not found");
+        LOG_WARNING("aoo_source: ignoring '/request' message - sink not found");
     }
 }
 
@@ -491,11 +501,11 @@ void source::handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32_t s
                                int32_t count, osc::ReceivedMessageArgumentIterator it){
     auto sink = find_sink(endpoint, id);
     if (!sink){
-        LOG_WARNING("ignoring '/resend' message: sink not found");
+        LOG_WARNING("aoo_source: ignoring '/resend' message - sink not found");
         return;
     }
     if (salt != salt_){
-        LOG_VERBOSE("ignoring '/resend' message: source has changed");
+        LOG_VERBOSE("aoo_source: ignoring '/resend' message - source has changed");
         return;
     }
     // get pairs of [seq, frame]

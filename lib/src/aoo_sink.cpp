@@ -269,18 +269,18 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n, void *endpoint, a
     osc::ReceivedMessage msg(packet);
 
     if (samplerate_ == 0){
-        return 1; // not setup yet
+        return 0; // not setup yet
     }
 
     int32_t sinkid = 0;
     auto onset = aoo_parsepattern(data, n, &sinkid);
     if (!onset){
         LOG_WARNING("not an AoO message!");
-        return 1; // ?
+        return 0;
     }
     if (sinkid != id_ && sinkid != AOO_ID_WILDCARD){
         LOG_WARNING("wrong sink ID!");
-        return 1; // ?
+        return 0;
     }
 
     if (!strcmp(msg.AddressPattern() + onset, AOO_FORMAT)){
@@ -299,7 +299,14 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n, void *endpoint, a
                 osc::osc_bundle_element_size_t blobsize;
                 (it++)->AsBlob(blobdata, blobsize);
 
-                handle_format_message(endpoint, fn, id, salt, f, (const char *)blobdata, blobsize);
+                if (id >= 0){
+                    handle_format_message(endpoint, fn, id, salt, f,
+                                          (const char *)blobdata, blobsize);
+                    return 1;
+                } else {
+                    LOG_WARNING("aoo_sink: bad source ID " << id
+                                << " for " << AOO_FORMAT << " message");
+                }
             } catch (const osc::Exception& e){
                 LOG_ERROR(e.what());
             }
@@ -326,7 +333,13 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n, void *endpoint, a
                 d.data = (const char *)blobdata;
                 d.size = blobsize;
 
-                handle_data_message(endpoint, fn, id, salt, d);
+                if (id >= 0){
+                    handle_data_message(endpoint, fn, id, salt, d);
+                    return 1;
+                } else {
+                    LOG_WARNING("aoo_sink: bad source ID " << id
+                                << " for " << AOO_DATA << " message");
+                }
             } catch (const osc::Exception& e){
                 LOG_ERROR(e.what());
             }
@@ -336,7 +349,7 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n, void *endpoint, a
     } else {
         LOG_WARNING("unknown message '" << (msg.AddressPattern() + onset) << "'");
     }
-    return 1; // ?
+    return 0;
 }
 
 namespace aoo {
@@ -346,63 +359,51 @@ namespace aoo {
 void sink::handle_format_message(void *endpoint, aoo_replyfn fn,
                                      int32_t id, int32_t salt, const aoo_format& f,
                                      const char *settings, int32_t size){
-    LOG_DEBUG("handle format message");
+    // try to find existing source
+    auto src = find_source(endpoint, id);
 
-    auto update_format = [&](aoo::source_desc& src){
-        if (!src.decoder || strcmp(src.decoder->name(), f.codec)){
-            auto c = aoo::find_codec(f.codec);
-            if (c){
-                src.decoder = c->create_decoder();
-            } else {
-                LOG_ERROR("codec '" << f.codec << "' not supported!");
-                return;
-            }
-            if (!src.decoder){
-                LOG_ERROR("couldn't create decoder!");
-                return;
-            }
-        }
-        src.decoder->read_format(f.nchannels, f.samplerate, f.blocksize, settings, size);
-
-        update_source(src);
-
+    // everything below needs to be synchronized with the process method!
+    aoo::unique_lock lock(mutex_); // writer lock!
+    if (!src){
+        // not found - add new source
+        sources_.emplace_back(endpoint, fn, id, salt);
+        src = &sources_.back();
         // called with mutex locked, so we don't have to synchronize with the process() method!
         aoo_event event;
-        event.type = AOO_SOURCE_FORMAT_EVENT;
-        event.source.endpoint = src.endpoint;
-        event.source.id = src.id;
-        src.eventqueue.write(event);
-    };
-
-    if (id == AOO_ID_WILDCARD){
-        // update all sources from this endpoint
-        for (auto& src : sources_){
-            if (src.endpoint == endpoint){
-                aoo::unique_lock lock(mutex_); // writer lock!
-                src.salt = salt;
-                update_format(src);
-            }
-        }
+        event.type = AOO_SOURCE_ADD_EVENT;
+        event.source.endpoint = src->endpoint;
+        event.source.id = src->id;
+        src->eventqueue.write(event);
     } else {
-        // try to find existing source
-        auto src = find_source(endpoint, id);
-        aoo::unique_lock lock(mutex_); // writer lock!
-        if (!src){
-            // not found - add new source
-            sources_.emplace_back(endpoint, fn, id, salt);
-            src = &sources_.back();
-            // called with mutex locked, so we don't have to synchronize with the process() method!
-            aoo_event event;
-            event.type = AOO_SOURCE_ADD_EVENT;
-            event.source.endpoint = src->endpoint;
-            event.source.id = src->id;
-            src->eventqueue.write(event);
-        } else {
-            src->salt = salt;
-        }
-        // update source
-        update_format(*src);
+        src->salt = salt;
     }
+
+    // create/change decoder if needed
+    if (!src->decoder || strcmp(src->decoder->name(), f.codec)){
+        auto c = aoo::find_codec(f.codec);
+        if (c){
+            src->decoder = c->create_decoder();
+        } else {
+            LOG_ERROR("codec '" << f.codec << "' not supported!");
+            return;
+        }
+        if (!src->decoder){
+            LOG_ERROR("couldn't create decoder!");
+            return;
+        }
+    }
+
+    // read format
+    src->decoder->read_format(f.nchannels, f.samplerate, f.blocksize, settings, size);
+
+    update_source(*src);
+
+    // push event
+    aoo_event event;
+    event.type = AOO_SOURCE_FORMAT_EVENT;
+    event.source.endpoint = src->endpoint;
+    event.source.id = src->id;
+    src->eventqueue.write(event);
 }
 
 // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
