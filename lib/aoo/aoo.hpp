@@ -120,6 +120,9 @@ public:
         return get_option(aoo_opt_resend_buffersize, AOO_ARG(n));
     }
 
+    virtual int32_t set_option(int32_t opt, void *ptr, int32_t size) = 0;
+    virtual int32_t get_option(int32_t opt, void *ptr, int32_t size) = 0;
+
     //--------------------- sink options --------------------------//
 
     int32_t set_sink_channelonset(void *endpoint, int32_t id, int32_t onset){
@@ -129,23 +132,21 @@ public:
     int32_t get_sink_channelonset(void *endpoint, int32_t id, int32_t& onset){
         return get_sinkoption(endpoint, id, aoo_opt_channelonset, AOO_ARG(onset));
     }
-protected:
-    virtual int32_t set_option(int32_t opt, void *ptr, int32_t size) = 0;
-    virtual int32_t get_option(int32_t opt, void *ptr, int32_t size) = 0;
+
     virtual int32_t set_sinkoption(void *endpoint, int32_t id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
     virtual int32_t get_sinkoption(void *endpoint, int32_t id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
-
+protected:
     ~isource(){} // non-virtual!
 };
 
 inline isource * isource::create(int32_t id){
-    return reinterpret_cast<isource *>(aoo_source_new(id));
+    return aoo_source_new(id);
 }
 
 inline void isource::destroy(isource *src){
-    aoo_source_free(reinterpret_cast<aoo_source *>(src));
+    aoo_source_free(src);
 }
 
 /*//////////////////////// AoO sink ///////////////////////*/
@@ -242,28 +243,29 @@ public:
         return get_option(aoo_opt_resend_maxnumframes, AOO_ARG(n));
     }
 
+    virtual int32_t set_option(int32_t opt, void *ptr, int32_t size) = 0;
+    virtual int32_t get_option(int32_t opt, void *ptr, int32_t size) = 0;
+
     //----------------- source options -------------------//
 
     int32_t get_source_format(void *endpoint, int32_t id, aoo_format_storage& f){
         return get_sourceoption(endpoint, id, aoo_opt_format, AOO_ARG(f));
     }
-protected:
-    virtual int32_t set_option(int32_t opt, void *ptr, int32_t size) = 0;
-    virtual int32_t get_option(int32_t opt, void *ptr, int32_t size) = 0;
+
     virtual int32_t set_sourceoption(void *endpoint, int32_t id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
     virtual int32_t get_sourceoption(void *endpoint, int32_t id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
-
+protected:
     ~isink(){} // non-virtual!
 };
 
 inline isink * isink::create(int32_t id){
-    return reinterpret_cast<isink *>(aoo_sink_new(id));
+    return aoo_sink_new(id);
 }
 
 inline void isink::destroy(isink *sink){
-    aoo_sink_free(reinterpret_cast<aoo_sink *>(sink));
+    aoo_sink_free(sink);
 }
 
 } // aoo

@@ -22,11 +22,13 @@ void source_desc::send(const char *data, int32_t n){
 /*//////////////////// aoo_sink /////////////////////*/
 
 aoo_sink * aoo_sink_new(int32_t id) {
-    return new aoo_sink(id);
+    return new aoo::sink(id);
 }
 
 void aoo_sink_free(aoo_sink *sink) {
-    delete sink;
+    // cast to correct type because base class
+    // has no virtual destructor!
+    delete static_cast<aoo::sink *>(sink);
 }
 
 int32_t aoo_sink_setup(aoo_sink *sink, const aoo_sink_settings *settings) {
@@ -36,7 +38,7 @@ int32_t aoo_sink_setup(aoo_sink *sink, const aoo_sink_settings *settings) {
     return 0;
 }
 
-int32_t aoo_sink::setup(const aoo_sink_settings& settings){
+int32_t aoo::sink::setup(const aoo_sink_settings& settings){
     processfn_ = settings.processfn;
     eventhandler_ = settings.eventhandler;
     user_ = settings.userdata;
@@ -66,10 +68,14 @@ int32_t aoo_sink::setup(const aoo_sink_settings& settings){
     return 0;
 }
 
+namespace aoo {
+
 template<typename T>
 T& as(void *p){
     return *reinterpret_cast<T *>(p);
 }
+
+} // aoo
 
 #define CHECKARG(type) assert(size == sizeof(type))
 
@@ -78,7 +84,7 @@ int32_t aoo_sink_setoption(aoo_sink *sink, int32_t opt, void *p, int32_t size)
     return sink->set_option(opt, p, size);
 }
 
-int32_t aoo_sink::set_option(int32_t opt, void *ptr, int32_t size)
+int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
     // buffer size
@@ -149,7 +155,7 @@ int32_t aoo_sink_getoption(aoo_sink *sink, int32_t opt, void *p, int32_t size)
     return sink->get_option(opt, p, size);
 }
 
-int32_t aoo_sink::get_option(int32_t opt, void *ptr, int32_t size)
+int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
     // buffer size
@@ -201,7 +207,7 @@ int32_t aoo_sink_setsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
     return sink->set_sourceoption(endpoint, id, opt, p, size);
 }
 
-int32_t aoo_sink::set_sourceoption(void *endpoint, int32_t id,
+int32_t aoo::sink::set_sourceoption(void *endpoint, int32_t id,
                                    int32_t opt, void *ptr, int32_t size)
 {
     auto src = find_source(endpoint, id);
@@ -226,7 +232,7 @@ int32_t aoo_sink_getsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
     return sink->get_sourceoption(endpoint, id, opt, p, size);
 }
 
-int32_t aoo_sink::get_sourceoption(void *endpoint, int32_t id,
+int32_t aoo::sink::get_sourceoption(void *endpoint, int32_t id,
                               int32_t opt, void *p, int32_t size)
 {
     auto src = find_source(endpoint, id);
@@ -255,7 +261,7 @@ int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
     return sink->handle_message(data, n, src, fn);
 }
 
-int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn){
+int32_t aoo::sink::handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn){
     osc::ReceivedPacket packet(data, n);
     osc::ReceivedMessage msg(packet);
 
@@ -263,13 +269,13 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
         return 1; // not setup yet
     }
 
-    int32_t sink = 0;
-    auto onset = aoo_parsepattern(data, n, &sink);
+    int32_t sinkid = 0;
+    auto onset = aoo_parsepattern(data, n, &sinkid);
     if (!onset){
         LOG_WARNING("not an AoO message!");
         return 1; // ?
     }
-    if (sink != id_ && sink != AOO_ID_WILDCARD){
+    if (sinkid != id_ && sinkid != AOO_ID_WILDCARD){
         LOG_WARNING("wrong sink ID!");
         return 1; // ?
     }
@@ -330,9 +336,11 @@ int32_t aoo_sink::handle_message(const char *data, int32_t n, void *endpoint, ao
     return 1; // ?
 }
 
+namespace aoo {
+
 // /AoO/<sink>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <settings...>
 
-void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
+void sink::handle_format_message(void *endpoint, aoo_replyfn fn,
                                      int32_t id, int32_t salt, const aoo_format& f,
                                      const char *settings, int32_t size){
     LOG_DEBUG("handle format message");
@@ -390,7 +398,7 @@ void aoo_sink::handle_format_message(void *endpoint, aoo_replyfn fn,
 
 // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
 
-void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
+void sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                                    int32_t salt, const aoo::data_packet& d){
     // first try to find existing source
     auto src = find_source(endpoint, id);
@@ -667,7 +675,7 @@ void aoo_sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
     }
 }
 
-aoo::source_desc * aoo_sink::find_source(void *endpoint, int32_t id){
+aoo::source_desc * sink::find_source(void *endpoint, int32_t id){
     for (auto& src : sources_){
         if ((src.endpoint == endpoint) && (src.id == id)){
             return &src;
@@ -676,13 +684,13 @@ aoo::source_desc * aoo_sink::find_source(void *endpoint, int32_t id){
     return nullptr;
 }
 
-void aoo_sink::update_sources(){
+void sink::update_sources(){
     for (auto& src : sources_){
         update_source(src);
     }
 }
 
-void aoo_sink::update_source(aoo::source_desc &src){
+void sink::update_source(aoo::source_desc &src){
     // resize audio ring buffer
     if (src.decoder && src.decoder->blocksize() > 0 && src.decoder->samplerate() > 0){
         // recalculate buffersize from ms to samples
@@ -727,7 +735,7 @@ void aoo_sink::update_source(aoo::source_desc &src){
 
 // /AoO/<src>/request <sink>
 
-void aoo_sink::request_format(void *endpoint, aoo_replyfn fn, int32_t id){
+void sink::request_format(void *endpoint, aoo_replyfn fn, int32_t id){
     LOG_DEBUG("request format");
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -744,7 +752,7 @@ void aoo_sink::request_format(void *endpoint, aoo_replyfn fn, int32_t id){
 
 // /AoO/<src>/resend <sink> <salt> <seq0> <frame0> <seq1> <frame1> ...
 
-void aoo_sink::request_data(aoo::source_desc& src){
+void sink::request_data(aoo::source_desc& src){
     if (retransmit_list_.empty()){
         return;
     }
@@ -782,7 +790,7 @@ void aoo_sink::request_data(aoo::source_desc& src){
 
 // AoO/<id>/ping <sink>
 
-void aoo_sink::ping(aoo::source_desc& src){
+void sink::ping(aoo::source_desc& src){
     if (ping_interval_ == 0){
         return;
     }
@@ -806,6 +814,8 @@ void aoo_sink::ping(aoo::source_desc& src){
     }
 }
 
+} // aoo
+
 #if AOO_DEBUG_RESAMPLING
 thread_local int32_t debug_counter = 0;
 #endif
@@ -816,7 +826,7 @@ int32_t aoo_sink_process(aoo_sink *sink, uint64_t t) {
 
 #define AOO_MAXNUMEVENTS 256
 
-int32_t aoo_sink::process(uint64_t t){
+int32_t aoo::sink::process(uint64_t t){
     if (!processfn_){
         return 0;
     }
@@ -974,7 +984,7 @@ int32_t aoo_sink_eventsavailable(aoo_sink *sink){
     return sink->events_available();
 }
 
-int32_t aoo_sink::events_available(){
+int32_t aoo::sink::events_available(){
     // the mutex is uncontended most of the time, but LATER we might replace
     // this with a lockless and/or waitfree solution
     aoo::shared_lock lock(mutex_);
@@ -990,7 +1000,7 @@ int32_t aoo_sink_handleevents(aoo_sink *sink){
     return sink->handle_events();
 }
 
-int32_t aoo_sink::handle_events(){
+int32_t aoo::sink::handle_events(){
     if (!eventhandler_){
         return 0;
     }

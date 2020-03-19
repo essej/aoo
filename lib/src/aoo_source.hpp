@@ -10,10 +10,12 @@ namespace osc {
     class ReceivedMessageArgumentIterator;
 }
 
-class aoo_source final : public aoo::isource {
+namespace aoo {
+
+class source final : public isource {
  public:
-    aoo_source(int32_t id);
-    ~aoo_source();
+    source(int32_t id);
+    ~source();
 
     int32_t setup(const aoo_source_settings& settings) override;
 
@@ -98,3 +100,5 @@ class aoo_source final : public aoo::isource {
 
     int32_t make_salt();
 };
+
+} // aoo

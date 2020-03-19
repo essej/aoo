@@ -68,11 +68,9 @@ struct source_desc {
     void send(const char *data, int32_t n);
 };
 
-} // aoo
-
-class aoo_sink final : public aoo::isink {
+class sink final : public isink {
  public:
-    aoo_sink(int32_t id)
+    sink(int32_t id)
         : id_(id) {}
 
     int32_t setup(const aoo_sink_settings& settings) override;
@@ -141,3 +139,5 @@ class aoo_sink final : public aoo::isink {
     void handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                              int32_t salt, const aoo::data_packet& d);
 };
+
+} // aoo

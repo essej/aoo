@@ -305,7 +305,14 @@ typedef enum aoo_option
 
 /*//////////////////// AoO source /////////////////////*/
 
+#ifdef __cplusplus
+namespace aoo {
+    class isource;
+}
+using aoo_source = aoo::isource;
+#else
 typedef struct aoo_source aoo_source;
+#endif
 
 typedef struct aoo_format
 {
@@ -380,7 +387,14 @@ AOO_EXTERN int32_t aoo_source_getsinkoption(aoo_source *src, void *endpoint, int
 
 /*//////////////////// AoO sink /////////////////////*/
 
+#ifdef __cplusplus
+namespace aoo {
+    class isink;
+}
+using aoo_sink = aoo::isink;
+#else
 typedef struct aoo_sink aoo_sink;
+#endif
 
 typedef void (*aoo_processfn)(
         void *,                 // user data
