@@ -23,7 +23,7 @@ typedef enum
 typedef struct aoo_format_pcm
 {
     aoo_format header;
-    aoo_pcm_bitdepth bitdepth;
+    int32_t bitdepth;
 } aoo_format_pcm;
 
 AOO_API void aoo_codec_pcm_setup(aoo_codec_registerfn fn);

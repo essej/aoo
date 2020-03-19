@@ -16,7 +16,7 @@ union convert {
     double d;
 };
 
-int32_t bytes_per_sample(aoo_pcm_bitdepth bd)
+int32_t bytes_per_sample(int32_t bd)
 {
     switch (bd){
     case AOO_PCM_INT16:
