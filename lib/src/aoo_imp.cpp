@@ -215,6 +215,7 @@ padded_spinlock::padded_spinlock(){
 shared_mutex::shared_mutex() {
     InitializeSRWLock((PSRWLOCK)& rwlock_);
 }
+shared_mutex::~shared_mutex() {}
 // exclusive
 void shared_mutex::lock() {
     AcquireSRWLockExclusive((PSRWLOCK)&rwlock_);
