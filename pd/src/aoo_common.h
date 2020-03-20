@@ -2,6 +2,8 @@
 
 #include "m_pd.h"
 
+#include "aoo_net.h"
+
 // hack for pd-lib-builder
 #ifdef AOO_BUILD
 #undef AOO_BUILD
@@ -21,6 +23,12 @@
 #endif
 
 uint64_t aoo_pd_osctime(int n, t_float sr);
+
+int aoo_getsinkarg(void *x, int argc, t_atom *argv,
+                        struct sockaddr_storage *sa, socklen_t *len, int32_t *id);
+
+int aoo_getsourcearg(void *x, int argc, t_atom *argv,
+                        struct sockaddr_storage *sa, socklen_t *len, int32_t *id);
 
 int aoo_parseresend(void *x, int argc, const t_atom *argv,
                     int32_t *limit, int32_t *interval,

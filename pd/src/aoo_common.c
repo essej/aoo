@@ -3,6 +3,8 @@
 #include "aoo/aoo_pcm.h"
 #include "aoo/aoo_opus.h"
 
+#include "aoo_common.h"
+
 #include <stdio.h>
 #include <inttypes.h>
 
@@ -56,7 +58,51 @@ uint64_t aoo_pd_osctime(int n, t_float sr)
     return t;
 }
 
-static int aoo_getarg(const char *name, void *x, int which, int argc, const t_atom *argv, t_float *f, t_float def)
+static int aoo_getendpointarg(void *x, int argc, t_atom *argv, struct sockaddr_storage *sa,
+                              socklen_t *len, int32_t *id, const char *what)
+{
+    if (argc < 3){
+        pd_error(x, "%s: too few arguments for %s", classname(x), what);
+        return 0;
+    }
+
+    t_symbol *hostname = atom_getsymbol(argv);
+    int port = atom_getfloat(argv + 1);
+
+    if (!socket_getaddr(hostname->s_name, port, sa, len)){
+        pd_error(x, "%s: couldn't resolve hostname '%s' of %s",
+                 classname(x), hostname->s_name, what);
+        return 0;
+    }
+
+    if (argv[2].a_type == A_SYMBOL){
+        if (*argv[2].a_w.w_symbol->s_name == '*'){
+            *id = AOO_ID_WILDCARD;
+        } else {
+            pd_error(x, "%s: bad %s ID '%s'!",
+                     classname(x), what, argv[2].a_w.w_symbol->s_name);
+            return 0;
+        }
+    } else {
+        *id = atom_getfloat(argv + 2);
+    }
+    return 1;
+}
+
+int aoo_getsinkarg(void *x, int argc, t_atom *argv,
+                   struct sockaddr_storage *sa, socklen_t *len, int32_t *id)
+{
+    return aoo_getendpointarg(x, argc, argv, sa, len, id, "sink");
+}
+
+int aoo_getsourcearg(void *x, int argc, t_atom *argv,
+                     struct sockaddr_storage *sa, socklen_t *len, int32_t *id)
+{
+    return aoo_getendpointarg(x, argc, argv, sa, len, id, "source");
+}
+
+static int aoo_getarg(const char *name, void *x, int which,
+                      int argc, const t_atom *argv, t_float *f, t_float def)
 {
     if (argc > which){
         if (argv[which].a_type == A_SYMBOL){
