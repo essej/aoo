@@ -1,7 +1,6 @@
 #include "m_pd.h"
 
 #include "aoo_common.h"
-#include "aoo_net.h"
 
 #include <string.h>
 #include <assert.h>
@@ -43,35 +42,6 @@ typedef struct _aoo_send
     pthread_cond_t x_cond;
     pthread_mutex_t x_mutex;
 } t_aoo_send;
-
-static int aoo_send_getsinkarg(void *x, int argc, t_atom *argv,
-                        struct sockaddr_storage *sa, socklen_t *len, int32_t *id)
-{
-    if (argc < 3){
-        return 0;
-    }
-
-    t_symbol *hostname = atom_getsymbol(argv);
-    int port = atom_getfloat(argv + 1);
-
-    if (!socket_getaddr(hostname->s_name, port, sa, len)){
-        pd_error(x, "%s: couldn't resolve hostname '%s'", classname(x), hostname->s_name);
-        return 0;
-    }
-
-    if (argv[2].a_type == A_SYMBOL){
-        if (*argv[2].a_w.w_symbol->s_name == '*'){
-            *id = AOO_ID_WILDCARD;
-        } else {
-            pd_error(x, "%s: bad ID '%s'!",
-                     classname(x), argv[2].a_w.w_symbol->s_name);
-            return 0;
-        }
-    } else {
-        *id = atom_getfloat(argv + 2);
-    }
-    return 1;
-}
 
 static void aoo_send_handleevents(t_aoo_send *x,
                                   const aoo_event *events, int32_t n)
@@ -118,7 +88,7 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         pd_error(x, "%s: too few arguments for 'channel' message", classname(x));
         return;
     }
-    if (aoo_send_getsinkarg(x, argc, argv, &sa, &len, &id)){
+    if (aoo_getsinkarg(x, argc, argv, &sa, &len, &id)){
         t_endpoint *e = endpoint_find(x->x_endpoints, &sa);
         if (!e){
             pd_error(x, "%s: couldn't find sink!", classname(x));
@@ -258,7 +228,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     struct sockaddr_storage sa;
     socklen_t len;
     int32_t id;
-    if (aoo_send_getsinkarg(x, argc, argv, &sa, &len, &id)){
+    if (aoo_getsinkarg(x, argc, argv, &sa, &len, &id)){
         t_endpoint *e = endpoint_find(x->x_endpoints, &sa);
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
@@ -341,7 +311,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     struct sockaddr_storage sa;
     socklen_t len;
     int32_t id;
-    if (aoo_send_getsinkarg(x, argc, argv, &sa, &len, &id)){
+    if (aoo_getsinkarg(x, argc, argv, &sa, &len, &id)){
         t_endpoint *e = endpoint_find(x->x_endpoints, &sa);
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
