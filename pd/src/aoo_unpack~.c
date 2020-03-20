@@ -71,6 +71,18 @@ static void aoo_unpack_ping(t_aoo_unpack *x, t_floatarg f)
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_ping_interval, AOO_ARG(interval));
 }
 
+static void aoo_unpack_reset(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (argc){
+        // reset specific source
+        int32_t id = atom_getfloat(argv);
+        aoo_sink_setsourceoption(x->x_aoo_sink, x, id, aoo_opt_reset, AOO_ARGNULL);
+    } else {
+        // reset all sources
+        aoo_sink_setoption(x->x_aoo_sink, aoo_opt_reset, AOO_ARGNULL);
+    }
+}
+
 static void aoo_unpack_packetsize(t_aoo_unpack *x, t_floatarg f)
 {
     int32_t packetsize = f;
@@ -271,6 +283,8 @@ EXPORT void aoo_unpack_tilde_setup(void)
                     gensym("resend"), A_GIMME, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_ping,
                     gensym("ping"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_reset,
+                    gensym("reset"), A_GIMME, A_NULL);
 
     aoo_setup();
 }

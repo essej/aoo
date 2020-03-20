@@ -1,63 +1,66 @@
 #N canvas 946 24 446 99 12;
-#N canvas 787 202 756 551 sub 1;
+#N canvas 830 202 756 551 sub 1;
 #X obj 127 164 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 500 256;
-#X obj 327 250 line~;
-#X msg 327 216 \$1 50;
-#X obj 66 285 *~;
-#X obj 137 286 *~;
-#X obj 327 25 vsl 15 128 0 1 0 0 empty empty empty 0 -9 0 10 -262144
--1 -1 0 1;
-#X obj 327 185 t f f;
-#X obj 373 235 - 100;
-#X floatatom 373 259 5 0 0 0 - - -;
-#X obj 373 211 rmstodb;
-#X obj 327 161 pow 2;
+#X obj 403 270 line~;
+#X msg 403 236 \$1 50;
+#X obj 66 315 *~;
+#X obj 137 316 *~;
+#X obj 403 45 vsl 15 128 0 1 0 0 empty empty empty 0 -9 0 10 -262144
+-1 -1 2800 1;
+#X obj 403 205 t f f;
+#X obj 449 255 - 100;
+#X floatatom 449 279 5 0 0 0 - - -;
+#X obj 449 231 rmstodb;
+#X obj 403 181 pow 2;
 #X msg 123 191 bufsize \$1;
 #X obj 43 66 loadbang;
 #X msg 43 90 \; pd dsp 1;
-#X obj 57 342 outlet~;
-#X obj 137 344 outlet~;
-#X obj 70 464 block~;
-#X msg 70 438 set \$1;
-#X msg 71 408 64;
-#X msg 105 409 128;
-#X msg 141 410 256;
+#X obj 57 372 outlet~;
+#X obj 137 374 outlet~;
+#X obj 70 494 block~;
+#X msg 70 468 set \$1;
+#X msg 71 438 64;
+#X msg 105 439 128;
+#X msg 141 440 256;
 #X msg 41 190 listen \$1;
 #X msg 42 163 9999;
 #X msg 80 164 0;
 #X obj 26 142 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X obj 190 406 sigmund~;
-#X floatatom 190 430 10 0 0 0 - - -;
+#X obj 190 436 sigmund~;
+#X floatatom 190 460 10 0 0 0 - - -;
 #X obj 126 97 loadbang;
-#X obj 191 453 moses 0;
-#X obj 191 477 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
+#X obj 191 483 moses 0;
+#X obj 191 507 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
 -1 -1;
-#X obj 191 499 f;
-#X obj 222 502 + 1;
-#X floatatom 222 529 8 0 0 0 - - -;
-#X msg 214 477 -1;
-#X obj 249 478 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
+#X obj 191 529 f;
+#X obj 222 532 + 1;
+#X floatatom 222 559 8 0 0 0 - - -;
+#X msg 214 507 -1;
+#X obj 249 508 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
 -1 -1;
 #X msg 207 190 timefilter \$1;
 #X obj 208 163 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X obj 65 248 aoo_receive~ 1 2 9999;
-#X obj 137 313 clip~ -1 1;
-#X obj 56 313 clip~ -1 1;
+#X obj 65 278 aoo_receive~ 1 2 9999;
+#X obj 137 343 clip~ -1 1;
+#X obj 56 343 clip~ -1 1;
 #X msg 126 121 500;
 #X msg 162 122 100;
 #X msg 193 123 20;
-#X obj 291 314 aoo_receive~ 2 2 9999;
-#X obj 363 352 env~;
-#X floatatom 363 376 5 0 0 0 - - -;
-#X obj 292 351 env~;
-#X floatatom 292 375 5 0 0 0 - - -;
-#X obj 435 341 print B;
-#X obj 211 336 print A;
+#X obj 367 334 aoo_receive~ 2 2 9999;
+#X obj 439 372 env~;
+#X floatatom 439 396 5 0 0 0 - - -;
+#X obj 368 371 env~;
+#X floatatom 368 395 5 0 0 0 - - -;
+#X obj 511 361 print B;
+#X obj 211 366 print A;
 #X msg 65 219 list_sources;
-#X msg 291 287 list_sources;
+#X msg 367 307 list_sources;
+#X msg 194 218 reset;
+#X msg 466 307 reset;
+#X msg 88 247 reset localhost 64962 1;
 #X connect 0 0 11 0;
 #X connect 1 0 3 1;
 #X connect 1 0 4 1;
@@ -108,6 +111,9 @@
 #X connect 46 0 47 0;
 #X connect 50 0 37 0;
 #X connect 51 0 43 0;
+#X connect 52 0 37 0;
+#X connect 53 0 43 0;
+#X connect 54 0 37 0;
 #X restore 34 46 pd sub;
 #X obj 34 70 dac~;
 #X connect 0 0 1 0;

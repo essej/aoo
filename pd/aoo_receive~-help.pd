@@ -1,15 +1,15 @@
-#N canvas 482 56 721 680 12;
-#X text 35 635 see also;
-#X obj 104 636 aoo_send~;
+#N canvas 452 39 721 745 12;
+#X text 35 703 see also;
+#X obj 104 704 aoo_send~;
 #X msg 38 99 listen \$1;
 #X obj 38 74 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
 -262144 -1 -1 0 256;
 #X msg 102 72 0;
 #X text 37 52 port;
 #X text 136 72 stop listening;
-#X obj 38 545 aoo_receive~ 1 2 9999;
-#X text 101 491 creation arguments:;
-#X text 99 515 1) ID \, 2) num channels \, 3) [port] \, 4) [bufsize]
+#X obj 38 613 aoo_receive~ 1 2 9999;
+#X text 101 559 creation arguments:;
+#X text 99 583 1) ID \, 2) num channels \, 3) [port] \, 4) [bufsize]
 ;
 #X msg 59 182 bufsize \$1;
 #X obj 59 158 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
@@ -18,22 +18,22 @@
 #X obj 65 215 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X text 168 235 time DLL filter bandwidth (default: 0.0001);
-#X obj 38 572 env~;
-#X floatatom 38 596 5 0 0 0 - - -;
-#X obj 109 573 env~;
-#X floatatom 109 597 5 0 0 0 - - -;
+#X obj 38 640 env~;
+#X floatatom 38 664 5 0 0 0 - - -;
+#X obj 109 641 env~;
+#X floatatom 109 665 5 0 0 0 - - -;
 #X text 140 181 increase for jittery \, unreliable networks!;
 #X text 141 160 buffer size in ms (default: 20 ms);
-#X msg 102 460 resend 0;
-#X msg 97 425 resend;
-#X text 150 426 turn on (auto);
-#X text 88 365 resend lost packets (on by default):;
-#X text 266 412 2) interval (ms) = time between attempts;
-#X text 266 435 3) maxnumframes = max. number of frames to request
+#X msg 102 528 resend 0;
+#X msg 97 493 resend;
+#X text 150 494 turn on (auto);
+#X text 86 433 resend lost packets (on by default):;
+#X text 266 480 2) interval (ms) = time between attempts;
+#X text 266 503 3) maxnumframes = max. number of frames to request
 at once;
-#X text 266 461 all arguments are optional or can be "auto", f 44
+#X text 266 529 all arguments are optional or can be "auto", f 44
 ;
-#X text 172 461 turn off;
+#X text 172 529 turn off;
 #X msg 81 337 ping \$1;
 #X obj 81 316 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
@@ -59,20 +59,25 @@ at once;
 #X text 72 108 a source has been added;
 #X text 33 86 [source_add <host> <port> <ID>(, f 33;
 #X connect 0 0 2 0;
-#X restore 182 574 pd events;
+#X restore 182 642 pd events;
 #X text 35 24 aoo_receive~: receive one or more AoO audio streams;
-#X msg 289 600 \; pd dsp \$1;
-#X obj 289 577 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X msg 289 668 \; pd dsp \$1;
+#X obj 289 645 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X obj 73 264 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X msg 73 288 packetsize \$1;
 #X text 179 286 max. UDP packet size (default: 512 bytes);
-#X msg 90 392 resend 4 10 16;
-#X text 266 390 1) limit = max. number of attempts per frame;
+#X msg 90 460 resend 4 10 16;
+#X text 266 458 1) limit = max. number of attempts per frame;
 #X msg 49 128 list_sources;
 #X text 147 117 list sources. This will output a message [source <host>
 <port> <id>( for each source., f 45;
+#X msg 87 371 reset;
+#X text 144 364 reset all sources (e.g. if the stream seems to be broken
+or out of sync), f 47;
+#X msg 88 402 reset <host> <port> <id>;
+#X text 271 401 reset individual source;
 #X connect 2 0 7 0;
 #X connect 3 0 2 0;
 #X connect 4 0 2 0;
@@ -94,3 +99,4 @@ at once;
 #X connect 37 0 7 0;
 #X connect 39 0 7 0;
 #X connect 41 0 7 0;
+#X connect 43 0 7 0;

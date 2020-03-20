@@ -1,7 +1,6 @@
 #include "m_pd.h"
 
 #include "aoo_common.h"
-#include "aoo_net.h"
 
 #ifndef _WIN32
   #include <sys/select.h>
@@ -273,6 +272,27 @@ static int32_t aoo_receive_getid(t_aoo_receive *x)
     return x->x_id;
 }
 
+static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *argv)
+{
+    struct sockaddr_storage sa;
+    socklen_t len;
+    int32_t id;
+    if (aoo_getsourcearg(x, argc, argv, &sa, &len, &id)){
+        for (int i = 0; i < x->x_numsources; ++i){
+            if (endpoint_match(x->x_sources[i].s_endpoint, &sa) &&
+                x->x_sources[i].s_id == id)
+            {
+                return &x->x_sources[i];
+            }
+        }
+        t_symbol *host = atom_getsymbol(argv);
+        int port = atom_getfloat(argv + 1);
+        pd_error(x, "%s: couldn't find source %s %d %d",
+                 classname(x), host->s_name, port, id);
+    }
+    return 0;
+}
+
 static void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
                                        int32_t n, void *src, aoo_replyfn fn)
 {
@@ -311,6 +331,25 @@ static void aoo_receive_ping(t_aoo_receive *x, t_floatarg f)
     int32_t interval = f;
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_ping_interval, AOO_ARG(interval));
     pthread_mutex_unlock(&x->x_mutex);
+}
+
+static void aoo_receive_reset(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (argc){
+        // reset specific source
+        t_source *source = aoo_receive_findsource(x, argc, argv);
+        if (source){
+            pthread_mutex_lock(&x->x_mutex);
+            aoo_sink_setsourceoption(x->x_aoo_sink, source->s_endpoint,
+                                     source->s_id, aoo_opt_reset, AOO_ARGNULL);
+            pthread_mutex_unlock(&x->x_mutex);
+        }
+    } else {
+        // reset all sources
+        pthread_mutex_lock(&x->x_mutex);
+        aoo_sink_setoption(x->x_aoo_sink, aoo_opt_reset, AOO_ARGNULL);
+        pthread_mutex_unlock(&x->x_mutex);
+    }
 }
 
 static void aoo_receive_resend(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
@@ -620,6 +659,8 @@ EXPORT void aoo_receive_tilde_setup(void)
                     gensym("ping"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_listsources,
                     gensym("list_sources"), A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_reset,
+                    gensym("reset"), A_GIMME, A_NULL);
 
     aoo_setup();
 }
