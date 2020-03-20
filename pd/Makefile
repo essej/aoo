@@ -57,6 +57,7 @@ define forWindows
 endef
 
 define forDarwin
+	CC=$(CXX)
     cflags += -stdlib=libc++ -mmacosx-version-min=10.9
     ldlibs += -lpthread
 endef
