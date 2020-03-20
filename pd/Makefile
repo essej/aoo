@@ -23,6 +23,7 @@ cflags = -I$(AOO) \
     -I$(AOO)/src/lib \
     -Wno-unused -Wno-unused-parameter \
     -fvisibility=hidden \
+    -std=c++14 \
     -DAOO_BUILD \
     -DDLL_EXPORT \
     -DLOGLEVEL=2 \
