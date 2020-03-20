@@ -44,7 +44,7 @@ typedef struct _aoo_send
     pthread_mutex_t x_mutex;
 } t_aoo_send;
 
-int aoo_send_getsinkarg(void *x, int argc, t_atom *argv,
+static int aoo_send_getsinkarg(void *x, int argc, t_atom *argv,
                         struct sockaddr_storage *sa, socklen_t *len, int32_t *id)
 {
     if (argc < 3){
@@ -157,7 +157,7 @@ static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
     pthread_mutex_unlock(&x->x_mutex);
 }
 
-void *aoo_send_threadfn(void *y)
+static void *aoo_send_threadfn(void *y)
 {
     t_aoo_send *x = (t_aoo_send *)y;
 
@@ -193,7 +193,56 @@ void *aoo_send_threadfn(void *y)
     return 0;
 }
 
-void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
+static void aoo_send_doremovesink(t_aoo_send *x, t_endpoint *e, int32_t id)
+{
+    int n = x->x_numsinks;
+    if (n > 1){
+        if (id == AOO_ID_WILDCARD){
+            // remove all sinks matching endpoint
+            t_sink *end = x->x_sinks + n;
+            for (t_sink *s = x->x_sinks; s != end; ){
+                if (s->s_endpoint == e){
+                    memmove(s, s + 1,
+                            (end - s - 1) * sizeof(t_sink));
+                    end--;
+                } else {
+                    s++;
+                }
+            }
+            int newsize = end - x->x_sinks;
+            x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
+                n * sizeof(t_sink), newsize * sizeof(t_sink));
+            x->x_numsinks = newsize;
+            return;
+        } else {
+            // remove the sink matching endpoint and id
+            for (int i = 0; i < n; ++i){
+                if ((x->x_sinks[i].s_endpoint == e) &&
+                    (x->x_sinks[i].s_id == id))
+                {
+                    memmove(&x->x_sinks[i], &x->x_sinks[i + 1],
+                            (n - i - 1) * sizeof(t_sink));
+                    x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
+                        n * sizeof(t_sink), (n - 1) * sizeof(t_sink));
+                    x->x_numsinks--;
+                    return;
+                }
+            }
+        }
+    } else if (n == 1) {
+        if ((x->x_sinks->s_endpoint == e) &&
+            (id == AOO_ID_WILDCARD || id == x->x_sinks->s_id))
+        {
+            freebytes(x->x_sinks, sizeof(t_sink));
+            x->x_sinks = 0;
+            x->x_numsinks = 0;
+            return;
+        }
+    }
+    bug("aoo_send_doremovesink");
+}
+
+static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (x->x_socket < 0){
         pd_error(x, "%s: can't add sink - no socket!", classname(x));
@@ -209,15 +258,17 @@ void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     int32_t id;
     if (aoo_send_getsinkarg(x, argc, argv, &sa, &len, &id)){
         t_endpoint *e = endpoint_find(x->x_endpoints, &sa);
-        if (e){
-            // check if sink exists
+        t_symbol *host = atom_getsymbol(argv);
+        int port = atom_getfloat(argv + 1);
+        // check if sink exists
+        if (e && id != AOO_ID_WILDCARD){
             for (int i = 0; i < x->x_numsinks; ++i){
-                if ((x->x_sinks[i].s_endpoint == e) &&
-                    (x->x_sinks[i].s_id == id))
-                {
-                    t_symbol *host;
-                    int port;
-                    if (endpoint_getaddress(e, &host, &port)){
+                if (x->x_sinks[i].s_endpoint == e){
+                    if (x->x_sinks[i].s_id == AOO_ID_WILDCARD){
+                        pd_error(x, "%s: sink %s %d %d already added via wildcard!",
+                                 classname(x), host->s_name, port, id);
+                        return;
+                    } else if (x->x_sinks[i].s_id == id){
                         pd_error(x, "%s: sink %s %d %d already added!",
                                  classname(x), host->s_name, port, id);
                         return;
@@ -250,24 +301,30 @@ void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         // leave critical section
         pthread_mutex_unlock(&x->x_mutex);
 
+        if (id == AOO_ID_WILDCARD){
+            // first remove all sinks on this endpoint
+            aoo_send_doremovesink(x, e, AOO_ID_WILDCARD);
+        }
         // add sink to list
-        int oldsize = x->x_numsinks;
-        if (oldsize){
+        int n = x->x_numsinks;
+        if (n){
             x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
-                oldsize * sizeof(t_sink), (oldsize + 1) * sizeof(t_sink));
+                n * sizeof(t_sink), (n + 1) * sizeof(t_sink));
         } else {
             x->x_sinks = (t_sink *)getbytes(sizeof(t_sink));
         }
-        t_sink *sink = &x->x_sinks[oldsize];
+        t_sink *sink = &x->x_sinks[n];
         sink->s_endpoint = e;
         sink->s_id = id;
         x->x_numsinks++;
 
-        // print message
-        t_symbol *host;
-        int port;
+        // print message (use actual hostname)
         if (endpoint_getaddress(e, &host, &port)){
-            verbose(0, "added sink %s %d %d", host->s_name, port, id);
+            if (id == AOO_ID_WILDCARD){
+                verbose(0, "added all sinks on %s %d", host->s_name, port);
+            } else {
+                verbose(0, "added sink %s %d %d", host->s_name, port, id);
+            }
         }
     }
 }
@@ -284,23 +341,33 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     int32_t id;
     if (aoo_send_getsinkarg(x, argc, argv, &sa, &len, &id)){
         t_endpoint *e = endpoint_find(x->x_endpoints, &sa);
-        t_sink *sink = 0;
-        if (e){
+        t_symbol *host = atom_getsymbol(argv);
+        int port = atom_getfloat(argv + 1);
+        if (!e){
+            pd_error(x, "%s: couldn't find any sink on %s %d!",
+                     classname(x), host->s_name, port);
+            return;
+        }
+        if (id != AOO_ID_WILDCARD){
             // check if sink exists
+            int found = 0;
             for (int i = 0; i < x->x_numsinks; ++i){
-                if ((x->x_sinks[i].s_endpoint == e) &&
-                    (x->x_sinks[i].s_id == id))
-                {
-                    sink = &x->x_sinks[i];
+                if (x->x_sinks[i].s_endpoint == e){
+                    if (x->x_sinks[i].s_id == AOO_ID_WILDCARD){
+                        pd_error(x, "%s: can't remove sink %s %d %d because of wildcard!",
+                                 classname(x), host->s_name, port, id);
+                        return;
+                    } else if (x->x_sinks[i].s_id == id) {
+                        found = 1;
+                        break;
+                    }
                 }
             }
-        }
-        if (!sink){
-            t_symbol *host = atom_getsymbol(argv);
-            int port = atom_getfloat(argv + 1);
-            pd_error(x, "%s: couldn't find sink %s %d %d!",
-                     classname(x), host->s_name, port, id);
-            return;
+            if (!found){
+                pd_error(x, "%s: couldn't find sink %s %d %d!",
+                         classname(x), host->s_name, port, id);
+                return;
+            }
         }
 
         pthread_mutex_lock(&x->x_mutex);
@@ -308,23 +375,15 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         pthread_mutex_unlock(&x->x_mutex);
 
         // remove from list
-        int oldsize = x->x_numsinks;
-        if (oldsize > 1){
-            memmove(sink, sink + 1,
-                    (x->x_sinks + oldsize - (sink + 1)) * sizeof(t_sink));
-            x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
-                oldsize * sizeof(t_sink), (oldsize - 1) * sizeof(t_sink));
-        } else {
-            freebytes(x->x_sinks, sizeof(t_sink));
-            x->x_sinks = 0;
-        }
-        x->x_numsinks--;
+        aoo_send_doremovesink(x, e, id);
 
-        // print message
-        t_symbol *host;
-        int port;
+        // print message (use actual hostname)
         if (endpoint_getaddress(e, &host, &port)){
-            verbose(0, "removed sink %s %d %d", host->s_name, port, id);
+            if (id == AOO_ID_WILDCARD){
+                verbose(0, "removed all sinks on %s %d", host->s_name, port);
+            } else {
+                verbose(0, "removed sink %s %d %d", host->s_name, port, id);
+            }
         }
     }
 }
@@ -352,7 +411,11 @@ static void aoo_send_listsinks(t_aoo_send *x)
             t_atom msg[3];
             SETSYMBOL(msg, host);
             SETFLOAT(msg + 1, port);
-            SETFLOAT(msg + 2, s->s_id);
+            if (s->s_id == AOO_ID_WILDCARD){
+                SETSYMBOL(msg + 2, gensym("*"));
+            } else {
+                SETFLOAT(msg + 2, s->s_id);
+            }
             outlet_anything(x->x_eventout, gensym("sink"), 3, msg);
         } else {
             pd_error(x, "%s: couldn't get endpoint address for sink", classname(x));

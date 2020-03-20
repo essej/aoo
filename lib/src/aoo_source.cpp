@@ -187,6 +187,12 @@ int32_t aoo::source::set_sinkoption(void *endpoint, int32_t id,
     } else {
         auto sink = find_sink(endpoint, id);
         if (sink){
+            if (sink->id == AOO_ID_WILDCARD){
+                LOG_WARNING("aoo_source: can't set individual sink option "
+                            << opt << " because of wildcard");
+                return 0;
+            }
+
             switch (opt){
             // channel onset
             case aoo_opt_channelonset:
@@ -242,7 +248,7 @@ int32_t aoo::source::get_sinkoption(void *endpoint, int32_t id,
         return 1;
     } else {
         LOG_ERROR("aoo_source: couldn't get option " << opt
-                  << " - sink not found!");
+                  << " - sink " << id << " not found!");
         return 0;
     }
 }
@@ -270,7 +276,7 @@ int32_t aoo::source::set_format(aoo_format &f){
     update();
 
     for (auto& sink : sinks_){
-        send_format(sink);
+        send_format(sink, sink.id); // 'sink.id' might be wildcard!
     }
 
     return 1;
@@ -348,7 +354,9 @@ void aoo::source::update(){
 
 aoo::source::sink_desc * aoo::source::find_sink(void *endpoint, int32_t id){
     for (auto& sink : sinks_){
-        if ((sink.endpoint == endpoint) && (sink.id == id)){
+        if ((sink.endpoint == endpoint) &&
+            (sink.id == AOO_ID_WILDCARD || sink.id == id))
+        {
             return &sink;
         }
     }
@@ -364,15 +372,22 @@ int32_t aoo::source::add_sink(void *endpoint, int32_t id, aoo_replyfn fn){
         // first remove all sinks on the given endpoint!
         remove_sink(endpoint, AOO_ID_WILDCARD);
     } else {
-        if (find_sink(endpoint, id)){
-            LOG_WARNING("aoo_source: sink already added!");
+        // check if sink exists!
+        auto result = find_sink(endpoint, id);
+        if (result){
+            if (result->id == AOO_ID_WILDCARD){
+                LOG_WARNING("aoo_source: can't add individual sink "
+                            << id << " because of wildcard!");
+            } else {
+                LOG_WARNING("aoo_source: sink already added!");
+            }
             return 0;
         }
     }
     // add sink descriptor
     sink_desc sd = { endpoint, fn, id, 0 };
     sinks_.push_back(sd);
-    send_format(sd);
+    send_format(sd, id); // NOTE: id might be wildcard!
     return 1;
 }
 
@@ -389,16 +404,20 @@ int32_t aoo::source::remove_sink(void *endpoint, int32_t id){
         sinks_.erase(it, sinks_.end());
         return 1;
     } else {
-        auto result = std::find_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-            return (s.endpoint == endpoint) && (s.id == id);
-        });
-        if (result != sinks_.end()){
-            sinks_.erase(result);
-            return 1;
-        } else {
-            LOG_WARNING("aoo_source: sink not found!");
-            return 0;
+        for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
+            if (it->endpoint == endpoint){
+                if (it->id == AOO_ID_WILDCARD){
+                    LOG_WARNING("aoo_source: can't remove individual sink "
+                                << id << " because of wildcard!");
+                    return 0;
+                } else if (it->id == id){
+                    sinks_.erase(it);
+                    return 1;
+                }
+            }
         }
+        LOG_WARNING("aoo_source: sink not found!");
+        return 0;
     }
 }
 
@@ -490,10 +509,12 @@ namespace aoo {
 void source::handle_request(void *endpoint, aoo_replyfn fn, int32_t id){
     auto sink = find_sink(endpoint, id);
     if (sink){
-        // just resend format (the last format message might have been lost)
-        send_format(*sink);
+        // Just resend format (the last format message might have been lost)
+        // Use 'id' because we want to send to an individual sink!
+        // ('sink.id' might be a wildcard)
+        send_format(*sink, id);
     } else {
-        LOG_WARNING("aoo_source: ignoring '/request' message - sink not found");
+        LOG_WARNING("aoo_source: ignoring '" << AOO_REQUEST << "' message - sink not found");
     }
 }
 
@@ -501,11 +522,11 @@ void source::handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32_t s
                                int32_t count, osc::ReceivedMessageArgumentIterator it){
     auto sink = find_sink(endpoint, id);
     if (!sink){
-        LOG_WARNING("aoo_source: ignoring '/resend' message - sink not found");
+        LOG_WARNING("aoo_source: ignoring '" << AOO_RESEND << "' message - sink not found");
         return;
     }
     if (salt != salt_){
-        LOG_VERBOSE("aoo_source: ignoring '/resend' message - source has changed");
+        LOG_VERBOSE("aoo_source: ignoring '" << AOO_RESEND << "' - source has changed");
         return;
     }
     // get pairs of [seq, frame]
@@ -525,13 +546,17 @@ void source::handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32_t s
                 for (int i = 0; i < d.nframes; ++i){
                     d.framenum = i;
                     block->get_frame(i, d.data, d.size);
-                    send_data(*sink, d);
+                    // Use 'id' because we want to send to an individual sink!
+                    // ('sink.id' might be a wildcard)
+                    send_data(*sink, id, d);
                 }
             } else {
                 // single frame
                 d.framenum = framenum;
                 block->get_frame(framenum, d.data, d.size);
-                send_data(*sink, d);
+                // Use 'id' because we want to send to an individual sink!
+                // ('sink.id' might be a wildcard)
+                send_data(*sink, id, d);
             }
         } else {
             LOG_VERBOSE("couldn't find block " << seq);
@@ -546,10 +571,11 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id){
         aoo_event event;
         event.type = AOO_PING_EVENT;
         event.sink.endpoint = endpoint;
+        // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
         event.sink.id = id;
         eventqueue_.write(event);
     } else {
-        LOG_WARNING("ignoring '/ping' message: sink not found");
+        LOG_WARNING("ignoring '" << AOO_PING << "' message: sink not found");
     }
 }
 
@@ -597,7 +623,7 @@ int32_t aoo::source::send(){
             d.data = data;
             d.size = n;
             for (auto& sink : sinks_){
-                send_data(sink, d);
+                send_data(sink, sink.id, d); // NOTE: sink.id can be wildcard!
             }
         };
 
@@ -732,16 +758,18 @@ namespace aoo {
 
 // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
-void source::send_data(sink_desc& sink, const aoo::data_packet& d){
+void source::send_data(sink_desc& sink, int32_t id, const aoo::data_packet& d){
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
     assert(d.data != nullptr);
 
-    if (sink.id != AOO_ID_WILDCARD){
+    // use 'id' instead of 'sink.id'! this is for cases where 'sink.id' is a wildcard
+    // but we want to reply to an individual sink.
+    if (id != AOO_ID_WILDCARD){
         const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_DATA);
         char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, sink.id, AOO_DATA);
+        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, id, AOO_DATA);
 
         msg << osc::BeginMessage(address);
     } else {
@@ -761,15 +789,17 @@ void source::send_data(sink_desc& sink, const aoo::data_packet& d){
 
 // /AoO/<sink>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
 
-void source::send_format(sink_desc &sink){
+void source::send_format(sink_desc &sink, int32_t id){
     if (encoder_){
         char buf[AOO_MAXPACKETSIZE];
         osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-        if (sink.id != AOO_ID_WILDCARD){
+        // use 'id' instead of 'sink.id'! this is for cases where 'sink.id' is a wildcard
+        // but we want to reply to an individual sink.
+        if (id != AOO_ID_WILDCARD){
             const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_FORMAT);
             char address[max_addr_size];
-            snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, sink.id, AOO_FORMAT);
+            snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, id, AOO_FORMAT);
 
             msg << osc::BeginMessage(address);
         } else {

@@ -1,6 +1,6 @@
-#N canvas 289 26 610 748 12;
-#X obj 29 592 aoo_send~ 1 2;
-#X text 136 592 creation arguments:;
+#N canvas 198 9 672 767 12;
+#X obj 29 599 aoo_send~ 1 2;
+#X text 182 581 creation arguments:;
 #N canvas 135 97 551 346 pcm 0;
 #X obj 31 302 outlet;
 #X msg 187 57 2;
@@ -52,7 +52,7 @@
 #X connect 16 0 13 0;
 #X connect 17 0 9 0;
 #X connect 27 0 0 0;
-#X restore 104 468 pd pcm;
+#X restore 116 481 pd pcm;
 #N canvas 104 170 832 547 opus 0;
 #X obj 50 454 outlet;
 #X msg 161 125 48000;
@@ -144,58 +144,61 @@
 #X connect 44 0 25 0;
 #X connect 45 0 25 0;
 #X connect 46 0 25 0;
-#X restore 110 497 pd opus;
-#X text 102 446 set format:;
-#X obj 80 255 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X restore 122 510 pd opus;
+#X text 114 459 set format:;
+#X obj 89 265 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X obj 88 304 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X obj 97 315 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X msg 88 323 packetsize \$1;
-#X text 194 321 max. UDP packet size (default: 512 bytes);
-#X obj 94 351 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X msg 97 334 packetsize \$1;
+#X text 203 332 max. UDP packet size (default: 512 bytes);
+#X obj 103 362 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X msg 94 370 timefilter \$1;
-#X text 198 371 time DLL filter bandwidth (default: 0.0001);
-#X text 26 706 see also;
-#X obj 101 707 aoo_receive~;
-#X obj 60 533 osc~ 440;
-#X obj 128 532 osc~ 220;
-#X text 136 614 1) ID \, 2) num channels \, 3) [sink ID] \, 4) [sink
+#X msg 103 381 timefilter \$1;
+#X text 207 382 time DLL filter bandwidth (default: 0.0001);
+#X text 26 694 see also;
+#X obj 101 695 aoo_receive~;
+#X obj 48 546 osc~ 440;
+#X obj 116 545 osc~ 220;
+#X text 182 603 1) ID \, 2) num channels \, 3) [sink ID] \, 4) [sink
 channel onset], f 62;
-#X obj 60 559 *~ 0.25;
-#X obj 128 558 *~ 0.25;
-#X msg 99 419 resend \$1;
-#X obj 99 398 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X obj 48 572 *~ 0.25;
+#X obj 116 571 *~ 0.25;
+#X msg 108 430 resend \$1;
+#X obj 108 409 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X text 178 420 buffersize (ms) for resending lost packets (default:
+#X text 187 431 buffersize (ms) for resending lost packets (default:
 1000);
-#X text 167 644 events:;
-#X text 189 666 ping event: [ping <host> <port> <id>(;
-#X msg 29 68 add localhost 9999 1;
-#X text 28 34 aoo_send~: send an AoO audio stream to one or more AoO
+#X text 179 635 events:;
+#X text 201 657 ping event: [ping <host> <port> <id>(;
+#X msg 29 52 add localhost 9999 1;
+#X text 26 19 aoo_send~: send an AoO audio stream to one or more AoO
 sinks;
-#X msg 46 128 remove localhost 9999 1;
-#X text 222 127 remove an AoO sink (hostname \, port \, sink ID);
-#X msg 65 189 clear;
-#X text 118 190 remove all AoO sinks;
-#X msg 80 276 channel localhost 9999 1 \$1;
-#X text 287 277 set sink channel onset;
-#X msg 56 158 remove localhost 9999 2;
-#X msg 38 98 add localhost 9999 2 1;
-#X text 185 68 add an AoO sink (hostname \, port \, sink ID \, [channel
+#X msg 53 140 remove localhost 9999 1;
+#X text 229 139 remove an AoO sink (hostname \, port \, sink ID);
+#X msg 74 200 clear;
+#X text 127 201 remove all AoO sinks;
+#X msg 89 287 channel localhost 9999 1 \$1;
+#X text 296 288 set sink channel onset;
+#X text 185 52 add an AoO sink (hostname \, port \, sink ID \, [channel
 onset]);
-#X text 211 99 with optional channel onset;
-#X msg 271 503 \; pd dsp \$1;
-#X obj 271 481 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X text 211 82 with optional channel onset;
+#X msg 271 516 \; pd dsp \$1;
+#X obj 271 494 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
-#X msg 74 220 list_sinks;
-#X text 162 219 list all sinks. This will output a message [sink <host>
+#X msg 83 232 list_sinks;
+#X text 170 229 list all sinks. This will output a message [sink <host>
 <port> <id>( for each sink., f 44;
-#X obj 29 672 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
+#X obj 29 657 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
 -1;
-#X obj 80 670 print SINK;
-#X obj 29 645 route ping sink;
-#X connect 0 0 42 0;
+#X obj 80 655 print SINK;
+#X obj 29 630 route ping sink;
+#X msg 46 111 add localhost 9999 *;
+#X text 203 112 send to all AoO sinks on the given endpoint;
+#X msg 62 170 remove localhost 9999 *;
+#X msg 38 82 add localhost 9999 1 1;
+#X text 241 170 remove all AoO sinks on the given endpoint;
+#X connect 0 0 40 0;
 #X connect 2 0 0 0;
 #X connect 3 0 0 0;
 #X connect 5 0 30 0;
@@ -213,9 +216,10 @@ onset]);
 #X connect 26 0 0 0;
 #X connect 28 0 0 0;
 #X connect 30 0 0 0;
-#X connect 32 0 0 0;
-#X connect 33 0 0 0;
-#X connect 37 0 36 0;
-#X connect 38 0 0 0;
-#X connect 42 0 40 0;
-#X connect 42 1 41 0;
+#X connect 35 0 34 0;
+#X connect 36 0 0 0;
+#X connect 40 0 38 0;
+#X connect 40 1 39 0;
+#X connect 41 0 0 0;
+#X connect 43 0 0 0;
+#X connect 44 0 0 0;

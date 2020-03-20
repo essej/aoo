@@ -87,9 +87,9 @@ class source final : public isource {
 
     void update_historybuffer();
 
-    void send_data(sink_desc& sink, const aoo::data_packet& d);
+    void send_data(sink_desc& sink, int32_t id, const aoo::data_packet& d);
 
-    void send_format(sink_desc& sink);
+    void send_format(sink_desc& sink, int32_t id);
 
     void handle_request(void *endpoint, aoo_replyfn fn, int32_t id);
 
