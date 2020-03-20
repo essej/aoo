@@ -177,6 +177,12 @@ int endpoint_getaddress(const t_endpoint *e, t_symbol **hostname, int *port)
     return 1;
 }
 
+int endpoint_match(t_endpoint *e, const struct sockaddr_storage *sa)
+{
+    return (sa->ss_family == ((const struct sockaddr *)&e->addr)->sa_family)
+                && !memcmp(sa, &e->addr, e->addrlen);
+}
+
 t_endpoint * endpoint_find(t_endpoint *e, const struct sockaddr_storage *sa)
 {
     for (t_endpoint *ep = e; ep; ep = ep->next){

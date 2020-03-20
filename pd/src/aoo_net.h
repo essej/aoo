@@ -43,3 +43,5 @@ int endpoint_send(t_endpoint *e, const char *data, int size);
 int endpoint_getaddress(const t_endpoint *e, t_symbol **hostname, int *port);
 
 t_endpoint * endpoint_find(t_endpoint *e, const struct sockaddr_storage *sa);
+
+int endpoint_match(t_endpoint *e, const struct sockaddr_storage *sa);
