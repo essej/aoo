@@ -102,7 +102,7 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
     }
     // unknown
     default:
-        LOG_WARNING("aoo_source: unknown option " << opt);
+        LOG_WARNING("aoo_source: unsupported option " << opt);
         return 0;
     }
     return 1;
@@ -147,7 +147,7 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
         break;
     // unknown
     default:
-        LOG_WARNING("aoo_source: unknown option " << opt);
+        LOG_WARNING("aoo_source: unsupported option " << opt);
         return 0;
     }
     return 1;
@@ -180,7 +180,7 @@ int32_t aoo::source::set_sinkoption(void *endpoint, int32_t id,
         }
         // unknown
         default:
-            LOG_WARNING("aoo_source: unknown sink option " << opt);
+            LOG_WARNING("aoo_source: unsupported sink option " << opt);
             return 0;
         }
         return 1;
@@ -242,7 +242,7 @@ int32_t aoo::source::get_sinkoption(void *endpoint, int32_t id,
             break;
         // unknown
         default:
-            LOG_WARNING("aoo_source: unknown sink option " << opt);
+            LOG_WARNING("aoo_source: unsupported sink option " << opt);
             return 0;
         }
         return 1;

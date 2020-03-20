@@ -500,6 +500,7 @@ void sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
             if (queue.full()){
                 // if the queue is full, we have to drop a block;
                 // in this case we send a block of zeros to the audio buffer
+                auto old = queue.front().sequence;
                 auto nsamples = src->audioqueue.blocksize();
                 if (src->audioqueue.write_available() && src->infoqueue.write_available()){
                     auto ptr = src->audioqueue.write_data();
@@ -512,10 +513,14 @@ void sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                     i.sr = src->decoder->samplerate();
                     i.channel = 0;
                     src->infoqueue.write(i);
+                    // update 'next'
+                    if (src->next <= old){
+                        src->next = old + 1;
+                    }
                 }
-                LOG_VERBOSE("dropped block " << queue.front().sequence);
+                LOG_VERBOSE("dropped block " << old);
                 // remove block from acklist
-                acklist.remove(queue.front().sequence);
+                acklist.remove(old);
                 // record dropped block
                 src->streamstate.lost++;
             }
