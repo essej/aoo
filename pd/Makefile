@@ -36,8 +36,8 @@ cflags = -I$(AOO) \
 ldlibs =
 
 common.sources = \
-    src/aoo_common.cpp \
-    src/aoo_net.cpp
+    src/aoo_common.c \
+    src/aoo_net.c
 
 shared.sources = \
     $(AOO)/src/aoo_imp.cpp \
