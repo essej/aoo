@@ -239,7 +239,9 @@ static void aoo_send_doremovesink(t_aoo_send *x, t_endpoint *e, int32_t id)
             return;
         }
     }
-    bug("aoo_send_doremovesink");
+    if (id != AOO_ID_WILDCARD){
+        bug("aoo_send_doremovesink");
+    }
 }
 
 static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
