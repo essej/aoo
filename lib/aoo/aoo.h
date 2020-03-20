@@ -234,8 +234,8 @@ typedef enum aoo_option
     // ---
     // The settings for the audio codec to be used for a stream.
     // If you want to set the format, you have to send the format
-    // header, e.g. aoo_format_pcm.header. This is only allowed
-    // for sources.
+    // header, e.g. aoo_format_pcm.header. The format can only be
+    // set in sources.
     // If you want to get the format, you have to pass a
     // aoo_format_storage, which is filled with the format.
     aoo_opt_format = 0,
@@ -310,10 +310,13 @@ typedef enum aoo_option
     // ---
     // This is the max. number of frames to request
     // in a single call to sink_handlemessage().
-    aoo_opt_resend_maxnumframes
+    aoo_opt_resend_maxnumframes,
+    // Reset the source/sink (NULL)
+    aoo_opt_reset,
 } aoo_option;
 
 #define AOO_ARG(x) &x, sizeof(x)
+#define AOO_ARGNULL 0, 0
 
 /*//////////////////// AoO source /////////////////////*/
 

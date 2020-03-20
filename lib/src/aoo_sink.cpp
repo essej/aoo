@@ -90,6 +90,13 @@ int32_t aoo_sink_setoption(aoo_sink *sink, int32_t opt, void *p, int32_t size)
 int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
+    // reset
+    case aoo_opt_reset:
+        update_sources();
+
+        // reset time DLL
+        starttime_ = 0; // will update
+        break;
     // buffer size
     case aoo_opt_buffersize:
     {
@@ -147,7 +154,7 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         break;
     // unknown
     default:
-        LOG_WARNING("aoo_sink: unknown option " << opt);
+        LOG_WARNING("aoo_sink: unsupported option " << opt);
         return 0;
     }
     return 1;
@@ -198,7 +205,7 @@ int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
         break;
     // unknown
     default:
-        LOG_WARNING("aoo_sink: unknown option " << opt);
+        LOG_WARNING("aoo_sink: unsupported option " << opt);
         return 0;
     }
     return 1;
@@ -216,11 +223,13 @@ int32_t aoo::sink::set_sourceoption(void *endpoint, int32_t id,
     auto src = find_source(endpoint, id);
     if (src){
         switch (opt){
-        case aoo_opt_format:
-            LOG_ERROR("aoo_sink: can't set source format!");
-            return 0;
+        // reset
+        case aoo_opt_reset:
+            update_source(*src);
+            break;
+        // unsupported
         default:
-            LOG_WARNING("aoo_sink: unknown source option " << opt);
+            LOG_WARNING("aoo_sink: unsupported source option " << opt);
             return 0;
         }
         return 1;
@@ -241,6 +250,7 @@ int32_t aoo::sink::get_sourceoption(void *endpoint, int32_t id,
     auto src = find_source(endpoint, id);
     if (src){
         switch (opt){
+        // format
         case aoo_opt_format:
             CHECKARG(aoo_format_storage);
             if (src->decoder){
@@ -249,8 +259,9 @@ int32_t aoo::sink::get_sourceoption(void *endpoint, int32_t id,
                 return 0;
             }
             break;
+        // unsupported
         default:
-            LOG_WARNING("aoo_sink: unknown source option " << opt);
+            LOG_WARNING("aoo_sink: unsupported source option " << opt);
             return 0;
         }
         return 1;

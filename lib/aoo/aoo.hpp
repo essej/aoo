@@ -187,6 +187,10 @@ public:
     //---------------------- options ----------------------//
     // Call from any thread - synchronize with network and audio thread!
 
+    int32_t reset(){
+        return set_option(aoo_opt_reset, AOO_ARGNULL);
+    }
+
     int32_t set_buffersize(int32_t n){
         return set_option(aoo_opt_buffersize, AOO_ARG(n));
     }
@@ -247,6 +251,10 @@ public:
     virtual int32_t get_option(int32_t opt, void *ptr, int32_t size) = 0;
 
     //----------------- source options -------------------//
+
+    int32_t reset_source(void *endpoint, int32_t id){
+        return set_sourceoption(endpoint, id, aoo_opt_reset, AOO_ARGNULL);
+    }
 
     int32_t get_source_format(void *endpoint, int32_t id, aoo_format_storage& f){
         return get_sourceoption(endpoint, id, aoo_opt_format, AOO_ARG(f));
