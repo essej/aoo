@@ -443,7 +443,7 @@ static void aoo_receive_handleevents(t_aoo_receive *x,
                 x->x_sources = (t_source *)getbytes(sizeof(t_source));
             }
             t_source *s = &x->x_sources[oldsize];
-            s->s_endpoint = e->endpoint;
+            s->s_endpoint = (t_endpoint *)e->endpoint;
             s->s_id = e->id;
             x->x_numsources++;
 
