@@ -35,6 +35,7 @@ struct stream_state {
     std::atomic<int32_t> reordered{0};
     std::atomic<int32_t> resent{0};
     std::atomic<int32_t> gap{0};
+    std::atomic<bool> recover{false};
 };
 
 struct source_desc {

@@ -57,7 +57,7 @@ int32_t aoo::sink::setup(const aoo_sink_settings& settings){
         buffer_.resize(blocksize_ * nchannels_);
 
         // reset timer + time DLL filter
-        timer_.reset();
+        timer_.setup(samplerate_, blocksize_);
 
         // don't need to lock
         update_sources();
@@ -457,14 +457,19 @@ void sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 // record reordering
                 src->streamstate.reordered++;
             }
-        } else if ((d.sequence - src->newest) > 1){
+        } else if (src->newest > 0 && (d.sequence - src->newest) > 1){
             LOG_VERBOSE("skipped " << (d.sequence - src->newest - 1) << " blocks");
         }
 
-        if (src->newest > 0 && (d.sequence - src->newest) > queue.capacity()){
-            // too large gap between incoming block and most recent block.
-            // either network problem or stream has temporarily stopped.
+        // check for large gap between incoming block and most recent block
+        // (either network problem or stream has temporarily stopped.)
+        bool large_gap = (src->newest > 0) && ((d.sequence - src->newest) > queue.capacity());
 
+        // check if we need to recover
+        bool expected = true;
+        bool recover = src->streamstate.recover.compare_exchange_strong(expected, false);
+
+        if (large_gap || recover){
             // record dropped blocks
             src->streamstate.lost += queue.size();
             src->streamstate.gap += (d.sequence - src->newest - 1);
@@ -489,7 +494,8 @@ void sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
 
                 count++;
             }
-            LOG_VERBOSE("wrote " << count << " silent blocks for transmission gap");
+            LOG_VERBOSE("wrote " << count << " silent blocks for "
+                        << (recover ? "recovery" : "transmission gap"));
         }
         auto block = queue.find(d.sequence);
         if (!block){
@@ -858,17 +864,23 @@ int32_t aoo::sink::process(uint64_t t){
 
     bool didsomething = false;
 
-    // update time DLL
-    timer_.update(t);
-    double elapsed = timer_.get_elapsed();
-    if (elapsed == 0){
-        LOG_VERBOSE("setup time DLL for sink");
+    // update time DLL filter
+    double error;
+    auto state = timer_.update(t, error);
+    if (state == timer::state::reset){
+        LOG_VERBOSE("setup time DLL filter for sink");
         dll_.setup(samplerate_, blocksize_, bandwidth_, 0);
+    } else if (state == timer::state::error){
+        // recover sources
+        for (auto& s : sources_){
+            s.streamstate.recover = true;
+        }
+        timer_.reset();
     } else {
+        auto elapsed = timer_.get_elapsed();
         dll_.update(elapsed);
     #if AOO_DEBUG_DLL
-        DO_LOG("SINK");
-        DO_LOG("elapsed: " << elapsed << ", period: " << dll_.period()
+        DO_LOG("time elapsed: " << elapsed << ", period: " << dll_.period()
                << ", samplerate: " << dll_.samplerate());
     #endif
     }
