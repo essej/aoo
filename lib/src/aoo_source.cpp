@@ -86,7 +86,7 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
         CHECKARG(float);
         // time filter
         bandwidth_ = as<float>(ptr);
-        starttime_ = 0; // will update
+        timer_.reset(); // will update
         break;
     // resend buffer size
     case aoo_opt_resend_buffersize:
@@ -310,7 +310,7 @@ int32_t aoo::source::setup(const aoo_source_settings &settings){
         }
 
         // always reset time DLL to be on the safe side
-        starttime_ = 0; // will update
+        timer_.reset(); // will update
         return 1;
     }
 
@@ -348,7 +348,7 @@ void aoo::source::update(){
         update_historybuffer();
 
         // reset time DLL to be on the safe side
-        starttime_ = 0; // will update
+        timer_.reset(); // will update
     }
 }
 
@@ -658,13 +658,12 @@ int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, 
 
 int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     // update DLL
-    aoo::time_tag tt(t);
-    if (starttime_ == 0){
+    timer_.update(t);
+    double elapsed = timer_.get_elapsed();
+    if (elapsed == 0){
         LOG_VERBOSE("setup time DLL for source");
-        starttime_ = tt.to_double();
         dll_.setup(samplerate_, blocksize_, bandwidth_, 0);
     } else {
-        auto elapsed = tt.to_double() - starttime_;
         dll_.update(elapsed);
     #if AOO_DEBUG_DLL
         fprintf(stderr, "SOURCE\n");

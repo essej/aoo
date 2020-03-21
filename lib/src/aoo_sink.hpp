@@ -117,8 +117,7 @@ class sink final : public isink {
     aoo::shared_mutex mutex_; // LATER replace with a spinlock?
     aoo::time_dll dll_;
     double bandwidth_ = AOO_TIMEFILTER_BANDWIDTH;
-    double starttime_ = 0;
-    aoo::threadsafe_counter elapsedtime_;
+    aoo::timer timer_;
     // helper methods
     aoo::source_desc *find_source(void *endpoint, int32_t id);
 

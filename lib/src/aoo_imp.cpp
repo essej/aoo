@@ -1003,6 +1003,50 @@ void dynamic_resampler::read(aoo_sample *data, int32_t n){
     }
 }
 
+/*//////////////////////// timer //////////////////////*/
+
+timer::timer(const timer& other)
+    : delta_(other.delta_),
+      last_(other.last_),
+      elapsed_(other.elapsed_.load()),
+      buffer_(other.buffer_),
+      head_(other.head_),
+      sum_(other.sum_) {}
+
+timer& timer::operator=(const timer& other){
+    delta_ = other.delta_;
+    last_ = other.last_;
+    elapsed_ = other.elapsed_.load();
+    buffer_ = other.buffer_;
+    head_ = other.head_;
+    sum_ = other.sum_;
+    return *this;
+}
+
+void timer::setup(int32_t sr, int32_t blocksize){
+    delta_ = (double)blocksize / (double)sr;
+}
+
+void timer::reset(){
+    last_.clear();
+    elapsed_ = 0;
+}
+
+double timer::get_elapsed() const {
+    return elapsed_.load();
+}
+
+int32_t timer::update(time_tag t){
+    if (last_.seconds != 0){
+        auto diff = t - last_;
+        auto delta = diff.to_double();
+        // TODO check delta
+        elapsed_ = elapsed_ + delta;
+    }
+    last_ = t;
+    return 0;
+}
+
 } // aoo
 
 void aoo_setup(){

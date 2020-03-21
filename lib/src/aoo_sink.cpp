@@ -64,7 +64,7 @@ int32_t aoo::sink::setup(const aoo_sink_settings& settings){
         }
 
         // always reset time DLL to be on the safe side
-        starttime_ = 0; // will update
+       timer_.reset(); // will update
 
         return 1;
     }
@@ -95,7 +95,7 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         update_sources();
 
         // reset time DLL
-        starttime_ = 0; // will update
+        timer_.reset(); // will update
         break;
     // buffer size
     case aoo_opt_buffersize:
@@ -118,7 +118,7 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
     case aoo_opt_timefilter_bandwidth:
         CHECKARG(float);
         bandwidth_ = std::max<double>(0, std::min<double>(1, as<float>(ptr)));
-        starttime_ = 0; // will update time DLL and reset timer
+        timer_.reset(); // will update time DLL and reset timer
         break;
     // packetsize
     case aoo_opt_packetsize:
@@ -627,7 +627,7 @@ void sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 if (!it->complete()){
                     // insert ack (if needed)
                     auto& ack = acklist.get(it->sequence);
-                    if (ack.check(elapsedtime_.get(), resend_interval_)){
+                    if (ack.check(timer_.get_elapsed(), resend_interval_)){
                         for (int i = 0; i < it->num_frames(); ++i){
                             if (!it->has_frame(i)){
                                 if (numframes < resend_maxnumframes_){
@@ -652,7 +652,7 @@ void sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                     for (int i = 0; i < missing; ++i){
                         // insert ack (if necessary)
                         auto& ack = acklist.get(next + i);
-                        if (ack.check(elapsedtime_.get(), resend_interval_)){
+                        if (ack.check(timer_.get_elapsed(), resend_interval_)){
                             if (numframes + it->num_frames() <= resend_maxnumframes_){
                                 retransmit_list_.push_back(data_request { next + i, -1 }); // whole block
                                 numframes += it->num_frames();
@@ -822,7 +822,7 @@ void sink::ping(aoo::source_desc& src){
     if (ping_interval_ == 0){
         return;
     }
-    auto now = elapsedtime_.get();
+    auto now = timer_.get_elapsed();
     if ((now - src.lastpingtime) > ping_interval_){
         char buffer[AOO_MAXPACKETSIZE];
         osc::OutboundPacketStream msg(buffer, sizeof(buffer));
@@ -863,21 +863,18 @@ int32_t aoo::sink::process(uint64_t t){
     bool didsomething = false;
 
     // update time DLL
-    aoo::time_tag tt(t);
-    if (starttime_ == 0){
-        starttime_ = tt.to_double();
+    timer_.update(t);
+    double elapsed = timer_.get_elapsed();
+    if (elapsed == 0){
         LOG_VERBOSE("setup time DLL for sink");
         dll_.setup(samplerate_, blocksize_, bandwidth_, 0);
-        elapsedtime_.reset();
     } else {
-        auto elapsed = tt.to_double() - starttime_;
         dll_.update(elapsed);
     #if AOO_DEBUG_DLL
         DO_LOG("SINK");
         DO_LOG("elapsed: " << elapsed << ", period: " << dll_.period()
                << ", samplerate: " << dll_.samplerate());
     #endif
-        elapsedtime_.set(elapsed);
     }
 
     // the mutex is uncontended most of the time, but LATER we might replace

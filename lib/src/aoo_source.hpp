@@ -63,7 +63,7 @@ class source final : public isource {
     void *user_;
     aoo::time_dll dll_;
     double bandwidth_ = AOO_TIMEFILTER_BANDWIDTH;
-    double starttime_ = 0;
+    aoo::timer timer_;
     aoo::history_buffer history_;
     // sinks
     struct sink_desc {
