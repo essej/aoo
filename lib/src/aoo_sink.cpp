@@ -469,7 +469,10 @@ void sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
         bool expected = true;
         bool recover = src->streamstate.recover.compare_exchange_strong(expected, false);
 
-        if (large_gap || recover){
+        // check for empty block (= skipped)
+        bool dropped = d.totalsize == 0;
+
+        if (large_gap || recover || dropped){
             // record dropped blocks
             src->streamstate.lost += queue.size();
             src->streamstate.gap += (d.sequence - src->newest - 1);
@@ -495,8 +498,14 @@ void sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 count++;
             }
             LOG_VERBOSE("wrote " << count << " silent blocks for "
-                        << (recover ? "recovery" : "transmission gap"));
+                        << (large_gap ? "transmission gap" :
+                            recover ? "recovery" : "host timing gap"));
+            if (dropped){
+                src->next++;
+                return;
+            }
         }
+
         auto block = queue.find(d.sequence);
         if (!block){
             if (queue.full()){

@@ -342,6 +342,7 @@ void aoo::source::update(){
         // any timing gaps.
         salt_ = make_salt();
         sequence_ = 0;
+        dropped_ = 0;
         for (auto& sink : sinks_){
             sink.format_changed = true;
         }
@@ -584,75 +585,89 @@ int32_t aoo::source::send(){
     if (!encoder_){
         return 0;
     }
+    const auto nchannels = encoder_->nchannels();
+    const auto blocksize = encoder_->blocksize();
+    aoo::data_packet d;
+    d.sequence = sequence_;
 
-    if (audioqueue_.read_available() && srqueue_.read_available()){
-        const auto nchannels = encoder_->nchannels();
-        const auto blocksize = encoder_->blocksize();
-        aoo::data_packet d;
-        d.sequence = sequence_;
-        srqueue_.read(d.samplerate);
-
+    // *first* check for dropped blocks
+    // NOTE: there's no ABA problem because dropped_ will only be decremented in this method.
+    if (dropped_ > 0){
+        // send empty block
+        d.samplerate = encoder_->samplerate(); // use nominal samplerate
+        d.totalsize = 0;
+        d.nframes = 0;
+        d.framenum = 0;
+        d.data = nullptr;
+        d.size = 0;
+        for (auto& sink : sinks_){
+            send_data(sink, sink.id, d); // NOTE: sink.id can be wildcard!
+        }
+        --dropped_;
+    } else if (audioqueue_.read_available() && srqueue_.read_available()){
         // copy and convert audio samples to blob data
         const auto blobmaxsize = sizeof(double) * nchannels * blocksize; // overallocate
         char * blobdata = (char *)alloca(blobmaxsize);
 
+        // read samples from audio ringbuffer
+        srqueue_.read(d.samplerate);
         d.totalsize = encoder_->encode(audioqueue_.read_data(), audioqueue_.blocksize(),
-                                        blobdata, blobmaxsize);
+                                       blobdata, blobmaxsize);
 
-        if (d.totalsize == 0){
-            return 1; // ?
-        }
+        if (d.totalsize > 0){
+            auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
+            auto dv = div(d.totalsize, maxpacketsize);
+            d.nframes = dv.quot + (dv.rem != 0);
 
-        auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
-        auto dv = div(d.totalsize, maxpacketsize);
-        d.nframes = dv.quot + (dv.rem != 0);
+            // save block
+            history_.push(d.sequence, d.samplerate,
+                          blobdata, d.totalsize, d.nframes, maxpacketsize);
 
-        // save block
-        history_.push(d.sequence, d.samplerate,
-                      blobdata, d.totalsize, d.nframes, maxpacketsize);
-
-        // check if we need to send the format
-        for (auto& sink : sinks_){
-            if (sink.format_changed){
-                send_format(sink, sink.id); // NOTE: sink.id can be wildcard!
-                sink.format_changed = false;
-            }
-        }
-
-        // send a single frame to all sink
-        // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
-        auto dosend = [&](int32_t frame, const char* data, auto n){
-            d.framenum = frame;
-            d.data = data;
-            d.size = n;
+            // check if we need to send the format
             for (auto& sink : sinks_){
-                send_data(sink, sink.id, d); // NOTE: sink.id can be wildcard!
+                if (sink.format_changed){
+                    send_format(sink, sink.id); // NOTE: sink.id can be wildcard!
+                    sink.format_changed = false;
+                }
             }
-        };
 
-        auto blobptr = blobdata;
-        // send large frames (might be 0)
-        for (int32_t i = 0; i < dv.quot; ++i, blobptr += maxpacketsize){
-            dosend(i, blobptr, maxpacketsize);
-        }
-        // send remaining bytes as a single frame (might be the only one!)
-        if (dv.rem){
-            dosend(dv.quot, blobptr, dv.rem);
+            // send a single frame to all sink
+            // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
+            auto dosend = [&](int32_t frame, const char* data, auto n){
+                d.framenum = frame;
+                d.data = data;
+                d.size = n;
+                for (auto& sink : sinks_){
+                    send_data(sink, sink.id, d); // NOTE: sink.id can be wildcard!
+                }
+            };
+
+            auto blobptr = blobdata;
+            // send large frames (might be 0)
+            for (int32_t i = 0; i < dv.quot; ++i, blobptr += maxpacketsize){
+                dosend(i, blobptr, maxpacketsize);
+            }
+            // send remaining bytes as a single frame (might be the only one!)
+            if (dv.rem){
+                dosend(dv.quot, blobptr, dv.rem);
+            }
+        } else {
+            LOG_WARNING("aoo_source: couldn't encode audio data!");
         }
 
         audioqueue_.read_commit(); // commit the read after sending!
-
-        sequence_++;
-        // handle overflow (with 64 samples @ 44.1 kHz this happens every 36 days)
-        // for now just force a reset by changing the salt, LATER think how to handle this better
-        if (sequence_ == INT32_MAX){
-            salt_ = make_salt();
-        }
-        return 1;
     } else {
         // LOG_DEBUG("couldn't send");
         return 0;
     }
+
+    sequence_++;
+    // handle overflow (with 64 samples @ 44.1 kHz this happens every 36 days)
+    // for now just force a reset by changing the salt, LATER think how to handle this better
+    if (sequence_ == INT32_MAX){
+        salt_ = make_salt();
+    }
+    return 1;
 }
 
 int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, uint64_t t) {
@@ -660,20 +675,25 @@ int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, 
 }
 
 int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
-    // update DLL
-    timer_.update(t);
-    double elapsed = timer_.get_elapsed();
-    if (elapsed == 0){
-        LOG_VERBOSE("setup time DLL for source");
+    // update time DLL filter
+    double error;
+    auto state = timer_.update(t, error);
+    if (state == timer::state::reset){
+        LOG_VERBOSE("setup time DLL filter for source");
         dll_.setup(samplerate_, blocksize_, bandwidth_, 0);
+    } else if (state == timer::state::error){
+        // skip blocks
+        double period = (double)blocksize_ / (double)samplerate_;
+        int nblocks = error / period + 0.5;
+        LOG_VERBOSE("skip " << nblocks << " blocks");
+        dropped_ += nblocks;
+        timer_.reset();
     } else {
+        auto elapsed = timer_.get_elapsed();
         dll_.update(elapsed);
     #if AOO_DEBUG_DLL
-        fprintf(stderr, "SOURCE\n");
-        // fprintf(stderr, "timetag: %llu, seconds: %f\n", tt.to_uint64(), tt.to_double());
-        fprintf(stderr, "elapsed: %f, period: %f, samplerate: %f\n",
-                elapsed, dll_.period(), dll_.samplerate());
-        fflush(stderr);
+        DO_LOG("time elapsed: " << elapsed << ", period: " << dll_.period()
+               << ", samplerate: " << dll_.samplerate());
     #endif
     }
 
@@ -690,6 +710,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
             buf[j * nchannels_ + i] = data[i][j];
         }
     }
+
     if (encoder_->blocksize() != blocksize_ || encoder_->samplerate() != samplerate_){
         // go through resampler
         if (resampler_.write_available() >= insamples){
@@ -710,8 +731,6 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
             auto ratio = (double)encoder_->samplerate() / (double)samplerate_;
             srqueue_.write(dll_.samplerate() * ratio);
         }
-
-        return 1;
     } else {
         // bypass resampler
         if (audioqueue_.write_available() && srqueue_.write_available()){
@@ -721,13 +740,11 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
 
             // push samplerate
             srqueue_.write(dll_.samplerate());
-
-            return 1;
         } else {
             LOG_DEBUG("couldn't process");
-            return 0;
         }
     }
+    return 1;
 }
 
 int32_t aoo_source_eventsavailable(aoo_source *src){
@@ -763,8 +780,6 @@ namespace aoo {
 void source::send_data(sink_desc& sink, int32_t id, const aoo::data_packet& d){
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
-
-    assert(d.data != nullptr);
 
     // use 'id' instead of 'sink.id'! this is for cases where 'sink.id' is a wildcard
     // but we want to reply to an individual sink.

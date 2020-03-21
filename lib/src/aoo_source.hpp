@@ -55,6 +55,7 @@ class source final : public isource {
     int32_t packetsize_ = AOO_PACKETSIZE;
     int32_t resend_buffersize_ = AOO_RESEND_BUFSIZE;
     int32_t sequence_ = 0;
+    std::atomic<int32_t> dropped_{0};
     aoo::dynamic_resampler resampler_;
     aoo::lfqueue<aoo_sample> audioqueue_;
     aoo::lfqueue<double> srqueue_;
