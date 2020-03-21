@@ -254,8 +254,6 @@ int32_t aoo::source::get_sinkoption(void *endpoint, int32_t id,
 }
 
 int32_t aoo::source::set_format(aoo_format &f){
-    salt_ = make_salt();
-
     if (!encoder_ || strcmp(encoder_->name(), f.codec)){
         auto codec = aoo::find_codec(f.codec);
         if (codec){
@@ -270,11 +268,6 @@ int32_t aoo::source::set_format(aoo_format &f){
         }
     }
     encoder_->set_format(f);
-    for (auto& sink : sinks_){
-        sink.format_changed = true;
-    }
-
-    sequence_ = 0;
 
     update();
 
@@ -341,7 +334,17 @@ void aoo::source::update(){
         update_historybuffer();
 
         // reset time DLL to be on the safe side
-        timer_.reset(); // will update
+        timer_.reset();
+
+        // Start new sequence and resend format.
+        // We naturally want to do this when setting the format,
+        // but it's good to also do it in setup() to eliminate
+        // any timing gaps.
+        salt_ = make_salt();
+        sequence_ = 0;
+        for (auto& sink : sinks_){
+            sink.format_changed = true;
+        }
     }
 }
 
