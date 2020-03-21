@@ -1,5 +1,5 @@
 #N canvas 946 24 446 99 12;
-#N canvas 830 202 756 551 sub 1;
+#N canvas 811 54 756 612 sub 1;
 #X obj 127 164 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 500 256;
 #X obj 403 270 line~;
@@ -7,7 +7,7 @@
 #X obj 66 315 *~;
 #X obj 137 316 *~;
 #X obj 403 45 vsl 15 128 0 1 0 0 empty empty empty 0 -9 0 10 -262144
--1 -1 2800 1;
+-1 -1 5700 1;
 #X obj 403 205 t f f;
 #X obj 449 255 - 100;
 #X floatatom 449 279 5 0 0 0 - - -;
@@ -61,6 +61,14 @@
 #X msg 194 218 reset;
 #X msg 466 307 reset;
 #X msg 88 247 reset localhost 64962 1;
+#X obj 335 495 netsend -u -b;
+#X obj 469 474 table foo 4e+006;
+#X obj 470 529 array get foo;
+#X obj 470 553 list length;
+#X floatatom 470 577 5 0 0 0 - - -;
+#X obj 469 503 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
+-1 -1;
+#X msg 335 467 connect foo 9999;
 #X connect 0 0 11 0;
 #X connect 1 0 3 1;
 #X connect 1 0 4 1;
@@ -114,6 +122,10 @@
 #X connect 52 0 37 0;
 #X connect 53 0 43 0;
 #X connect 54 0 37 0;
+#X connect 57 0 58 0;
+#X connect 58 0 59 0;
+#X connect 60 0 57 0;
+#X connect 61 0 55 0;
 #X restore 34 46 pd sub;
 #X obj 34 70 dac~;
 #X connect 0 0 1 0;
