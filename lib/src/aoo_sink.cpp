@@ -615,7 +615,7 @@ void sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
 
         // deal with "holes" in block queue
         if (!queue.empty()){
-        #if LOGLEVEL >= 3
+        #if LOGLEVEL >= 4
             std::cerr << queue << std::endl;
         #endif
             int32_t numframes = 0;
@@ -690,7 +690,7 @@ void sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                 acklist.clear();
             }
         }
-    #if LOGLEVEL >= 3
+    #if LOGLEVEL >= 4
         std::cerr << acklist << std::endl;
     #endif
         // ping source

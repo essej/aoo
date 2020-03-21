@@ -486,11 +486,7 @@ int32_t block_ack_list::remove_before(int32_t seq){
     if (empty() || seq <= oldest_){
         return 0;
     }
-    LOG_DEBUG("block_ack_list: oldest = " << oldest_);
-#if LOGLEVEL >= 3
-    LOG_DEBUG("before remove_before (" << seq << "):");
-    std::cerr << *this << std::endl;
-#endif
+    LOG_DEBUG("block_ack_list: oldest before = " << oldest_);
     int count = 0;
     for (auto& d : data_){
         if (d.sequence >= 0 && d.sequence < seq){
@@ -501,10 +497,7 @@ int32_t block_ack_list::remove_before(int32_t seq){
         }
     }
     oldest_ = seq;
-#if LOGLEVEL >= 3
-    LOG_DEBUG("after remove_before:");
-    std::cerr << *this << std::endl;
-#endif
+    LOG_DEBUG("block_ack_list: oldest after = " << oldest_);
     assert(size_ >= 0);
     return count;
 }
@@ -513,15 +506,11 @@ void block_ack_list::rehash(){
     auto newsize = data_.size() << 1; // double the size
     auto mask = newsize - 1;
     std::vector<block_ack> temp(newsize);
-#if LOGLEVEL >= 3
-    LOG_DEBUG("before rehash:");
-    std::cerr << *this << std::endl;
-#endif
     // use this chance to find oldest item
     oldest_ = INT32_MAX;
     // we skip all deleted items; 'size_' stays the same
     deleted_ = 0;
-    // transfer items
+    // reinsert items
     for (auto& b : data_){
         if (b.sequence >= 0){
             auto index = b.sequence & mask;
@@ -538,10 +527,6 @@ void block_ack_list::rehash(){
         }
     }
     data_ = std::move(temp);
-#if LOGLEVEL >= 3
-    LOG_DEBUG("after rehash:");
-    std::cerr << *this << std::endl;
-#endif
 }
 
 std::ostream& operator<<(std::ostream& os, const block_ack_list& b){
