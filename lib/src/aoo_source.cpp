@@ -270,14 +270,13 @@ int32_t aoo::source::set_format(aoo_format &f){
         }
     }
     encoder_->set_format(f);
+    for (auto& sink : sinks_){
+        sink.format_changed = true;
+    }
 
     sequence_ = 0;
 
     update();
-
-    for (auto& sink : sinks_){
-        send_format(sink, sink.id); // 'sink.id' might be wildcard!
-    }
 
     return 1;
 }
@@ -385,9 +384,8 @@ int32_t aoo::source::add_sink(void *endpoint, int32_t id, aoo_replyfn fn){
         }
     }
     // add sink descriptor
-    sink_desc sd = { endpoint, fn, id, 0 };
-    sinks_.push_back(sd);
-    send_format(sd, id); // NOTE: id might be wildcard!
+    sinks_.emplace_back(endpoint, fn, id);
+
     return 1;
 }
 
@@ -615,6 +613,14 @@ int32_t aoo::source::send(){
         // save block
         history_.push(d.sequence, d.samplerate,
                       blobdata, d.totalsize, d.nframes, maxpacketsize);
+
+        // check if we need to send the format
+        for (auto& sink : sinks_){
+            if (sink.format_changed){
+                send_format(sink, sink.id); // NOTE: sink.id can be wildcard!
+                sink.format_changed = false;
+            }
+        }
 
         // send a single frame to all sink
         // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>

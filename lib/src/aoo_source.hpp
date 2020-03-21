@@ -67,11 +67,15 @@ class source final : public isource {
     aoo::history_buffer history_;
     // sinks
     struct sink_desc {
+        sink_desc(void *_endpoint, aoo_replyfn _fn, int32_t _id)
+            : endpoint(_endpoint), fn(_fn), id(_id),
+              channel(0), format_changed(true) {}
         // data
         void *endpoint;
         aoo_replyfn fn;
         int32_t id;
         int32_t channel;
+        bool format_changed;
         // methods
         void send(const char *data, int32_t n){
             fn(endpoint, data, n);
