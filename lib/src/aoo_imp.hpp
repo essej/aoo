@@ -263,6 +263,9 @@ private:
 
 class block_ack {
 public:
+    static const int32_t EMPTY = -1;
+    static const int32_t DELETED = -2;
+
     block_ack();
     block_ack(int32_t seq, int32_t limit);
 
@@ -280,7 +283,7 @@ class block_ack_list {
 public:
     block_ack_list();
 
-    void setup(int32_t limit);
+    void set_limit(int32_t limit);
     block_ack* find(int32_t seq);
     block_ack& get(int32_t seq);
     bool remove(int32_t seq);
@@ -300,9 +303,9 @@ private:
 
     static const int32_t initial_size_ = 16; // must be power of 2
 
-    int32_t size_ = 0;
-    int32_t mask_ = 0;
-    int32_t oldest_ = 0;
+    int32_t size_;
+    int32_t deleted_;
+    int32_t oldest_;
 #endif
     int32_t limit_ = 0;
     std::vector<block_ack> data_;

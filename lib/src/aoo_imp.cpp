@@ -347,7 +347,7 @@ bool block::has_frame(int32_t which) const {
 /*////////////////////////// block_ack /////////////////////////////*/
 
 block_ack::block_ack()
-    : sequence(-1), count_(0), timestamp_(-1e009){}
+    : sequence(EMPTY), count_(0), timestamp_(-1e009){}
 
 block_ack::block_ack(int32_t seq, int32_t limit)
     : sequence(seq) {
@@ -381,19 +381,21 @@ bool block_ack::check(double time, double interval){
 block_ack_list::block_ack_list(){
     static_assert(is_pow2(initial_size_), "initial_size_ must be a power of 2!");
     data_.resize(initial_size_);
-    mask_ = data_.size() - 1;
+    size_ = 0;
+    deleted_ = 0;
     oldest_ = INT32_MAX;
 }
 
-void block_ack_list::setup(int32_t limit){
+void block_ack_list::set_limit(int32_t limit){
     limit_ = limit;
 }
 
 void block_ack_list::clear(){
-    for (auto& d : data_){
-        d.sequence = -1;
+    for (auto& b : data_){
+        b.sequence = block_ack::EMPTY;
     }
     size_ = 0;
+    deleted_ = 0;
     oldest_ = INT32_MAX;
 }
 
@@ -406,12 +408,14 @@ bool block_ack_list::empty() const {
 }
 
 block_ack * block_ack_list::find(int32_t seq){
-    auto index = seq & mask_;
+    int32_t mask = data_.size() - 1;
+    auto index = seq & mask;
     while (data_[index].sequence != seq){
-        if (data_[index].sequence < 0){
+        // terminate on empty bucket, but skip deleted buckets
+        if (data_[index].sequence == block_ack::EMPTY){
             return nullptr;
         }
-        index = (index + 1) & mask_;
+        index = (index + 1) & mask;
     }
     assert(data_[index].sequence >= 0);
     assert(seq >= oldest_);
@@ -420,61 +424,62 @@ block_ack * block_ack_list::find(int32_t seq){
 
 block_ack& block_ack_list::get(int32_t seq){
     // try to find item
-    auto index = seq & mask_;
+    block_ack *deleted = nullptr;
+    int32_t mask = data_.size() - 1;
+    auto index = seq & mask;
     while (data_[index].sequence != seq){
-        if (data_[index].sequence < 0){
-            // hit empty item -> insert item
-            data_[index] = block_ack { seq, limit_ };
+        if (data_[index].sequence == block_ack::DELETED){
+            // save for reuse
+            deleted = &data_[index];
+        } else if (data_[index].sequence == block_ack::EMPTY){
+            // empty bucket -> not found -> insert item
+            // update oldest
             if (seq < oldest_){
                 oldest_ = seq;
             }
+            // try to reclaim deleted bucket
+            if (deleted){
+                *deleted = block_ack { seq, limit_ };
+                deleted_--;
+                size_++;
+                // load factor doesn't change, no need to rehash
+                return *deleted;
+            }
+            // put in empty bucket
+            data_[index] = block_ack { seq, limit_ };
+            size_++;
             // rehash if the table is more than 50% full
-            if (++size_ > (int32_t)(data_.size() >> 1)){
+            if ((size_ + deleted_) > (int32_t)(data_.size() >> 1)){
                 rehash();
                 auto b = find(seq);
                 assert(b != nullptr);
                 return *b;
+            } else {
+                return data_[index];
             }
-            break;
         }
-        index = (index + 1) & mask_;
+        index = (index + 1) & mask;
     }
+    // return existing item
     assert(data_[index].sequence >= 0);
     return data_[index];
 }
 
 bool block_ack_list::remove(int32_t seq){
     // first find the key
-    auto index = seq & mask_;
-    while (data_[index].sequence != seq){
-        if (data_[index].sequence < 0){
-            return false;
+    auto b = find(seq);
+    if (b){
+        b->sequence = block_ack::DELETED; // mark as deleted
+        deleted_++;
+        size_--;
+        // this won't give the "true" oldest value, but a closer one
+        if (seq == oldest_){
+            oldest_++;
         }
-        index = (index + 1) & mask_;
+        return true;
+    } else {
+        return false;
     }
-    // clear block
-    data_[index].sequence = -1;
-    // check and fix subsequent blocks
-    auto i = index;
-    while (true){
-        i = (i + 1) & mask_;
-        if (data_[i].sequence < 0){
-            // hit empty cell!
-            break;
-        }
-        if (data_[i].sequence <= data_[index].sequence){
-            // found earlier block, move it to previous empty slot
-            data_[index] = data_[i];
-            data_[i].sequence = -1;
-            index = i; // new empty slot
-        }
-    }
-    if (seq == oldest_){
-        oldest_++;
-    }
-    size_--;
-    assert(size_ >= 0);
-    return true;
 }
 
 int32_t block_ack_list::remove_before(int32_t seq){
@@ -487,45 +492,52 @@ int32_t block_ack_list::remove_before(int32_t seq){
     std::cerr << *this << std::endl;
 #endif
     int count = 0;
-    // traverse table in reverse
-    // this way we're likely to create a hole in the table which will
-    // terminate the fixup process for the *next* removed block early on
-    for (int i = data_.size() - 1; i >= 0; --i){
-        auto& d = data_[i];
+    for (auto& d : data_){
         if (d.sequence >= 0 && d.sequence < seq){
-            count += remove(d.sequence);
+            d.sequence = block_ack::DELETED; // mark as deleted
+            count++;
+            size_--;
+            deleted_++;
         }
     }
-    assert(size_ >= 0);
     oldest_ = seq;
 #if LOGLEVEL >= 3
     LOG_DEBUG("after remove_before:");
     std::cerr << *this << std::endl;
 #endif
+    assert(size_ >= 0);
     return count;
 }
 
 void block_ack_list::rehash(){
     auto newsize = data_.size() << 1; // double the size
-    auto newmask = newsize - 1;
+    auto mask = newsize - 1;
     std::vector<block_ack> temp(newsize);
 #if LOGLEVEL >= 3
     LOG_DEBUG("before rehash:");
     std::cerr << *this << std::endl;
 #endif
+    // use this chance to find oldest item
+    oldest_ = INT32_MAX;
+    // we skip all deleted items; 'size_' stays the same
+    deleted_ = 0;
     // transfer items
     for (auto& b : data_){
         if (b.sequence >= 0){
-            auto index = b.sequence & newmask;
+            auto index = b.sequence & mask;
+            // find free slot
             while (temp[index].sequence >= 0){
-                index = (index + 1) & newmask;
+                index = (index + 1) & mask;
             }
             // insert item
             temp[index] = block_ack { b.sequence, limit_ };
+            // update oldest
+            if (b.sequence < oldest_){
+                oldest_ = b.sequence;
+            }
         }
     }
     data_ = std::move(temp);
-    mask_ = newmask;
 #if LOGLEVEL >= 3
     LOG_DEBUG("after rehash:");
     std::cerr << *this << std::endl;

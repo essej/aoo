@@ -753,7 +753,7 @@ void sink::update_source(aoo::source_desc &src){
         src.lastpingtime = 0;
         src.laststate = AOO_SOURCE_STATE_STOP;
         src.streamstate.reset();
-        src.ack_list.setup(resend_limit_);
+        src.ack_list.set_limit(resend_limit_);
         src.ack_list.clear();
         LOG_DEBUG("update source " << src.id << ": sr = " << src.decoder->samplerate()
                     << ", blocksize = " << src.decoder->blocksize() << ", nchannels = "

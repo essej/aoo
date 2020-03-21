@@ -21,8 +21,8 @@ namespace aoo {
 // and return types.
 //
 // In practice this means you only have to build 'aoo' once as a
-// shared library and can then use it with the C++ interface in
-// applications built with different compilers resp. compiler versions.
+// shared library and can then use its C++ interface in applications
+// built with different compilers resp. compiler versions.
 //
 // If you want to be on the safe safe, use the C interface :-)
 
