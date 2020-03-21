@@ -1024,14 +1024,16 @@ timer& timer::operator=(const timer& other){
 }
 
 void timer::setup(int32_t sr, int32_t blocksize){
+#if AOO_TIMEFILTER_CHECK
     delta_ = (double)blocksize / (double)sr;
+#endif
     reset();
 }
 
 void timer::reset(){
     last_.clear();
     elapsed_ = 0;
-#if AOO_CHECK_TIMER
+#if AOO_TIMEFILTER_CHECK
     // fill ringbuffer with nominal delta
     std::fill(buffer_.begin(), buffer_.end(), delta_);
     sum_ = delta_ * buffer_.size(); // initial sum
@@ -1043,14 +1045,14 @@ double timer::get_elapsed() const {
     return elapsed_.load();
 }
 
-double timer::update(time_tag t){
+timer::state timer::update(time_tag t, double& error){
     if (last_.seconds != 0){
         auto diff = t - last_;
         auto delta = diff.to_double();
         elapsed_ = elapsed_ + delta;
         last_ = t;
 
-    #if AOO_CHECK_TIMER
+    #if AOO_TIMEFILTER_CHECK
         // check delta and return error
 
         // if we're in a callback scheduler,
@@ -1073,24 +1075,34 @@ double timer::update(time_tag t){
         // is a power of 2, our ringbuffer size also has to be a power of 2!
 
         // recursive moving average filter
-        auto newhead = (head_ + 1) & (buffer_.size() - 1);
-        auto old = buffer_[newhead];
-        sum_ += delta - old;
-        buffer_[newhead] = delta;
+        head_ = (head_ + 1) & (buffer_.size() - 1);
+        sum_ += delta - buffer_[head_];
+        buffer_[head_] = delta;
 
         auto average = sum_ / buffer_.size();
-        auto error = average - delta;
-        if (error > delta_ * AOO_TIMER_TOLERANCE){
-            LOG_WARNING("DSP tick(s) took too long! Error (ms): " << error);
-            reset();
-            return error;
+        auto average_error = average - delta_;
+        auto last_error = delta - delta_;
+
+        if (average_error > delta_ * AOO_TIMEFILTER_TOLERANCE){
+            LOG_WARNING("DSP tick(s) took too long!");
+            LOG_VERBOSE("last period: " << (delta * 1000.0)
+                        << " ms, average period: " << (average * 1000.0)
+                        << " ms, error: " << (last_error * 1000.0)
+                        << " ms, average error: " << (average_error * 1000.0) << " ms");
+            error = std::max<double>(0, delta - delta_);
+            return state::error;
+        } else {
+            LOG_DEBUG("delta : " << (delta * 1000.0)
+                      << ", average delta: " << (average * 1000.0)
+                      << ", error: " << (last_error * 1000.0)
+                      << ", average error: " << (average_error * 1000.0));
         }
     #endif
 
-        return 0;
+        return state::ok;
     } else {
         last_ = t;
-        return 0;
+        return state::reset;
     }
 }
 

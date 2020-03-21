@@ -83,6 +83,16 @@ typedef AOO_SAMPLETYPE aoo_sample;
  #define AOO_TIMEFILTER_BANDWIDTH 0.012
 #endif
 
+// try to catch timing issues (e.g. blocking audio thread)
+#ifndef AOO_TIMEFILTER_CHECK
+ #define AOO_TIMEFILTER_CHECK 1
+#endif
+
+// the tolerance for deviations from the nominal block period
+#ifndef AOO_TIMEFILTER_TOLERANCE
+ #define AOO_TIMEFILTER_TOLERANCE 0.1
+#endif
+
 // ping interval (sink to source) in ms
 #ifndef AOO_PING_INTERVAL
  #define AOO_PING_INTERVAL 1000

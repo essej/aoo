@@ -293,7 +293,7 @@ int32_t aoo::source::setup(const aoo_source_settings &settings){
         blocksize_ = settings.blocksize;
 
         // reset timer + time DLL filter
-        timer_.reset();
+        timer_.setup(samplerate_, blocksize_);
 
         update();
 
