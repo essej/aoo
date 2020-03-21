@@ -22,8 +22,6 @@
 #define EXPORT
 #endif
 
-uint64_t aoo_pd_osctime(int n, t_float sr);
-
 int aoo_getsinkarg(void *x, int argc, t_atom *argv,
                         struct sockaddr_storage *sa, socklen_t *len, int32_t *id);
 

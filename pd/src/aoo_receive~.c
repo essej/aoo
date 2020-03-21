@@ -546,7 +546,7 @@ static t_int * aoo_receive_perform(t_int *w)
     t_aoo_receive *x = (t_aoo_receive *)(w[1]);
     int n = (int)(w[2]);
 
-    uint64_t t = aoo_pd_osctime(n, x->x_settings.samplerate);
+    uint64_t t = aoo_osctime_get();
     if (aoo_sink_process(x->x_aoo_sink, t) <= 0){
         // output zeros
         for (int i = 0; i < x->x_settings.nchannels; ++i){

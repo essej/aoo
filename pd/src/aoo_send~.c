@@ -402,7 +402,7 @@ static t_int * aoo_send_perform(t_int *w)
 
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
-    uint64_t t = aoo_pd_osctime(n, x->x_settings.samplerate);
+    uint64_t t = aoo_osctime_get();
     if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n, t) > 0){
         pthread_cond_signal(&x->x_cond);
     }
