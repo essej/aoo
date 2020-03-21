@@ -37,7 +37,8 @@ typedef struct _aoo_pack
 
 static void aoo_pack_tick(t_aoo_pack *x)
 {
-    aoo_source_send(x->x_aoo_source);
+    while (aoo_source_send(x->x_aoo_source)) ;
+
     aoo_source_handleevents(x->x_aoo_source);
 }
 
