@@ -295,21 +295,15 @@ int32_t aoo::source::setup(const aoo_source_settings &settings){
     {
         eventhandler_ = settings.eventhandler;
         user_ = settings.userdata;
+        nchannels_ = settings.nchannels;
+        samplerate_ = settings.samplerate;
+        blocksize_ = settings.blocksize;
 
-        // only update if at least one value has changed
-        if (settings.nchannels != nchannels_
-                || settings.samplerate != samplerate_
-                || settings.blocksize != blocksize_)
-        {
-            nchannels_ = settings.nchannels;
-            samplerate_ = settings.samplerate;
-            blocksize_ = settings.blocksize;
+        // reset timer + time DLL filter
+        timer_.reset();
 
-            update();
-        }
+        update();
 
-        // always reset time DLL to be on the safe side
-        timer_.reset(); // will update
         return 1;
     }
 

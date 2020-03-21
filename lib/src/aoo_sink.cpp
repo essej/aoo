@@ -49,22 +49,18 @@ int32_t aoo::sink::setup(const aoo_sink_settings& settings){
             && settings.samplerate > 0
             && settings.blocksize > 0)
     {
-        // only update if at least one value has changed
-        if (settings.nchannels != nchannels_
-                || settings.samplerate != samplerate_
-                || settings.blocksize != blocksize_)
-        {
-            nchannels_ = settings.nchannels;
-            samplerate_ = settings.samplerate;
-            blocksize_ = settings.blocksize;
 
-            buffer_.resize(blocksize_ * nchannels_);
-            // don't need to lock
-            update_sources();
-        }
+        nchannels_ = settings.nchannels;
+        samplerate_ = settings.samplerate;
+        blocksize_ = settings.blocksize;
 
-        // always reset time DLL to be on the safe side
-       timer_.reset(); // will update
+        buffer_.resize(blocksize_ * nchannels_);
+
+        // reset timer + time DLL filter
+        timer_.reset();
+
+        // don't need to lock
+        update_sources();
 
         return 1;
     }
@@ -95,7 +91,7 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         update_sources();
 
         // reset time DLL
-        timer_.reset(); // will update
+        timer_.reset();
         break;
     // buffer size
     case aoo_opt_buffersize:
