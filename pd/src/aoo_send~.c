@@ -10,7 +10,8 @@
 
 #define classname(x) class_getname(*(t_pd *)x)
 
-#define DEFBUFSIZE 10
+// for hardware buffer sizes up to 1024 @ 44.1 kHz
+#define DEFBUFSIZE 25
 
 static t_class *aoo_send_class;
 

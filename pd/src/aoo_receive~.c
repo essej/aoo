@@ -22,7 +22,7 @@
 #define AOO_DEBUG_OSCTIME 0
 #endif
 
-#define DEFBUFSIZE 20
+#define DEFBUFSIZE 25
 
 /*////////////////////// socket listener //////////////////*/
 
