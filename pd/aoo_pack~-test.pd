@@ -1,24 +1,25 @@
-#N canvas 204 42 737 759 12;
+#N canvas 446 120 737 759 12;
+#X declare -path osc;
 #X obj 168 119 osc~ 440;
 #X msg 88 135 set \$1;
 #X obj 91 63 hradio 15 1 0 8 empty empty empty 0 -8 0 10 -262144 -1
--1 1;
+-1 0;
 #X msg 103 110 symbol *;
-#X obj 100 88 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
-10 -262144 -1 -1 0 256;
+#X obj 100 88 nbx 5 14 -1e+37 1e+37 0 0 empty empty empty 0 -8 0 10
+-262144 -1 -1 0 256;
 #X msg 39 139 clear;
 #X obj 236 119 osc~ 600;
-#X obj 196 84 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
-10 -262144 -1 -1 0 256;
+#X obj 196 84 nbx 5 14 -1e+37 1e+37 0 0 empty empty empty 0 -8 0 10
+-262144 -1 -1 0 256;
 #X obj 316 51 loadbang;
 #X msg 316 75 \; pd dsp 1;
 #X obj 177 495 loadbang;
 #X obj 100 166 r \$0-back;
-#X obj 142 496 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
+#X obj 142 496 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X msg 251 173 channel \$1;
-#X obj 251 153 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
-10 -262144 -1 -1 0 256;
+#X obj 251 153 nbx 5 14 -1e+37 1e+37 0 0 empty empty empty 0 -8 0 10
+-262144 -1 -1 0 256;
 #X obj 177 578 s \$0-back;
 #X obj 195 553 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
 -1 -1;
@@ -32,8 +33,8 @@
 #X obj 67 658 t f f;
 #X obj 127 689 s \$0-blocksize;
 #X msg 249 222 packetsize \$1;
-#X obj 249 202 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
-10 -262144 -1 -1 0 256;
+#X obj 249 202 nbx 5 14 -1e+37 1e+37 0 0 empty empty empty 0 -8 0 10
+-262144 -1 -1 0 256;
 #X obj 89 457 pipelist;
 #X obj 142 427 random;
 #X obj 181 402 nbx 5 14 0 100 0 0 empty empty empty 0 -8 0 10 -262144
@@ -74,6 +75,8 @@
 #X obj 419 316 metro 1000;
 #X msg 341 159 format pcm 256 44100 2;
 #X obj 175 229 print;
+#X obj 88 17 declare -path osc;
+#X text 217 17 for pipelist;
 #X connect 0 0 23 0;
 #X connect 1 0 23 0;
 #X connect 2 0 1 0;
