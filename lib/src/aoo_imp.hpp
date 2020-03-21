@@ -3,6 +3,7 @@
 #include "aoo/aoo.h"
 
 #include <vector>
+#include <array>
 #include <memory>
 #include <atomic>
 
@@ -306,7 +307,7 @@ private:
 #else
     void rehash();
 
-    static const int32_t initial_size_ = 16; // must be power of 2
+    static const int32_t initial_size_ = 16;
 
     int32_t size_;
     int32_t deleted_;
@@ -331,6 +332,9 @@ private:
     int32_t head_ = 0;
 };
 
+#define AOO_TIMER_TOLERANCE 0.1
+#define AOO_CHECK_TIMER 1
+
 class timer {
 public:
     timer() = default;
@@ -339,14 +343,21 @@ public:
     void setup(int32_t sr, int32_t blocksize);
     void reset();
     double get_elapsed() const;
-    int32_t update(time_tag t);
+    double update(time_tag t);
 private:
     double delta_ = 0;
     time_tag last_;
     std::atomic<double> elapsed_{0};
-    std::array<double, 32> buffer_;
+
+#if AOO_CHECK_TIMER
+    // moving average filter to detect timing problems,
+    // see update() more details
+    static const size_t buffersize_ = 64;
+
+    std::array<double, buffersize_> buffer_;
     int32_t head_ = 0;
     double sum_ = 0;
+#endif
 };
 
 } // aoo

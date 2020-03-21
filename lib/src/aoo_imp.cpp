@@ -29,12 +29,6 @@
 
 namespace aoo {
 
-/*//////////////// utility ////////////////*/
-
-constexpr bool is_pow2(int32_t i){
-    return (i & (i - 1)) == 0;
-}
-
 /*////////////// codec plugins ///////////////*/
 
 static std::unordered_map<std::string, std::unique_ptr<aoo::codec>> codec_dict;
@@ -379,7 +373,7 @@ bool block_ack::check(double time, double interval){
 #if BLOCK_ACK_LIST_HASHTABLE
 
 block_ack_list::block_ack_list(){
-    static_assert(is_pow2(initial_size_), "initial_size_ must be a power of 2!");
+    static_assert(is_pow2(initial_size_), "initial size must be a power of 2!");
     data_.resize(initial_size_);
     size_ = 0;
     deleted_ = 0;
@@ -1005,46 +999,99 @@ void dynamic_resampler::read(aoo_sample *data, int32_t n){
 
 /*//////////////////////// timer //////////////////////*/
 
-timer::timer(const timer& other)
-    : delta_(other.delta_),
-      last_(other.last_),
-      elapsed_(other.elapsed_.load()),
-      buffer_(other.buffer_),
-      head_(other.head_),
-      sum_(other.sum_) {}
+timer::timer(const timer& other){
+    delta_ = other.delta_;
+    last_ = other.last_;
+    elapsed_ = other.elapsed_.load();
+#if AOO_CHECK_TIMER
+    static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
+    buffer_ = other.buffer_;
+    head_ = other.head_;
+    sum_ = other.sum_;
+#endif
+}
 
 timer& timer::operator=(const timer& other){
     delta_ = other.delta_;
     last_ = other.last_;
     elapsed_ = other.elapsed_.load();
+#if AOO_CHECK_TIMER
     buffer_ = other.buffer_;
     head_ = other.head_;
     sum_ = other.sum_;
+#endif
     return *this;
 }
 
 void timer::setup(int32_t sr, int32_t blocksize){
     delta_ = (double)blocksize / (double)sr;
+    reset();
 }
 
 void timer::reset(){
     last_.clear();
     elapsed_ = 0;
+#if AOO_CHECK_TIMER
+    // fill ringbuffer with nominal delta
+    std::fill(buffer_.begin(), buffer_.end(), delta_);
+    sum_ = delta_ * buffer_.size(); // initial sum
+    head_ = 0;
+#endif
 }
 
 double timer::get_elapsed() const {
     return elapsed_.load();
 }
 
-int32_t timer::update(time_tag t){
+double timer::update(time_tag t){
     if (last_.seconds != 0){
         auto diff = t - last_;
         auto delta = diff.to_double();
-        // TODO check delta
         elapsed_ = elapsed_ + delta;
+        last_ = t;
+
+    #if AOO_CHECK_TIMER
+        // check delta and return error
+
+        // if we're in a callback scheduler,
+        // there shouldn't be any delta larger than
+        // the nominal delta +- tolerance
+
+        // If we're in a ringbuffer scheduler and we have a
+        // DSP blocksize of N and a hardware buffer size of M,
+        // there will be M / N blocks calculated in a row, so we
+        // usually see one large delta and (M / N) - 1 short deltas.
+        // The arithmetic mean should still be the nominal delta +- tolerance.
+        // If it is larger than that, we assume that one or more DSP ticks
+        // took too long, so we reset the timer and output the error.
+        // Note that this also happens when we start the timer
+        // in the middle of the ringbuffer scheduling sequence
+        // (i.e. we didn't get all short deltas before the long delta),
+        // so resetting the timer makes sure that the next time we start
+        // at the beginning.
+        // Since the relation between hardware buffersize and DSP blocksize
+        // is a power of 2, our ringbuffer size also has to be a power of 2!
+
+        // recursive moving average filter
+        auto newhead = (head_ + 1) & (buffer_.size() - 1);
+        auto old = buffer_[newhead];
+        sum_ += delta - old;
+        buffer_[newhead] = delta;
+
+        auto average = sum_ / buffer_.size();
+        auto error = average - delta;
+        if (error > delta_ * AOO_TIMER_TOLERANCE){
+            LOG_WARNING("DSP tick(s) took too long! Error (ms): " << error);
+            reset();
+            return error;
+        }
+    #endif
+
+        return 0;
+    } else {
+        last_ = t;
+        return 0;
     }
-    last_ = t;
-    return 0;
 }
 
 } // aoo
