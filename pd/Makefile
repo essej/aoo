@@ -23,7 +23,6 @@ cflags = -I$(AOO) \
     -I$(AOO)/src/lib \
     -Wno-unused -Wno-unused-parameter \
     -fvisibility=hidden \
-    -std=c++14 \
     -DAOO_BUILD \
     -DDLL_EXPORT \
     -DLOGLEVEL=2 \
@@ -48,6 +47,9 @@ shared.sources = \
     $(AOO)/src/lib/oscpack/osc/OscReceivedElements.cpp \
     $(AOO)/src/lib/oscpack/osc/OscOutboundPacketStream.cpp
 
+# hack to set the C++ standard only for the shared library
+$(shared.sources:.cpp=.o): cxx.flags += -std=c++14
+
 shared.ldlibs = -lopus
 
 define forWindows
@@ -56,7 +58,6 @@ define forWindows
 endef
 
 define forDarwin
-	CC=$(CXX)
     cflags += -mmacosx-version-min=10.9
     ldlibs += -lpthread
 endef
