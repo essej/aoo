@@ -1045,6 +1045,8 @@ int32_t aoo_sink_handleevents(aoo_sink *sink){
     return sink->handle_events();
 }
 
+#define EVENT_THROTTLE 1000
+
 int32_t aoo::sink::handle_events(){
     if (!eventhandler_){
         return 0;
@@ -1052,18 +1054,25 @@ int32_t aoo::sink::handle_events(){
     int total = 0;
     // the mutex is uncontended most of the time, but LATER we might replace
     // this with a lockless and/or waitfree solution
-    aoo::shared_lock lock(mutex_);
-    for (auto& src : sources_){
-        auto n = src.eventqueue.read_available();
-        if (n > 0){
+    while (total < EVENT_THROTTLE){
+        int numevents = 0;
+        auto events = (aoo_event *)alloca(sizeof(aoo_event) * AOO_MAXNUMEVENTS);
+        // we have to hold a lock while iterating because the source list might change!
+        aoo::shared_lock lock(mutex_);
+        for (auto& src : sources_){
             // copy events
-            auto events = (aoo_event *)alloca(sizeof(aoo_event) * n);
-            for (int i = 0; i < n; ++i){
-                src.eventqueue.read(events[i]);
+            while (src.eventqueue.read_available() &&
+                   numevents < AOO_MAXNUMEVENTS)
+            {
+                src.eventqueue.read(events[numevents++]);
             }
-            // send events
-            eventhandler_(user_, events, n);
-            total += n;
+        }
+        lock.unlock();
+        // call event handler with mutex unlocked to avoid possible deadlocks!
+        eventhandler_(user_, events, numevents);
+        total += numevents;
+        if (numevents == 0){
+            break;
         }
     }
     return total;
