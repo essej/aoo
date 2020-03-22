@@ -4,7 +4,7 @@
 #
 # use : make PDDIR=/path/to/pure-data/
 #
-# The following command will build the external and install the distributable 
+# The following command will build the external and install the distributable
 # files into a subdirectory called build :
 #
 # make install PDDIR=/path/to/pure-data/ PDLIBDIR=./build
