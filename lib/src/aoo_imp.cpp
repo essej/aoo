@@ -21,13 +21,22 @@
 // ARM
 #elif defined(__arm__) || defined(_M_ARM) || defined(__aarch64__)
   #define CPU_ARM
-  #include <intrinsics.h>
 #else
 // fallback
   #include <thread>
 #endif
 
 namespace aoo {
+
+void pause_cpu(){
+#if defined(CPU_INTEL)
+    _mm_pause();
+#elif defined(CPU_ARM)
+    __asm__ __volatile__("yield");
+#else // fallback
+    std::this_thread::sleep_for(std::chrono::microseconds(0));
+#endif
+}
 
 /*////////////// codec plugins ///////////////*/
 
@@ -184,13 +193,7 @@ void spinlock::lock(){
     // this should prevent unnecessary cache invalidation.
     do {
         while (locked_.load(std::memory_order_relaxed)){
-        #if defined(CPU_INTEL)
-            _mm_pause();
-        #elif defined(CPU_ARM)
-            __yield();
-        #else // fallback
-            std::this_thread::sleep_for(std::chrono::microseconds(0));
-        #endif
+            pause_cpu();
         }
     } while (locked_.exchange(true, std::memory_order_acquire));
 }
