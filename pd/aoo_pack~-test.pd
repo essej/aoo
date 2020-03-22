@@ -1,16 +1,16 @@
-#N canvas 446 120 737 759 12;
+#N canvas 242 32 737 759 12;
 #X declare -path osc;
 #X obj 168 119 osc~ 440;
 #X msg 88 135 set \$1;
 #X obj 91 63 hradio 15 1 0 8 empty empty empty 0 -8 0 10 -262144 -1
--1 0;
+-1 1;
 #X msg 103 110 symbol *;
-#X obj 100 88 nbx 5 14 -1e+37 1e+37 0 0 empty empty empty 0 -8 0 10
--262144 -1 -1 0 256;
+#X obj 100 88 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
 #X msg 39 139 clear;
 #X obj 236 119 osc~ 600;
-#X obj 196 84 nbx 5 14 -1e+37 1e+37 0 0 empty empty empty 0 -8 0 10
--262144 -1 -1 0 256;
+#X obj 196 84 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
 #X obj 316 51 loadbang;
 #X msg 316 75 \; pd dsp 1;
 #X obj 177 495 loadbang;
@@ -18,8 +18,8 @@
 #X obj 142 496 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X msg 251 173 channel \$1;
-#X obj 251 153 nbx 5 14 -1e+37 1e+37 0 0 empty empty empty 0 -8 0 10
--262144 -1 -1 0 256;
+#X obj 251 153 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
 #X obj 177 578 s \$0-back;
 #X obj 195 553 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
 -1 -1;
@@ -33,8 +33,8 @@
 #X obj 67 658 t f f;
 #X obj 127 689 s \$0-blocksize;
 #X msg 249 222 packetsize \$1;
-#X obj 249 202 nbx 5 14 -1e+37 1e+37 0 0 empty empty empty 0 -8 0 10
--262144 -1 -1 0 256;
+#X obj 249 202 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
 #X obj 89 457 pipelist;
 #X obj 142 427 random;
 #X obj 181 402 nbx 5 14 0 100 0 0 empty empty empty 0 -8 0 10 -262144
@@ -74,9 +74,26 @@
 -1 -1 0 256;
 #X obj 419 316 metro 1000;
 #X msg 341 159 format pcm 256 44100 2;
-#X obj 175 229 print;
 #X obj 88 17 declare -path osc;
 #X text 217 17 for pipelist;
+#X obj 471 651 array get foo;
+#X obj 471 675 list length;
+#X floatatom 471 699 5 0 0 0 - - -;
+#X obj 472 627 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
+-1 -1;
+#X text 493 624 test drop out;
+#X obj 465 595 table foo 5e+006;
+#X obj 294 710 aoo_send~ 2 2;
+#X obj 304 652 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X msg 265 591 add localhost 9999 1;
+#X msg 288 620 clear;
+#X obj 294 676 osc~ 300;
+#X obj 370 675 osc~ 800;
+#X obj 175 229 print A;
+#X obj 294 734 print B;
+#X obj 270 738 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
+-1 -1;
 #X connect 0 0 23 0;
 #X connect 1 0 23 0;
 #X connect 2 0 1 0;
@@ -97,7 +114,7 @@
 #X connect 21 0 24 0;
 #X connect 22 0 24 0;
 #X connect 23 0 34 0;
-#X connect 23 1 61 0;
+#X connect 23 1 75 0;
 #X connect 24 0 19 0;
 #X connect 24 1 25 0;
 #X connect 26 0 23 0;
@@ -136,7 +153,13 @@
 #X connect 58 0 59 1;
 #X connect 59 0 53 0;
 #X connect 60 0 23 0;
-#X connect 63 0 62 0;
-#X connect 65 0 66 0;
-#X connect 66 0 67 0;
-#X connect 68 0 65 0;
+#X connect 63 0 64 0;
+#X connect 64 0 65 0;
+#X connect 66 0 63 0;
+#X connect 69 0 76 0;
+#X connect 69 0 77 0;
+#X connect 70 0 73 0;
+#X connect 71 0 69 0;
+#X connect 72 0 69 0;
+#X connect 73 0 69 0;
+#X connect 74 0 69 1;
