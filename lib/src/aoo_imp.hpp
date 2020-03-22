@@ -94,7 +94,7 @@ public:
     shared_mutex();
     ~shared_mutex();
     shared_mutex(const shared_mutex&) = delete;
-    shared_mutex& operator==(const shared_mutex&) = delete;
+    shared_mutex& operator=(const shared_mutex&) = delete;
     // exclusive
     void lock();
     bool try_lock();
