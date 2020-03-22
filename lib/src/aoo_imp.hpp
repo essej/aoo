@@ -57,27 +57,53 @@ struct time_tag {
     }
 };
 
-// simple spin lock
+/*////////////////// simple spin lock ////////////////////*/
 
 class spinlock {
 public:
+    spinlock(const spinlock&) = delete;
+    spinlock& operator=(const spinlock&) = delete;
     void lock();
+    bool try_lock();
     void unlock();
 protected:
     std::atomic_bool locked_{false};
 };
 
-// padded spin lock
+/*/////////////////// shared spin lock /////////////////////////*/
+
+class shared_spinlock {
+public:
+    shared_spinlock(const shared_spinlock&) = delete;
+    shared_spinlock& operator=(const shared_spinlock&) = delete;
+    // exclusive
+    void lock();
+    bool try_lock();
+    void unlock();
+    // shared
+    void lock_shared();
+    bool try_lock_shared();
+    void unlock_shared();
+protected:
+    const uint32_t UNLOCKED = 0;
+    const uint32_t LOCKED = 0x80000000;
+    std::atomic<uint32_t> state_{0};
+};
+
+// paddeded spin locks
+
+template<typename T, size_t N>
+class alignas(N) padded_class : public T {
+    // pad and align to prevent false sharing
+    char pad_[N - sizeof(T)];
+};
 
 static const size_t CACHELINE_SIZE = 64;
 
-class alignas(CACHELINE_SIZE) padded_spinlock : public spinlock {
-public:
-    padded_spinlock();
-private:
-    // pad and align to prevent false sharing
-    char pad_[CACHELINE_SIZE - sizeof(locked_)];
-};
+using padded_spinlock = padded_class<spinlock, CACHELINE_SIZE>;
+
+using padded_shared_spinlock =  padded_class<shared_spinlock, CACHELINE_SIZE>;
+
 
 /*//////////////////////// shared_mutex //////////////////////////*/
 
