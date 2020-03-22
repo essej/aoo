@@ -381,6 +381,7 @@ void sink::handle_format_message(void *endpoint, aoo_replyfn fn,
         event.source.endpoint = src->endpoint;
         event.source.id = src->id;
         src->eventqueue.write(event);
+        LOG_DEBUG("add new source with id " << id);
     } else {
         src->salt = salt;
     }
@@ -739,15 +740,17 @@ void sink::update_source(aoo::source_desc &src){
         auto nsamples = src.decoder->nchannels() * src.decoder->blocksize();
         src.audioqueue.resize(nbuffers * nsamples, nsamples);
         src.infoqueue.resize(nbuffers, 1);
+        int count = 0;
         while (src.audioqueue.write_available() && src.infoqueue.write_available()){
-            LOG_DEBUG("write silent block");
             src.audioqueue.write_commit();
             // push nominal samplerate + default channel (0)
             aoo::source_desc::info i;
             i.sr = src.decoder->samplerate();
             i.channel = 0;
             src.infoqueue.write(i);
+            count++;
         };
+        LOG_DEBUG("write " << count << " silent blocks");
     #if 0
         // don't touch the event queue once constructed
         src.eventqueue.reset();
@@ -775,7 +778,7 @@ void sink::update_source(aoo::source_desc &src){
 // /AoO/<src>/request <sink>
 
 void sink::request_format(void *endpoint, aoo_replyfn fn, int32_t id){
-    LOG_DEBUG("request format");
+    LOG_DEBUG("request format of source " << id);
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
@@ -849,7 +852,7 @@ void sink::ping(aoo::source_desc& src){
 
         src.lastpingtime = now;
 
-        LOG_DEBUG("send ping");
+        LOG_DEBUG("send ping to source " << src.id);
     }
 }
 
