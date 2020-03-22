@@ -40,7 +40,8 @@ ldlibs =
 
 common.sources = \
     src/aoo_common.c \
-    src/aoo_net.c
+    src/aoo_net.c \
+    $(empty)
 
 shared.sources = \
     $(AOO)/src/aoo_imp.cpp \
