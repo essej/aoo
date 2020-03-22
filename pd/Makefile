@@ -13,8 +13,13 @@
 lib.name = aoo
 
 # input source files
-class.sources = src/aoo_pack~.c src/aoo_unpack~.c src/aoo_route.c \
-                src/aoo_send~.c src/aoo_receive~.c
+class.sources = \
+    src/aoo_pack~.c \
+    src/aoo_unpack~.c \
+    src/aoo_route.c \
+    src/aoo_send~.c \
+    src/aoo_receive~.c \
+    $(empty)
 
 AOO = ../lib
 
