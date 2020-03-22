@@ -23,7 +23,8 @@ class.sources = \
 
 AOO = ../lib
 
-cflags = -I$(AOO) \
+cflags = \
+    -I$(AOO) \
     -I$(AOO)/src \
     -I$(AOO)/src/lib \
     -Wno-unused -Wno-unused-parameter \
@@ -34,7 +35,8 @@ cflags = -I$(AOO) \
     -DAOO_TIMEFILTER_BANDWIDTH=0.0001 \
     -DAOO_DEBUG_DLL=0 \
     -DAOO_DEBUG_OSCTIME=0 \
-    -DAOO_DEBUG_RESAMPLING=0
+    -DAOO_DEBUG_RESAMPLING=0 \
+    $(empty)
 
 ldlibs =
 
