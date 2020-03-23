@@ -2,7 +2,7 @@
 
 #include "aoo/aoo.hpp"
 #include "aoo_imp.hpp"
-#include "lfqueue.hpp"
+#include "lockfree.hpp"
 #include "time_dll.hpp"
 
 // forward declaration
@@ -57,9 +57,9 @@ class source final : public isource {
     int32_t sequence_ = 0;
     std::atomic<int32_t> dropped_{0};
     aoo::dynamic_resampler resampler_;
-    aoo::lfqueue<aoo_sample> audioqueue_;
-    aoo::lfqueue<double> srqueue_;
-    aoo::lfqueue<aoo_event> eventqueue_;
+    lockfree::queue<aoo_sample> audioqueue_;
+    lockfree::queue<double> srqueue_;
+    lockfree::queue<aoo_event> eventqueue_;
     aoo_eventhandler eventhandler_;
     void *user_;
     aoo::time_dll dll_;

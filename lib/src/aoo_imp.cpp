@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <chrono>
 #include <algorithm>
+#include <cassert>
 
 // for shared_lock
 #ifdef _WIN32

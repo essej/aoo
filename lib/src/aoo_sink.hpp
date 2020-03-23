@@ -2,7 +2,7 @@
 
 #include "aoo/aoo.hpp"
 #include "aoo_imp.hpp"
-#include "lfqueue.hpp"
+#include "lockfree.hpp"
 #include "time_dll.hpp"
 
 namespace aoo {
@@ -57,13 +57,13 @@ struct source_desc {
     stream_state streamstate;
     block_queue blockqueue;
     block_ack_list ack_list;
-    lfqueue<aoo_sample> audioqueue;
+    lockfree::queue<aoo_sample> audioqueue;
     struct info {
         double sr;
         int32_t channel;
     };
-    lfqueue<info> infoqueue;
-    lfqueue<aoo_event> eventqueue;
+    lockfree::queue<info> infoqueue;
+    lockfree::queue<aoo_event> eventqueue;
     dynamic_resampler resampler;
     // methods
     void send(const char *data, int32_t n);
