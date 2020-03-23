@@ -183,6 +183,7 @@ public:
                 break;
             }
         }
+        size_++;
     }
 
     T& front() { return *begin(); }
@@ -205,8 +206,11 @@ public:
         return const_iterator();
     }
 
+    int32_t size() const { return size_.load(std::memory_order_acquire); }
+
     // the deletion of nodes itself is not thread-safe!!!
     void clear(){
+        size_ = 0;
         auto it = head_.exchange(nullptr);
         while (it){
             auto next = it->next_;
@@ -219,6 +223,7 @@ public:
     }
 private:
     std::atomic<node *> head_{nullptr};
+    std::atomic<int32_t> size_{0};
 };
 
 } // lockfree
