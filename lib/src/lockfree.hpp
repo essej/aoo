@@ -113,7 +113,7 @@ class queue {
 /*///////////////////////// list ////////////////////////*/
 
 // a lock-free singly-linked list which supports adding items and iteration.
-// clearing the list *not* thread-safe
+// clearing the list is *not* thread-safe
 
 template<typename T>
 class list {

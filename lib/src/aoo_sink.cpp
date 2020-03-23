@@ -373,8 +373,8 @@ void sink::handle_format_message(void *endpoint, aoo_replyfn fn,
     aoo::unique_lock lock(mutex_); // writer lock!
     if (!src){
         // not found - add new source
-        sources_.emplace_back(endpoint, fn, id, salt);
-        src = &sources_.back();
+        sources_.emplace_front(endpoint, fn, id, salt);
+        src = &sources_.front();
         // called with mutex locked, so we don't have to synchronize with the process() method!
         aoo_event event;
         event.type = AOO_SOURCE_ADD_EVENT;

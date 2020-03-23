@@ -109,7 +109,7 @@ class sink final : public isink {
     aoo_processfn processfn_ = nullptr;
     aoo_eventhandler eventhandler_ = nullptr;
     void *user_ = nullptr;
-    std::vector<aoo::source_desc> sources_;
+    lockfree::list<source_desc> sources_;
     struct data_request {
         int32_t sequence;
         int32_t frame;
