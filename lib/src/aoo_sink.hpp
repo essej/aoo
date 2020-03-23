@@ -47,7 +47,7 @@ struct source_desc {
     aoo_replyfn fn;
     int32_t id;
     int32_t salt;
-    std::unique_ptr<aoo::decoder> decoder;
+    std::unique_ptr<decoder> decoder;
     int32_t newest = 0; // sequence number of most recent incoming block
     int32_t next = 0; // next outgoing block
     int32_t channel = 0; // recent channel onset
@@ -116,28 +116,28 @@ class sink final : public isink {
     };
     std::vector<data_request> retransmit_list_;
     aoo::shared_mutex mutex_; // LATER replace with a spinlock?
-    aoo::time_dll dll_;
+    time_dll dll_;
     double bandwidth_ = AOO_TIMEFILTER_BANDWIDTH;
-    aoo::timer timer_;
+    timer timer_;
     // helper methods
-    aoo::source_desc *find_source(void *endpoint, int32_t id);
+    source_desc *find_source(void *endpoint, int32_t id);
 
     void update_sources();
 
-    void update_source(aoo::source_desc& src);
+    void update_source(source_desc& src);
 
     void request_format(void * endpoint, aoo_replyfn fn, int32_t id);
 
-    void request_data(aoo::source_desc& src);
+    void request_data(source_desc& src);
 
-    void ping(aoo::source_desc& src);
+    void ping(source_desc& src);
 
     void handle_format_message(void *endpoint, aoo_replyfn fn,
                                int32_t id, int32_t salt, const aoo_format& f,
                                const char *setting, int32_t size);
 
     void handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
-                             int32_t salt, const aoo::data_packet& d);
+                             int32_t salt, const data_packet& d);
 };
 
 } // aoo

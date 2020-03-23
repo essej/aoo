@@ -47,7 +47,7 @@ class source final : public isource {
  private:
     const int32_t id_;
     int32_t salt_ = 0;
-    std::unique_ptr<aoo::encoder> encoder_;
+    std::unique_ptr<encoder> encoder_;
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
     int32_t samplerate_ = 0;
@@ -56,16 +56,16 @@ class source final : public isource {
     int32_t resend_buffersize_ = AOO_RESEND_BUFSIZE;
     int32_t sequence_ = 0;
     std::atomic<int32_t> dropped_{0};
-    aoo::dynamic_resampler resampler_;
+    dynamic_resampler resampler_;
     lockfree::queue<aoo_sample> audioqueue_;
     lockfree::queue<double> srqueue_;
     lockfree::queue<aoo_event> eventqueue_;
     aoo_eventhandler eventhandler_;
     void *user_;
-    aoo::time_dll dll_;
+    time_dll dll_;
     double bandwidth_ = AOO_TIMEFILTER_BANDWIDTH;
-    aoo::timer timer_;
-    aoo::history_buffer history_;
+    timer timer_;
+    history_buffer history_;
     // sinks
     struct sink_desc {
         sink_desc(void *_endpoint, aoo_replyfn _fn, int32_t _id)
@@ -92,7 +92,7 @@ class source final : public isource {
 
     void update_historybuffer();
 
-    void send_data(sink_desc& sink, int32_t id, const aoo::data_packet& d);
+    void send_data(sink_desc& sink, int32_t id, const data_packet& d);
 
     void send_format(sink_desc& sink, int32_t id);
 
