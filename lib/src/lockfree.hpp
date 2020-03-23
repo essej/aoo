@@ -205,13 +205,17 @@ public:
         return const_iterator();
     }
 
-    // not thread-safe!!!
+    // the deletion of nodes itself is not thread-safe!!!
     void clear(){
-        for (auto it = head_.load(); it; ){
+        auto it = head_.exchange(nullptr);
+        while (it){
             auto next = it->next_;
             delete it;
             it = next;
         }
+    }
+    ~list(){
+        clear();
     }
 private:
     std::atomic<node *> head_{nullptr};
