@@ -184,7 +184,7 @@ public:
     }
 
     bool set_format(aoo_format& fmt);
-    bool get_format(aoo_format_storage& f){
+    bool get_format(aoo_format_storage& f) const {
         return codec_->encoder_getformat(obj_, &f) > 0;
     }
     int32_t write_format(int32_t& nchannels, int32_t& samplerate, int32_t& blocksize,
@@ -205,7 +205,7 @@ public:
     }
 
     bool set_format(aoo_format& fmt);
-    bool get_format(aoo_format_storage& f){
+    bool get_format(aoo_format_storage& f) const {
         return codec_->decoder_getformat(obj_, &f) > 0;
     }
     int32_t read_format(int32_t nchannels, int32_t samplerate, int32_t blocksize,
