@@ -73,7 +73,6 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
     // reset
     case aoo_opt_reset:
         update_sources();
-
         // reset time DLL
         timer_.reset();
         break;
@@ -84,7 +83,6 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         auto bufsize = std::max<int32_t>(0, as<int32_t>(ptr));
         if (bufsize != buffersize_){
             buffersize_ = bufsize;
-            // we don't need to lock (the user might!)
             update_sources();
         }
         break;
@@ -367,13 +365,11 @@ int32_t aoo::sink::process(uint64_t t){
 
     // the mutex is uncontended most of the time, but LATER we might replace
     // this with a lockless and/or waitfree solution
-    aoo::shared_lock lock(mutex_);
     for (auto& src : sources_){
         if (src.process(*this, buffer_.data(), buffer_.size())){
             didsomething = true;
         }
     }
-    lock.unlock();
 
     if (didsomething){
     #if AOO_CLIP_OUTPUT
@@ -401,9 +397,6 @@ int32_t aoo_sink_eventsavailable(aoo_sink *sink){
 }
 
 int32_t aoo::sink::events_available(){
-    // the mutex is uncontended most of the time, but LATER we might replace
-    // this with a lockless and/or waitfree solution
-    aoo::shared_lock lock(mutex_);
     for (auto& src : sources_){
         if (src.has_events()){
             return true;
@@ -461,8 +454,6 @@ int32_t sink::handle_format_message(void *endpoint, aoo_replyfn fn, int32_t id,
     // try to find existing source
     auto src = find_source(endpoint, id);
 
-    // everything below needs to be synchronized with the process method!
-    aoo::unique_lock lock(mutex_); // writer lock!
     if (!src){
         // not found - add new source
         sources_.emplace_front(endpoint, fn, id, salt);
@@ -493,7 +484,7 @@ int32_t sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
 // /AoO/<src>/request <sink>
 
 void sink::request_format(void *endpoint, aoo_replyfn fn, int32_t id) const {
-    LOG_DEBUG("request format of source " << id);
+    LOG_VERBOSE("request format for source " << id);
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
@@ -524,6 +515,8 @@ source_desc::source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t sal
 }
 
 int32_t source_desc::get_format(aoo_format_storage &format){
+    // synchronize with handle_format() and update()!
+    shared_lock lock(mutex_);
     if (decoder_){
         return decoder_->get_format(format);
     } else {
@@ -532,6 +525,12 @@ int32_t source_desc::get_format(aoo_format_storage &format){
 }
 
 void source_desc::update(const sink &s){
+    // take writer lock!
+    unique_lock lock(mutex_);
+    do_update(s);
+}
+
+void source_desc::do_update(const sink &s){
     // resize audio ring buffer
     if (decoder_ && decoder_->blocksize() > 0 && decoder_->samplerate() > 0){
         // recalculate buffersize from ms to samples
@@ -582,6 +581,8 @@ void source_desc::update(const sink &s){
 
 int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format& f,
                                    const char *settings, int32_t size){
+    // take writer lock!
+    unique_lock lock(mutex_);
 
     salt_ = salt;
 
@@ -603,7 +604,7 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
     // read format
     decoder_->read_format(f.nchannels, f.samplerate, f.blocksize, settings, size);
 
-    update(s);
+    do_update(s);
 
     // push event
     aoo_event event;
@@ -618,6 +619,9 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
 // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
 
 int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_packet& d){
+    // synchronize with update()!
+    shared_lock lock(mutex_);
+
     // the source format might have changed and we haven't noticed,
     // e.g. because of dropped UDP packets.
     if (salt != salt_){
@@ -633,7 +637,6 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
 #else
     assert(decoder_ != nullptr);
 #endif
-    // LOG_VERBOSE("block " << d.sequence << " (" << d.framenum << " / " << d.nframes << ")");
     LOG_DEBUG("got block: seq = " << d.sequence << ", sr = " << d.samplerate
               << ", chn = " << d.channel << ", totalsize = " << d.totalsize
               << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
@@ -662,6 +665,14 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
     // check and resend missing blocks
     check_missing_blocks(s);
 
+    // we can release the lock now!
+    // this makes sure that the reply function in send()
+    // is called without any lock to avoid deadlocks.
+    lock.unlock();
+
+    // send request messages
+    request_data(s, salt);
+
     // ping source
     ping(s);
 
@@ -669,6 +680,11 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
 }
 
 bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
+    // synchronize with handle_format() and update()!
+    // the mutex should be uncontended most of the time.
+    // NOTE: We could use try_lock() and skip the block if we couldn't aquire the lock.
+    shared_lock lock(mutex_);
+
     if (!decoder_){
         return false;
     }
@@ -774,7 +790,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
 }
 
 int32_t source_desc::handle_events(aoo_eventhandler handler, void *user){
-    // copy events
+    // copy events - always lockfree! (the eventqueue is never resized)
     auto n = eventqueue_.read_available();
     auto events = (aoo_event *)alloca(sizeof(aoo_event) * n);
     for (int i = 0; i < n; ++i){
@@ -1054,11 +1070,6 @@ resend_missing_done:
         LOG_DEBUG("requested " << numframes << " frames");
     }
 
-    if (!retransmit_list_.empty()){
-        // send request messages
-        request_data(s);
-    }
-
 #if 1
     // clean ack list
     auto removed = ack_list_.remove_before(next_);
@@ -1074,7 +1085,12 @@ resend_missing_done:
 
 // /AoO/<src>/resend <sink> <salt> <seq0> <frame0> <seq1> <frame1> ...
 
-void source_desc::request_data(const sink &s){
+void source_desc::request_data(const sink &s, int32_t salt){
+    // called without lock!
+    if (retransmit_list_.empty()){
+        return;
+    }
+
     // send request messages
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -1089,7 +1105,7 @@ void source_desc::request_data(const sink &s){
     auto d = div(retransmit_list_.size(), maxrequests);
 
     auto dorequest = [&](const data_request* data, int32_t n){
-        msg << osc::BeginMessage(address) << s.id() << salt_;
+        msg << osc::BeginMessage(address) << s.id() << salt;
         for (int i = 0; i < n; ++i){
             msg << data[i].sequence << data[i].frame;
         }
@@ -1111,6 +1127,8 @@ void source_desc::request_data(const sink &s){
 // AoO/<id>/ping <sink>
 
 void source_desc::ping(const sink& s){
+    // called without lock!
+
     if (s.ping_interval() == 0){
         return;
     }

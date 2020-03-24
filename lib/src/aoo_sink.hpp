@@ -53,8 +53,8 @@ class sink;
 class source_desc {
 public:
     source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt);
-    source_desc(source_desc&& other) = default;
-    source_desc& operator=(source_desc&& other) = default;
+    source_desc(const source_desc& other) = delete;
+    source_desc& operator=(const source_desc& other) = delete;
 
     // getters
     int32_t id() const { return id_; }
@@ -75,12 +75,13 @@ private:
         int32_t sequence;
         int32_t frame;
     };
+    void do_update(const sink& s);
     bool check_packet(const data_packet& d);
     bool add_packet(const data_packet& d);
     void send_data();
     void pop_outdated_blocks();
     void check_missing_blocks(const sink& s);
-    void request_data(const sink& s);
+    void request_data(const sink& s, int32_t salt);
     void ping(const sink& s);
     void send(const char *data, int32_t n){
         fn_(endpoint_, data, n);
@@ -108,6 +109,8 @@ private:
     lockfree::queue<aoo_event> eventqueue_;
     dynamic_resampler resampler_;
     std::vector<data_request> retransmit_list_;
+    // thread synchronization
+    aoo::shared_mutex mutex_; // LATER replace with a spinlock?
 };
 
 class sink final : public isink {
@@ -162,19 +165,17 @@ private:
     // buffer for summing source audio output
     std::vector<aoo_sample> buffer_;
     // options
-    int32_t buffersize_ = AOO_SINK_BUFSIZE;
-    int32_t packetsize_ = AOO_PACKETSIZE;
-    int32_t resend_limit_ = AOO_RESEND_LIMIT;
-    float resend_interval_ = AOO_RESEND_INTERVAL * 0.001;
-    int32_t resend_maxnumframes_ = AOO_RESEND_MAXNUMFRAMES;
-    float ping_interval_ = AOO_PING_INTERVAL * 0.001;
+    std::atomic<int32_t> buffersize_{ AOO_SINK_BUFSIZE };
+    std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
+    std::atomic<int32_t> resend_limit_{ AOO_RESEND_LIMIT };
+    std::atomic<float> resend_interval_{ AOO_RESEND_INTERVAL * 0.001 };
+    std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
+    std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };
     // the sources
     lockfree::list<source_desc> sources_;
-    // thread synchronization
-    aoo::shared_mutex mutex_; // LATER replace with a spinlock?
     // timing
+    std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
     time_dll dll_;
-    double bandwidth_ = AOO_TIMEFILTER_BANDWIDTH;
     timer timer_;
 
     // helper methods
