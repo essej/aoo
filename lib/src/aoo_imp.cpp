@@ -1081,12 +1081,13 @@ timer& timer::operator=(const timer& other){
 
 void timer::setup(int32_t sr, int32_t blocksize){
 #if AOO_TIMEFILTER_CHECK
-    delta_ = (double)blocksize / (double)sr;
+    delta_ = (double)blocksize / (double)sr; // shouldn't tear
 #endif
     reset();
 }
 
 void timer::reset(){
+    scoped_lock<spinlock> l(lock_);
     last_.clear();
     elapsed_ = 0;
 #if AOO_TIMEFILTER_CHECK
@@ -1102,6 +1103,7 @@ double timer::get_elapsed() const {
 }
 
 timer::state timer::update(time_tag t, double& error){
+    scoped_lock<spinlock> l(lock_);
     if (last_.seconds != 0){
         auto diff = t - last_;
         auto delta = diff.to_double();

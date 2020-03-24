@@ -403,10 +403,12 @@ private:
     static const size_t buffersize_ = 64;
 
     double delta_ = 0;
+    double sum_ = 0;
     std::array<double, buffersize_> buffer_;
     int32_t head_ = 0;
-    double sum_ = 0;
 #endif
+
+    spinlock lock_;
 };
 
 } // aoo
