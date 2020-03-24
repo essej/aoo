@@ -61,19 +61,21 @@ struct time_tag {
 
 class spinlock {
 public:
+    spinlock() = default;
     spinlock(const spinlock&) = delete;
     spinlock& operator=(const spinlock&) = delete;
     void lock();
     bool try_lock();
     void unlock();
 protected:
-    std::atomic_bool locked_{false};
+    std::atomic<uint32_t> locked_{false};
 };
 
 /*/////////////////// shared spin lock /////////////////////////*/
 
 class shared_spinlock {
 public:
+    shared_spinlock() = default;
     shared_spinlock(const shared_spinlock&) = delete;
     shared_spinlock& operator=(const shared_spinlock&) = delete;
     // exclusive
@@ -139,6 +141,26 @@ private:
 
 using shared_lock = std::shared_lock<shared_mutex>;
 using unique_lock = std::unique_lock<shared_mutex>;
+
+template<typename T>
+class scoped_lock {
+public:
+    scoped_lock(T& lock)
+        : lock_(&lock){ lock_->lock(); }
+    ~scoped_lock() { lock_->unlock(); }
+private:
+    T* lock_;
+};
+
+template<typename T>
+class shared_scoped_lock {
+public:
+    shared_scoped_lock(T& lock)
+        : lock_(&lock){ lock_->lock_shared(); }
+    ~shared_scoped_lock() { lock_->unlock(); }
+private:
+    T* lock_;
+};
 
 class dynamic_resampler {
 public:
