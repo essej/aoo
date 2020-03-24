@@ -59,8 +59,8 @@ public:
     // getters
     int32_t id() const { return id_; }
     void *endpoint() const { return endpoint_; }
-    const aoo::decoder* decoder() const { return decoder_.get(); }
     bool has_events() const { return  eventqueue_.read_available() > 0; }
+    int32_t get_format(aoo_format_storage& format);
 
     // methods
     void update(const sink& s);

@@ -156,7 +156,7 @@ int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
     // ping interval
     case aoo_opt_ping_interval:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = ping_interval_;
+        as<int32_t>(ptr) = ping_interval_ * 1000;
         break;
     // timefilter bandwidth
     case aoo_opt_timefilter_bandwidth:
@@ -176,7 +176,7 @@ int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
     // resend interval
     case aoo_opt_resend_interval:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = resend_interval_;
+        as<int32_t>(ptr) = resend_interval_ * 1000;
         break;
     // resend maxnumframes
     case aoo_opt_resend_maxnumframes:
@@ -233,12 +233,7 @@ int32_t aoo::sink::get_sourceoption(void *endpoint, int32_t id,
         // format
         case aoo_opt_format:
             CHECKARG(aoo_format_storage);
-            if (src->decoder()){
-                return src->decoder()->get_format(as<aoo_format_storage>(p));
-            } else {
-                return 0;
-            }
-            break;
+            return src->get_format(as<aoo_format_storage>(p));
         // unsupported
         default:
             LOG_WARNING("aoo_sink: unsupported source option " << opt);
@@ -526,6 +521,14 @@ source_desc::source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t sal
     event.source.id = id;
     eventqueue_.write(event);
     LOG_DEBUG("add new source with id " << id);
+}
+
+int32_t source_desc::get_format(aoo_format_storage &format){
+    if (decoder_){
+        return decoder_->get_format(format);
+    } else {
+        return 0;
+    }
 }
 
 void source_desc::update(const sink &s){
