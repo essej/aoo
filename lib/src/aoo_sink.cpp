@@ -630,6 +630,7 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
 #else
     assert(decoder_ != nullptr);
 #endif
+    // LOG_VERBOSE("block " << d.sequence << " (" << d.framenum << " / " << d.nframes << ")");
     LOG_DEBUG("got block: seq = " << d.sequence << ", sr = " << d.samplerate
               << ", chn = " << d.channel << ", totalsize = " << d.totalsize
               << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
@@ -976,6 +977,8 @@ void source_desc::pop_outdated_blocks(){
     }
 }
 
+#define AOO_BLOCKQUEUE_CHECK_THRESHOLD 3
+
 // deal with "holes" in block queue
 void source_desc::check_missing_blocks(const sink& s){
     if (blockqueue_.empty()){
@@ -983,6 +986,11 @@ void source_desc::check_missing_blocks(const sink& s){
             LOG_WARNING("bug: acklist not empty");
             ack_list_.clear();
         }
+        return;
+    }
+    // don't check below a certain threshold,
+    // because we might just experience packet reordering.
+    if (blockqueue_.size() < AOO_BLOCKQUEUE_CHECK_THRESHOLD){
         return;
     }
 #if LOGLEVEL >= 4
