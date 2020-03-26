@@ -74,9 +74,7 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     aoo_format_storage f;
     f.header.nchannels = x->x_settings.nchannels;
     if (aoo_parseformat(x, &f, argc, argv)){
-        pthread_mutex_lock(&x->x_mutex);
         aoo_source_setoption(x->x_aoo_source, aoo_opt_format, AOO_ARG(f.header));
-        pthread_mutex_unlock(&x->x_mutex);
     }
 }
 
@@ -97,41 +95,34 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         }
         int32_t chn = atom_getfloat(argv + 3);
 
-        pthread_mutex_lock(&x->x_mutex);
         aoo_source_setsinkoption(x->x_aoo_source, e, id,
                                  aoo_opt_channelonset, AOO_ARG(chn));
-        pthread_mutex_unlock(&x->x_mutex);
     }
 }
 
 static void aoo_send_packetsize(t_aoo_send *x, t_floatarg f)
 {
-    pthread_mutex_lock(&x->x_mutex);
     int32_t packetsize = f;
     aoo_source_setoption(x->x_aoo_source, aoo_opt_packetsize, AOO_ARG(packetsize));
-    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_send_resend(t_aoo_send *x, t_floatarg f)
 {
-    pthread_mutex_lock(&x->x_mutex);
     int32_t bufsize = f;
     aoo_source_setoption(x->x_aoo_source, aoo_opt_resend_buffersize, AOO_ARG(bufsize));
-    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
 {
-    pthread_mutex_lock(&x->x_mutex);
     float bandwidth;
     aoo_source_setoption(x->x_aoo_source, aoo_opt_timefilter_bandwidth, AOO_ARG(bandwidth));
-    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void *aoo_send_threadfn(void *y)
 {
     t_aoo_send *x = (t_aoo_send *)y;
 
+    // needed for condition variable + synchronize with "dsp" method
     pthread_mutex_lock(&x->x_mutex);
     while (!x->x_quit){
         // send all available outgoing packets
@@ -250,8 +241,6 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             }
         }
 
-        // enter critical section
-        pthread_mutex_lock(&x->x_mutex);
         if (!e){
             // add endpoint
             e = endpoint_new(x->x_socket, &sa, len);
@@ -271,8 +260,6 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             aoo_source_setsinkoption(x->x_aoo_source, e, id,
                                      aoo_opt_channelonset, AOO_ARG(chn));
         }
-        // leave critical section
-        pthread_mutex_unlock(&x->x_mutex);
 
         if (id == AOO_ID_WILDCARD){
             // first remove all sinks on this endpoint
@@ -343,9 +330,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             }
         }
 
-        pthread_mutex_lock(&x->x_mutex);
         aoo_source_removesink(x->x_aoo_source, e, id);
-        pthread_mutex_unlock(&x->x_mutex);
 
         // remove from list
         aoo_send_doremovesink(x, e, id);
@@ -363,9 +348,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_send_clear(t_aoo_send *x)
 {
-    pthread_mutex_lock(&x->x_mutex);
     aoo_source_removeall(x->x_aoo_source);
-    pthread_mutex_unlock(&x->x_mutex);
 
     // clear sink list
     if (x->x_numsinks){
@@ -416,6 +399,7 @@ static t_int * aoo_send_perform(t_int *w)
 
 static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
 {
+    // synchronize with network thread!
     pthread_mutex_lock(&x->x_mutex);
     x->x_settings.blocksize = sp[0]->s_n;
     x->x_settings.samplerate = sp[0]->s_sr;
