@@ -57,27 +57,55 @@ struct time_tag {
     }
 };
 
-// simple spin lock
+/*////////////////// simple spin lock ////////////////////*/
 
 class spinlock {
 public:
+    spinlock() = default;
+    spinlock(const spinlock&) = delete;
+    spinlock& operator=(const spinlock&) = delete;
     void lock();
+    bool try_lock();
     void unlock();
 protected:
-    std::atomic_bool locked_{false};
+    std::atomic<uint32_t> locked_{false};
 };
 
-// padded spin lock
+/*/////////////////// shared spin lock /////////////////////////*/
+
+class shared_spinlock {
+public:
+    shared_spinlock() = default;
+    shared_spinlock(const shared_spinlock&) = delete;
+    shared_spinlock& operator=(const shared_spinlock&) = delete;
+    // exclusive
+    void lock();
+    bool try_lock();
+    void unlock();
+    // shared
+    void lock_shared();
+    bool try_lock_shared();
+    void unlock_shared();
+protected:
+    const uint32_t UNLOCKED = 0;
+    const uint32_t LOCKED = 0x80000000;
+    std::atomic<uint32_t> state_{0};
+};
+
+// paddeded spin locks
+
+template<typename T, size_t N>
+class alignas(N) padded_class : public T {
+    // pad and align to prevent false sharing
+    char pad_[N - sizeof(T)];
+};
 
 static const size_t CACHELINE_SIZE = 64;
 
-class alignas(CACHELINE_SIZE) padded_spinlock : public spinlock {
-public:
-    padded_spinlock();
-private:
-    // pad and align to prevent false sharing
-    char pad_[CACHELINE_SIZE - sizeof(locked_)];
-};
+using padded_spinlock = padded_class<spinlock, CACHELINE_SIZE>;
+
+using padded_shared_spinlock =  padded_class<shared_spinlock, CACHELINE_SIZE>;
+
 
 /*//////////////////////// shared_mutex //////////////////////////*/
 
@@ -94,7 +122,7 @@ public:
     shared_mutex();
     ~shared_mutex();
     shared_mutex(const shared_mutex&) = delete;
-    shared_mutex& operator==(const shared_mutex&) = delete;
+    shared_mutex& operator=(const shared_mutex&) = delete;
     // exclusive
     void lock();
     bool try_lock();
@@ -113,6 +141,26 @@ private:
 
 using shared_lock = std::shared_lock<shared_mutex>;
 using unique_lock = std::unique_lock<shared_mutex>;
+
+template<typename T>
+class scoped_lock {
+public:
+    scoped_lock(T& lock)
+        : lock_(&lock){ lock_->lock(); }
+    ~scoped_lock() { lock_->unlock(); }
+private:
+    T* lock_;
+};
+
+template<typename T>
+class shared_scoped_lock {
+public:
+    shared_scoped_lock(T& lock)
+        : lock_(&lock){ lock_->lock_shared(); }
+    ~shared_scoped_lock() { lock_->unlock(); }
+private:
+    T* lock_;
+};
 
 class dynamic_resampler {
 public:
@@ -158,7 +206,7 @@ public:
     }
 
     bool set_format(aoo_format& fmt);
-    bool get_format(aoo_format_storage& f){
+    bool get_format(aoo_format_storage& f) const {
         return codec_->encoder_getformat(obj_, &f) > 0;
     }
     int32_t write_format(int32_t& nchannels, int32_t& samplerate, int32_t& blocksize,
@@ -179,7 +227,7 @@ public:
     }
 
     bool set_format(aoo_format& fmt);
-    bool get_format(aoo_format_storage& f){
+    bool get_format(aoo_format_storage& f) const {
         return codec_->decoder_getformat(obj_, &f) > 0;
     }
     int32_t read_format(int32_t nchannels, int32_t samplerate, int32_t blocksize,
@@ -227,8 +275,9 @@ public:
     int32_t size() const { return buffer_.size(); }
     bool complete() const;
     void add_frame(int32_t which, const char *data, int32_t n);
-    void get_frame(int32_t which, const char *& data, int32_t& n);
+    int32_t get_frame(int32_t which, char * data, int32_t n);
     bool has_frame(int32_t which) const;
+    int32_t frame_size(int32_t which) const;
     int32_t num_frames() const { return numframes_; }
     // data
     int32_t sequence = -1;
@@ -355,10 +404,12 @@ private:
     static const size_t buffersize_ = 64;
 
     double delta_ = 0;
+    double sum_ = 0;
     std::array<double, buffersize_> buffer_;
     int32_t head_ = 0;
-    double sum_ = 0;
 #endif
+
+    spinlock lock_;
 };
 
 } // aoo

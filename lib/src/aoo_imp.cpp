@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <chrono>
 #include <algorithm>
+#include <cassert>
 
 // for shared_lock
 #ifdef _WIN32
@@ -186,7 +187,7 @@ std::unique_ptr<decoder> codec::create_decoder() const {
 }
 
 
-/*////////////////////////// spinlock //////////////////////////*/
+/*/////////////////////// spinlock //////////////////////////*/
 
 void spinlock::lock(){
     // only try to modify the shared state if the lock seems to be available.
@@ -195,18 +196,70 @@ void spinlock::lock(){
         while (locked_.load(std::memory_order_relaxed)){
             pause_cpu();
         }
-    } while (locked_.exchange(true, std::memory_order_acquire));
+    } while (!try_lock());
+}
+
+bool spinlock::try_lock(){
+    // if the previous value was false, it means be could aquire the lock.
+    // this is faster than a CAS loop.
+    return !locked_.exchange(true, std::memory_order_acquire);
 }
 
 void spinlock::unlock(){
     locked_.store(false, std::memory_order_release);
 }
 
-padded_spinlock::padded_spinlock(){
-    static_assert(sizeof(padded_spinlock) == CACHELINE_SIZE, "");
+/*//////////////////// shared spinlock ///////////////////////*/
+
+// exclusive
+void shared_spinlock::lock(){
+    // only try to modify the shared state if the lock seems to be available.
+    // this should prevent unnecessary cache invalidation.
+    do {
+        while (state_.load(std::memory_order_relaxed) != UNLOCKED){
+            pause_cpu();
+        }
+    } while (!try_lock());
 }
 
-/*////////////////////// shared_mutex ///////////////////*/
+bool shared_spinlock::try_lock(){
+    // check if state is UNLOCKED and set to LOCKED on success.
+    uint32_t expected = UNLOCKED;
+    return state_.compare_exchange_strong(expected, LOCKED, std::memory_order_acq_rel);
+}
+
+void shared_spinlock::unlock(){
+    // set to UNLOCKED
+    state_.store(UNLOCKED, std::memory_order_release);
+}
+
+// shared
+void shared_spinlock::lock_shared(){
+    while (!try_lock_shared()){
+        pause_cpu();
+    }
+}
+
+bool shared_spinlock::try_lock_shared(){
+    // optimistically increment the reader count and then
+    // check whether the LOCKED bit is *not* set,
+    // otherwise we simply decrement the reader count again.
+    // this is optimized for the likely case that there's no writer.
+    auto state = state_.fetch_add(1, std::memory_order_acquire);
+    if (!(state & LOCKED)){
+        return true;
+    } else {
+        state_.fetch_sub(1, std::memory_order_release);
+        return false;
+    }
+}
+
+void shared_spinlock::unlock_shared(){
+    // decrement the reader count
+    state_.fetch_sub(1, std::memory_order_release);
+}
+
+/*////////////////////// shared_mutex //////////////////////*/
 
 #ifdef _WIN32
 shared_mutex::shared_mutex() {
@@ -319,20 +372,36 @@ void block::add_frame(int32_t which, const char *data, int32_t n){
     // LOG_DEBUG("frames: " << frames_);
 }
 
-void block::get_frame(int32_t which, const char *&data, int32_t &n){
+int32_t block::get_frame(int32_t which, char *data, int32_t n){
     assert(framesize_ > 0 && numframes_ > 0);
     if (which >= 0 && which < numframes_){
         auto onset = which * framesize_;
-        data = buffer_.data() + onset;
-        if (which == numframes_ - 1){ // last frame
-            n = size() - onset;
+        auto minsize = (which == numframes_ - 1) ? size() - onset : framesize_;
+        if (n >= minsize){
+            int32_t nbytes;
+            if (which == numframes_ - 1){ // last frame
+                nbytes = size() - onset;
+            } else {
+                nbytes = framesize_;
+            }
+            auto ptr = buffer_.data() + onset;
+            std::copy(ptr, ptr + n, data);
+            return nbytes;
         } else {
-            n = framesize_;
+            LOG_ERROR("buffer too small! got " << n << ", need " << minsize);
         }
     } else {
         LOG_ERROR("frame number " << which << " out of range!");
-        data = nullptr;
-        n = 0;
+    }
+    return 0;
+}
+
+int32_t block::frame_size(int32_t which) const {
+    assert(which < numframes_);
+    if (which == numframes_ - 1){ // last frame
+        return size() - which * framesize_;
+    } else {
+        return framesize_;
     }
 }
 
@@ -1003,37 +1072,39 @@ void dynamic_resampler::read(aoo_sample *data, int32_t n){
 /*//////////////////////// timer //////////////////////*/
 
 timer::timer(const timer& other){
-    delta_ = other.delta_;
     last_ = other.last_;
     elapsed_ = other.elapsed_.load();
 #if AOO_CHECK_TIMER
     static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
+    delta_ = other.delta_;
+    sum_ = other.sum_;
     buffer_ = other.buffer_;
     head_ = other.head_;
-    sum_ = other.sum_;
 #endif
 }
 
 timer& timer::operator=(const timer& other){
-    delta_ = other.delta_;
     last_ = other.last_;
     elapsed_ = other.elapsed_.load();
 #if AOO_CHECK_TIMER
+    static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
+    delta_ = other.delta_;
+    sum_ = other.sum_;
     buffer_ = other.buffer_;
     head_ = other.head_;
-    sum_ = other.sum_;
 #endif
     return *this;
 }
 
 void timer::setup(int32_t sr, int32_t blocksize){
 #if AOO_TIMEFILTER_CHECK
-    delta_ = (double)blocksize / (double)sr;
+    delta_ = (double)blocksize / (double)sr; // shouldn't tear
 #endif
     reset();
 }
 
 void timer::reset(){
+    scoped_lock<spinlock> l(lock_);
     last_.clear();
     elapsed_ = 0;
 #if AOO_TIMEFILTER_CHECK
@@ -1049,6 +1120,7 @@ double timer::get_elapsed() const {
 }
 
 timer::state timer::update(time_tag t, double& error){
+    scoped_lock<spinlock> l(lock_);
     if (last_.seconds != 0){
         auto diff = t - last_;
         auto delta = diff.to_double();

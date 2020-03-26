@@ -2,7 +2,7 @@
 
 #include "aoo/aoo.hpp"
 #include "aoo_imp.hpp"
-#include "lfqueue.hpp"
+#include "lockfree.hpp"
 #include "time_dll.hpp"
 
 // forward declaration
@@ -11,6 +11,43 @@ namespace osc {
 }
 
 namespace aoo {
+
+struct sink_desc {
+    sink_desc(void *_endpoint, aoo_replyfn _fn, int32_t _id)
+        : endpoint(_endpoint), fn(_fn), id(_id),
+          channel(0), format_changed(true) {}
+    sink_desc(const sink_desc& other)
+        : endpoint(other.endpoint), fn(other.fn), id(other.id),
+          channel(other.channel.load()),
+          format_changed(other.format_changed) {}
+    sink_desc& operator=(const sink_desc& other){
+        endpoint = other.endpoint;
+        fn = other.fn;
+        id = other.id;
+        channel = other.channel.load();
+        format_changed = other.format_changed;
+        return *this;
+    }
+    // data
+    void * endpoint;
+    aoo_replyfn fn;
+    int32_t id;
+    std::atomic<int32_t> channel;
+    bool format_changed;
+
+    // methods
+    void send_data(int32_t src, int32_t salt, const data_packet& data) const;
+    void send_data(int32_t sink, int32_t src, int32_t salt, const data_packet& data) const;
+
+    void send_format(int32_t src, int32_t salt, const aoo_format& f,
+                     const char *options, int32_t size) const;
+    void send_format(int32_t sink, int32_t src, int32_t salt, const aoo_format& f,
+                     const char *options, int32_t size) const;
+
+    void send(const char *data, int32_t n) const {
+        fn(endpoint, data, n);
+    }
+};
 
 class source final : public isource {
  public:
@@ -45,56 +82,51 @@ class source final : public isource {
     int32_t get_sinkoption(void *endpoint, int32_t id,
                            int32_t opt, void *ptr, int32_t size) override;
  private:
+    // settings
     const int32_t id_;
     int32_t salt_ = 0;
-    std::unique_ptr<aoo::encoder> encoder_;
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
     int32_t samplerate_ = 0;
-    int32_t buffersize_ = AOO_SOURCE_BUFSIZE;
-    int32_t packetsize_ = AOO_PACKETSIZE;
-    int32_t resend_buffersize_ = AOO_RESEND_BUFSIZE;
-    int32_t sequence_ = 0;
-    std::atomic<int32_t> dropped_{0};
-    aoo::dynamic_resampler resampler_;
-    aoo::lfqueue<aoo_sample> audioqueue_;
-    aoo::lfqueue<double> srqueue_;
-    aoo::lfqueue<aoo_event> eventqueue_;
     aoo_eventhandler eventhandler_;
     void *user_;
-    aoo::time_dll dll_;
-    double bandwidth_ = AOO_TIMEFILTER_BANDWIDTH;
-    aoo::timer timer_;
-    aoo::history_buffer history_;
+    // audio encoder
+    std::unique_ptr<encoder> encoder_;
+    // state
+    int32_t sequence_ = 0;
+    std::atomic<int32_t> dropped_{0};
+    // timing
+    time_dll dll_;
+    std::atomic<double> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
+    timer timer_;
+    // buffers and queues
+    dynamic_resampler resampler_;
+    lockfree::queue<aoo_sample> audioqueue_;
+    lockfree::queue<double> srqueue_;
+    lockfree::queue<aoo_event> eventqueue_;
+    history_buffer history_;
+    std::vector<char> blockbuffer_;
+    std::vector<char> resendbuffer_;
     // sinks
-    struct sink_desc {
-        sink_desc(void *_endpoint, aoo_replyfn _fn, int32_t _id)
-            : endpoint(_endpoint), fn(_fn), id(_id),
-              channel(0), format_changed(true) {}
-        // data
-        void *endpoint;
-        aoo_replyfn fn;
-        int32_t id;
-        int32_t channel;
-        bool format_changed;
-        // methods
-        void send(const char *data, int32_t n){
-            fn(endpoint, data, n);
-        }
-    };
     std::vector<sink_desc> sinks_;
+    // thread synchronization
+    aoo::shared_mutex update_mutex_;
+    aoo::shared_mutex sinklist_mutex_;
+    // options
+    std::atomic<int32_t> buffersize_{ AOO_SOURCE_BUFSIZE };
+    std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
+    std::atomic<int32_t> resend_buffersize_{ AOO_RESEND_BUFSIZE };
+
     // helper methods
     sink_desc * find_sink(void *endpoint, int32_t id);
 
     int32_t set_format(aoo_format& f);
 
+    int32_t make_salt();
+
     void update();
 
     void update_historybuffer();
-
-    void send_data(sink_desc& sink, int32_t id, const aoo::data_packet& d);
-
-    void send_format(sink_desc& sink, int32_t id);
 
     void handle_request(void *endpoint, aoo_replyfn fn, int32_t id);
 
@@ -103,7 +135,6 @@ class source final : public isource {
 
     void handle_ping(void *endpoint, aoo_replyfn fn, int32_t id);
 
-    int32_t make_salt();
 };
 
 } // aoo
