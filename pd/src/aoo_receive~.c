@@ -256,7 +256,9 @@ typedef struct _aoo_receive
     t_object x_obj;
     t_float x_f;
     aoo_sink *x_aoo_sink;
-    aoo_sink_settings x_settings;
+    int32_t x_samplerate;
+    int32_t x_blocksize;
+    int32_t x_nchannels;
     int32_t x_id;
     t_sample **x_vec;
     // sinks
@@ -395,11 +397,6 @@ static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
     }
 }
 
-static void aoo_receive_tick(t_aoo_receive *x)
-{
-    aoo_sink_handleevents(x->x_aoo_sink);
-}
-
 static int32_t aoo_sourceevent_to_atoms(const aoo_source_event *e, t_atom *argv)
 {
     t_endpoint *c = (t_endpoint *)e->endpoint;
@@ -515,18 +512,10 @@ static void aoo_receive_handleevents(t_aoo_receive *x,
     }
 }
 
-static void aoo_receive_process(t_aoo_receive *x,
-                                const aoo_sample **data, int32_t n)
+static void aoo_receive_tick(t_aoo_receive *x)
 {
-    assert(sizeof(t_sample) == sizeof(aoo_sample));
-    // copy samples
-    for (int i = 0; i < x->x_settings.nchannels; ++i){
-        memcpy(x->x_vec[i], data[i], sizeof(aoo_sample) * n);
-    }
-    // handle events
-    if (aoo_sink_eventsavailable(x->x_aoo_sink) > 0){
-        clock_delay(x->x_clock, 0);
-    }
+    aoo_sink_handleevents(x->x_aoo_sink,
+                          (aoo_eventhandler)aoo_receive_handleevents, x);
 }
 
 static t_int * aoo_receive_perform(t_int *w)
@@ -535,11 +524,16 @@ static t_int * aoo_receive_perform(t_int *w)
     int n = (int)(w[2]);
 
     uint64_t t = aoo_osctime_get();
-    if (aoo_sink_process(x->x_aoo_sink, t) <= 0){
+    if (aoo_sink_process(x->x_aoo_sink, x->x_vec, n, t) <= 0){
         // output zeros
-        for (int i = 0; i < x->x_settings.nchannels; ++i){
+        for (int i = 0; i < x->x_nchannels; ++i){
             memset(x->x_vec[i], 0, sizeof(t_float) * n);
         }
+    }
+
+    // handle events
+    if (aoo_sink_eventsavailable(x->x_aoo_sink) > 0){
+        clock_delay(x->x_clock, 0);
     }
 
     return w + 3;
@@ -547,19 +541,22 @@ static t_int * aoo_receive_perform(t_int *w)
 
 static void aoo_receive_dsp(t_aoo_receive *x, t_signal **sp)
 {
-    int n = x->x_settings.blocksize = (int)sp[0]->s_n;
-    x->x_settings.samplerate = sp[0]->s_sr;
+    x->x_blocksize = (int)sp[0]->s_n;
+    x->x_samplerate = sp[0]->s_sr;
 
-    for (int i = 0; i < x->x_settings.nchannels; ++i){
+    for (int i = 0; i < x->x_nchannels; ++i){
         x->x_vec[i] = sp[i]->s_vec;
     }
 
     // synchronize with aoo_receive_handle_message()
     pthread_mutex_lock(&x->x_mutex);
-    aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
+
+    aoo_sink_setup(x->x_aoo_sink, x->x_samplerate,
+                   x->x_blocksize, x->x_nchannels);
+
     pthread_mutex_unlock(&x->x_mutex);
 
-    dsp_add(aoo_receive_perform, 2, (t_int)x, (t_int)n);
+    dsp_add(aoo_receive_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 }
 
 static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
@@ -578,17 +575,14 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
     x->x_id = id >= 0 ? id : 0;
     x->x_aoo_sink = aoo_sink_new(x->x_id);
 
-    memset(&x->x_settings, 0, sizeof(aoo_sink_settings));
-    x->x_settings.userdata = x;
-    x->x_settings.eventhandler = (aoo_eventhandler)aoo_receive_handleevents;
-    x->x_settings.processfn = (aoo_processfn)aoo_receive_process;
-
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
     if (nchannels < 1){
         nchannels = 1;
     }
-    x->x_settings.nchannels = nchannels;
+    x->x_nchannels = nchannels;
+    x->x_blocksize = 0;
+    x->x_samplerate = 0;
 
     // arg #3: port number
     if (argc > 2){
@@ -620,7 +614,7 @@ static void aoo_receive_free(t_aoo_receive *x)
 
     pthread_mutex_destroy(&x->x_mutex);
 
-    freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
+    freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
     if (x->x_sources){
         freebytes(x->x_sources, x->x_numsources * sizeof(t_source));
     }

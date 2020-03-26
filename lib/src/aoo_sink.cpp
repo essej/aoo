@@ -18,25 +18,18 @@ void aoo_sink_free(aoo_sink *sink) {
     delete static_cast<aoo::sink *>(sink);
 }
 
-int32_t aoo_sink_setup(aoo_sink *sink, const aoo_sink_settings *settings) {
-    if (settings){
-        return sink->setup(*settings);
-    }
-    return 0;
+int32_t aoo_sink_setup(aoo_sink *sink, int32_t samplerate,
+                       int32_t blocksize, int32_t nchannels) {
+    return sink->setup(samplerate, blocksize, nchannels);
 }
 
-int32_t aoo::sink::setup(const aoo_sink_settings& settings){
-    processfn_ = settings.processfn;
-    eventhandler_ = settings.eventhandler;
-    user_ = settings.userdata;
-    if (settings.nchannels > 0
-            && settings.samplerate > 0
-            && settings.blocksize > 0)
+int32_t aoo::sink::setup(int32_t samplerate,
+                         int32_t blocksize, int32_t nchannels){
+    if (samplerate > 0 && blocksize > 0 && nchannels > 0)
     {
-
-        nchannels_ = settings.nchannels;
-        samplerate_ = settings.samplerate;
-        blocksize_ = settings.blocksize;
+        nchannels_ = nchannels;
+        samplerate_ = samplerate;
+        blocksize_ = blocksize;
 
         buffer_.resize(blocksize_ * nchannels_);
 
@@ -328,16 +321,14 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n, void *endpoint, a
 thread_local int32_t debug_counter = 0;
 #endif
 
-int32_t aoo_sink_process(aoo_sink *sink, uint64_t t) {
-    return sink->process(t);
+int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,
+                         int32_t nsamples, uint64_t t) {
+    return sink->process(data, nsamples, t);
 }
 
 #define AOO_MAXNUMEVENTS 256
 
-int32_t aoo::sink::process(uint64_t t){
-    if (!processfn_){
-        return 0;
-    }
+int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
     std::fill(buffer_.begin(), buffer_.end(), 0);
 
     bool didsomething = false;
@@ -381,12 +372,11 @@ int32_t aoo::sink::process(uint64_t t){
             }
         }
     #endif
-        // set buffer pointers and pass to audio callback
-        auto vec = (const aoo_sample **)alloca(sizeof(aoo_sample *) * nchannels_);
+        // copy buffers
         for (int i = 0; i < nchannels_; ++i){
-            vec[i] = &buffer_[i * blocksize_];
+            auto buf = &buffer_[i * blocksize_];
+            std::copy(buf, buf + blocksize_, data[i]);
         }
-        processfn_(user_, vec, blocksize_);
         return 1;
     } else {
         return 0;
@@ -405,20 +395,21 @@ int32_t aoo::sink::events_available(){
     return false;
 }
 
-int32_t aoo_sink_handleevents(aoo_sink *sink){
-    return sink->handle_events();
+int32_t aoo_sink_handleevents(aoo_sink *sink,
+                              aoo_eventhandler fn, void *user){
+    return sink->handle_events(fn, user);
 }
 
 #define EVENT_THROTTLE 1000
 
-int32_t aoo::sink::handle_events(){
-    if (!eventhandler_){
+int32_t aoo::sink::handle_events(aoo_eventhandler fn, void *user){
+    if (!fn){
         return 0;
     }
     int total = 0;
     // handle_events() and the source list itself are both lock-free!
     for (auto& src : sources_){
-        total += src.handle_events(eventhandler_, user_);
+        total += src.handle_events(fn, user);
         if (total > EVENT_THROTTLE){
             break;
         }

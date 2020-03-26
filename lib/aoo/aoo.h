@@ -353,15 +353,6 @@ typedef struct aoo_format_storage
     char buf[256];
 } aoo_format_storage;
 
-typedef struct aoo_source_settings
-{
-    void *userdata;
-    aoo_eventhandler eventhandler;
-    int32_t samplerate;
-    int32_t blocksize;
-    int32_t nchannels;
-} aoo_source_settings;
-
 // create a new AoO source instance
 AOO_API aoo_source * aoo_source_new(int32_t id);
 
@@ -369,12 +360,13 @@ AOO_API aoo_source * aoo_source_new(int32_t id);
 AOO_API void aoo_source_free(aoo_source *src);
 
 // setup the source - needs to be synchronized with other method calls!
-AOO_API int32_t aoo_source_setup(aoo_source *src, const aoo_source_settings *settings);
+AOO_API int32_t aoo_source_setup(aoo_source *src, int32_t samplerate,
+                                 int32_t blocksize, int32_t nchannels);
 
 // add a new sink (always threadsafe)
 AOO_API int32_t aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn);
 
-// remova a sink (always threadsafe)
+// remove a sink (always threadsafe)
 AOO_API int32_t aoo_source_removesink(aoo_source *src, void *sink, int32_t id);
 
 // remove all sinks (always threadsafe)
@@ -397,8 +389,8 @@ AOO_API int32_t aoo_source_process(aoo_source *src, const aoo_sample **data,
 // check if events are available (always thread safe)
 AOO_API int32_t aoo_source_eventsavailable(aoo_source *src);
 
-// handle events - will call the event handler (threadsafe, but not rentrant)
-AOO_API int32_t aoo_source_handleevents(aoo_source *src);
+// handle events - will call the event handler (threadsafe, but not reentrant)
+AOO_API int32_t aoo_source_handleevents(aoo_source *src, aoo_eventhandler fn, void *user);
 
 // set/get options (always threadsafe)
 AOO_API int32_t aoo_source_setoption(aoo_source *src, int32_t opt, void *p, int32_t size);
@@ -423,22 +415,6 @@ using aoo_sink = aoo::isink;
 typedef struct aoo_sink aoo_sink;
 #endif
 
-typedef void (*aoo_processfn)(
-        void *,                 // user data
-        const aoo_sample **,    // sample data
-        int32_t                 // number of samples per channel
-);
-
-typedef struct aoo_sink_settings
-{
-    void *userdata;
-    aoo_processfn processfn;
-    aoo_eventhandler eventhandler;
-    int32_t samplerate;
-    int32_t blocksize;
-    int32_t nchannels;
-} aoo_sink_settings;
-
 // create a new AoO sink instance
 AOO_API aoo_sink * aoo_sink_new(int32_t id);
 
@@ -446,20 +422,22 @@ AOO_API aoo_sink * aoo_sink_new(int32_t id);
 AOO_API void aoo_sink_free(aoo_sink *sink);
 
 // setup the sink - needs to be synchronized with other method calls!
-AOO_API int32_t aoo_sink_setup(aoo_sink *sink, const aoo_sink_settings *settings);
+AOO_API int32_t aoo_sink_setup(aoo_sink *sink, int32_t samplerate,
+                               int32_t blocksize, int32_t nchannels);
 
 // handle messages from sources - might call the reply function (threadsafe, but not reentrant)
 AOO_API int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
                             void *src, aoo_replyfn fn);
 
-// process audio - will call the process callback function (threadsafe, but not reentrant)
-AOO_API int32_t aoo_sink_process(aoo_sink *sink, uint64_t t);
+// process audio (threadsafe, but not reentrant)
+AOO_API int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,
+                                 int32_t nsamples, uint64_t t);
 
 // check if events are available (always thread safe)
 AOO_API int32_t aoo_sink_eventsavailable(aoo_sink *sink);
 
 // handle events - will call the event handler (threadsafe, but not rentrant)
-AOO_API int32_t aoo_sink_handleevents(aoo_sink *sink);
+AOO_API int32_t aoo_sink_handleevents(aoo_sink *sink, aoo_eventhandler fn, void *user);
 
 // set/get options (always threadsafe)
 AOO_API int32_t aoo_sink_setoption(aoo_sink *sink, int32_t opt, void *p, int32_t size);

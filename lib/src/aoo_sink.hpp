@@ -118,16 +118,16 @@ public:
     sink(int32_t id)
         : id_(id) {}
 
-    int32_t setup(const aoo_sink_settings& settings) override;
+    int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
     int32_t handle_message(const char *data, int32_t n,
                            void *endpoint, aoo_replyfn fn) override;
 
-    int32_t process(uint64_t t) override;
+    int32_t process(aoo_sample **data, int32_t nsamples, uint64_t t) override;
 
     int32_t events_available() override;
 
-    int32_t handle_events() override;
+    int32_t handle_events(aoo_eventhandler fn, void *user) override;
 
     int32_t set_option(int32_t opt, void *ptr, int32_t size) override;
 
@@ -159,9 +159,6 @@ private:
     int32_t nchannels_ = 0;
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
-    aoo_processfn processfn_ = nullptr;
-    aoo_eventhandler eventhandler_ = nullptr;
-    void *user_ = nullptr;
     // buffer for summing source audio output
     std::vector<aoo_sample> buffer_;
     // options

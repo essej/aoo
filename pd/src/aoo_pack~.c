@@ -26,7 +26,9 @@ typedef struct _aoo_pack
     t_object x_obj;
     t_float x_f;
     aoo_source *x_aoo_source;
-    aoo_source_settings x_settings;
+    int32_t x_samplerate;
+    int32_t x_blocksize;
+    int32_t x_nchannels;
     t_float **x_vec;
     t_clock *x_clock;
     t_outlet *x_out;
@@ -34,13 +36,6 @@ typedef struct _aoo_pack
     int32_t x_sink_id;
     int32_t x_sink_chn;
 } t_aoo_pack;
-
-static void aoo_pack_tick(t_aoo_pack *x)
-{
-    while (aoo_source_send(x->x_aoo_source)) ;
-
-    aoo_source_handleevents(x->x_aoo_source);
-}
 
 static void aoo_pack_handleevents(t_aoo_pack *x,
                                   const aoo_event *events, int32_t n)
@@ -52,6 +47,14 @@ static void aoo_pack_handleevents(t_aoo_pack *x,
             outlet_anything(x->x_eventout, gensym("ping"), 1, &msg);
         }
     }
+}
+
+static void aoo_pack_tick(t_aoo_pack *x)
+{
+    while (aoo_source_send(x->x_aoo_source)) ;
+
+    aoo_source_handleevents(x->x_aoo_source,
+                            (aoo_eventhandler)aoo_pack_handleevents, x);
 }
 
 static int32_t aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)
@@ -76,7 +79,7 @@ static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 {
     aoo_format_storage f;
-    f.header.nchannels = x->x_settings.nchannels;
+    f.header.nchannels = x->x_nchannels;
     if (aoo_parseformat(x, &f, argc, argv)){
         aoo_source_setoption(x->x_aoo_source, aoo_opt_format, AOO_ARG(f.header));
     }
@@ -160,15 +163,17 @@ static t_int * aoo_pack_perform(t_int *w)
 
 static void aoo_pack_dsp(t_aoo_pack *x, t_signal **sp)
 {
-    x->x_settings.blocksize = sp[0]->s_n;
-    x->x_settings.samplerate = sp[0]->s_sr;
-    aoo_source_setup(x->x_aoo_source, &x->x_settings);
+    x->x_blocksize = sp[0]->s_n;
+    x->x_samplerate = sp[0]->s_sr;
 
-    for (int i = 0; i < x->x_settings.nchannels; ++i){
+    for (int i = 0; i < x->x_nchannels; ++i){
         x->x_vec[i] = sp[i]->s_vec;
     }
 
-    dsp_add(aoo_pack_perform, 2, (t_int)x, (t_int)sp[0]->s_n);
+    aoo_source_setup(x->x_aoo_source, x->x_samplerate,
+                     x->x_blocksize, x->x_nchannels);
+
+    dsp_add(aoo_pack_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 
     clock_unset(x->x_clock);
 }
@@ -198,9 +203,6 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     int src = atom_getfloatarg(0, argc, argv);
     x->x_aoo_source = aoo_source_new(src >= 0 ? src : 0);
 
-    memset(&x->x_settings, 0, sizeof(aoo_source_settings));
-    x->x_settings.userdata = x;
-    x->x_settings.eventhandler = (aoo_eventhandler)aoo_pack_handleevents;
     // since process() and send() are called from the same thread,
     // we can use the minimal buffer size and thus safe some memory.
     int32_t bufsize = 0;
@@ -211,7 +213,9 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     if (nchannels < 1){
         nchannels = 1;
     }
-    x->x_settings.nchannels = nchannels;
+    x->x_nchannels = nchannels;
+    x->x_samplerate = 0;
+    x->x_blocksize = 0;
 
     // arg #3: sink ID
     if (argc > 2){
@@ -246,7 +250,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
 static void aoo_pack_free(t_aoo_pack *x)
 {
     // clean up
-    freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
+    freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
     clock_free(x->x_clock);
     aoo_source_free(x->x_aoo_source);
 }

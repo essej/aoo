@@ -44,7 +44,7 @@ public:
     static void destroy(isource *src);
 
     // setup the source - needs to be synchronized with other method calls!
-    virtual int32_t setup(const aoo_source_settings& settings) = 0;
+    virtual int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) = 0;
 
     // add a new sink (always threadsafe)
     virtual int32_t add_sink(void *sink, int32_t id, aoo_replyfn fn) = 0;
@@ -73,7 +73,7 @@ public:
     virtual int32_t events_available() = 0;
 
     // handle events - will call the event handler (threadsafe, but not rentrant)
-    virtual int32_t handle_events() = 0;
+    virtual int32_t handle_events(aoo_eventhandler fn, void *user) = 0;
 
     //---------------------- options ----------------------//
     // set/get options (always threadsafe)
@@ -168,20 +168,20 @@ public:
     static void destroy(isink *sink);
 
     // setup the sink - needs to be synchronized with other method calls!
-    virtual int32_t setup(const aoo_sink_settings& settings) = 0;
+    virtual int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) = 0;
 
     // handle messages from sources - might call the reply function (threadsafe, but not reentrant)
     virtual int32_t handle_message(const char *data, int32_t n,
                                    void *endpoint, aoo_replyfn fn) = 0;
 
-    // process audio - will call the process callback function (threadsafe, but not reentrant)
-    virtual int32_t process(uint64_t t) = 0;
+    // process audio (threadsafe, but not reentrant)
+    virtual int32_t process(aoo_sample **data, int32_t nsamples, uint64_t t) = 0;
 
     // check if events are available (always thread safe)
     virtual int32_t events_available() = 0;
 
     // handle events - will call the event handler (threadsafe, but not rentrant)
-    virtual int32_t handle_events() = 0;
+    virtual int32_t handle_events(aoo_eventhandler fn, void *user) = 0;
 
     //---------------------- options ----------------------//
     // set/get options (always threadsafe)

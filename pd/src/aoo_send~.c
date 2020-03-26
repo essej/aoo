@@ -26,7 +26,9 @@ typedef struct _aoo_send
     t_object x_obj;
     t_float x_f;
     aoo_source *x_aoo_source;
-    aoo_source_settings x_settings;
+    int32_t x_samplerate;
+    int32_t x_blocksize;
+    int32_t x_nchannels;
     t_float **x_vec;
     // sinks
     t_sink *x_sinks;
@@ -66,13 +68,14 @@ static void aoo_send_handleevents(t_aoo_send *x,
 
 static void aoo_send_tick(t_aoo_send *x)
 {
-    aoo_source_handleevents(x->x_aoo_source);
+    aoo_source_handleevents(x->x_aoo_source,
+                            (aoo_eventhandler)aoo_send_handleevents, x);
 }
 
 static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     aoo_format_storage f;
-    f.header.nchannels = x->x_settings.nchannels;
+    f.header.nchannels = x->x_nchannels;
     if (aoo_parseformat(x, &f, argc, argv)){
         aoo_source_setoption(x->x_aoo_source, aoo_opt_format, AOO_ARG(f.header));
     }
@@ -399,18 +402,22 @@ static t_int * aoo_send_perform(t_int *w)
 
 static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
 {
-    // synchronize with network thread!
-    pthread_mutex_lock(&x->x_mutex);
-    x->x_settings.blocksize = sp[0]->s_n;
-    x->x_settings.samplerate = sp[0]->s_sr;
-    aoo_source_setup(x->x_aoo_source, &x->x_settings);
-    pthread_mutex_unlock(&x->x_mutex);
+    x->x_blocksize = sp[0]->s_n;
+    x->x_samplerate = sp[0]->s_sr;
 
-    for (int i = 0; i < x->x_settings.nchannels; ++i){
+    for (int i = 0; i < x->x_nchannels; ++i){
         x->x_vec[i] = sp[i]->s_vec;
     }
 
-    dsp_add(aoo_send_perform, 2, (t_int)x, (t_int)sp[0]->s_n);
+    // synchronize with network thread!
+    pthread_mutex_lock(&x->x_mutex);
+
+    aoo_source_setup(x->x_aoo_source, x->x_samplerate,
+                     x->x_blocksize, x->x_nchannels);
+
+    pthread_mutex_unlock(&x->x_mutex);
+
+    dsp_add(aoo_send_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 }
 
 
@@ -433,16 +440,14 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     int src = atom_getfloatarg(0, argc, argv);
     x->x_aoo_source = aoo_source_new(src >= 0 ? src : 0);
 
-    memset(&x->x_settings, 0, sizeof(aoo_source_settings));
-    x->x_settings.userdata = x;
-    x->x_settings.eventhandler = (aoo_eventhandler)aoo_send_handleevents;
-
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
     if (nchannels < 1){
         nchannels = 1;
     }
-    x->x_settings.nchannels = nchannels;
+    x->x_nchannels = nchannels;
+    x->x_blocksize = 0;
+    x->x_samplerate = 0;
 
     // make additional inlets
     if (nchannels > 1){
@@ -496,7 +501,7 @@ static void aoo_send_free(t_aoo_send *x)
         e = next;
     }
 
-    freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
+    freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
     if (x->x_sinks){
         freebytes(x->x_sinks, x->x_numsinks * sizeof(t_sink));
     }

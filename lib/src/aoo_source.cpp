@@ -259,24 +259,19 @@ int32_t aoo::source::get_sinkoption(void *endpoint, int32_t id,
     }
 }
 
-int32_t aoo_source_setup(aoo_source *src, const aoo_source_settings *settings){
-    if (settings){
-        return src->setup(*settings);
-    }
-    return 0;
+int32_t aoo_source_setup(aoo_source *src, int32_t samplerate,
+                         int32_t blocksize, int32_t nchannels){
+    return src->setup(samplerate, blocksize, nchannels);
 }
 
-int32_t aoo::source::setup(const aoo_source_settings &settings){
+int32_t aoo::source::setup(int32_t samplerate,
+                           int32_t blocksize, int32_t nchannels){
     unique_lock lock(update_mutex_); // writer lock!
-    if (settings.nchannels > 0
-            && settings.samplerate > 0
-            && settings.nchannels > 0)
+    if (samplerate > 0 && blocksize > 0 && nchannels > 0)
     {
-        eventhandler_ = settings.eventhandler;
-        user_ = settings.userdata;
-        nchannels_ = settings.nchannels;
-        samplerate_ = settings.samplerate;
-        blocksize_ = settings.blocksize;
+        nchannels_ = nchannels;
+        samplerate_ = samplerate;
+        blocksize_ = blocksize;
 
         // reset timer + time DLL filter
         timer_.setup(samplerate_, blocksize_);
@@ -679,11 +674,12 @@ int32_t aoo::source::events_available(){
     return eventqueue_.read_available() > 0;
 }
 
-int32_t aoo_source_handleevents(aoo_source *src){
-    return src->handle_events();
+int32_t aoo_source_handleevents(aoo_source *src,
+                                aoo_eventhandler fn, void *user){
+    return src->handle_events(fn, user);
 }
 
-int32_t aoo::source::handle_events(){
+int32_t aoo::source::handle_events(aoo_eventhandler fn, void *user){
     // always thread-safe
     auto n = eventqueue_.read_available();
     if (n > 0){
@@ -693,7 +689,7 @@ int32_t aoo::source::handle_events(){
             eventqueue_.read(events[i]);
         }
         // send events
-        eventhandler_(user_, events, n);
+        fn(user, events, n);
     }
     return n;
 }

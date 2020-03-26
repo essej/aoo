@@ -54,7 +54,7 @@ class source final : public isource {
     source(int32_t id);
     ~source();
 
-    int32_t setup(const aoo_source_settings& settings) override;
+    int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
     int32_t add_sink(void *sink, int32_t id, aoo_replyfn fn) override;
 
@@ -70,7 +70,7 @@ class source final : public isource {
 
     int32_t events_available() override;
 
-    int32_t handle_events() override;
+    int32_t handle_events(aoo_eventhandler fn, void *user) override;
 
     int32_t set_option(int32_t opt, void *ptr, int32_t size) override;
 
@@ -88,8 +88,6 @@ class source final : public isource {
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
     int32_t samplerate_ = 0;
-    aoo_eventhandler eventhandler_;
-    void *user_;
     // audio encoder
     std::unique_ptr<encoder> encoder_;
     // state
