@@ -598,12 +598,13 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
     do_update(s);
 
     // push event
-    aoo_event event;
-    event.type = AOO_SOURCE_FORMAT_EVENT;
-    event.source.endpoint = endpoint_;
-    event.source.id = id_;
-    eventqueue_.write(event);
-
+    if (eventqueue_.write_available()){
+        aoo_event event;
+        event.type = AOO_SOURCE_FORMAT_EVENT;
+        event.source.endpoint = endpoint_;
+        event.source.id = id_;
+        eventqueue_.write(event);
+    }
     return 1;
 }
 
@@ -701,25 +702,25 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         aoo_event event;
         event.source.endpoint = endpoint_;
         event.source.id = id_;
-        if (lost > 0){
+        if (lost > 0 && eventqueue_.write_available()){
             // push packet loss event
             event.type = AOO_BLOCK_LOSS_EVENT;
             event.block_loss.count = lost;
             eventqueue_.write(event);
         }
-        if (reordered > 0){
+        if (reordered > 0 && eventqueue_.write_available()){
             // push packet reorder event
             event.type = AOO_BLOCK_REORDER_EVENT;
             event.block_reorder.count = reordered;
             eventqueue_.write(event);
         }
-        if (resent > 0){
+        if (resent > 0 && eventqueue_.write_available()){
             // push packet resend event
             event.type = AOO_BLOCK_RESEND_EVENT;
             event.block_resend.count = resent;
             eventqueue_.write(event);
         }
-        if (gap > 0){
+        if (gap > 0 && eventqueue_.write_available()){
             // push packet gap event
             event.type = AOO_BLOCK_GAP_EVENT;
             event.block_gap.count = gap;
@@ -753,13 +754,15 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         LOG_DEBUG("read samples from source " << id_);
 
         if (laststate_ != AOO_SOURCE_STATE_START){
-            // push "start" event
-            aoo_event event;
-            event.type = AOO_SOURCE_STATE_EVENT;
-            event.source.endpoint = endpoint_;
-            event.source.id = id_;
-            event.source_state.state = AOO_SOURCE_STATE_START;
-            eventqueue_.write(event);
+            if (eventqueue_.write_available()){
+                // push "start" event
+                aoo_event event;
+                event.type = AOO_SOURCE_STATE_EVENT;
+                event.source.endpoint = endpoint_;
+                event.source.id = id_;
+                event.source_state.state = AOO_SOURCE_STATE_START;
+                eventqueue_.write(event);
+            }
             laststate_ = AOO_SOURCE_STATE_START;
         }
 
@@ -767,12 +770,14 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
     } else {
         // buffer ran out -> push "stop" event
         if (laststate_ != AOO_SOURCE_STATE_STOP){
-            aoo_event event;
-            event.type = AOO_SOURCE_STATE_EVENT;
-            event.source.endpoint = endpoint_;
-            event.source.id = id_;
-            event.source_state.state = AOO_SOURCE_STATE_STOP;
-            eventqueue_.write(event);
+            if (eventqueue_.write_available()){
+                aoo_event event;
+                event.type = AOO_SOURCE_STATE_EVENT;
+                event.source.endpoint = endpoint_;
+                event.source.id = id_;
+                event.source_state.state = AOO_SOURCE_STATE_STOP;
+                eventqueue_.write(event);
+            }
             laststate_ = AOO_SOURCE_STATE_STOP;
         }
 
@@ -783,11 +788,13 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
 int32_t source_desc::handle_events(aoo_eventhandler handler, void *user){
     // copy events - always lockfree! (the eventqueue is never resized)
     auto n = eventqueue_.read_available();
-    auto events = (aoo_event *)alloca(sizeof(aoo_event) * n);
-    for (int i = 0; i < n; ++i){
-        eventqueue_.read(events[i]);
+    if (n > 0){
+        auto events = (aoo_event *)alloca(sizeof(aoo_event) * n);
+        for (int i = 0; i < n; ++i){
+            eventqueue_.read(events[i]);
+        }
+        handler(user, events, n);
     }
-    handler(user, events, n);
     return n;
 }
 

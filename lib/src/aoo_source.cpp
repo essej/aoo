@@ -991,18 +991,21 @@ void source::handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32_t s
 }
 
 void source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id){
-    shared_lock lock(sinklist_mutex_); // reader lock!
-    auto sink = find_sink(endpoint, id);
-    if (sink){
-        // push ping event
-        aoo_event event;
-        event.type = AOO_PING_EVENT;
-        event.sink.endpoint = endpoint;
-        // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
-        event.sink.id = id;
-        eventqueue_.write(event);
-    } else {
-        LOG_WARNING("ignoring '" << AOO_PING << "' message: sink not found");
+    // push "ping" event
+    if (eventqueue_.write_available()){
+        shared_lock lock(sinklist_mutex_); // reader lock!
+        auto sink = find_sink(endpoint, id);
+        if (sink){
+            // push ping event
+            aoo_event event;
+            event.type = AOO_PING_EVENT;
+            event.sink.endpoint = endpoint;
+            // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
+            event.sink.id = id;
+            eventqueue_.write(event);
+        } else {
+            LOG_WARNING("ignoring '" << AOO_PING << "' message: sink not found");
+        }
     }
 }
 
