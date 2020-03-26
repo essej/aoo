@@ -275,8 +275,9 @@ public:
     int32_t size() const { return buffer_.size(); }
     bool complete() const;
     void add_frame(int32_t which, const char *data, int32_t n);
-    void get_frame(int32_t which, const char *& data, int32_t& n);
+    int32_t get_frame(int32_t which, char * data, int32_t n);
     bool has_frame(int32_t which) const;
+    int32_t frame_size(int32_t which) const;
     int32_t num_frames() const { return numframes_; }
     // data
     int32_t sequence = -1;

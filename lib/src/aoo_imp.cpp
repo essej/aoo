@@ -372,20 +372,36 @@ void block::add_frame(int32_t which, const char *data, int32_t n){
     // LOG_DEBUG("frames: " << frames_);
 }
 
-void block::get_frame(int32_t which, const char *&data, int32_t &n){
+int32_t block::get_frame(int32_t which, char *data, int32_t n){
     assert(framesize_ > 0 && numframes_ > 0);
     if (which >= 0 && which < numframes_){
         auto onset = which * framesize_;
-        data = buffer_.data() + onset;
-        if (which == numframes_ - 1){ // last frame
-            n = size() - onset;
+        auto minsize = (which == numframes_ - 1) ? size() - onset : framesize_;
+        if (n >= minsize){
+            int32_t nbytes;
+            if (which == numframes_ - 1){ // last frame
+                nbytes = size() - onset;
+            } else {
+                nbytes = framesize_;
+            }
+            auto ptr = buffer_.data() + onset;
+            std::copy(ptr, ptr + n, data);
+            return nbytes;
         } else {
-            n = framesize_;
+            LOG_ERROR("buffer too small! got " << n << ", need " << minsize);
         }
     } else {
         LOG_ERROR("frame number " << which << " out of range!");
-        data = nullptr;
-        n = 0;
+    }
+    return 0;
+}
+
+int32_t block::frame_size(int32_t which) const {
+    assert(which < numframes_);
+    if (which == numframes_ - 1){ // last frame
+        return size() - which * framesize_;
+    } else {
+        return framesize_;
     }
 }
 
@@ -1056,25 +1072,26 @@ void dynamic_resampler::read(aoo_sample *data, int32_t n){
 /*//////////////////////// timer //////////////////////*/
 
 timer::timer(const timer& other){
-    delta_ = other.delta_;
     last_ = other.last_;
     elapsed_ = other.elapsed_.load();
 #if AOO_CHECK_TIMER
     static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
+    delta_ = other.delta_;
+    sum_ = other.sum_;
     buffer_ = other.buffer_;
     head_ = other.head_;
-    sum_ = other.sum_;
 #endif
 }
 
 timer& timer::operator=(const timer& other){
-    delta_ = other.delta_;
     last_ = other.last_;
     elapsed_ = other.elapsed_.load();
 #if AOO_CHECK_TIMER
+    static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
+    delta_ = other.delta_;
+    sum_ = other.sum_;
     buffer_ = other.buffer_;
     head_ = other.head_;
-    sum_ = other.sum_;
 #endif
     return *this;
 }
