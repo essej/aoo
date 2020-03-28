@@ -4,7 +4,7 @@
 #
 # use : make PDDIR=/path/to/pure-data/
 #
-# The following command will build the external and install the distributable 
+# The following command will build the external and install the distributable
 # files into a subdirectory called build :
 #
 # make install PDDIR=/path/to/pure-data/ PDLIBDIR=./build
@@ -13,31 +13,37 @@
 lib.name = aoo
 
 # input source files
-class.sources = src/aoo_pack~.c src/aoo_unpack~.c src/aoo_route.c \
-                src/aoo_send~.c src/aoo_receive~.c
+class.sources = \
+    src/aoo_pack~.c \
+    src/aoo_unpack~.c \
+    src/aoo_route.c \
+    src/aoo_send~.c \
+    src/aoo_receive~.c \
+    $(empty)
 
 AOO = ../lib
 
-cflags = -I$(AOO) \
+cflags = \
+    -I$(AOO) \
     -I$(AOO)/src \
     -I$(AOO)/src/lib \
     -Wno-unused -Wno-unused-parameter \
     -fvisibility=hidden \
-    -std=c++14 \
     -DAOO_BUILD \
     -DDLL_EXPORT \
     -DLOGLEVEL=2 \
-    -DAOO_PD_OSCTIMEHACK=0 \
     -DAOO_TIMEFILTER_BANDWIDTH=0.0001 \
     -DAOO_DEBUG_DLL=0 \
     -DAOO_DEBUG_OSCTIME=0 \
-    -DAOO_DEBUG_RESAMPLING=0
+    -DAOO_DEBUG_RESAMPLING=0 \
+    $(empty)
 
 ldlibs =
 
 common.sources = \
     src/aoo_common.c \
-    src/aoo_net.c
+    src/aoo_net.c \
+    $(empty)
 
 shared.sources = \
     $(AOO)/src/aoo_imp.cpp \
@@ -49,6 +55,9 @@ shared.sources = \
     $(AOO)/src/lib/oscpack/osc/OscReceivedElements.cpp \
     $(AOO)/src/lib/oscpack/osc/OscOutboundPacketStream.cpp
 
+# hack to set the C++ standard only for the shared library
+$(shared.sources:.cpp=.o): cxx.flags += -std=c++14
+
 shared.ldlibs = -lopus
 
 define forWindows
@@ -57,7 +66,6 @@ define forWindows
 endef
 
 define forDarwin
-	CC=$(CXX)
     cflags += -mmacosx-version-min=10.9
     ldlibs += -lpthread
 endef

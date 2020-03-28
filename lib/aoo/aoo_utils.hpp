@@ -71,6 +71,11 @@
 namespace aoo {
 
 template<typename T>
+constexpr bool is_pow2(T i){
+    return (i & (i - 1)) == 0;
+}
+
+template<typename T>
 T from_bytes(const char *b){
     union {
         T t;

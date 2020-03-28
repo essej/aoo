@@ -1,8 +1,6 @@
 #pragma once
 
 #include "aoo.h"
-#include "lfqueue.hpp"
-#include "time_dll.hpp"
 
 #include <memory>
 
@@ -45,40 +43,40 @@ public:
     // destroy the AoO source instance
     static void destroy(isource *src);
 
-    // Call from any thread - synchronize with network and audio thread!
-    virtual int32_t setup(const aoo_source_settings& settings) = 0;
+    // setup the source - needs to be synchronized with other method calls!
+    virtual int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) = 0;
 
-    // Call from any thread - synchronize with network and audio thread!
+    // add a new sink (always threadsafe)
     virtual int32_t add_sink(void *sink, int32_t id, aoo_replyfn fn) = 0;
 
-    // Call from any thread - synchronize with network and audio thread!
+    // remova a sink (always threadsafe)
     virtual int32_t remove_sink(void *sink, int32_t id) = 0;
 
-    // Call from any thread - synchronize with network and audio thread!
+    // remove all sinks (always threadsafe)
     virtual void remove_all() = 0;
 
-    // Call from the network thread.
+    // handle messages from sinks - might call the reply function (threadsafe, but not reentrant)
     virtual int32_t handle_message(const char *data, int32_t n,
                                 void *endpoint, aoo_replyfn fn) = 0;
 
-    // Call from the network thread.
+    // send outgoing messages - will call the reply function (threadsafe, but not rentrant)
     virtual int32_t send() = 0;
 
-    // Call from the audio thread.
+    // process audio blocks (threadsafe, but not reentrant)
     // data:        array of channel data (non-interleaved)
     // nsamples:    number of samples per channel
     // t:           current NTP timestamp (see aoo_osctime_get)
     virtual int32_t process(const aoo_sample **data,
                             int32_t nsamples, uint64_t t) = 0;
 
-    // Call from any thread - always thread safe!
+    // check if events are available (always thread safe)
     virtual int32_t events_available() = 0;
 
-    // Call from any thread - always thread safe!
-    virtual int32_t handle_events() = 0;
+    // handle events - will call the event handler (threadsafe, but not rentrant)
+    virtual int32_t handle_events(aoo_eventhandler fn, void *user) = 0;
 
     //---------------------- options ----------------------//
-    // Call from any thread - synchronize with network and audio thread!
+    // set/get options (always threadsafe)
 
     int32_t set_format(aoo_format& f){
         return set_option(aoo_opt_format, AOO_ARG(f));
@@ -124,6 +122,7 @@ public:
     virtual int32_t get_option(int32_t opt, void *ptr, int32_t size) = 0;
 
     //--------------------- sink options --------------------------//
+    // set/get sink options (always threadsafe)
 
     int32_t set_sink_channelonset(void *endpoint, int32_t id, int32_t onset){
         return set_sinkoption(endpoint, id, aoo_opt_channelonset, AOO_ARG(onset));
@@ -168,24 +167,24 @@ public:
     // destroy the AoO sink instance
     static void destroy(isink *sink);
 
-    // Call from any thread - synchronize with network and audio thread!
-    virtual int32_t setup(const aoo_sink_settings& settings) = 0;
+    // setup the sink - needs to be synchronized with other method calls!
+    virtual int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) = 0;
 
-    // Call from the network thread.
+    // handle messages from sources - might call the reply function (threadsafe, but not reentrant)
     virtual int32_t handle_message(const char *data, int32_t n,
                                    void *endpoint, aoo_replyfn fn) = 0;
 
-    // Call from the audio thread.
-    virtual int32_t process(uint64_t t) = 0;
+    // process audio (threadsafe, but not reentrant)
+    virtual int32_t process(aoo_sample **data, int32_t nsamples, uint64_t t) = 0;
 
-    // Call from any thread - always thread safe!
+    // check if events are available (always thread safe)
     virtual int32_t events_available() = 0;
 
-    // Call from any thread - always thread safe!
-    virtual int32_t handle_events() = 0;
+    // handle events - will call the event handler (threadsafe, but not rentrant)
+    virtual int32_t handle_events(aoo_eventhandler fn, void *user) = 0;
 
     //---------------------- options ----------------------//
-    // Call from any thread - synchronize with network and audio thread!
+    // set/get options (always threadsafe)
 
     int32_t reset(){
         return set_option(aoo_opt_reset, AOO_ARGNULL);
@@ -251,6 +250,7 @@ public:
     virtual int32_t get_option(int32_t opt, void *ptr, int32_t size) = 0;
 
     //----------------- source options -------------------//
+    // set/get source options (always threadsafe)
 
     int32_t reset_source(void *endpoint, int32_t id){
         return set_sourceoption(endpoint, id, aoo_opt_reset, AOO_ARGNULL);

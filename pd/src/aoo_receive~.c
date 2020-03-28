@@ -22,7 +22,7 @@
 #define AOO_DEBUG_OSCTIME 0
 #endif
 
-#define DEFBUFSIZE 20
+#define DEFBUFSIZE 25
 
 /*////////////////////// socket listener //////////////////*/
 
@@ -78,6 +78,7 @@ static void* socket_listener_threadfn(void *y)
             // get sink ID
             int32_t id = 0;
             if (aoo_parsepattern(buf, nbytes, &id) > 0){
+                // synchronize with socket_listener_add()/remove()
                 pthread_mutex_lock(&x->mutex);
                 // forward OSC packet to matching receiver(s)
                 for (int i = 0; i < x->numrecv; ++i){
@@ -128,6 +129,7 @@ t_socket_listener* socket_listener_add(t_aoo_receive *r, int port)
     t_socket_listener *x = (t_socket_listener *)pd_findbyclass(s, socket_listener_class);
     if (x){
         // check receiver and add to list
+        // synchronize with socket_listener_threadfn()
         pthread_mutex_lock(&x->mutex);
     #if 1
         for (int i = 0; i < x->numrecv; ++i){
@@ -254,7 +256,9 @@ typedef struct _aoo_receive
     t_object x_obj;
     t_float x_f;
     aoo_sink *x_aoo_sink;
-    aoo_sink_settings x_settings;
+    int32_t x_samplerate;
+    int32_t x_blocksize;
+    int32_t x_nchannels;
     int32_t x_id;
     t_sample **x_vec;
     // sinks
@@ -293,9 +297,11 @@ static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *arg
     return 0;
 }
 
+// called from the network thread
 static void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
                                        int32_t n, void *src, aoo_replyfn fn)
 {
+    // synchronize with aoo_receive_dsp()
     pthread_mutex_lock(&x->x_mutex);
     aoo_sink_handlemessage(x->x_aoo_sink, data, n, src, fn);
     pthread_mutex_unlock(&x->x_mutex);
@@ -303,34 +309,26 @@ static void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
 
 static void aoo_receive_buffersize(t_aoo_receive *x, t_floatarg f)
 {
-    pthread_mutex_lock(&x->x_mutex);
     int32_t bufsize = f;
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_buffersize, AOO_ARG(bufsize));
-    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_receive_timefilter(t_aoo_receive *x, t_floatarg f)
 {
-    pthread_mutex_lock(&x->x_mutex);
     float bandwidth = f;
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_timefilter_bandwidth, AOO_ARG(bandwidth));
-    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_receive_packetsize(t_aoo_receive *x, t_floatarg f)
 {
-    pthread_mutex_lock(&x->x_mutex);
     int32_t packetsize = f;
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_packetsize, AOO_ARG(packetsize));
-    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_receive_ping(t_aoo_receive *x, t_floatarg f)
 {
-    pthread_mutex_lock(&x->x_mutex);
     int32_t interval = f;
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_ping_interval, AOO_ARG(interval));
-    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_receive_reset(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
@@ -339,16 +337,12 @@ static void aoo_receive_reset(t_aoo_receive *x, t_symbol *s, int argc, t_atom *a
         // reset specific source
         t_source *source = aoo_receive_findsource(x, argc, argv);
         if (source){
-            pthread_mutex_lock(&x->x_mutex);
             aoo_sink_setsourceoption(x->x_aoo_sink, source->s_endpoint,
                                      source->s_id, aoo_opt_reset, AOO_ARGNULL);
-            pthread_mutex_unlock(&x->x_mutex);
         }
     } else {
         // reset all sources
-        pthread_mutex_lock(&x->x_mutex);
         aoo_sink_setoption(x->x_aoo_sink, aoo_opt_reset, AOO_ARGNULL);
-        pthread_mutex_unlock(&x->x_mutex);
     }
 }
 
@@ -358,11 +352,9 @@ static void aoo_receive_resend(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
     if (!aoo_parseresend(x, argc, argv, &limit, &interval, &maxnumframes)){
         return;
     }
-    pthread_mutex_lock(&x->x_mutex);
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_limit, AOO_ARG(limit));
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_interval, AOO_ARG(interval));
     aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_maxnumframes, AOO_ARG(maxnumframes));
-    pthread_mutex_unlock(&x->x_mutex);
 }
 
 static void aoo_receive_listsources(t_aoo_receive *x)
@@ -403,11 +395,6 @@ static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
         // stop listening
         x->x_listener = 0;
     }
-}
-
-static void aoo_receive_tick(t_aoo_receive *x)
-{
-    aoo_sink_handleevents(x->x_aoo_sink);
 }
 
 static int32_t aoo_sourceevent_to_atoms(const aoo_source_event *e, t_atom *argv)
@@ -461,10 +448,8 @@ static void aoo_receive_handleevents(t_aoo_receive *x,
                 continue;
             }
             aoo_format_storage f;
-            pthread_mutex_lock(&x->x_mutex);
             int success = aoo_sink_getsourceoption(x->x_aoo_sink, e->endpoint, e->id,
                                                    aoo_opt_format, AOO_ARG(f));
-            pthread_mutex_unlock(&x->x_mutex);
             if (success){
                 int fsize = aoo_printformat(&f, 29, msg + 3); // skip first three atoms
                 outlet_anything(x->x_eventout, gensym("source_format"), fsize + 3, msg);
@@ -527,18 +512,10 @@ static void aoo_receive_handleevents(t_aoo_receive *x,
     }
 }
 
-static void aoo_receive_process(t_aoo_receive *x,
-                                const aoo_sample **data, int32_t n)
+static void aoo_receive_tick(t_aoo_receive *x)
 {
-    assert(sizeof(t_sample) == sizeof(aoo_sample));
-    // copy samples
-    for (int i = 0; i < x->x_settings.nchannels; ++i){
-        memcpy(x->x_vec[i], data[i], sizeof(aoo_sample) * n);
-    }
-    // handle events
-    if (aoo_sink_eventsavailable(x->x_aoo_sink) > 0){
-        clock_delay(x->x_clock, 0);
-    }
+    aoo_sink_handleevents(x->x_aoo_sink,
+                          (aoo_eventhandler)aoo_receive_handleevents, x);
 }
 
 static t_int * aoo_receive_perform(t_int *w)
@@ -546,12 +523,17 @@ static t_int * aoo_receive_perform(t_int *w)
     t_aoo_receive *x = (t_aoo_receive *)(w[1]);
     int n = (int)(w[2]);
 
-    uint64_t t = aoo_pd_osctime(n, x->x_settings.samplerate);
-    if (aoo_sink_process(x->x_aoo_sink, t) <= 0){
+    uint64_t t = aoo_osctime_get();
+    if (aoo_sink_process(x->x_aoo_sink, x->x_vec, n, t) <= 0){
         // output zeros
-        for (int i = 0; i < x->x_settings.nchannels; ++i){
+        for (int i = 0; i < x->x_nchannels; ++i){
             memset(x->x_vec[i], 0, sizeof(t_float) * n);
         }
+    }
+
+    // handle events
+    if (aoo_sink_eventsavailable(x->x_aoo_sink) > 0){
+        clock_delay(x->x_clock, 0);
     }
 
     return w + 3;
@@ -559,18 +541,22 @@ static t_int * aoo_receive_perform(t_int *w)
 
 static void aoo_receive_dsp(t_aoo_receive *x, t_signal **sp)
 {
-    int n = x->x_settings.blocksize = (int)sp[0]->s_n;
-    x->x_settings.samplerate = sp[0]->s_sr;
+    x->x_blocksize = (int)sp[0]->s_n;
+    x->x_samplerate = sp[0]->s_sr;
 
-    for (int i = 0; i < x->x_settings.nchannels; ++i){
+    for (int i = 0; i < x->x_nchannels; ++i){
         x->x_vec[i] = sp[i]->s_vec;
     }
 
+    // synchronize with aoo_receive_handle_message()
     pthread_mutex_lock(&x->x_mutex);
-    aoo_sink_setup(x->x_aoo_sink, &x->x_settings);
+
+    aoo_sink_setup(x->x_aoo_sink, x->x_samplerate,
+                   x->x_blocksize, x->x_nchannels);
+
     pthread_mutex_unlock(&x->x_mutex);
 
-    dsp_add(aoo_receive_perform, 2, (t_int)x, (t_int)n);
+    dsp_add(aoo_receive_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 }
 
 static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
@@ -589,17 +575,14 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
     x->x_id = id >= 0 ? id : 0;
     x->x_aoo_sink = aoo_sink_new(x->x_id);
 
-    memset(&x->x_settings, 0, sizeof(aoo_sink_settings));
-    x->x_settings.userdata = x;
-    x->x_settings.eventhandler = (aoo_eventhandler)aoo_receive_handleevents;
-    x->x_settings.processfn = (aoo_processfn)aoo_receive_process;
-
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
     if (nchannels < 1){
         nchannels = 1;
     }
-    x->x_settings.nchannels = nchannels;
+    x->x_nchannels = nchannels;
+    x->x_blocksize = 0;
+    x->x_samplerate = 0;
 
     // arg #3: port number
     if (argc > 2){
@@ -631,7 +614,7 @@ static void aoo_receive_free(t_aoo_receive *x)
 
     pthread_mutex_destroy(&x->x_mutex);
 
-    freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
+    freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
     if (x->x_sources){
         freebytes(x->x_sources, x->x_numsources * sizeof(t_source));
     }

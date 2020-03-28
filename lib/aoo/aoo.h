@@ -83,6 +83,16 @@ typedef AOO_SAMPLETYPE aoo_sample;
  #define AOO_TIMEFILTER_BANDWIDTH 0.012
 #endif
 
+// try to catch timing issues (e.g. blocking audio thread)
+#ifndef AOO_TIMEFILTER_CHECK
+ #define AOO_TIMEFILTER_CHECK 1
+#endif
+
+// the tolerance for deviations from the nominal block period
+#ifndef AOO_TIMEFILTER_TOLERANCE
+ #define AOO_TIMEFILTER_TOLERANCE 0.1
+#endif
+
 // ping interval (sink to source) in ms
 #ifndef AOO_PING_INTERVAL
  #define AOO_PING_INTERVAL 1000
@@ -343,57 +353,51 @@ typedef struct aoo_format_storage
     char buf[256];
 } aoo_format_storage;
 
-typedef struct aoo_source_settings
-{
-    void *userdata;
-    aoo_eventhandler eventhandler;
-    int32_t samplerate;
-    int32_t blocksize;
-    int32_t nchannels;
-} aoo_source_settings;
-
 // create a new AoO source instance
 AOO_API aoo_source * aoo_source_new(int32_t id);
 
 // destroy the AoO source instance
 AOO_API void aoo_source_free(aoo_source *src);
 
-AOO_API int32_t aoo_source_setup(aoo_source *src, const aoo_source_settings *settings);
+// setup the source - needs to be synchronized with other method calls!
+AOO_API int32_t aoo_source_setup(aoo_source *src, int32_t samplerate,
+                                 int32_t blocksize, int32_t nchannels);
 
-// Call from any thread - synchronize with network and audio thread!
+// add a new sink (always threadsafe)
 AOO_API int32_t aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn);
 
-// Call from any thread - synchronize with network and audio thread!
+// remove a sink (always threadsafe)
 AOO_API int32_t aoo_source_removesink(aoo_source *src, void *sink, int32_t id);
 
-// Call from any thread - synchronize with network and audio thread!
+// remove all sinks (always threadsafe)
 AOO_API void aoo_source_removeall(aoo_source *src);
 
-// Call from the network thread.
+// handle messages from sinks - might call the reply function (threadsafe, but not reentrant)
 AOO_API int32_t aoo_source_handlemessage(aoo_source *src, const char *data, int32_t n,
                                  void *sink, aoo_replyfn fn);
 
-// Call from the network thread.
+// send outgoing messages - will call the reply function (threadsafe, but not rentrant)
 AOO_API int32_t aoo_source_send(aoo_source *src);
 
-// Call from the audio thread.
+// process audio blocks (threadsafe, but not reentrant)
 // data:        array of channel data (non-interleaved)
 // nsamples:    number of samples per channel
 // t:           current NTP timestamp (see aoo_osctime_get)
 AOO_API int32_t aoo_source_process(aoo_source *src, const aoo_sample **data,
                            int32_t nsamples, uint64_t t);
 
-// Call from any thread - always thread safe!
+// check if events are available (always thread safe)
 AOO_API int32_t aoo_source_eventsavailable(aoo_source *src);
 
-// Call from any thread - always thread safe!
-AOO_API int32_t aoo_source_handleevents(aoo_source *src);
+// handle events - will call the event handler (threadsafe, but not reentrant)
+AOO_API int32_t aoo_source_handleevents(aoo_source *src, aoo_eventhandler fn, void *user);
 
-// Call from any thread - synchronize with network and audio thread!
+// set/get options (always threadsafe)
 AOO_API int32_t aoo_source_setoption(aoo_source *src, int32_t opt, void *p, int32_t size);
 
 AOO_API int32_t aoo_source_getoption(aoo_source *src, int32_t opt, void *p, int32_t size);
 
+// set/get sink options (always threadsafe)
 AOO_API int32_t aoo_source_setsinkoption(aoo_source *src, void *endpoint, int32_t id,
                                  int32_t opt, void *p, int32_t size);
 
@@ -411,49 +415,36 @@ using aoo_sink = aoo::isink;
 typedef struct aoo_sink aoo_sink;
 #endif
 
-typedef void (*aoo_processfn)(
-        void *,                 // user data
-        const aoo_sample **,    // sample data
-        int32_t                 // number of samples per channel
-);
-
-typedef struct aoo_sink_settings
-{
-    void *userdata;
-    aoo_processfn processfn;
-    aoo_eventhandler eventhandler;
-    int32_t samplerate;
-    int32_t blocksize;
-    int32_t nchannels;
-} aoo_sink_settings;
-
 // create a new AoO sink instance
 AOO_API aoo_sink * aoo_sink_new(int32_t id);
 
 // destroy the AoO sink instance
 AOO_API void aoo_sink_free(aoo_sink *sink);
 
-// Call from any thread - synchronize with network and audio thread!
-AOO_API int32_t aoo_sink_setup(aoo_sink *sink, const aoo_sink_settings *settings);
+// setup the sink - needs to be synchronized with other method calls!
+AOO_API int32_t aoo_sink_setup(aoo_sink *sink, int32_t samplerate,
+                               int32_t blocksize, int32_t nchannels);
 
-// Call from the network thread.
+// handle messages from sources - might call the reply function (threadsafe, but not reentrant)
 AOO_API int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
                             void *src, aoo_replyfn fn);
 
-// Call from the audio thread.
-AOO_API int32_t aoo_sink_process(aoo_sink *sink, uint64_t t);
+// process audio (threadsafe, but not reentrant)
+AOO_API int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,
+                                 int32_t nsamples, uint64_t t);
 
-// Call from any thread - always thread safe!
+// check if events are available (always thread safe)
 AOO_API int32_t aoo_sink_eventsavailable(aoo_sink *sink);
 
-// Call from any thread - always thread safe!
-AOO_API int32_t aoo_sink_handleevents(aoo_sink *sink);
+// handle events - will call the event handler (threadsafe, but not rentrant)
+AOO_API int32_t aoo_sink_handleevents(aoo_sink *sink, aoo_eventhandler fn, void *user);
 
-// Call from any thread - synchronize with network and audio thread!
+// set/get options (always threadsafe)
 AOO_API int32_t aoo_sink_setoption(aoo_sink *sink, int32_t opt, void *p, int32_t size);
 
 AOO_API int32_t aoo_sink_getoption(aoo_sink *sink, int32_t opt, void *p, int32_t size);
 
+// set/get source options (always threadsafe)
 AOO_API int32_t aoo_sink_setsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
                               int32_t opt, void *p, int32_t size);
 
