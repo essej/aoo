@@ -23,8 +23,7 @@ A new Version has been started again in 2020, targeting a network streaming Proj
 
 Also a Seminar on the IEM is planed, to organize and do a Internet Concert using this tools, for further enhancement and proof of concept.
 
-New version was mainly done by Christof Ressi, based on fragments from Wolfgang Jäger in 2014, based on the idea of Winfried Ritsch with a first implementation.
-
+Based on the AOO idea of Winfried Ritsch with a first draft, the new version going to be V1.0 and more, was mainly written by Christof Ressi, as a complete rewrite of the version from Wolfgang Jäger in C in 2014.
 
 features
 --------
@@ -84,6 +83,7 @@ Note: TO BE DONE
    
 Pd externals
 ------------
+
 * [aoo_pack~] takes audio signals and outputs OSC messages (also accepts /request messages from sinks)
 * [aoo_unpack~] takes OSC messages from several sources and turns them into audio signals
 * [aoo_route] takes OSC messages and routes them based on the ID
@@ -92,6 +92,7 @@ Pd externals
 
 OSC messages
 ------------
+
 * message to notify sinks about format changes:
 
  /AoO/<sink>/format src(i) salt(i) nchannels(i) samplerate(i) blocksize(i) codec(s) options(b)
@@ -118,6 +119,7 @@ todo
 
 * fade in/fade out ?
 * unit tests!
+* publish
 
 download
 --------
