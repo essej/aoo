@@ -4,35 +4,84 @@ Audio over OSC
 Audio over OSC is aimed to be a message based audio system using 
 Open Sound Control OSC_ as a syntax format.
 
-A first implementation a library with externals for PureData (Pd).
+History
+-------
+
+A first implementation a library with externals for PureData (Pd) has been done 2014, but major issues with network objects made this version unpracticable.
+More on this version of message based audio system was published at LAC 2014 [LAC14]
+
+.. [AOO-LAC14] see docu/lac2014_aoo.pdf
+
+
+A new Version has been started again in 2020, targeting a network streaming Project for Kunsthaus Graz for Bill Fontana using a independent wireless network infrastructure Funkfeuer in Graz [0xFF].
 
 .. _OSC: http://opensoundcontrol.org/
 
 .. _Pd: http://puredata.info/
 
-More on message based audio system see docu/lac2014_aoo.pdf
+.. _0xFF: http://graz.funkfeuer.at/
+
+Also a Seminar on the IEM is planed, to organize and do a Internet Concert using this tools, for further enhancement and proof of concept.
+
+New version was mainly done by Christof Ressi, based on fragments from Wolfgang Jäger in 2014, based on the idea of Winfried Ritsch with a first implementation.
+
 
 features
 --------
 
 * each endpoint can have multiple sources/sinks (each with their own ID)
-* AoO sources can send audio to any sink at any time; if the sink ID is a wildcard,
-  it will send to all sinks on the endpoint.
-* AoO sinks can listen to several sources at the same time
+* AoO sources can send audio to any sink at any time; 
+* AoO sinks can listen and add signals to several sources at the same time
 * AoO sinks and sources can operate at different blocksizes and samplerates
 * AoO sources can dynamically change the channel onset
+* AoO is internet time based, with means all signal from the same timestamp are added correctly at the same point in the receiver.
 * timing differences (e.g. because of clock drifts) are adjusted via a time DLL filter + dynamic resampling
-* the stream format can be set dynamically
+* the stream format can be set per audio message differently
 * plugin API to register codecs; currently only PCM (uncompressed) and Opus (compressed) are implemented
-* aoo_source and aoo_sink C++ classes have a lock-free ringbuffer, so that audio processing and network IO
-  can run on different threads.
-  In the case of aoo_sink, the buffer also helps to deal with network jitter, packet reordering
+* aoo_source and aoo_sink C++ classes have a lock-free ringbuffer, so that audio processing and network IO can run on different threads.
+* aoo_sink buffer helps to deal with network jitter, packet reordering
   and packet loss at the cost of latency. The size can be adjusted dynamically.
 * aoo_sink can ask the source(s) to resend dropped packets, the settings are free adjustable.
 * settable UDP packet size for audio data (to optimize for local networks or the internet)
 * sinks automatically send pings to all its sources (at a configurable rate).
   For example, sources might want to stop sending if they don't receive a ping in a certain time period.
 
+
+Installation
+------------
+
+from source
+...........
+
+Get the source:
+
+over ssh::
+
+   git clone git@git.iem.at:cm/aoo.git
+
+or https::
+
+   git clone https://git.iem.at/pd/aoo.git
+
+make it (using pd-libbuilder)::
+
+    make -C aoo/pd clean
+    make -C aoo/pd -j4 
+
+install eg. in aoo dir::
+
+    make -C aoo/pd PDLIBDIR=./ install
+
+use help and testfiles there to test it.
+
+from deken
+..........
+
+in Pd->Help->"find in externals" enter aoo
+
+Note: TO BE DONE
+
+   
 Pd externals
 ------------
 * [aoo_pack~] takes audio signals and outputs OSC messages (also accepts /request messages from sinks)
@@ -80,7 +129,7 @@ git clone https://git.iem.at/cm/aoo
 content
 -------
 
-docu -- documentation, papers
+doku -- documentation, papers
  
 pd -- Pd library for OSC, first implementation for experiments
 
@@ -89,7 +138,8 @@ lib -- C++ library with a C interface, create and manage AoO sources/sinks
 Changelog
 ---------
 
-- New project page on Feb.2014 - winfried ritsch
+- April 2020: go public
+- New project page on Feb.2014 - winfried ritsch now on git.iem.at
 - checked in in sourceforge repo (see above) 
 - added aao_lib
 - New test implementation Feb. 2020 - christof ressi
@@ -98,5 +148,5 @@ About Document
 --------------
 :authors: Winfried Ritsch, Christof Ressi
 :date: march 2014 - february 2020
-:version: 0.1
+:version: 1.0-a1
  
