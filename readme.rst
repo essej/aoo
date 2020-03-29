@@ -1,17 +1,16 @@
-Audio over OSC
-==============
+Audio over OSC based audio streaming
+====================================
 
-Audio over OSC is aimed to be a message based audio system using 
+"Audio over OSC" aka *AoO* is aimed to be a message based audio system using 
 Open Sound Control OSC_ as a syntax format.
 
-History
+history
 -------
 
-A first implementation a library with externals for PureData (Pd) has been done 2014, but major issues with network objects made this version unpracticable.
+The vision of *AoO* has been done in 2009, a first implementation a library with externals for PureData (Pd) has been done 2010, but major issues with needed networking objects, like netsend, netreceive made this version unpracticable.
 More on this version of message based audio system was published at LAC 2014 [LAC14]
 
 .. [AOO-LAC14] see docu/lac2014_aoo.pdf
-
 
 A new Version has been started again in 2020, targeting a network streaming Project for Kunsthaus Graz for Bill Fontana using a independent wireless network infrastructure Funkfeuer in Graz [0xFF].
 
@@ -21,9 +20,9 @@ A new Version has been started again in 2020, targeting a network streaming Proj
 
 .. _0xFF: http://graz.funkfeuer.at/
 
-Also a Seminar on the IEM is planed, to organize and do a Internet Concert using this tools, for further enhancement and proof of concept.
+Also a seminar on the IEM to scratch, rehearse and play an internet concert using this tools, for further enhancement and proof of concept, is in progress (April 2020)
 
-Based on the AOO idea of Winfried Ritsch with a first draft, the new version going to be V1.0 and more, was mainly written by Christof Ressi, as a complete rewrite of the version from Wolfgang Jäger in C in 2014.
+Based on the AOO idea of Winfried Ritsch with a first draft of realisation on embedded devices, the new version going to be V1.0 and more, was mainly written by Christof Ressi, as a complete rewrite of the version from Wolfgang Jäger in C in 2010.
 
 features
 --------
