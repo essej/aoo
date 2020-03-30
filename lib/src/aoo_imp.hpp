@@ -206,13 +206,11 @@ public:
     }
 
     bool set_format(aoo_format& fmt);
-    bool get_format(aoo_format_storage& f) const {
-        return codec_->encoder_getformat(obj_, &f) > 0;
+    bool get_format(aoo_format_storage& fmt) const {
+        return codec_->encoder_getformat(obj_, &fmt) > 0;
     }
-    int32_t write_format(int32_t& nchannels, int32_t& samplerate, int32_t& blocksize,
-                  char *buf, int32_t size){
-        return codec_->encoder_writeformat(obj_,&nchannels, &samplerate,
-                                     &blocksize,buf, size);
+    int32_t write_format(aoo_format& fmt, char *buf, int32_t size){
+        return codec_->encoder_writeformat(obj_, &fmt, buf, size);
     }
     int32_t encode(const aoo_sample *s, int32_t n, char *buf, int32_t size){
         return codec_->encoder_encode(obj_, s, n, buf, size);
@@ -230,8 +228,7 @@ public:
     bool get_format(aoo_format_storage& f) const {
         return codec_->decoder_getformat(obj_, &f) > 0;
     }
-    int32_t read_format(int32_t nchannels, int32_t samplerate, int32_t blocksize,
-                 const char *opt, int32_t size);
+    int32_t read_format(const aoo_format& fmt, const char *opt, int32_t size);
     int32_t decode(const char *buf, int32_t size, aoo_sample *s, int32_t n){
         return codec_->decoder_decode(obj_, buf, size, s, n);
     }

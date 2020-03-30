@@ -179,13 +179,11 @@ int32_t encoder_setformat(void *enc, aoo_format *f){
 
 #define encoder_getformat codec_getformat
 
-int32_t encoder_writeformat(void *enc, int32_t *nchannels,int32_t *samplerate,
-                      int32_t *blocksize, char *buf, int32_t size){
+int32_t encoder_writeformat(void *enc, aoo_format *fmt,
+                            char *buf, int32_t size){
     if (size >= 12){
         auto c = static_cast<encoder *>(enc);
-        *nchannels = c->format.header.nchannels;
-        *samplerate = c->format.header.samplerate;
-        *blocksize = c->format.header.blocksize;
+        memcpy(fmt, &c->format.header, sizeof(aoo_format));
         aoo::to_bytes<int32_t>(c->format.bitrate, buf);
         aoo::to_bytes<int32_t>(c->format.complexity, buf + 4);
         aoo::to_bytes<int32_t>(c->format.signal_type, buf + 8);
@@ -297,15 +295,13 @@ int32_t decoder_setformat(void *dec, aoo_format *f)
 
 #define decoder_getformat codec_getformat
 
-int32_t decoder_read(void *dec, int32_t nchannels, int32_t samplerate,
-                     int32_t blocksize, const char *buf, int32_t size){
+int32_t decoder_readformat(void *dec, const aoo_format *fmt,
+                           const char *buf, int32_t size){
     if (size >= 12){
         auto c = static_cast<decoder *>(dec);
         aoo_format_opus f;
         // opus will validate for us
-        f.header.nchannels = nchannels;
-        f.header.samplerate = samplerate;
-        f.header.blocksize = blocksize;
+        memcpy(&f.header, fmt, sizeof(aoo_format));
         f.bitrate = aoo::from_bytes<int32_t>(buf);
         f.complexity = aoo::from_bytes<int32_t>(buf + 4);
         f.signal_type = aoo::from_bytes<int32_t>(buf + 8);
@@ -333,7 +329,7 @@ aoo_codec codec_class = {
     decoder_free,
     decoder_setformat,
     decoder_getformat,
-    decoder_read,
+    decoder_readformat,
     decoder_decode
 };
 

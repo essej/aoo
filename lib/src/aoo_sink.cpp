@@ -590,7 +590,7 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
     }
 
     // read format
-    decoder_->read_format(f.nchannels, f.samplerate, f.blocksize, settings, size);
+    decoder_->read_format(f, settings, size);
 
     do_update(s);
 

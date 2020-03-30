@@ -229,14 +229,12 @@ int32_t encoder_encode(void *enc,
     return n * samplesize;
 }
 
-int32_t encoder_writeformat(void *enc, int32_t *nchannels, int32_t *samplerate,
-                      int32_t *blocksize, char *buf, int32_t size)
+int32_t encoder_writeformat(void *enc, aoo_format *fmt,
+                            char *buf, int32_t size)
 {
     if (size >= 4){
         auto c = static_cast<codec *>(enc);
-        *nchannels = c->format.header.nchannels;
-        *samplerate = c->format.header.samplerate;
-        *blocksize = c->format.header.blocksize;
+        memcpy(fmt, &c->format.header, sizeof(aoo_format));
         aoo::to_bytes<int32_t>(c->format.bitdepth, buf);
 
         return 4;
@@ -295,17 +293,16 @@ int32_t decoder_decode(void *dec,
     return size / samplesize;
 }
 
-int32_t decoder_readformat(void *dec, int32_t nchannels, int32_t samplerate,
-                     int32_t blocksize, const char *buf, int32_t size)
+int32_t decoder_readformat(void *dec, const aoo_format *fmt,
+                           const char *buf, int32_t size)
 {
     if (size >= 4){
         auto c = static_cast<codec *>(dec);
         // TODO validate
-        if (nchannels > 0 && samplerate > 0 && blocksize > 0){
-            c->format.header.codec = AOO_CODEC_PCM;
-            c->format.header.nchannels = nchannels;
-            c->format.header.samplerate = samplerate;
-            c->format.header.blocksize = blocksize;
+        if (!strcmp(fmt->codec, AOO_CODEC_PCM) && fmt->blocksize > 0
+                && fmt->samplerate > 0 && fmt->blocksize > 0)
+        {
+            memcpy(&c->format.header, fmt, sizeof(aoo_format));
             c->format.bitdepth = (aoo_pcm_bitdepth)aoo::from_bytes<int32_t>(buf);
             print_settings(c->format);
             return 4;

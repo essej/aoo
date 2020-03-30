@@ -761,10 +761,8 @@ bool source::send_format(){
     int32_t salt = salt_;
 
     aoo_format fmt;
-    fmt.codec = encoder_->name();
     char settings[AOO_CODEC_MAXSETTINGSIZE];
-    auto size = encoder_->write_format(fmt.nchannels, fmt.samplerate,
-                               fmt.blocksize, settings, sizeof(settings));
+    auto size = encoder_->write_format(fmt, settings, sizeof(settings));
 
     updatelock.unlock();
 

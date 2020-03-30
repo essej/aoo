@@ -478,20 +478,16 @@ typedef int32_t (*aoo_codec_getformat)(void *, aoo_format_storage *);
 
 typedef int32_t (*aoo_codec_writeformat)(
         void *,         // the encoder instance
-        int32_t *,      // nchannels
-        int32_t *,      // samplerate
-        int32_t *,      // blocksize
+        aoo_format *,   // the base format
         char *,         // output buffer
         int32_t         // buffer size
 );
 
 typedef int32_t (*aoo_codec_readformat)(
-        void *,         // the decoder instance
-        int32_t,        // nchannels
-        int32_t,        // samplerate
-        int32_t,        // blocksize
-        const char *,   // input buffer
-        int32_t         // number of bytes
+        void *,             // the decoder instance
+        const aoo_format *, // the base format
+        const char *,       // input buffer
+        int32_t             // number of bytes
 );
 
 typedef int32_t (*aoo_codec_encode)(

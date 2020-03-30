@@ -177,14 +177,12 @@ bool decoder::set_format(aoo_format& fmt){
     }
 }
 
-int32_t decoder::read_format(int32_t nchannels, int32_t samplerate, int32_t blocksize,
-             const char *opt, int32_t size){
-    auto result = codec_->decoder_readformat(obj_, nchannels, samplerate,
-                                blocksize, opt, size);
+int32_t decoder::read_format(const aoo_format& fmt, const char *opt, int32_t size){
+    auto result = codec_->decoder_readformat(obj_, &fmt, opt, size);
     if (result >= 0){
-        nchannels_ = nchannels;
-        samplerate_ = samplerate;
-        blocksize_ = blocksize;
+        nchannels_ = fmt.nchannels;
+        samplerate_ = fmt.samplerate;
+        blocksize_ = fmt.blocksize;
     }
     return result;
 }
