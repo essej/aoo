@@ -52,7 +52,10 @@ static void aoo_unpack_list(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv
     for (int i = 0; i < argc; ++i){
         msg[i] = (int)(argv[i].a_type == A_FLOAT ? argv[i].a_w.w_float : 0.f);
     }
+    // handle incoming message
     aoo_sink_handlemessage(x->x_aoo_sink, msg, argc, x, (aoo_replyfn)aoo_pack_reply);
+    // send outgoing messages
+    while (aoo_sink_send(x->x_aoo_sink)) ;
 }
 
 static void aoo_unpack_buffersize(t_aoo_unpack *x, t_floatarg f)

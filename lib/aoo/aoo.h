@@ -429,6 +429,9 @@ AOO_API int32_t aoo_sink_setup(aoo_sink *sink, int32_t samplerate,
 AOO_API int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
                             void *src, aoo_replyfn fn);
 
+// send outgoing messages - will call the reply function (threadsafe, but not rentrant)
+AOO_API int32_t aoo_sink_send(aoo_sink *sink);
+
 // process audio (threadsafe, but not reentrant)
 AOO_API int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,
                                  int32_t nsamples, uint64_t t);

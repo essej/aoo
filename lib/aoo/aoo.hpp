@@ -174,6 +174,9 @@ public:
     virtual int32_t handle_message(const char *data, int32_t n,
                                    void *endpoint, aoo_replyfn fn) = 0;
 
+    // send outgoing messages - will call the reply function (threadsafe, but not rentrant)
+    virtual int32_t send() = 0;
+
     // process audio (threadsafe, but not reentrant)
     virtual int32_t process(aoo_sample **data, int32_t nsamples, uint64_t t) = 0;
 

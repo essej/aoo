@@ -317,9 +317,19 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n, void *endpoint, a
     return 0;
 }
 
-#if AOO_DEBUG_RESAMPLING
-thread_local int32_t debug_counter = 0;
-#endif
+int32_t aoo_sink_send(aoo_sink *sink){
+    return sink->send();
+}
+
+int32_t aoo::sink::send(){
+    bool didsomething = false;
+    for (auto& s: sources_){
+        if (s.send(*this)){
+            didsomething = true;
+        }
+    }
+    return didsomething;
+}
 
 int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,
                          int32_t nsamples, uint64_t t) {
@@ -342,7 +352,7 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
     } else if (state == timer::state::error){
         // recover sources
         for (auto& s : sources_){
-            s.recover();
+            s.request_recover();
         }
         timer_.reset();
     } else {
@@ -466,29 +476,13 @@ int32_t sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
     if (src){
         return src->handle_data(*this, salt, data);
     } else {
-        // discard data message and request format!
-        request_format(endpoint, fn, id);
+        // discard data message, add source and request format!
+        sources_.emplace_front(endpoint, fn, id, salt);
+        src = &sources_.front();
+        src->request_format();
         return 0;
     }
 }
-
-// /AoO/<src>/request <sink>
-
-void sink::request_format(void *endpoint, aoo_replyfn fn, int32_t id) const {
-    LOG_VERBOSE("request format for source " << id);
-    char buf[AOO_MAXPACKETSIZE];
-    osc::OutboundPacketStream msg(buf, sizeof(buf));
-
-    // make OSC address pattern
-    const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_REQUEST);
-    char address[max_addr_size];
-    snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, id, AOO_REQUEST);
-
-    msg << osc::BeginMessage(address) << id_ << osc::EndMessage;
-
-    fn(endpoint, msg.Data(), msg.Size());
-}
-
 
 /*////////////////////////// source_desc /////////////////////////////*/
 
@@ -503,6 +497,7 @@ source_desc::source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t sal
     event.source.id = id;
     eventqueue_.write(event);
     LOG_DEBUG("add new source with id " << id);
+    resendqueue_.resize(256, 1);
 }
 
 int32_t source_desc::get_format(aoo_format_storage &format){
@@ -617,7 +612,7 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
     // the source format might have changed and we haven't noticed,
     // e.g. because of dropped UDP packets.
     if (salt != salt_){
-        s.request_format(endpoint_, fn_, id_);
+        streamstate_.request_format();
         return 0;
     }
 
@@ -647,28 +642,32 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
         return 0;
     }
 
-    // try to send blocks
-    send_data();
+    // process blocks and send audio
+    process_blocks();
 
 #if 1
-    pop_outdated_blocks();
+    check_outdated_blocks();
 #endif
 
     // check and resend missing blocks
     check_missing_blocks(s);
 
-    // we can release the lock now!
-    // this makes sure that the reply function in send()
-    // is called without any lock to avoid deadlocks.
-    lock.unlock();
-
-    // send request messages
-    request_data(s, salt);
-
-    // ping source
-    ping(s);
-
     return 1;
+}
+
+bool source_desc::send(const sink& s){
+    bool didsomething = false;
+
+    if (send_format_request(s)){
+        didsomething = true;
+    }
+    if (send_data_request(s)){
+        didsomething = true;
+    }
+    if (send_ping(s)){
+        didsomething = true;
+    }
+    return didsomething;
 }
 
 bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
@@ -751,7 +750,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
             }
         }
 
-        LOG_DEBUG("read samples from source " << id_);
+        // LOG_DEBUG("read samples from source " << id_);
 
         if (laststate_ != AOO_SOURCE_STATE_START){
             if (eventqueue_.write_available()){
@@ -811,7 +810,7 @@ bool source_desc::check_packet(const data_packet &d){
     bool large_gap = newest_ > 0 && diff > blockqueue_.capacity();
 
     // check if we need to recover
-    bool recover = streamstate_.get_recover();
+    bool recover = streamstate_.need_recover();
 
     // check for empty block (= skipped)
     bool dropped = d.totalsize == 0;
@@ -922,7 +921,7 @@ bool source_desc::add_packet(const data_packet& d){
     return true;
 }
 
-void source_desc::send_data(){
+void source_desc::process_blocks(){
     // Transfer all consecutive complete blocks as long as
     // no previous (expected) blocks are missing.
     if (blockqueue_.empty()){
@@ -974,7 +973,7 @@ void source_desc::send_data(){
     LOG_DEBUG("next: " << next_);
 }
 
-void source_desc::pop_outdated_blocks(){
+void source_desc::check_outdated_blocks(){
     // pop outdated blocks (shouldn't really happen...)
     while (!blockqueue_.empty() &&
            (newest_ - blockqueue_.front().sequence) >= blockqueue_.capacity())
@@ -1018,14 +1017,14 @@ void source_desc::check_missing_blocks(const sink& s){
     // resend incomplete blocks except for the last block
     LOG_DEBUG("resend incomplete blocks");
     for (auto it = blockqueue_.begin(); it != (blockqueue_.end() - 1); ++it){
-        if (!it->complete()){
+        if (!it->complete() && resendqueue_.write_available()){
             // insert ack (if needed)
             auto& ack = ack_list_.get(it->sequence);
             if (ack.check(s.elapsed_time(), s.resend_interval())){
                 for (int i = 0; i < it->num_frames(); ++i){
                     if (!it->has_frame(i)){
                         if (numframes < s.resend_maxnumframes()){
-                            retransmit_list_.push_back(data_request { it->sequence, i });
+                            resendqueue_.write(data_request { it->sequence, i });
                             numframes++;
                         } else {
                             goto resend_incomplete_done;
@@ -1043,12 +1042,12 @@ resend_incomplete_done:
     for (auto it = blockqueue_.begin(); it != blockqueue_.end(); ++it){
         auto missing = it->sequence - next;
         if (missing > 0){
-            for (int i = 0; i < missing; ++i){
+            for (int i = 0; i < missing && resendqueue_.write_available(); ++i){
                 // insert ack (if necessary)
                 auto& ack = ack_list_.get(next + i);
                 if (ack.check(s.elapsed_time(), s.resend_interval())){
                     if (numframes + it->num_frames() <= s.resend_maxnumframes()){
-                        retransmit_list_.push_back(data_request { next + i, -1 }); // whole block
+                        resendqueue_.write(data_request { next + i, -1 }); // whole block
                         numframes += it->num_frames();
                     } else {
                         goto resend_missing_done;
@@ -1081,54 +1080,82 @@ resend_missing_done:
 #endif
 }
 
+// /AoO/<src>/request <sink>
+
+bool source_desc::send_format_request(const sink& s) {
+    if (streamstate_.need_format()){
+        LOG_VERBOSE("request format for source " << id_);
+        char buf[AOO_MAXPACKETSIZE];
+        osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+        // make OSC address pattern
+        const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_REQUEST);
+        char address[max_addr_size];
+        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, id_, AOO_REQUEST);
+
+        msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
+
+        dosend(msg.Data(), msg.Size());
+
+        return true;
+    } else {
+        return false;
+    }
+}
+
+
 // /AoO/<src>/resend <sink> <salt> <seq0> <frame0> <seq1> <frame1> ...
 
-void source_desc::request_data(const sink &s, int32_t salt){
+int32_t source_desc::send_data_request(const sink &s){
     // called without lock!
-    if (retransmit_list_.empty()){
-        return;
-    }
+    shared_lock lock(mutex_);
+    int32_t salt = salt_;
+    lock.unlock();
 
-    // send request messages
-    char buf[AOO_MAXPACKETSIZE];
-    osc::OutboundPacketStream msg(buf, sizeof(buf));
+    int32_t numrequests = 0;
+    while ((numrequests = resendqueue_.read_available()) > 0){
+        // send request messages
+        char buf[AOO_MAXPACKETSIZE];
+        osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-    // make OSC address pattern
-    const int32_t maxaddrsize = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_RESEND);
-    char address[maxaddrsize];
-    snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, id_, AOO_RESEND);
+        // make OSC address pattern
+        const int32_t maxaddrsize = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_RESEND);
+        char address[maxaddrsize];
+        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, id_, AOO_RESEND);
 
-    const int32_t maxdatasize = s.packetsize() - maxaddrsize - 16; // id + salt + padding
-    const int32_t maxrequests = maxdatasize / 10; // 2 * (int32_t + typetag)
-    auto d = div(retransmit_list_.size(), maxrequests);
+        const int32_t maxdatasize = s.packetsize() - maxaddrsize - 16; // id + salt + padding
+        const int32_t maxrequests = maxdatasize / 10; // 2 * (int32_t + typetag)
+        auto d = div(numrequests, maxrequests);
 
-    auto dorequest = [&](const data_request* data, int32_t n){
-        msg << osc::BeginMessage(address) << s.id() << salt;
-        for (int i = 0; i < n; ++i){
-            msg << data[i].sequence << data[i].frame;
+        auto dorequest = [&](int32_t n){
+            msg << osc::BeginMessage(address) << s.id() << salt;
+            while (n--){
+                data_request request;
+                resendqueue_.read(request);
+                msg << request.sequence << request.frame;
+            }
+            msg << osc::EndMessage;
+
+            dosend(msg.Data(), msg.Size());
+        };
+
+        for (int i = 0; i < d.quot; ++i){
+            dorequest(maxrequests);
         }
-        msg << osc::EndMessage;
-
-        send(msg.Data(), msg.Size());
-    };
-
-    for (int i = 0; i < d.quot; ++i){
-        dorequest(retransmit_list_.data() + i * maxrequests, maxrequests);
+        if (d.rem > 0){
+            dorequest(d.rem);
+        }
     }
-    if (d.rem > 0){
-        dorequest(retransmit_list_.data() + retransmit_list_.size() - d.rem, d.rem);
-    }
-
-    retransmit_list_.clear();
+    return numrequests;
 }
 
 // AoO/<id>/ping <sink>
 
-void source_desc::ping(const sink& s){
+bool source_desc::send_ping(const sink& s){
     // called without lock!
 
     if (s.ping_interval() == 0){
-        return;
+        return false;
     }
     auto now = s.elapsed_time();
     if ((now - lastpingtime_) > s.ping_interval()){
@@ -1142,12 +1169,14 @@ void source_desc::ping(const sink& s){
 
         msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
 
-        send(msg.Data(), msg.Size());
+        dosend(msg.Data(), msg.Size());
 
         lastpingtime_ = now;
 
         LOG_DEBUG("send ping to source " << id_);
+        return true;
     }
+    return false;
 }
 
 } // aoo

@@ -18,6 +18,7 @@ struct stream_state {
         resent_ = 0;
         gap_ = 0;
         recover_ = false;
+        format_ = false;
     }
 
     void add_lost(int32_t n) { lost_ += n; }
@@ -33,14 +34,18 @@ struct stream_state {
         gap = gap_.exchange(0);
     }
 
-    void set_recover() { recover_ = true; }
-    bool get_recover() { return recover_.exchange(false); }
+    void request_recover() { recover_ = true; }
+    bool need_recover() { return recover_.exchange(false); }
+
+    void request_format() { format_ = true; }
+    bool need_format() { return format_.exchange(false); }
 private:
     std::atomic<int32_t> lost_{0};
     std::atomic<int32_t> reordered_{0};
     std::atomic<int32_t> resent_{0};
     std::atomic<int32_t> gap_{0};
     std::atomic<bool> recover_{false};
+    std::atomic<bool> format_{false};
 };
 
 struct block_info {
@@ -68,22 +73,27 @@ public:
                                const char *setting, int32_t size);
     int32_t handle_data(const sink& s, int32_t salt, const data_packet& d);
     int32_t handle_events(aoo_eventhandler handler, void *user);
+    bool send(const sink& s);
     bool process(const sink& s, aoo_sample *buffer, int32_t size);
-    void recover(){ streamstate_.set_recover(); }
+    void request_recover(){ streamstate_.request_recover(); }
+    void request_format(){ streamstate_.request_format(); }
 private:
     struct data_request {
         int32_t sequence;
         int32_t frame;
     };
     void do_update(const sink& s);
+    // handle messages
     bool check_packet(const data_packet& d);
     bool add_packet(const data_packet& d);
-    void send_data();
-    void pop_outdated_blocks();
+    void process_blocks();
+    void check_outdated_blocks();
     void check_missing_blocks(const sink& s);
-    void request_data(const sink& s, int32_t salt);
-    void ping(const sink& s);
-    void send(const char *data, int32_t n){
+    // send messages
+    bool send_format_request(const sink& s);
+    int32_t send_data_request(const sink& s);
+    bool send_ping(const sink& s);
+    void dosend(const char *data, int32_t n){
         fn_(endpoint_, data, n);
     }
     // data
@@ -107,8 +117,8 @@ private:
     lockfree::queue<aoo_sample> audioqueue_;
     lockfree::queue<block_info> infoqueue_;
     lockfree::queue<aoo_event> eventqueue_;
+    lockfree::queue<data_request> resendqueue_;
     dynamic_resampler resampler_;
-    std::vector<data_request> retransmit_list_;
     // thread synchronization
     aoo::shared_mutex mutex_; // LATER replace with a spinlock?
 };
@@ -122,6 +132,8 @@ public:
 
     int32_t handle_message(const char *data, int32_t n,
                            void *endpoint, aoo_replyfn fn) override;
+
+    int32_t send() override;
 
     int32_t process(aoo_sample **data, int32_t nsamples, uint64_t t) override;
 
@@ -151,8 +163,6 @@ public:
     int32_t resend_maxnumframes() const { return resend_maxnumframes_; }
     float ping_interval() const { return ping_interval_; }
     double elapsed_time() const { return timer_.get_elapsed(); }
-
-    void request_format(void *endpoint, aoo_replyfn fn, int32_t id) const;
 private:
     // settings
     const int32_t id_;

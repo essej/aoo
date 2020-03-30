@@ -303,7 +303,10 @@ static void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
 {
     // synchronize with aoo_receive_dsp()
     pthread_mutex_lock(&x->x_mutex);
+    // handle incoming message
     aoo_sink_handlemessage(x->x_aoo_sink, data, n, src, fn);
+    // send outgoing messages
+    while (aoo_sink_send(x->x_aoo_sink)) ;
     pthread_mutex_unlock(&x->x_mutex);
 }
 
