@@ -96,26 +96,6 @@ Pd externals
 OSC messages
 ------------
 
-* message to notify sinks about format changes:
-
- /AoO/<sink>/format src(i) salt(i) nchannels(i) samplerate(i) blocksize(i) codec(s) options(b)
-
-* message to deliver audio data, large blocks are split across several frames:
-
- /AoO/<sink>/data src(i) salt(i) seq(i) samplerate(d) channel_onset(i) totalsize(i) nframes(i) frame(i) data(b)
-
-* message from sink to source to request the format (e.g. the salt has changed):
-
- /AoO/<src>/request sink(i)
-
-* message from sink to source to request dropped packets; the arguments are pairs of sequence + frame (-1 = whole block):
-
- /AoO/<src>/resend sink(i) salt(i) [ seq(i) frame(i) ... ]
-
-* ping message from sink to source (usually sent once per second):
-
- /AoO/<src>/ping sink(i)
-
 todo
 ----
 
