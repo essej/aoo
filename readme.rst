@@ -12,19 +12,7 @@ More on this version of AoO as "message based audio system"" was published at LA
 
 A new Version, quite from scratch, has been launched in 2020, targeting a network streaming Project for Kunsthaus Graz for Bill Fontana using a independent wireless network infrastructure FunkFeuer Graz 0xFF_ and also reviving the Virtual IEM Computer Music Ensemble VICE_ within a seminar on IEM_ Graz.
 
-.. _OSC: http://opensoundcontrol.org/
-
-.. _Pd: http://puredata.info/
-
-.. _0xFF: http://graz.funkfeuer.at/
-
-.. _VICE: https://iaem.at/projekte/ice/overview
-
-.. _IEM: http://iem.at/
-
 Based on the *AoO* idea of Winfried Ritsch with a first draft of realisation on embedded devices, the actual version starting with V-2.0 , was mainly written by Christof Ressi, as a complete rewrite of the version from Wolfgang Jäger in C in 2010.
-
-
 
 features
 --------
@@ -133,6 +121,15 @@ About Document
 :authors: Winfried Ritsch, Christof Ressi
 :date: march 2014 - february 2020
 :version: 1.0-a1
- 
+
+.. _OSC: http://opensoundcontrol.org/
+
+.. _Pd: http://puredata.info/
+
+.. _0xFF: http://graz.funkfeuer.at/
+
+.. _VICE: https://iaem.at/projekte/ice/overview
+
+.. _IEM: http://iem.at/
 
 .. [LAC14] see docu/lac2014_aoo.pdf
