@@ -467,34 +467,34 @@ static void aoo_receive_handleevents(t_aoo_receive *x,
             outlet_anything(x->x_eventout, gensym("source_state"), 4, msg);
             break;
         }
-        case AOO_BLOCK_LOSS_EVENT:
+        case AOO_BLOCK_LOST_EVENT:
         {
             const aoo_block_loss_event *e = &events[i].block_loss;
             if (!aoo_sourceevent_to_atoms(&e->source, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
-            outlet_anything(x->x_eventout, gensym("block_loss"), 4, msg);
+            outlet_anything(x->x_eventout, gensym("block_lost"), 4, msg);
             break;
         }
-        case AOO_BLOCK_REORDER_EVENT:
+        case AOO_BLOCK_REORDERED_EVENT:
         {
             const aoo_block_reorder_event *e = &events[i].block_reorder;
             if (!aoo_sourceevent_to_atoms(&e->source, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
-            outlet_anything(x->x_eventout, gensym("block_reorder"), 4, msg);
+            outlet_anything(x->x_eventout, gensym("block_reordered"), 4, msg);
             break;
         }
-        case AOO_BLOCK_RESEND_EVENT:
+        case AOO_BLOCK_RESENT_EVENT:
         {
             const aoo_block_resend_event *e = &events[i].block_resend;
             if (!aoo_sourceevent_to_atoms(&e->source, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
-            outlet_anything(x->x_eventout, gensym("block_resend"), 4, msg);
+            outlet_anything(x->x_eventout, gensym("block_resent"), 4, msg);
             break;
         }
         case AOO_BLOCK_GAP_EVENT:

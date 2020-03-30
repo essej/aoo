@@ -189,11 +189,11 @@ typedef enum aoo_event_type
     // sink: source changed state
     AOO_SOURCE_STATE_EVENT,
     // sink: blocks have been lost
-    AOO_BLOCK_LOSS_EVENT,
+    AOO_BLOCK_LOST_EVENT,
     // sink: blocks arrived out of order
-    AOO_BLOCK_REORDER_EVENT,
+    AOO_BLOCK_REORDERED_EVENT,
     // sink: blocks have been resent
-    AOO_BLOCK_RESEND_EVENT,
+    AOO_BLOCK_RESENT_EVENT,
     // sink: large gap between blocks
     AOO_BLOCK_GAP_EVENT
 } aoo_event_type;

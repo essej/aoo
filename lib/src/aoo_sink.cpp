@@ -716,19 +716,19 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         event.source.id = id_;
         if (lost > 0 && eventqueue_.write_available()){
             // push packet loss event
-            event.type = AOO_BLOCK_LOSS_EVENT;
+            event.type = AOO_BLOCK_LOST_EVENT;
             event.block_loss.count = lost;
             eventqueue_.write(event);
         }
         if (reordered > 0 && eventqueue_.write_available()){
             // push packet reorder event
-            event.type = AOO_BLOCK_REORDER_EVENT;
+            event.type = AOO_BLOCK_REORDERED_EVENT;
             event.block_reorder.count = reordered;
             eventqueue_.write(event);
         }
         if (resent > 0 && eventqueue_.write_available()){
             // push packet resend event
-            event.type = AOO_BLOCK_RESEND_EVENT;
+            event.type = AOO_BLOCK_RESENT_EVENT;
             event.block_resend.count = resent;
             eventqueue_.write(event);
         }

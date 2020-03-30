@@ -139,28 +139,28 @@ static void aoo_unpack_handleevents(t_aoo_unpack *x,
             outlet_anything(x->x_eventout, gensym("source_state"), 2, msg);
             break;
         }
-        case AOO_BLOCK_LOSS_EVENT:
+        case AOO_BLOCK_LOST_EVENT:
         {
             const aoo_block_loss_event *e = &events[i].block_loss;
             SETFLOAT(&msg[0], e->source.id);
             SETFLOAT(&msg[1], e->count);
-            outlet_anything(x->x_eventout, gensym("block_loss"), 2, msg);
+            outlet_anything(x->x_eventout, gensym("block_lost"), 2, msg);
             break;
         }
-        case AOO_BLOCK_REORDER_EVENT:
+        case AOO_BLOCK_REORDERED_EVENT:
         {
             const aoo_block_reorder_event *e = &events[i].block_reorder;
             SETFLOAT(&msg[0], e->source.id);
             SETFLOAT(&msg[1], e->count);
-            outlet_anything(x->x_eventout, gensym("block_reorder"), 2, msg);
+            outlet_anything(x->x_eventout, gensym("block_reordered"), 2, msg);
             break;
         }
-        case AOO_BLOCK_RESEND_EVENT:
+        case AOO_BLOCK_RESENT_EVENT:
         {
             const aoo_block_reorder_event *e = &events[i].block_resend;
             SETFLOAT(&msg[0], e->source.id);
             SETFLOAT(&msg[1], e->count);
-            outlet_anything(x->x_eventout, gensym("block_resend"), 2, msg);
+            outlet_anything(x->x_eventout, gensym("block_resent"), 2, msg);
             break;
         }
         case AOO_BLOCK_GAP_EVENT:
