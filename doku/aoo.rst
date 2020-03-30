@@ -651,6 +651,64 @@ system, kernel-drivers must be developed and with time-slotted Ethernet
 transmissions, systems with latencies down to 8 us on transmission time
 can be implemented using hard RT-systems.
 
+Networking
+==========
+
+(fragments  fro IOhannes)
+
+setup is like::
+
+    client A
+        will use listening port 10001
+        private IP: 192.168.1.100
+        public IP: 192.0.2.0.72
+    client B
+        will use listening port 10002
+        private IP: 192.168.7.22
+        public IP: 198.51.100.190
+
+both clients need to know the public IP (and listening port) of the peer beforehand. 
+
+initiate session::
+
+    clientA: initiate connection [connect 198.51.100.190 10002 10001( -> [netsend -u]
+    clientA: send some data
+        the data won't arrive on clientB yet
+        but the NATting routerA sets up the forwarding rules
+    clientB: initiate connection [connect 192.0.2.0.72 10001 10002( -> [netsend -u]
+    clientB: send some data
+        data should arrive at clientA (2nd outlet of [netsend])
+    clientA: send more data
+        data should arrive at clientB (2nd outlet of [netsend])
+
+
+A hole-punching server setup::
+
+    serverX
+        reachable via a public IP:port
+    clientA, clientB
+        live in (separate) private (NATted) networks
+        don't know the public IPs
+
+network connection flow::
+
+    1 clientA sends <channel-token> <clientA-name> <portA> to serverX
+        : some string known to all peers (e.g. "covid19")
+        - <clientA-name>: some string identifying clientA
+        - <portA>: the port where clientA listens for incoming payload data
+    2 serverX notes the public IP of clientA and remembers it along with the data-tuple.
+    3 clientB sends <channel-token> <clientB-name> <portB> to serverX
+    4 serverX notes the public IP of clientB and remembers it along with the data-tuple
+    5 serverX sends the public IP:port of clientB to clientA
+    6 serverX sends the public IP:port of clientA to clientB
+        in practice serverX might just "broadcast" the entire stored information (public IP, port, name) of all clients with the same channel-token to all clients with that same channel-token; clients will filter out their own public IP based on the client-name
+    7 clientA opens a UDP-connection to the public IP:port of clientB
+    8 clientB opens a UDP-connection to the public IP:port of clientA
+    9 tada
+
+        
+
+
 Acknowledgements
 ================
 
