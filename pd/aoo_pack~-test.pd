@@ -1,4 +1,4 @@
-#N canvas 142 30 737 759 12;
+#N canvas 61 25 737 759 12;
 #X declare -path osc;
 #X obj 168 119 osc~ 440;
 #X msg 88 135 set \$1;
@@ -15,7 +15,7 @@
 #X msg 316 75 \; pd dsp 1;
 #X obj 177 495 loadbang;
 #X obj 100 166 r \$0-back;
-#X obj 142 496 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
+#X obj 142 496 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X msg 251 173 channel \$1;
 #X obj 251 153 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
@@ -99,6 +99,7 @@
 #X text 539 368 random dropout length;
 #X text 538 417 fixed dropout length;
 #X msg 275 592 add localhost 9999 *;
+#X msg 338 620 add foo 9999 1;
 #X connect 0 0 23 0;
 #X connect 1 0 23 0;
 #X connect 2 0 1 0;
@@ -171,3 +172,4 @@
 #X connect 77 0 50 1;
 #X connect 78 0 77 1;
 #X connect 81 0 68 0;
+#X connect 82 0 68 0;

@@ -34,8 +34,8 @@ cflags = \
     -DLOGLEVEL=2 \
     -DAOO_TIMEFILTER_BANDWIDTH=0.0001 \
     -DAOO_DEBUG_DLL=0 \
-    -DAOO_DEBUG_OSCTIME=0 \
     -DAOO_DEBUG_RESAMPLING=0 \
+    -DAOO_DEBUG_BLOCK_BUFFER=0 \
     $(empty)
 
 ldlibs =

@@ -70,6 +70,10 @@ typedef AOO_SAMPLETYPE aoo_sample;
  #define AOO_DEBUG_RESAMPLING 0
 #endif
 
+#ifndef AOO_DEBUG_BLOCK_BUFFER
+ #define AOO_DEBUG_BLOCK_BUFFER 0
+#endif
+
 /*////////// default values ////////////*/
 
 // max. UDP packet size

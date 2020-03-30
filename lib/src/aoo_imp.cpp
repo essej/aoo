@@ -1004,13 +1004,14 @@ void dynamic_resampler::update(double srfrom, double srto){
         ratio_ = srto / srfrom;
     }
 #if AOO_DEBUG_RESAMPLING
-    if (debug_counter == 100){
+    static int counter = 0;
+    if (counter == 100){
         DO_LOG("srfrom: " << srfrom << ", srto: " << srto);
         DO_LOG("resample factor: " << ratio_);
         DO_LOG("balance: " << balance_ << ", size: " << buffer_.size());
-        debug_counter = 0;
+        counter = 0;
     } else {
-        debug_counter++;
+        counter++;
     }
 #endif
 }

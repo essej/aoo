@@ -654,6 +654,10 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
     // check and resend missing blocks
     check_missing_blocks(s);
 
+#if AOO_DEBUG_BLOCK_BUFFER
+    DO_LOG("block buffer: size = " << blockqueue_.size() << " / " << blockqueue_.capacity());
+#endif
+
     return 1;
 }
 
@@ -683,6 +687,11 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
     }
 
     int32_t nsamples = audioqueue_.blocksize();
+
+#if 0
+    auto capacity = audioqueue_.capacity() / audioqueue_.blocksize();
+    DO_LOG("audioqueue: " << audioqueue_.read_available() << " / " << capacity);
+#endif
 
     while (audioqueue_.read_available() && infoqueue_.read_available()
            && resampler_.write_available() >= nsamples){

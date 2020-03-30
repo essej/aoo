@@ -18,10 +18,6 @@
 
 #define classname(x) class_getname(*(t_pd *)x)
 
-#ifndef AOO_DEBUG_OSCTIME
-#define AOO_DEBUG_OSCTIME 0
-#endif
-
 #define DEFBUFSIZE 25
 
 /*////////////////////// socket listener //////////////////*/
