@@ -1,18 +1,16 @@
 Audio over OSC based audio streaming
 ====================================
 
-"Audio over OSC" aka *AoO* is aimed to be a message based audio system using 
-Open Sound Control OSC_ as a syntax format.
+"Audio over OSC" aka *AoO* is aimed to be a message based audio system inspired by 
+Open Sound Control OSC_ as a syntax format. It is dedicated to send audio in real time from arbitrary sources to arbitrary sinks on demand.
 
 history
 -------
 
-The vision of *AoO* has been done in 2009, a first implementation a library with externals for PureData (Pd) has been done 2010, but major issues with needed networking objects, like netsend, netreceive made this version unpracticable.
-More on this version of message based audio system was published at LAC 2014 [LAC14]
+A first vision of *AoO* has came up in 2009, a first implementation as a library with externals for PureData (Pd) has been done 2010, but major issues with needed networking objects made this version unpracticable and was not used extensively.
+More on this version of AoO as "message based audio system"" was published at LAC 2014 [LAC14]_
 
-.. [AOO-LAC14] see docu/lac2014_aoo.pdf
-
-A new Version has been started again in 2020, targeting a network streaming Project for Kunsthaus Graz for Bill Fontana using a independent wireless network infrastructure Funkfeuer in Graz [0xFF].
+A new Version, quite from scratch, has been launched in 2020, targeting a network streaming Project for Kunsthaus Graz for Bill Fontana using a independent wireless network infrastructure FunkFeuer Graz 0xFF_ and also reviving the Virtual IEM Computer Music Ensemble VICE_ within a seminar on IEM_ Graz.
 
 .. _OSC: http://opensoundcontrol.org/
 
@@ -20,9 +18,13 @@ A new Version has been started again in 2020, targeting a network streaming Proj
 
 .. _0xFF: http://graz.funkfeuer.at/
 
-Also a seminar on the IEM to scratch, rehearse and play an internet concert using this tools, for further enhancement and proof of concept, is in progress (April 2020)
+.. _VICE: https://iaem.at/projekte/ice/overview
 
-Based on the AOO idea of Winfried Ritsch with a first draft of realisation on embedded devices, the new version going to be V1.0 and more, was mainly written by Christof Ressi, as a complete rewrite of the version from Wolfgang Jäger in C in 2010.
+.. _IEM: http://iem.at/
+
+Based on the *AoO* idea of Winfried Ritsch with a first draft of realisation on embedded devices, the actual version starting with V-2.0 , was mainly written by Christof Ressi, as a complete rewrite of the version from Wolfgang Jäger in C in 2010.
+
+
 
 features
 --------
@@ -45,8 +47,10 @@ features
   For example, sources might want to stop sending if they don't receive a ping in a certain time period.
 
 
-Installation
+installation
 ------------
+
+Repository: http://git.iem.at/cm/aoo/
 
 from source
 ...........
@@ -112,7 +116,6 @@ OSC messages
 
  /AoO/<src>/ping sink(i)
 
-
 todo
 ----
 
@@ -151,3 +154,5 @@ About Document
 :date: march 2014 - february 2020
 :version: 1.0-a1
  
+
+.. [LAC14] see docu/lac2014_aoo.pdf
