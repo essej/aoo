@@ -24,6 +24,9 @@ aoo::source::source(int32_t id)
 {
     // event queue
     eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);
+    // request queues
+    formatrequestqueue_.resize(64, 1);
+    datarequestqueue_.resize(1024, 1);
 }
 
 void aoo_source_free(aoo_source *src){
@@ -173,9 +176,9 @@ int32_t aoo::source::set_sinkoption(void *endpoint, int32_t id,
         {
             CHECKARG(int32_t);
             auto chn = as<int32_t>(ptr);
-            shared_lock lock(sinklist_mutex_); // reader lock!
+            shared_lock lock(sink_mutex_); // reader lock!
             for (auto& sink : sinks_){
-                if (sink.endpoint == endpoint){
+                if (sink.user == endpoint){
                     sink.channel = chn;
                 }
             }
@@ -189,7 +192,7 @@ int32_t aoo::source::set_sinkoption(void *endpoint, int32_t id,
         }
         return 1;
     } else {
-        shared_lock lock(sinklist_mutex_); // reader lock!
+        shared_lock lock(sink_mutex_); // reader lock!
         auto sink = find_sink(endpoint, id);
         if (sink){
             if (sink->id == AOO_ID_WILDCARD){
@@ -237,7 +240,7 @@ int32_t aoo::source::get_sinkoption(void *endpoint, int32_t id,
         return 0;
     }
 
-    shared_lock lock(sinklist_mutex_); // reader lock!
+    shared_lock lock(sink_mutex_); // reader lock!
     auto sink = find_sink(endpoint, id);
     if (sink){
         switch (opt){
@@ -289,11 +292,11 @@ int32_t aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn 
 }
 
 int32_t aoo::source::add_sink(void *endpoint, int32_t id, aoo_replyfn fn){
-    unique_lock lock(sinklist_mutex_); // writer lock!
+    unique_lock lock(sink_mutex_); // writer lock!
     if (id == AOO_ID_WILDCARD){
         // first remove all sinks on the given endpoint!
         auto it = std::remove_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-            return s.endpoint == endpoint;
+            return s.user == endpoint;
         });
         sinks_.erase(it, sinks_.end());
     } else {
@@ -311,6 +314,8 @@ int32_t aoo::source::add_sink(void *endpoint, int32_t id, aoo_replyfn fn){
     }
     // add sink descriptor
     sinks_.emplace_back(endpoint, fn, id);
+    // notify send_format()
+    format_changed_ = true;
 
     return 1;
 }
@@ -320,17 +325,17 @@ int32_t aoo_source_removesink(aoo_source *src, void *sink, int32_t id) {
 }
 
 int32_t aoo::source::remove_sink(void *endpoint, int32_t id){
-    unique_lock lock(sinklist_mutex_); // writer lock!
+    unique_lock lock(sink_mutex_); // writer lock!
     if (id == AOO_ID_WILDCARD){
         // remove all sinks on the given endpoint
         auto it = std::remove_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-            return s.endpoint == endpoint;
+            return s.user == endpoint;
         });
         sinks_.erase(it, sinks_.end());
         return 1;
     } else {
         for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
-            if (it->endpoint == endpoint){
+            if (it->user == endpoint){
                 if (it->id == AOO_ID_WILDCARD){
                     LOG_WARNING("aoo_source: can't remove individual sink "
                                 << id << " because of wildcard!");
@@ -351,7 +356,7 @@ void aoo_source_removeall(aoo_source *src) {
 }
 
 void aoo::source::remove_all(){
-    unique_lock lock(sinklist_mutex_); // writer lock!
+    unique_lock lock(sink_mutex_); // writer lock!
     sinks_.clear();
 }
 
@@ -386,7 +391,7 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
                 auto it = msg.ArgumentsBegin();
                 auto id = it->AsInt32();
 
-                handle_request(endpoint, fn, id);
+                handle_format_request(endpoint, fn, id);
 
                 return 1;
             } catch (const osc::Exception& e){
@@ -403,7 +408,7 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
                 auto id = (it++)->AsInt32();
                 auto salt = (it++)->AsInt32();
 
-                handle_resend(endpoint, fn, id, salt, count - 2, it);
+                handle_data_request(endpoint, fn, id, salt, count - 2, it);
 
                 return 1;
             } catch (const osc::Exception& e){
@@ -438,151 +443,24 @@ int32_t aoo_source_send(aoo_source *src) {
 // We have to aquire both the update lock and the sink list lock
 // and release both before calling the sink's send method
 // to avoid possible deadlocks in the client code.
-// We have to make a local copy of the client list, but this should be
+// We have to make a local copy of the sink list, but this should be
 // rather cheap in comparison to encoding and sending the audio data.
 int32_t aoo::source::send(){
-    shared_lock updatelock(update_mutex_); // reader lock!
-    if (!encoder_){
-        return 0;
+    bool didsomething = false;
+
+    if (send_format()){
+        didsomething = true;
     }
 
-    int32_t salt = salt_;
-    data_packet d;
-
-    // *first* check for dropped blocks
-    // NOTE: there's no ABA problem because the variable will only be decremented in this method.
-    if (dropped_ > 0){
-        // send empty block
-        d.sequence = sequence_++;
-        d.samplerate = encoder_->samplerate(); // use nominal samplerate
-        d.totalsize = 0;
-        d.nframes = 0;
-        d.framenum = 0;
-        d.data = nullptr;
-        d.size = 0;
-        // save to unlock
-        updatelock.unlock();
-
-        // make local copy of sink descriptors
-        shared_lock listlock(sinklist_mutex_);
-        int32_t numsinks = sinks_.size();
-        auto sinks = (sink_desc *)alloca(numsinks * sizeof(sink_desc));
-        std::copy(sinks_.begin(), sinks_.end(), sinks);
-
-        // unlock before sending!
-        listlock.unlock();
-
-        // send block to sinks
-        for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_data(id_, salt, d);
-        }
-        --dropped_;
-    } else if (audioqueue_.read_available() && srqueue_.read_available()){
-        // make local copy of sink descriptors
-        shared_lock listlock(sinklist_mutex_);
-        int32_t numsinks = sinks_.size();
-        auto sinks = (sink_desc *)alloca((numsinks + 1) * sizeof(sink_desc)); // avoid alloca(0)
-        bool need_format = false;
-        for (int i = 0; i < numsinks; ++i){
-            // placement new
-            new (&sinks[i]) sink_desc(sinks_[i]);
-            // check if at least one sink needs the format
-            if (sinks_[i].format_changed){
-                need_format = true;
-                // clear flag in original sink descriptor!
-                sinks_[i].format_changed = false;
-            }
-        }
-        // unlock before sending!
-        listlock.unlock();
-
-        d.sequence = sequence_++;
-        srqueue_.read(d.samplerate); // read samplerate from ringbuffer
-
-        if (numsinks){
-            // copy and convert audio samples to blob data
-            auto nchannels = encoder_->nchannels();
-            auto blocksize = encoder_->blocksize();
-            blockbuffer_.resize(sizeof(double) * nchannels * blocksize); // overallocate
-
-            d.totalsize = encoder_->encode(audioqueue_.read_data(), audioqueue_.blocksize(),
-                                           blockbuffer_.data(), blockbuffer_.size());
-            audioqueue_.read_commit();
-
-            if (d.totalsize > 0){
-                // calculate number of frames
-                auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
-                auto dv = div(d.totalsize, maxpacketsize);
-                d.nframes = dv.quot + (dv.rem != 0);
-
-                // save block
-                history_.push(d.sequence, d.samplerate, blockbuffer_.data(),
-                              d.totalsize, d.nframes, maxpacketsize);
-
-                // send format if needed
-                if (need_format){
-                    LOG_VERBOSE("need format");
-                    // get format
-                    char options[AOO_CODEC_MAXSETTINGSIZE];
-                    aoo_format f;
-                    f.codec = encoder_->name();
-                    auto size = encoder_->write_format(f.nchannels, f.samplerate, f.blocksize,
-                                                       options, AOO_CODEC_MAXSETTINGSIZE);
-                    // unlock before sending!
-                    updatelock.unlock();
-                    // send format to sinks
-                    for (int i = 0; i < numsinks; ++i){
-                        if (sinks[i].format_changed){
-                            sinks[i].send_format(id_, salt, f, options, size);
-                        }
-                    }
-                } else {
-                    // unlock before sending!
-                    updatelock.unlock();
-                }
-
-                // from here on we don't hold any lock!
-
-                // send a single frame to all sinks
-                // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
-                auto dosend = [&](int32_t frame, const char* data, auto n){
-                    d.framenum = frame;
-                    d.data = data;
-                    d.size = n;
-                    for (int i = 0; i < numsinks; ++i){
-                        sinks[i].send_data(id_, salt, d);
-                    }
-                };
-
-                auto ptr = blockbuffer_.data();
-                // send large frames (might be 0)
-                for (int32_t i = 0; i < dv.quot; ++i, ptr += maxpacketsize){
-                    dosend(i, ptr, maxpacketsize);
-                }
-                // send remaining bytes as a single frame (might be the only one!)
-                if (dv.rem){
-                    dosend(dv.quot, ptr, dv.rem);
-                }
-            } else {
-                LOG_WARNING("aoo_source: couldn't encode audio data!");
-            }
-        } else {
-            // drain buffer anyway
-            audioqueue_.read_commit();
-        }
-    } else {
-        // LOG_DEBUG("couldn't send");
-        return 0;
+    if (send_data()){
+        didsomething = true;
     }
 
-    // handle overflow (with 64 samples @ 44.1 kHz this happens every 36 days)
-    // for now just force a reset by changing the salt, LATER think how to handle this better
-    if (d.sequence == INT32_MAX){
-        unique_lock lock2(update_mutex_); // take writer lock
-        salt_ = make_salt();
+    if (resend_data()){
+        didsomething = true;
     }
 
-    return 1;
+    return didsomething;
 }
 
 int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, uint64_t t) {
@@ -635,7 +513,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
         if (resampler_.write_available() >= insamples){
             resampler_.write(buf, insamples);
         } else {
-            LOG_DEBUG("couldn't process");
+            // LOG_DEBUG("couldn't process");
             return false;
         }
         while (resampler_.read_available() >= outsamples
@@ -660,7 +538,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
             // push samplerate
             srqueue_.write(dll_.samplerate());
         } else {
-            LOG_DEBUG("couldn't process");
+            // LOG_DEBUG("couldn't process");
         }
     }
     return 1;
@@ -696,24 +574,20 @@ int32_t aoo::source::handle_events(aoo_eventhandler fn, void *user){
 
 namespace aoo {
 
-/*//////////////////////////////// sink_desc /////////////////////////////////////*/
+/*//////////////////////////////// endpoint /////////////////////////////////////*/
 
 // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
-void sink_desc::send_data(int32_t src, int32_t salt, const data_packet& data) const {
-    send_data(id, src, salt, data);
-}
-
-void sink_desc::send_data(int32_t sink, int32_t src, int32_t salt, const aoo::data_packet& d) const{
+void endpoint::send_data(int32_t src, int32_t salt, const aoo::data_packet& d) const{
     // call without lock!
 
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-    if (sink != AOO_ID_WILDCARD){
+    if (id != AOO_ID_WILDCARD){
         const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_DATA);
         char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, sink, AOO_DATA);
+        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, id, AOO_DATA);
 
         msg << osc::BeginMessage(address);
     } else {
@@ -721,10 +595,10 @@ void sink_desc::send_data(int32_t sink, int32_t src, int32_t salt, const aoo::da
     }
 
     LOG_DEBUG("send block: seq = " << d.sequence << ", sr = " << d.samplerate
-              << ", chn = " << channel.load() << ", totalsize = " << d.totalsize
+              << ", chn = " << d.channel << ", totalsize = " << d.totalsize
               << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
 
-    msg << src << salt << d.sequence << d.samplerate << channel.load()
+    msg << src << salt << d.sequence << d.samplerate << d.channel
         << d.totalsize << d.nframes << d.framenum
         << osc::Blob(d.data, d.size) << osc::EndMessage;
 
@@ -733,25 +607,20 @@ void sink_desc::send_data(int32_t sink, int32_t src, int32_t salt, const aoo::da
 
 // /AoO/<sink>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
 
-void sink_desc::send_format(int32_t src, int32_t salt, const aoo_format& f,
-                            const char *options, int32_t size) const {
-    send_format(id, src, salt, f, options, size);
-}
-
-void sink_desc::send_format(int32_t sink, int32_t src, int32_t salt, const aoo_format& f,
+void endpoint::send_format(int32_t src, int32_t salt, const aoo_format& f,
                             const char *options, int32_t size) const {
     // call without lock!
-    LOG_DEBUG("send format to " << sink << " (salt = " << salt << ")");
+    LOG_DEBUG("send format to " << id << " (salt = " << salt << ")");
 
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
     // use 'id' instead of 'sink.id'! this is for cases where 'sink.id' is a wildcard
     // but we want to reply to an individual sink.
-    if (sink != AOO_ID_WILDCARD){
+    if (id != AOO_ID_WILDCARD){
         const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_FORMAT);
         char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, sink, AOO_FORMAT);
+        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, id, AOO_FORMAT);
 
         msg << osc::BeginMessage(address);
     } else {
@@ -768,7 +637,7 @@ void sink_desc::send_format(int32_t sink, int32_t src, int32_t salt, const aoo_f
 
 sink_desc * source::find_sink(void *endpoint, int32_t id){
     for (auto& sink : sinks_){
-        if ((sink.endpoint == endpoint) &&
+        if ((sink.user == endpoint) &&
             (sink.id == AOO_ID_WILDCARD || sink.id == id))
         {
             return &sink;
@@ -806,7 +675,7 @@ int32_t source::make_salt(){
     return dist(mt);
 }
 
-// always called with upate_mutex_ locked!
+// always called with update_mutex_ locked!
 void source::update(){
     if (!encoder_){
         return;
@@ -847,8 +716,13 @@ void source::update(){
         salt_ = make_salt();
         sequence_ = 0;
         dropped_ = 0;
-        for (auto& sink : sinks_){
-            sink.format_changed = true;
+        {
+            shared_lock lock2(sink_mutex_);
+            for (auto& sink : sinks_){
+                sink.format_changed = true;
+            }
+            // notify send_format()
+            format_changed_ = true;
         }
     }
 }
@@ -862,81 +736,96 @@ void source::update_historybuffer(){
     }
 }
 
-void source::handle_request(void *endpoint, aoo_replyfn fn, int32_t id){
-    shared_lock listlock(sinklist_mutex_); // reader lock!
-    auto s = find_sink(endpoint, id);
-    if (s){
-        // Just resend format (the last format message might have been lost)
-        // Use 'id' because we want to send to an individual sink!
-        // ('sink.id' might be a wildcard)
+bool source::send_format(){
+    bool format_changed = format_changed_.exchange(false);
+    bool format_requested = formatrequestqueue_.read_available();
 
-        // first make local copy of sink
-        sink_desc sink = *s;
-
-        // unlock before sending!
-        listlock.unlock();
-
-        // get format
-        shared_lock updatelock(update_mutex_);
-        auto salt = salt_;
-        char options[AOO_CODEC_MAXSETTINGSIZE];
-        aoo_format f;
-        f.codec = encoder_->name();
-        auto size = encoder_->write_format(f.nchannels, f.samplerate, f.blocksize,
-                                           options, AOO_CODEC_MAXSETTINGSIZE);
-        // unlock before sending!
-        updatelock.unlock();
-
-        // send format to sink
-        // use 'id' because sink_desc.id might be a wildcard!
-        sink.send_format(id, id_, salt, f, options, size);
-    } else {
-        LOG_WARNING("aoo_source: ignoring '" << AOO_REQUEST << "' message - sink not found");
+    if (!format_changed && !format_requested){
+        return false;
     }
+
+    shared_lock updatelock(update_mutex_); // reader lock!
+
+    if (!encoder_){
+        return false;
+    }
+
+    int32_t salt = salt_;
+
+    aoo_format fmt;
+    fmt.codec = encoder_->name();
+    char settings[AOO_CODEC_MAXSETTINGSIZE];
+    auto size = encoder_->write_format(fmt.nchannels, fmt.samplerate,
+                               fmt.blocksize, settings, sizeof(settings));
+
+    updatelock.unlock();
+
+    if (size < 0){
+        return false;
+    }
+
+    if (format_changed){
+        // only copy sinks which require a format update!
+        shared_lock sinklock(sink_mutex_);
+        auto sinks = (aoo::sink_desc *)alloca((sinks_.size() + 1) * sizeof(aoo::endpoint)); // avoid alloca(0)
+        int numsinks = 0;
+        for (auto& sink : sinks_){
+            if (sink.format_changed.exchange(false)){
+                new (sinks + numsinks) aoo::endpoint (sink.user, sink.fn, sink.id);
+                numsinks++;
+            }
+        }
+        sinklock.unlock();
+        // now we don't hold any lock!
+
+        for (int i = 0; i < numsinks; ++i){
+            sinks[i].send_format(id_, salt, fmt, settings, size);
+        }
+    }
+
+    if (format_requested){
+        while (formatrequestqueue_.read_available()){
+            endpoint ep;
+            formatrequestqueue_.read(ep);
+            ep.send_format(id_, salt, fmt, settings, size);
+        }
+    }
+
+    return true;
 }
 
-void source::handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt,
-                               int32_t count, osc::ReceivedMessageArgumentIterator it){
+bool source::resend_data(){
     shared_lock updatelock(update_mutex_); // reader lock!
     if (!history_.capacity()){
-        return;
-    }
-    if (salt != salt_){
-        LOG_VERBOSE("aoo_source: ignoring '" << AOO_RESEND << "' - source has changed");
-        return;
+        return false;
     }
 
-    shared_lock listlock(sinklist_mutex_); // reader lock!
-    auto s = find_sink(endpoint, id);
-    if (!s){
-        LOG_WARNING("aoo_source: ignoring '" << AOO_RESEND << "' message - sink not found");
-        return;
-    }
+    bool didsomething = false;
 
-    // first make local copy of sink
-    sink_desc sink = *s;
+    while (datarequestqueue_.read_available()){
+        data_request request;
+        datarequestqueue_.read(request);
 
-    // unlock before sending!
-    listlock.unlock();
+        auto salt = salt_;
+        if (salt != request.salt){
+            // outdated request
+            continue;
+        }
 
-    // get pairs of [seq, frame]
-    int npairs = count / 2;
-    while (npairs--){
-        auto seq = (it++)->AsInt32();
-        auto framenum = (it++)->AsInt32();
-        auto block = history_.find(seq);
+        auto block = history_.find(request.sequence);
         if (block){
             aoo::data_packet d;
             d.sequence = block->sequence;
             d.samplerate = block->samplerate;
+            d.channel = block->channel;
             d.totalsize = block->size();
             d.nframes = block->num_frames();
             // We use a buffer on the heap because blocks and even frames
             // can be quite large and we don't want them to sit on the stack.
-            if (framenum < 0){
+            if (request.frame < 0){
                 // Copy whole block and save frame pointers.
-                resendbuffer_.resize(d.totalsize);
-                char *buf = resendbuffer_.data();
+                sendbuffer_.resize(d.totalsize);
+                char *buf = sendbuffer_.data();
                 char *frameptr[256];
                 int32_t framesize[256];
                 int32_t onset = 0;
@@ -948,7 +837,7 @@ void source::handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32_t s
                         framesize[i] = nbytes;
                         onset += nbytes;
                     } else {
-                        return; // error
+                        LOG_ERROR("empty frame!");
                     }
                 }
                 // unlock before sending
@@ -959,53 +848,217 @@ void source::handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32_t s
                     d.framenum = i;
                     d.data = frameptr[i];
                     d.size = framesize[i];
-                    // use 'id' because sink_desc.id might be a wildcard!
-                    sink.send_data(id, id_, salt, d);
+                    request.send_data(id_, salt, d);
                 }
             } else {
                 // Copy a single frame
-                if (framenum >= 0 && framenum < d.nframes){
-                    int32_t size = block->frame_size(framenum);
-                    resendbuffer_.resize(size);
-                    block->get_frame(framenum, resendbuffer_.data(), size);
+                if (request.frame >= 0 && request.frame < d.nframes){
+                    int32_t size = block->frame_size(request.frame);
+                    sendbuffer_.resize(size);
+                    block->get_frame(request.frame, sendbuffer_.data(), size);
                     // unlock before sending
                     updatelock.unlock();
 
                     // send frame to sink
-                    // use 'id' because sink_desc.id might be a wildcard!
-                    d.framenum = framenum;
-                    d.data = resendbuffer_.data();
+                    d.framenum = request.frame;
+                    d.data = sendbuffer_.data();
                     d.size = size;
-                    // use 'id' because sink_desc.id might be a wildcard!
-                    sink.send_data(id, id_, salt, d);
+                    request.send_data(id_, salt, d);
                 } else {
-                    LOG_ERROR("frame number " << framenum << " out of range!");
+                    LOG_ERROR("frame number " << request.frame << " out of range!");
                 }
             }
             // lock again
             updatelock.lock();
+
+            didsomething = true;
         } else {
-            LOG_VERBOSE("couldn't find block " << seq);
+            LOG_VERBOSE("couldn't find block " << request.sequence);
         }
+    }
+
+    return didsomething;
+}
+
+bool source::send_data(){
+    shared_lock updatelock(update_mutex_); // reader lock!
+    if (!encoder_){
+        return 0;
+    }
+
+    data_packet d;
+    int32_t salt = salt_;
+
+    // *first* check for dropped blocks
+    // NOTE: there's no ABA problem because the variable will only be decremented in this method.
+    if (dropped_ > 0){
+        // send empty block
+        d.sequence = sequence_++;
+        d.samplerate = encoder_->samplerate(); // use nominal samplerate
+        d.totalsize = 0;
+        d.nframes = 0;
+        d.framenum = 0;
+        d.data = nullptr;
+        d.size = 0;
+        // now we can unlock
+        updatelock.unlock();
+
+        // make local copy of sink descriptors
+        shared_lock listlock(sink_mutex_);
+        int32_t numsinks = sinks_.size();
+        auto sinks = (sink_desc *)alloca((numsinks + 1) * sizeof(sink_desc)); // avoid alloca(0)
+        std::copy(sinks_.begin(), sinks_.end(), sinks);
+
+        // unlock before sending!
+        listlock.unlock();
+
+        // send block to sinks
+        for (int i = 0; i < numsinks; ++i){
+            sinks[i].send_data(id_, salt, d);
+        }
+        --dropped_;
+    } else if (audioqueue_.read_available() && srqueue_.read_available()){
+        // make local copy of sink descriptors
+        shared_lock listlock(sink_mutex_);
+        int32_t numsinks = sinks_.size();
+        auto sinks = (sink_desc *)alloca((numsinks + 1) * sizeof(sink_desc)); // avoid alloca(0)
+        std::copy(sinks_.begin(), sinks_.end(), sinks);
+
+        // unlock before sending!
+        listlock.unlock();
+
+        d.sequence = sequence_++;
+        srqueue_.read(d.samplerate); // always read samplerate from ringbuffer
+
+        if (numsinks){
+            // copy and convert audio samples to blob data
+            auto nchannels = encoder_->nchannels();
+            auto blocksize = encoder_->blocksize();
+            sendbuffer_.resize(sizeof(double) * nchannels * blocksize); // overallocate
+
+            d.totalsize = encoder_->encode(audioqueue_.read_data(), audioqueue_.blocksize(),
+                                           sendbuffer_.data(), sendbuffer_.size());
+            audioqueue_.read_commit();
+
+            if (d.totalsize > 0){
+                // calculate number of frames
+                auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
+                auto dv = div(d.totalsize, maxpacketsize);
+                d.nframes = dv.quot + (dv.rem != 0);
+
+                // save block
+                history_.push(d.sequence, d.samplerate, sendbuffer_.data(),
+                              d.totalsize, d.nframes, maxpacketsize);
+
+                // unlock before sending!
+                updatelock.unlock();
+
+                // from here on we don't hold any lock!
+
+                // send a single frame to all sinks
+                // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
+                auto dosend = [&](int32_t frame, const char* data, auto n){
+                    d.framenum = frame;
+                    d.data = data;
+                    d.size = n;
+                    for (int i = 0; i < numsinks; ++i){
+                        d.channel = sinks[i].channel;
+                        sinks[i].send_data(id_, salt, d);
+                    }
+                };
+
+                auto ptr = sendbuffer_.data();
+                // send large frames (might be 0)
+                for (int32_t i = 0; i < dv.quot; ++i, ptr += maxpacketsize){
+                    dosend(i, ptr, maxpacketsize);
+                }
+                // send remaining bytes as a single frame (might be the only one!)
+                if (dv.rem){
+                    dosend(dv.quot, ptr, dv.rem);
+                }
+            } else {
+                LOG_WARNING("aoo_source: couldn't encode audio data!");
+            }
+        } else {
+            // drain buffer anyway
+            audioqueue_.read_commit();
+        }
+    } else {
+        // LOG_DEBUG("couldn't send");
+        return 0;
+    }
+
+    // handle overflow (with 64 samples @ 44.1 kHz this happens every 36 days)
+    // for now just force a reset by changing the salt, LATER think how to handle this better
+    if (d.sequence == INT32_MAX){
+        unique_lock lock2(update_mutex_); // take writer lock
+        salt_ = make_salt();
+    }
+
+    return 1;
+}
+
+void source::handle_format_request(void *endpoint, aoo_replyfn fn, int32_t id){
+    LOG_DEBUG("handle format request");
+
+    // check if sink exists (not strictly necessary, but might help catch errors)
+    shared_lock lock(sink_mutex_); // reader lock!
+    auto sink = find_sink(endpoint, id);
+    lock.unlock();
+
+    if (sink){
+        if (formatrequestqueue_.write_available()){
+            formatrequestqueue_.write(aoo::endpoint { endpoint, fn, id });
+        }
+    } else {
+        LOG_WARNING("ignoring '" << AOO_REQUEST << "' message: sink not found");
+    }
+}
+
+void source::handle_data_request(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt,
+                               int32_t count, osc::ReceivedMessageArgumentIterator it){
+    LOG_DEBUG("handle data request");
+
+    // check if sink exists (not strictly necessary, but might help catch errors)
+    shared_lock lock(sink_mutex_); // reader lock!
+    auto sink = find_sink(endpoint, id);
+    lock.unlock();
+
+    if (sink){
+        // get pairs of [seq, frame]
+        int npairs = count / 2;
+        while (npairs--){
+            auto seq = (it++)->AsInt32();
+            auto frame = (it++)->AsInt32();
+            if (datarequestqueue_.write_available()){
+                datarequestqueue_.write(data_request{ endpoint, fn, id, salt, seq, frame });
+            }
+        }
+    } else {
+        LOG_WARNING("ignoring '" << AOO_RESEND << "' message: sink not found");
     }
 }
 
 void source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id){
-    // push "ping" event
-    if (eventqueue_.write_available()){
-        shared_lock lock(sinklist_mutex_); // reader lock!
-        auto sink = find_sink(endpoint, id);
-        if (sink){
-            // push ping event
+    LOG_DEBUG("handle ping");
+
+    // check if sink exists (not strictly necessary, but might help catch errors)
+    shared_lock lock(sink_mutex_); // reader lock!
+    auto sink = find_sink(endpoint, id);
+    lock.unlock();
+
+    if (sink){
+        // push "ping" event
+        if (eventqueue_.write_available()){
             aoo_event event;
             event.type = AOO_PING_EVENT;
             event.sink.endpoint = endpoint;
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
             event.sink.id = id;
             eventqueue_.write(event);
-        } else {
-            LOG_WARNING("ignoring '" << AOO_PING << "' message: sink not found");
         }
+    } else {
+        LOG_WARNING("ignoring '" << AOO_PING << "' message: sink not found");
     }
 }
 

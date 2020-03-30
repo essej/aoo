@@ -12,41 +12,57 @@ namespace osc {
 
 namespace aoo {
 
-struct sink_desc {
-    sink_desc(void *_endpoint, aoo_replyfn _fn, int32_t _id)
-        : endpoint(_endpoint), fn(_fn), id(_id),
-          channel(0), format_changed(true) {}
-    sink_desc(const sink_desc& other)
-        : endpoint(other.endpoint), fn(other.fn), id(other.id),
-          channel(other.channel.load()),
-          format_changed(other.format_changed) {}
-    sink_desc& operator=(const sink_desc& other){
-        endpoint = other.endpoint;
-        fn = other.fn;
-        id = other.id;
-        channel = other.channel.load();
-        format_changed = other.format_changed;
-        return *this;
-    }
+struct endpoint {
+    endpoint() = default;
+    endpoint(void *_user, aoo_replyfn _fn, int32_t _id)
+        : user(_user), fn(_fn), id(_id){}
+
     // data
-    void * endpoint;
-    aoo_replyfn fn;
-    int32_t id;
-    std::atomic<int32_t> channel;
-    bool format_changed;
+    void *user = nullptr;
+    aoo_replyfn fn = nullptr;
+    int32_t id = 0;
 
     // methods
     void send_data(int32_t src, int32_t salt, const data_packet& data) const;
-    void send_data(int32_t sink, int32_t src, int32_t salt, const data_packet& data) const;
 
     void send_format(int32_t src, int32_t salt, const aoo_format& f,
                      const char *options, int32_t size) const;
-    void send_format(int32_t sink, int32_t src, int32_t salt, const aoo_format& f,
-                     const char *options, int32_t size) const;
 
     void send(const char *data, int32_t n) const {
-        fn(endpoint, data, n);
+        fn(user, data, n);
     }
+};
+
+struct data_request : endpoint {
+    data_request() = default;
+    data_request(void *_user, aoo_replyfn _fn, int32_t _id,
+                 int32_t _salt, int32_t _sequence, int32_t _frame)
+        : endpoint(_user, _fn, _id),
+          salt(_salt), sequence(_sequence), frame(_frame){}
+    int32_t salt = 0;
+    int32_t sequence = 0;
+    int32_t frame = 0;
+};
+
+struct sink_desc : endpoint {
+    sink_desc(void *_user, aoo_replyfn _fn, int32_t _id)
+        : endpoint(_user, _fn, _id), channel(0), format_changed(true) {}
+    sink_desc(const sink_desc& other)
+        : endpoint(other.user, other.fn, other.id),
+          channel(other.channel.load()),
+          format_changed(other.format_changed.load()){}
+    sink_desc& operator=(const sink_desc& other){
+        user = other.user;
+        fn = other.fn;
+        id = other.id;
+        channel = other.channel.load();
+        format_changed = other.format_changed.load();
+        return *this;
+    }
+
+    // data
+    std::atomic<int16_t> channel;
+    std::atomic<bool> format_changed;
 };
 
 class source final : public isource {
@@ -93,27 +109,29 @@ class source final : public isource {
     // state
     int32_t sequence_ = 0;
     std::atomic<int32_t> dropped_{0};
+    std::atomic<bool> format_changed_{false};
     // timing
     time_dll dll_;
-    std::atomic<double> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
     timer timer_;
     // buffers and queues
+    std::vector<char> sendbuffer_;
     dynamic_resampler resampler_;
     lockfree::queue<aoo_sample> audioqueue_;
     lockfree::queue<double> srqueue_;
     lockfree::queue<aoo_event> eventqueue_;
+    lockfree::queue<endpoint> formatrequestqueue_;
+    lockfree::queue<data_request> datarequestqueue_;
     history_buffer history_;
-    std::vector<char> blockbuffer_;
-    std::vector<char> resendbuffer_;
     // sinks
     std::vector<sink_desc> sinks_;
     // thread synchronization
     aoo::shared_mutex update_mutex_;
-    aoo::shared_mutex sinklist_mutex_;
+    aoo::shared_mutex sink_mutex_;
     // options
     std::atomic<int32_t> buffersize_{ AOO_SOURCE_BUFSIZE };
     std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
     std::atomic<int32_t> resend_buffersize_{ AOO_RESEND_BUFSIZE };
+    std::atomic<double> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
 
     // helper methods
     sink_desc * find_sink(void *endpoint, int32_t id);
@@ -126,9 +144,15 @@ class source final : public isource {
 
     void update_historybuffer();
 
-    void handle_request(void *endpoint, aoo_replyfn fn, int32_t id);
+    bool send_format();
 
-    void handle_resend(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt,
+    bool send_data();
+
+    bool resend_data();
+
+    void handle_format_request(void *endpoint, aoo_replyfn fn, int32_t id);
+
+    void handle_data_request(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt,
                         int32_t count, osc::ReceivedMessageArgumentIterator it);
 
     void handle_ping(void *endpoint, aoo_replyfn fn, int32_t id);
