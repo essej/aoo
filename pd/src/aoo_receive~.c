@@ -76,20 +76,22 @@ static void* socket_listener_threadfn(void *y)
                 }
             }
             // get sink ID
-            int32_t id = 0;
-            if (aoo_parsepattern(buf, nbytes, &id) > 0){
-                // synchronize with socket_listener_add()/remove()
-                pthread_mutex_lock(&x->mutex);
-                // forward OSC packet to matching receiver(s)
-                for (int i = 0; i < x->numrecv; ++i){
-                    if ((id == AOO_ID_WILDCARD) ||
-                        (id == aoo_receive_getid(x->recv[i])))
-                    {
-                        aoo_receive_handle_message(x->recv[i], buf, nbytes,
-                            client, (aoo_replyfn)endpoint_send);
+            int32_t type, id;
+            if (aoo_parsepattern(buf, nbytes, &type, &id) > 0){
+                if (type == AOO_TYPE_SINK){
+                    // synchronize with socket_listener_add()/remove()
+                    pthread_mutex_lock(&x->mutex);
+                    // forward OSC packet to matching receiver(s)
+                    for (int i = 0; i < x->numrecv; ++i){
+                        if ((id == AOO_ID_WILDCARD) ||
+                            (id == aoo_receive_getid(x->recv[i])))
+                        {
+                            aoo_receive_handle_message(x->recv[i], buf, nbytes,
+                                client, (aoo_replyfn)endpoint_send);
+                        }
                     }
+                    pthread_mutex_unlock(&x->mutex);
                 }
-                pthread_mutex_unlock(&x->mutex);
             } else {
                 // not a valid AoO OSC message
             }

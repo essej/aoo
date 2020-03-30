@@ -249,10 +249,14 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n, void *endpoint, a
         return 0; // not setup yet
     }
 
-    int32_t sinkid = 0;
-    auto onset = aoo_parsepattern(data, n, &sinkid);
+    int32_t type, sinkid;
+    auto onset = aoo_parsepattern(data, n, &type, &sinkid);
     if (!onset){
         LOG_WARNING("not an AoO message!");
+        return 0;
+    }
+    if (type != AOO_TYPE_SINK){
+        LOG_WARNING("not a sink message!");
         return 0;
     }
     if (sinkid != id_ && sinkid != AOO_ID_WILDCARD){
@@ -260,8 +264,8 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n, void *endpoint, a
         return 0;
     }
 
-    if (!strcmp(msg.AddressPattern() + onset, AOO_FORMAT)){
-        if (msg.ArgumentCount() == AOO_FORMAT_NARGS){
+    if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_FORMAT)){
+        if (msg.ArgumentCount() == AOO_MSG_FORMAT_NUMARGS){
             auto it = msg.ArgumentsBegin();
             try {
                 int32_t id = (it++)->AsInt32();
@@ -284,8 +288,8 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n, void *endpoint, a
         } else {
             LOG_ERROR("wrong number of arguments for /format message");
         }
-    } else if (!strcmp(msg.AddressPattern() + onset, AOO_DATA)){
-        if (msg.ArgumentCount() == AOO_DATA_NARGS){
+    } else if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_DATA)){
+        if (msg.ArgumentCount() == AOO_MSG_DATA_NUMARGS){
             auto it = msg.ArgumentsBegin();
             try {
                 // get header from arguments
@@ -449,7 +453,7 @@ int32_t sink::handle_format_message(void *endpoint, aoo_replyfn fn, int32_t id,
                            const char *settings, int32_t size)
 {
     if (id < 0){
-        LOG_WARNING("bad ID for " << AOO_FORMAT << " message");
+        LOG_WARNING("bad ID for " << AOO_MSG_FORMAT << " message");
         return 0;
     }
     // try to find existing source
@@ -468,7 +472,7 @@ int32_t sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                            int32_t salt, const data_packet& data)
 {
     if (id < 0){
-        LOG_WARNING("bad ID for " << AOO_DATA << " message");
+        LOG_WARNING("bad ID for " << AOO_MSG_DATA << " message");
         return 0;
     }
     // try to find existing source
@@ -563,7 +567,7 @@ void source_desc::do_update(const sink &s){
     }
 }
 
-// /AoO/<sink>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <settings...>
+// /aoo/sink/<id>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <settings...>
 
 int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format& f,
                                    const char *settings, int32_t size){
@@ -603,7 +607,7 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
     return 1;
 }
 
-// /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
+// /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
 
 int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_packet& d){
     // synchronize with update()!
@@ -1080,7 +1084,7 @@ resend_missing_done:
 #endif
 }
 
-// /AoO/<src>/request <sink>
+// /aoo/src/<id>/format <sink>
 
 bool source_desc::send_format_request(const sink& s) {
     if (streamstate_.need_format()){
@@ -1089,9 +1093,11 @@ bool source_desc::send_format_request(const sink& s) {
         osc::OutboundPacketStream msg(buf, sizeof(buf));
 
         // make OSC address pattern
-        const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_REQUEST);
+        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN +
+                AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_FORMAT_LEN;
         char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, id_, AOO_REQUEST);
+        snprintf(address, sizeof(address), "%s%s/%d%s",
+                 AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_FORMAT);
 
         msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
 
@@ -1104,7 +1110,7 @@ bool source_desc::send_format_request(const sink& s) {
 }
 
 
-// /AoO/<src>/resend <sink> <salt> <seq0> <frame0> <seq1> <frame1> ...
+// /aoo/src/<id>/data <sink> <salt> <seq0> <frame0> <seq1> <frame1> ...
 
 int32_t source_desc::send_data_request(const sink &s){
     // called without lock!
@@ -1119,9 +1125,11 @@ int32_t source_desc::send_data_request(const sink &s){
         osc::OutboundPacketStream msg(buf, sizeof(buf));
 
         // make OSC address pattern
-        const int32_t maxaddrsize = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_RESEND);
+        const int32_t maxaddrsize = AOO_MSG_DOMAIN_LEN +
+                AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_DATA_LEN;
         char address[maxaddrsize];
-        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, id_, AOO_RESEND);
+        snprintf(address, sizeof(address), "%s%s/%d%s",
+                 AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_DATA);
 
         const int32_t maxdatasize = s.packetsize() - maxaddrsize - 16; // id + salt + padding
         const int32_t maxrequests = maxdatasize / 10; // 2 * (int32_t + typetag)
@@ -1163,9 +1171,11 @@ bool source_desc::send_ping(const sink& s){
         osc::OutboundPacketStream msg(buffer, sizeof(buffer));
 
         // make OSC address pattern
-        const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_PING);
+        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+                + AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_PING_LEN;
         char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, id_, AOO_PING);
+        snprintf(address, sizeof(address), "%s%s/%d%s",
+                 AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_PING);
 
         msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
 

@@ -365,15 +365,19 @@ int32_t aoo_source_handlemessage(aoo_source *src, const char *data, int32_t n,
     return src->handle_message(data, n, sink, fn);
 }
 
-// /AoO/<src>/request <sink>
+// /aoo/src/<id>/format <sink>
 int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn){
     osc::ReceivedPacket packet(data, n);
     osc::ReceivedMessage msg(packet);
 
-    int32_t src = 0;
-    auto onset = aoo_parsepattern(data, n, &src);
+    int32_t type, src;
+    auto onset = aoo_parsepattern(data, n, &type, &src);
     if (!onset){
         LOG_WARNING("aoo_source: not an AoO message!");
+        return 0;
+    }
+    if (type != AOO_TYPE_SOURCE){
+        LOG_WARNING("aoo_source: not a source message!");
         return 0;
     }
     if (src == AOO_ID_WILDCARD){
@@ -385,7 +389,7 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
         return 0;
     }
 
-    if (!strcmp(msg.AddressPattern() + onset, AOO_REQUEST)){
+    if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_FORMAT)){
         if (msg.ArgumentCount() == 1){
             try {
                 auto it = msg.ArgumentsBegin();
@@ -400,7 +404,7 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
         } else {
             LOG_ERROR("wrong number of arguments for /request message");
         }
-    } else if (!strcmp(msg.AddressPattern() + onset, AOO_RESEND)){
+    } else if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_DATA)){
         auto count = msg.ArgumentCount();
         if (count >= 4){
             try {
@@ -417,7 +421,7 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
         } else {
             LOG_ERROR("bad number of arguments for /resend message");
         }
-    } else if (!strcmp(msg.AddressPattern() + onset, AOO_PING)){
+    } else if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_PING)){
         try {
             auto it = msg.ArgumentsBegin();
             auto id = it->AsInt32();
@@ -576,7 +580,7 @@ namespace aoo {
 
 /*//////////////////////////////// endpoint /////////////////////////////////////*/
 
-// /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
+// /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
 void endpoint::send_data(int32_t src, int32_t salt, const aoo::data_packet& d) const{
     // call without lock!
@@ -585,13 +589,15 @@ void endpoint::send_data(int32_t src, int32_t salt, const aoo::data_packet& d) c
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
     if (id != AOO_ID_WILDCARD){
-        const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_DATA);
+        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+                + AOO_MSG_SINK_LEN + 16 + AOO_MSG_DATA_LEN;
         char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, id, AOO_DATA);
+        snprintf(address, sizeof(address), "%s%s/%d%s",
+                 AOO_MSG_DOMAIN, AOO_MSG_SINK, id, AOO_MSG_DATA);
 
         msg << osc::BeginMessage(address);
     } else {
-        msg << osc::BeginMessage(AOO_DATA_WILDCARD);
+        msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_DATA);
     }
 
     LOG_DEBUG("send block: seq = " << d.sequence << ", sr = " << d.samplerate
@@ -605,7 +611,7 @@ void endpoint::send_data(int32_t src, int32_t salt, const aoo::data_packet& d) c
     send(msg.Data(), msg.Size());
 }
 
-// /AoO/<sink>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
+// /aoo/sink/<id>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
 
 void endpoint::send_format(int32_t src, int32_t salt, const aoo_format& f,
                             const char *options, int32_t size) const {
@@ -618,13 +624,15 @@ void endpoint::send_format(int32_t src, int32_t salt, const aoo_format& f,
     // use 'id' instead of 'sink.id'! this is for cases where 'sink.id' is a wildcard
     // but we want to reply to an individual sink.
     if (id != AOO_ID_WILDCARD){
-        const int32_t max_addr_size = sizeof(AOO_DOMAIN) + 16 + sizeof(AOO_FORMAT);
+        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+                + AOO_MSG_SINK_LEN + 16 + AOO_MSG_FORMAT_LEN;
         char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s/%d%s", AOO_DOMAIN, id, AOO_FORMAT);
+        snprintf(address, sizeof(address), "%s%s/%d%s",
+                 AOO_MSG_DOMAIN, AOO_MSG_SINK, id, AOO_MSG_FORMAT);
 
         msg << osc::BeginMessage(address);
     } else {
-        msg << osc::BeginMessage(AOO_FORMAT_WILDCARD);
+        msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_FORMAT);
     }
 
     msg << src << salt << f.nchannels << f.samplerate << f.blocksize
@@ -1011,7 +1019,7 @@ void source::handle_format_request(void *endpoint, aoo_replyfn fn, int32_t id){
             formatrequestqueue_.write(aoo::endpoint { endpoint, fn, id });
         }
     } else {
-        LOG_WARNING("ignoring '" << AOO_REQUEST << "' message: sink not found");
+        LOG_WARNING("ignoring '" << AOO_MSG_FORMAT << "' message: sink not found");
     }
 }
 
@@ -1035,7 +1043,7 @@ void source::handle_data_request(void *endpoint, aoo_replyfn fn, int32_t id, int
             }
         }
     } else {
-        LOG_WARNING("ignoring '" << AOO_RESEND << "' message: sink not found");
+        LOG_WARNING("ignoring '" << AOO_MSG_DATA << "' message: sink not found");
     }
 }
 
@@ -1058,7 +1066,7 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id){
             eventqueue_.write(event);
         }
     } else {
-        LOG_WARNING("ignoring '" << AOO_PING << "' message: sink not found");
+        LOG_WARNING("ignoring '" << AOO_MSG_PING << "' message: sink not found");
     }
 }
 

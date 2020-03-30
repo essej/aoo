@@ -31,16 +31,25 @@ extern "C"
 
 typedef AOO_SAMPLETYPE aoo_sample;
 
-#define AOO_DOMAIN "/AoO"
-#define AOO_FORMAT "/format"
-#define AOO_FORMAT_NARGS 7
-#define AOO_FORMAT_WILDCARD "/AoO/*/format"
-#define AOO_DATA "/data"
-#define AOO_DATA_NARGS 9
-#define AOO_DATA_WILDCARD "/AoO/*/data"
-#define AOO_REQUEST "/request"
-#define AOO_RESEND "/resend"
-#define AOO_PING "/ping"
+#define AOO_MSG_DOMAIN "/aoo"
+#define AOO_MSG_DOMAIN_LEN 4
+#define AOO_MSG_SOURCE "/src"
+#define AOO_MSG_SOURCE_LEN 4
+#define AOO_MSG_SINK "/sink"
+#define AOO_MSG_SINK_LEN 5
+#define AOO_MSG_WILDCARD "/*"
+#define AOO_MSG_WILDCARD_LEN 2
+#define AOO_MSG_FORMAT "/format"
+#define AOO_MSG_FORMAT_LEN 7
+#define AOO_MSG_FORMAT_NUMARGS 7
+#define AOO_MSG_DATA "/data"
+#define AOO_MSG_DATA_LEN 5
+#define AOO_MSG_DATA_NUMARGS 9
+#define AOO_MSG_PING "/ping"
+#define AOO_MSG_PING_LEN 5
+
+#define AOO_TYPE_SOURCE 0
+#define AOO_TYPE_SINK 1
 
 #define AOO_MAXPACKETSIZE 4096 // ?
 
@@ -134,9 +143,10 @@ struct aoo_format;
 #define AOO_ID_WILDCARD -1
 #define AOO_ID_NONE INT32_MIN
 
-// get the ID from an AoO OSC message, e.g. in /AoO/<id>/data
+// get the type and ID from an AoO OSC message, e.g. in /aoo/src/<id>/data
 // returns 1 on success, 0 on fail
-AOO_API int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *id);
+AOO_API int32_t aoo_parsepattern(const char *msg, int32_t n,
+                                 int32_t *type, int32_t *id);
 
 // get the current NTP time
 AOO_API uint64_t aoo_osctime_get(void);

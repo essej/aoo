@@ -66,22 +66,42 @@ int32_t aoo_register_codec(const char *name, const aoo_codec *codec){
 
 /*//////////////////// OSC ////////////////////////////*/
 
-int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *id){
-    int32_t offset = sizeof(AOO_DOMAIN) - 1;
-    if (n < (offset + 2)){
-        return 0;
-    }
-    if (!memcmp(msg, AOO_DOMAIN, offset)){
+int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *type, int32_t *id){
+    int32_t offset = 0;
+    if (n >= AOO_MSG_DOMAIN_LEN && !memcmp(msg, AOO_MSG_DOMAIN, AOO_MSG_DOMAIN_LEN)){
+        offset += AOO_MSG_DOMAIN_LEN;
+        if (n >= (offset + AOO_MSG_SOURCE_LEN)
+            && !memcmp(msg + offset, AOO_MSG_SOURCE, AOO_MSG_SOURCE_LEN))
+        {
+            *type = AOO_TYPE_SOURCE;
+            offset += AOO_MSG_SOURCE_LEN;
+        }
+        else if (n >= (offset + AOO_MSG_SINK_LEN)
+            && !memcmp(msg + offset, AOO_MSG_SINK, AOO_MSG_SINK_LEN))
+        {
+            *type = AOO_TYPE_SINK;
+            offset += AOO_MSG_SINK_LEN;
+        } else {
+            // TODO only print relevant part of OSC address string
+            LOG_ERROR("aoo_parsepattern: unknown destination " << msg + offset);
+            return 0;
+        }
+
         if (!memcmp(msg + offset, "/*", 2)){
             *id = AOO_ID_WILDCARD; // wildcard
             return offset + 2;
         }
         int32_t skip = 0;
-        if (sscanf(&msg[offset], "/%d%n", id, &skip) > 0){
+        if (sscanf(msg + offset, "/%d%n", id, &skip) > 0){
             return offset + skip;
+        } else {
+            // TODO only print relevant part of OSC address string
+            LOG_ERROR("aoo_parsepattern: bad ID " << msg + offset);
+            return 0;
         }
+    } else {
+        return 0; // not an AoO message
     }
-    return 0;
 }
 
 // OSC time stamp (NTP time)
