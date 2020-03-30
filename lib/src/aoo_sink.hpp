@@ -17,21 +17,39 @@ struct stream_state {
         reordered_ = 0;
         resent_ = 0;
         gap_ = 0;
+        pingtime_ = 0;
+        state_ = AOO_SOURCE_STATE_STOP;
         recover_ = false;
         format_ = false;
     }
 
     void add_lost(int32_t n) { lost_ += n; }
+    int32_t get_lost() { return lost_.exchange(0); }
+
     void add_reordered(int32_t n) { reordered_ += n; }
+    int32_t get_reordered() { return reordered_.exchange(0); }
+
     void add_resent(int32_t n) { resent_ += n; }
+    int32_t get_resent() { return resent_.exchange(0); }
+
     void add_gap(int32_t n) { gap_ += n; }
-    void get(int32_t& lost, int32_t& reordered,
-             int32_t& resent, int32_t& gap)
-    {
-        lost = lost_.exchange(0);
-        reordered = reordered_.exchange(0);
-        resent = resent_.exchange(0);
-        gap = gap_.exchange(0);
+    int32_t get_gap() { return gap_.exchange(0); }
+
+    bool update_pingtime(double time, double interval){
+        if (time - pingtime_.load() > interval){
+            pingtime_ = time;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    bool update_state(aoo_source_state state){
+        auto last = state_.exchange(state);
+        return state != last;
+    }
+    aoo_source_state get_state(){
+        return state_;
     }
 
     void request_recover() { recover_ = true; }
@@ -44,6 +62,8 @@ private:
     std::atomic<int32_t> reordered_{0};
     std::atomic<int32_t> resent_{0};
     std::atomic<int32_t> gap_{0};
+    std::atomic<double> pingtime_{0};
+    std::atomic<aoo_source_state> state_{AOO_SOURCE_STATE_STOP};
     std::atomic<bool> recover_{false};
     std::atomic<bool> format_{false};
 };
@@ -108,8 +128,6 @@ private:
     int32_t next_ = 0; // next outgoing block
     int32_t channel_ = 0; // recent channel onset
     double samplerate_ = 0; // recent samplerate
-    double lastpingtime_ = 0;
-    aoo_source_state laststate_{AOO_SOURCE_STATE_STOP};
     stream_state streamstate_;
     // queues and buffers
     block_queue blockqueue_;

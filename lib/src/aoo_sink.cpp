@@ -556,8 +556,6 @@ void source_desc::do_update(const sink &s){
         next_ = -1;
         channel_ = 0;
         samplerate_ = decoder_->samplerate();
-        lastpingtime_ = 0;
-        laststate_ = AOO_SOURCE_STATE_STOP;
         streamstate_.reset();
         ack_list_.set_limit(s.resend_limit());
         ack_list_.clear();
@@ -699,8 +697,10 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         audioqueue_.read_commit();
 
         // record stream state
-        int32_t lost, reordered, resent, gap;
-        streamstate_.get(lost, reordered, resent, gap);
+        int32_t lost = streamstate_.get_lost();
+        int32_t reordered = streamstate_.get_reordered();
+        int32_t resent = streamstate_.get_resent();
+        int32_t gap = streamstate_.get_gap();
 
         aoo_event event;
         event.source.endpoint = endpoint_;
@@ -756,23 +756,22 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
 
         // LOG_DEBUG("read samples from source " << id_);
 
-        if (laststate_ != AOO_SOURCE_STATE_START){
+        if (streamstate_.update_state(AOO_SOURCE_STATE_PLAY)){
             if (eventqueue_.write_available()){
                 // push "start" event
                 aoo_event event;
                 event.type = AOO_SOURCE_STATE_EVENT;
                 event.source.endpoint = endpoint_;
                 event.source.id = id_;
-                event.source_state.state = AOO_SOURCE_STATE_START;
+                event.source_state.state = AOO_SOURCE_STATE_PLAY;
                 eventqueue_.write(event);
             }
-            laststate_ = AOO_SOURCE_STATE_START;
         }
 
         return true;
     } else {
         // buffer ran out -> push "stop" event
-        if (laststate_ != AOO_SOURCE_STATE_STOP){
+        if (streamstate_.update_state(AOO_SOURCE_STATE_STOP)){
             if (eventqueue_.write_available()){
                 aoo_event event;
                 event.type = AOO_SOURCE_STATE_EVENT;
@@ -781,7 +780,6 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
                 event.source_state.state = AOO_SOURCE_STATE_STOP;
                 eventqueue_.write(event);
             }
-            laststate_ = AOO_SOURCE_STATE_STOP;
         }
 
         return false;
@@ -1166,25 +1164,26 @@ bool source_desc::send_ping(const sink& s){
         return false;
     }
     auto now = s.elapsed_time();
-    if ((now - lastpingtime_) > s.ping_interval()){
-        char buffer[AOO_MAXPACKETSIZE];
-        osc::OutboundPacketStream msg(buffer, sizeof(buffer));
+    if (streamstate_.update_pingtime(now, s.ping_interval())){
+        // only send ping if source is active
+        if (streamstate_.get_state() == AOO_SOURCE_STATE_PLAY){
+            char buffer[AOO_MAXPACKETSIZE];
+            osc::OutboundPacketStream msg(buffer, sizeof(buffer));
 
-        // make OSC address pattern
-        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                + AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_PING_LEN;
-        char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s%s/%d%s",
-                 AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_PING);
+            // make OSC address pattern
+            const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+                    + AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_PING_LEN;
+            char address[max_addr_size];
+            snprintf(address, sizeof(address), "%s%s/%d%s",
+                     AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_PING);
 
-        msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
+            msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
 
-        dosend(msg.Data(), msg.Size());
+            dosend(msg.Data(), msg.Size());
 
-        lastpingtime_ = now;
-
-        LOG_DEBUG("send ping to source " << id_);
-        return true;
+            LOG_DEBUG("send ping to source " << id_);
+            return true;
+        }
     }
     return false;
 }
