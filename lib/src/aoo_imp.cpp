@@ -1016,7 +1016,7 @@ void dynamic_resampler::update(double srfrom, double srto){
 }
 
 int32_t dynamic_resampler::write_available(){
-    return (double)buffer_.size() - balance_ + 0.5; // !
+    return (double)buffer_.size() - balance_; // !
 }
 
 void dynamic_resampler::write(const aoo_sample *data, int32_t n){
