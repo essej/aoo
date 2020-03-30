@@ -207,7 +207,7 @@ typedef aoo_endpoint_event aoo_sink_event;
 typedef enum aoo_source_state
 {
     AOO_SOURCE_STATE_STOP,
-    AOO_SOURCE_STATE_START
+    AOO_SOURCE_STATE_PLAY
 } aoo_source_state;
 
 typedef struct aoo_source_state_event
