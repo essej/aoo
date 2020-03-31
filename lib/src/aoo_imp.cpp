@@ -1204,9 +1204,13 @@ timer::state timer::update(time_tag t, double& error){
 
 } // aoo
 
-void aoo_setup(){
-    aoo_codec_pcm_setup(aoo_register_codec);
-    aoo_codec_opus_setup(aoo_register_codec);
+void aoo_initialize(){
+    static bool initialized = false;
+    if (!initialized){
+        aoo_codec_pcm_setup(aoo_register_codec);
+        aoo_codec_opus_setup(aoo_register_codec);
+        initialized = true;
+    }
 }
 
-void aoo_close() {}
+void aoo_terminate() {}

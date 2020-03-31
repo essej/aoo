@@ -131,11 +131,11 @@ typedef AOO_SAMPLETYPE aoo_sample;
  #define AOO_RESEND_MAXNUMFRAMES 64
 #endif
 
-// setup AoO library - call only once!
-AOO_API void aoo_setup(void);
+// initialize AoO library - call only once!
+AOO_API void aoo_initialize(void);
 
-// close AoO library - call only once!
-AOO_API void aoo_close(void);
+// terminate AoO library - call only once!
+AOO_API void aoo_terminate(void);
 
 struct aoo_format;
 
