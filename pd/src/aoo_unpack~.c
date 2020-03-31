@@ -81,10 +81,10 @@ static void aoo_unpack_reset(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *arg
     if (argc){
         // reset specific source
         int32_t id = atom_getfloat(argv);
-        aoo_sink_setsourceoption(x->x_aoo_sink, x, id, aoo_opt_reset, AOO_ARGNULL);
+        aoo_sink_setsourceoption(x->x_aoo_sink, x, id, aoo_opt_reset, AOO_ARG_NULL);
     } else {
         // reset all sources
-        aoo_sink_setoption(x->x_aoo_sink, aoo_opt_reset, AOO_ARGNULL);
+        aoo_sink_setoption(x->x_aoo_sink, aoo_opt_reset, AOO_ARG_NULL);
     }
 }
 

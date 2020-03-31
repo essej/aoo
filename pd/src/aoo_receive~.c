@@ -339,11 +339,11 @@ static void aoo_receive_reset(t_aoo_receive *x, t_symbol *s, int argc, t_atom *a
         t_source *source = aoo_receive_findsource(x, argc, argv);
         if (source){
             aoo_sink_setsourceoption(x->x_aoo_sink, source->s_endpoint,
-                                     source->s_id, aoo_opt_reset, AOO_ARGNULL);
+                                     source->s_id, aoo_opt_reset, AOO_ARG_NULL);
         }
     } else {
         // reset all sources
-        aoo_sink_setoption(x->x_aoo_sink, aoo_opt_reset, AOO_ARGNULL);
+        aoo_sink_setoption(x->x_aoo_sink, aoo_opt_reset, AOO_ARG_NULL);
     }
 }
 
