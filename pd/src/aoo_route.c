@@ -91,11 +91,9 @@ static void aoo_route_free(t_aoo_route *x)
     freebytes(x->x_selectors, sizeof(t_atom) * x->x_n);
 }
 
-EXPORT void aoo_route_setup(void)
+void aoo_route_setup(void)
 {
     aoo_route_class = class_new(gensym("aoo_route"), (t_newmethod)(void *)aoo_route_new,
         (t_method)aoo_route_free, sizeof(t_aoo_route), 0, A_GIMME, A_NULL);
     class_addlist(aoo_route_class, (t_method)aoo_route_list);
-
-    aoo_setup();
 }

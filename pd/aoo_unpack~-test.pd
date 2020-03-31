@@ -1,11 +1,12 @@
-#N canvas 946 91 284 20 12;
+#N canvas 946 91 284 1 12;
+#X declare -lib aoo;
 #N canvas 703 84 868 737 sub 1;
 #X obj 48 199 spigot;
 #X obj 87 177 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X obj 48 230 print;
-#X obj 131 300 nbx 5 14 -1e+37 1e+37 0 0 empty empty empty 0 -8 0 10
--262144 -1 -1 500 256;
+#X obj 131 300 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 500 256;
 #X obj 111 180 aoo_route 1 2;
 #X obj 177 412 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
 -1 -1;
@@ -62,6 +63,7 @@
 #X text 341 463 use backchannel ...;
 #X text 83 19 Test aoo/aoo_unpack~ <id> <channels>;
 #X text 220 175 aoo/aoo_route <id1> [id2] [id3] ...;
+#X obj 256 62 declare -lib aoo;
 #X connect 0 0 2 0;
 #X connect 1 0 0 1;
 #X connect 3 0 16 0;

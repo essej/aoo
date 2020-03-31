@@ -1,4 +1,5 @@
 #N canvas 452 39 721 745 12;
+#X declare -lib aoo;
 #X text 35 703 see also;
 #X obj 104 704 aoo_send~;
 #X msg 38 99 listen \$1;
@@ -78,6 +79,7 @@ at once;
 or out of sync), f 47;
 #X msg 88 402 reset <host> <port> <id>;
 #X text 271 401 reset individual source;
+#X obj 392 676 declare -lib aoo;
 #X connect 2 0 7 0;
 #X connect 3 0 2 0;
 #X connect 4 0 2 0;

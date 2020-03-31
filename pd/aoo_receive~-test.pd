@@ -1,4 +1,5 @@
 #N canvas 946 24 446 99 12;
+#X declare -lib aoo;
 #N canvas 811 54 756 612 sub 1;
 #X obj 127 164 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 500 256;
@@ -7,7 +8,7 @@
 #X obj 66 315 *~;
 #X obj 137 316 *~;
 #X obj 403 45 vsl 15 128 0 1 0 0 empty empty empty 0 -9 0 10 -262144
--1 -1 5700 1;
+-1 -1 0 1;
 #X obj 403 205 t f f;
 #X obj 449 255 - 100;
 #X floatatom 449 279 5 0 0 0 - - -;
@@ -69,6 +70,7 @@
 #X obj 469 503 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
 -1 -1;
 #X msg 335 467 connect foo 9999;
+#X obj 132 41 declare -lib aoo;
 #X connect 0 0 11 0;
 #X connect 1 0 3 1;
 #X connect 1 0 4 1;

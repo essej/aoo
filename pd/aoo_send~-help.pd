@@ -1,4 +1,5 @@
-#N canvas 222 14 765 775 12;
+#N canvas 605 2 765 775 12;
+#X declare -lib aoo;
 #X obj 29 633 aoo_send~ 1 2;
 #X text 182 615 creation arguments:;
 #N canvas 135 97 551 377 pcm 0;
@@ -208,6 +209,7 @@ onset]);
 #X text 271 272 You can use these two methods to send "audio events"
 instead of continuous streams., f 53;
 #X text 272 308 Note that the stream is initially running.;
+#X obj 363 559 declare -lib aoo;
 #X connect 0 0 40 0;
 #X connect 2 0 0 0;
 #X connect 3 0 0 0;

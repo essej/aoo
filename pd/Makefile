@@ -29,8 +29,7 @@ cflags = \
     -I$(AOO)/src/lib \
     -Wno-unused -Wno-unused-parameter \
     -fvisibility=hidden \
-    -DAOO_BUILD \
-    -DDLL_EXPORT \
+    -DAOO_STATIC \
     -DLOGLEVEL=2 \
     -DAOO_TIMEFILTER_BANDWIDTH=0.0001 \
     -DAOO_DEBUG_DLL=0 \
@@ -40,7 +39,12 @@ cflags = \
 
 ldlibs =
 
+make-lib-executable=yes
+
+lib.setup.sources = src/aoo_setup.c
+
 common.sources = \
+    src/aoo_server.c \
     src/aoo_common.c \
     src/aoo_net.c \
     $(empty)
@@ -53,25 +57,23 @@ shared.sources = \
     $(AOO)/src/aoo_opus.cpp \
     $(AOO)/src/lib/oscpack/osc/OscTypes.cpp \
     $(AOO)/src/lib/oscpack/osc/OscReceivedElements.cpp \
-    $(AOO)/src/lib/oscpack/osc/OscOutboundPacketStream.cpp
+    $(AOO)/src/lib/oscpack/osc/OscOutboundPacketStream.cpp \
+    $(empty)
 
 # hack to set the C++ standard only for the shared library
 $(shared.sources:.cpp=.o): cxx.flags += -std=c++14
 
-shared.ldlibs = -lopus
-
 define forWindows
-    ldlibs += -lws2_32
-    shared.ldlibs += -static-libstdc++ -static-libgcc
+    ldlibs += -lws2_32 -lopus -static-libstdc++ -static-libgcc
 endef
 
 define forDarwin
     cflags += -mmacosx-version-min=10.9
-    ldlibs += -lpthread
+    ldlibs += -lpthread -lopus
 endef
 
 define forLinux
-    ldlibs += -pthread
+    ldlibs += -pthread -lopus
 endef
 
 # all extra files to be included in binary distribution of the library

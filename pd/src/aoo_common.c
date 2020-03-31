@@ -8,9 +8,9 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-#define classname(x) class_getname(*(t_pd *)x)
-
 #define CLAMP(x, a, b) ((x) < (a) ? (a) : (x) > (b) ? (b) : (x))
+
+/*/////////////////////////// helper functions ///////////////////////////////////////*/
 
 static int aoo_getendpointarg(void *x, int argc, t_atom *argv, struct sockaddr_storage *sa,
                               socklen_t *len, int32_t *id, const char *what)

@@ -22,6 +22,20 @@
 #define EXPORT
 #endif
 
+#define classname(x) class_getname(*(t_pd *)x)
+
+/*///////////////////////////// aoo_server /////////////////////////////*/
+
+typedef struct _aoo_server t_aoo_server;
+
+t_aoo_server *aoo_server_add(t_pd *client, int32_t id, int port);
+
+void aoo_server_release(t_aoo_server *socket, t_pd *client, int32_t id);
+
+int aoo_server_port(t_aoo_server *);
+
+/*///////////////////////////// helper functions ///////////////////////////////*/
+
 int aoo_getsinkarg(void *x, int argc, t_atom *argv,
                         struct sockaddr_storage *sa, socklen_t *len, int32_t *id);
 

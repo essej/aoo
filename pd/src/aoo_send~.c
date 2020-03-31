@@ -8,8 +8,6 @@
 #include <stdio.h>
 #include <errno.h>
 
-#define classname(x) class_getname(*(t_pd *)x)
-
 // for hardware buffer sizes up to 1024 @ 44.1 kHz
 #define DEFBUFSIZE 25
 
@@ -519,7 +517,7 @@ static void aoo_send_free(t_aoo_send *x)
     clock_free(x->x_clock);
 }
 
-EXPORT void aoo_send_tilde_setup(void)
+void aoo_send_tilde_setup(void)
 {
     aoo_send_class = class_new(gensym("aoo_send~"), (t_newmethod)(void *)aoo_send_new,
         (t_method)aoo_send_free, sizeof(t_aoo_send), 0, A_GIMME, A_NULL);
@@ -536,6 +534,4 @@ EXPORT void aoo_send_tilde_setup(void)
     class_addmethod(aoo_send_class, (t_method)aoo_send_resend, gensym("resend"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_listsinks, gensym("list_sinks"), A_NULL);
-
-    aoo_setup();
 }

@@ -17,8 +17,6 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
-#define classname(x) class_getname(*(t_pd *)x)
-
 static t_class *aoo_pack_class;
 
 typedef struct _aoo_pack
@@ -265,7 +263,7 @@ static void aoo_pack_free(t_aoo_pack *x)
     aoo_source_free(x->x_aoo_source);
 }
 
-EXPORT void aoo_pack_tilde_setup(void)
+void aoo_pack_tilde_setup(void)
 {
     aoo_pack_class = class_new(gensym("aoo_pack~"), (t_newmethod)(void *)aoo_pack_new,
         (t_method)aoo_pack_free, sizeof(t_aoo_pack), 0, A_GIMME, A_NULL);
@@ -282,6 +280,4 @@ EXPORT void aoo_pack_tilde_setup(void)
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_resend, gensym("resend"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
-
-    aoo_setup();
 }
