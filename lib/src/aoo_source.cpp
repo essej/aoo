@@ -52,6 +52,18 @@ int32_t aoo_source_setoption(aoo_source *src, int32_t opt, void *p, int32_t size
 int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
+    // stop
+    case aoo_opt_stop:
+        play_ = false;
+        break;
+    // resume
+    case aoo_opt_resume:
+    {
+        unique_lock lock(update_mutex_); // writer lock!
+        update();
+        play_ = true;
+        break;
+    }
     // format
     case aoo_opt_format:
         CHECKARG(aoo_format);
@@ -472,11 +484,15 @@ int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, 
 }
 
 int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
+    if (!play_){
+        return 0; // pausing
+    }
+
     // update time DLL filter
     double error;
     auto state = timer_.update(t, error);
     if (state == timer::state::reset){
-        LOG_VERBOSE("setup time DLL filter for source");
+        LOG_DEBUG("setup time DLL filter for source");
         dll_.setup(samplerate_, blocksize_, bandwidth_, 0);
     } else if (state == timer::state::error){
         // skip blocks

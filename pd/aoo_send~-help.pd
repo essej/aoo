@@ -1,37 +1,38 @@
-#N canvas 198 9 672 767 12;
-#X obj 29 599 aoo_send~ 1 2;
-#X text 182 581 creation arguments:;
-#N canvas 135 97 551 346 pcm 0;
-#X obj 31 302 outlet;
-#X msg 187 57 2;
-#X msg 198 83 3;
-#X msg 204 109 4;
-#X msg 210 134 8;
-#X obj 187 161 t b f;
-#X msg 119 104 44100;
-#X msg 126 128 48000;
-#X msg 110 81 22050;
-#X obj 102 159 t b f;
-#X msg 42 78 64;
-#X msg 51 103 128;
-#X msg 58 127 256;
-#X obj 31 193 pack 64 44100 4;
-#X msg 31 245 format pcm \$1 \$2 \$3;
-#X msg 63 155 512;
-#X obj 32 56 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
+#N canvas 222 14 765 775 12;
+#X obj 29 633 aoo_send~ 1 2;
+#X text 182 615 creation arguments:;
+#N canvas 135 97 551 377 pcm 0;
+#X obj 31 323 outlet;
+#X msg 187 78 2;
+#X msg 198 104 3;
+#X msg 204 130 4;
+#X msg 210 155 8;
+#X obj 187 182 t b f;
+#X msg 119 125 44100;
+#X msg 126 149 48000;
+#X msg 110 102 22050;
+#X obj 102 180 t b f;
+#X msg 42 99 64;
+#X msg 51 124 128;
+#X msg 58 148 256;
+#X obj 31 214 pack 64 44100 4;
+#X msg 31 266 format pcm \$1 \$2 \$3;
+#X msg 63 176 512;
+#X obj 32 77 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
 -262144 -1 -1 0 256;
-#X obj 102 57 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X obj 102 78 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X text 230 57 16-bit integer;
-#X text 238 84 24-bit integer;
-#X text 241 107 32-bit float;
-#X text 244 134 64-bit float;
-#X text 28 34 blocksize;
-#X text 102 34 samplerate;
-#X text 186 35 bitdepth (default: 4);
-#X text 128 274 all arguments are optional!;
-#X text 39 219 [format pcm <blocksize> <samplerate> <bitdepth>(;
-#X msg 41 274 format pcm;
+#X text 230 78 16-bit integer;
+#X text 238 105 24-bit integer;
+#X text 241 128 32-bit float;
+#X text 244 155 64-bit float;
+#X text 28 55 blocksize;
+#X text 102 55 samplerate;
+#X text 186 56 bitdepth (default: 4);
+#X text 128 295 all arguments are optional!;
+#X text 39 240 [format pcm <blocksize> <samplerate> <bitdepth>(;
+#X msg 41 295 format pcm;
+#X text 29 28 uncompressed PCM;
 #X connect 1 0 5 0;
 #X connect 2 0 5 0;
 #X connect 3 0 5 0;
@@ -52,60 +53,62 @@
 #X connect 16 0 13 0;
 #X connect 17 0 9 0;
 #X connect 27 0 0 0;
-#X restore 116 481 pd pcm;
+#X restore 112 545 pd pcm;
 #N canvas 104 170 832 547 opus 0;
-#X obj 50 454 outlet;
-#X msg 161 125 48000;
-#X obj 137 178 t b f;
-#X obj 50 53 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
+#X obj 50 493 outlet;
+#X msg 161 164 48000;
+#X obj 137 217 t b f;
+#X obj 50 92 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
 -262144 -1 -1 0 256;
-#X obj 137 54 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X obj 137 93 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X text 137 31 samplerate;
-#X text 60 326 [format opus <blocksize> <samplerate> <bitrate> <complexity>
+#X text 137 70 samplerate;
+#X text 60 365 [format opus <blocksize> <samplerate> <bitrate> <complexity>
 <signal type>(, f 77;
-#X obj 224 53 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X obj 224 92 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X msg 245 103 max;
-#X obj 340 53 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X msg 245 142 max;
+#X obj 340 92 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X msg 63 424 format opus;
-#X text 153 424 all arguments are optional!;
-#X msg 235 74 auto;
-#X text 339 30 complexity (0 - 10);
-#X text 223 31 bitrate (bit/s);
-#X msg 351 78 auto;
-#X text 486 29 signal type;
-#X msg 588 52 auto;
-#X msg 491 52 music;
-#X msg 539 52 voice;
-#X obj 224 154 t b a;
-#X obj 491 183 t b a;
-#X obj 430 291 text define \$0-opus;
-#X obj 430 239 loadbang;
-#X msg 430 263 set 512 48000 auto auto auto;
-#X obj 50 207 t b f;
-#X obj 340 162 t b a;
-#X obj 50 355 list prepend format opus;
-#X obj 50 383 list trim;
-#X obj 82 238 text set \$0-opus 0 0;
-#X obj 169 204 text set \$0-opus 0 1;
-#X obj 256 238 text set \$0-opus 0 2;
-#X obj 372 212 text set \$0-opus 0 3;
-#X obj 523 236 text set \$0-opus 0 4;
-#X obj 523 210 symbol;
-#X obj 372 186 list;
-#X obj 256 179 list;
-#X text 45 31 blocksize;
-#X msg 154 101 24000;
-#X msg 145 78 12000;
-#X msg 50 262 0;
-#X obj 50 295 text get \$0-opus;
-#X msg 59 75 128;
-#X msg 65 100 256;
-#X msg 71 124 512;
-#X msg 77 148 1024;
-#X msg 84 173 2048;
+#X msg 63 463 format opus;
+#X text 153 463 all arguments are optional!;
+#X msg 235 113 auto;
+#X text 339 69 complexity (0 - 10);
+#X text 223 70 bitrate (bit/s);
+#X msg 351 117 auto;
+#X text 486 68 signal type;
+#X msg 588 91 auto;
+#X msg 491 91 music;
+#X msg 539 91 voice;
+#X obj 224 193 t b a;
+#X obj 491 222 t b a;
+#X obj 430 330 text define \$0-opus;
+#X obj 430 278 loadbang;
+#X msg 430 302 set 512 48000 auto auto auto;
+#X obj 50 246 t b f;
+#X obj 340 201 t b a;
+#X obj 50 394 list prepend format opus;
+#X obj 50 422 list trim;
+#X obj 82 277 text set \$0-opus 0 0;
+#X obj 169 243 text set \$0-opus 0 1;
+#X obj 256 277 text set \$0-opus 0 2;
+#X obj 372 251 text set \$0-opus 0 3;
+#X obj 523 275 text set \$0-opus 0 4;
+#X obj 523 249 symbol;
+#X obj 372 225 list;
+#X obj 256 218 list;
+#X text 45 70 blocksize;
+#X msg 154 140 24000;
+#X msg 145 117 12000;
+#X msg 50 301 0;
+#X obj 50 334 text get \$0-opus;
+#X msg 59 114 128;
+#X msg 65 139 256;
+#X msg 71 163 512;
+#X msg 77 187 1024;
+#X msg 84 212 2048;
+#X text 47 35 Opus is a high quality codec for compressed audio \,
+see http://opus-codec.org/, f 79;
 #X connect 1 0 2 0;
 #X connect 2 0 40 0;
 #X connect 2 1 30 0;
@@ -144,60 +147,67 @@
 #X connect 44 0 25 0;
 #X connect 45 0 25 0;
 #X connect 46 0 25 0;
-#X restore 122 510 pd opus;
-#X text 114 459 set format:;
-#X obj 89 265 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X restore 169 545 pd opus;
+#X text 110 521 set format:;
+#X obj 89 326 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X obj 97 315 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X obj 97 376 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X msg 97 334 packetsize \$1;
-#X text 203 332 max. UDP packet size (default: 512 bytes);
-#X obj 103 362 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X msg 97 395 packetsize \$1;
+#X text 203 393 max. UDP packet size (default: 512 bytes);
+#X obj 103 423 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X msg 103 381 timefilter \$1;
-#X text 207 382 time DLL filter bandwidth (default: 0.0001);
-#X text 26 694 see also;
-#X obj 101 695 aoo_receive~;
-#X obj 48 546 osc~ 440;
-#X obj 116 545 osc~ 220;
-#X text 182 603 1) ID \, 2) num channels \, 3) [sink ID] \, 4) [sink
+#X msg 103 442 timefilter \$1;
+#X text 207 443 time DLL filter bandwidth (default: 0.0001);
+#X text 26 728 see also;
+#X obj 101 729 aoo_receive~;
+#X obj 48 580 osc~ 440;
+#X obj 116 579 osc~ 220;
+#X text 182 637 1) ID \, 2) num channels \, 3) [sink ID] \, 4) [sink
 channel onset], f 62;
-#X obj 48 572 *~ 0.25;
-#X obj 116 571 *~ 0.25;
-#X msg 108 430 resend \$1;
-#X obj 108 409 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X obj 48 606 *~ 0.25;
+#X obj 116 605 *~ 0.25;
+#X msg 108 491 resend \$1;
+#X obj 108 470 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X text 187 431 buffersize (ms) for resending lost packets (default:
+#X text 187 492 buffersize (ms) for resending lost packets (default:
 1000);
-#X text 179 635 events:;
-#X text 201 657 ping event: [ping <host> <port> <id>(;
+#X text 179 669 events:;
+#X text 201 691 ping event: [ping <host> <port> <id>(;
 #X msg 29 52 add localhost 9999 1;
 #X text 26 19 aoo_send~: send an AoO audio stream to one or more AoO
 sinks;
-#X msg 53 140 remove localhost 9999 1;
+#X msg 50 140 remove localhost 9999 1;
 #X text 229 139 remove an AoO sink (hostname \, port \, sink ID);
-#X msg 74 200 clear;
-#X text 127 201 remove all AoO sinks;
-#X msg 89 287 channel localhost 9999 1 \$1;
-#X text 296 288 set sink channel onset;
+#X msg 64 200 clear;
+#X text 117 201 remove all AoO sinks;
+#X msg 89 348 channel localhost 9999 1 \$1;
+#X text 296 349 set sink channel onset;
 #X text 185 52 add an AoO sink (hostname \, port \, sink ID \, [channel
 onset]);
 #X text 211 82 with optional channel onset;
-#X msg 271 516 \; pd dsp \$1;
-#X obj 271 494 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X msg 258 551 \; pd dsp \$1;
+#X obj 258 529 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
-#X msg 83 232 list_sinks;
-#X text 170 229 list all sinks. This will output a message [sink <host>
+#X msg 71 232 list_sinks;
+#X text 158 229 list all sinks. This will output a message [sink <host>
 <port> <id>( for each sink., f 44;
-#X obj 29 657 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
+#X obj 29 691 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
 -1;
-#X obj 80 655 print SINK;
-#X obj 29 630 route ping sink;
-#X msg 46 111 add localhost 9999 *;
+#X obj 80 689 print SINK;
+#X obj 29 664 route ping sink;
+#X msg 43 111 add localhost 9999 *;
 #X text 203 112 send to all AoO sinks on the given endpoint;
-#X msg 62 170 remove localhost 9999 *;
-#X msg 38 82 add localhost 9999 1 1;
+#X msg 57 170 remove localhost 9999 *;
+#X msg 36 82 add localhost 9999 1 1;
 #X text 241 170 remove all AoO sinks on the given endpoint;
+#X msg 81 299 stop;
+#X msg 76 271 start;
+#X text 127 299 stop the stream;
+#X text 126 272 start a new stream;
+#X text 271 272 You can use these two methods to send "audio events"
+instead of continuous streams., f 53;
+#X text 272 308 Note that the stream is initially running.;
 #X connect 0 0 40 0;
 #X connect 2 0 0 0;
 #X connect 3 0 0 0;
@@ -223,3 +233,5 @@ onset]);
 #X connect 41 0 0 0;
 #X connect 43 0 0 0;
 #X connect 44 0 0 0;
+#X connect 46 0 0 0;
+#X connect 47 0 0 0;

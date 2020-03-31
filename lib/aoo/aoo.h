@@ -337,10 +337,14 @@ typedef enum aoo_option
     aoo_opt_resend_maxnumframes,
     // Reset the source/sink (NULL)
     aoo_opt_reset,
+    // Stop the source/sink (NULL)
+    aoo_opt_stop,
+    // Resume the source/sink (NULL)
+    aoo_opt_resume
 } aoo_option;
 
 #define AOO_ARG(x) &x, sizeof(x)
-#define AOO_ARGNULL 0, 0
+#define AOO_ARG_NULL 0, 0
 
 /*//////////////////// AoO source /////////////////////*/
 

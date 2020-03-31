@@ -351,7 +351,7 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
     double error;
     auto state = timer_.update(t, error);
     if (state == timer::state::reset){
-        LOG_VERBOSE("setup time DLL filter for sink");
+        LOG_DEBUG("setup time DLL filter for sink");
         dll_.setup(samplerate_, blocksize_, bandwidth_, 0);
     } else if (state == timer::state::error){
         // recover sources

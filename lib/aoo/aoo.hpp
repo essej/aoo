@@ -78,6 +78,14 @@ public:
     //---------------------- options ----------------------//
     // set/get options (always threadsafe)
 
+    int32_t stop(){
+        return set_option(aoo_opt_stop, AOO_ARG_NULL);
+    }
+
+    int32_t resume(){
+        return set_option(aoo_opt_resume, AOO_ARG_NULL);
+    }
+
     int32_t set_format(aoo_format& f){
         return set_option(aoo_opt_format, AOO_ARG(f));
     }
@@ -190,7 +198,7 @@ public:
     // set/get options (always threadsafe)
 
     int32_t reset(){
-        return set_option(aoo_opt_reset, AOO_ARGNULL);
+        return set_option(aoo_opt_reset, AOO_ARG_NULL);
     }
 
     int32_t set_buffersize(int32_t n){
@@ -256,7 +264,7 @@ public:
     // set/get source options (always threadsafe)
 
     int32_t reset_source(void *endpoint, int32_t id){
-        return set_sourceoption(endpoint, id, aoo_opt_reset, AOO_ARGNULL);
+        return set_sourceoption(endpoint, id, aoo_opt_reset, AOO_ARG_NULL);
     }
 
     int32_t get_source_format(void *endpoint, int32_t id, aoo_format_storage& f){

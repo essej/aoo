@@ -1,4 +1,4 @@
-#N canvas 61 25 737 759 12;
+#N canvas 147 20 737 759 12;
 #X declare -path osc;
 #X obj 168 119 osc~ 440;
 #X msg 88 135 set \$1;
@@ -100,6 +100,10 @@
 #X text 538 417 fixed dropout length;
 #X msg 275 592 add localhost 9999 *;
 #X msg 338 620 add foo 9999 1;
+#X msg 19 85 start;
+#X msg 27 114 stop;
+#X msg 228 622 start;
+#X msg 236 651 stop;
 #X connect 0 0 23 0;
 #X connect 1 0 23 0;
 #X connect 2 0 1 0;
@@ -173,3 +177,7 @@
 #X connect 78 0 77 1;
 #X connect 81 0 68 0;
 #X connect 82 0 68 0;
+#X connect 83 0 23 0;
+#X connect 84 0 23 0;
+#X connect 85 0 68 0;
+#X connect 86 0 68 0;

@@ -110,6 +110,7 @@ class source final : public isource {
     int32_t sequence_ = 0;
     std::atomic<int32_t> dropped_{0};
     std::atomic<bool> format_changed_{false};
+    std::atomic<bool> play_{true};
     // timing
     time_dll dll_;
     timer timer_;

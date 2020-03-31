@@ -360,6 +360,16 @@ static void aoo_send_clear(t_aoo_send *x)
     }
 }
 
+static void aoo_send_start(t_aoo_send *x)
+{
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_resume, AOO_ARG_NULL);
+}
+
+static void aoo_send_stop(t_aoo_send *x)
+{
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_stop, AOO_ARG_NULL);
+}
+
 static void aoo_send_listsinks(t_aoo_send *x)
 {
     for (int i = 0; i < x->x_numsinks; ++i){
@@ -518,6 +528,8 @@ EXPORT void aoo_send_tilde_setup(void)
     class_addmethod(aoo_send_class, (t_method)aoo_send_add, gensym("add"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_remove, gensym("remove"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_clear, gensym("clear"), A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_start, gensym("start"), A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_stop, gensym("stop"), A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_format, gensym("format"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_channel, gensym("channel"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);

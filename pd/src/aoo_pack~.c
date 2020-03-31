@@ -147,6 +147,16 @@ static void aoo_pack_clear(t_aoo_pack *x)
     x->x_sink_id = AOO_ID_NONE;
 }
 
+static void aoo_pack_start(t_aoo_pack *x)
+{
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_resume, AOO_ARG_NULL);
+}
+
+static void aoo_pack_stop(t_aoo_pack *x)
+{
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_stop, AOO_ARG_NULL);
+}
+
 static t_int * aoo_pack_perform(t_int *w)
 {
     t_aoo_pack *x = (t_aoo_pack *)(w[1]);
@@ -264,11 +274,13 @@ EXPORT void aoo_pack_tilde_setup(void)
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_loadbang, gensym("loadbang"), A_FLOAT, A_NULL);
     class_addlist(aoo_pack_class, (t_method)aoo_pack_list);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_set, gensym("set"), A_GIMME, A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_clear, gensym("clear"), A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_start, gensym("start"), A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_stop, gensym("stop"), A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_format, gensym("format"), A_GIMME, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_channel, gensym("channel"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_resend, gensym("resend"), A_FLOAT, A_NULL);
-    class_addmethod(aoo_pack_class, (t_method)aoo_pack_clear, gensym("clear"), A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
 
     aoo_setup();
