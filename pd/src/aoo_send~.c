@@ -11,7 +11,7 @@
 // for hardware buffer sizes up to 1024 @ 44.1 kHz
 #define DEFBUFSIZE 25
 
-static t_class *aoo_send_class;
+t_class *aoo_send_class;
 
 typedef struct _sink
 {
@@ -27,22 +27,39 @@ typedef struct _aoo_send
     int32_t x_samplerate;
     int32_t x_blocksize;
     int32_t x_nchannels;
+    int32_t x_id;
     t_float **x_vec;
     // sinks
     t_sink *x_sinks;
     int x_numsinks;
+    // server
+    t_aoo_server *x_server;
+    pthread_rwlock_t x_lock;
     // events
     t_clock *x_clock;
     t_outlet *x_eventout;
-    // socket
-    int x_quit;
-    int x_socket;
-    t_endpoint *x_endpoints;
-    // threading
-    pthread_t x_thread;
-    pthread_cond_t x_cond;
-    pthread_mutex_t x_mutex;
 } t_aoo_send;
+
+// called from the network receive thread
+void aoo_send_handle_message(t_aoo_send *x, const char * data,
+                                int32_t n, void *src, aoo_replyfn fn)
+{
+    // synchronize with aoo_receive_dsp()
+    pthread_rwlock_rdlock(&x->x_lock);
+    // handle incoming message
+    aoo_source_handlemessage(x->x_aoo_source, data, n, src, fn);
+    pthread_rwlock_unlock(&x->x_lock);
+}
+
+// called from the network send thread
+void aoo_send_send(t_aoo_send *x)
+{
+    // synchronize with aoo_receive_dsp()
+    pthread_rwlock_rdlock(&x->x_lock);
+    // send outgoing messages
+    while (aoo_source_send(x->x_aoo_source)) ;
+    pthread_rwlock_unlock(&x->x_lock);
+}
 
 static void aoo_send_handleevents(t_aoo_send *x,
                                   const aoo_event *events, int32_t n)
@@ -79,6 +96,19 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     }
 }
 
+static t_sink *aoo_send_findsink(t_aoo_send *x,
+                                 const struct sockaddr_storage *sa, int32_t id)
+{
+    for (int i = 0; i < x->x_numsinks; ++i){
+        if (x->x_sinks[i].s_id == id &&
+            endpoint_match(x->x_sinks[i].s_endpoint, sa))
+        {
+            return &x->x_sinks[i];
+        }
+    }
+    return 0;
+}
+
 static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     struct sockaddr_storage sa;
@@ -89,14 +119,14 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         return;
     }
     if (aoo_getsinkarg(x, argc, argv, &sa, &len, &id)){
-        t_endpoint *e = endpoint_find(x->x_endpoints, &sa);
-        if (!e){
+        t_sink *sink = aoo_send_findsink(x, &sa, id);
+        if (!sink){
             pd_error(x, "%s: couldn't find sink!", classname(x));
             return;
         }
         int32_t chn = atom_getfloat(argv + 3);
 
-        aoo_source_setsinkoption(x->x_aoo_source, e, id,
+        aoo_source_setsinkoption(x->x_aoo_source, sink->s_endpoint, sink->s_id,
                                  aoo_opt_channelonset, AOO_ARG(chn));
     }
 }
@@ -117,43 +147,6 @@ static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
 {
     float bandwidth;
     aoo_source_setoption(x->x_aoo_source, aoo_opt_timefilter_bandwidth, AOO_ARG(bandwidth));
-}
-
-static void *aoo_send_threadfn(void *y)
-{
-    t_aoo_send *x = (t_aoo_send *)y;
-
-    // needed for condition variable + synchronize with "dsp" method
-    pthread_mutex_lock(&x->x_mutex);
-    while (!x->x_quit){
-        // send all available outgoing packets
-        while (aoo_source_send(x->x_aoo_source)) ;
-        // check for pending incoming packets
-        while (1){
-            // receive packet
-            char buf[AOO_MAXPACKETSIZE];
-            struct sockaddr_storage sa;
-            socklen_t len;
-            int nbytes = socket_receive(x->x_socket, buf, AOO_MAXPACKETSIZE, &sa, &len, 1);
-            if (nbytes > 0){
-                t_endpoint * e = endpoint_find(x->x_endpoints, &sa);
-                if (e){
-                    aoo_source_handlemessage(x->x_aoo_source, buf, nbytes,
-                                                     e, (aoo_replyfn)endpoint_send);
-                } else {
-                    fprintf(stderr, "aoo_send~: received message from unknown endpoint!");
-                    fflush(stderr);
-                }
-            } else {
-                break;
-            }
-        }
-        // wait for more
-        pthread_cond_wait(&x->x_cond, &x->x_mutex);
-    }
-    pthread_mutex_unlock(&x->x_mutex);
-
-    return 0;
 }
 
 static void aoo_send_doremovesink(t_aoo_send *x, t_endpoint *e, int32_t id)
@@ -209,8 +202,8 @@ static void aoo_send_doremovesink(t_aoo_send *x, t_endpoint *e, int32_t id)
 
 static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
-    if (x->x_socket < 0){
-        pd_error(x, "%s: can't add sink - no socket!", classname(x));
+    if (!x->x_server){
+        pd_error(x, "%s: can't add sink - no server!", classname(x));
     }
 
     if (argc < 3){
@@ -222,11 +215,11 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     socklen_t len;
     int32_t id;
     if (aoo_getsinkarg(x, argc, argv, &sa, &len, &id)){
-        t_endpoint *e = endpoint_find(x->x_endpoints, &sa);
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
+        t_endpoint *e = aoo_server_getendpoint(x->x_server, &sa, len);
         // check if sink exists
-        if (e && id != AOO_ID_WILDCARD){
+        if (id != AOO_ID_WILDCARD){
             for (int i = 0; i < x->x_numsinks; ++i){
                 if (x->x_sinks[i].s_endpoint == e){
                     if (x->x_sinks[i].s_id == AOO_ID_WILDCARD){
@@ -239,18 +232,6 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
                         return;
                     }
                 }
-            }
-        }
-
-        if (!e){
-            // add endpoint
-            e = endpoint_new(x->x_socket, &sa, len);
-
-            if (x->x_endpoints){
-                e->next = x->x_endpoints;
-                x->x_endpoints = e;
-            } else {
-                x->x_endpoints = e;
             }
         }
 
@@ -292,6 +273,10 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
+    if (!x->x_server){
+        pd_error(x, "%s: can't remove sink - no server!", classname(x));
+    }
+
     if (argc < 3){
         pd_error(x, "%s: too few arguments for 'remove' message", classname(x));
         return;
@@ -301,34 +286,32 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     socklen_t len;
     int32_t id;
     if (aoo_getsinkarg(x, argc, argv, &sa, &len, &id)){
-        t_endpoint *e = endpoint_find(x->x_endpoints, &sa);
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
-        if (!e){
-            pd_error(x, "%s: couldn't find any sink on %s %d!",
-                     classname(x), host->s_name, port);
-            return;
-        }
+        t_endpoint *e = 0;
         if (id != AOO_ID_WILDCARD){
             // check if sink exists
-            int found = 0;
             for (int i = 0; i < x->x_numsinks; ++i){
-                if (x->x_sinks[i].s_endpoint == e){
-                    if (x->x_sinks[i].s_id == AOO_ID_WILDCARD){
+                t_sink *sink = &x->x_sinks[i];
+                if (endpoint_match(sink->s_endpoint, &sa)){
+                    if (sink->s_id == AOO_ID_WILDCARD){
                         pd_error(x, "%s: can't remove sink %s %d %d because of wildcard!",
                                  classname(x), host->s_name, port, id);
                         return;
-                    } else if (x->x_sinks[i].s_id == id) {
-                        found = 1;
+                    } else if (sink->s_id == id) {
+                        e = sink->s_endpoint;
                         break;
                     }
                 }
             }
-            if (!found){
-                pd_error(x, "%s: couldn't find sink %s %d %d!",
-                         classname(x), host->s_name, port, id);
-                return;
-            }
+        } else {
+            e = aoo_server_getendpoint(x->x_server, &sa, len);
+        }
+
+        if (!e){
+            pd_error(x, "%s: couldn't find sink %s %d %d!",
+                     classname(x), host->s_name, port, id);
+            return;
         }
 
         aoo_source_removesink(x->x_aoo_source, e, id);
@@ -399,7 +382,9 @@ static t_int * aoo_send_perform(t_int *w)
 
     uint64_t t = aoo_osctime_get();
     if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n, t) > 0){
-        pthread_cond_signal(&x->x_cond);
+        if (x->x_server){
+            aoo_server_notify(x->x_server);
+        }
     }
     if (aoo_source_eventsavailable(x->x_aoo_source) > 0){
         clock_set(x->x_clock, 0);
@@ -417,13 +402,13 @@ static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
         x->x_vec[i] = sp[i]->s_vec;
     }
 
-    // synchronize with network thread!
-    pthread_mutex_lock(&x->x_mutex);
+    // synchronize with network threads!
+    pthread_rwlock_wrlock(&x->x_lock); // writer lock!
 
     aoo_source_setup(x->x_aoo_source, x->x_samplerate,
                      x->x_blocksize, x->x_nchannels);
 
-    pthread_mutex_unlock(&x->x_mutex);
+    pthread_rwlock_unlock(&x->x_lock);
 
     dsp_add(aoo_send_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 }
@@ -434,22 +419,21 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     t_aoo_send *x = (t_aoo_send *)pd_new(aoo_send_class);
 
     x->x_clock = clock_new(x, (t_method)aoo_send_tick);
-    x->x_endpoints = 0;
     x->x_sinks = 0;
     x->x_numsinks = 0;
-    x->x_socket = socket_udp();
-    if (x->x_socket < 0){
-        pd_error(x, "%s: couldn't create socket", classname(x));
-    }
-    pthread_mutex_init(&x->x_mutex, 0);
-    pthread_cond_init(&x->x_cond, 0);
+    pthread_rwlock_init(&x->x_lock, 0);
 
-    // arg #1: ID
-    int src = atom_getfloatarg(0, argc, argv);
-    x->x_aoo_source = aoo_source_new(src >= 0 ? src : 0);
+    // arg #1: port number
+    int port = atom_getfloatarg(0, argc, argv);
 
-    // arg #2: num channels
-    int nchannels = atom_getfloatarg(1, argc, argv);
+    // arg #2: ID
+    int id = atom_getfloatarg(1, argc, argv);
+    x->x_id = id > 0 ? id : 0;
+    x->x_aoo_source = aoo_source_new(x->x_id);
+    x->x_server = port ? aoo_server_addclient((t_pd *)x, x->x_id, port) : 0;
+
+    // arg #3: num channels
+    int nchannels = atom_getfloatarg(2, argc, argv);
     if (nchannels < 1){
         nchannels = 1;
     }
@@ -474,40 +458,18 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     aoo_defaultformat(&fmt, nchannels);
     aoo_source_setoption(x->x_aoo_source, aoo_opt_format, AOO_ARG(fmt.header));
 
-    // create thread
-    x->x_quit = 0;
-    if (x->x_socket >= 0){
-        pthread_create(&x->x_thread, 0, aoo_send_threadfn, x);
-    } else {
-        x->x_thread = 0;
-    }
     return x;
 }
 
 static void aoo_send_free(t_aoo_send *x)
 {
-    // notify thread and join
-    if (x->x_thread){
-        x->x_quit = 1;
-        pthread_cond_signal(&x->x_cond);
-        pthread_join(x->x_thread, 0);
+    if (x->x_server){
+        aoo_server_removeclient(x->x_server, (t_pd *)x, x->x_id);
     }
 
     aoo_source_free(x->x_aoo_source);
 
-    pthread_mutex_destroy(&x->x_mutex);
-    pthread_cond_destroy(&x->x_cond);
-
-    if (x->x_socket >= 0){
-        socket_close(x->x_socket);
-    }
-
-    t_endpoint *e = x->x_endpoints;
-    while (e){
-        t_endpoint *next = e->next;
-        endpoint_free(e);
-        e = next;
-    }
+    pthread_rwlock_destroy(&x->x_lock);
 
     freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
     if (x->x_sinks){

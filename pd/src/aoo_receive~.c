@@ -33,8 +33,9 @@ typedef struct _aoo_receive
     // sinks
     t_source *x_sources;
     int x_numsources;
-    t_aoo_server * x_listener;
-    pthread_mutex_t x_mutex;
+    // server
+    t_aoo_server * x_server;
+    pthread_rwlock_t x_lock;
     // events
     t_outlet *x_eventout;
     t_clock *x_clock;
@@ -61,17 +62,25 @@ static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *arg
     return 0;
 }
 
-// called from the network thread
+// called from the network receive thread
 void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
-                                       int32_t n, void *src, aoo_replyfn fn)
+                                int32_t n, void *src, aoo_replyfn fn)
 {
     // synchronize with aoo_receive_dsp()
-    pthread_mutex_lock(&x->x_mutex);
+    pthread_rwlock_rdlock(&x->x_lock);
     // handle incoming message
     aoo_sink_handlemessage(x->x_aoo_sink, data, n, src, fn);
+    pthread_rwlock_unlock(&x->x_lock);
+}
+
+// called from the network send thread
+void aoo_receive_send(t_aoo_receive *x)
+{
+    // synchronize with aoo_receive_dsp()
+    pthread_rwlock_rdlock(&x->x_lock);
     // send outgoing messages
     while (aoo_sink_send(x->x_aoo_sink)) ;
-    pthread_mutex_unlock(&x->x_mutex);
+    pthread_rwlock_unlock(&x->x_lock);
 }
 
 static void aoo_receive_buffersize(t_aoo_receive *x, t_floatarg f)
@@ -145,22 +154,22 @@ static void aoo_receive_listsources(t_aoo_receive *x)
 static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
 {
     int port = f;
-    if (x->x_listener){
-        if (aoo_server_port(x->x_listener) == port){
+    if (x->x_server){
+        if (aoo_server_port(x->x_server) == port){
             return;
         }
         // release old listener
-        aoo_server_release(x->x_listener, (t_pd *)x, x->x_id);
+        aoo_server_removeclient(x->x_server, (t_pd *)x, x->x_id);
     }
     // add new listener
     if (port){
-        x->x_listener = aoo_server_add((t_pd *)x, x->x_id, port);
-        if (x->x_listener){
-            post("listening on port %d", aoo_server_port(x->x_listener));
+        x->x_server = aoo_server_addclient((t_pd *)x, x->x_id, port);
+        if (x->x_server){
+            post("listening on port %d", aoo_server_port(x->x_server));
         }
     } else {
         // stop listening
-        x->x_listener = 0;
+        x->x_server = 0;
     }
 }
 
@@ -315,13 +324,14 @@ static void aoo_receive_dsp(t_aoo_receive *x, t_signal **sp)
         x->x_vec[i] = sp[i]->s_vec;
     }
 
-    // synchronize with aoo_receive_handle_message()
-    pthread_mutex_lock(&x->x_mutex);
+    // synchronize with aoo_receive_send()
+    // and aoo_receive_handle_message()
+    pthread_rwlock_wrlock(&x->x_lock); // writer lock!
 
     aoo_sink_setup(x->x_aoo_sink, x->x_samplerate,
                    x->x_blocksize, x->x_nchannels);
 
-    pthread_mutex_unlock(&x->x_mutex);
+    pthread_rwlock_unlock(&x->x_lock);
 
     dsp_add(aoo_receive_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 }
@@ -331,30 +341,29 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
     t_aoo_receive *x = (t_aoo_receive *)pd_new(aoo_receive_class);
 
     x->x_f = 0;
-    x->x_listener = 0;
+    x->x_server = 0;
     x->x_sources = 0;
     x->x_numsources = 0;
     x->x_clock = clock_new(x, (t_method)aoo_receive_tick);
-    pthread_mutex_init(&x->x_mutex, 0);
+    pthread_rwlock_init(&x->x_lock, 0);
 
-    // arg #1: ID
-    int id = atom_getfloatarg(0, argc, argv);
+    // arg #1: port number
+    int port = atom_getfloatarg(0, argc, argv);
+
+    // arg #2: ID
+    int id = atom_getfloatarg(1, argc, argv);
     x->x_id = id >= 0 ? id : 0;
     x->x_aoo_sink = aoo_sink_new(x->x_id);
+    x->x_server = port ? aoo_server_addclient((t_pd *)x, x->x_id, port) : 0;
 
-    // arg #2: num channels
-    int nchannels = atom_getfloatarg(1, argc, argv);
+    // arg #3: num channels
+    int nchannels = atom_getfloatarg(2, argc, argv);
     if (nchannels < 1){
         nchannels = 1;
     }
     x->x_nchannels = nchannels;
     x->x_blocksize = 0;
     x->x_samplerate = 0;
-
-    // arg #3: port number
-    if (argc > 2){
-        aoo_receive_listen(x, atom_getfloat(argv + 2));
-    }
 
     // arg #4: buffer size (ms)
     aoo_receive_buffersize(x, argc > 3 ? atom_getfloat(argv + 3) : DEFBUFSIZE);
@@ -373,13 +382,13 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_receive_free(t_aoo_receive *x)
 {
-    if (x->x_listener){
-        aoo_server_release(x->x_listener, (t_pd *)x, x->x_id);
+    if (x->x_server){
+        aoo_server_removeclient(x->x_server, (t_pd *)x, x->x_id);
     }
 
     aoo_sink_free(x->x_aoo_sink);
 
-    pthread_mutex_destroy(&x->x_mutex);
+    pthread_rwlock_destroy(&x->x_lock);
 
     freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
     if (x->x_sources){

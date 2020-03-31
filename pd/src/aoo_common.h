@@ -28,11 +28,16 @@
 
 typedef struct _aoo_server t_aoo_server;
 
-t_aoo_server *aoo_server_add(t_pd *client, int32_t id, int port);
+t_aoo_server *aoo_server_addclient(t_pd *client, int32_t id, int port);
 
-void aoo_server_release(t_aoo_server *socket, t_pd *client, int32_t id);
+void aoo_server_removeclient(t_aoo_server *server, t_pd *client, int32_t id);
+
+t_endpoint * aoo_server_getendpoint(t_aoo_server *server,
+                                    const struct sockaddr_storage *sa, socklen_t len);
 
 int aoo_server_port(t_aoo_server *);
+
+void aoo_server_notify(t_aoo_server *x);
 
 /*///////////////////////////// helper functions ///////////////////////////////*/
 
