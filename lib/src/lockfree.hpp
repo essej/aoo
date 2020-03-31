@@ -38,7 +38,7 @@ class queue {
         // check if size is divisible by both rdsize and wrsize
         assert(size >= blocksize);
         assert((size % blocksize) == 0);
-    #if 0
+    #if 1
         data_.clear(); // force zero
     #endif
         data_.resize(size);
