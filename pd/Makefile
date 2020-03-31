@@ -29,6 +29,7 @@ cflags = \
     -I$(AOO)/src/lib \
     -Wno-unused -Wno-unused-parameter \
     -fvisibility=hidden \
+    -DNDEBUG \
     -DAOO_STATIC \
     -DLOGLEVEL=2 \
     -DAOO_TIMEFILTER_BANDWIDTH=0.0001 \
