@@ -12,4 +12,7 @@ all: ${DOCS}
 	pdflatex $<
 
 clean:
-	rm -f ${DOCS} *.out *aux *bbl *blg *log *toc *.ptb *.tod *.fls *.fdb_latexmk *.lof
+	rm -f *.out *aux *bbl *blg *log *toc *.ptb *.tod *.fls *.fdb_latexmk *.lof
+
+distclean: clean
+	rm -f ${DOCS} 

@@ -29,11 +29,10 @@ As a first goal, the geodesic sound-dome in Pischelsdorf (with a diameter of 20Â
 .. _fig-aoo_domespeaker:
 
 .. figure:: ./images/dome_node_small.jpg
-   :alt: One node with one speaker in the dome
+   :alt: One node for 6 channels with one speaker in the dome
    :width: 80%
 
-   One node with one speaker in the dome
-
+   One node for 6 channels with one speaker in the dome
 
 Each node is a small embedded computer equipped with an 8-channel sound-card, including amplifiers and speakers. Each speaker can been calibrated and fed individually. However, since each unit is aware of its speaker positions, it can also render the audio with an internal Ambisonics encoder/decoder combination.
 
@@ -93,10 +92,15 @@ Using a message audio system, each musicians only sends sound data if playing, l
 Streaming Boxes  
 ===============
 
+Doku To be done...
 
-.. 
-.. state of the work
-.. =================
+
+
+state of the work
+=================
+
+to be written...
+
 .. 
 .. The AoO has been implemented for proof of concept and special
 .. applications in a first draft version. The next version should fixate
@@ -125,6 +129,8 @@ Streaming Boxes
 .. audio processing for calibration filters, beam-forming,â€¦for
 .. speaker-systems optional powered over Ethernet.
 .. 
+
+
 
 Acknowledgements
 ================
