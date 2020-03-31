@@ -8,19 +8,23 @@ extern "C"
 #endif
 
 #ifndef AOO_API
-# if defined(_WIN32)
-#  if defined(AOO_BUILD)
-#     if defined(DLL_EXPORT)
-#       define AOO_API __declspec(dllexport)
-#     else
-#       define AOO_API
-#     endif
-#  else
-#   define AOO_API __declspec(dllimport)
+# ifndef AOO_STATIC
+#  if defined(_WIN32) // Windows
+#   if defined(AOO_BUILD)
+#      if defined(DLL_EXPORT)
+#        define AOO_API __declspec(dllexport)
+#      else
+#        define AOO_API
+#      endif
+#   else
+#    define AOO_API __declspec(dllimport)
+#   endif
+#  elif defined(__GNUC__) && defined(AOO_BUILD) // GNU C
+#   define AOO_API __attribute__ ((visibility ("default")))
+#  else // Other
+#   define AOO_API
 #  endif
-# elif defined(__GNUC__) && defined(AOO_BUILD)
-#  define AOO_API __attribute__ ((visibility ("default")))
-# else
+# else // AOO_STATIC
 #  define AOO_API
 # endif
 #endif
