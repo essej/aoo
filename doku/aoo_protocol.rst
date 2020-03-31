@@ -1,10 +1,12 @@
-=========================================
-AOO - Tools 
-=========================================
-towards message based audio systems
------------------------------------
+===================================================
+AoO - Protocol -towards message based audio systems
+===================================================
 
-The deployment of distributed audio systems in the context of computermusic and audio installation is explored within this library, to implement the vision of transition from static streaming audio networks to flexible dynamic audio networks. Audiodata is send on demand only. Sharing sources and sinks allows us to create arbitrary audio networks, without boundaries.
+:authors: Winfried Ritsch, Christof Ressi
+:date: march 2014 - february 2020
+:version: 2.0-a1
+
+The deployment of distributed audio systems in the context of computermusic and audio installation is explored within this library, to implement the vision of transition from static streaming audio networks to flexible dynamic audio networks. Audio data is send on demand only. Sharing sources and sinks allows us to create arbitrary audio networks, without boundaries.
 
 This idea of message based audio systems, which has been investigated within several projects from  playing Ambisonics spatial audio systems, streaming over Large Area Networks (LAN) and playing within a computermusic ensembles.
 
@@ -54,10 +56,10 @@ Following features can be outlined:
 
 The most common way of communication within local networks is Ethernet. Therefore “Audio over Ethernet“ has become a widely used technique. However, there is roughly only a single approach: Stream based audio transmission, representing the data as a continuous sequence. For audio messages as on-demand packet based streams [#2]_ we found no usable implementation (2009). This lead to the design and implementation of a new audio transmission protocol for the demands shown before. As a first approach, an implementation in user space (on the application layer) without the need of special OS-drivers was intended. This can also be seen as the idea of “dynamic audio networks”.
 
-Audio over OSC Protocoll
-========================
+AoO protocol
+============
 
-Looking for a modern, commonly used transmission format for messaging systems within the computermusic domain, we found “Open Sound Control” (OSC) [OSC]_. With its flexible address pattern in URL-style and its implementation of high resolution time tags, OSC provides everything needed as a communication format [BPOSC]_. OSC specifications points out that it does not require specific underlying transport protocol, but often uses Ethernet network. In our case this would be UDP in a first implementation but is not limited to these. TCP/IP as transport protocol can also be used, but would make some features obsolete and some more complicated, like the requirement for negotiations to initialize connections. Wolfgang Jäger implemented “Audio over OSC” (AoO) within a first project at the IEM [AOO]_. This was used in tests and”AUON“ (all under one net), a concert installation for network art [#3]_
+Looking for a modern, commonly used transmission format for messaging systems within the computermusic domain, we found “Open Sound Control” (OSC) [OSC]_. With its flexible address pattern in URL-style and its implementation of high resolution time tags, OSC provides everything needed as a communication format [BPOSC]_. OSC specifications points out that it does not require specific underlying transport protocol, but often uses Ethernet network. In our case this would be UDP in a first implementation but is not limited to these. TCP/IP as transport protocol can also be used, but would make some features obsolete and some more complicated, like the requirement for negotiations to initialize connections. Wolfgang Jäger implemented “Audio over OSC” (AoO) within a first project at the IEM [AoO]_ in targeting Version 1.0, which was never accomplished. This was used in tests and ”AUON“ (all under one net), a concert installation for network art [#3]_
 
 the AoO protocol V2.0
 ---------------------
@@ -65,73 +67,83 @@ the AoO protocol V2.0
 The definition of AoO protocol was made with simplicity in mind, targeting also small devices like microcontrollers.
 Unlike Version~1, messages are not bundled, and meta-information is split in a format and a data message to reduce size. No ``#bundle`` means no ``timestamp``. Since timestamping in OSC messages is done on send time within a ``#bundle``, it does not help on synchronisation and resampling, since the message can be send somewhere in the range of the buffer time of the sender audio application. A new strategy was chosen see Timing section, calculating the resampling faktor to realtime and using this for excact timingm see also section Timing below.
 
-Here the AOO protocaoll using OSC synthax:
+.. raw:: latex
 
-message to notify sinks about format changes:
+   \clearpage
+
+
+AoO synthax::
+
+ notify sinks about format changes:
+
  ``/AoO/<sink>/format ,iiiisb <src> <salt> <nchannels> <samplerate> <blocksize> <codec> <options>``
 
-message to deliver audio data, large blocks are split across several frames:
+
+ deliver audio data, large blocks are split across several frames:
  ``/AoO/<sink>/data ,iiidiiiib <isrc> <salt> <seq> <samplerate> <channel_onset> <totalsize> <nframes> <frame> <data>``
 
-message from sink to source to request the format (e.g. the salt has changed):
+ from sink to source to request the format (e.g. the salt has changed):
  ``/AoO/<src>/request ,i <sink>``
 
-message from sink to source to request dropped packets; the arguments are pairs of sequence + frame (-1 = whole block):
+ from sink to source to request dropped packets; the arguments are pairs of sequence + frame (-1 = whole block):
  ``/AoO/<src>/resend ,iib <sink> <salt> [<seq> <frame>]*``
 
-ping message from sink to source (usually sent once per second):
+ ping message from sink to source (usually sent once per second):
  ``/AoO/<src>/ping ,i sink``
 
-Parameter used:
+Parameter used::
  
-``src``
+ ``src``
    Identification number of the source
 
-``sink``
+ ``sink``
    Identification number for the sink
 
-``salt`` 
+ ``salt`` 
    Unique random number
     
-``seq`` 
+ ``seq`` 
    sequence of sequent data blocks
 
-``samplerate`` 
+ ``samplerate`` 
    Different sampling rates of sources are possible, which will be re-sampled in the sink. The samplerate in the format is the formal one as integer, the samplerate in the data, the measured == corrected one and is therefore double precision.
-   
-``nchannels``
+
+ ``nchannels``
     number of channels to send
 
-``channel_onset`` 
+ ``channel_onset`` 
     first channel number in sink to write ``nchannels``
 
-``blocksize``
+ ``blocksize``
     number of samples in a data block
 
-``totalsize`` 
+ ``totalsize`` 
     total size of package
     
-``nframes`` 
+ ``nframes`` 
     number of frames to send
 
-``frame`` 
+ ``frame`` 
     starting frame in block
 
-``codec``
+ ``codec``
     which codec is used
     
-``options``
+ ``options``
     options for codec
     
-``data``
+ ``data``
     data content like defined above
 
-
-Data packages used are uncompressed packets with data types defined by OSC, like 32-Bit float. However, it’s also possible to use blobs with an arbitrary bit-length audio data. This can become handy if bandwidth matters. Sources must be aware, which formats can be handled by the sinks. Using codecs the codec defines the data. At the  moment besides raw data only opus is implemented, since it also supports low latency and to keep it simple, there should not be a need for others.
+    
+Data packages used are uncompressed packets with data types defined by format. However, it’s also possible to use blobs with an arbitrary bit-length audio data. This can become handy if bandwidth matters. Sources must be aware, which formats can be handled by the sinks. Using codecs the codec defines the data. At the  moment besides raw data only opus [opus]_ is implemented, since it also supports low latency and to keep it simple, there should not be a need for others.
 
 To provide low latency, time-bounded audio transmissions is sliced into shorter messages and send individually to be reconstructed at the receiver.
 
-There must always be at least one format message before sending data messages to a specific sink.
+theory of operation
+===================
+
+There must always be at least one format message before sending data messages to a specific sink, which can request one.
 
 For the addressing the sinks the structure of the resources in the network is used as the base. Each device in the network with an unique network-address (IP-number and Port number) can have one or more sinks with different identification numbers. Each of these sinks can have one or more channels. There can be an arbitrary amount of sinks, and each sink could have an arbitrary amount of channels.
 
@@ -146,8 +158,8 @@ For re-arranging the audio packages there is a need to do some sort of labeling 
 .. The first audio packet has to be faded in and the last faded out. A sequence of audio messages must be concatenated. At least one message has to be buffered to know if a next one arrives. If messages are in overlapping mode, they always have to be cross-faded.
 
 
-addressing problems
--------------------
+addressing scheme
+-----------------
 
 Like described above, to deliver audio messages to a sink, additionally to the sink number and channel number, the address of the device has to be known. A decision was made, that the address is not part of the message, since the sender has to know about the sink on the receiver and the network system has to handle the addressing. 
 
@@ -155,10 +167,10 @@ Like stated in in the vision, we do want negotiations and requests, but in situa
 
 A second problem arose, since broadcasting to all sinks with the same number, the destination information is not contained in the audio message, we cannot use broadcast to reduce network load and address specific destinations. For this the sink has to know about the sources it will accept. Anyway this worked fine, but made some additional efforts in communication before.
 
-One other problem is if drains or sinks are behind a firewall. So if A is behind the firewall, B cannot send data to A directly. So a receiver can use the back-channel of the receiver, which normally is provided using TCP/IP protocol but not UDP. But since a normal "NATing" firewall stores session data, there is a chance that it can work when the sink uses the known sources. This has to be explored further.
+One other problem is if drains or sinks are behind a firewall. So if ``A`` is behind the firewall, ``B`` cannot send data to ``A`` directly. So a receiver can use the back-channel of the receiver, which normally is provided using TCP/IP protocol, but not usinge the UDP protocol we do, but we can grasp it, when a message from the source arrives. But since a normal "NATing" firewall stores session data, there is a chance that it can work when the sink uses the known sources. This has to be explored further and individually before usage and since network setups differ, do not assume it works everywhere.
 
-mixing modes
-------------
+mixing
+------
 
 In the first implementation we used two different modes: Mode 1
 provides the possibility of summation of the received audio signals and
@@ -166,18 +178,20 @@ Mode 2 should perform an arithmetic averaging of parallel signals. The
 reason for this is that summing audio signals with maximum amplitudes
 each causes distortion. Using Mode 2 this cannot happen.
 
-In the Version-2 of AoO only Mode 1 is implemented, since samples are added within a floating point domain and the audio application can take care to reduce the volume as needed.
+In the Version-2 of AoO only Mode 1 is implemented, since samples are added mostly within a floating point domain, or a with integer with more bits than the samples, and the audio application should take care to reduce the volume as needed. So volume changes are not triggered by additionally sources.
 
 .. _subsec:timing:
 
 timing and sample-rates
 -----------------------
 
-Timing is critical in audio-systems, not only for synchronizing audio, but also to prevent jitter noise. Timestamps of the packets are represented by a 64 bit fixed point number, as specified by OSC, to a precision of about 230 picoseconds. This conforms to the representation used by the Network Time Protocol NTP [RFC5905]_.
+Timing is critical in audio-systems, not only for synchronizing audio, but also to prevent jitter noise. Times in the internet are represented by a 64 bit fixed point number, like timestamps specified by OSC, to a precision of about 230 picoseconds. This conforms to the representation used by the Network Time Protocol NTP [RFC5905]_.
 
-Also another timeprotocoll can be used like the Precision Time Protocol PTP, since this is handled by the system, we only access exact timer information.
+Also other time-protocols can be used like the Precision Time Protocol PTP, since this is handled by the system, we use the exact time information of the system, so care should be take, that the devices are synchronized over network.
 
 Using fixed buffering mode, the buffer size has to be chosen large enough to prevent dropouts. In the automatic buffer control mode, the sink should use the shortest possible size for buffering. If packets arrive too late, buffering should be dynamically extended and then slowly reduced. This has to be handled by the audio application. Number of dropouts, ping times and a method for resend is provided to be used for this purpose.
+
+Also using a lot of channels and large block sizes, the can be larger than packetsizes. So a mechanism had been implemented to slice them. The smaller the packets, the more chance they have to travel over many hops, since each router can limit sizes and drop large packets.
 
 Since audio packets can arrive with different sample-rates, re-sampling is executed before the audio data is added to the internal sound stream synchronized with the local audio environment. This provides the opportunity to synchronize audio content respecting the timing differences and time drifts between sources and sinks. This strategy of resampling is shown in a figure `re-sampling`:
 
@@ -188,15 +202,9 @@ Since audio packets can arrive with different sample-rates, re-sampling is execu
 
    re-sampling rate :math:`R_n` between source :math:`S` and sink :math:`D` is not constant
 
-
-
 Looking at synchronization in digital audio system, mostly a common master-clock is used for all devices. Since each device has its own audio environment, which may not support external synchronization sources, the time :math:`T_Sn` of the local audio environment is used to calculate the corrected samplerate for outgoing audio messages.
 
-Using the incoming corrected samplerate from the remote source, we can compare
-them with the local time :math:`t_Dn` and correct the re-sampling factor
-:math:`R_n` dynamically for each message. The change of the correction
-should be small if averaged over a longer time, but can be bad for first
-audio messages received. Therefore a DLL filter is used, like described in the paper "Using a DLL to filter time" by Fons Adriaensen [FA05]_ . 
+Using the incoming corrected samplerates from the remote source, we can compare them with the local time :math:`t_Dn` and correct the re-sampling factor :math:`R_n` dynamically for each message. The change of the correction should be small if averaged over a longer time, but can be bad for first audio messages received, since a DLL filter is used, like described in the paper "Using a DLL to filter time" by Fons Adriaensen [FA05]_ .
 
 Since the local time source of a device can differ from the timing of the audio environment, each device needs a correction factor between this time source and the audio hardware time including the time master device. This factor has to be communicated between the devices, so the re-sampling correction factor can be calculated before the first audio message is sent, guaranteeing a quasi sample-synchronous network-wide system starting with the first message send.
 
@@ -209,13 +217,25 @@ Since the local time source of a device can differ from the timing of the audio 
 
    audio messages are arranged as single, combined or overlapped using different salts.
 
+Also the idea that all audio messages, which are originated at the same time are mixed in correctly in the receiving buffer has been dropped from Version 1.0 to Version 2.0. However it can be accomplished using more receiver and  using the information by the ping requests to the sources, which deliver the exact network delay and implement delays by the receiving application. This gives more flexibility for different use cases.
 
 Networking
-==========
+----------
 
-(fragments  fro IOhannes)
 
-setup is like::
+Networking is not part of the library, but the function of the streaming depends on it, so some helpers has been added to accomplish different network tasks.
+
+In the stream project all sources and sinks has been in one big network with known addresses and without firewalls, since every device is its own router and firewall using olrd, the Optimized Link State Routing Protocol (OLSR)[1] is an IP routing protocol optimized for ad hoc networks used by freifunk or funkfeuer [0xFF]_ with free bandwith usage.
+
+But the project playing together with an ensemble showed, that most user work behind a firewall. One solution is to setup a virtual private network VPN or using port forwarding over secure shell, both needing a server with an offial known IP.
+
+Another solution have been suggested by IOhannes Zmoelnig and needs to be tested, but implementing the invitation message gives us the chance to gather all informations needed for this strageties.
+
+
+peer
+....
+
+setup ::
 
     client A
         will use listening port 10001
@@ -226,7 +246,6 @@ setup is like::
         private IP: 192.168.7.22
         public IP: 198.51.100.190
 
-both clients need to know the public IP (and listening port) of the peer beforehand. 
 
 initiate session::
 
@@ -241,8 +260,10 @@ initiate session::
         data should arrive at clientB (2nd outlet of [netsend])
 
 
-A hole-punching server setup::
+A hole-punching server
+......................
 
+setup::
     serverX
         reachable via a public IP:port
     clientA, clientB
@@ -265,22 +286,55 @@ network connection flow::
     8 clientB opens a UDP-connection to the public IP:port of clientA
     9 tada
 
+Note: 
+ has to be tested, if failed this documenation part will be removed.
+    
+Implementations
+===============
+
+As a first proof of concept, AoO was implemented within user space using Pure Data. [Pd96]_  Also V2.0 has been implemented first with Pd externals, but others will follow since it is done as a C++/C library usable for other computermusic languages, plugins or mircocontrollers.
+
+
+C++/C library
+-------------
+
+The main functionality is implemented in this library, which is used by the further implemantation for applications described below.
+
+See source and library documenation for details.
+
+Puredata library
+----------------
+
+The V1.0 implementation has shown various problems to be solved in future. Using the network library iemnet additional ”externals“ have been written in C to extend the OSC-Protocol, split continuous audio signals into packets and mix OSC audio messages in sinks.  
+
+In the new Version-2 the network infrastructure has been implemented within the AoO library to overcome these problems and use new concepts for threading, to avoid blocking the main task.
+
+As a first test environment, a number of different open-source audio hardware implementations, using Debian Linux OS-System, has been used. The new Version was implemented for most OS-System as Pd-Externals in a first place.
+
+The new version can be found in the git library and also should be available via Pd library manager deken:
+
+- see http://git.iem.at/cm/aoo
+
+see documentation  in the help and testfiles there or in a reference projects in use cases.
 
 About Document
 --------------
+
+Thanks all who helped to bring this to live and please test und comment, file issues and pull request to improve it at http://git.iem.at/cm/aoo
+
 :authors: Winfried Ritsch, Christof Ressi
 :date: march 2014 - february 2020
 :version: 2.0-a1
 
 .. [ICE] IEM (Institute of Electronic Music and Acoustics) Computermusic Ensemble
 
-.. [OSC] "Matt Wright", http://opensoundcontrol.org/spec-1\_0 , [Online; accessed 1-Feb-2014], "The open sound control 1.0 specification.", 2002
+.. [OSC] Matt Wright, http://opensoundcontrol.org/spec-1\_0 , [Online; accessed 1-Feb-2014], "The open sound control 1.0 specification.", 2002
 
 .. [BPOSC] Andrew Schmeder and Adrian Freed and David Wessel, "Best Practices for Open Sound Control", "Linux Audio Conference", 01/05/2010, Utrecht, NL
 
-.. [AOO] Wolgang Jaeger and Winfried Ritsch, "AOO", https://iem.kug.ac.at/en/projects/workspace/2009/audio-over-internet-using-osc.html , [Online; accessed 12-Dez-2011], Graz, 2009
+.. [AoO] Wolgang Jaeger and Winfried Ritsch, "AoO", https://iem.kug.ac.at/en/projects/workspace/2009/audio-over-internet-using-osc.html , [Online; accessed 12-Dez-2011], Graz, 2009
 
-.. [RFC5905] "D. Mills and J. Martin and J. Burbank and W. Kasch", 
+.. [RFC5905] D. Mills and J. Martin and J. Burbank and W. Kasch, 
         "RFC 5905 (Proposed Standard)", 
         "Network Time Protocol Version 4: Protocol and Algorithms Specification" , published by "Internet Engineering Task Force" IETF, "Request for Comments", number 5905,
 	http://www.ietf.org/rfc/rfc5905.txt ,
@@ -289,7 +343,18 @@ About Document
 .. [FA05] Fons Adriaensen, "Using a DLL to filter time", 2005,
         https://kokkinizita.linuxaudio.org/papers/usingdll.pdf
 
+.. [Pd96] Miller S. Puckette, "Pure Data",
+	in "Proceedings, International Computer Music Conference." p.224–227,
+        San Francisco, 1996
+
+.. [opus] http://opus-codec.org/
+
+.. [OLSR] IETF RFC3626 - https://tools.ietf.org/html/rfc3626
+
+.. [0xFF] Funkfeuer Graz -http://graz.funkfeuer.at/
+
 .. [#2] not to be mistaken with ”streaming on demand” or UDP packets
    
 .. [#3] performed 17.1.2010 in Medienkunstlabor Kunsthaus Graz see
  http://medienkunstlabor.at/projects/blender/ArtsBirthday17012010/index.html
+

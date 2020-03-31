@@ -4,11 +4,7 @@ AOO - Use Cases
 towards message based audio systems
 -----------------------------------
 
-As a first proof of concept, AoO was implemented within user space using Pure Data. [MILLER:96]_  This implementation has shown various problems to be solved in future. Using the network library iemnet additional ”externals“ have been written in C to extend the OSC-Protocol, split continuous audio signals into packets and mix OSC audio messages in sinks.  
-
-In the new Version-2 the network infrastructure has been implemented within the AoO library to overcome these problems and use new concepts for threading, to avoid blocking the main task.
-
-As a first test environment, a number of different open-source audio hardware implementations, using Debian Linux OS-System, has been used. The new Version was implemented for most OS-System as Pd-Externals in a first place.
+Use Cases was the driving motor for development of AoO. Here the important Project shown as use cases, to illustrate the usages and detect the drawbacks of this streaming solutions.
 
 message based Ambisonics spatial audio systems
 ==============================================
@@ -165,3 +161,7 @@ this paper and useful hints, to enhance the understanding.
 .. system, kernel-drivers must be developed and with time-slotted Ethernet
 .. transmissions, systems with latencies down to 8 us on transmission time
 .. can be implemented using hard RT-systems.
+
+.. [Pd96] Miller S. Puckette, "Pure Data",
+	in "Proceedings, International Computer Music Conference." p.224–227,
+        San Francisco, 1996
