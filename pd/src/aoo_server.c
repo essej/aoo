@@ -37,7 +37,7 @@ void aoo_send_send(t_aoo_send *x);
 void aoo_send_handle_message(t_aoo_send *x, const char * data,
                                 int32_t n, void *src, aoo_replyfn fn);
 
-/*////////////////////// socket listener //////////////////*/
+/*////////////////////// aoo server //////////////////*/
 
 static t_class *aoo_server_class;
 
@@ -227,7 +227,7 @@ t_aoo_server* aoo_server_addclient(t_pd *c, int32_t id, int port)
         x->x_numclients++;
         aoo_lock_unlock(&x->x_clientlock);
     } else {
-        // make new socket listener
+        // make new aoo server
 
         // first create socket
         int sock = socket_udp();
@@ -243,7 +243,7 @@ t_aoo_server* aoo_server_addclient(t_pd *c, int32_t id, int port)
             return 0;
         }
 
-        // now create socket listener instance
+        // now create aoo server instance
         x = (t_aoo_server *)getbytes(sizeof(t_aoo_server));
         x->x_pd = aoo_server_class;
         x->x_sym = s;
@@ -267,7 +267,7 @@ t_aoo_server* aoo_server_addclient(t_pd *c, int32_t id, int port)
         pthread_create(&x->x_sendthread, 0, aoo_server_send, x);
         pthread_create(&x->x_receivethread, 0, aoo_server_receive, x);
 
-        verbose(0, "new socket listener on port %d", x->x_port);
+        verbose(0, "new aoo server on port %d", x->x_port);
     }
     return x;
 }
@@ -338,7 +338,7 @@ void aoo_server_removeclient(t_aoo_server *x, t_pd *c, int32_t id)
         aoo_lock_destroy(&x->x_clientlock);
         pthread_cond_destroy(&x->x_condition);
 
-        verbose(0, "released socket listener on port %d", x->x_port);
+        verbose(0, "released aoo server on port %d", x->x_port);
 
         freebytes(x, sizeof(*x));
     } else {
