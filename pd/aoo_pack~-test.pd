@@ -1,4 +1,4 @@
-#N canvas 147 20 737 759 12;
+#N canvas 28 37 870 759 12;
 #X declare -lib aoo -path osc;
 #X obj 168 119 osc~ 440;
 #X msg 88 135 set \$1;
@@ -67,7 +67,7 @@
 #X obj 418 348 t b b b;
 #X obj 87 387 spigot 1;
 #X text 244 348 simulate drop outs;
-#X obj 384 374 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
+#X obj 384 374 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X obj 486 295 nbx 5 14 0 5000 0 0 empty empty empty 0 -8 0 10 -262144
 -1 -1 0 256;
@@ -93,7 +93,7 @@
 -1 -1;
 #X obj 442 411 +;
 #X obj 479 418 nbx 5 14 0 500 0 0 empty empty empty 0 -8 0 10 -262144
--1 -1 0 256;
+-1 -1 485 256;
 #X text 539 368 random dropout length;
 #X text 538 417 fixed dropout length;
 #X msg 275 592 add localhost 9999 *;
@@ -104,6 +104,11 @@
 #X msg 236 651 stop;
 #X obj 70 17 declare -lib aoo -path osc;
 #X obj 294 709 aoo_send~ 9998 1 2;
+#X obj 621 640 aoo_receive~ 9998 1 2;
+#X obj 622 672 env~;
+#X obj 694 674 env~;
+#X floatatom 622 696 5 0 0 0 - - -;
+#X floatatom 694 698 5 0 0 0 - - -;
 #X connect 0 0 23 0;
 #X connect 1 0 23 0;
 #X connect 2 0 1 0;
@@ -181,3 +186,7 @@
 #X connect 84 0 86 0;
 #X connect 86 0 73 0;
 #X connect 86 0 74 0;
+#X connect 87 0 88 0;
+#X connect 87 1 89 0;
+#X connect 88 0 90 0;
+#X connect 89 0 91 0;
