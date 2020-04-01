@@ -87,6 +87,7 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
 {
     if (!x->x_server){
         pd_error(x, "%s: can't invite source - no server!", classname(x));
+        return;
     }
 
     if (argc < 3){
