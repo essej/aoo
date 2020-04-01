@@ -147,6 +147,8 @@ class scoped_lock {
 public:
     scoped_lock(T& lock)
         : lock_(&lock){ lock_->lock(); }
+    scoped_lock(const T& lock) = delete;
+    scoped_lock& operator=(const T& lock) = delete;
     ~scoped_lock() { lock_->unlock(); }
 private:
     T* lock_;
@@ -157,7 +159,9 @@ class shared_scoped_lock {
 public:
     shared_scoped_lock(T& lock)
         : lock_(&lock){ lock_->lock_shared(); }
-    ~shared_scoped_lock() { lock_->unlock(); }
+    shared_scoped_lock(const T& lock) = delete;
+    shared_scoped_lock& operator=(const T& lock) = delete;
+    ~shared_scoped_lock() { lock_->unlock_shared(); }
 private:
     T* lock_;
 };
