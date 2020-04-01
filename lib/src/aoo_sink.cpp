@@ -923,7 +923,7 @@ bool source_desc::add_packet(const data_packet& d){
     // add frame to block
     block->add_frame(d.framenum, (const char *)d.data, d.size);
 
-#if 1
+#if 0
     if (block->complete()){
         // remove block from acklist as early as possible
         ack_list_.remove(block->sequence);
@@ -973,7 +973,7 @@ void source_desc::process_blocks(){
     next_ = next;
     // pop blocks
     while (count--){
-    #if 0
+    #if 1
         // remove block from acklist
         ack_list_.remove(blockqueue_.front().sequence);
     #endif
