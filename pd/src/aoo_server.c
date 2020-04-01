@@ -37,6 +37,16 @@ void aoo_send_send(t_aoo_send *x);
 void aoo_send_handle_message(t_aoo_send *x, const char * data,
                                 int32_t n, void *src, aoo_replyfn fn);
 
+static void lower_thread_priority(void)
+{
+#ifdef _WIN32
+    int priority = GetThreadPriority(GetCurrentThread());
+    SetThreadPriority(GetCurrentThread(), priority - 2);
+#else
+
+#endif
+}
+
 /*////////////////////// aoo server //////////////////*/
 
 static t_class *aoo_server_class;
@@ -98,6 +108,8 @@ static void* aoo_server_send(void *y)
 {
     t_aoo_server *x = (t_aoo_server *)y;
 
+    lower_thread_priority();
+
     pthread_mutex_lock(&x->x_mutex);
     while (!x->x_quit){
         pthread_cond_wait(&x->x_condition, &x->x_mutex);
@@ -126,6 +138,8 @@ static void* aoo_server_send(void *y)
 static void* aoo_server_receive(void *y)
 {
     t_aoo_server *x = (t_aoo_server *)y;
+
+    lower_thread_priority();
 
     while (!x->x_quit){
         struct sockaddr_storage sa;

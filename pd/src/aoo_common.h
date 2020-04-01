@@ -52,10 +52,15 @@ typedef pthread_rwlock_t aoo_lock;
 #endif
 
 void aoo_lock_init(aoo_lock *x);
+
 void aoo_lock_destroy(aoo_lock *x);
+
 void aoo_lock_lock(aoo_lock *x);
+
 void aoo_lock_lock_shared(aoo_lock *x);
+
 void aoo_lock_unlock(aoo_lock *x);
+
 void aoo_lock_unlock_shared(aoo_lock *x);
 
 /*///////////////////////////// helper functions ///////////////////////////////*/
