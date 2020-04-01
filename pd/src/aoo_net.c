@@ -21,6 +21,9 @@ void socket_error_print(const char *label)
 {
 #ifdef _WIN32
     int err = WSAGetLastError();
+    if (err == WSAECONNRESET){
+        return; // ignore
+    }
     char str[1024];
     str[0] = 0;
     FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0,
