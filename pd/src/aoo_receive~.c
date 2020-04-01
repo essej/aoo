@@ -35,7 +35,7 @@ typedef struct _aoo_receive
     int x_numsources;
     // server
     t_aoo_server * x_server;
-    pthread_rwlock_t x_lock;
+    aoo_lock x_lock;
     // events
     t_outlet *x_eventout;
     t_clock *x_clock;
@@ -67,20 +67,20 @@ void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
                                 int32_t n, void *src, aoo_replyfn fn)
 {
     // synchronize with aoo_receive_dsp()
-    pthread_rwlock_rdlock(&x->x_lock);
+    aoo_lock_lock_shared(&x->x_lock);
     // handle incoming message
     aoo_sink_handlemessage(x->x_aoo_sink, data, n, src, fn);
-    pthread_rwlock_unlock(&x->x_lock);
+    aoo_lock_unlock_shared(&x->x_lock);
 }
 
 // called from the network send thread
 void aoo_receive_send(t_aoo_receive *x)
 {
     // synchronize with aoo_receive_dsp()
-    pthread_rwlock_rdlock(&x->x_lock);
+    aoo_lock_lock_shared(&x->x_lock);
     // send outgoing messages
     while (aoo_sink_send(x->x_aoo_sink)) ;
-    pthread_rwlock_unlock(&x->x_lock);
+    aoo_lock_unlock_shared(&x->x_lock);
 }
 
 static void aoo_receive_buffersize(t_aoo_receive *x, t_floatarg f)
@@ -326,12 +326,12 @@ static void aoo_receive_dsp(t_aoo_receive *x, t_signal **sp)
 
     // synchronize with aoo_receive_send()
     // and aoo_receive_handle_message()
-    pthread_rwlock_wrlock(&x->x_lock); // writer lock!
+    aoo_lock_lock(&x->x_lock); // writer lock!
 
     aoo_sink_setup(x->x_aoo_sink, x->x_samplerate,
                    x->x_blocksize, x->x_nchannels);
 
-    pthread_rwlock_unlock(&x->x_lock);
+    aoo_lock_unlock(&x->x_lock);
 
     dsp_add(aoo_receive_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 }
@@ -345,7 +345,7 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
     x->x_sources = 0;
     x->x_numsources = 0;
     x->x_clock = clock_new(x, (t_method)aoo_receive_tick);
-    pthread_rwlock_init(&x->x_lock, 0);
+    aoo_lock_init(&x->x_lock);
 
     // arg #1: port number
     int port = atom_getfloatarg(0, argc, argv);
@@ -388,7 +388,7 @@ static void aoo_receive_free(t_aoo_receive *x)
 
     aoo_sink_free(x->x_aoo_sink);
 
-    pthread_rwlock_destroy(&x->x_lock);
+    aoo_lock_destroy(&x->x_lock);
 
     freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
     if (x->x_sources){

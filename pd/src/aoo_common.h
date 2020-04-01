@@ -13,6 +13,10 @@
 #include "aoo/aoo_pcm.h"
 #include "aoo/aoo_opus.h"
 
+#ifndef _WIN32
+#include <pthread.h>
+#endif
+
 // setup function
 #ifdef _WIN32
 #define EXPORT __declspec(dllexport)
@@ -38,6 +42,21 @@ t_endpoint * aoo_server_getendpoint(t_aoo_server *server,
 int aoo_server_port(t_aoo_server *);
 
 void aoo_server_notify(t_aoo_server *x);
+
+/*///////////////////////////// aoo_lock /////////////////////////////*/
+
+#ifdef _WIN32
+typedef void * aoo_lock;
+#else
+typedef pthread_rwlock_t aoo_lock;
+#endif
+
+void aoo_lock_init(aoo_lock *x);
+void aoo_lock_destroy(aoo_lock *x);
+void aoo_lock_lock(aoo_lock *x);
+void aoo_lock_lock_shared(aoo_lock *x);
+void aoo_lock_unlock(aoo_lock *x);
+void aoo_lock_unlock_shared(aoo_lock *x);
 
 /*///////////////////////////// helper functions ///////////////////////////////*/
 

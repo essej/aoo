@@ -62,7 +62,7 @@ typedef struct _aoo_server
     pthread_t x_sendthread;
     pthread_t x_receivethread;
     pthread_mutex_t x_endpointlock;
-    pthread_rwlock_t x_clientlock;
+    aoo_lock x_clientlock;
     pthread_mutex_t x_mutex;
     pthread_cond_t x_condition;
     int x_quit; // should be atomic, but works anyway
@@ -102,7 +102,7 @@ static void* aoo_server_send(void *y)
     while (!x->x_quit){
         pthread_cond_wait(&x->x_condition, &x->x_mutex);
 
-        pthread_rwlock_rdlock(&x->x_clientlock);
+        aoo_lock_lock_shared(&x->x_clientlock);
 
         for (int i = 0; i < x->x_numclients; ++i){
             t_client *c = &x->x_clients[i];
@@ -116,7 +116,7 @@ static void* aoo_server_send(void *y)
             }
         }
 
-        pthread_rwlock_unlock(&x->x_clientlock);
+        aoo_lock_unlock_shared(&x->x_clientlock);
     }
     pthread_mutex_unlock(&x->x_mutex);
 
@@ -146,7 +146,7 @@ static void* aoo_server_receive(void *y)
             // get sink ID
             int32_t type, id;
             if (aoo_parsepattern(buf, nbytes, &type, &id) > 0){
-                pthread_rwlock_rdlock(&x->x_clientlock);
+                aoo_lock_lock_shared(&x->x_clientlock);
                 if (type == AOO_TYPE_SINK){
                     // forward OSC packet to matching receiver(s)
                     for (int i = 0; i < x->x_numclients; ++i){
@@ -177,7 +177,7 @@ static void* aoo_server_receive(void *y)
                     fprintf(stderr, "bug: unknown aoo type\n");
                     fflush(stderr);
                 }
-                pthread_rwlock_unlock(&x->x_clientlock);
+                aoo_lock_unlock_shared(&x->x_clientlock);
                 // notify send thread
                 pthread_cond_signal(&x->x_condition);
             } else {
@@ -204,7 +204,7 @@ t_aoo_server* aoo_server_addclient(t_pd *c, int32_t id, int port)
     t_aoo_server *x = (t_aoo_server *)pd_findbyclass(s, aoo_server_class);
     if (x){
         // check receiver and add to list
-        pthread_rwlock_wrlock(&x->x_clientlock);
+        aoo_lock_lock(&x->x_clientlock);
     #if 1
         for (int i = 0; i < x->x_numclients; ++i){
             if (pd_class(c) == pd_class(x->x_clients[i].c_obj)
@@ -216,7 +216,7 @@ t_aoo_server* aoo_server_addclient(t_pd *c, int32_t id, int port)
                     pd_error(c, "%s with ID %d on port %d already exists!",
                              classname(c), id, port);
                 }
-                pthread_rwlock_unlock(&x->x_clientlock);
+                aoo_lock_unlock(&x->x_clientlock);
                 return 0;
             }
         }
@@ -225,7 +225,7 @@ t_aoo_server* aoo_server_addclient(t_pd *c, int32_t id, int port)
                                                 sizeof(t_client) * (x->x_numclients + 1));
         x->x_clients[x->x_numclients] = client;
         x->x_numclients++;
-        pthread_rwlock_unlock(&x->x_clientlock);
+        aoo_lock_unlock(&x->x_clientlock);
     } else {
         // make new socket listener
 
@@ -260,8 +260,8 @@ t_aoo_server* aoo_server_addclient(t_pd *c, int32_t id, int port)
 
         // start threads
         x->x_quit = 0;
+        aoo_lock_init(&x->x_clientlock);
         pthread_mutex_init(&x->x_mutex, 0);
-        pthread_rwlock_init(&x->x_clientlock, 0);
         pthread_cond_init(&x->x_condition, 0);
 
         pthread_create(&x->x_sendthread, 0, aoo_server_send, x);
@@ -276,7 +276,7 @@ void aoo_server_removeclient(t_aoo_server *x, t_pd *c, int32_t id)
 {
     if (x->x_numclients > 1){
         // just remove receiver from list
-        pthread_rwlock_wrlock(&x->x_clientlock);
+        aoo_lock_lock(&x->x_clientlock);
         int n = x->x_numclients;
         for (int i = 0; i < n; ++i){
             if (c == x->x_clients[i].c_obj){
@@ -288,12 +288,12 @@ void aoo_server_removeclient(t_aoo_server *x, t_pd *c, int32_t id)
                 x->x_clients = (t_client *)resizebytes(x->x_clients, n * sizeof(t_client),
                                                         (n - 1) * sizeof(t_client));
                 x->x_numclients--;
-                pthread_rwlock_unlock(&x->x_clientlock);
+                aoo_lock_unlock(&x->x_clientlock);
                 return;
             }
         }
         bug("aoo_server_release: receiver not found!");
-        pthread_rwlock_unlock(&x->x_clientlock);
+        aoo_lock_unlock(&x->x_clientlock);
     } else if (x->x_numclients == 1){
         // last instance
         pd_unbind(&x->x_pd, x->x_sym);
@@ -307,7 +307,7 @@ void aoo_server_removeclient(t_aoo_server *x, t_pd *c, int32_t id)
         pthread_cond_signal(&x->x_condition);
 
         // try to wake up receive thread
-        pthread_rwlock_wrlock(&x->x_clientlock);
+        aoo_lock_lock(&x->x_clientlock);
         int didit = socket_signal(x->x_socket, x->x_port);
         if (!didit){
             // force wakeup by closing the socket.
@@ -315,7 +315,7 @@ void aoo_server_removeclient(t_aoo_server *x, t_pd *c, int32_t id)
             // the MSDN docs explicitly forbid it!
             socket_close(x->x_socket);
         }
-        pthread_rwlock_unlock(&x->x_clientlock);
+        aoo_lock_unlock(&x->x_clientlock);
 
         // wait for threads
         pthread_join(x->x_sendthread, 0);
@@ -335,7 +335,7 @@ void aoo_server_removeclient(t_aoo_server *x, t_pd *c, int32_t id)
         freebytes(x->x_clients, sizeof(t_client) * x->x_numclients);
 
         pthread_mutex_destroy(&x->x_mutex);
-        pthread_rwlock_destroy(&x->x_clientlock);
+        aoo_lock_destroy(&x->x_clientlock);
         pthread_cond_destroy(&x->x_condition);
 
         verbose(0, "released socket listener on port %d", x->x_port);

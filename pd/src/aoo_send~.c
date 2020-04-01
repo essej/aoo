@@ -34,7 +34,7 @@ typedef struct _aoo_send
     int x_numsinks;
     // server
     t_aoo_server *x_server;
-    pthread_rwlock_t x_lock;
+    aoo_lock x_lock;
     // events
     t_clock *x_clock;
     t_outlet *x_eventout;
@@ -45,20 +45,20 @@ void aoo_send_handle_message(t_aoo_send *x, const char * data,
                                 int32_t n, void *src, aoo_replyfn fn)
 {
     // synchronize with aoo_receive_dsp()
-    pthread_rwlock_rdlock(&x->x_lock);
+    aoo_lock_lock_shared(&x->x_lock);
     // handle incoming message
     aoo_source_handlemessage(x->x_aoo_source, data, n, src, fn);
-    pthread_rwlock_unlock(&x->x_lock);
+    aoo_lock_unlock_shared(&x->x_lock);
 }
 
 // called from the network send thread
 void aoo_send_send(t_aoo_send *x)
 {
     // synchronize with aoo_receive_dsp()
-    pthread_rwlock_rdlock(&x->x_lock);
+    aoo_lock_lock_shared(&x->x_lock);
     // send outgoing messages
     while (aoo_source_send(x->x_aoo_source)) ;
-    pthread_rwlock_unlock(&x->x_lock);
+    aoo_lock_unlock_shared(&x->x_lock);
 }
 
 static void aoo_send_handleevents(t_aoo_send *x,
@@ -403,12 +403,12 @@ static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
     }
 
     // synchronize with network threads!
-    pthread_rwlock_wrlock(&x->x_lock); // writer lock!
+    aoo_lock_lock(&x->x_lock); // writer lock!
 
     aoo_source_setup(x->x_aoo_source, x->x_samplerate,
                      x->x_blocksize, x->x_nchannels);
 
-    pthread_rwlock_unlock(&x->x_lock);
+    aoo_lock_unlock(&x->x_lock);
 
     dsp_add(aoo_send_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 }
@@ -421,7 +421,7 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     x->x_clock = clock_new(x, (t_method)aoo_send_tick);
     x->x_sinks = 0;
     x->x_numsinks = 0;
-    pthread_rwlock_init(&x->x_lock, 0);
+    aoo_lock_init(&x->x_lock);
 
     // arg #1: port number
     int port = atom_getfloatarg(0, argc, argv);
@@ -469,7 +469,7 @@ static void aoo_send_free(t_aoo_send *x)
 
     aoo_source_free(x->x_aoo_source);
 
-    pthread_rwlock_destroy(&x->x_lock);
+    aoo_lock_destroy(&x->x_lock);
 
     freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
     if (x->x_sinks){
