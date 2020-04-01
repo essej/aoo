@@ -132,7 +132,7 @@ typedef AOO_SAMPLETYPE aoo_sample;
 
 // max. number of frames to request per call
 #ifndef AOO_RESEND_MAXNUMFRAMES
- #define AOO_RESEND_MAXNUMFRAMES 64
+ #define AOO_RESEND_MAXNUMFRAMES 16
 #endif
 
 // initialize AoO library - call only once!
