@@ -50,7 +50,7 @@ over ssh::
 
 or https::
 
-   git clone https://git.iem.at/pd/aoo.git
+   git clone https://git.iem.at/cm/aoo.git
 
 make it (using pd-libbuilder)::
 
