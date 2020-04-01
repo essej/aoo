@@ -1,16 +1,15 @@
 Audio over OSC based audio streaming
 ====================================
 
-"Audio over OSC" aka *AoO* is aimed to be a message based audio system inspired by 
-Open Sound Control OSC_ as a syntax format. It is dedicated to send audio in real time from arbitrary sources to arbitrary sinks on demand.
+"Audio over OSC" aka *AoO* is aimed to be a message based audio system inspired by Open Sound Control OSC_ as a syntax format. It is dedicated to send audio in real time from arbitrary sources to arbitrary sinks on demand.
 
 history
 -------
 
-A first vision of *AoO* has came up in 2009, a first implementation as a library with externals for PureData (Pd) has been done 2010, but major issues with needed networking objects made this version unpracticable and was not used extensively.
+A first vision of *AoO* has came up in 2009, a first implementation V1.0-b2 as a library with externals for PureData (Pd) has been done 2010, but major issues with needed networking objects made this version unpracticable and was not used extensively.
 More on this version of AoO as "message based audio system"" was published at LAC 2014 [LAC14]_
 
-A new Version, quite from scratch, has been launched in 2020, targeting a network streaming Project for Kunsthaus Graz for Bill Fontana using a independent wireless network infrastructure FunkFeuer Graz 0xFF_ and also reviving the Virtual IEM Computer Music Ensemble VICE_ within a seminar on IEM_ Graz.
+The new Version 2.0, not backwards compatible, was done quite from scratch and has been launched in february 2020, targeting a network streaming Project for Kunsthaus Graz for Bill Fontana using a independent wireless network infrastructure FunkFeuer Graz 0xFF_ and also reviving the Virtual IEM Computer Music Ensemble VICE_ within a seminar on IEM_ Graz.
 
 Based on the *AoO* idea of Winfried Ritsch with a first draft of realisation on embedded devices, the actual version starting with V-2.0 , was mainly written by Christof Ressi, as a complete rewrite of the version from Wolfgang Jäger in C in 2010.
 
@@ -120,7 +119,7 @@ About Document
 --------------
 :authors: Winfried Ritsch, Christof Ressi
 :date: march 2014 - february 2020
-:version: 1.0-a1
+:version: 2.0-a1
 
 .. _OSC: http://opensoundcontrol.org/
 
