@@ -83,6 +83,54 @@ void aoo_receive_send(t_aoo_receive *x)
     aoo_lock_unlock_shared(&x->x_lock);
 }
 
+static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (!x->x_server){
+        pd_error(x, "%s: can't invite source - no server!", classname(x));
+    }
+
+    if (argc < 3){
+        pd_error(x, "%s: too few arguments for 'invite' message", classname(x));
+        return;
+    }
+
+    struct sockaddr_storage sa;
+    socklen_t len;
+    int32_t id;
+    t_endpoint *e = 0;
+    if (aoo_getsourcearg(x, argc, argv, &sa, &len, &id)){
+        for (int i = 0; i < x->x_numsources; ++i){
+            t_source *src = &x->x_sources[i];
+            if (src->s_id == id && endpoint_match(src->s_endpoint, &sa)){
+                e = src->s_endpoint;
+                break;
+            }
+        }
+    }
+    if (!e){
+        e = aoo_server_getendpoint(x->x_server, &sa, len);
+    }
+    aoo_sink_invitesource(x->x_aoo_sink, e, id, (aoo_replyfn)endpoint_send);
+}
+
+static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (!x->x_server){
+        pd_error(x, "%s: can't uninvite source - no server!", classname(x));
+    }
+
+    if (argc < 3){
+        pd_error(x, "%s: too few arguments for 'uninvite' message", classname(x));
+        return;
+    }
+
+    t_source *src = aoo_receive_findsource(x, argc, argv);
+    if (src){
+        aoo_sink_uninvitesource(x->x_aoo_sink, src->s_endpoint,
+                                src->s_id, (aoo_replyfn)endpoint_send);
+    }
+}
+
 static void aoo_receive_buffersize(t_aoo_receive *x, t_floatarg f)
 {
     int32_t bufsize = f;
@@ -404,6 +452,10 @@ void aoo_receive_tilde_setup(void)
         (t_method)aoo_receive_free, sizeof(t_aoo_receive), 0, A_GIMME, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_dsp, gensym("dsp"), A_CANT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_listen, gensym("listen"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_invite,
+                    gensym("invite"), A_GIMME, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_uninvite,
+                    gensym("uninvite"), A_GIMME, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_buffersize,
                     gensym("bufsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_timefilter,

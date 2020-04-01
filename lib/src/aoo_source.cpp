@@ -1100,7 +1100,7 @@ void source::handle_invite(void *endpoint, aoo_replyfn fn, int32_t id){
             eventqueue_.write(event);
         }
     } else {
-        LOG_WARNING("ignoring '" << AOO_MSG_INVITE << "' message: sink already added");
+        LOG_VERBOSE("ignoring '" << AOO_MSG_INVITE << "' message: sink already added");
     }
 }
 
@@ -1121,7 +1121,7 @@ void source::handle_uninvite(void *endpoint, aoo_replyfn fn, int32_t id){
             eventqueue_.write(event);
         }
     } else {
-        LOG_WARNING("ignoring '" << AOO_MSG_UNINVITE << "' message: sink not found");
+        LOG_VERBOSE("ignoring '" << AOO_MSG_UNINVITE << "' message: sink not found");
     }
 }
 
@@ -1144,7 +1144,7 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id){
             eventqueue_.write(event);
         }
     } else {
-        LOG_WARNING("ignoring '" << AOO_MSG_PING << "' message: sink not found");
+        LOG_VERBOSE("ignoring '" << AOO_MSG_PING << "' message: sink not found");
     }
 }
 

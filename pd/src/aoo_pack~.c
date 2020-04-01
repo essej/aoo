@@ -39,10 +39,30 @@ static void aoo_pack_handleevents(t_aoo_pack *x,
                                   const aoo_event *events, int32_t n)
 {
     for (int i = 0; i < n; ++i){
-        if (events[i].type == AOO_PING_EVENT){
+        switch (events[i].type){
+        case AOO_PING_EVENT:
+        {
             t_atom msg;
             SETFLOAT(&msg, events[i].sink.id);
             outlet_anything(x->x_eventout, gensym("ping"), 1, &msg);
+            break;
+        }
+        case AOO_INVITE_EVENT:
+        {
+            t_atom msg;
+            SETFLOAT(&msg, events[i].sink.id);
+            outlet_anything(x->x_eventout, gensym("invite"), 1, &msg);
+            break;
+        }
+        case AOO_UNINVITE_EVENT:
+        {
+            t_atom msg;
+            SETFLOAT(&msg, events[i].sink.id);
+            outlet_anything(x->x_eventout, gensym("uninvite"), 1, &msg);
+            break;
+        }
+        default:
+            break;
         }
     }
 }

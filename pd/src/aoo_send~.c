@@ -65,7 +65,9 @@ static void aoo_send_handleevents(t_aoo_send *x,
                                   const aoo_event *events, int32_t n)
 {
     for (int i = 0; i < n; ++i){
-        if (events[i].type == AOO_PING_EVENT){
+        switch (events[i].type){
+        case AOO_PING_EVENT:
+        {
             t_endpoint *e = (t_endpoint *)events[i].sink.endpoint;
             t_symbol *host;
             int port;
@@ -77,6 +79,40 @@ static void aoo_send_handleevents(t_aoo_send *x,
             SETFLOAT(msg + 1, port);
             SETFLOAT(msg + 2, events[i].sink.id);
             outlet_anything(x->x_eventout, gensym("ping"), 3, msg);
+            break;
+        }
+        case AOO_INVITE_EVENT:
+        {
+            t_endpoint *e = (t_endpoint *)events[i].sink.endpoint;
+            t_symbol *host;
+            int port;
+            if (!endpoint_getaddress(e, &host, &port)){
+                continue;
+            }
+            t_atom msg[3];
+            SETSYMBOL(msg, host);
+            SETFLOAT(msg + 1, port);
+            SETFLOAT(msg + 2, events[i].sink.id);
+            outlet_anything(x->x_eventout, gensym("invite"), 3, msg);
+            break;
+        }
+        case AOO_UNINVITE_EVENT:
+        {
+            t_endpoint *e = (t_endpoint *)events[i].sink.endpoint;
+            t_symbol *host;
+            int port;
+            if (!endpoint_getaddress(e, &host, &port)){
+                continue;
+            }
+            t_atom msg[3];
+            SETSYMBOL(msg, host);
+            SETFLOAT(msg + 1, port);
+            SETFLOAT(msg + 2, events[i].sink.id);
+            outlet_anything(x->x_eventout, gensym("uninvite"), 3, msg);
+            break;
+        }
+        default:
+            break;
         }
     }
 }

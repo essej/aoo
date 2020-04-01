@@ -56,6 +56,16 @@ static void aoo_unpack_list(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv
     while (aoo_sink_send(x->x_aoo_sink)) ;
 }
 
+static void aoo_unpack_invite(t_aoo_unpack *x, t_floatarg f)
+{
+    aoo_sink_invitesource(x->x_aoo_sink, x, (int32_t)f, (aoo_replyfn)aoo_pack_reply);
+}
+
+static void aoo_unpack_uninvite(t_aoo_unpack *x, t_floatarg f)
+{
+    aoo_sink_uninvitesource(x->x_aoo_sink, x, (int32_t)f, (aoo_replyfn)aoo_pack_reply);
+}
+
 static void aoo_unpack_buffersize(t_aoo_unpack *x, t_floatarg f)
 {
     int32_t bufsize = f;
@@ -268,6 +278,10 @@ void aoo_unpack_tilde_setup(void)
         (t_method)aoo_unpack_free, sizeof(t_aoo_unpack), 0, A_GIMME, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_dsp, gensym("dsp"), A_CANT, A_NULL);
     class_addlist(aoo_unpack_class, (t_method)aoo_unpack_list);
+    class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_invite,
+                    gensym("invite"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_uninvite,
+                    gensym("uninvite"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_buffersize,
                     gensym("bufsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_timefilter,
