@@ -40,8 +40,12 @@ void aoo_send_handle_message(t_aoo_send *x, const char * data,
 static void lower_thread_priority(void)
 {
 #ifdef _WIN32
-    int priority = GetThreadPriority(GetCurrentThread());
-    SetThreadPriority(GetCurrentThread(), priority - 2);
+    // lower thread priority only for high priority or real time processes
+    DWORD cls = GetPriorityClass(GetCurrentProcess());
+    if (cls == HIGH_PRIORITY_CLASS || cls == REALTIME_PRIORITY_CLASS){
+        int priority = GetThreadPriority(GetCurrentThread());
+        SetThreadPriority(GetCurrentThread(), priority - 2);
+    }
 #else
 
 #endif
