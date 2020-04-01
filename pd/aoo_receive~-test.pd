@@ -1,14 +1,14 @@
 #N canvas 946 24 446 99 12;
 #X declare -lib aoo;
-#N canvas 696 53 864 612 sub 1;
+#N canvas 564 64 864 612 sub 1;
 #X obj 127 164 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
-10 -262144 -1 -1 500 256;
+10 -262144 -1 -1 20 256;
 #X obj 403 270 line~;
 #X msg 403 236 \$1 50;
 #X obj 66 315 *~;
 #X obj 137 316 *~;
 #X obj 403 45 vsl 15 128 0 1 0 0 empty empty empty 0 -9 0 10 -262144
--1 -1 2200 1;
+-1 -1 1300 1;
 #X obj 403 205 t f f;
 #X obj 449 255 - 100;
 #X floatatom 449 279 5 0 0 0 - - -;

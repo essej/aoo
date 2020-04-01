@@ -44,6 +44,18 @@ struct data_request : endpoint {
     int32_t frame = 0;
 };
 
+struct invite_request : endpoint {
+    enum type {
+        INVITE,
+        UNINVITE
+    };
+
+    invite_request() = default;
+    invite_request(void *_user, aoo_replyfn _fn, int32_t _id, int32_t _type)
+        : endpoint(_user, _fn, _id), type(_type){}
+    int32_t type = 0;
+};
+
 struct sink_desc : endpoint {
     sink_desc(void *_user, aoo_replyfn _fn, int32_t _id)
         : endpoint(_user, _fn, _id), channel(0), format_changed(true) {}
@@ -158,6 +170,9 @@ class source final : public isource {
 
     void handle_ping(void *endpoint, aoo_replyfn fn, int32_t id);
 
+    void handle_invite(void *endpoint, aoo_replyfn fn, int32_t id);
+
+    void handle_uninvite(void *endpoint, aoo_replyfn fn, int32_t id);
 };
 
 } // aoo

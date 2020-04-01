@@ -21,6 +21,7 @@ struct stream_state {
         state_ = AOO_SOURCE_STATE_STOP;
         recover_ = false;
         format_ = false;
+        invite_ = NONE;
     }
 
     void add_lost(int32_t n) { lost_ += n; }
@@ -57,6 +58,15 @@ struct stream_state {
 
     void request_format() { format_ = true; }
     bool need_format() { return format_.exchange(false); }
+
+    enum invitation_state {
+        NONE = 0,
+        INVITE = 1,
+        UNINVITE = 2,
+    };
+
+    void request_invitation(invitation_state state) { invite_ = state; }
+    invitation_state get_invitation_state() { return invite_.exchange(NONE); }
 private:
     std::atomic<int32_t> lost_{0};
     std::atomic<int32_t> reordered_{0};
@@ -64,6 +74,7 @@ private:
     std::atomic<int32_t> gap_{0};
     std::atomic<double> pingtime_{0};
     std::atomic<aoo_source_state> state_{AOO_SOURCE_STATE_STOP};
+    std::atomic<invitation_state> invite_{NONE};
     std::atomic<bool> recover_{false};
     std::atomic<bool> format_{false};
 };
@@ -97,6 +108,8 @@ public:
     bool process(const sink& s, aoo_sample *buffer, int32_t size);
     void request_recover(){ streamstate_.request_recover(); }
     void request_format(){ streamstate_.request_format(); }
+    void request_invite(){ streamstate_.request_invitation(stream_state::INVITE); }
+    void request_uninvite(){ streamstate_.request_invitation(stream_state::UNINVITE); }
 private:
     struct data_request {
         int32_t sequence;
@@ -112,7 +125,7 @@ private:
     // send messages
     bool send_format_request(const sink& s);
     int32_t send_data_request(const sink& s);
-    bool send_ping(const sink& s);
+    bool send_notifications(const sink& s);
     void dosend(const char *data, int32_t n){
         fn_(endpoint_, data, n);
     }
@@ -147,6 +160,10 @@ public:
         : id_(id) {}
 
     int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
+
+    int32_t invite_source(void *endpoint, int32_t id, aoo_replyfn fn) override;
+
+    int32_t uninvite_source(void *endpoint, int32_t id, aoo_replyfn fn) override;
 
     int32_t handle_message(const char *data, int32_t n,
                            void *endpoint, aoo_replyfn fn) override;

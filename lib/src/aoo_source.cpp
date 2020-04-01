@@ -433,6 +433,28 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
         } else {
             LOG_ERROR("bad number of arguments for /resend message");
         }
+    } else if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_INVITE)){
+        try {
+            auto it = msg.ArgumentsBegin();
+            auto id = it->AsInt32();
+
+            handle_invite(endpoint, fn, id);
+
+            return 1;
+        } catch (const osc::Exception& e){
+            LOG_ERROR(e.what());
+        }
+    } else if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_UNINVITE)){
+        try {
+            auto it = msg.ArgumentsBegin();
+            auto id = it->AsInt32();
+
+            handle_uninvite(endpoint, fn, id);
+
+            return 1;
+        } catch (const osc::Exception& e){
+            LOG_ERROR(e.what());
+        }
     } else if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_PING)){
         try {
             auto it = msg.ArgumentsBegin();
@@ -1058,6 +1080,48 @@ void source::handle_data_request(void *endpoint, aoo_replyfn fn, int32_t id, int
         }
     } else {
         LOG_WARNING("ignoring '" << AOO_MSG_DATA << "' message: sink not found");
+    }
+}
+
+void source::handle_invite(void *endpoint, aoo_replyfn fn, int32_t id){
+    // check if sink exists (not strictly necessary, but might help catch errors)
+    shared_lock lock(sink_mutex_); // reader lock!
+    auto sink = find_sink(endpoint, id);
+    lock.unlock();
+
+    if (!sink){
+        // push "invite" event
+        if (eventqueue_.write_available()){
+            aoo_event event;
+            event.type = AOO_INVITE_EVENT;
+            event.sink.endpoint = endpoint;
+            // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
+            event.sink.id = id;
+            eventqueue_.write(event);
+        }
+    } else {
+        LOG_WARNING("ignoring '" << AOO_MSG_INVITE << "' message: sink already added");
+    }
+}
+
+void source::handle_uninvite(void *endpoint, aoo_replyfn fn, int32_t id){
+    // check if sink exists (not strictly necessary, but might help catch errors)
+    shared_lock lock(sink_mutex_); // reader lock!
+    auto sink = find_sink(endpoint, id);
+    lock.unlock();
+
+    if (sink){
+        // push "uninvite" event
+        if (eventqueue_.write_available()){
+            aoo_event event;
+            event.type = AOO_UNINVITE_EVENT;
+            event.sink.endpoint = endpoint;
+            // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
+            event.sink.id = id;
+            eventqueue_.write(event);
+        }
+    } else {
+        LOG_WARNING("ignoring '" << AOO_MSG_UNINVITE << "' message: sink not found");
     }
 }
 

@@ -45,12 +45,14 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #define AOO_MSG_WILDCARD_LEN 2
 #define AOO_MSG_FORMAT "/format"
 #define AOO_MSG_FORMAT_LEN 7
-#define AOO_MSG_FORMAT_NUMARGS 7
 #define AOO_MSG_DATA "/data"
 #define AOO_MSG_DATA_LEN 5
-#define AOO_MSG_DATA_NUMARGS 9
 #define AOO_MSG_PING "/ping"
 #define AOO_MSG_PING_LEN 5
+#define AOO_MSG_INVITE "/invite"
+#define AOO_MSG_INVITE_LEN 7
+#define AOO_MSG_UNINVITE "/uninvite"
+#define AOO_MSG_UNINVITE_LEN 9
 
 #define AOO_TYPE_SOURCE 0
 #define AOO_TYPE_SINK 1
@@ -184,6 +186,10 @@ typedef enum aoo_event_type
 {
     // source: received a ping from sink
     AOO_PING_EVENT,
+    // source: invited by sink
+    AOO_INVITE_EVENT,
+    // source: uninvited by sink
+    AOO_UNINVITE_EVENT,
     // sink: source added
     AOO_SOURCE_ADD_EVENT,
     // sink: source removed (non implemented yet)
@@ -447,9 +453,15 @@ AOO_API void aoo_sink_free(aoo_sink *sink);
 AOO_API int32_t aoo_sink_setup(aoo_sink *sink, int32_t samplerate,
                                int32_t blocksize, int32_t nchannels);
 
+// invite a source (always threadsafe)
+AOO_API int32_t aoo_sink_invitesource(aoo_sink *sink, void *endpoint, int32_t id, aoo_replyfn fn);
+
+// uninvite a source (always threadsafe)
+AOO_API int32_t aoo_sink_uninvitesource(aoo_sink *sink, void *endpoint, int32_t id, aoo_replyfn fn);
+
 // handle messages from sources - might call the reply function (threadsafe, but not reentrant)
 AOO_API int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
-                            void *src, aoo_replyfn fn);
+                                       void *src, aoo_replyfn fn);
 
 // send outgoing messages - will call the reply function (threadsafe, but not rentrant)
 AOO_API int32_t aoo_sink_send(aoo_sink *sink);

@@ -178,6 +178,12 @@ public:
     // setup the sink - needs to be synchronized with other method calls!
     virtual int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) = 0;
 
+    // invite a source (always thread safe)
+    virtual int32_t invite_source(void *endpoint, int32_t id, aoo_replyfn fn) = 0;
+
+    // uninvite a source (always thread safe)
+    virtual int32_t uninvite_source(void *endpoint, int32_t id, aoo_replyfn fn) = 0;
+
     // handle messages from sources - might call the reply function (threadsafe, but not reentrant)
     virtual int32_t handle_message(const char *data, int32_t n,
                                    void *endpoint, aoo_replyfn fn) = 0;
