@@ -171,7 +171,7 @@ static void aoo_pack_clear(t_aoo_pack *x)
 
 static void aoo_pack_start(t_aoo_pack *x)
 {
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_resume, AOO_ARG_NULL);
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_start, AOO_ARG_NULL);
 }
 
 static void aoo_pack_stop(t_aoo_pack *x)

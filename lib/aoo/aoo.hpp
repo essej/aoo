@@ -82,12 +82,12 @@ public:
     //---------------------- options ----------------------//
     // set/get options (always threadsafe)
 
-    int32_t stop(){
-        return set_option(aoo_opt_stop, AOO_ARG_NULL);
+    int32_t start(){
+        return set_option(aoo_opt_start, AOO_ARG_NULL);
     }
 
-    int32_t resume(){
-        return set_option(aoo_opt_resume, AOO_ARG_NULL);
+    int32_t stop(){
+        return set_option(aoo_opt_stop, AOO_ARG_NULL);
     }
 
     int32_t set_format(aoo_format& f){

@@ -61,7 +61,7 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
         play_ = false;
         break;
     // resume
-    case aoo_opt_resume:
+    case aoo_opt_start:
     {
         unique_lock lock(update_mutex_); // writer lock!
         update();

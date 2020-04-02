@@ -277,6 +277,12 @@ typedef enum aoo_option
     // If you want to get the format, you have to pass a
     // aoo_format_storage, which is filled with the format.
     aoo_opt_format = 0,
+    // Reset the source/sink (NULL)
+    aoo_opt_reset,
+    // Start the source/sink (NULL)
+    aoo_opt_start,
+    // Stop the source/sink (NULL)
+    aoo_opt_stop,
     // Buffer size in ms (int32_t)
     // ---
     // This is the size of the ring buffer
@@ -348,13 +354,7 @@ typedef enum aoo_option
     // ---
     // This is the max. number of frames to request
     // in a single call to sink_handlemessage().
-    aoo_opt_resend_maxnumframes,
-    // Reset the source/sink (NULL)
-    aoo_opt_reset,
-    // Stop the source/sink (NULL)
-    aoo_opt_stop,
-    // Resume the source/sink (NULL)
-    aoo_opt_resume
+    aoo_opt_resend_maxnumframes
 } aoo_option;
 
 #define AOO_ARG(x) &x, sizeof(x)

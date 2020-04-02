@@ -383,7 +383,7 @@ static void aoo_send_clear(t_aoo_send *x)
 
 static void aoo_send_start(t_aoo_send *x)
 {
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_resume, AOO_ARG_NULL);
+    aoo_source_setoption(x->x_aoo_source, aoo_opt_start, AOO_ARG_NULL);
 }
 
 static void aoo_send_stop(t_aoo_send *x)
