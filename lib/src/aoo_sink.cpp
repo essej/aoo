@@ -538,7 +538,7 @@ source_desc::source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t sal
     event.type = AOO_SOURCE_ADD_EVENT;
     event.source.endpoint = endpoint;
     event.source.id = id;
-    eventqueue_.write(event);
+    eventqueue_.write(event); // no need to lock
     LOG_DEBUG("add new source with id " << id);
     resendqueue_.resize(256, 1);
 }
@@ -639,7 +639,7 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
         event.type = AOO_SOURCE_FORMAT_EVENT;
         event.source.endpoint = endpoint_;
         event.source.id = id_;
-        eventqueue_.write(event);
+        push_event(event);
     }
     return 1;
 }
@@ -757,25 +757,25 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
             // push packet loss event
             event.type = AOO_BLOCK_LOST_EVENT;
             event.block_loss.count = lost;
-            eventqueue_.write(event);
+            push_event(event);
         }
         if (reordered > 0 && eventqueue_.write_available()){
             // push packet reorder event
             event.type = AOO_BLOCK_REORDERED_EVENT;
             event.block_reorder.count = reordered;
-            eventqueue_.write(event);
+            push_event(event);
         }
         if (resent > 0 && eventqueue_.write_available()){
             // push packet resend event
             event.type = AOO_BLOCK_RESENT_EVENT;
             event.block_resend.count = resent;
-            eventqueue_.write(event);
+            push_event(event);
         }
         if (gap > 0 && eventqueue_.write_available()){
             // push packet gap event
             event.type = AOO_BLOCK_GAP_EVENT;
             event.block_gap.count = gap;
-            eventqueue_.write(event);
+            push_event(event);
         }
     }
     // update resampler
@@ -812,7 +812,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
                 event.source.endpoint = endpoint_;
                 event.source.id = id_;
                 event.source_state.state = AOO_SOURCE_STATE_PLAY;
-                eventqueue_.write(event);
+                push_event(event);
             }
         }
 
@@ -826,7 +826,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
                 event.source.endpoint = endpoint_;
                 event.source.id = id_;
                 event.source_state.state = AOO_SOURCE_STATE_STOP;
-                eventqueue_.write(event);
+                push_event(event);
             }
         }
 

@@ -151,8 +151,13 @@ private:
     block_ack_list ack_list_;
     lockfree::queue<aoo_sample> audioqueue_;
     lockfree::queue<block_info> infoqueue_;
-    lockfree::queue<aoo_event> eventqueue_;
     lockfree::queue<data_request> resendqueue_;
+    lockfree::queue<aoo_event> eventqueue_;
+    spinlock eventqueuelock_;
+    void push_event(const aoo_event& e){
+        scoped_lock<spinlock> l(eventqueuelock_);
+        eventqueue_.write(e);
+    }
     dynamic_resampler resampler_;
     // thread synchronization
     aoo::shared_mutex mutex_; // LATER replace with a spinlock?
