@@ -1,7 +1,10 @@
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+ * For information on usage and redistribution, and for a DISCLAIMER OF ALL
+ * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
+
 #include "m_pd.h"
-#include "aoo/aoo.h"
-#include "aoo/aoo_pcm.h"
-#include "aoo/aoo_opus.h"
+
+#include "aoo_common.h"
 
 #include <string.h>
 #include <assert.h>
@@ -18,8 +21,6 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
-#define classname(x) class_getname(*(t_pd *)x)
-
 static t_class *aoo_pack_class;
 
 typedef struct _aoo_pack
@@ -27,28 +28,65 @@ typedef struct _aoo_pack
     t_object x_obj;
     t_float x_f;
     aoo_source *x_aoo_source;
-    aoo_source_settings x_settings;
+    int32_t x_samplerate;
+    int32_t x_blocksize;
+    int32_t x_nchannels;
     t_float **x_vec;
     t_clock *x_clock;
     t_outlet *x_out;
+    t_outlet *x_eventout;
     int32_t x_sink_id;
     int32_t x_sink_chn;
 } t_aoo_pack;
 
-static void aoo_pack_tick(t_aoo_pack *x)
+static void aoo_pack_handleevents(t_aoo_pack *x,
+                                  const aoo_event *events, int32_t n)
 {
-    if (!aoo_source_send(x->x_aoo_source)){
-        bug("aoo_pack_tick");
+    for (int i = 0; i < n; ++i){
+        switch (events[i].type){
+        case AOO_PING_EVENT:
+        {
+            t_atom msg;
+            SETFLOAT(&msg, events[i].sink.id);
+            outlet_anything(x->x_eventout, gensym("ping"), 1, &msg);
+            break;
+        }
+        case AOO_INVITE_EVENT:
+        {
+            t_atom msg;
+            SETFLOAT(&msg, events[i].sink.id);
+            outlet_anything(x->x_eventout, gensym("invite"), 1, &msg);
+            break;
+        }
+        case AOO_UNINVITE_EVENT:
+        {
+            t_atom msg;
+            SETFLOAT(&msg, events[i].sink.id);
+            outlet_anything(x->x_eventout, gensym("uninvite"), 1, &msg);
+            break;
+        }
+        default:
+            break;
+        }
     }
 }
 
-static void aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)
+static void aoo_pack_tick(t_aoo_pack *x)
+{
+    while (aoo_source_send(x->x_aoo_source)) ;
+
+    aoo_source_handleevents(x->x_aoo_source,
+                            (aoo_eventhandler)aoo_pack_handleevents, x);
+}
+
+static int32_t aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)
 {
     t_atom *a = (t_atom *)alloca(n * sizeof(t_atom));
     for (int i = 0; i < n; ++i){
         SETFLOAT(&a[i], (unsigned char)data[i]);
     }
     outlet_list(x->x_out, &s_list, n, a);
+    return 1;
 }
 
 static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -60,14 +98,12 @@ static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
     aoo_source_handlemessage(x->x_aoo_source, msg, argc, x, (aoo_replyfn)aoo_pack_reply);
 }
 
-int aoo_parseformat(void *x, aoo_format_storage *f, int argc, t_atom *argv);
-
 static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 {
     aoo_format_storage f;
-    f.header.nchannels = x->x_settings.nchannels;
+    f.header.nchannels = x->x_nchannels;
     if (aoo_parseformat(x, &f, argc, argv)){
-        aoo_source_setformat(x->x_aoo_source, &f.header);
+        aoo_source_set_format(x->x_aoo_source, &f.header);
     }
 }
 
@@ -75,24 +111,23 @@ static void aoo_pack_channel(t_aoo_pack *x, t_floatarg f)
 {
     x->x_sink_chn = f > 0 ? f : 0;
     if (x->x_sink_id != AOO_ID_NONE){
-        aoo_source_setsinkchannel(x->x_aoo_source, x, x->x_sink_id, x->x_sink_chn);
+        aoo_source_set_sink_channelonset(x->x_aoo_source, x, x->x_sink_id, x->x_sink_chn);
     }
 }
 
 static void aoo_pack_packetsize(t_aoo_pack *x, t_floatarg f)
 {
-    x->x_settings.packetsize = f;
-    if (x->x_settings.blocksize){
-        aoo_source_setup(x->x_aoo_source, &x->x_settings);
-    }
+    aoo_source_set_packetsize(x->x_aoo_source, f);
+}
+
+static void aoo_pack_resend(t_aoo_pack *x, t_floatarg f)
+{
+    aoo_source_set_buffersize(x->x_aoo_source, f);
 }
 
 static void aoo_pack_timefilter(t_aoo_pack *x, t_floatarg f)
 {
-    x->x_settings.time_filter_bandwidth = f;
-    if (x->x_settings.blocksize){
-        aoo_source_setup(x->x_aoo_source, &x->x_settings);
-    }
+    aoo_source_set_timefilter_bandwith(x->x_aoo_source, f);
 }
 
 static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -109,15 +144,18 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
                          classname(x), argv->a_w.w_symbol->s_name);
                 return;
             }
-            aoo_source_setsinkchannel(x->x_aoo_source, x, AOO_ID_WILDCARD, x->x_sink_chn);
             x->x_sink_id = AOO_ID_WILDCARD;
         } else {
             int32_t id = atom_getfloat(argv);
             aoo_source_addsink(x->x_aoo_source, x, id, (aoo_replyfn)aoo_pack_reply);
-            aoo_source_setsinkchannel(x->x_aoo_source, x, id, x->x_sink_chn);
             x->x_sink_id = id;
         }
-        aoo_pack_channel(x, atom_getfloatarg(1, argc, argv));
+        // set channel (if provided)
+        if (argc > 1){
+            int32_t chn = atom_getfloat(argv + 1);
+            x->x_sink_chn = chn > 0 ? chn : 0;
+        }
+        aoo_pack_channel(x, x->x_sink_chn);
     }
 }
 
@@ -127,7 +165,15 @@ static void aoo_pack_clear(t_aoo_pack *x)
     x->x_sink_id = AOO_ID_NONE;
 }
 
-uint64_t aoo_pd_osctime(int n, t_float sr);
+static void aoo_pack_start(t_aoo_pack *x)
+{
+    aoo_source_start(x->x_aoo_source);
+}
+
+static void aoo_pack_stop(t_aoo_pack *x)
+{
+    aoo_source_stop(x->x_aoo_source);
+}
 
 static t_int * aoo_pack_perform(t_int *w)
 {
@@ -136,8 +182,8 @@ static t_int * aoo_pack_perform(t_int *w)
 
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
-    uint64_t t = aoo_pd_osctime(n, x->x_settings.samplerate);
-    if (aoo_source_process(x->x_aoo_source,(const aoo_sample **)x->x_vec, n, t)){
+    uint64_t t = aoo_osctime_get();
+    if (aoo_source_process(x->x_aoo_source,(const aoo_sample **)x->x_vec, n, t) > 0){
         clock_set(x->x_clock, 0);
     }
     return w + 3;
@@ -145,15 +191,17 @@ static t_int * aoo_pack_perform(t_int *w)
 
 static void aoo_pack_dsp(t_aoo_pack *x, t_signal **sp)
 {
-    x->x_settings.blocksize = sp[0]->s_n;
-    x->x_settings.samplerate = sp[0]->s_sr;
-    aoo_source_setup(x->x_aoo_source, &x->x_settings);
+    x->x_blocksize = sp[0]->s_n;
+    x->x_samplerate = sp[0]->s_sr;
 
-    for (int i = 0; i < x->x_settings.nchannels; ++i){
+    for (int i = 0; i < x->x_nchannels; ++i){
         x->x_vec[i] = sp[i]->s_vec;
     }
 
-    dsp_add(aoo_pack_perform, 2, (t_int)x, (t_int)sp[0]->s_n);
+    aoo_source_setup(x->x_aoo_source, x->x_samplerate,
+                     x->x_blocksize, x->x_nchannels);
+
+    dsp_add(aoo_pack_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 
     clock_unset(x->x_clock);
 }
@@ -172,8 +220,6 @@ static void aoo_pack_loadbang(t_aoo_pack *x, t_floatarg f)
     }
 }
 
-void aoo_defaultformat(aoo_format_storage *f, int nchannels);
-
 static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
 {
     t_aoo_pack *x = (t_aoo_pack *)pd_new(aoo_pack_class);
@@ -184,17 +230,20 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     // arg #1: ID
     int src = atom_getfloatarg(0, argc, argv);
     x->x_aoo_source = aoo_source_new(src >= 0 ? src : 0);
-    memset(&x->x_settings, 0, sizeof(aoo_source_settings));
-    x->x_settings.buffersize = AOO_SOURCE_DEFBUFSIZE;
-    x->x_settings.packetsize = AOO_DEFPACKETSIZE;
-    x->x_settings.time_filter_bandwidth = AOO_DLL_BW;
+
+    // since process() and send() are called from the same thread,
+    // we can use the minimal buffer size and thus safe some memory.
+    int32_t bufsize = 0;
+    aoo_source_set_buffersize(x->x_aoo_source, bufsize);
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
     if (nchannels < 1){
         nchannels = 1;
     }
-    x->x_settings.nchannels = nchannels;
+    x->x_nchannels = nchannels;
+    x->x_samplerate = 0;
+    x->x_blocksize = 0;
 
     // arg #3: sink ID
     if (argc > 2){
@@ -214,13 +263,14 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
         }
     }
     x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * nchannels);
-    // make message outlet
+    // make outlets
     x->x_out = outlet_new(&x->x_obj, 0);
+    x->x_eventout = outlet_new(&x->x_obj, 0);
 
     // default format
     aoo_format_storage fmt;
     aoo_defaultformat(&fmt, nchannels);
-    aoo_source_setformat(x->x_aoo_source, &fmt.header);
+    aoo_source_set_format(x->x_aoo_source, &fmt.header);
 
     return x;
 }
@@ -228,7 +278,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
 static void aoo_pack_free(t_aoo_pack *x)
 {
     // clean up
-    freebytes(x->x_vec, sizeof(t_sample *) * x->x_settings.nchannels);
+    freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
     clock_free(x->x_clock);
     aoo_source_free(x->x_aoo_source);
 }
@@ -242,11 +292,12 @@ void aoo_pack_tilde_setup(void)
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_loadbang, gensym("loadbang"), A_FLOAT, A_NULL);
     class_addlist(aoo_pack_class, (t_method)aoo_pack_list);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_set, gensym("set"), A_GIMME, A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_clear, gensym("clear"), A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_start, gensym("start"), A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_stop, gensym("stop"), A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_format, gensym("format"), A_GIMME, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_channel, gensym("channel"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
-    class_addmethod(aoo_pack_class, (t_method)aoo_pack_clear, gensym("clear"), A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_resend, gensym("resend"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
-
-    aoo_setup();
 }

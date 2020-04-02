@@ -1,83 +1,129 @@
-Audio over OSC
-==============
+Audio over OSC based audio streaming
+====================================
 
-Audio over OSC is aimed to be a message based audio system using 
-Open Sound Control OSC_ as a syntax format.
+"Audio over OSC" aka *AoO* is aimed to be a message based audio system inspired by Open Sound Control OSC_ as a syntax format. It is dedicated to send audio in real time from arbitrary sources to arbitrary sinks on demand.
 
-A first implementation a library with externals for PureData (Pd).
+history
+-------
 
-.. _OSC: http://opensoundcontrol.org/
+A first vision of *AoO* has came up in 2009, a first implementation V1.0-b2 as a library with externals for PureData (Pd) has been done 2010, but major issues with needed networking objects made this version unpracticable and was not used extensively.
+More on this version of AoO as "message based audio system"" was published at LAC 2014 [LAC14]_
 
-.. _Pd: http://puredata.info/
+The new Version 2.0, not backwards compatible, was done quite from scratch and has been launched in february 2020, targeting a network streaming Project for Kunsthaus Graz for Bill Fontana using a independent wireless network infrastructure FunkFeuer Graz 0xFF_ and also reviving the Virtual IEM Computer Music Ensemble VICE_ within a seminar on IEM_ Graz.
 
-More on message based audio system see docu/lac2014_aoo.pdf
+Based on the *AoO* idea of Winfried Ritsch with a first draft of realisation on embedded devices, the actual version starting with V-2.0 , was mainly written by Christof Ressi, as a complete rewrite of the version from Wolfgang Jäger in C in 2010.
 
-features
---------
+collected features
+------------------
 
 * each endpoint can have multiple sources/sinks (each with their own ID)
-* AoO sources can send audio to any sink at any time; if the sink ID is a wildcard,
-  it will send to all sinks on the endpoint.
-* AoO sinks can listen to several sources at the same time
-* AoO sinks and sources can operate at different blocksizes
-* AoO sources can dynamically change the channel onset of the sink
-* format message to notify sinks about format changes:
-  /AoO/<sink>/format <src> <salt> <mime-type> <bitdepth> <nchannels> <samplerate> <blocksize> <overlap>
-* data message to deliver audio data, large blocks are split across several frames:
-  /AoO/<sink>/data <src> <salt> <seq> <t> <channel_onset> <numframes> <frame> <data...>
-* request message from sink to source to ask about the format if necessary
-  /AoO/<src>/request <sink>
-* invitation message broadcasted by sinks at low intervals, inviting sources to send audio
-  /AoO/<src>/invite
-* aoo_source and aoo_sink C++ classes have a lock-free ringbuffer, so that audio processing and network IO
-  can run on different threads. The buffer also helps to avoid network jitter at the cost of latency.
-  The size can be adjusted dynamically.
-* data messages can arrive out of order up to a certain bound (determined by buffer size)
+* AoO sources can send audio to any sink at any time; 
+* AoO sinks can listen and add signals to several sources at the same time
+* AoO sinks and sources can operate at different blocksizes and samplerates
+* AoO sources can dynamically change the channel onset
+* AoO is internet time based, with means all signal from the same timestamp are added correctly at the same point in the receiver.
+* timing differences (e.g. because of clock drifts) are adjusted via a time DLL filter + dynamic resampling
+* the stream format can be set per audio message differently
+* plugin API to register codecs; currently only PCM (uncompressed) and Opus (compressed) are implemented
+* aoo_source and aoo_sink C++ classes have a lock-free ringbuffer, so that audio processing and network IO can run on different threads.
+* aoo_sink buffer helps to deal with network jitter, packet reordering
+  and packet loss at the cost of latency. The size can be adjusted dynamically.
+* aoo_sink can ask the source(s) to resend dropped packets, the settings are free adjustable.
 * settable UDP packet size for audio data (to optimize for local networks or the internet)
-* Pd externals:
-  [aoo_source~] takes audio signals and outputs OSC messages (also accepts /request messages from sinks)
-  [aoo_sink~] takes OSC messages from several sinks and turns them into audio signals
-  [aoo_route] takes OSC messages and routes them based on the sink ID
+* sinks automatically send pings to all its sources (at a configurable rate).
+  For example, sources might want to stop sending if they don't receive a ping in a certain time period.
+
+
+installation
+------------
+
+Repository: http://git.iem.at/cm/aoo/
+
+from source
+...........
+
+Get the source:
+
+over ssh::
+
+   git clone git@git.iem.at:cm/aoo.git
+
+or https::
+
+   git clone https://git.iem.at/cm/aoo.git
+
+make it (using pd-libbuilder)::
+
+    make -C aoo/pd clean
+    make -C aoo/pd -j4 
+
+install eg. in aoo dir::
+
+    make -C aoo/pd PDLIBDIR=./ install
+
+use help and testfiles there to test it.
+
+from deken
+..........
+
+in Pd->Help->"find in externals" enter aoo
+
+Note: TO BE DONE
+
+Pd externals
+------------
+
+see help- and test-patches there for more information.
+
+Main objects
+
+* [aoo_send~] send an AoO stream (with threaded network IO)
+
+* [aoo_receive~] receive one or more AoO streams (with threaded network IO)
+
+for compatible old patches or OSC routing
+    
+* [aoo_pack~] takes audio signals and outputs OSC messages (also accepts /request messages from sinks)
+* [aoo_unpack~] takes OSC messages from several sources and turns them into audio signals
+* [aoo_route] takes OSC messages and routes them based on the ID
 
 todo
 ----
 
-* resampling
-* overlap
-* interpolation of dropped packets
-* fade in/fade out
-* time correction (timestamps + DLL)
-* settable max. OSC packet size
-* [aoo_send~] + [aoo_receive~] with integrated (threaded) network IO
-* replace oscpack with our own (optimized) OSC routines
-* unit tests!
+* publish
+* more examples on features especial invite/uninvite
+* relay for AoO server
 
 download
 --------
 
 main git repository at git.iem.at:
 
- git clone https://git.iem.at/cm/aoo
+git clone https://git.iem.at/cm/aoo
 
 content
 -------
 
-docu -- documentation, papers
+doku -- documentation, papers
  
 pd -- Pd library for OSC, first implementation for experiments
-lib -- C++ library with a C interface, create and manage AoO sources/sinks
- 
-Changelog
----------
 
-- New project page on Feb.2014 - winfried ritsch
-- checked in in sourceforge repo (see above) 
-- added aao_lib
-- New test implementation Feb. 2020 - christof ressi
- 
+lib -- C++ library with a C interface, create and manage AoO sources/sinks
+
 About Document
 --------------
 :authors: Winfried Ritsch, Christof Ressi
 :date: march 2014 - february 2020
-:version: 0.1
- 
+:version: 2.0-a1
+
+.. _OSC: http://opensoundcontrol.org/
+
+.. _Pd: http://puredata.info/
+
+.. _0xFF: http://graz.funkfeuer.at/
+
+.. _VICE: https://iaem.at/projekte/ice/overview
+
+.. _IEM: http://iem.at/
+
+.. [LAC14] see docu/lac2014_aoo.pdf

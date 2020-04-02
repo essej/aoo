@@ -1,0 +1,695 @@
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+ * For information on usage and redistribution, and for a DISCLAIMER OF ALL
+ * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
+
+#pragma once
+
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+#ifndef AOO_API
+# ifndef AOO_STATIC
+#  if defined(_WIN32) // Windows
+#   if defined(AOO_BUILD)
+#      if defined(DLL_EXPORT)
+#        define AOO_API __declspec(dllexport)
+#      else
+#        define AOO_API
+#      endif
+#   else
+#    define AOO_API __declspec(dllimport)
+#   endif
+#  elif defined(__GNUC__) && defined(AOO_BUILD) // GNU C
+#   define AOO_API __attribute__ ((visibility ("default")))
+#  else // Other
+#   define AOO_API
+#  endif
+# else // AOO_STATIC
+#  define AOO_API
+# endif
+#endif
+
+#ifndef AOO_SAMPLETYPE
+#define AOO_SAMPLETYPE float
+#endif
+
+typedef AOO_SAMPLETYPE aoo_sample;
+
+#define AOO_MSG_DOMAIN "/aoo"
+#define AOO_MSG_DOMAIN_LEN 4
+#define AOO_MSG_SOURCE "/src"
+#define AOO_MSG_SOURCE_LEN 4
+#define AOO_MSG_SINK "/sink"
+#define AOO_MSG_SINK_LEN 5
+#define AOO_MSG_WILDCARD "/*"
+#define AOO_MSG_WILDCARD_LEN 2
+#define AOO_MSG_FORMAT "/format"
+#define AOO_MSG_FORMAT_LEN 7
+#define AOO_MSG_DATA "/data"
+#define AOO_MSG_DATA_LEN 5
+#define AOO_MSG_PING "/ping"
+#define AOO_MSG_PING_LEN 5
+#define AOO_MSG_INVITE "/invite"
+#define AOO_MSG_INVITE_LEN 7
+#define AOO_MSG_UNINVITE "/uninvite"
+#define AOO_MSG_UNINVITE_LEN 9
+
+#define AOO_TYPE_SOURCE 0
+#define AOO_TYPE_SINK 1
+
+#define AOO_MAXPACKETSIZE 4096 // ?
+
+#ifndef AOO_CLIP_OUTPUT
+#define AOO_CLIP_OUTPUT 0
+#endif
+
+// 0: error, 1: warning, 2: verbose, 3: debug
+#ifndef LOGLEVEL
+ #define LOGLEVEL 2
+#endif
+
+#ifndef AOO_DEBUG_DLL
+ #define AOO_DEBUG_DLL 0
+#endif
+
+#ifndef AOO_DEBUG_RESAMPLING
+ #define AOO_DEBUG_RESAMPLING 0
+#endif
+
+#ifndef AOO_DEBUG_BLOCK_BUFFER
+ #define AOO_DEBUG_BLOCK_BUFFER 0
+#endif
+
+/*////////// default values ////////////*/
+
+// max. UDP packet size
+#ifndef AOO_PACKETSIZE
+ #define AOO_PACKETSIZE 512
+#endif
+
+// source buffer size in ms
+#ifndef AOO_SOURCE_BUFSIZE
+ #define AOO_SOURCE_BUFSIZE 10
+#endif
+
+// sink buffer size in ms
+#ifndef AOO_SINK_BUFSIZE
+ #define AOO_SINK_BUFSIZE 100
+#endif
+
+// time DLL filter bandwidth
+#ifndef AOO_TIMEFILTER_BANDWIDTH
+ #define AOO_TIMEFILTER_BANDWIDTH 0.012
+#endif
+
+// try to catch timing issues (e.g. blocking audio thread)
+#ifndef AOO_TIMEFILTER_CHECK
+ #define AOO_TIMEFILTER_CHECK 1
+#endif
+
+// the tolerance for deviations from the nominal block period
+#ifndef AOO_TIMEFILTER_TOLERANCE
+ #define AOO_TIMEFILTER_TOLERANCE 0.1
+#endif
+
+// ping interval (sink to source) in ms
+#ifndef AOO_PING_INTERVAL
+ #define AOO_PING_INTERVAL 1000
+#endif
+
+// resend buffer size in ms
+#ifndef AOO_RESEND_BUFSIZE
+ #define AOO_RESEND_BUFSIZE 1000
+#endif
+
+// max. number of resend attempts per packet
+#ifndef AOO_RESEND_LIMIT
+ #define AOO_RESEND_LIMIT 5
+#endif
+
+// interval between resend attempts in ms
+#ifndef AOO_RESEND_INTERVAL
+ #define AOO_RESEND_INTERVAL 10
+#endif
+
+// max. number of frames to request per call
+#ifndef AOO_RESEND_MAXNUMFRAMES
+ #define AOO_RESEND_MAXNUMFRAMES 16
+#endif
+
+// initialize AoO library - call only once!
+AOO_API void aoo_initialize(void);
+
+// terminate AoO library - call only once!
+AOO_API void aoo_terminate(void);
+
+struct aoo_format;
+
+/*//////////////////// OSC ////////////////////////////*/
+
+// id: the source or sink ID
+// returns: the offset to the remaining address pattern
+
+#define AOO_ID_WILDCARD -1
+#define AOO_ID_NONE INT32_MIN
+
+// get the type and ID from an AoO OSC message, e.g. in /aoo/src/<id>/data
+// returns 1 on success, 0 on fail
+AOO_API int32_t aoo_parsepattern(const char *msg, int32_t n,
+                                 int32_t *type, int32_t *id);
+
+// get the current NTP time
+AOO_API uint64_t aoo_osctime_get(void);
+
+// convert NTP time to seconds
+AOO_API double aoo_osctime_toseconds(uint64_t t);
+
+// convert seconds to NTP time
+AOO_API uint64_t aoo_osctime_fromseconds(double s);
+
+// add seconds to NTP timestamp
+AOO_API uint64_t aoo_osctime_addseconds(uint64_t t, double s);
+
+// reply function for endpoints
+typedef int32_t (*aoo_replyfn)(
+        void *,         // endpoint
+        const char *,   // data
+        int32_t         // number of bytes
+);
+
+/*//////////////////// AoO events /////////////////////*/
+
+#define AOO_EVENTQUEUESIZE 64
+
+// event types
+typedef enum aoo_event_type
+{
+    // source: received a ping from sink
+    AOO_PING_EVENT,
+    // source: invited by sink
+    AOO_INVITE_EVENT,
+    // source: uninvited by sink
+    AOO_UNINVITE_EVENT,
+    // sink: source added
+    AOO_SOURCE_ADD_EVENT,
+    // sink: source removed (non implemented yet)
+    AOO_SOURCE_REMOVE_EVENT,
+    // sink: source format changed
+    AOO_SOURCE_FORMAT_EVENT,
+    // sink: source changed state
+    AOO_SOURCE_STATE_EVENT,
+    // sink: blocks have been lost
+    AOO_BLOCK_LOST_EVENT,
+    // sink: blocks arrived out of order
+    AOO_BLOCK_REORDERED_EVENT,
+    // sink: blocks have been resent
+    AOO_BLOCK_RESENT_EVENT,
+    // sink: large gap between blocks
+    AOO_BLOCK_GAP_EVENT
+} aoo_event_type;
+
+typedef struct aoo_endpoint_event
+{
+    int32_t type;
+    int32_t id;
+    void *endpoint;
+} aoo_endpoint_event;
+
+typedef aoo_endpoint_event aoo_source_event;
+typedef aoo_endpoint_event aoo_sink_event;
+
+typedef enum aoo_source_state
+{
+    AOO_SOURCE_STATE_STOP,
+    AOO_SOURCE_STATE_PLAY
+} aoo_source_state;
+
+typedef struct aoo_source_state_event
+{
+    aoo_source_event source;
+    int32_t state;
+} aoo_source_state_event;
+
+struct _aoo_block_event
+{
+    aoo_source_event source;
+    int32_t count;
+};
+
+typedef struct _aoo_block_event aoo_block_loss_event;
+typedef struct _aoo_block_event aoo_block_reorder_event;
+typedef struct _aoo_block_event aoo_block_resend_event;
+typedef struct _aoo_block_event aoo_block_gap_event;
+
+// event union
+typedef union aoo_event
+{
+    aoo_event_type type;
+    aoo_source_event source;
+    aoo_sink_event sink;
+    aoo_source_state_event source_state;
+    aoo_block_loss_event block_loss;
+    aoo_block_reorder_event block_reorder;
+    aoo_block_resend_event block_resend;
+    aoo_block_gap_event block_gap;
+} aoo_event;
+
+typedef void (*aoo_eventhandler)(
+    void *,             // user
+    const aoo_event *,  // event array
+    int32_t             // number of events
+);
+
+/*//////////////////// AoO options ////////////////////*/
+
+typedef enum aoo_option
+{
+    // Stream format (set: aoo_format, get: aoo_format_storage)
+    // ---
+    // The settings for the audio codec to be used for a stream.
+    // If you want to set the format, you have to send the format
+    // header, e.g. aoo_format_pcm.header. The format can only be
+    // set in sources.
+    // If you want to get the format, you have to pass a
+    // aoo_format_storage, which is filled with the format.
+    aoo_opt_format = 0,
+    // Reset the source/sink (NULL)
+    aoo_opt_reset,
+    // Start the source/sink (NULL)
+    aoo_opt_start,
+    // Stop the source/sink (NULL)
+    aoo_opt_stop,
+    // Buffer size in ms (int32_t)
+    // ---
+    // This is the size of the ring buffer
+    // between the audio and network thread.
+    // For the source, this can be rather small,
+    // as you only have to compensate the latency
+    // for thread signalling.
+    // For the sink, a larger buffer size helps
+    // to deal with network jitter, packet reordering
+    // and packet loss. For local networks, small
+    // buffersizes between 10-50ms should work,
+    // but for unreliable/unpredictable networks
+    // you might need to increased it significantly.
+    aoo_opt_buffersize,
+    // Time filter DLL bandwidth (float)
+    // ---
+    // The time DLL filter estimates the effective samplerate
+    // and is used to compensate clock drift via dynamic resampling.
+    // See the paper "Using a DLL to filter time" by Fons Adriaensen.
+    aoo_opt_timefilter_bandwidth,
+    // Sink channel onset (int32_t)
+    // ---
+    // The channel onset of the sink where a given source
+    // should be received. For example, if the channel onset
+    // is 5, a 2-channel source will be summed into sink
+    // channels 5 and 6. The default is 0 (= the first channel).
+    aoo_opt_channelonset,
+    // Max. UDP packet size in bytes (int32_t)
+    // ---
+    // The default value of 512 should work across most
+    // networks (even the internet). You might increase
+    // this value for local networks. Larger packet sizes
+    // have less overhead. If a audio block exceeds
+    // the max. UDP packet size, it will be automatically
+    // broken up into several "frames" in reassembled
+    // in the sink.
+    aoo_opt_packetsize,
+    // Ping interval in ms (int32_t)
+    // ---
+    // The sink sends a periodic ping message to each
+    // source to signify that it is actually receiving data.
+    // For example, a application might choose to remove
+    // a sink after the source hasn't received a ping
+    // for a certain amount of time.
+    aoo_opt_ping_interval,
+    // Resend buffer size in ms (int32_t).
+    // ---
+    // The source keeps the last N ms of audio in a buffer,
+    // so it can resend parts of it if requested, e.g. to
+    // handle packet loss.
+    aoo_opt_resend_buffersize,
+    // Resend limit (int32_t)
+    // ---
+    // The max. number of resend attempts per frame.
+    // The sink will stop to request a missing frame
+    // after this limit has been reached.
+    // If set to 0, resending is effectively disabled.
+    aoo_opt_resend_limit,           // int32_t
+    // Resend interval in ms (int32_t)
+    // ---
+    // This is the interval between individual resend
+    // attempts for a specific frame.
+    // Since there is always a certain roundtrip delay
+    // between source and sink, it makes sense to wait
+    // between resend attempts to not spam the network
+    // with redundant /resend messages.
+    aoo_opt_resend_interval,
+    // Max. number of frames to resend (int32_t)
+    // ---
+    // This is the max. number of frames to request
+    // in a single call to sink_handlemessage().
+    aoo_opt_resend_maxnumframes
+} aoo_option;
+
+#define AOO_ARG(x) &x, sizeof(x)
+#define AOO_ARG_NULL 0, 0
+
+/*//////////////////// AoO source /////////////////////*/
+
+#ifdef __cplusplus
+namespace aoo {
+    class isource;
+}
+using aoo_source = aoo::isource;
+#else
+typedef struct aoo_source aoo_source;
+#endif
+
+typedef struct aoo_format
+{
+    const char *codec;
+    int32_t nchannels;
+    int32_t samplerate;
+    int32_t blocksize;
+} aoo_format;
+
+typedef struct aoo_format_storage
+{
+    aoo_format header;
+    char buf[256];
+} aoo_format_storage;
+
+// create a new AoO source instance
+AOO_API aoo_source * aoo_source_new(int32_t id);
+
+// destroy the AoO source instance
+AOO_API void aoo_source_free(aoo_source *src);
+
+// setup the source - needs to be synchronized with other method calls!
+AOO_API int32_t aoo_source_setup(aoo_source *src, int32_t samplerate,
+                                 int32_t blocksize, int32_t nchannels);
+
+// add a new sink (always threadsafe)
+AOO_API int32_t aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn);
+
+// remove a sink (always threadsafe)
+AOO_API int32_t aoo_source_removesink(aoo_source *src, void *sink, int32_t id);
+
+// remove all sinks (always threadsafe)
+AOO_API void aoo_source_removeall(aoo_source *src);
+
+// handle messages from sinks - might call the reply function (threadsafe, but not reentrant)
+AOO_API int32_t aoo_source_handlemessage(aoo_source *src, const char *data, int32_t n,
+                                 void *sink, aoo_replyfn fn);
+
+// send outgoing messages - will call the reply function (threadsafe, but not rentrant)
+AOO_API int32_t aoo_source_send(aoo_source *src);
+
+// process audio blocks (threadsafe, but not reentrant)
+// data:        array of channel data (non-interleaved)
+// nsamples:    number of samples per channel
+// t:           current NTP timestamp (see aoo_osctime_get)
+AOO_API int32_t aoo_source_process(aoo_source *src, const aoo_sample **data,
+                           int32_t nsamples, uint64_t t);
+
+// check if events are available (always thread safe)
+AOO_API int32_t aoo_source_eventsavailable(aoo_source *src);
+
+// handle events - will call the event handler (threadsafe, but not reentrant)
+AOO_API int32_t aoo_source_handleevents(aoo_source *src, aoo_eventhandler fn, void *user);
+
+// set/get options (always threadsafe)
+AOO_API int32_t aoo_source_setoption(aoo_source *src, int32_t opt, void *p, int32_t size);
+
+AOO_API int32_t aoo_source_getoption(aoo_source *src, int32_t opt, void *p, int32_t size);
+
+// set/get sink options (always threadsafe)
+AOO_API int32_t aoo_source_setsinkoption(aoo_source *src, void *endpoint, int32_t id,
+                                 int32_t opt, void *p, int32_t size);
+
+AOO_API int32_t aoo_source_getsinkoption(aoo_source *src, void *endpoint, int32_t id,
+                                 int32_t opt, void *p, int32_t size);
+
+// wrapper functions for frequently used options
+
+inline int32_t aoo_source_start(aoo_source *src) {
+    return aoo_source_setoption(src, aoo_opt_start, AOO_ARG_NULL);
+}
+
+inline int32_t aoo_source_stop(aoo_source *src) {
+    return aoo_source_setoption(src, aoo_opt_stop, AOO_ARG_NULL);
+}
+
+inline int32_t aoo_source_set_format(aoo_source *src, const aoo_format *f) {
+    return aoo_source_setoption(src, aoo_opt_format, (void *)f, sizeof(aoo_format));
+}
+
+inline int32_t aoo_source_get_format(aoo_source *src, aoo_format_storage *f) {
+    return aoo_source_setoption(src, aoo_opt_format, AOO_ARG(*f));
+}
+
+inline int32_t aoo_source_set_buffersize(aoo_source *src, int32_t n) {
+    return aoo_source_setoption(src, aoo_opt_buffersize, AOO_ARG(n));
+}
+
+inline int32_t aoo_source_get_buffersize(aoo_source *src, int32_t *n) {
+    return aoo_source_getoption(src, aoo_opt_buffersize, AOO_ARG(*n));
+}
+
+inline int32_t aoo_source_set_timefilter_bandwith(aoo_source *src, int32_t n) {
+    return aoo_source_setoption(src, aoo_opt_timefilter_bandwidth, AOO_ARG(n));
+}
+
+inline int32_t aoo_source_get_timefilter_bandwidth(aoo_source *src, int32_t *n) {
+    return aoo_source_getoption(src, aoo_opt_timefilter_bandwidth, AOO_ARG(*n));
+}
+
+inline int32_t aoo_source_set_packetsize(aoo_source *src, int32_t n) {
+    return aoo_source_setoption(src, aoo_opt_packetsize, AOO_ARG(n));
+}
+
+inline int32_t aoo_source_get_packetsize(aoo_source *src, int32_t *n) {
+    return aoo_source_getoption(src, aoo_opt_packetsize, AOO_ARG(*n));
+}
+
+inline int32_t aoo_source_set_resend_buffersize(aoo_source *src, int32_t n) {
+    return aoo_source_setoption(src, aoo_opt_resend_buffersize, AOO_ARG(n));
+}
+
+inline int32_t aoo_source_get_resend_buffersize(aoo_source *src, int32_t *n) {
+    return aoo_source_getoption(src, aoo_opt_resend_buffersize, AOO_ARG(*n));
+}
+
+inline int32_t aoo_source_set_sink_channelonset(aoo_source *src, void *endpoint, int32_t id, int32_t onset) {
+    return aoo_source_setsinkoption(src, endpoint, id, aoo_opt_channelonset, AOO_ARG(onset));
+}
+
+inline int32_t aoo_source_get_sink_channelonset(aoo_source *src, void *endpoint, int32_t id, int32_t *onset) {
+    return aoo_source_getsinkoption(src, endpoint, id, aoo_opt_channelonset, AOO_ARG(*onset));
+}
+
+/*//////////////////// AoO sink /////////////////////*/
+
+#ifdef __cplusplus
+namespace aoo {
+    class isink;
+}
+using aoo_sink = aoo::isink;
+#else
+typedef struct aoo_sink aoo_sink;
+#endif
+
+// create a new AoO sink instance
+AOO_API aoo_sink * aoo_sink_new(int32_t id);
+
+// destroy the AoO sink instance
+AOO_API void aoo_sink_free(aoo_sink *sink);
+
+// setup the sink - needs to be synchronized with other method calls!
+AOO_API int32_t aoo_sink_setup(aoo_sink *sink, int32_t samplerate,
+                               int32_t blocksize, int32_t nchannels);
+
+// invite a source (always threadsafe)
+AOO_API int32_t aoo_sink_invitesource(aoo_sink *sink, void *endpoint, int32_t id, aoo_replyfn fn);
+
+// uninvite a source (always threadsafe)
+AOO_API int32_t aoo_sink_uninvitesource(aoo_sink *sink, void *endpoint, int32_t id, aoo_replyfn fn);
+
+// handle messages from sources - might call the reply function (threadsafe, but not reentrant)
+AOO_API int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
+                                       void *src, aoo_replyfn fn);
+
+// send outgoing messages - will call the reply function (threadsafe, but not rentrant)
+AOO_API int32_t aoo_sink_send(aoo_sink *sink);
+
+// process audio (threadsafe, but not reentrant)
+AOO_API int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,
+                                 int32_t nsamples, uint64_t t);
+
+// check if events are available (always thread safe)
+AOO_API int32_t aoo_sink_eventsavailable(aoo_sink *sink);
+
+// handle events - will call the event handler (threadsafe, but not rentrant)
+AOO_API int32_t aoo_sink_handleevents(aoo_sink *sink, aoo_eventhandler fn, void *user);
+
+// set/get options (always threadsafe)
+AOO_API int32_t aoo_sink_setoption(aoo_sink *sink, int32_t opt, void *p, int32_t size);
+
+AOO_API int32_t aoo_sink_getoption(aoo_sink *sink, int32_t opt, void *p, int32_t size);
+
+// set/get source options (always threadsafe)
+AOO_API int32_t aoo_sink_setsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
+                              int32_t opt, void *p, int32_t size);
+
+AOO_API int32_t aoo_sink_getsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
+                              int32_t opt, void *p, int32_t size);
+
+// wrapper functions for frequently used options
+
+inline int32_t aoo_sink_reset(aoo_sink *sink) {
+    return aoo_sink_setoption(sink, aoo_opt_reset, AOO_ARG_NULL);
+}
+
+inline int32_t aoo_sink_set_buffersize(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_buffersize, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_buffersize(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_buffersize, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_set_timefilter_bandwith(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_timefilter_bandwidth, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_timefilter_bandwidth(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_timefilter_bandwidth, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_set_packetsize(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_packetsize, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_packetsize(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_packetsize, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_set_ping_interval(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_ping_interval, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_ping_interval(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_ping_interval, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_set_resend_limit(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_resend_limit, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_resend_limit(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_resend_limit, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_set_resend_interval(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_resend_interval, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_resend_interval(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_resend_interval, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_set_resend_maxnumframes(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_resend_maxnumframes, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_resend_maxnumframes(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_resend_maxnumframes, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_reset_source(aoo_sink *sink, void *endpoint, int32_t id) {
+    return aoo_sink_setsourceoption(sink, endpoint, id, aoo_opt_reset, AOO_ARG_NULL);
+}
+
+inline int32_t aoo_sink_get_source_format(aoo_sink *sink, void *endpoint, int32_t id, aoo_format_storage *f) {
+    return aoo_sink_getsourceoption(sink, endpoint, id, aoo_opt_format, AOO_ARG(*f));
+}
+
+/*//////////////////// Codec API //////////////////////////*/
+
+#define AOO_CODEC_MAXSETTINGSIZE 256
+
+typedef void* (*aoo_codec_new)(void);
+
+typedef void (*aoo_codec_free)(void *);
+
+typedef int32_t (*aoo_codec_setformat)(void *, aoo_format *);
+
+typedef int32_t (*aoo_codec_getformat)(void *, aoo_format_storage *);
+
+typedef int32_t (*aoo_codec_writeformat)(
+        void *,         // the encoder instance
+        aoo_format *,   // the base format
+        char *,         // output buffer
+        int32_t         // buffer size
+);
+
+typedef int32_t (*aoo_codec_readformat)(
+        void *,             // the decoder instance
+        const aoo_format *, // the base format
+        const char *,       // input buffer
+        int32_t             // number of bytes
+);
+
+typedef int32_t (*aoo_codec_encode)(
+        void *,             // the encoder instance
+        const aoo_sample *, // input samples (interleaved)
+        int32_t,            // number of samples
+        char *,             // output buffer
+        int32_t             // max. size of output buffer
+);
+
+typedef int32_t (*aoo_codec_decode)(
+        void *,         // the decoder instance
+        const char *,   // input bytes
+        int32_t,        // input size
+        aoo_sample *,   // output samples (interleaved)
+        int32_t         // number of samples
+
+);
+
+typedef struct aoo_codec
+{
+    const char *name;
+    // encoder
+    aoo_codec_new encoder_new;
+    aoo_codec_free encoder_free;
+    aoo_codec_setformat encoder_setformat;
+    aoo_codec_getformat encoder_getformat;
+    aoo_codec_writeformat encoder_writeformat;
+    aoo_codec_encode encoder_encode;
+    // decoder
+    aoo_codec_new decoder_new;
+    aoo_codec_free decoder_free;
+    aoo_codec_setformat decoder_setformat;
+    aoo_codec_getformat decoder_getformat;
+    aoo_codec_readformat decoder_readformat;
+    aoo_codec_decode decoder_decode;
+} aoo_codec;
+
+// register an external codec plugin
+AOO_API int32_t aoo_register_codec(const char *name, const aoo_codec *codec);
+
+// The type of 'aoo_register_codec', which gets passed to codec setup functions.
+// For now, plugins are registered statically - or manually by the user.
+// Later we might want to automatically look for codec plugins.
+typedef int32_t (*aoo_codec_registerfn)(const char *, const aoo_codec *);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif

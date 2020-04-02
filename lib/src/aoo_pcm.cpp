@@ -1,3 +1,7 @@
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+ * For information on usage and redistribution, and for a DISCLAIMER OF ALL
+ * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
+
 #include "aoo/aoo_pcm.h"
 #include "aoo/aoo_utils.hpp"
 
@@ -16,7 +20,8 @@ union convert {
     double d;
 };
 
-int32_t bytes_per_sample(aoo_pcm_bitdepth bd){
+int32_t bytes_per_sample(int32_t bd)
+{
     switch (bd){
     case AOO_PCM_INT16:
         return 2;
@@ -32,7 +37,8 @@ int32_t bytes_per_sample(aoo_pcm_bitdepth bd){
     }
 }
 
-void sample_to_int16(aoo_sample in, char *out){
+void sample_to_int16(aoo_sample in, char *out)
+{
     convert c;
     int32_t temp = in * 0x7fff + 0.5f;
     c.i16 = (temp > INT16_MAX) ? INT16_MAX : (temp < INT16_MIN) ? INT16_MIN : temp;
@@ -44,7 +50,8 @@ void sample_to_int16(aoo_sample in, char *out){
 #endif
 }
 
-void sample_to_int24(aoo_sample in, char *out){
+void sample_to_int24(aoo_sample in, char *out)
+{
     convert c;
     int32_t temp = in * 0x7fffffff + 0.5f;
     c.i32 = (temp > INT32_MAX) ? INT32_MAX : (temp < INT32_MIN) ? INT32_MIN : temp;
@@ -60,11 +67,13 @@ void sample_to_int24(aoo_sample in, char *out){
 #endif
 }
 
-void sample_to_float32(aoo_sample in, char *out){
+void sample_to_float32(aoo_sample in, char *out)
+{
     aoo::to_bytes<float>(in, out);
 }
 
-void sample_to_float64(aoo_sample in, char *out){
+void sample_to_float64(aoo_sample in, char *out)
+{
     aoo::to_bytes<double>(in, out);
 }
 
@@ -79,7 +88,8 @@ aoo_sample int16_to_sample(const char *in){
     return(aoo_sample)c.i16 / 32768.f;
 }
 
-aoo_sample int24_to_sample(const char *in){
+aoo_sample int24_to_sample(const char *in)
+{
     convert c;
     // copy to the highest 3 bytes!
 #if BYTE_ORDER == BIG_ENDIAN
@@ -96,19 +106,18 @@ aoo_sample int24_to_sample(const char *in){
     return (aoo_sample)c.i32 / 0x7fffffff;
 }
 
-aoo_sample float32_to_sample(const char *in){
+aoo_sample float32_to_sample(const char *in)
+{
     return aoo::from_bytes<float>(in);
 }
 
-aoo_sample float64_to_sample(const char *in){
+aoo_sample float64_to_sample(const char *in)
+{
     return aoo::from_bytes<double>(in);
 }
 
-struct codec {
-    aoo_format_pcm format;
-};
-
-void print_settings(const aoo_format_pcm& f){
+void print_settings(const aoo_format_pcm& f)
+{
     LOG_VERBOSE("PCM settings: "
                 << "nchannels = " << f.header.nchannels
                 << ", blocksize = " << f.header.blocksize
@@ -116,16 +125,20 @@ void print_settings(const aoo_format_pcm& f){
                 << ", bitdepth = " << bytes_per_sample(f.bitdepth));
 }
 
-void *encoder_new(){
-    return new codec;
-}
+/*//////////////////// codec //////////////////////////*/
 
-void encoder_free(void *enc){
-    delete (codec *)enc;
-}
+struct codec {
+    codec(){
+        memset(&format, 0, sizeof(aoo_format_pcm));
+    }
+    aoo_format_pcm format;
+};
 
-void encoder_setup(void *enc, aoo_format *f){
-    assert(!strcmp(f->codec, AOO_CODEC_PCM));
+int32_t codec_setformat(void *enc, aoo_format *f)
+{
+    if (strcmp(f->codec, AOO_CODEC_PCM)){
+        return 0;
+    }
     auto c = static_cast<codec *>(enc);
     auto fmt = reinterpret_cast<aoo_format_pcm *>(f);
 
@@ -155,7 +168,29 @@ void encoder_setup(void *enc, aoo_format *f){
 
     // save and print settings
     memcpy(&c->format, fmt, sizeof(aoo_format_pcm));
+    c->format.header.codec = AOO_CODEC_PCM;
     print_settings(c->format);
+
+    return 1;
+}
+
+int32_t codec_getformat(void *x, aoo_format_storage *f)
+{
+    auto c = static_cast<codec *>(x);
+    if (c->format.header.codec){
+        memcpy(f, &c->format, sizeof(aoo_format_pcm));
+        return sizeof(aoo_format_pcm);
+    } else {
+        return 0;
+    }
+}
+
+void *encoder_new(){
+    return new codec;
+}
+
+void encoder_free(void *enc){
+    delete (codec *)enc;
 }
 
 int32_t encoder_encode(void *enc,
@@ -165,7 +200,9 @@ int32_t encoder_encode(void *enc,
     auto bitdepth = static_cast<codec *>(enc)->format.bitdepth;
     auto samplesize = bytes_per_sample(bitdepth);
 
-    assert(size >= n * samplesize);
+    if (size < (n * samplesize)){
+        return 0;
+    }
 
     auto samples_to_blob = [&](auto fn){
         auto b = buf;
@@ -196,13 +233,12 @@ int32_t encoder_encode(void *enc,
     return n * samplesize;
 }
 
-int32_t encoder_write(void *enc, int32_t *nchannels,int32_t *samplerate,
-                      int32_t *blocksize, char *buf, int32_t size){
+int32_t encoder_writeformat(void *enc, aoo_format *fmt,
+                            char *buf, int32_t size)
+{
     if (size >= 4){
         auto c = static_cast<codec *>(enc);
-        *nchannels = c->format.header.nchannels;
-        *samplerate = c->format.header.samplerate;
-        *blocksize = c->format.header.blocksize;
+        memcpy(fmt, &c->format.header, sizeof(aoo_format));
         aoo::to_bytes<int32_t>(c->format.bitdepth, buf);
 
         return 4;
@@ -229,7 +265,9 @@ int32_t decoder_decode(void *dec,
 
     auto samplesize = bytes_per_sample(c->format.bitdepth);
 
-    assert(n >= (size / samplesize));
+    if (n < (size / samplesize)){
+        return 0;
+    }
 
     auto blob_to_samples = [&](auto convfn){
         auto b = buf;
@@ -259,19 +297,24 @@ int32_t decoder_decode(void *dec,
     return size / samplesize;
 }
 
-int32_t decoder_read(void *dec, int32_t nchannels, int32_t samplerate,
-                     int32_t blocksize, const char *buf, int32_t size){
+int32_t decoder_readformat(void *dec, const aoo_format *fmt,
+                           const char *buf, int32_t size)
+{
     if (size >= 4){
         auto c = static_cast<codec *>(dec);
-        c->format.header.nchannels = nchannels;
-        c->format.header.samplerate = samplerate;
-        c->format.header.blocksize = blocksize;
-        c->format.bitdepth = (aoo_pcm_bitdepth)aoo::from_bytes<int32_t>(buf);
         // TODO validate
-        print_settings(c->format);
-        return 4;
+        if (!strcmp(fmt->codec, AOO_CODEC_PCM) && fmt->blocksize > 0
+                && fmt->samplerate > 0 && fmt->blocksize > 0)
+        {
+            memcpy(&c->format.header, fmt, sizeof(aoo_format));
+            c->format.bitdepth = (aoo_pcm_bitdepth)aoo::from_bytes<int32_t>(buf);
+            print_settings(c->format);
+            return 4;
+        } else {
+            LOG_ERROR("PCM: bad format!");
+        }
     } else {
-        LOG_ERROR("PCM: couldn't read settings - not enough data!");
+        LOG_ERROR("PCM: couldn't read format - not enough data!");
     }
     return -1;
 }
@@ -280,13 +323,16 @@ aoo_codec codec_class = {
     AOO_CODEC_PCM,
     encoder_new,
     encoder_free,
-    encoder_setup,
+    codec_setformat,
+    codec_getformat,
+    encoder_writeformat,
     encoder_encode,
-    encoder_write,
     decoder_new,
     decoder_free,
-    decoder_decode,
-    decoder_read
+    codec_setformat,
+    codec_getformat,
+    decoder_readformat,
+    decoder_decode
 };
 
 } // namespace

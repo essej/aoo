@@ -1,59 +1,170 @@
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+ * For information on usage and redistribution, and for a DISCLAIMER OF ALL
+ * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
+
 #include "m_pd.h"
 #include "aoo/aoo.h"
 #include "aoo/aoo_pcm.h"
 #include "aoo/aoo_opus.h"
 
+#include "aoo_common.h"
+
 #include <stdio.h>
 #include <inttypes.h>
 
-#define classname(x) class_getname(*(t_pd *)x)
+#ifdef _WIN32
+#include <synchapi.h>
+#endif
 
 #define CLAMP(x, a, b) ((x) < (a) ? (a) : (x) > (b) ? (b) : (x))
 
-#ifndef AOO_DEBUG_OSCTIME
-#define AOO_DEBUG_OSCTIME 0
-#endif
+/*///////////////////////////// aoo_lock /////////////////////////////*/
 
-#define AOO_PD_MINPERIOD 0.5
-
-#ifndef AOO_PD_OSCTIMEHACK
-#define AOO_PD_OSCTIMEHACK 0
-#endif
-
-uint64_t aoo_pd_osctime(int n, t_float sr)
+#ifdef _WIN32
+void aoo_lock_init(aoo_lock *x)
 {
-    uint64_t t = aoo_osctime_get();
-#if AOO_PD_OSCTIMEHACK || AOO_DEBUG_OSCTIME
-    double s = aoo_osctime_toseconds(t);
-    double period = (double)n / sr;
-    double diff;
-    static PERTHREAD double last = 0;
-    if (last > 0){
-        diff = s - last;
-    } else {
-        diff = period;
+    InitializeSRWLock((SRWLOCK *)x);
+}
+
+void aoo_lock_destroy(aoo_lock *x){}
+
+void aoo_lock_lock(aoo_lock *x)
+{
+    AcquireSRWLockExclusive((SRWLOCK *)x);
+}
+
+void aoo_lock_lock_shared(aoo_lock *x)
+{
+    AcquireSRWLockShared((SRWLOCK *)x);
+}
+
+void aoo_lock_unlock(aoo_lock *x)
+{
+    ReleaseSRWLockExclusive((SRWLOCK *)x);
+}
+
+void aoo_lock_unlock_shared(aoo_lock *x){
+    ReleaseSRWLockShared((SRWLOCK *)x);
+}
+#else
+void aoo_lock_init(aoo_lock *x)
+{
+    pthread_rwlock_init(x, 0);
+}
+
+void aoo_lock_destroy(aoo_lock *x)
+{
+    pthread_rwlock_destroy(x);
+}
+
+void aoo_lock_lock(aoo_lock *x)
+{
+    pthread_rwlock_wrlock(x);
+}
+
+void aoo_lock_lock_shared(aoo_lock *x)
+{
+    pthread_rwlock_rdlock(x);
+}
+
+void aoo_lock_unlock(aoo_lock *x)
+{
+    pthread_rwlock_unlock(x);
+}
+
+void aoo_lock_unlock_shared(aoo_lock *x)
+{
+    pthread_rwlock_unlock(x);
+}
+#endif
+
+/*/////////////////////////// helper functions ///////////////////////////////////////*/
+
+static int aoo_getendpointarg(void *x, int argc, t_atom *argv, struct sockaddr_storage *sa,
+                              socklen_t *len, int32_t *id, const char *what)
+{
+    if (argc < 3){
+        pd_error(x, "%s: too few arguments for %s", classname(x), what);
+        return 0;
     }
-    last = s;
-#endif
-#if AOO_PD_OSCTIMEHACK
-    // HACK to catch blocks calculated in a row because of Pd's ringbuffer scheduler
-    static PERTHREAD uint64_t osc = 0;
-    static PERTHREAD int32_t count = 0;
-    if (diff > period * AOO_PD_MINPERIOD){
-        osc = t;
-        count = 0;
-    } else {
-        // approximate timestamp
-        count++;
-        t = aoo_osctime_addseconds(t, period * count);
+
+    t_symbol *hostname = atom_getsymbol(argv);
+    int port = atom_getfloat(argv + 1);
+
+    if (!socket_getaddr(hostname->s_name, port, sa, len)){
+        pd_error(x, "%s: couldn't resolve hostname '%s' of %s",
+                 classname(x), hostname->s_name, what);
+        return 0;
     }
-#endif
-#if AOO_DEBUG_OSCTIME
-    s = aoo_osctime_toseconds(t);
-    fprintf(stderr, "osctime: %" PRIu64 ", seconds: %f, diff (ms): %f\n", t, s, diff * 1000.0);
-    fflush(stderr);
-#endif
-    return t;
+
+    if (argv[2].a_type == A_SYMBOL){
+        if (*argv[2].a_w.w_symbol->s_name == '*'){
+            *id = AOO_ID_WILDCARD;
+        } else {
+            pd_error(x, "%s: bad %s ID '%s'!",
+                     classname(x), what, argv[2].a_w.w_symbol->s_name);
+            return 0;
+        }
+    } else {
+        *id = atom_getfloat(argv + 2);
+    }
+    return 1;
+}
+
+int aoo_getsinkarg(void *x, int argc, t_atom *argv,
+                   struct sockaddr_storage *sa, socklen_t *len, int32_t *id)
+{
+    return aoo_getendpointarg(x, argc, argv, sa, len, id, "sink");
+}
+
+int aoo_getsourcearg(void *x, int argc, t_atom *argv,
+                     struct sockaddr_storage *sa, socklen_t *len, int32_t *id)
+{
+    return aoo_getendpointarg(x, argc, argv, sa, len, id, "source");
+}
+
+static int aoo_getarg(const char *name, void *x, int which,
+                      int argc, const t_atom *argv, t_float *f, t_float def)
+{
+    if (argc > which){
+        if (argv[which].a_type == A_SYMBOL){
+            t_symbol *sym = argv[which].a_w.w_symbol;
+            if (sym == gensym("auto")){
+                *f = def;
+            } else {
+                pd_error(x, "%s: bad '%s' argument '%s'", classname(x), name, sym->s_name);
+                return 0;
+            }
+        } else {
+            *f = atom_getfloat(argv + which);
+        }
+    } else {
+        *f = def;
+    }
+    return 1;
+}
+
+int aoo_parseresend(void *x, int argc, const t_atom *argv,
+                    int32_t *limit, int32_t *interval,
+                    int32_t *maxnumframes)
+{
+    t_float f;
+    if (aoo_getarg("limit", x, 0, argc, argv, &f, AOO_RESEND_LIMIT)){
+        *limit = f;
+    } else {
+        return 0;
+    }
+    if (aoo_getarg("interval", x, 1, argc, argv, &f, AOO_RESEND_INTERVAL)){
+        *interval = f;
+    } else {
+        return 0;
+    }
+    if (aoo_getarg("maxnumframes", x, 2, argc, argv, &f, AOO_RESEND_MAXNUMFRAMES)){
+        *maxnumframes = f;
+    } else {
+        return 0;
+    }
+    return 1;
 }
 
 void aoo_defaultformat(aoo_format_storage *f, int nchannels)
@@ -71,6 +182,7 @@ int aoo_parseformat(void *x, aoo_format_storage *f, int argc, t_atom *argv)
     t_symbol *codec = atom_getsymbolarg(0, argc, argv);
     f->header.blocksize = argc > 1 ? atom_getfloat(argv + 1) : 64;
     f->header.samplerate = argc > 2 ? atom_getfloat(argv + 2) : sys_getsr();
+    // omit nchannels
 
     if (codec == gensym(AOO_CODEC_PCM)){
         aoo_format_pcm *fmt = (aoo_format_pcm *)f;
@@ -165,4 +277,60 @@ int aoo_parseformat(void *x, aoo_format_storage *f, int argc, t_atom *argv)
         return 0;
     }
     return 1;
+}
+
+int aoo_printformat(const aoo_format_storage *f, int argc, t_atom *argv)
+{
+    if (argc < 3){
+        return 0;
+    }
+    t_symbol *codec = gensym(f->header.codec);
+    SETSYMBOL(argv, codec);
+    SETFLOAT(argv + 1, f->header.blocksize);
+    SETFLOAT(argv + 2, f->header.samplerate);
+    // omit nchannels
+
+    if (codec == gensym(AOO_CODEC_PCM) && argc >= 4){
+        // pcm <blocksize> <samplerate> <bitdepth>
+        aoo_format_pcm *fmt = (aoo_format_pcm *)f;
+        int nbits;
+        switch (fmt->bitdepth){
+        case AOO_PCM_INT16:
+            nbits = 2;
+            break;
+        case AOO_PCM_INT24:
+            nbits = 3;
+            break;
+        case AOO_PCM_FLOAT32:
+            nbits = 4;
+            break;
+        case AOO_PCM_FLOAT64:
+            nbits = 8;
+            break;
+        default:
+            nbits = 0;
+        }
+        SETFLOAT(argv + 3, nbits);
+        return 4;
+    } else if (codec == gensym(AOO_CODEC_OPUS) && argc >= 6){
+        // opus <blocksize> <samplerate> <bitrate> <complexity> <signaltype>
+        aoo_format_opus *fmt = (aoo_format_opus *)f;
+        SETFLOAT(argv + 3, fmt->bitrate);
+        SETFLOAT(argv + 4, fmt->complexity);
+        t_symbol *signaltype;
+        switch (fmt->signal_type){
+        case OPUS_SIGNAL_MUSIC:
+            signaltype = gensym("music");
+            break;
+        case OPUS_SIGNAL_VOICE:
+            signaltype = gensym("voice");
+            break;
+        default:
+            signaltype = gensym("auto");
+            break;
+        }
+        SETSYMBOL(argv + 5, signaltype);
+        return 6;
+    }
+    return 0;
 }
