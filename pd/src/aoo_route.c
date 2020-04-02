@@ -1,6 +1,7 @@
 /* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
+
 #include "m_pd.h"
 #include "aoo/aoo.h"
 #include "aoo_common.h"

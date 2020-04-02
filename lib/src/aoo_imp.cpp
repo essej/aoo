@@ -1,7 +1,7 @@
 /* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
-#include "aoo/aoo.hpp"
+
 #include "aoo/aoo_utils.hpp"
 #include "aoo/aoo_pcm.h"
 #include "aoo/aoo_opus.h"
@@ -108,6 +108,7 @@ int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *type, int32_t *id)
 }
 
 // OSC time stamp (NTP time)
+// LATER try to use GetSystemTimePreciseAsFileTime on Windows!
 uint64_t aoo_osctime_get(void){
     // use system clock (1970 epoch)
     auto epoch = std::chrono::system_clock::now().time_since_epoch();
