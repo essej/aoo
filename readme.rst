@@ -13,8 +13,8 @@ The new Version 2.0, not backwards compatible, was done quite from scratch and h
 
 Based on the *AoO* idea of Winfried Ritsch with a first draft of realisation on embedded devices, the actual version starting with V-2.0 , was mainly written by Christof Ressi, as a complete rewrite of the version from Wolfgang Jäger in C in 2010.
 
-features
---------
+collected features
+------------------
 
 * each endpoint can have multiple sources/sinks (each with their own ID)
 * AoO sources can send audio to any sink at any time; 
@@ -70,7 +70,6 @@ in Pd->Help->"find in externals" enter aoo
 
 Note: TO BE DONE
 
-   
 Pd externals
 ------------
 

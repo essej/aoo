@@ -6,6 +6,66 @@ towards message based audio systems
 
 Use Cases was the driving motor for development of AoO. Here the important Project shown as use cases, to illustrate the usages and detect the drawbacks of this streaming solutions.
 
+Here historic Implementation are also shown.
+
+Streaming Boxes  
+===============
+
+A reference project can be found at IEM git server, which is the realisation of streams for Bill Fontana just exploring in Graz:
+
+- http://git.iem.at/ritsch/DIYasb
+
+.. _fig-diyasb:
+
+.. figure:: ./images/streamboxen_mikros.jpg
+   :alt: weather-proof streaming boxes on a rooftop with directional microphones
+   :width: 80%
+
+   weather-proof streaming boxes on a rooftop with directional microphones
+
+
+Doku: To be done... there and here
+
+
+
+Playing together
+================
+
+.. .. centered::
+
+.. _fig-ice_playing:
+
+.. figure:: ./images/ice_porgy_and_bess_small.jpg
+   :alt: first concert of IEM computermusic ensemble ICE playing over a HUB
+   :width: 90%
+
+   first concert of IEM computermusic ensemble ICE playing over a HUB
+
+
+When specifying an audio-network for playing togehter within an ensemble, a focus was set on the collaborating efforts to be done to gain the unity of the individuals.
+
+So, like a musicians with acoustic instrument, joining a band with Linux audio-computer implies a need for a place where the musician has a ”virtual sound space“ they can join. So they provide sound sources and need to plugin audio channels on a virtual mixing desk. With AoO the participant just needs to connect to the network, wireless or wired, choosing the sinks to play to and send phrases of audio with AoO when needed.
+
+For the ICE ensemble Ambisonics as an virtual audio environment was chosen, which can be rendered to different concert halls. Within the Ambisonics each musician can always use the same playing parameters for spatializing her or his musical contribution. So the imagination of the musician is ”playing in a virtual 3D environment“, sending their audio signals together with 3D-spatial data to a distributed mixing system which is rendering it on the speakers.
+
+Additional there is an audio communication between the musicians, where each musicians can hear into the signal produced by the other, if there is one or on special offered sinks send audio intervention to the others for e.g. monitoring purposes. The musicians can do their own monitor mix, depending on the piece and space where the play.
+
+Using a message audio system, each musicians only sends sound data if playing, like audio bursts just notes, or just sending their audio-data to another musicians, who will process this further and so on. There should be no border on the imagination of these situations, (as long it can be grasped by the participants).
+
+.. .. centered::
+
+.. _fig-aoo_ice:
+
+.. figure:: ./figures/aoo_ice.pdf
+   :alt: ICE using AoO as space for playing together and on a PA system
+   :width: 95%
+
+   ICE using AoO as space for playing together and on a PA system
+
+.. raw:: latex
+
+   \clearpage
+   
 message based Ambisonics spatial audio systems
 ==============================================
 
@@ -21,8 +81,6 @@ message based Ambisonics spatial audio systems
 
 
 As a first goal, the geodesic sound-dome in Pischelsdorf (with a diameter of 20 m and a height of about 10 m) as an environmental landscape sculpture in Pischelsdorf should transmute into 3D a sound-sphere. Therefore as special hardware and software, a low power solar power driven multichannel Ambisonics system was developed and installed prototypically. This should result in a low cost implementation of multichannel audio system Up to 48 speakers should be mounted in a hemisphere, forming an Ambisonics sound system. Using 6 nodes, each with 8 speakers, special embedded controllers are used to render the audio in the system
-
-(figure `fig-aoo_embedded`_ ).
 
 .. .. centered::
 
@@ -53,60 +111,22 @@ The first implementation of the nodes has been done with special micro-controlle
 
 The main advantage, besides the low cost and autonomous system, is that one or more sound technicians or computer musicians can enter the dome, plug into the network with their portable devices and play the sound dome either addressing speakers individually, with audio material spatializing live with additional OSC messages or a generated or prerecorded Ambisonics audio material.
 
-Playing together
-================
 
-.. .. centered::
+.. raw:: latex
 
-.. _fig-ice_playing:
-
-.. figure:: ./images/ice_porgy_and_bess_small.jpg
-   :alt: first concert of IEM computermusic ensemble ICE playing over a HUB
-   :width: 80%
-
-   first concert of IEM computermusic ensemble ICE playing over a HUB
-
-
-When specifying an audio-network for playing togehter within an ensemble, a focus was set on the collaborating efforts to be done to gain the unity of the individuals.
-
-So, like a musicians with acoustic instrument, joining a band with Linux audio-computer implies a need for a place where the musician has a ”virtual sound space“ they can join. So they provide sound sources and need to plugin audio channels on a virtual mixing desk. With AoO the participant just needs to connect to the network, wireless or wired, choosing the sinks to play to and send phrases of audio with AoO when needed.
-
-For the ICE ensemble Ambisonics as an virtual audio environment was chosen, which can be rendered to different concert halls. Within the Ambisonics each musician can always use the same playing parameters for spatializing her or his musical contribution. So the imagination of the musician is ”playing in a virtual 3D environment“, sending their audio signals together with 3D-spatial data to a distributed mixing system which is rendering it on the speakers.
-
-Additional there is an audio communication between the musicians, where each musicians can hear into the signal produced by the other, if there is one or on special offered sinks send audio intervention to the others for e.g. monitoring purposes. The musicians can do their own monitor mix, depending on the piece and space where the play.
-
-Using a message audio system, each musicians only sends sound data if playing, like audio bursts just notes, or just sending their audio-data to another musicians, who will process this further and so on. There should be no border on the imagination of these situations, (as long it can be grasped by the participants).
-
-.. .. centered::
-
-.. _fig-aoo_ice:
-
-.. figure:: ./figures/aoo_ice.pdf
-   :alt: ICE using AoO as space for playing together and on a PA system
-   :width: 80%
-
-   ICE using AoO as space for playing together and on a PA system
-
-   
-   
-Streaming Boxes  
-===============
-
-Doku To be done...
-
-
+   \clearpage
 
 state of the work
 =================
 
 to be written...
 
-.. 
-.. The AoO has been implemented for proof of concept and special
-.. applications in a first draft version. The next version should fixate
-.. the protocol, after having discussed it in public, in a way that makes
-.. it compatible with future protocol upgrades.
-.. 
+
+The AoO has been implemented for proof of concept and special
+applications in a first draft version. The next version should fixate
+the protocol, after having discussed it in public, in a way that makes
+it compatible with future protocol upgrades.
+
 .. The usage of AoO in an ensemble has been explored in a workshop with
 .. students at the IEM, but the implemented software was not stable enough
 .. on the different platforms used for stage performance. This was
@@ -124,13 +144,9 @@ to be written...
 .. and open access. More documentation and source code should be released
 .. and open-hardware as AoO-audio devices should be available.
 .. 
-.. Special focus is done on using embedded devices with AoO as networked
-.. multichannel audio hardware interfaces for low cost solutions adding
-.. audio processing for calibration filters, beam-forming,…for
-.. speaker-systems optional powered over Ethernet.
-.. 
 
-
+Special focus will be done in future on using embedded devices with AoO as networked multichannel audio hardware interfaces for low cost solutions adding audio processing for calibration filters, beam-forming,…for
+speaker-systems optional powered over Ethernet.
 
 Acknowledgements
 ================
@@ -138,26 +154,24 @@ Acknowledgements
 Thanks to …my colleagues on the IEM supporting me with their help,
 especially Wolfgang Jäger for a first implementation as a
 sound-engineering project. Also for helping set up the ”Klangdom“
-especially to Marian Weger, Matthias Kronlachner and the cultu ral
+especially to Marian Weger, Matthias Kronlachner and the cultural
 initiative K.U.L.M. in Pischelsdorf and the members of the ICE Ensemble
 helping to experiment and many others. Thanks also for corrections of
-this paper and useful hints, to enhance the understanding.
+this doku and useful hints, to enhance the understanding.
 
-.. Conclusions
-.. ===========
-.. 
-.. Starting as a vision, these experiments and implementations have shown,
-.. that message based audio systems can enhance the collaboration in
-.. ensembles, playing open audio systems. Also network art projects using
-.. the Internet can use AoO to contribute to sound installation from
-.. outside, just knowing the IP and ports to use.
-.. 
+Conclusions
+===========
+
+Starting as a vision, these experiments and implementations have shown, that message based audio systems can enhance the collaboration in ensembles, playing open audio systems. Also network art projects using the Internet can use AoO to contribute to sound installation from outside, just knowing the IP and ports to use.
+
+With Version~2.0 a usable system has been created and tested und hopfully with the input of the community will further enhance.
+
 .. The implementation is far from being complete, and more restrictions
 .. will be included in order to simplify the system. Synchronization and
 .. re-sampling is not perfect, but usable for most cases and it has been
 .. shown, that audio message systems can work reliable in different
 .. situations.
-.. 
+
 .. Audio message systems can also be implemented in other formats than OSC
 .. and lower layers of the Linux OS, like jack-plugins or ALSA-modules as
 .. converters between message based audio system and synchronous data flow

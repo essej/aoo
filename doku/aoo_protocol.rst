@@ -6,6 +6,8 @@ AoO - Protocol -towards message based audio systems
 :date: march 2014 - february 2020
 :version: 2.0-a1
 
+NOTE: documentation can be behind the implementation, as long as alpha and beta releases are done !!!
+
 The deployment of distributed audio systems in the context of computermusic and audio installation is explored within this library, to implement the vision of transition from static streaming audio networks to flexible dynamic audio networks. Audio data is send on demand only. Sharing sources and sinks allows us to create arbitrary audio networks, without boundaries.
 
 This idea of message based audio systems, which has been investigated within several projects from  playing Ambisonics spatial audio systems, streaming over Large Area Networks (LAN) and playing within a computermusic ensembles.
@@ -315,7 +317,7 @@ The new version can be found in the git library and also should be available via
 
 - see http://git.iem.at/cm/aoo
 
-see documentation  in the help and testfiles there or in a reference projects in use cases.
+see documentation  in the help- and test-patches there or in a reference projects in use cases.
 
 About Document
 --------------
@@ -357,4 +359,3 @@ Thanks all who helped to bring this to live and please test und comment, file is
    
 .. [#3] performed 17.1.2010 in Medienkunstlabor Kunsthaus Graz see
  http://medienkunstlabor.at/projects/blender/ArtsBirthday17012010/index.html
-
