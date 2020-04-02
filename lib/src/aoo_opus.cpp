@@ -1,3 +1,6 @@
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+ * For information on usage and redistribution, and for a DISCLAIMER OF ALL
+ * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 #include "aoo/aoo_opus.h"
 #include "aoo/aoo_utils.hpp"
 
