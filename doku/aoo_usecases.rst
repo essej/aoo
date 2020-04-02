@@ -13,7 +13,7 @@ Streaming Boxes
 
 A reference project can be found at IEM git server, which is the realisation of streams for Bill Fontana just exploring in Graz:
 
-- http://git.iem.at/ritsch/DIYasb
+- http://git.iem.at/cm/DIYasb
 
 .. _fig-diyasb:
 
@@ -22,7 +22,6 @@ A reference project can be found at IEM git server, which is the realisation of 
    :width: 80%
 
    weather-proof streaming boxes on a rooftop with directional microphones
-
 
 Doku: To be done... there and here
 
