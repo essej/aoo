@@ -72,20 +72,17 @@ static void aoo_unpack_uninvite(t_aoo_unpack *x, t_floatarg f)
 
 static void aoo_unpack_buffersize(t_aoo_unpack *x, t_floatarg f)
 {
-    int32_t bufsize = f;
-    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_buffersize, AOO_ARG(bufsize));
+    aoo_sink_set_buffersize(x->x_aoo_sink, f);
 }
 
 static void aoo_unpack_timefilter(t_aoo_unpack *x, t_floatarg f)
 {
-    float bandwidth = f;
-    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_timefilter_bandwidth, AOO_ARG(bandwidth));
+    aoo_sink_set_timefilter_bandwith(x->x_aoo_sink, f);
 }
 
 static void aoo_unpack_ping(t_aoo_unpack *x, t_floatarg f)
 {
-    int32_t interval = f;
-    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_ping_interval, AOO_ARG(interval));
+    aoo_sink_set_ping_interval(x->x_aoo_sink, f);
 }
 
 static void aoo_unpack_reset(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)
@@ -93,17 +90,16 @@ static void aoo_unpack_reset(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *arg
     if (argc){
         // reset specific source
         int32_t id = atom_getfloat(argv);
-        aoo_sink_setsourceoption(x->x_aoo_sink, x, id, aoo_opt_reset, AOO_ARG_NULL);
+        aoo_sink_reset_source(x->x_aoo_sink, x, id);
     } else {
         // reset all sources
-        aoo_sink_setoption(x->x_aoo_sink, aoo_opt_reset, AOO_ARG_NULL);
+        aoo_sink_reset(x->x_aoo_sink);
     }
 }
 
 static void aoo_unpack_packetsize(t_aoo_unpack *x, t_floatarg f)
 {
-    int32_t packetsize = f;
-    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_packetsize, AOO_ARG(packetsize));
+    aoo_sink_set_packetsize(x->x_aoo_sink, f);
 }
 
 static void aoo_unpack_resend(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)
@@ -112,9 +108,9 @@ static void aoo_unpack_resend(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *ar
     if (!aoo_parseresend(x, argc, argv, &limit, &interval, &maxnumframes)){
         return;
     }
-    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_limit, AOO_ARG(limit));
-    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_interval, AOO_ARG(interval));
-    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_resend_maxnumframes, AOO_ARG(maxnumframes));
+    aoo_sink_set_resend_limit(x->x_aoo_sink, limit);
+    aoo_sink_set_resend_interval(x->x_aoo_sink, interval);
+    aoo_sink_set_resend_maxnumframes(x->x_aoo_sink, maxnumframes);
 }
 
 static void aoo_unpack_handleevents(t_aoo_unpack *x,
@@ -134,9 +130,7 @@ static void aoo_unpack_handleevents(t_aoo_unpack *x,
         {
             const aoo_source_event *e = &events[i].source;
             aoo_format_storage f;
-            if (aoo_sink_getsourceoption(x->x_aoo_sink, e->endpoint, e->id,
-                                         aoo_opt_format, AOO_ARG(f)) > 0)
-            {
+            if (aoo_sink_get_source_format(x->x_aoo_sink, e->endpoint, e->id, &f) > 0) {
                 SETFLOAT(&msg[0], events[i].source.id);
                 int fsize = aoo_printformat(&f, 31, msg + 1); // skip first atom
                 outlet_anything(x->x_eventout, gensym("source_format"), fsize + 1, msg);
@@ -252,8 +246,7 @@ static void * aoo_unpack_new(t_symbol *s, int argc, t_atom *argv)
     x->x_blocksize = 0;
 
     // arg #3: buffer size (ms)
-    int32_t bufsize = argc > 2 ? atom_getfloat(argv + 2) : DEFBUFSIZE;
-    aoo_sink_setoption(x->x_aoo_sink, aoo_opt_buffersize, AOO_ARG(bufsize));
+    aoo_unpack_buffersize(x, argc > 2 ? atom_getfloat(argv + 2) : DEFBUFSIZE);
 
     // make signal outlets
     for (int i = 0; i < nchannels; ++i){

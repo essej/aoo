@@ -132,7 +132,7 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     aoo_format_storage f;
     f.header.nchannels = x->x_nchannels;
     if (aoo_parseformat(x, &f, argc, argv)){
-        aoo_source_setoption(x->x_aoo_source, aoo_opt_format, AOO_ARG(f.header));
+        aoo_source_set_format(x->x_aoo_source, &f.header);
     }
 }
 
@@ -166,27 +166,23 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         }
         int32_t chn = atom_getfloat(argv + 3);
 
-        aoo_source_setsinkoption(x->x_aoo_source, sink->s_endpoint, sink->s_id,
-                                 aoo_opt_channelonset, AOO_ARG(chn));
+        aoo_source_set_sink_channelonset(x->x_aoo_source, sink->s_endpoint, sink->s_id, chn);
     }
 }
 
 static void aoo_send_packetsize(t_aoo_send *x, t_floatarg f)
 {
-    int32_t packetsize = f;
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_packetsize, AOO_ARG(packetsize));
+    aoo_source_set_packetsize(x->x_aoo_source, f);
 }
 
 static void aoo_send_resend(t_aoo_send *x, t_floatarg f)
 {
-    int32_t bufsize = f;
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_resend_buffersize, AOO_ARG(bufsize));
+    aoo_source_set_buffersize(x->x_aoo_source, f);
 }
 
 static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
 {
-    float bandwidth;
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_timefilter_bandwidth, AOO_ARG(bandwidth));
+    aoo_source_set_timefilter_bandwith(x->x_aoo_source, f);
 }
 
 static void aoo_send_doremovesink(t_aoo_send *x, t_endpoint *e, int32_t id)
@@ -279,8 +275,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
         if (argc > 3){
             int32_t chn = atom_getfloat(argv + 3);
-            aoo_source_setsinkoption(x->x_aoo_source, e, id,
-                                     aoo_opt_channelonset, AOO_ARG(chn));
+            aoo_source_set_sink_channelonset(x->x_aoo_source, e, id, chn);
         }
 
         if (id == AOO_ID_WILDCARD){
@@ -383,12 +378,12 @@ static void aoo_send_clear(t_aoo_send *x)
 
 static void aoo_send_start(t_aoo_send *x)
 {
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_start, AOO_ARG_NULL);
+    aoo_source_start(x->x_aoo_source);
 }
 
 static void aoo_send_stop(t_aoo_send *x)
 {
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_stop, AOO_ARG_NULL);
+    aoo_source_stop(x->x_aoo_source);
 }
 
 static void aoo_send_listsinks(t_aoo_send *x)
@@ -496,7 +491,7 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     // default format
     aoo_format_storage fmt;
     aoo_defaultformat(&fmt, nchannels);
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_format, AOO_ARG(fmt.header));
+    aoo_source_set_format(x->x_aoo_source, &fmt.header);
 
     return x;
 }

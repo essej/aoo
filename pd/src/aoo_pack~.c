@@ -103,7 +103,7 @@ static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
     aoo_format_storage f;
     f.header.nchannels = x->x_nchannels;
     if (aoo_parseformat(x, &f, argc, argv)){
-        aoo_source_setoption(x->x_aoo_source, aoo_opt_format, AOO_ARG(f.header));
+        aoo_source_set_format(x->x_aoo_source, &f.header);
     }
 }
 
@@ -111,27 +111,23 @@ static void aoo_pack_channel(t_aoo_pack *x, t_floatarg f)
 {
     x->x_sink_chn = f > 0 ? f : 0;
     if (x->x_sink_id != AOO_ID_NONE){
-        aoo_source_setsinkoption(x->x_aoo_source, x, x->x_sink_id,
-                                 aoo_opt_channelonset, AOO_ARG(x->x_sink_chn));
+        aoo_source_set_sink_channelonset(x->x_aoo_source, x, x->x_sink_id, x->x_sink_chn);
     }
 }
 
 static void aoo_pack_packetsize(t_aoo_pack *x, t_floatarg f)
 {
-    int32_t packetsize = f;
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_packetsize, AOO_ARG(packetsize));
+    aoo_source_set_packetsize(x->x_aoo_source, f);
 }
 
 static void aoo_pack_resend(t_aoo_pack *x, t_floatarg f)
 {
-    int32_t bufsize = f;
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_resend_buffersize, AOO_ARG(bufsize));
+    aoo_source_set_buffersize(x->x_aoo_source, f);
 }
 
 static void aoo_pack_timefilter(t_aoo_pack *x, t_floatarg f)
 {
-    float bandwidth;
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_timefilter_bandwidth, AOO_ARG(bandwidth));
+    aoo_source_set_timefilter_bandwith(x->x_aoo_source, f);
 }
 
 static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -171,12 +167,12 @@ static void aoo_pack_clear(t_aoo_pack *x)
 
 static void aoo_pack_start(t_aoo_pack *x)
 {
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_start, AOO_ARG_NULL);
+    aoo_source_start(x->x_aoo_source);
 }
 
 static void aoo_pack_stop(t_aoo_pack *x)
 {
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_stop, AOO_ARG_NULL);
+    aoo_source_stop(x->x_aoo_source);
 }
 
 static t_int * aoo_pack_perform(t_int *w)
@@ -238,7 +234,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     // since process() and send() are called from the same thread,
     // we can use the minimal buffer size and thus safe some memory.
     int32_t bufsize = 0;
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_buffersize, AOO_ARG(bufsize));
+    aoo_source_set_buffersize(x->x_aoo_source, bufsize);
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
@@ -274,7 +270,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     // default format
     aoo_format_storage fmt;
     aoo_defaultformat(&fmt, nchannels);
-    aoo_source_setoption(x->x_aoo_source, aoo_opt_format, AOO_ARG(fmt.header));
+    aoo_source_set_format(x->x_aoo_source, &fmt.header);
 
     return x;
 }

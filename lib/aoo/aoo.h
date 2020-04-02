@@ -436,6 +436,64 @@ AOO_API int32_t aoo_source_setsinkoption(aoo_source *src, void *endpoint, int32_
 AOO_API int32_t aoo_source_getsinkoption(aoo_source *src, void *endpoint, int32_t id,
                                  int32_t opt, void *p, int32_t size);
 
+// wrapper functions for frequently used options
+
+inline int32_t aoo_source_start(aoo_source *src) {
+    return aoo_source_setoption(src, aoo_opt_start, AOO_ARG_NULL);
+}
+
+inline int32_t aoo_source_stop(aoo_source *src) {
+    return aoo_source_setoption(src, aoo_opt_stop, AOO_ARG_NULL);
+}
+
+inline int32_t aoo_source_set_format(aoo_source *src, const aoo_format *f) {
+    return aoo_source_setoption(src, aoo_opt_format, (void *)f, sizeof(aoo_format));
+}
+
+inline int32_t aoo_source_get_format(aoo_source *src, aoo_format_storage *f) {
+    return aoo_source_setoption(src, aoo_opt_format, AOO_ARG(*f));
+}
+
+inline int32_t aoo_source_set_buffersize(aoo_source *src, int32_t n) {
+    return aoo_source_setoption(src, aoo_opt_buffersize, AOO_ARG(n));
+}
+
+inline int32_t aoo_source_get_buffersize(aoo_source *src, int32_t *n) {
+    return aoo_source_getoption(src, aoo_opt_buffersize, AOO_ARG(*n));
+}
+
+inline int32_t aoo_source_set_timefilter_bandwith(aoo_source *src, int32_t n) {
+    return aoo_source_setoption(src, aoo_opt_timefilter_bandwidth, AOO_ARG(n));
+}
+
+inline int32_t aoo_source_get_timefilter_bandwidth(aoo_source *src, int32_t *n) {
+    return aoo_source_getoption(src, aoo_opt_timefilter_bandwidth, AOO_ARG(*n));
+}
+
+inline int32_t aoo_source_set_packetsize(aoo_source *src, int32_t n) {
+    return aoo_source_setoption(src, aoo_opt_packetsize, AOO_ARG(n));
+}
+
+inline int32_t aoo_source_get_packetsize(aoo_source *src, int32_t *n) {
+    return aoo_source_getoption(src, aoo_opt_packetsize, AOO_ARG(*n));
+}
+
+inline int32_t aoo_source_set_resend_buffersize(aoo_source *src, int32_t n) {
+    return aoo_source_setoption(src, aoo_opt_resend_buffersize, AOO_ARG(n));
+}
+
+inline int32_t aoo_source_get_resend_buffersize(aoo_source *src, int32_t *n) {
+    return aoo_source_getoption(src, aoo_opt_resend_buffersize, AOO_ARG(*n));
+}
+
+inline int32_t aoo_source_set_sink_channelonset(aoo_source *src, void *endpoint, int32_t id, int32_t onset) {
+    return aoo_source_setsinkoption(src, endpoint, id, aoo_opt_channelonset, AOO_ARG(onset));
+}
+
+inline int32_t aoo_source_get_sink_channelonset(aoo_source *src, void *endpoint, int32_t id, int32_t *onset) {
+    return aoo_source_getsinkoption(src, endpoint, id, aoo_opt_channelonset, AOO_ARG(*onset));
+}
+
 /*//////////////////// AoO sink /////////////////////*/
 
 #ifdef __cplusplus
@@ -491,6 +549,76 @@ AOO_API int32_t aoo_sink_setsourceoption(aoo_sink *sink, void *endpoint, int32_t
 
 AOO_API int32_t aoo_sink_getsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
                               int32_t opt, void *p, int32_t size);
+
+// wrapper functions for frequently used options
+
+inline int32_t aoo_sink_reset(aoo_sink *sink) {
+    return aoo_sink_setoption(sink, aoo_opt_reset, AOO_ARG_NULL);
+}
+
+inline int32_t aoo_sink_set_buffersize(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_buffersize, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_buffersize(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_buffersize, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_set_timefilter_bandwith(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_timefilter_bandwidth, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_timefilter_bandwidth(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_timefilter_bandwidth, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_set_packetsize(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_packetsize, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_packetsize(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_packetsize, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_set_ping_interval(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_ping_interval, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_ping_interval(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_ping_interval, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_set_resend_limit(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_resend_limit, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_resend_limit(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_resend_limit, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_set_resend_interval(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_resend_interval, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_resend_interval(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_resend_interval, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_set_resend_maxnumframes(aoo_sink *sink, int32_t n) {
+    return aoo_sink_setoption(sink, aoo_opt_resend_maxnumframes, AOO_ARG(n));
+}
+
+inline int32_t aoo_sink_get_resend_maxnumframes(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_getoption(sink, aoo_opt_resend_maxnumframes, AOO_ARG(*n));
+}
+
+inline int32_t aoo_sink_reset_source(aoo_sink *sink, void *endpoint, int32_t id) {
+    return aoo_sink_setsourceoption(sink, endpoint, id, aoo_opt_reset, AOO_ARG_NULL);
+}
+
+inline int32_t aoo_sink_get_source_format(aoo_sink *sink, void *endpoint, int32_t id, aoo_format_storage *f) {
+    return aoo_sink_getsourceoption(sink, endpoint, id, aoo_opt_format, AOO_ARG(*f));
+}
 
 /*//////////////////// Codec API //////////////////////////*/
 
