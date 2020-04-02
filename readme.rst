@@ -13,8 +13,8 @@ The new Version 2.0, not backwards compatible, was done quite from scratch and h
 
 Based on the *AoO* idea of Winfried Ritsch with a first draft of realisation on embedded devices, the actual version starting with V-2.0 , was mainly written by Christof Ressi, as a complete rewrite of the version from Wolfgang Jäger in C in 2010.
 
-features
---------
+collected features
+------------------
 
 * each endpoint can have multiple sources/sinks (each with their own ID)
 * AoO sources can send audio to any sink at any time; 
@@ -70,25 +70,29 @@ in Pd->Help->"find in externals" enter aoo
 
 Note: TO BE DONE
 
-   
 Pd externals
 ------------
 
+see help- and test-patches there for more information.
+
+Main objects
+
+* [aoo_send~] send an AoO stream (with threaded network IO)
+
+* [aoo_receive~] receive one or more AoO streams (with threaded network IO)
+
+for compatible old patches or OSC routing
+    
 * [aoo_pack~] takes audio signals and outputs OSC messages (also accepts /request messages from sinks)
 * [aoo_unpack~] takes OSC messages from several sources and turns them into audio signals
 * [aoo_route] takes OSC messages and routes them based on the ID
-* [aoo_send~] send an AoO stream (with threaded network IO)
-* [aoo_receive~] receive one or more AoO streams (with threaded network IO)
-
-OSC messages
-------------
 
 todo
 ----
 
-* fade in/fade out ?
-* unit tests!
 * publish
+* more examples on features especial invite/uninvite
+* relay for AoO server
 
 download
 --------
@@ -105,16 +109,7 @@ doku -- documentation, papers
 pd -- Pd library for OSC, first implementation for experiments
 
 lib -- C++ library with a C interface, create and manage AoO sources/sinks
- 
-Changelog
----------
 
-- April 2020: go public
-- New project page on Feb.2014 - winfried ritsch now on git.iem.at
-- checked in in sourceforge repo (see above) 
-- added aao_lib
-- New test implementation Feb. 2020 - christof ressi
- 
 About Document
 --------------
 :authors: Winfried Ritsch, Christof Ressi
