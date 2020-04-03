@@ -116,6 +116,8 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
         e = aoo_server_getendpoint(x->x_server, &sa, len);
     }
     aoo_sink_invitesource(x->x_aoo_sink, e, id, (aoo_replyfn)endpoint_send);
+    // notify send thread
+    aoo_server_notify(x->x_server);
 }
 
 static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
@@ -133,6 +135,8 @@ static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom
     if (src){
         aoo_sink_uninvitesource(x->x_aoo_sink, src->s_endpoint,
                                 src->s_id, (aoo_replyfn)endpoint_send);
+        // notify send thread
+        aoo_server_notify(x->x_server);
     }
 }
 

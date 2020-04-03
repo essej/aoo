@@ -63,11 +63,15 @@ static void aoo_unpack_list(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv
 static void aoo_unpack_invite(t_aoo_unpack *x, t_floatarg f)
 {
     aoo_sink_invitesource(x->x_aoo_sink, x, (int32_t)f, (aoo_replyfn)aoo_pack_reply);
+    // send outgoing messages
+    while (aoo_sink_send(x->x_aoo_sink)) ;
 }
 
 static void aoo_unpack_uninvite(t_aoo_unpack *x, t_floatarg f)
 {
     aoo_sink_uninvitesource(x->x_aoo_sink, x, (int32_t)f, (aoo_replyfn)aoo_pack_reply);
+    // send outgoing messages
+    while (aoo_sink_send(x->x_aoo_sink)) ;
 }
 
 static void aoo_unpack_buffersize(t_aoo_unpack *x, t_floatarg f)
