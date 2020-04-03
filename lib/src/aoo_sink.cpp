@@ -440,7 +440,7 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
         return 0;
     }
 }
-int32_t aoo_sink_eventsavailable(aoo_sink *sink){
+int32_t aoo_sink_events_available(aoo_sink *sink){
     return sink->events_available();
 }
 
@@ -453,7 +453,7 @@ int32_t aoo::sink::events_available(){
     return false;
 }
 
-int32_t aoo_sink_handleevents(aoo_sink *sink,
+int32_t aoo_sink_handle_events(aoo_sink *sink,
                               aoo_eventhandler fn, void *user){
     return sink->handle_events(fn, user);
 }
@@ -556,11 +556,11 @@ source_desc::source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t sal
 {
     eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);
     // push "add" event
-    aoo_event event;
-    event.type = AOO_SOURCE_ADD_EVENT;
-    event.source.endpoint = endpoint;
-    event.source.id = id;
-    eventqueue_.write(event); // no need to lock
+    event e;
+    e.ping.type = AOO_SOURCE_ADD_EVENT;
+    e.ping.endpoint = endpoint;
+    e.ping.id = id;
+    eventqueue_.write(e); // no need to lock
     LOG_DEBUG("add new source with id " << id);
     resendqueue_.resize(256, 1);
 }
@@ -657,11 +657,11 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
 
     // push event
     if (eventqueue_.write_available()){
-        aoo_event event;
-        event.type = AOO_SOURCE_FORMAT_EVENT;
-        event.source.endpoint = endpoint_;
-        event.source.id = id_;
-        push_event(event);
+        event e;
+        e.type = AOO_SOURCE_FORMAT_EVENT;
+        e.source.endpoint = endpoint_;
+        e.source.id = id_;
+        push_event(e);
     }
     return 1;
 }
@@ -735,14 +735,14 @@ int32_t source_desc::handle_ping(const sink &s, time_tag tt){
 
     // push "ping" event
     if (eventqueue_.write_available()){
-        aoo_event event;
-        event.type = AOO_PING_EVENT;
-        event.sink.endpoint = endpoint_;
-        event.sink.id = id_;
-        event.ping.tt1 = tt.to_uint64();
-        event.ping.tt2 = tt2.to_uint64();
-        event.ping.tt3 = 0;
-        push_event(event);
+        event e;
+        e.type = AOO_PING_EVENT;
+        e.ping.endpoint = endpoint_;
+        e.ping.id = id_;
+        e.ping.tt1 = tt.to_uint64();
+        e.ping.tt2 = tt2.to_uint64();
+        e.ping.tt3 = 0;
+        push_event(e);
     }
 
     return 1;
@@ -798,32 +798,32 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         int32_t resent = streamstate_.get_resent();
         int32_t gap = streamstate_.get_gap();
 
-        aoo_event event;
-        event.source.endpoint = endpoint_;
-        event.source.id = id_;
+        event e;
+        e.source.endpoint = endpoint_;
+        e.source.id = id_;
         if (lost > 0 && eventqueue_.write_available()){
             // push packet loss event
-            event.type = AOO_BLOCK_LOST_EVENT;
-            event.block_loss.count = lost;
-            push_event(event);
+            e.type = AOO_BLOCK_LOST_EVENT;
+            e.block_loss.count = lost;
+            push_event(e);
         }
         if (reordered > 0 && eventqueue_.write_available()){
             // push packet reorder event
-            event.type = AOO_BLOCK_REORDERED_EVENT;
-            event.block_reorder.count = reordered;
-            push_event(event);
+            e.type = AOO_BLOCK_REORDERED_EVENT;
+            e.block_reorder.count = reordered;
+            push_event(e);
         }
         if (resent > 0 && eventqueue_.write_available()){
             // push packet resend event
-            event.type = AOO_BLOCK_RESENT_EVENT;
-            event.block_resend.count = resent;
-            push_event(event);
+            e.type = AOO_BLOCK_RESENT_EVENT;
+            e.block_resend.count = resent;
+            push_event(e);
         }
         if (gap > 0 && eventqueue_.write_available()){
             // push packet gap event
-            event.type = AOO_BLOCK_GAP_EVENT;
-            event.block_gap.count = gap;
-            push_event(event);
+            e.type = AOO_BLOCK_GAP_EVENT;
+            e.block_gap.count = gap;
+            push_event(e);
         }
     }
     // update resampler
@@ -855,12 +855,12 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         if (streamstate_.update_state(AOO_SOURCE_STATE_PLAY)){
             if (eventqueue_.write_available()){
                 // push "start" event
-                aoo_event event;
-                event.type = AOO_SOURCE_STATE_EVENT;
-                event.source.endpoint = endpoint_;
-                event.source.id = id_;
-                event.source_state.state = AOO_SOURCE_STATE_PLAY;
-                push_event(event);
+                event e;
+                e.type = AOO_SOURCE_STATE_EVENT;
+                e.source_state.endpoint = endpoint_;
+                e.source_state.id = id_;
+                e.source_state.state = AOO_SOURCE_STATE_PLAY;
+                push_event(e);
             }
         }
 
@@ -869,12 +869,12 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         // buffer ran out -> push "stop" event
         if (streamstate_.update_state(AOO_SOURCE_STATE_STOP)){
             if (eventqueue_.write_available()){
-                aoo_event event;
-                event.type = AOO_SOURCE_STATE_EVENT;
-                event.source.endpoint = endpoint_;
-                event.source.id = id_;
-                event.source_state.state = AOO_SOURCE_STATE_STOP;
-                push_event(event);
+                event e;
+                e.type = AOO_SOURCE_STATE_EVENT;
+                e.source_state.endpoint = endpoint_;
+                e.source_state.id = id_;
+                e.source_state.state = AOO_SOURCE_STATE_STOP;
+                push_event(e);
             }
         }
 
@@ -882,15 +882,19 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
     }
 }
 
-int32_t source_desc::handle_events(aoo_eventhandler handler, void *user){
+int32_t source_desc::handle_events(aoo_eventhandler fn, void *user){
     // copy events - always lockfree! (the eventqueue is never resized)
     auto n = eventqueue_.read_available();
     if (n > 0){
-        auto events = (aoo_event *)alloca(sizeof(aoo_event) * n);
+        auto events = (event *)alloca(sizeof(event) * n);
         for (int i = 0; i < n; ++i){
             eventqueue_.read(events[i]);
         }
-        handler(user, events, n);
+        auto vec = (const aoo_event **)alloca(sizeof(aoo_event *) * n);
+        for (int i = 0; i < n; ++i){
+            vec[i] = (aoo_event *)&events[i];
+        }
+        fn(user, vec, n);
     }
     return n;
 }

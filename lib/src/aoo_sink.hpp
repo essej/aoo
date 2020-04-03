@@ -102,6 +102,18 @@ class sink;
 
 class source_desc {
 public:
+    typedef union event
+    {
+        aoo_event_type type;
+        aoo_source_event source;
+        aoo_ping_event ping;
+        aoo_source_state_event source_state;
+        aoo_block_loss_event block_loss;
+        aoo_block_reorder_event block_reorder;
+        aoo_block_resend_event block_resend;
+        aoo_block_gap_event block_gap;
+    } event;
+
     source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt);
     source_desc(const source_desc& other) = delete;
     source_desc& operator=(const source_desc& other) = delete;
@@ -118,7 +130,7 @@ public:
                                const char *setting, int32_t size);
     int32_t handle_data(const sink& s, int32_t salt, const data_packet& d);
     int32_t handle_ping(const sink& s, time_tag tt);
-    int32_t handle_events(aoo_eventhandler handler, void *user);
+    int32_t handle_events(aoo_eventhandler fn, void *user);
     bool send(const sink& s);
     bool process(const sink& s, aoo_sample *buffer, int32_t size);
     void request_recover(){ streamstate_.request_recover(); }
@@ -163,9 +175,9 @@ private:
     lockfree::queue<aoo_sample> audioqueue_;
     lockfree::queue<block_info> infoqueue_;
     lockfree::queue<data_request> resendqueue_;
-    lockfree::queue<aoo_event> eventqueue_;
+    lockfree::queue<event> eventqueue_;
     spinlock eventqueuelock_;
-    void push_event(const aoo_event& e){
+    void push_event(const event& e){
         scoped_lock<spinlock> l(eventqueuelock_);
         eventqueue_.write(e);
     }

@@ -85,6 +85,13 @@ struct sink_desc : endpoint {
 
 class source final : public isource {
  public:
+    typedef union event
+    {
+        aoo_event_type type;
+        aoo_sink_event sink;
+        aoo_ping_event ping;
+    } event;
+
     source(int32_t id);
     ~source();
 
@@ -138,7 +145,7 @@ class source final : public isource {
     dynamic_resampler resampler_;
     lockfree::queue<aoo_sample> audioqueue_;
     lockfree::queue<double> srqueue_;
-    lockfree::queue<aoo_event> eventqueue_;
+    lockfree::queue<event> eventqueue_;
     lockfree::queue<endpoint> formatrequestqueue_;
     lockfree::queue<data_request> datarequestqueue_;
     history_buffer history_;

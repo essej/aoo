@@ -69,6 +69,8 @@ void aoo_lock_unlock_shared(aoo_lock *x);
 
 /*///////////////////////////// helper functions ///////////////////////////////*/
 
+int aoo_endpoint_to_atoms(const t_endpoint *e, int32_t id, t_atom *argv);
+
 int aoo_getsinkarg(void *x, int argc, t_atom *argv,
                         struct sockaddr_storage *sa, socklen_t *len, int32_t *id);
 

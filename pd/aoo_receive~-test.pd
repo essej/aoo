@@ -87,6 +87,8 @@
 #X obj 755 402 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
 -1 -1;
 #X obj 629 339 aoo_send~ 9999 1 2;
+#X msg 567 242 start;
+#X msg 572 267 stop;
 #X connect 0 0 11 0;
 #X connect 1 0 3 1;
 #X connect 1 0 4 1;
@@ -158,6 +160,8 @@
 #X connect 73 1 69 0;
 #X connect 73 2 74 0;
 #X connect 75 0 73 0;
+#X connect 76 0 75 0;
+#X connect 77 0 75 0;
 #X restore 34 46 pd sub;
 #X obj 34 70 dac~;
 #X connect 0 0 1 0;

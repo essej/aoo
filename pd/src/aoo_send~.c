@@ -65,29 +65,20 @@ void aoo_send_send(t_aoo_send *x)
     aoo_lock_unlock_shared(&x->x_lock);
 }
 
-static void aoo_send_handleevents(t_aoo_send *x,
-                                  const aoo_event *events, int32_t n)
+static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, int32_t n)
 {
     for (int i = 0; i < n; ++i){
-        switch (events[i].type){
+        switch (events[i]->type){
         case AOO_PING_EVENT:
         {
-            t_endpoint *e = (t_endpoint *)events[i].sink.endpoint;
-            t_symbol *host;
-            int port;
-            if (!endpoint_getaddress(e, &host, &port)){
-                continue;
-            }
-            uint64_t t1 = events[i].ping.tt1;
-            uint64_t t2 = events[i].ping.tt2;
-            uint64_t t3 = events[i].ping.tt3;
-            double diff1 = aoo_osctime_diff(t1, t2) * 1000.0;
-            double diff2 = aoo_osctime_diff(t2, t3) * 1000.0;
+            aoo_ping_event *e = (aoo_ping_event *)events[i];
+            double diff1 = aoo_osctime_diff(e->tt1, e->tt2) * 1000.0;
+            double diff2 = aoo_osctime_diff(e->tt2, e->tt3) * 1000.0;
 
             t_atom msg[5];
-            SETSYMBOL(msg, host);
-            SETFLOAT(msg + 1, port);
-            SETFLOAT(msg + 2, events[i].sink.id);
+            if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
+                continue;
+            }
             SETFLOAT(msg + 3, diff1);
             SETFLOAT(msg + 4, diff2);
             outlet_anything(x->x_eventout, gensym("ping"), 5, msg);
@@ -95,31 +86,22 @@ static void aoo_send_handleevents(t_aoo_send *x,
         }
         case AOO_INVITE_EVENT:
         {
-            t_endpoint *e = (t_endpoint *)events[i].sink.endpoint;
-            t_symbol *host;
-            int port;
-            if (!endpoint_getaddress(e, &host, &port)){
+            aoo_sink_event *e = (aoo_sink_event *)events[i];
+
+            t_atom msg[3];
+            if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
                 continue;
             }
-            t_atom msg[3];
-            SETSYMBOL(msg, host);
-            SETFLOAT(msg + 1, port);
-            SETFLOAT(msg + 2, events[i].sink.id);
             outlet_anything(x->x_eventout, gensym("invite"), 3, msg);
             break;
         }
         case AOO_UNINVITE_EVENT:
         {
-            t_endpoint *e = (t_endpoint *)events[i].sink.endpoint;
-            t_symbol *host;
-            int port;
-            if (!endpoint_getaddress(e, &host, &port)){
+            aoo_sink_event *e = (aoo_sink_event *)events[i];
+            t_atom msg[3];
+            if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
                 continue;
             }
-            t_atom msg[3];
-            SETSYMBOL(msg, host);
-            SETFLOAT(msg + 1, port);
-            SETFLOAT(msg + 2, events[i].sink.id);
             outlet_anything(x->x_eventout, gensym("uninvite"), 3, msg);
             break;
         }
@@ -127,12 +109,12 @@ static void aoo_send_handleevents(t_aoo_send *x,
             break;
         }
     }
+    return 1;
 }
 
 static void aoo_send_tick(t_aoo_send *x)
 {
-    aoo_source_handleevents(x->x_aoo_source,
-                            (aoo_eventhandler)aoo_send_handleevents, x);
+    aoo_source_handle_events(x->x_aoo_source, (aoo_eventhandler)aoo_send_handle_events, x);
 }
 
 static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
@@ -434,7 +416,7 @@ static t_int * aoo_send_perform(t_int *w)
             aoo_server_notify(x->x_server);
         }
     }
-    if (aoo_source_eventsavailable(x->x_aoo_source) > 0){
+    if (aoo_source_events_available(x->x_aoo_source) > 0){
         clock_set(x->x_clock, 0);
     }
 

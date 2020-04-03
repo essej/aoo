@@ -606,7 +606,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     return 1;
 }
 
-int32_t aoo_source_eventsavailable(aoo_source *src){
+int32_t aoo_source_events_available(aoo_source *src){
     return src->events_available();
 }
 
@@ -614,7 +614,7 @@ int32_t aoo::source::events_available(){
     return eventqueue_.read_available() > 0;
 }
 
-int32_t aoo_source_handleevents(aoo_source *src,
+int32_t aoo_source_handle_events(aoo_source *src,
                                 aoo_eventhandler fn, void *user){
     return src->handle_events(fn, user);
 }
@@ -624,12 +624,16 @@ int32_t aoo::source::handle_events(aoo_eventhandler fn, void *user){
     auto n = eventqueue_.read_available();
     if (n > 0){
         // copy events
-        auto events = (aoo_event *)alloca(sizeof(aoo_event) * n);
+        auto events = (event *)alloca(sizeof(event) * n);
         for (int i = 0; i < n; ++i){
             eventqueue_.read(events[i]);
         }
+        auto vec = (const aoo_event **)alloca(sizeof(aoo_event *) * n);
+        for (int i = 0; i < n; ++i){
+            vec[i] = (aoo_event *)&events[i];
+        }
         // send events
-        fn(user, events, n);
+        fn(user, vec, n);
     }
     return n;
 }
@@ -1163,12 +1167,12 @@ void source::handle_invite(void *endpoint, aoo_replyfn fn, int32_t id){
     if (!sink){
         // push "invite" event
         if (eventqueue_.write_available()){
-            aoo_event event;
-            event.type = AOO_INVITE_EVENT;
-            event.sink.endpoint = endpoint;
+            event e;
+            e.type = AOO_INVITE_EVENT;
+            e.sink.endpoint = endpoint;
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
-            event.sink.id = id;
-            eventqueue_.write(event);
+            e.sink.id = id;
+            eventqueue_.write(e);
         }
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_INVITE << "' message: sink already added");
@@ -1184,12 +1188,12 @@ void source::handle_uninvite(void *endpoint, aoo_replyfn fn, int32_t id){
     if (sink){
         // push "uninvite" event
         if (eventqueue_.write_available()){
-            aoo_event event;
-            event.type = AOO_UNINVITE_EVENT;
-            event.sink.endpoint = endpoint;
+            event e;
+            e.type = AOO_UNINVITE_EVENT;
+            e.sink.endpoint = endpoint;
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
-            event.sink.id = id;
-            eventqueue_.write(event);
+            e.sink.id = id;
+            eventqueue_.write(e);
         }
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_UNINVITE << "' message: sink not found");
@@ -1208,19 +1212,19 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id,
     if (sink){
         // push "ping" event
         if (eventqueue_.write_available()){
-            aoo_event event;
-            event.type = AOO_PING_EVENT;
-            event.sink.endpoint = endpoint;
+            event e;
+            e.type = AOO_PING_EVENT;
+            e.sink.endpoint = endpoint;
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
-            event.sink.id = id;
-            event.ping.tt1 = tt1.to_uint64();
-            event.ping.tt2 = tt2.to_uint64();
+            e.sink.id = id;
+            e.ping.tt1 = tt1.to_uint64();
+            e.ping.tt2 = tt2.to_uint64();
         #if 0
-            event.ping.tt3 = timer_.get_absolute().to_uint64(); // use last stream time
+            e.ping.tt3 = timer_.get_absolute().to_uint64(); // use last stream time
         #else
-            event.ping.tt3 = aoo_osctime_get(); // use real system time
+            e.ping.tt3 = aoo_osctime_get(); // use real system time
         #endif
-            eventqueue_.write(event);
+            eventqueue_.write(e);
         }
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_PING << "' message: sink not found");

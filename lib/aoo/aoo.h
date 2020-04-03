@@ -215,16 +215,37 @@ typedef enum aoo_event_type
     AOO_BLOCK_GAP_EVENT
 } aoo_event_type;
 
-typedef struct aoo_endpoint_event
+// base event
+typedef struct aoo_event
 {
     int32_t type;
-    int32_t id;
-    void *endpoint;
-} aoo_endpoint_event;
+} aoo_event;
 
-typedef aoo_endpoint_event aoo_source_event;
-typedef aoo_endpoint_event aoo_sink_event;
+// event handler
+typedef int32_t (*aoo_eventhandler)(
+        void *,             // user
+        const aoo_event **, // event array
+        int32_t n           // number of events
+);
 
+#define AOO_ENDPOINT_EVENT  \
+    int32_t type;           \
+    int32_t id;             \
+    void *endpoint;         \
+
+// source event
+typedef struct aoo_source_event
+{
+    AOO_ENDPOINT_EVENT
+} aoo_source_event;
+
+// sink event
+typedef struct aoo_sink_event
+{
+    AOO_ENDPOINT_EVENT
+} aoo_sink_event;
+
+// source state event
 typedef enum aoo_source_state
 {
     AOO_SOURCE_STATE_STOP,
@@ -233,47 +254,29 @@ typedef enum aoo_source_state
 
 typedef struct aoo_source_state_event
 {
-    aoo_source_event source;
+    AOO_ENDPOINT_EVENT
     int32_t state;
 } aoo_source_state_event;
 
+// block events
 struct _aoo_block_event
 {
-    aoo_source_event source;
+    AOO_ENDPOINT_EVENT
     int32_t count;
 };
-
-typedef struct aoo_ping_event {
-    aoo_endpoint_event endpoint;
-    uint64_t tt1;
-    uint64_t tt2;
-    uint64_t tt3; // only for source
-} aoo_ping_event;
 
 typedef struct _aoo_block_event aoo_block_loss_event;
 typedef struct _aoo_block_event aoo_block_reorder_event;
 typedef struct _aoo_block_event aoo_block_resend_event;
 typedef struct _aoo_block_event aoo_block_gap_event;
 
-// event union
-typedef union aoo_event
-{
-    aoo_event_type type;
-    aoo_source_event source;
-    aoo_sink_event sink;
-    aoo_ping_event ping;
-    aoo_source_state_event source_state;
-    aoo_block_loss_event block_loss;
-    aoo_block_reorder_event block_reorder;
-    aoo_block_resend_event block_resend;
-    aoo_block_gap_event block_gap;
-} aoo_event;
-
-typedef void (*aoo_eventhandler)(
-    void *,             // user
-    const aoo_event *,  // event array
-    int32_t             // number of events
-);
+// ping event
+typedef struct aoo_ping_event {
+    AOO_ENDPOINT_EVENT
+    uint64_t tt1;
+    uint64_t tt2;
+    uint64_t tt3; // only for source
+} aoo_ping_event;
 
 /*//////////////////// AoO options ////////////////////*/
 
@@ -393,7 +396,7 @@ typedef struct aoo_format
 typedef struct aoo_format_storage
 {
     aoo_format header;
-    char buf[256];
+    char data[256];
 } aoo_format_storage;
 
 // create a new AoO source instance
@@ -429,11 +432,12 @@ AOO_API int32_t aoo_source_send(aoo_source *src);
 AOO_API int32_t aoo_source_process(aoo_source *src, const aoo_sample **data,
                            int32_t nsamples, uint64_t t);
 
-// check if events are available (always thread safe)
-AOO_API int32_t aoo_source_eventsavailable(aoo_source *src);
+// get number of pending events (always thread safe)
+AOO_API int32_t aoo_source_events_available(aoo_source *src);
 
-// handle events - will call the event handler (threadsafe, but not reentrant)
-AOO_API int32_t aoo_source_handleevents(aoo_source *src, aoo_eventhandler fn, void *user);
+// handle events (threadsafe, but not reentrant)
+// will all the event handler function one or more times
+AOO_API int32_t aoo_source_handle_events(aoo_source *src, aoo_eventhandler fn, void *user);
 
 // set/get options (always threadsafe)
 AOO_API int32_t aoo_source_setoption(aoo_source *src, int32_t opt, void *p, int32_t size);
@@ -551,11 +555,12 @@ AOO_API int32_t aoo_sink_send(aoo_sink *sink);
 AOO_API int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,
                                  int32_t nsamples, uint64_t t);
 
-// check if events are available (always thread safe)
-AOO_API int32_t aoo_sink_eventsavailable(aoo_sink *sink);
+// get number of pending events (always thread safe)
+AOO_API int32_t aoo_sink_events_available(aoo_sink *sink);
 
-// handle events - will call the event handler (threadsafe, but not rentrant)
-AOO_API int32_t aoo_sink_handleevents(aoo_sink *sink, aoo_eventhandler fn, void *user);
+// handle events (threadsafe, but not reentrant)
+// will all the event handler function one or more times
+AOO_API int32_t aoo_sink_handle_events(aoo_sink *sink, aoo_eventhandler fn, void *user);
 
 // set/get options (always threadsafe)
 AOO_API int32_t aoo_sink_setoption(aoo_sink *sink, int32_t opt, void *p, int32_t size);

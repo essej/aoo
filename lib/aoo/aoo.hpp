@@ -73,10 +73,10 @@ public:
     virtual int32_t process(const aoo_sample **data,
                             int32_t nsamples, uint64_t t) = 0;
 
-    // check if events are available (always thread safe)
+    // get number of pending events (always thread safe)
     virtual int32_t events_available() = 0;
 
-    // handle events - will call the event handler (threadsafe, but not rentrant)
+    // get next available event (threadsafe, but not rentrant)
     virtual int32_t handle_events(aoo_eventhandler fn, void *user) = 0;
 
     //---------------------- options ----------------------//
@@ -198,10 +198,10 @@ public:
     // process audio (threadsafe, but not reentrant)
     virtual int32_t process(aoo_sample **data, int32_t nsamples, uint64_t t) = 0;
 
-    // check if events are available (always thread safe)
+    // get number of pending events (always thread safe)
     virtual int32_t events_available() = 0;
 
-    // handle events - will call the event handler (threadsafe, but not rentrant)
+    // get next available event (threadsafe, but not rentrant)
     virtual int32_t handle_events(aoo_eventhandler fn, void *user) = 0;
 
     //---------------------- options ----------------------//

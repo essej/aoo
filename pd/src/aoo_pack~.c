@@ -39,21 +39,18 @@ typedef struct _aoo_pack
     int32_t x_sink_chn;
 } t_aoo_pack;
 
-static void aoo_pack_handleevents(t_aoo_pack *x,
-                                  const aoo_event *events, int32_t n)
+static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, int32_t n)
 {
     for (int i = 0; i < n; ++i){
-        switch (events[i].type){
+        switch (events[i]->type){
         case AOO_PING_EVENT:
         {
-            uint64_t t1 = events[i].ping.tt1;
-            uint64_t t2 = events[i].ping.tt2;
-            uint64_t t3 = events[i].ping.tt3;
-            double diff1 = aoo_osctime_diff(t1, t2) * 1000.0;
-            double diff2 = aoo_osctime_diff(t2, t3) * 1000.0;
+            aoo_ping_event *e = (aoo_ping_event *)events[i];
+            double diff1 = aoo_osctime_diff(e->tt1, e->tt2) * 1000.0;
+            double diff2 = aoo_osctime_diff(e->tt2, e->tt3) * 1000.0;
 
             t_atom msg[3];
-            SETFLOAT(msg, events[i].sink.id);
+            SETFLOAT(msg, e->id);
             SETFLOAT(msg + 1, diff1);
             SETFLOAT(msg + 2, diff2);
             outlet_anything(x->x_eventout, gensym("ping"), 3, msg);
@@ -62,14 +59,14 @@ static void aoo_pack_handleevents(t_aoo_pack *x,
         case AOO_INVITE_EVENT:
         {
             t_atom msg;
-            SETFLOAT(&msg, events[i].sink.id);
+            SETFLOAT(&msg, ((aoo_sink_event *)events[i])->id);
             outlet_anything(x->x_eventout, gensym("invite"), 1, &msg);
             break;
         }
         case AOO_UNINVITE_EVENT:
         {
             t_atom msg;
-            SETFLOAT(&msg, events[i].sink.id);
+            SETFLOAT(&msg, ((aoo_sink_event *)events[i])->id);
             outlet_anything(x->x_eventout, gensym("uninvite"), 1, &msg);
             break;
         }
@@ -77,14 +74,14 @@ static void aoo_pack_handleevents(t_aoo_pack *x,
             break;
         }
     }
+    return 1;
 }
 
 static void aoo_pack_tick(t_aoo_pack *x)
 {
     while (aoo_source_send(x->x_aoo_source)) ;
 
-    aoo_source_handleevents(x->x_aoo_source,
-                            (aoo_eventhandler)aoo_pack_handleevents, x);
+    aoo_source_handle_events(x->x_aoo_source, (aoo_eventhandler)aoo_pack_handle_events, x);
 }
 
 static int32_t aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)
