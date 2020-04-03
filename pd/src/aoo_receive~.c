@@ -73,7 +73,7 @@ void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
     // synchronize with aoo_receive_dsp()
     aoo_lock_lock_shared(&x->x_lock);
     // handle incoming message
-    aoo_sink_handlemessage(x->x_aoo_sink, data, n, src, fn);
+    aoo_sink_handle_message(x->x_aoo_sink, data, n, src, fn);
     aoo_lock_unlock_shared(&x->x_lock);
 }
 
@@ -115,7 +115,7 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
     if (!e){
         e = aoo_server_getendpoint(x->x_server, &sa, len);
     }
-    aoo_sink_invitesource(x->x_aoo_sink, e, id, (aoo_replyfn)endpoint_send);
+    aoo_sink_invite_source(x->x_aoo_sink, e, id, (aoo_replyfn)endpoint_send);
     // notify send thread
     aoo_server_notify(x->x_server);
 }
@@ -133,7 +133,7 @@ static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom
 
     t_source *src = aoo_receive_findsource(x, argc, argv);
     if (src){
-        aoo_sink_uninvitesource(x->x_aoo_sink, src->s_endpoint,
+        aoo_sink_uninvite_source(x->x_aoo_sink, src->s_endpoint,
                                 src->s_id, (aoo_replyfn)endpoint_send);
         // notify send thread
         aoo_server_notify(x->x_server);

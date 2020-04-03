@@ -51,7 +51,7 @@ void aoo_send_handle_message(t_aoo_send *x, const char * data,
     // synchronize with aoo_receive_dsp()
     aoo_lock_lock_shared(&x->x_lock);
     // handle incoming message
-    aoo_source_handlemessage(x->x_aoo_source, data, n, src, fn);
+    aoo_source_handle_message(x->x_aoo_source, data, n, src, fn);
     aoo_lock_unlock_shared(&x->x_lock);
 }
 
@@ -266,7 +266,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             }
         }
 
-        aoo_source_addsink(x->x_aoo_source, e, id, (aoo_replyfn)endpoint_send);
+        aoo_source_add_sink(x->x_aoo_source, e, id, (aoo_replyfn)endpoint_send);
 
         if (argc > 3){
             int32_t chn = atom_getfloat(argv + 3);
@@ -344,7 +344,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             return;
         }
 
-        aoo_source_removesink(x->x_aoo_source, e, id);
+        aoo_source_remove_sink(x->x_aoo_source, e, id);
 
         // remove from list
         aoo_send_doremovesink(x, e, id);
@@ -362,7 +362,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_send_clear(t_aoo_send *x)
 {
-    aoo_source_removeall(x->x_aoo_source);
+    aoo_source_remove_all(x->x_aoo_source);
 
     // clear sink list
     if (x->x_numsinks){

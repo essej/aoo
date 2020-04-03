@@ -48,7 +48,7 @@ int32_t aoo::sink::setup(int32_t samplerate,
     return 0;
 }
 
-int32_t aoo_sink_invitesource(aoo_sink *sink, void *endpoint,
+int32_t aoo_sink_invite_source(aoo_sink *sink, void *endpoint,
                               int32_t id, aoo_replyfn fn)
 {
     return sink->invite_source(endpoint, id, fn);
@@ -66,7 +66,7 @@ int32_t aoo::sink::invite_source(void *endpoint, int32_t id, aoo_replyfn fn){
     return 1;
 }
 
-int32_t aoo_sink_uninvitesource(aoo_sink *sink, void *endpoint,
+int32_t aoo_sink_uninvite_source(aoo_sink *sink, void *endpoint,
                                 int32_t id, aoo_replyfn fn)
 {
     return sink->uninvite_source(endpoint, id, fn);
@@ -94,7 +94,7 @@ T& as(void *p){
 
 #define CHECKARG(type) assert(size == sizeof(type))
 
-int32_t aoo_sink_setoption(aoo_sink *sink, int32_t opt, void *p, int32_t size)
+int32_t aoo_sink_set_option(aoo_sink *sink, int32_t opt, void *p, int32_t size)
 {
     return sink->set_option(opt, p, size);
 }
@@ -165,7 +165,7 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
     return 1;
 }
 
-int32_t aoo_sink_getoption(aoo_sink *sink, int32_t opt, void *p, int32_t size)
+int32_t aoo_sink_get_option(aoo_sink *sink, int32_t opt, void *p, int32_t size)
 {
     return sink->get_option(opt, p, size);
 }
@@ -211,7 +211,7 @@ int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
     return 1;
 }
 
-int32_t aoo_sink_setsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
+int32_t aoo_sink_set_sourceoption(aoo_sink *sink, void *endpoint, int32_t id,
                               int32_t opt, void *p, int32_t size)
 {
     return sink->set_sourceoption(endpoint, id, opt, p, size);
@@ -238,7 +238,7 @@ int32_t aoo::sink::set_sourceoption(void *endpoint, int32_t id,
     }
 }
 
-int32_t aoo_sink_getsourceoption(aoo_sink *sink, void *endpoint, int32_t id,
+int32_t aoo_sink_get_sourceoption(aoo_sink *sink, void *endpoint, int32_t id,
                               int32_t opt, void *p, int32_t size)
 {
     return sink->get_sourceoption(endpoint, id, opt, p, size);
@@ -265,7 +265,7 @@ int32_t aoo::sink::get_sourceoption(void *endpoint, int32_t id,
     }
 }
 
-int32_t aoo_sink_handlemessage(aoo_sink *sink, const char *data, int32_t n,
+int32_t aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_t n,
                             void *src, aoo_replyfn fn) {
     return sink->handle_message(data, n, src, fn);
 }

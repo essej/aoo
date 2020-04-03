@@ -48,7 +48,7 @@ T& as(void *p){
 
 #define CHECKARG(type) assert(size == sizeof(type))
 
-int32_t aoo_source_setoption(aoo_source *src, int32_t opt, void *p, int32_t size)
+int32_t aoo_source_set_option(aoo_source *src, int32_t opt, void *p, int32_t size)
 {
     return src->set_option(opt, p, size);
 }
@@ -134,7 +134,7 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
     return 1;
 }
 
-int32_t aoo_source_getoption(aoo_source *src, int32_t opt, void *p, int32_t size)
+int32_t aoo_source_get_option(aoo_source *src, int32_t opt, void *p, int32_t size)
 {
     return src->get_option(opt, p, size);
 }
@@ -185,7 +185,7 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
     return 1;
 }
 
-int32_t aoo_source_setsinkoption(aoo_source *src, void *endpoint, int32_t id,
+int32_t aoo_source_set_sinkoption(aoo_source *src, void *endpoint, int32_t id,
                               int32_t opt, void *p, int32_t size)
 {
     return src->set_sinkoption(endpoint, id, opt, p, size);
@@ -252,7 +252,7 @@ int32_t aoo::source::set_sinkoption(void *endpoint, int32_t id,
     }
 }
 
-int32_t aoo_source_getsinkoption(aoo_source *src, void *endpoint, int32_t id,
+int32_t aoo_source_get_sinkoption(aoo_source *src, void *endpoint, int32_t id,
                               int32_t opt, void *p, int32_t size)
 {
     return src->get_sinkoption(endpoint, id, opt, p, size);
@@ -313,7 +313,7 @@ int32_t aoo::source::setup(int32_t samplerate,
     return 0;
 }
 
-int32_t aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn) {
+int32_t aoo_source_add_sink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn) {
     return src->add_sink(sink, id, fn);
 }
 
@@ -346,7 +346,7 @@ int32_t aoo::source::add_sink(void *endpoint, int32_t id, aoo_replyfn fn){
     return 1;
 }
 
-int32_t aoo_source_removesink(aoo_source *src, void *sink, int32_t id) {
+int32_t aoo_source_remove_sink(aoo_source *src, void *sink, int32_t id) {
     return src->remove_sink(sink, id);
 }
 
@@ -377,7 +377,7 @@ int32_t aoo::source::remove_sink(void *endpoint, int32_t id){
     }
 }
 
-void aoo_source_removeall(aoo_source *src) {
+void aoo_source_remove_all(aoo_source *src) {
     src->remove_all();
 }
 
@@ -386,7 +386,7 @@ void aoo::source::remove_all(){
     sinks_.clear();
 }
 
-int32_t aoo_source_handlemessage(aoo_source *src, const char *data, int32_t n,
+int32_t aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
                               void *sink, aoo_replyfn fn) {
     return src->handle_message(data, n, sink, fn);
 }
