@@ -108,9 +108,9 @@ public:
         aoo_source_event source;
         aoo_ping_event ping;
         aoo_source_state_event source_state;
-        aoo_block_loss_event block_loss;
-        aoo_block_reorder_event block_reorder;
-        aoo_block_resend_event block_resend;
+        aoo_block_lost_event block_loss;
+        aoo_block_reordered_event block_reorder;
+        aoo_block_resent_event block_resend;
         aoo_block_gap_event block_gap;
     } event;
 

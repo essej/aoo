@@ -274,7 +274,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         }
         case AOO_BLOCK_LOST_EVENT:
         {
-            aoo_block_loss_event *e = (aoo_block_loss_event *)events[i];
+            aoo_block_lost_event *e = (aoo_block_lost_event *)events[i];
             if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
                 continue;
             }
@@ -284,7 +284,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         }
         case AOO_BLOCK_REORDERED_EVENT:
         {
-            aoo_block_reorder_event *e = (aoo_block_reorder_event *)events[i];
+            aoo_block_reordered_event *e = (aoo_block_reordered_event *)events[i];
             if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
                 continue;
             }
@@ -294,7 +294,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         }
         case AOO_BLOCK_RESENT_EVENT:
         {
-            aoo_block_resend_event *e = (aoo_block_resend_event *)events[i];
+            aoo_block_resent_event *e = (aoo_block_resent_event *)events[i];
             if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
                 continue;
             }

@@ -146,7 +146,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
         }
         case AOO_BLOCK_LOST_EVENT:
         {
-            aoo_block_loss_event *e = (aoo_block_loss_event *)events[i];
+            aoo_block_lost_event *e = (aoo_block_lost_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             SETFLOAT(&msg[1], e->count);
             outlet_anything(x->x_eventout, gensym("block_lost"), 2, msg);
@@ -154,7 +154,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
         }
         case AOO_BLOCK_REORDERED_EVENT:
         {
-            aoo_block_reorder_event *e = (aoo_block_reorder_event *)events[i];
+            aoo_block_reordered_event *e = (aoo_block_reordered_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             SETFLOAT(&msg[1], e->count);
             outlet_anything(x->x_eventout, gensym("block_reordered"), 2, msg);
@@ -162,7 +162,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
         }
         case AOO_BLOCK_RESENT_EVENT:
         {
-            aoo_block_resend_event *e = (aoo_block_resend_event *)events[i];
+            aoo_block_resent_event *e = (aoo_block_resent_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             SETFLOAT(&msg[1], e->count);
             outlet_anything(x->x_eventout, gensym("block_resent"), 2, msg);

@@ -265,9 +265,9 @@ struct _aoo_block_event
     int32_t count;
 };
 
-typedef struct _aoo_block_event aoo_block_loss_event;
-typedef struct _aoo_block_event aoo_block_reorder_event;
-typedef struct _aoo_block_event aoo_block_resend_event;
+typedef struct _aoo_block_event aoo_block_lost_event;
+typedef struct _aoo_block_event aoo_block_reordered_event;
+typedef struct _aoo_block_event aoo_block_resent_event;
 typedef struct _aoo_block_event aoo_block_gap_event;
 
 // ping event
