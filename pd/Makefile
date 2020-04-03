@@ -31,7 +31,7 @@ cflags = \
     -fvisibility=hidden \
     -DNDEBUG \
     -DAOO_STATIC \
-    -DLOGLEVEL=2 \
+    -DLOGLEVEL=1 \
     -DAOO_TIMEFILTER_BANDWIDTH=0.0001 \
     -DAOO_DEBUG_DLL=0 \
     -DAOO_DEBUG_RESAMPLING=0 \
