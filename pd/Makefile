@@ -78,8 +78,7 @@ define forLinux
 endef
 
 # all extra files to be included in binary distribution of the library
-datafiles = aoo_pack~-test.pd aoo_receive~-test.pd aoo_send~-test.pd aoo-test.pd aoo_unpack~-test.pd \
-aoo_receive~-help.pd aoo_send~-help.pd
+datafiles = aoo_receive~-help.pd aoo_send~-help.pd
 #aoo_pack~-help.pd  aoo-help.pd aoo_unpack~-help.pd aoo_route-help.pd
 
 # include Makefile.pdlibbuilder from submodule directory 'pd-lib-builder'
