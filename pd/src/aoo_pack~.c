@@ -46,9 +46,17 @@ static void aoo_pack_handleevents(t_aoo_pack *x,
         switch (events[i].type){
         case AOO_PING_EVENT:
         {
-            t_atom msg;
-            SETFLOAT(&msg, events[i].sink.id);
-            outlet_anything(x->x_eventout, gensym("ping"), 1, &msg);
+            uint64_t t1 = events[i].ping.tt1;
+            uint64_t t2 = events[i].ping.tt2;
+            uint64_t t3 = events[i].ping.tt3;
+            double diff1 = aoo_osctime_diff(t1, t2) * 1000.0;
+            double diff2 = aoo_osctime_diff(t2, t3) * 1000.0;
+
+            t_atom msg[3];
+            SETFLOAT(msg, events[i].sink.id);
+            SETFLOAT(msg + 1, diff1);
+            SETFLOAT(msg + 2, diff2);
+            outlet_anything(x->x_eventout, gensym("ping"), 3, msg);
             break;
         }
         case AOO_INVITE_EVENT:
@@ -118,6 +126,11 @@ static void aoo_pack_channel(t_aoo_pack *x, t_floatarg f)
 static void aoo_pack_packetsize(t_aoo_pack *x, t_floatarg f)
 {
     aoo_source_set_packetsize(x->x_aoo_source, f);
+}
+
+static void aoo_pack_ping(t_aoo_pack *x, t_floatarg f)
+{
+    aoo_source_set_ping_interval(x->x_aoo_source, f);
 }
 
 static void aoo_pack_resend(t_aoo_pack *x, t_floatarg f)
@@ -298,6 +311,7 @@ void aoo_pack_tilde_setup(void)
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_format, gensym("format"), A_GIMME, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_channel, gensym("channel"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_ping, gensym("ping"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_resend, gensym("resend"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
 }

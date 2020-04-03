@@ -151,6 +151,10 @@ uint64_t aoo_osctime_addseconds(uint64_t t, double s){
     return (rh << 32) + rl;
 }
 
+double aoo_osctime_diff(uint64_t t1, uint64_t t2){
+    return (aoo::time_tag(t2) - aoo::time_tag(t1)).to_double();
+}
+
 namespace aoo {
 
 /*////////////////////////// codec /////////////////////////////*/
@@ -1095,7 +1099,7 @@ void dynamic_resampler::read(aoo_sample *data, int32_t n){
 /*//////////////////////// timer //////////////////////*/
 
 timer::timer(const timer& other){
-    last_ = other.last_;
+    last_ = other.last_.load();
     elapsed_ = other.elapsed_.load();
 #if AOO_CHECK_TIMER
     static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
@@ -1107,7 +1111,7 @@ timer::timer(const timer& other){
 }
 
 timer& timer::operator=(const timer& other){
-    last_ = other.last_;
+    last_ = other.last_.load();
     elapsed_ = other.elapsed_.load();
 #if AOO_CHECK_TIMER
     static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
@@ -1128,7 +1132,7 @@ void timer::setup(int32_t sr, int32_t blocksize){
 
 void timer::reset(){
     scoped_lock<spinlock> l(lock_);
-    last_.clear();
+    last_ = time_tag{};
     elapsed_ = 0;
 #if AOO_TIMEFILTER_CHECK
     // fill ringbuffer with nominal delta
@@ -1142,10 +1146,15 @@ double timer::get_elapsed() const {
     return elapsed_.load();
 }
 
+time_tag timer::get_absolute() const {
+    return last_.load();
+}
+
 timer::state timer::update(time_tag t, double& error){
     scoped_lock<spinlock> l(lock_);
-    if (last_.seconds != 0){
-        auto diff = t - last_;
+    time_tag last = last_.load();
+    if (last.seconds != 0){
+        auto diff = t - last;
         auto delta = diff.to_double();
         elapsed_ = elapsed_ + delta;
         last_ = t;

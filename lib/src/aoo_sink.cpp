@@ -119,11 +119,6 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
-    // ping interval
-    case aoo_opt_ping_interval:
-        CHECKARG(int32_t);
-        ping_interval_ = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
-        break;
     // timefilter bandwidth
     case aoo_opt_timefilter_bandwidth:
         CHECKARG(float);
@@ -182,11 +177,6 @@ int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
     case aoo_opt_buffersize:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = buffersize_;
-        break;
-    // ping interval
-    case aoo_opt_ping_interval:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = ping_interval_ * 1000;
         break;
     // timefilter bandwidth
     case aoo_opt_timefilter_bandwidth:
@@ -325,7 +315,7 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n, void *endpoint, a
                 LOG_ERROR(e.what());
             }
         } else {
-            LOG_ERROR("wrong number of arguments for /format message");
+            LOG_ERROR("wrong number of arguments for " << AOO_MSG_FORMAT << " message");
         }
     } else if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_DATA)){
         if (msg.ArgumentCount() == 9){
@@ -352,7 +342,22 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n, void *endpoint, a
                 LOG_ERROR(e.what());
             }
         } else {
-            LOG_ERROR("wrong number of arguments for /data message");
+            LOG_ERROR("wrong number of arguments for " << AOO_MSG_DATA << " message");
+        }
+    } else if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_PING)){
+        if (msg.ArgumentCount() == 2){
+            auto it = msg.ArgumentsBegin();
+            try {
+                // get header from arguments
+                auto id = (it++)->AsInt32();
+                time_tag tt = (it++)->AsTimeTag();
+
+                return handle_ping_message(endpoint, fn, id, tt);
+            } catch (const osc::Exception& e){
+                LOG_ERROR(e.what());
+            }
+        } else {
+            LOG_ERROR("wrong number of arguments for " << AOO_MSG_PING << " message");
         }
     } else {
         LOG_WARNING("unknown message '" << (msg.AddressPattern() + onset) << "'");
@@ -488,8 +493,8 @@ void sink::update_sources(){
 }
 
 int32_t sink::handle_format_message(void *endpoint, aoo_replyfn fn, int32_t id,
-                           int32_t salt, const aoo_format& format,
-                           const char *settings, int32_t size)
+                                    int32_t salt, const aoo_format& format,
+                                    const char *settings, int32_t size)
 {
     if (id < 0){
         LOG_WARNING("bad ID for " << AOO_MSG_FORMAT << " message");
@@ -508,7 +513,7 @@ int32_t sink::handle_format_message(void *endpoint, aoo_replyfn fn, int32_t id,
 }
 
 int32_t sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
-                           int32_t salt, const data_packet& data)
+                                  int32_t salt, const data_packet& data)
 {
     if (id < 0){
         LOG_WARNING("bad ID for " << AOO_MSG_DATA << " message");
@@ -523,6 +528,23 @@ int32_t sink::handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
         sources_.emplace_front(endpoint, fn, id, salt);
         src = &sources_.front();
         src->request_format();
+        return 0;
+    }
+}
+
+int32_t sink::handle_ping_message(void *endpoint, aoo_replyfn fn,
+                                  int32_t id, time_tag tt)
+{
+    if (id < 0){
+        LOG_WARNING("bad ID for " << AOO_MSG_PING << " message");
+        return 0;
+    }
+    // try to find existing source
+    auto src = find_source(endpoint, id);
+    if (src){
+        return src->handle_ping(*this, tt);
+    } else {
+        LOG_WARNING("couldn't find source for " << AOO_MSG_PING << " message");
         return 0;
     }
 }
@@ -696,6 +718,32 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
 #if AOO_DEBUG_BLOCK_BUFFER
     DO_LOG("block buffer: size = " << blockqueue_.size() << " / " << blockqueue_.capacity());
 #endif
+
+    return 1;
+}
+
+// /aoo/sink/<id>/ping <src> <time>
+
+int32_t source_desc::handle_ping(const sink &s, time_tag tt){
+#if 0
+    time_tag tt2 = s.absolute_time(); // use last stream time
+#else
+    time_tag tt2 = aoo_osctime_get(); // use real system time
+#endif
+
+    streamstate_.set_ping(tt, tt2);
+
+    // push "ping" event
+    if (eventqueue_.write_available()){
+        aoo_event event;
+        event.type = AOO_PING_EVENT;
+        event.sink.endpoint = endpoint_;
+        event.sink.id = id_;
+        event.ping.tt1 = tt.to_uint64();
+        event.ping.tt2 = tt2.to_uint64();
+        event.ping.tt3 = 0;
+        push_event(event);
+    }
 
     return 1;
 }
@@ -1209,28 +1257,30 @@ bool source_desc::send_notifications(const sink& s){
     // called without lock!
     bool didsomething = false;
 
-    if (s.ping_interval() > 0){
-        auto now = s.elapsed_time();
-        if (streamstate_.update_pingtime(now, s.ping_interval())){
-            // only send ping if source is active
-            if (streamstate_.get_state() == AOO_SOURCE_STATE_PLAY){
-                char buffer[AOO_MAXPACKETSIZE];
-                osc::OutboundPacketStream msg(buffer, sizeof(buffer));
+    time_tag pingtime1;
+    time_tag pingtime2;
+    if (streamstate_.need_ping(pingtime1, pingtime2)){
+        // only send ping if source is active
+        if (streamstate_.get_state() == AOO_SOURCE_STATE_PLAY){
+            char buffer[AOO_MAXPACKETSIZE];
+            osc::OutboundPacketStream msg(buffer, sizeof(buffer));
 
-                // make OSC address pattern
-                const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                        + AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_PING_LEN;
-                char address[max_addr_size];
-                snprintf(address, sizeof(address), "%s%s/%d%s",
-                         AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_PING);
+            // make OSC address pattern
+            const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+                    + AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_PING_LEN;
+            char address[max_addr_size];
+            snprintf(address, sizeof(address), "%s%s/%d%s",
+                     AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_PING);
 
-                msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
+            msg << osc::BeginMessage(address) << s.id()
+                << osc::TimeTag(pingtime1.to_uint64())
+                << osc::TimeTag(pingtime2.to_uint64())
+                << osc::EndMessage;
 
-                dosend(msg.Data(), msg.Size());
+            dosend(msg.Data(), msg.Size());
 
-                LOG_DEBUG("send /ping to source " << id_);
-                didsomething = true;
-            }
+            LOG_DEBUG("send /ping to source " << id_);
+            didsomething = true;
         }
     }
 

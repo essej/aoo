@@ -78,11 +78,19 @@ static void aoo_send_handleevents(t_aoo_send *x,
             if (!endpoint_getaddress(e, &host, &port)){
                 continue;
             }
-            t_atom msg[3];
+            uint64_t t1 = events[i].ping.tt1;
+            uint64_t t2 = events[i].ping.tt2;
+            uint64_t t3 = events[i].ping.tt3;
+            double diff1 = aoo_osctime_diff(t1, t2) * 1000.0;
+            double diff2 = aoo_osctime_diff(t2, t3) * 1000.0;
+
+            t_atom msg[5];
             SETSYMBOL(msg, host);
             SETFLOAT(msg + 1, port);
             SETFLOAT(msg + 2, events[i].sink.id);
-            outlet_anything(x->x_eventout, gensym("ping"), 3, msg);
+            SETFLOAT(msg + 3, diff1);
+            SETFLOAT(msg + 4, diff2);
+            outlet_anything(x->x_eventout, gensym("ping"), 5, msg);
             break;
         }
         case AOO_INVITE_EVENT:
@@ -173,6 +181,11 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 static void aoo_send_packetsize(t_aoo_send *x, t_floatarg f)
 {
     aoo_source_set_packetsize(x->x_aoo_source, f);
+}
+
+static void aoo_send_ping(t_aoo_send *x, t_floatarg f)
+{
+    aoo_source_set_ping_interval(x->x_aoo_source, f);
 }
 
 static void aoo_send_resend(t_aoo_send *x, t_floatarg f)
@@ -528,6 +541,7 @@ void aoo_send_tilde_setup(void)
     class_addmethod(aoo_send_class, (t_method)aoo_send_format, gensym("format"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_channel, gensym("channel"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_ping, gensym("ping"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_resend, gensym("resend"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_listsinks, gensym("list_sinks"), A_NULL);

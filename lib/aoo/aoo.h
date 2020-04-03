@@ -174,6 +174,9 @@ AOO_API uint64_t aoo_osctime_fromseconds(double s);
 // add seconds to NTP timestamp
 AOO_API uint64_t aoo_osctime_addseconds(uint64_t t, double s);
 
+// subtract two NTP timestamps
+AOO_API double aoo_osctime_diff(uint64_t t1, uint64_t t2);
+
 // reply function for endpoints
 typedef int32_t (*aoo_replyfn)(
         void *,         // endpoint
@@ -240,6 +243,13 @@ struct _aoo_block_event
     int32_t count;
 };
 
+typedef struct aoo_ping_event {
+    aoo_endpoint_event endpoint;
+    uint64_t tt1;
+    uint64_t tt2;
+    uint64_t tt3; // only for source
+} aoo_ping_event;
+
 typedef struct _aoo_block_event aoo_block_loss_event;
 typedef struct _aoo_block_event aoo_block_reorder_event;
 typedef struct _aoo_block_event aoo_block_resend_event;
@@ -251,6 +261,7 @@ typedef union aoo_event
     aoo_event_type type;
     aoo_source_event source;
     aoo_sink_event sink;
+    aoo_ping_event ping;
     aoo_source_state_event source_state;
     aoo_block_loss_event block_loss;
     aoo_block_reorder_event block_reorder;
@@ -478,6 +489,14 @@ static inline int32_t aoo_source_get_packetsize(aoo_source *src, int32_t *n) {
     return aoo_source_getoption(src, aoo_opt_packetsize, AOO_ARG(*n));
 }
 
+static inline int32_t aoo_source_set_ping_interval(aoo_source *src, int32_t n) {
+    return aoo_source_setoption(src, aoo_opt_ping_interval, AOO_ARG(n));
+}
+
+static inline int32_t aoo_source_get_ping_interval(aoo_source *src, int32_t *n) {
+    return aoo_source_getoption(src, aoo_opt_ping_interval, AOO_ARG(*n));
+}
+
 static inline int32_t aoo_source_set_resend_buffersize(aoo_source *src, int32_t n) {
     return aoo_source_setoption(src, aoo_opt_resend_buffersize, AOO_ARG(n));
 }
@@ -578,14 +597,6 @@ static inline int32_t aoo_sink_set_packetsize(aoo_sink *sink, int32_t n) {
 
 static inline int32_t aoo_sink_get_packetsize(aoo_sink *sink, int32_t *n) {
     return aoo_sink_getoption(sink, aoo_opt_packetsize, AOO_ARG(*n));
-}
-
-static inline int32_t aoo_sink_set_ping_interval(aoo_sink *sink, int32_t n) {
-    return aoo_sink_setoption(sink, aoo_opt_ping_interval, AOO_ARG(n));
-}
-
-static inline int32_t aoo_sink_get_ping_interval(aoo_sink *sink, int32_t *n) {
-    return aoo_sink_getoption(sink, aoo_opt_ping_interval, AOO_ARG(*n));
 }
 
 static inline int32_t aoo_sink_set_resend_limit(aoo_sink *sink, int32_t n) {

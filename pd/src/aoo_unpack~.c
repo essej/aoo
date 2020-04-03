@@ -80,11 +80,6 @@ static void aoo_unpack_timefilter(t_aoo_unpack *x, t_floatarg f)
     aoo_sink_set_timefilter_bandwith(x->x_aoo_sink, f);
 }
 
-static void aoo_unpack_ping(t_aoo_unpack *x, t_floatarg f)
-{
-    aoo_sink_set_ping_interval(x->x_aoo_sink, f);
-}
-
 static void aoo_unpack_reset(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (argc){
@@ -175,6 +170,23 @@ static void aoo_unpack_handleevents(t_aoo_unpack *x,
             SETFLOAT(&msg[0], e->source.id);
             SETFLOAT(&msg[1], e->count);
             outlet_anything(x->x_eventout, gensym("block_gap"), 2, msg);
+            break;
+        }
+        case AOO_PING_EVENT:
+        {
+            t_endpoint *e = (t_endpoint *)events[i].source.endpoint;
+            t_symbol *host;
+            int port;
+            if (!endpoint_getaddress(e, &host, &port)){
+                continue;
+            }
+            uint64_t t1 = events[i].ping.tt1;
+            uint64_t t2 = events[i].ping.tt2;
+            double diff = aoo_osctime_diff(t1, t2) * 1000.0;
+
+            SETFLOAT(msg, events[i].sink.id);
+            SETFLOAT(msg + 1, diff);
+            outlet_anything(x->x_eventout, gensym("ping"), 2, msg);
             break;
         }
         default:
@@ -287,8 +299,6 @@ void aoo_unpack_tilde_setup(void)
                     gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_resend,
                     gensym("resend"), A_GIMME, A_NULL);
-    class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_ping,
-                    gensym("ping"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_reset,
                     gensym("reset"), A_GIMME, A_NULL);
 }

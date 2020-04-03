@@ -1,6 +1,6 @@
-#N canvas 605 2 674 728 12;
+#N canvas 605 2 712 777 12;
 #X declare -lib aoo;
-#X text 182 615 creation arguments:;
+#X text 182 659 creation arguments:;
 #N canvas 135 97 551 377 pcm 0;
 #X obj 31 323 outlet;
 #X msg 187 78 2;
@@ -53,7 +53,7 @@
 #X connect 16 0 13 0;
 #X connect 17 0 9 0;
 #X connect 27 0 0 0;
-#X restore 112 545 pd pcm;
+#X restore 112 589 pd pcm;
 #N canvas 104 170 832 547 opus 0;
 #X obj 50 493 outlet;
 #X msg 161 164 48000;
@@ -147,28 +147,28 @@ see http://opus-codec.org/, f 79;
 #X connect 44 0 25 0;
 #X connect 45 0 25 0;
 #X connect 46 0 25 0;
-#X restore 169 545 pd opus;
-#X text 110 521 set format:;
+#X restore 169 589 pd opus;
+#X text 110 565 set format:;
 #X obj 89 326 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X obj 97 376 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X obj 100 425 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X msg 97 395 packetsize \$1;
-#X text 203 393 max. UDP packet size (default: 512 bytes);
-#X obj 103 423 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X msg 100 444 packetsize \$1;
+#X text 206 442 max. UDP packet size (default: 512 bytes);
+#X obj 104 472 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X msg 103 442 timefilter \$1;
-#X text 207 443 time DLL filter bandwidth (default: 0.0001);
-#X text 439 681 see also;
-#X obj 508 679 aoo_receive~;
-#X obj 48 580 osc~ 440;
-#X obj 116 579 osc~ 220;
-#X obj 48 606 *~ 0.25;
-#X obj 116 605 *~ 0.25;
-#X msg 108 491 resend \$1;
-#X obj 108 470 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X msg 104 491 timefilter \$1;
+#X text 208 492 time DLL filter bandwidth (default: 0.0001);
+#X text 439 725 see also;
+#X obj 508 723 aoo_receive~;
+#X obj 48 624 osc~ 440;
+#X obj 116 623 osc~ 220;
+#X obj 48 650 *~ 0.25;
+#X obj 116 649 *~ 0.25;
+#X msg 108 540 resend \$1;
+#X obj 108 519 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X text 187 492 buffersize (ms) for resending lost packets (default:
+#X text 187 541 buffersize (ms) for resending lost packets (default:
 1000);
 #X msg 29 52 add localhost 9999 1;
 #X text 26 19 aoo_send~: send an AoO audio stream to one or more AoO
@@ -182,13 +182,13 @@ sinks;
 #X text 185 52 add an AoO sink (hostname \, port \, sink ID \, [channel
 onset]);
 #X text 211 82 with optional channel onset;
-#X msg 507 624 \; pd dsp \$1;
-#X obj 507 600 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X msg 507 668 \; pd dsp \$1;
+#X obj 507 644 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X msg 71 232 list_sinks;
 #X text 158 229 list all sinks. This will output a message [sink <host>
 <port> <id>( for each sink., f 44;
-#X obj 29 685 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
+#X obj 29 729 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
 -1;
 #X msg 43 111 add localhost 9999 *;
 #X text 203 112 send to all AoO sinks on the given endpoint;
@@ -198,33 +198,43 @@ onset]);
 #X msg 81 299 stop;
 #X msg 76 271 start;
 #X obj 478 19 declare -lib aoo;
-#X text 182 637 1) port \, 2) ID \, 3) num channels, f 32;
-#X obj 29 633 aoo_send~ 9998 1 2;
-#N canvas 847 252 532 366 events 0;
+#X text 182 681 1) port \, 2) ID \, 3) num channels, f 32;
+#X obj 29 677 aoo_send~ 9998 1 2;
+#N canvas 847 252 596 418 events 1;
 #X obj 37 37 inlet;
 #X obj 88 87 print SINK;
 #X obj 37 61 route ping sink;
 #X obj 37 86 outlet;
-#X text 35 123 [ping <host> <port> <ID>(;
-#X text 36 189 [invite <host> <port> <ID>(;
-#X text 64 145 a periodic message sent from the sink to tell the source
-that it is receiving its messages., f 46;
-#X text 66 234 you may respond with [add <host> <port> <ID>( or ignore
+#X text 33 254 [invite <host> <port> <ID>(;
+#X text 63 299 you may respond with [add <host> <port> <ID>( or ignore
 it.;
-#X text 35 261 [uninvite <host> <port> <ID>(;
-#X text 67 213 a sink invites you to send audio messages.;
-#X text 67 286 a sink ask you to stop sending audio messages.;
-#X text 66 307 you may respond with [remove <host> <port> <ID>( or
+#X text 32 328 [uninvite <host> <port> <ID>(;
+#X text 64 278 a sink invites you to send audio messages.;
+#X text 64 353 a sink ask you to stop sending audio messages.;
+#X text 63 374 you may respond with [remove <host> <port> <ID>( or
 ignore it., f 62;
+#X text 35 123 [ping <host> <port> <ID> <delta1> <delta2>(;
+#X text 64 185 It also tells you the network latency:;
+#X text 66 206 <delta1> is the approx. delay between source and sink
+(in ms), f 62;
+#X text 67 226 <delta2> is the approx. delay between sink and source
+(in ms), f 62;
+#X text 64 145 a periodic message exchanged between source and sink
+\, so the source knows that the sink is receiving its messages.;
 #X connect 0 0 2 0;
 #X connect 2 0 3 0;
 #X connect 2 1 1 0;
-#X restore 29 659 pd events;
-#X text 50 683 ping;
+#X restore 29 703 pd events;
+#X text 50 727 ping;
 #X text 256 272 Note: you can use these two methods to send "audio
 events" instead of continuous streams., f 36;
 #X text 125 272 start streaming;
 #X text 127 299 stop streaming;
+#X msg 95 397 ping \$1;
+#X obj 95 376 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X text 161 397 set ping interval in ms (default: 1000) \, 0 = off
+;
 #X connect 1 0 44 0;
 #X connect 2 0 44 0;
 #X connect 4 0 26 0;
@@ -251,3 +261,5 @@ events" instead of continuous streams., f 36;
 #X connect 41 0 44 0;
 #X connect 44 0 45 0;
 #X connect 45 0 34 0;
+#X connect 50 0 44 0;
+#X connect 51 0 50 0;

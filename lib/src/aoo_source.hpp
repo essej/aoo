@@ -32,6 +32,8 @@ struct endpoint {
     void send_format(int32_t src, int32_t salt, const aoo_format& f,
                      const char *options, int32_t size) const;
 
+    void send_ping(int32_t src, time_tag t) const;
+
     void send(const char *data, int32_t n) const {
         fn(user, data, n);
     }
@@ -125,6 +127,7 @@ class source final : public isource {
     // state
     int32_t sequence_ = 0;
     std::atomic<int32_t> dropped_{0};
+    std::atomic<float> lastpingtime_{0};
     std::atomic<bool> format_changed_{false};
     std::atomic<bool> play_{false};
     // timing
@@ -148,7 +151,8 @@ class source final : public isource {
     std::atomic<int32_t> buffersize_{ AOO_SOURCE_BUFSIZE };
     std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
     std::atomic<int32_t> resend_buffersize_{ AOO_RESEND_BUFSIZE };
-    std::atomic<double> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
+    std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
+    std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };
 
     // helper methods
     sink_desc * find_sink(void *endpoint, int32_t id);
@@ -167,12 +171,15 @@ class source final : public isource {
 
     bool resend_data();
 
+    bool send_ping();
+
     void handle_format_request(void *endpoint, aoo_replyfn fn, int32_t id);
 
     void handle_data_request(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt,
                         int32_t count, osc::ReceivedMessageArgumentIterator it);
 
-    void handle_ping(void *endpoint, aoo_replyfn fn, int32_t id);
+    void handle_ping(void *endpoint, aoo_replyfn fn, int32_t id,
+                     time_tag tt1, time_tag tt2);
 
     void handle_invite(void *endpoint, aoo_replyfn fn, int32_t id);
 

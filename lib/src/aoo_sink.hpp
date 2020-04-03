@@ -21,11 +21,12 @@ struct stream_state {
         reordered_ = 0;
         resent_ = 0;
         gap_ = 0;
-        pingtime_ = 0;
         state_ = AOO_SOURCE_STATE_STOP;
         recover_ = false;
         format_ = false;
         invite_ = NONE;
+        pingtime1_ = time_tag{};
+        pingtime2_ = time_tag{};
     }
 
     void add_lost(int32_t n) { lost_ += n; }
@@ -40,21 +41,29 @@ struct stream_state {
     void add_gap(int32_t n) { gap_ += n; }
     int32_t get_gap() { return gap_.exchange(0); }
 
-    bool update_pingtime(double time, double interval){
-        if (time - pingtime_.load() > interval){
-            pingtime_ = time;
-            return true;
-        } else {
-            return false;
-        }
-    }
-
     bool update_state(aoo_source_state state){
         auto last = state_.exchange(state);
         return state != last;
     }
     aoo_source_state get_state(){
         return state_;
+    }
+
+    void set_ping(time_tag t1, time_tag t2){
+        pingtime1_ = t1;
+        pingtime2_ = t2;
+    }
+
+    bool need_ping(time_tag& t1, time_tag& t2){
+        // check pingtime2 because it ensures that pingtime1 has been set
+        auto pingtime2 = pingtime2_.exchange(time_tag{});
+        if (pingtime2.seconds > 0){
+            t1 = pingtime1_.load();
+            t2 = pingtime2;
+            return true;
+        } else {
+            return false;
+        }
     }
 
     void request_recover() { recover_ = true; }
@@ -76,11 +85,12 @@ private:
     std::atomic<int32_t> reordered_{0};
     std::atomic<int32_t> resent_{0};
     std::atomic<int32_t> gap_{0};
-    std::atomic<double> pingtime_{0};
     std::atomic<aoo_source_state> state_{AOO_SOURCE_STATE_STOP};
     std::atomic<invitation_state> invite_{NONE};
     std::atomic<bool> recover_{false};
     std::atomic<bool> format_{false};
+    std::atomic<time_tag> pingtime1_;
+    std::atomic<time_tag> pingtime2_;
 };
 
 struct block_info {
@@ -107,6 +117,7 @@ public:
     int32_t handle_format(const sink& s, int32_t salt, const aoo_format& f,
                                const char *setting, int32_t size);
     int32_t handle_data(const sink& s, int32_t salt, const data_packet& d);
+    int32_t handle_ping(const sink& s, time_tag tt);
     int32_t handle_events(aoo_eventhandler handler, void *user);
     bool send(const sink& s);
     bool process(const sink& s, aoo_sample *buffer, int32_t size);
@@ -205,8 +216,8 @@ public:
     float resend_interval() const { return resend_interval_; }
     int32_t resend_limit() const { return resend_limit_; }
     int32_t resend_maxnumframes() const { return resend_maxnumframes_; }
-    float ping_interval() const { return ping_interval_; }
     double elapsed_time() const { return timer_.get_elapsed(); }
+    time_tag absolute_time() const { return timer_.get_absolute(); }
 private:
     // settings
     const int32_t id_;
@@ -221,7 +232,6 @@ private:
     std::atomic<int32_t> resend_limit_{ AOO_RESEND_LIMIT };
     std::atomic<float> resend_interval_{ AOO_RESEND_INTERVAL * 0.001 };
     std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
-    std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };
     // the sources
     lockfree::list<source_desc> sources_;
     // timing
@@ -241,6 +251,8 @@ private:
     int32_t handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
                                int32_t salt, const data_packet& data);
 
+    int32_t handle_ping_message(void *endpoint, aoo_replyfn fn, int32_t id,
+                               time_tag tt);
 };
 
 } // aoo
