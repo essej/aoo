@@ -60,11 +60,11 @@ or https::
 
 Get the Opus library:
 
-  macOS -> homebrew: "brew install opus".
+* macOS -> homebrew: "brew install opus".
 
-  Windows -> Msys2: "pacman -S mingw32/mingw-w64-i686-opus" (32 bit) / "pacman -S mingw64/mingw-w64-x86_64-opus" (64 bit)
+* Windows -> Msys2: "pacman -S mingw32/mingw-w64-i686-opus" (32 bit) / "pacman -S mingw64/mingw-w64-x86_64-opus" (64 bit)
 
-  Linux -> apt: "apt-get install libopus-dev"
+* Linux -> apt: "apt-get install libopus-dev"
 
 make it (using pd-libbuilder)::
 
