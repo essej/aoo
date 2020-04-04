@@ -1,4 +1,4 @@
-#N canvas 39 31 870 759 12;
+#N canvas 454 4 870 759 12;
 #X declare -lib aoo -path osc;
 #X obj 168 119 osc~ 440;
 #X msg 88 135 set \$1;
@@ -104,13 +104,14 @@
 #X msg 236 651 stop;
 #X obj 70 17 declare -lib aoo -path osc;
 #X obj 294 709 aoo_send~ 9998 1 2;
-#X obj 621 640 aoo_receive~ 9998 1 2;
 #X obj 622 672 env~;
 #X obj 694 674 env~;
 #X floatatom 622 696 5 0 0 0 - - -;
 #X floatatom 694 698 5 0 0 0 - - -;
 #X msg 618 564 invite localhost 9999 1;
 #X msg 628 597 uninvite localhost 9999 1;
+#X obj 764 673 print C;
+#X obj 621 640 aoo_receive~ 9998 1 2;
 #X connect 0 0 23 0;
 #X connect 1 0 23 0;
 #X connect 2 0 1 0;
@@ -188,9 +189,10 @@
 #X connect 84 0 86 0;
 #X connect 86 0 73 0;
 #X connect 86 0 74 0;
-#X connect 87 0 88 0;
-#X connect 87 1 89 0;
+#X connect 87 0 89 0;
 #X connect 88 0 90 0;
-#X connect 89 0 91 0;
-#X connect 92 0 87 0;
-#X connect 93 0 87 0;
+#X connect 91 0 94 0;
+#X connect 92 0 94 0;
+#X connect 94 0 87 0;
+#X connect 94 1 88 0;
+#X connect 94 2 93 0;

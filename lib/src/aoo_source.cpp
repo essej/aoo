@@ -48,7 +48,7 @@ T& as(void *p){
 
 #define CHECKARG(type) assert(size == sizeof(type))
 
-int32_t aoo_source_setoption(aoo_source *src, int32_t opt, void *p, int32_t size)
+int32_t aoo_source_set_option(aoo_source *src, int32_t opt, void *p, int32_t size)
 {
     return src->set_option(opt, p, size);
 }
@@ -108,6 +108,11 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
         bandwidth_ = as<float>(ptr);
         timer_.reset(); // will update
         break;
+    // ping interval
+    case aoo_opt_ping_interval:
+        CHECKARG(int32_t);
+        ping_interval_ = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
+        break;
     // resend buffer size
     case aoo_opt_resend_buffersize:
     {
@@ -129,7 +134,7 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
     return 1;
 }
 
-int32_t aoo_source_getoption(aoo_source *src, int32_t opt, void *p, int32_t size)
+int32_t aoo_source_get_option(aoo_source *src, int32_t opt, void *p, int32_t size)
 {
     return src->get_option(opt, p, size);
 }
@@ -167,6 +172,11 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
         CHECKARG(int32_t);
         as<int32_t>(ptr) = packetsize_;
         break;
+    // ping interval
+    case aoo_opt_ping_interval:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = ping_interval_ * 1000;
+        break;
     // unknown
     default:
         LOG_WARNING("aoo_source: unsupported option " << opt);
@@ -175,7 +185,7 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
     return 1;
 }
 
-int32_t aoo_source_setsinkoption(aoo_source *src, void *endpoint, int32_t id,
+int32_t aoo_source_set_sinkoption(aoo_source *src, void *endpoint, int32_t id,
                               int32_t opt, void *p, int32_t size)
 {
     return src->set_sinkoption(endpoint, id, opt, p, size);
@@ -242,7 +252,7 @@ int32_t aoo::source::set_sinkoption(void *endpoint, int32_t id,
     }
 }
 
-int32_t aoo_source_getsinkoption(aoo_source *src, void *endpoint, int32_t id,
+int32_t aoo_source_get_sinkoption(aoo_source *src, void *endpoint, int32_t id,
                               int32_t opt, void *p, int32_t size)
 {
     return src->get_sinkoption(endpoint, id, opt, p, size);
@@ -303,7 +313,7 @@ int32_t aoo::source::setup(int32_t samplerate,
     return 0;
 }
 
-int32_t aoo_source_addsink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn) {
+int32_t aoo_source_add_sink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn) {
     return src->add_sink(sink, id, fn);
 }
 
@@ -336,7 +346,7 @@ int32_t aoo::source::add_sink(void *endpoint, int32_t id, aoo_replyfn fn){
     return 1;
 }
 
-int32_t aoo_source_removesink(aoo_source *src, void *sink, int32_t id) {
+int32_t aoo_source_remove_sink(aoo_source *src, void *sink, int32_t id) {
     return src->remove_sink(sink, id);
 }
 
@@ -367,7 +377,7 @@ int32_t aoo::source::remove_sink(void *endpoint, int32_t id){
     }
 }
 
-void aoo_source_removeall(aoo_source *src) {
+void aoo_source_remove_all(aoo_source *src) {
     src->remove_all();
 }
 
@@ -376,7 +386,7 @@ void aoo::source::remove_all(){
     sinks_.clear();
 }
 
-int32_t aoo_source_handlemessage(aoo_source *src, const char *data, int32_t n,
+int32_t aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
                               void *sink, aoo_replyfn fn) {
     return src->handle_message(data, n, sink, fn);
 }
@@ -462,9 +472,11 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
     } else if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_PING)){
         try {
             auto it = msg.ArgumentsBegin();
-            auto id = it->AsInt32();
+            auto id = (it++)->AsInt32();
+            time_tag t1 = (it++)->AsTimeTag();
+            time_tag t2 = (it++)->AsTimeTag();
 
-            handle_ping(endpoint, fn, id);
+            handle_ping(endpoint, fn, id, t1, t2);
 
             return 1;
         } catch (const osc::Exception& e){
@@ -499,6 +511,10 @@ int32_t aoo::source::send(){
     }
 
     if (resend_data()){
+        didsomething = true;
+    }
+
+    if (send_ping()){
         didsomething = true;
     }
 
@@ -590,7 +606,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     return 1;
 }
 
-int32_t aoo_source_eventsavailable(aoo_source *src){
+int32_t aoo_source_events_available(aoo_source *src){
     return src->events_available();
 }
 
@@ -598,7 +614,7 @@ int32_t aoo::source::events_available(){
     return eventqueue_.read_available() > 0;
 }
 
-int32_t aoo_source_handleevents(aoo_source *src,
+int32_t aoo_source_handle_events(aoo_source *src,
                                 aoo_eventhandler fn, void *user){
     return src->handle_events(fn, user);
 }
@@ -608,12 +624,16 @@ int32_t aoo::source::handle_events(aoo_eventhandler fn, void *user){
     auto n = eventqueue_.read_available();
     if (n > 0){
         // copy events
-        auto events = (aoo_event *)alloca(sizeof(aoo_event) * n);
+        auto events = (event *)alloca(sizeof(event) * n);
         for (int i = 0; i < n; ++i){
             eventqueue_.read(events[i]);
         }
+        auto vec = (const aoo_event **)alloca(sizeof(aoo_event *) * n);
+        for (int i = 0; i < n; ++i){
+            vec[i] = (aoo_event *)&events[i];
+        }
         // send events
-        fn(user, events, n);
+        fn(user, vec, n);
     }
     return n;
 }
@@ -663,8 +683,6 @@ void endpoint::send_format(int32_t src, int32_t salt, const aoo_format& f,
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-    // use 'id' instead of 'sink.id'! this is for cases where 'sink.id' is a wildcard
-    // but we want to reply to an individual sink.
     if (id != AOO_ID_WILDCARD){
         const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
                 + AOO_MSG_SINK_LEN + 16 + AOO_MSG_FORMAT_LEN;
@@ -679,6 +697,32 @@ void endpoint::send_format(int32_t src, int32_t salt, const aoo_format& f,
 
     msg << src << salt << f.nchannels << f.samplerate << f.blocksize
         << f.codec << osc::Blob(options, size) << osc::EndMessage;
+
+    send(msg.Data(), msg.Size());
+}
+
+// /aoo/sink/<id>/ping <src> <time>
+
+void endpoint::send_ping(int32_t src, time_tag t) const {
+    // call without lock!
+    LOG_DEBUG("send ping to " << id);
+
+    char buf[AOO_MAXPACKETSIZE];
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+    if (id != AOO_ID_WILDCARD){
+        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+                + AOO_MSG_SINK_LEN + 16 + AOO_MSG_PING_LEN;
+        char address[max_addr_size];
+        snprintf(address, sizeof(address), "%s%s/%d%s",
+                 AOO_MSG_DOMAIN, AOO_MSG_SINK, id, AOO_MSG_PING);
+
+        msg << osc::BeginMessage(address);
+    } else {
+        msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_PING);
+    }
+
+    msg << src << osc::TimeTag(t.to_uint64()) << osc::EndMessage;
 
     send(msg.Data(), msg.Size());
 }
@@ -758,6 +802,7 @@ void source::update(){
 
         // reset time DLL to be on the safe side
         timer_.reset();
+        lastpingtime_ = 0;
 
         // Start new sequence and resend format.
         // We naturally want to do this when setting the format,
@@ -1046,6 +1091,32 @@ bool source::send_data(){
     return 1;
 }
 
+bool source::send_ping(){
+    // if stream is stopped, the timer won't increment anyway
+    auto elapsed = timer_.get_elapsed();
+    auto pingtime = lastpingtime_.load();
+    auto interval = ping_interval_.load(); // 0: no ping
+    if (interval > 0 && (elapsed - pingtime) > interval){
+        // only copy sinks which require a format update!
+        shared_lock sinklock(sink_mutex_);
+        int32_t numsinks = sinks_.size();
+        auto sinks = (aoo::sink_desc *)alloca((numsinks + 1) * sizeof(aoo::sink_desc)); // avoid alloca(0)
+        std::copy(sinks_.begin(), sinks_.end(), sinks);
+        sinklock.unlock();
+
+        auto tt = timer_.get_absolute();
+
+        for (int i = 0; i < numsinks; ++i){
+            sinks[i].send_ping(id_, tt);
+        }
+
+        lastpingtime_ = elapsed;
+        return true;
+    } else {
+        return false;
+    }
+}
+
 void source::handle_format_request(void *endpoint, aoo_replyfn fn, int32_t id){
     LOG_DEBUG("handle format request");
 
@@ -1096,12 +1167,12 @@ void source::handle_invite(void *endpoint, aoo_replyfn fn, int32_t id){
     if (!sink){
         // push "invite" event
         if (eventqueue_.write_available()){
-            aoo_event event;
-            event.type = AOO_INVITE_EVENT;
-            event.sink.endpoint = endpoint;
+            event e;
+            e.type = AOO_INVITE_EVENT;
+            e.sink.endpoint = endpoint;
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
-            event.sink.id = id;
-            eventqueue_.write(event);
+            e.sink.id = id;
+            eventqueue_.write(e);
         }
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_INVITE << "' message: sink already added");
@@ -1117,19 +1188,20 @@ void source::handle_uninvite(void *endpoint, aoo_replyfn fn, int32_t id){
     if (sink){
         // push "uninvite" event
         if (eventqueue_.write_available()){
-            aoo_event event;
-            event.type = AOO_UNINVITE_EVENT;
-            event.sink.endpoint = endpoint;
+            event e;
+            e.type = AOO_UNINVITE_EVENT;
+            e.sink.endpoint = endpoint;
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
-            event.sink.id = id;
-            eventqueue_.write(event);
+            e.sink.id = id;
+            eventqueue_.write(e);
         }
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_UNINVITE << "' message: sink not found");
     }
 }
 
-void source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id){
+void source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id,
+                         time_tag tt1, time_tag tt2){
     LOG_DEBUG("handle ping");
 
     // check if sink exists (not strictly necessary, but might help catch errors)
@@ -1140,12 +1212,19 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id){
     if (sink){
         // push "ping" event
         if (eventqueue_.write_available()){
-            aoo_event event;
-            event.type = AOO_PING_EVENT;
-            event.sink.endpoint = endpoint;
+            event e;
+            e.type = AOO_PING_EVENT;
+            e.sink.endpoint = endpoint;
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
-            event.sink.id = id;
-            eventqueue_.write(event);
+            e.sink.id = id;
+            e.ping.tt1 = tt1.to_uint64();
+            e.ping.tt2 = tt2.to_uint64();
+        #if 0
+            e.ping.tt3 = timer_.get_absolute().to_uint64(); // use last stream time
+        #else
+            e.ping.tt3 = aoo_osctime_get(); // use real system time
+        #endif
+            eventqueue_.write(e);
         }
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_PING << "' message: sink not found");

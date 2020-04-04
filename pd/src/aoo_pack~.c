@@ -39,29 +39,34 @@ typedef struct _aoo_pack
     int32_t x_sink_chn;
 } t_aoo_pack;
 
-static void aoo_pack_handleevents(t_aoo_pack *x,
-                                  const aoo_event *events, int32_t n)
+static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, int32_t n)
 {
     for (int i = 0; i < n; ++i){
-        switch (events[i].type){
+        switch (events[i]->type){
         case AOO_PING_EVENT:
         {
-            t_atom msg;
-            SETFLOAT(&msg, events[i].sink.id);
-            outlet_anything(x->x_eventout, gensym("ping"), 1, &msg);
+            aoo_ping_event *e = (aoo_ping_event *)events[i];
+            double diff1 = aoo_osctime_diff(e->tt1, e->tt2) * 1000.0;
+            double diff2 = aoo_osctime_diff(e->tt2, e->tt3) * 1000.0;
+
+            t_atom msg[3];
+            SETFLOAT(msg, e->id);
+            SETFLOAT(msg + 1, diff1);
+            SETFLOAT(msg + 2, diff2);
+            outlet_anything(x->x_eventout, gensym("ping"), 3, msg);
             break;
         }
         case AOO_INVITE_EVENT:
         {
             t_atom msg;
-            SETFLOAT(&msg, events[i].sink.id);
+            SETFLOAT(&msg, ((aoo_sink_event *)events[i])->id);
             outlet_anything(x->x_eventout, gensym("invite"), 1, &msg);
             break;
         }
         case AOO_UNINVITE_EVENT:
         {
             t_atom msg;
-            SETFLOAT(&msg, events[i].sink.id);
+            SETFLOAT(&msg, ((aoo_sink_event *)events[i])->id);
             outlet_anything(x->x_eventout, gensym("uninvite"), 1, &msg);
             break;
         }
@@ -69,14 +74,14 @@ static void aoo_pack_handleevents(t_aoo_pack *x,
             break;
         }
     }
+    return 1;
 }
 
 static void aoo_pack_tick(t_aoo_pack *x)
 {
     while (aoo_source_send(x->x_aoo_source)) ;
 
-    aoo_source_handleevents(x->x_aoo_source,
-                            (aoo_eventhandler)aoo_pack_handleevents, x);
+    aoo_source_handle_events(x->x_aoo_source, (aoo_eventhandler)aoo_pack_handle_events, x);
 }
 
 static int32_t aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)
@@ -95,7 +100,7 @@ static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
     for (int i = 0; i < argc; ++i){
         msg[i] = (int)(argv[i].a_type == A_FLOAT ? argv[i].a_w.w_float : 0.f);
     }
-    aoo_source_handlemessage(x->x_aoo_source, msg, argc, x, (aoo_replyfn)aoo_pack_reply);
+    aoo_source_handle_message(x->x_aoo_source, msg, argc, x, (aoo_replyfn)aoo_pack_reply);
 }
 
 static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -120,6 +125,11 @@ static void aoo_pack_packetsize(t_aoo_pack *x, t_floatarg f)
     aoo_source_set_packetsize(x->x_aoo_source, f);
 }
 
+static void aoo_pack_ping(t_aoo_pack *x, t_floatarg f)
+{
+    aoo_source_set_ping_interval(x->x_aoo_source, f);
+}
+
 static void aoo_pack_resend(t_aoo_pack *x, t_floatarg f)
 {
     aoo_source_set_buffersize(x->x_aoo_source, f);
@@ -134,11 +144,11 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (argc){
         // remove old sink
-        aoo_source_removeall(x->x_aoo_source);
+        aoo_source_remove_all(x->x_aoo_source);
         // add new sink
         if (argv->a_type == A_SYMBOL){
             if (*argv->a_w.w_symbol->s_name == '*'){
-                aoo_source_addsink(x->x_aoo_source, x, AOO_ID_WILDCARD, (aoo_replyfn)aoo_pack_reply);
+                aoo_source_add_sink(x->x_aoo_source, x, AOO_ID_WILDCARD, (aoo_replyfn)aoo_pack_reply);
             } else {
                 pd_error(x, "%s: bad argument '%s' to 'set' message!",
                          classname(x), argv->a_w.w_symbol->s_name);
@@ -147,7 +157,7 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
             x->x_sink_id = AOO_ID_WILDCARD;
         } else {
             int32_t id = atom_getfloat(argv);
-            aoo_source_addsink(x->x_aoo_source, x, id, (aoo_replyfn)aoo_pack_reply);
+            aoo_source_add_sink(x->x_aoo_source, x, id, (aoo_replyfn)aoo_pack_reply);
             x->x_sink_id = id;
         }
         // set channel (if provided)
@@ -161,7 +171,7 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_pack_clear(t_aoo_pack *x)
 {
-    aoo_source_removeall(x->x_aoo_source);
+    aoo_source_remove_all(x->x_aoo_source);
     x->x_sink_id = AOO_ID_NONE;
 }
 
@@ -298,6 +308,7 @@ void aoo_pack_tilde_setup(void)
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_format, gensym("format"), A_GIMME, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_channel, gensym("channel"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_ping, gensym("ping"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_resend, gensym("resend"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
 }

@@ -1,14 +1,12 @@
-#N canvas 417 17 721 764 12;
+#N canvas 405 0 721 789 12;
 #X declare -lib aoo;
-#X text 550 718 see also;
-#X obj 619 719 aoo_send~;
 #X msg 38 99 listen \$1;
 #X obj 38 74 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
 -262144 -1 -1 0 256;
 #X msg 102 72 0;
 #X text 37 52 port;
 #X text 136 72 stop listening;
-#X text 101 616 creation arguments:;
+#X text 265 575 creation arguments:;
 #X msg 69 239 bufsize \$1;
 #X obj 69 215 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
@@ -16,28 +14,23 @@
 #X obj 75 272 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X text 178 292 time DLL filter bandwidth (default: 0.0001);
-#X obj 38 697 env~;
-#X floatatom 38 721 5 0 0 0 - - -;
-#X obj 109 698 env~;
-#X floatatom 109 722 5 0 0 0 - - -;
+#X obj 38 606 env~;
+#X floatatom 38 630 5 0 0 0 - - -;
+#X obj 109 607 env~;
+#X floatatom 109 631 5 0 0 0 - - -;
 #X text 150 238 increase for jittery \, unreliable networks!;
 #X text 151 217 buffer size in ms (default: 20 ms);
-#X msg 111 585 resend 0;
-#X msg 106 550 resend;
-#X text 159 551 turn on (auto);
-#X text 95 490 resend lost packets (on by default):;
-#X text 275 537 2) interval (ms) = time between attempts;
-#X text 275 560 3) maxnumframes = max. number of frames to request
+#X msg 111 539 resend 0;
+#X msg 106 504 resend;
+#X text 159 505 turn on (auto);
+#X text 95 444 resend lost packets (on by default):;
+#X text 275 491 2) interval (ms) = time between attempts;
+#X text 275 514 3) maxnumframes = max. number of frames to request
 at once;
-#X text 275 586 all arguments are optional or can be "auto", f 44
+#X text 275 540 all arguments are optional or can be "auto", f 44
 ;
-#X text 181 586 turn off;
-#X msg 90 394 ping \$1;
-#X obj 90 373 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
-10 -262144 -1 -1 0 256;
-#X text 156 394 set ping interval in ms (default: 1000) \, 0 = off
-;
-#N canvas 764 124 557 479 events 0;
+#X text 181 540 turn off;
+#N canvas 764 124 557 627 events 0;
 #X obj 37 32 inlet;
 #X obj 37 56 print aoo_receive~;
 #X text 69 209 the source format has changed;
@@ -56,58 +49,77 @@ at once;
 #X text 33 236 [block_lost <host> <port> <ID> <count>(, f 40;
 #X text 34 291 [block_reordered <host> <port> <ID> <count>(;
 #X text 34 347 [block_resent <host> <port> <ID> <count>(;
+#X text 33 463 [ping <host> <port> <ID> <delta>(;
+#X text 61 538 <delta> is the approx. delay between source and sink
+(in ms), f 62;
+#X text 62 487 a periodic message coming from the source. The sink
+automatically replies with another ping message to tell the source
+that it is receiving its messages., f 54;
 #X connect 0 0 1 0;
-#X restore 182 699 pd events;
+#X restore 182 608 pd events;
 #X text 35 24 aoo_receive~: receive one or more AoO audio streams;
-#X msg 548 668 \; pd dsp \$1;
-#X obj 548 645 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X msg 612 726 \; pd dsp \$1;
+#X obj 612 703 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X obj 82 321 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X msg 82 345 packetsize \$1;
 #X text 188 343 max. UDP packet size (default: 512 bytes);
-#X msg 99 517 resend 4 10 16;
-#X text 275 515 1) limit = max. number of attempts per frame;
+#X msg 99 471 resend 4 10 16;
+#X text 275 469 1) limit = max. number of attempts per frame;
 #X msg 47 126 list_sources;
 #X text 147 117 list sources. This will output a message [source <host>
 <port> <id>( for each source., f 45;
-#X msg 96 428 reset;
-#X text 153 421 reset all sources (e.g. if the stream seems to be broken
+#X msg 96 382 reset;
+#X text 153 375 reset all sources (e.g. if the stream seems to be broken
 or out of sync), f 47;
-#X text 269 460 reset individual source;
+#X text 269 414 reset individual source;
 #X obj 412 25 declare -lib aoo;
-#X obj 38 670 aoo_receive~ 9999 1 2;
-#X text 99 640 1) port \, 2) ID \, 3) num channels \, 4) [bufsize]
-;
+#X obj 38 579 aoo_receive~ 9999 1 2;
 #X msg 54 158 invite localhost 9998 1;
 #X text 232 158 invite an AoO source (hostname \, port \, source ID)
 ;
 #X msg 62 187 uninvite localhost 9998 1;
 #X text 252 186 uninvite an AoO source (hostname \, port \, source
 ID);
-#X msg 97 459 reset localhost 9998 1;
-#X connect 2 0 45 0;
-#X connect 3 0 2 0;
-#X connect 4 0 2 0;
-#X connect 8 0 45 0;
+#X msg 97 413 reset localhost 9998 1;
+#X obj 35 689 aoo_receive~ 9999 2 2;
+#X obj 166 741 aoo_send~ 9999 1 2;
+#X text 262 599 1) port number for incoming messages;
+#X text 262 625 2) sink ID \, must be unique for all;
+#X text 283 645 [aoo_receive~] instances on the same port;
+#X text 263 671 3) number of channels (default: 1);
+#X text 263 698 4) buffer size (default: 20 ms);
+#X text 32 663 another sink on the same port;
+#X obj 35 714 env~;
+#X floatatom 35 738 5 0 0 0 - - -;
+#X obj 106 715 env~;
+#X floatatom 106 739 5 0 0 0 - - -;
+#X text 304 741 the same port can also be used by sources;
+#X connect 0 0 40 0;
+#X connect 1 0 0 0;
+#X connect 2 0 0 0;
+#X connect 6 0 40 0;
+#X connect 7 0 6 0;
+#X connect 8 0 40 0;
 #X connect 9 0 8 0;
-#X connect 10 0 45 0;
-#X connect 11 0 10 0;
+#X connect 11 0 12 0;
 #X connect 13 0 14 0;
-#X connect 15 0 16 0;
-#X connect 19 0 45 0;
-#X connect 20 0 45 0;
-#X connect 27 0 45 0;
+#X connect 17 0 40 0;
+#X connect 18 0 40 0;
 #X connect 28 0 27 0;
-#X connect 33 0 32 0;
-#X connect 34 0 35 0;
-#X connect 35 0 45 0;
-#X connect 37 0 45 0;
-#X connect 39 0 45 0;
-#X connect 41 0 45 0;
-#X connect 45 0 13 0;
-#X connect 45 1 15 0;
-#X connect 45 2 30 0;
-#X connect 47 0 45 0;
-#X connect 49 0 45 0;
-#X connect 51 0 45 0;
+#X connect 29 0 30 0;
+#X connect 30 0 40 0;
+#X connect 32 0 40 0;
+#X connect 34 0 40 0;
+#X connect 36 0 40 0;
+#X connect 40 0 11 0;
+#X connect 40 1 13 0;
+#X connect 40 2 25 0;
+#X connect 41 0 40 0;
+#X connect 43 0 40 0;
+#X connect 45 0 40 0;
+#X connect 46 0 54 0;
+#X connect 46 1 56 0;
+#X connect 54 0 55 0;
+#X connect 56 0 57 0;

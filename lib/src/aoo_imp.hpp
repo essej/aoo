@@ -399,9 +399,10 @@ public:
     void setup(int32_t sr, int32_t blocksize);
     void reset();
     double get_elapsed() const;
+    time_tag get_absolute() const;
     state update(time_tag t, double& error);
 private:
-    time_tag last_;
+    std::atomic<time_tag> last_;
     std::atomic<double> elapsed_{0};
 
 #if AOO_TIMEFILTER_CHECK
