@@ -1,6 +1,6 @@
-#N canvas 605 2 682 784 12;
+#N canvas 501 78 682 683 12;
 #X declare -lib aoo;
-#X text 239 577 creation arguments:;
+#X text 247 396 creation arguments:;
 #N canvas 135 97 551 377 pcm 0;
 #X obj 31 323 outlet;
 #X msg 187 78 2;
@@ -53,7 +53,7 @@
 #X connect 16 0 13 0;
 #X connect 17 0 9 0;
 #X connect 27 0 0 0;
-#X restore 112 589 pd pcm;
+#X restore 99 433 pd pcm;
 #N canvas 104 170 832 547 opus 0;
 #X obj 50 493 outlet;
 #X msg 161 164 48000;
@@ -147,46 +147,32 @@ see http://opus-codec.org/, f 79;
 #X connect 44 0 25 0;
 #X connect 45 0 25 0;
 #X connect 46 0 25 0;
-#X restore 169 589 pd opus;
-#X text 110 565 set format:;
+#X restore 154 434 pd opus;
+#X text 97 409 set format:;
 #X obj 89 326 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X obj 100 425 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
-10 -262144 -1 -1 0 256;
-#X msg 100 444 packetsize \$1;
-#X text 206 442 max. UDP packet size (default: 512 bytes);
-#X obj 104 472 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
-10 -262144 -1 -1 0 256;
-#X msg 104 491 timefilter \$1;
-#X text 208 492 time DLL filter bandwidth (default: 0.0001);
-#X obj 48 624 osc~ 440;
-#X obj 116 623 osc~ 220;
-#X obj 48 650 *~ 0.25;
-#X obj 116 649 *~ 0.25;
-#X msg 108 540 resend \$1;
-#X obj 108 519 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
-10 -262144 -1 -1 0 256;
-#X text 187 540 buffersize (ms) for resending lost packets (default:
-1000);
+#X obj 48 472 osc~ 440;
+#X obj 152 473 osc~ 220;
+#X obj 48 498 *~ 0.25;
+#X obj 152 499 *~ 0.25;
 #X msg 29 52 add localhost 9999 1;
 #X text 26 19 aoo_send~: send an AoO audio stream to one or more AoO
 sinks;
 #X msg 50 140 remove localhost 9999 1;
 #X text 229 139 remove an AoO sink (hostname \, port \, sink ID);
-#X msg 64 200 clear;
 #X text 117 201 remove all AoO sinks;
 #X msg 89 348 channel localhost 9999 1 \$1;
 #X text 296 349 set sink channel onset;
 #X text 185 52 add an AoO sink (hostname \, port \, sink ID \, [channel
 onset]);
 #X text 211 82 with optional channel onset;
-#X msg 573 727 \; pd dsp \$1;
-#X obj 573 703 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X msg 543 354 \; pd dsp \$1;
+#X obj 543 330 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X msg 71 232 list_sinks;
 #X text 158 229 list all sinks. This will output a message [sink <host>
 <port> <id>( for each sink., f 44;
-#X obj 29 729 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
+#X obj 29 588 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
 -1;
 #X msg 43 111 add localhost 9999 *;
 #X text 203 112 send to all AoO sinks on the given endpoint;
@@ -196,7 +182,7 @@ onset]);
 #X msg 81 299 stop;
 #X msg 76 271 start;
 #X obj 478 19 declare -lib aoo;
-#X obj 29 677 aoo_send~ 9998 1 2;
+#X obj 29 526 aoo_send~ 9998 1 2;
 #N canvas 847 252 596 418 events 0;
 #X obj 37 37 inlet;
 #X obj 88 87 print SINK;
@@ -221,51 +207,70 @@ ignore it., f 62;
 #X connect 0 0 2 0;
 #X connect 2 0 3 0;
 #X connect 2 1 1 0;
-#X restore 29 703 pd events;
-#X text 50 727 ping;
+#X restore 29 555 pd events;
+#X text 50 586 ping;
 #X text 256 272 Note: you can use these two methods to send "audio
 events" instead of continuous streams., f 36;
 #X text 125 272 start streaming;
 #X text 127 299 stop streaming;
-#X msg 95 397 ping \$1;
-#X obj 95 376 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X text 246 449 2) the source ID \, must be unique for all;
+#X text 264 469 [aoo_send~] instances on this port.;
+#X obj 121 560 aoo_send~ 9998 2 2;
+#X text 262 560 another source on the same port;
+#X obj 121 591 aoo_receive~ 9998 1 2;
+#X text 245 495 3) number of channels (default: 1);
+#X text 246 423 1) port number for incoming messages \, e.g. invitations
+;
+#X text 283 591 the same port can also be used by sinks;
+#X msg 64 200 remove;
+#N canvas 307 69 594 308 advanced 0;
+#X obj 45 80 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
+-262144 -1 -1 0 256;
+#X msg 45 99 packetsize \$1;
+#X text 151 97 max. UDP packet size (default: 512 bytes);
+#X obj 54 129 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X text 161 397 set ping interval in ms (default: 1000) \, 0 = off
-;
-#X text 238 630 2) the source ID \, must be unique for all;
-#X text 256 650 [aoo_send~] instances on this port.;
-#X obj 121 711 aoo_send~ 9998 2 2;
-#X text 262 712 another source on the same port;
-#X obj 121 742 aoo_receive~ 9998 1 2;
-#X text 237 676 3) number of channels (default: 1);
-#X text 238 604 1) port number for incoming messages \, e.g. invitations
-;
-#X text 283 743 the same port can also be used by sinks;
-#X connect 1 0 41 0;
-#X connect 2 0 41 0;
-#X connect 4 0 24 0;
-#X connect 5 0 6 0;
-#X connect 6 0 41 0;
-#X connect 8 0 9 0;
-#X connect 9 0 41 0;
-#X connect 11 0 13 0;
-#X connect 12 0 14 0;
-#X connect 13 0 41 0;
-#X connect 14 0 41 1;
-#X connect 15 0 41 0;
-#X connect 16 0 15 0;
-#X connect 18 0 41 0;
-#X connect 20 0 41 0;
-#X connect 22 0 41 0;
-#X connect 24 0 41 0;
-#X connect 29 0 28 0;
-#X connect 30 0 41 0;
-#X connect 33 0 41 0;
-#X connect 35 0 41 0;
-#X connect 36 0 41 0;
-#X connect 38 0 41 0;
-#X connect 39 0 41 0;
-#X connect 41 0 42 0;
-#X connect 42 0 32 0;
-#X connect 47 0 41 0;
-#X connect 48 0 47 0;
+#X msg 54 148 timefilter \$1;
+#X text 158 149 time DLL filter bandwidth (default: 0.0001);
+#X msg 59 200 resend \$1;
+#X obj 59 179 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X text 138 200 buffersize (ms) for resending lost packets (default:
+1000);
+#X msg 34 50 ping \$1;
+#X obj 34 29 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
+-262144 -1 -1 0 256;
+#X text 100 50 set ping interval in ms (default: 1000) \, 0 = off;
+#X obj 34 253 outlet;
+#X connect 0 0 1 0;
+#X connect 1 0 12 0;
+#X connect 3 0 4 0;
+#X connect 4 0 12 0;
+#X connect 6 0 12 0;
+#X connect 7 0 6 0;
+#X connect 9 0 12 0;
+#X connect 10 0 9 0;
+#X restore 97 379 pd advanced;
+#X text 25 631 see also;
+#X obj 98 631 aoo_receive~;
+#X connect 1 0 31 0;
+#X connect 2 0 31 0;
+#X connect 4 0 14 0;
+#X connect 5 0 7 0;
+#X connect 6 0 8 0;
+#X connect 7 0 31 0;
+#X connect 8 0 31 1;
+#X connect 9 0 31 0;
+#X connect 11 0 31 0;
+#X connect 14 0 31 0;
+#X connect 19 0 18 0;
+#X connect 20 0 31 0;
+#X connect 23 0 31 0;
+#X connect 25 0 31 0;
+#X connect 26 0 31 0;
+#X connect 28 0 31 0;
+#X connect 29 0 31 0;
+#X connect 31 0 32 0;
+#X connect 32 0 22 0;
+#X connect 45 0 31 0;
+#X connect 46 0 31 0;
