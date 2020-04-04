@@ -126,6 +126,11 @@ static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom
         pd_error(x, "%s: can't uninvite source - no server!", classname(x));
     }
 
+    if (!argc){
+        aoo_sink_uninvite_all(x->x_aoo_sink);
+        return;
+    }
+
     if (argc < 3){
         pd_error(x, "%s: too few arguments for 'uninvite' message", classname(x));
         return;

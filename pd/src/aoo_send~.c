@@ -307,6 +307,17 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         pd_error(x, "%s: can't remove sink - no server!", classname(x));
     }
 
+    if (!argc){
+        aoo_source_remove_all(x->x_aoo_source);
+
+        // clear sink list
+        if (x->x_numsinks){
+            freebytes(x->x_sinks, x->x_numsinks * sizeof(t_sink));
+            x->x_numsinks = 0;
+        }
+        return;
+    }
+
     if (argc < 3){
         pd_error(x, "%s: too few arguments for 'remove' message", classname(x));
         return;
@@ -357,17 +368,6 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
                 verbose(0, "removed sink %s %d %d", host->s_name, port, id);
             }
         }
-    }
-}
-
-static void aoo_send_clear(t_aoo_send *x)
-{
-    aoo_source_remove_all(x->x_aoo_source);
-
-    // clear sink list
-    if (x->x_numsinks){
-        freebytes(x->x_sinks, x->x_numsinks * sizeof(t_sink));
-        x->x_numsinks = 0;
     }
 }
 
@@ -517,7 +517,6 @@ void aoo_send_tilde_setup(void)
     class_addmethod(aoo_send_class, (t_method)aoo_send_dsp, gensym("dsp"), A_CANT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_add, gensym("add"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_remove, gensym("remove"), A_GIMME, A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_clear, gensym("clear"), A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_start, gensym("start"), A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_stop, gensym("stop"), A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_format, gensym("format"), A_GIMME, A_NULL);
