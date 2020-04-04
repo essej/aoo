@@ -74,24 +74,26 @@ Unlike Version~1, messages are not bundled, and meta-information is split in a f
    \clearpage
 
 
-AoO synthax::
+AoO syntax::
 
  notify sinks about format changes:
 
- ``/AoO/<sink>/format ,iiiisb <src> <salt> <nchannels> <samplerate> <blocksize> <codec> <options>``
-
+ ``/AoO/sink/<sink>/format ,iiiisb <src> <salt> <nchannels> <samplerate> <blocksize> <codec> <options>``
 
  deliver audio data, large blocks are split across several frames:
- ``/AoO/<sink>/data ,iiidiiiib <isrc> <salt> <seq> <samplerate> <channel_onset> <totalsize> <nframes> <frame> <data>``
+ ``/AoO/sink/<sink>/data ,iiidiiiib <src> <salt> <seq> <samplerate> <channel_onset> <totalsize> <nframes> <frame> <data>``
 
  from sink to source to request the format (e.g. the salt has changed):
- ``/AoO/<src>/request ,i <sink>``
+ ``/AoO/src/<src>/format ,i <sink>``
 
  from sink to source to request dropped packets; the arguments are pairs of sequence + frame (-1 = whole block):
- ``/AoO/<src>/resend ,iib <sink> <salt> [<seq> <frame>]*``
+ ``/AoO/src/<src>/data ,ii[ii]* <sink> <salt> [<seq> <frame>]*``
 
- ping message from sink to source (usually sent once per second):
- ``/AoO/<src>/ping ,i sink``
+ ping message from source to sink (usually sent once per second):
+ ``/AoO/sink/<sink>/ping ,itt <sink> <t1> <t2>``
+
+ ping message reply from sink to source
+ ``/AoO/src/<src>/ping ,ittt sink <t1> <t2> <t3>``
 
 Parameter used::
  
@@ -99,13 +101,13 @@ Parameter used::
    Identification number of the source
 
  ``sink``
-   Identification number for the sink
+   Identification number of the sink
 
  ``salt`` 
-   Unique random number
+   Unique random number identifying the current stream
     
  ``seq`` 
-   sequence of sequent data blocks
+   running sequence number to identify each audio block within a stream
 
  ``samplerate`` 
    Different sampling rates of sources are possible, which will be re-sampled in the sink. The samplerate in the format is the formal one as integer, the samplerate in the data, the measured == corrected one and is therefore double precision.
@@ -135,10 +137,10 @@ Parameter used::
     options for codec
     
  ``data``
-    data content like defined above
+    encoded audio data like defined above as a binary blob.
 
     
-Data packages used are uncompressed packets with data types defined by format. However, it’s also possible to use blobs with an arbitrary bit-length audio data. This can become handy if bandwidth matters. Sources must be aware, which formats can be handled by the sinks. Using codecs the codec defines the data. At the  moment besides raw data only opus [opus]_ is implemented, since it also supports low latency and to keep it simple, there should not be a need for others.
+Data is transmitted as binary blobs with an opaque structure defined by the codec. Note that the blob size might differ across audio blocks, especially when compression is used. Sources must be aware which formats can be handled by the sinks. At the  moment besides raw data only opus [opus]_ is implemented, since it also supports low latency and to keep it simple, there should not be a need for others.
 
 To provide low latency, time-bounded audio transmissions is sliced into shorter messages and send individually to be reconstructed at the receiver.
 
@@ -147,13 +149,11 @@ theory of operation
 
 There must always be at least one format message before sending data messages to a specific sink, which can request one.
 
-For the addressing the sinks the structure of the resources in the network is used as the base. Each device in the network with an unique network-address (IP-number and Port number) can have one or more sinks with different identification numbers. Each of these sinks can have one or more channels. There can be an arbitrary amount of sinks, and each sink could have an arbitrary amount of channels.
+For addressing the sinks the structure of the resources in the network is used as the base. Each device in the network with an unique network-address (IP-number and Port number) can have one or more sinks with different identification numbers. Each of these sinks can have one or more channels. There can be an arbitrary amount of sinks, and each sink could have an arbitrary amount of channels.
 
 .. Like described in ”Best Practices for Open Sound Control“ [BPOSC]_, REST (Representational State Transfer) style is used. With its stateless representation each message is a singleton containing all information needed .. not longer true
 
 In OSC, there is a type of query operators called address pattern matching. These can be used to address multiple channels or sinks in one message. Since pattern matching can be computational intensive, we propose only to use the ”*“ wild-char for addressing all channels of a sink or all sinks of a device.
-
-Integer for most parameter was chosen in favor for processors without hardware floating point support. Channel specific data information like the id number of the message stream, the sequence number in the channel message allow more easily to detect lost packages. The resolution of a sample and an individual resampling factor is contained in the channel messages, where the resampling factor enables channels to differ from the samplerate specified in the format message, allowing lower rates for sub channels, control streams or higher rates for specific other needs.
 
 For re-arranging the audio packages there is a need to do some sort of labeling of the messages, since it is not clear if they are intended to overlap or are different material. This is handled via the “identification number” (id) and salt. Identical identification numbers means to recognize the material as one material and they can be cross-faded. So these numbers has to has to unique at least at the sink. Salt means different Audio Messages even on the same id.
 
