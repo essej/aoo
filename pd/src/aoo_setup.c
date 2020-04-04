@@ -15,6 +15,22 @@ void aoo_server_setup(void);
 
 EXPORT void aoo_setup(void)
 {
+    char version[64];
+    int offset = 0;
+    offset += snprintf(version, sizeof(version), "%d.%d",
+                       AOO_VERSION_MAJOR, AOO_VERSION_MINOR);
+#if AOO_VERSION_BUGFIX > 0
+    offset += snprintf(version + offset, sizeof(version) - offset,
+                       ".%d", AOO_VERSION_BUGFIX);
+#endif
+#if AOO_VERSION_PRERELEASE > 0
+    offset += snprintf(version + offset, sizeof(version) - offset,
+                       "-pre%d", AOO_VERSION_PRERELEASE);
+#endif
+
+    post("AOO (audio over OSC) %s", version);
+    post("  (c) 2020 Christof Ressi, Winfried Ritsch, et al.");
+
     aoo_initialize();
 
     aoo_send_tilde_setup();

@@ -11,6 +11,11 @@ extern "C"
 {
 #endif
 
+#define AOO_VERSION_MAJOR 2
+#define AOO_VERSION_MINOR 0
+#define AOO_VERSION_BUGFIX 0
+#define AOO_VERSION_PRERELEASE 1
+
 #ifndef AOO_API
 # ifndef AOO_STATIC
 #  if defined(_WIN32) // Windows
