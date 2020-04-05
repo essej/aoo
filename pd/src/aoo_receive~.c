@@ -323,7 +323,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
                 continue;
             }
-            double diff = aoo_osctime_diff(e->tt1, e->tt2) * 1000.0;
+            double diff = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
             SETFLOAT(msg + 3, diff);
             outlet_anything(x->x_eventout, gensym("ping"), 4, msg);
             break;

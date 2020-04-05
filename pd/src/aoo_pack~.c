@@ -46,8 +46,8 @@ static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, 
         case AOO_PING_EVENT:
         {
             aoo_ping_event *e = (aoo_ping_event *)events[i];
-            double diff1 = aoo_osctime_diff(e->tt1, e->tt2) * 1000.0;
-            double diff2 = aoo_osctime_diff(e->tt2, e->tt3) * 1000.0;
+            double diff1 = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
+            double diff2 = aoo_osctime_duration(e->tt2, e->tt3) * 1000.0;
 
             t_atom msg[3];
             SETFLOAT(msg, e->id);

@@ -20,7 +20,12 @@
 namespace aoo {
 
 struct time_tag {
+    static time_tag get();
+    static double duration(time_tag t1, time_tag t2);
+
     time_tag() = default;
+    time_tag(uint32_t _seconds, uint32_t _nanos)
+        : seconds(_seconds), nanos(_nanos){}
     time_tag(uint64_t ui){
         seconds = ui >> 32;
         nanos = (uint32_t)ui;
@@ -45,21 +50,39 @@ struct time_tag {
     uint64_t to_uint64() const {
         return (uint64_t)seconds << 32 | (uint64_t)nanos;
     }
-    time_tag operator+(time_tag t){
-        time_tag result;
-        uint64_t ns = nanos + t.nanos;
-        result.nanos = ns & 0xFFFFFFFF;
-        result.seconds = seconds + t.seconds + (ns >> 32);
-        return result;
-    }
-    time_tag operator-(time_tag t){
-        time_tag result;
-        uint64_t ns = ((uint64_t)1 << 32) + nanos - t.nanos;
-        result.nanos = ns & 0xFFFFFFFF;
-        result.seconds = seconds - t.seconds - !(ns >> 32);
-        return result;
-    }
 };
+
+
+inline time_tag operator+(time_tag lhs, time_tag rhs){
+    time_tag result;
+    uint64_t ns = lhs.nanos + rhs.nanos;
+    result.nanos = ns & 0xFFFFFFFF;
+    result.seconds = lhs.seconds + rhs.seconds + (ns >> 32);
+    return result;
+}
+
+inline time_tag operator-(time_tag lhs, time_tag rhs){
+    time_tag result;
+    uint64_t ns = ((uint64_t)1 << 32) + lhs.nanos - rhs.nanos;
+    result.nanos = ns & 0xFFFFFFFF;
+    result.seconds = lhs.seconds - rhs.seconds - !(ns >> 32);
+    return result;
+}
+
+inline bool operator==(time_tag lhs, time_tag rhs){
+    return lhs.seconds == rhs.seconds && lhs.nanos == rhs.nanos;
+}
+inline bool operator<(time_tag lhs, time_tag rhs){
+    if (lhs.seconds < rhs.seconds){
+        return true;
+    } else {
+        return lhs.seconds == rhs.seconds && lhs.nanos < rhs.nanos;
+    }
+}
+inline bool operator!=(time_tag lhs, time_tag rhs){ return !operator==(lhs,rhs); }
+inline bool operator> (time_tag lhs, time_tag rhs){ return  operator< (rhs,lhs); }
+inline bool operator<=(time_tag lhs, time_tag rhs){ return !operator> (lhs,rhs); }
+inline bool operator>=(time_tag lhs, time_tag rhs){ return !operator< (lhs,rhs); }
 
 /*////////////////// simple spin lock ////////////////////*/
 

@@ -108,21 +108,8 @@ int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *type, int32_t *id)
 }
 
 // OSC time stamp (NTP time)
-// LATER try to use GetSystemTimePreciseAsFileTime on Windows!
 uint64_t aoo_osctime_get(void){
-    // use system clock (1970 epoch)
-    auto epoch = std::chrono::system_clock::now().time_since_epoch();
-    auto s = std::chrono::duration_cast<std::chrono::seconds>(epoch);
-    auto ns = epoch - s;
-    // add number of seconds between 1900 and 1970 (including leap years!)
-    auto seconds = s.count() + 2208988800UL;
-    // fractional part in nanoseconds mapped to the range of uint32_t
-    auto nanos = (double)ns.count() * 4.294967296; // 2^32 / 1e9
-    // seconds in the higher 4 bytes, nanos in the lower 4 bytes
-    aoo::time_tag tt;
-    tt.seconds = seconds;
-    tt.nanos = nanos;
-    return tt.to_uint64();
+    return aoo::time_tag::get().to_uint64();
 }
 
 double aoo_osctime_toseconds(uint64_t t){
@@ -133,29 +120,36 @@ uint64_t aoo_osctime_fromseconds(double s){
     return aoo::time_tag(s).to_uint64();
 }
 
-uint64_t aoo_osctime_addseconds(uint64_t t, double s){
-    // LATER do operator overloading for aoo::time_tag
-    // split osctime
-    uint64_t th = t >> 32;
-    uint64_t tl = (t & 0xFFFFFFFF);
-    // split seconds
-    uint64_t sh = (uint64_t)s;
-    double fract = s - (double)sh;
-    uint64_t sl = fract * 4294967296.0;
-    // combine and reassemble
-    uint64_t rh = th + sh;
-    uint64_t rl = tl + sl;
-    // handle overflowing nanoseconds
-    rh += (rl >> 32); // add carry
-    rl &= 0xFFFFFFFF; // mask carry
-    return (rh << 32) + rl;
-}
-
-double aoo_osctime_diff(uint64_t t1, uint64_t t2){
-    return (aoo::time_tag(t2) - aoo::time_tag(t1)).to_double();
+double aoo_osctime_duration(uint64_t t1, uint64_t t2){
+    return aoo::time_tag::duration(t1, t2);
 }
 
 namespace aoo {
+
+/*////////////////////////// time tag //////////////////////////*/
+
+// OSC time stamp (NTP time)
+// LATER try to use GetSystemTimePreciseAsFileTime on Windows!
+time_tag time_tag::get(){
+    // use system clock (1970 epoch)
+    auto epoch = std::chrono::system_clock::now().time_since_epoch();
+    auto s = std::chrono::duration_cast<std::chrono::seconds>(epoch);
+    auto ns = epoch - s;
+    // add number of seconds between 1900 and 1970 (including leap years!)
+    auto seconds = s.count() + 2208988800UL;
+    // fractional part in nanoseconds mapped to the range of uint32_t
+    auto nanos = (double)ns.count() * 4.294967296; // 2^32 / 1e9
+    // seconds in the higher 4 bytes, nanos in the lower 4 bytes
+    return time_tag(seconds, nanos);
+}
+
+double time_tag::duration(time_tag t1, time_tag t2){
+    if (t2 > t1){
+        return (t2 - t1).to_double();
+    } else {
+        return (t1 - t2).to_double();
+    }
+}
 
 /*////////////////////////// codec /////////////////////////////*/
 
@@ -1154,8 +1148,7 @@ timer::state timer::update(time_tag t, double& error){
     scoped_lock<spinlock> l(lock_);
     time_tag last = last_.load();
     if (last.seconds != 0){
-        auto diff = t - last;
-        auto delta = diff.to_double();
+        auto delta = time_tag::duration(last, t);
         elapsed_ = elapsed_ + delta;
         last_ = t;
 

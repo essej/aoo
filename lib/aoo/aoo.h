@@ -14,7 +14,7 @@ extern "C"
 #define AOO_VERSION_MAJOR 2
 #define AOO_VERSION_MINOR 0
 #define AOO_VERSION_BUGFIX 0
-#define AOO_VERSION_PRERELEASE 1
+#define AOO_VERSION_PRERELEASE 1 // 0: no pre-release
 
 #ifndef AOO_API
 # ifndef AOO_STATIC
@@ -176,11 +176,8 @@ AOO_API double aoo_osctime_toseconds(uint64_t t);
 // convert seconds to NTP time
 AOO_API uint64_t aoo_osctime_fromseconds(double s);
 
-// add seconds to NTP timestamp
-AOO_API uint64_t aoo_osctime_addseconds(uint64_t t, double s);
-
-// subtract two NTP timestamps
-AOO_API double aoo_osctime_diff(uint64_t t1, uint64_t t2);
+// get time difference in seconds between two NTP timestamps
+AOO_API double aoo_osctime_duration(uint64_t t1, uint64_t t2);
 
 // reply function for endpoints
 typedef int32_t (*aoo_replyfn)(

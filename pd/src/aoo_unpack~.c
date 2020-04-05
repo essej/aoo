@@ -186,7 +186,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
             }
             uint64_t t1 = e->tt1;
             uint64_t t2 = e->tt2;
-            double diff = aoo_osctime_diff(t1, t2) * 1000.0;
+            double diff = aoo_osctime_duration(t1, t2) * 1000.0;
 
             SETFLOAT(msg, e->id);
             SETFLOAT(msg + 1, diff);
