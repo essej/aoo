@@ -183,27 +183,33 @@ onset]);
 #X msg 76 271 start;
 #X obj 478 19 declare -lib aoo;
 #X obj 29 526 aoo_send~ 9998 1 2;
-#N canvas 847 252 596 418 events 0;
+#N canvas 847 252 596 501 events 1;
 #X obj 37 37 inlet;
 #X obj 88 87 print SINK;
 #X obj 37 61 route ping sink;
 #X obj 37 86 outlet;
-#X text 33 254 [invite <host> <port> <ID>(;
-#X text 63 299 you may respond with [add <host> <port> <ID>( or ignore
+#X text 33 322 [invite <host> <port> <ID>(;
+#X text 63 366 you may respond with [add <host> <port> <ID>( or ignore
 it.;
-#X text 32 328 [uninvite <host> <port> <ID>(;
-#X text 64 278 a sink invites you to send audio messages.;
-#X text 64 353 a sink ask you to stop sending audio messages.;
-#X text 63 374 you may respond with [remove <host> <port> <ID>( or
+#X text 32 395 [uninvite <host> <port> <ID>(;
+#X text 64 345 a sink invites you to send audio messages.;
+#X text 64 420 a sink ask you to stop sending audio messages.;
+#X text 63 441 you may respond with [remove <host> <port> <ID>( or
 ignore it., f 62;
-#X text 35 123 [ping <host> <port> <ID> <delta1> <delta2>(;
 #X text 64 185 It also tells you the network latency:;
 #X text 66 206 <delta1> is the approx. delay between source and sink
 (in ms), f 62;
-#X text 67 226 <delta2> is the approx. delay between sink and source
+#X text 66 227 <delta2> is the approx. delay between sink and source
 (in ms), f 62;
 #X text 64 145 a periodic message exchanged between source and sink
 \, so the source knows that the sink is receiving its messages.;
+#X text 35 123 [ping <host> <port> <ID> <delta1> <delta2> <rtt>(;
+#X text 66 247 <rtt> is the approx. roundtrip time (in ms) \, as measured
+on the source, f 71;
+#X text 67 269 NOTE: The roundtrip time is not necessarily the same
+as the sum of the deltas \, especially if the two clocks are not perfectly
+in sync. If one clock runs significantly early or late \, the deltas
+can even be negative!, f 73;
 #X connect 0 0 2 0;
 #X connect 2 0 3 0;
 #X connect 2 1 1 0;
