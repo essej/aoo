@@ -144,10 +144,11 @@ time_tag time_tag::get(){
 }
 
 double time_tag::duration(time_tag t1, time_tag t2){
-    if (t2 > t1){
+    if (t2 >= t1){
         return (t2 - t1).to_double();
     } else {
-        return (t1 - t2).to_double();
+        LOG_DEBUG("t2 is smaller than t1!");
+        return (t1 - t2).to_double() * -1.0;
     }
 }
 
