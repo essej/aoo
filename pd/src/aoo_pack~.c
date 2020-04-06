@@ -203,15 +203,18 @@ static t_int * aoo_pack_perform(t_int *w)
 
 static void aoo_pack_dsp(t_aoo_pack *x, t_signal **sp)
 {
-    x->x_blocksize = sp[0]->s_n;
-    x->x_samplerate = sp[0]->s_sr;
+    int32_t blocksize = sp[0]->s_n;
+    int32_t samplerate = sp[0]->s_sr;
 
     for (int i = 0; i < x->x_nchannels; ++i){
         x->x_vec[i] = sp[i]->s_vec;
     }
 
-    aoo_source_setup(x->x_aoo_source, x->x_samplerate,
-                     x->x_blocksize, x->x_nchannels);
+    if (blocksize != x->x_blocksize || samplerate != x->x_samplerate){
+        aoo_source_setup(x->x_aoo_source, samplerate, blocksize, x->x_nchannels);
+        x->x_blocksize = blocksize;
+        x->x_samplerate = samplerate;
+    }
 
     dsp_add(aoo_pack_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 
