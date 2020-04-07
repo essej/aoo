@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
@@ -55,9 +55,9 @@ static void lower_thread_priority(void)
 #endif
 }
 
-/*////////////////////// aoo server //////////////////*/
+/*////////////////////// aoo node //////////////////*/
 
-static t_class *aoo_server_class;
+static t_class *aoo_node_class;
 
 typedef struct _client
 {
@@ -65,7 +65,7 @@ typedef struct _client
     int32_t c_id;
 } t_client;
 
-typedef struct _aoo_server
+typedef struct _aoo_node
 {
     t_pd x_pd;
     t_symbol *x_sym;
@@ -84,37 +84,37 @@ typedef struct _aoo_server
     pthread_mutex_t x_mutex;
     pthread_cond_t x_condition;
     int x_quit; // should be atomic, but works anyway
-} t_aoo_server;
+} t_aoo_node;
 
-t_endpoint * aoo_server_getendpoint(t_aoo_server *server,
-                                    const struct sockaddr_storage *sa, socklen_t len)
+t_endpoint * aoo_node_endpoint(t_aoo_node *x,
+                               const struct sockaddr_storage *sa, socklen_t len)
 {
-    pthread_mutex_lock(&server->x_endpointlock);
-    t_endpoint *ep = endpoint_find(server->x_endpoints, sa);
+    pthread_mutex_lock(&x->x_endpointlock);
+    t_endpoint *ep = endpoint_find(x->x_endpoints, sa);
     if (!ep){
         // add endpoint
-        ep = endpoint_new(server->x_socket, sa, len);
-        ep->next = server->x_endpoints;
-        server->x_endpoints = ep;
+        ep = endpoint_new(x->x_socket, sa, len);
+        ep->next = x->x_endpoints;
+        x->x_endpoints = ep;
     }
-    pthread_mutex_unlock(&server->x_endpointlock);
+    pthread_mutex_unlock(&x->x_endpointlock);
     return ep;
 }
 
 
-int aoo_server_port(t_aoo_server *x)
+int aoo_node_port(t_aoo_node *x)
 {
     return x->x_port;
 }
 
-void aoo_server_notify(t_aoo_server *x)
+void aoo_node_notify(t_aoo_node *x)
 {
     pthread_cond_signal(&x->x_condition);
 }
 
-static void* aoo_server_send(void *y)
+static void* aoo_node_send(void *y)
 {
-    t_aoo_server *x = (t_aoo_server *)y;
+    t_aoo_node *x = (t_aoo_node *)y;
 
     lower_thread_priority();
 
@@ -131,7 +131,7 @@ static void* aoo_server_send(void *y)
             } else if (pd_class(c->c_obj) == aoo_send_class){
                 aoo_send_send((t_aoo_send *)c->c_obj);
             } else {
-                fprintf(stderr, "bug: aoo_server_send\n");
+                fprintf(stderr, "bug: aoo_node_send\n");
                 fflush(stderr);
             }
         }
@@ -143,9 +143,9 @@ static void* aoo_server_send(void *y)
     return 0;
 }
 
-static void* aoo_server_receive(void *y)
+static void* aoo_node_receive(void *y)
 {
-    t_aoo_server *x = (t_aoo_server *)y;
+    t_aoo_node *x = (t_aoo_node *)y;
 
     lower_thread_priority();
 
@@ -216,27 +216,27 @@ static void* aoo_server_receive(void *y)
     return 0;
 }
 
-t_aoo_server* aoo_server_addclient(t_pd *c, int32_t id, int port)
+t_aoo_node* aoo_node_add(int port, t_pd *obj, int32_t id)
 {
     // make bind symbol for port number
     char buf[64];
-    snprintf(buf, sizeof(buf), "aoo listener %d", port);
+    snprintf(buf, sizeof(buf), "aoo_node %d", port);
     t_symbol *s = gensym(buf);
-    t_client client = { c, id };
-    t_aoo_server *x = (t_aoo_server *)pd_findbyclass(s, aoo_server_class);
+    t_client client = { obj, id };
+    t_aoo_node *x = (t_aoo_node *)pd_findbyclass(s, aoo_node_class);
     if (x){
         // check receiver and add to list
         aoo_lock_lock(&x->x_clientlock);
     #if 1
         for (int i = 0; i < x->x_numclients; ++i){
-            if (pd_class(c) == pd_class(x->x_clients[i].c_obj)
+            if (pd_class(obj) == pd_class(x->x_clients[i].c_obj)
                 && id == x->x_clients[i].c_id)
             {
-                if (c == x->x_clients[i].c_obj){
-                    bug("aoo_server_add: client already added!");
+                if (obj == x->x_clients[i].c_obj){
+                    bug("aoo_node_add: client already added!");
                 } else {
-                    pd_error(c, "%s with ID %d on port %d already exists!",
-                             classname(c), id, port);
+                    pd_error(obj, "%s with ID %d on port %d already exists!",
+                             classname(obj), id, port);
                 }
                 aoo_lock_unlock(&x->x_clientlock);
                 return 0;
@@ -249,7 +249,7 @@ t_aoo_server* aoo_server_addclient(t_pd *c, int32_t id, int port)
         x->x_numclients++;
         aoo_lock_unlock(&x->x_clientlock);
     } else {
-        // make new aoo server
+        // make new aoo node
 
         // first create socket
         int sock = socket_udp();
@@ -260,7 +260,7 @@ t_aoo_server* aoo_server_addclient(t_pd *c, int32_t id, int port)
 
         // bind socket to given port
         if (socket_bind(sock, port) < 0){
-            pd_error(c, "%s: couldn't bind to port %d", classname(c), port);
+            pd_error(obj, "%s: couldn't bind to port %d", classname(obj), port);
             socket_close(sock);
             return 0;
         }
@@ -268,9 +268,9 @@ t_aoo_server* aoo_server_addclient(t_pd *c, int32_t id, int port)
         // increase receive buffer size to 1 MB
         socket_setrecvbufsize(sock, 2 << 20);
 
-        // now create aoo server instance
-        x = (t_aoo_server *)getbytes(sizeof(t_aoo_server));
-        x->x_pd = aoo_server_class;
+        // now create aoo node instance
+        x = (t_aoo_node *)getbytes(sizeof(t_aoo_node));
+        x->x_pd = aoo_node_class;
         x->x_sym = s;
         pd_bind(&x->x_pd, s);
 
@@ -289,24 +289,24 @@ t_aoo_server* aoo_server_addclient(t_pd *c, int32_t id, int port)
         pthread_mutex_init(&x->x_mutex, 0);
         pthread_cond_init(&x->x_condition, 0);
 
-        pthread_create(&x->x_sendthread, 0, aoo_server_send, x);
-        pthread_create(&x->x_receivethread, 0, aoo_server_receive, x);
+        pthread_create(&x->x_sendthread, 0, aoo_node_send, x);
+        pthread_create(&x->x_receivethread, 0, aoo_node_receive, x);
 
-        verbose(0, "new aoo server on port %d", x->x_port);
+        verbose(0, "new aoo node on port %d", x->x_port);
     }
     return x;
 }
 
-void aoo_server_removeclient(t_aoo_server *x, t_pd *c, int32_t id)
+void aoo_node_release(t_aoo_node *x, t_pd *obj, int32_t id)
 {
     if (x->x_numclients > 1){
         // just remove receiver from list
         aoo_lock_lock(&x->x_clientlock);
         int n = x->x_numclients;
         for (int i = 0; i < n; ++i){
-            if (c == x->x_clients[i].c_obj){
+            if (obj == x->x_clients[i].c_obj){
                 if (id != x->x_clients[i].c_id){
-                    bug("aoo_server_remove: wrong ID!");
+                    bug("aoo_node_remove: wrong ID!");
                     aoo_lock_unlock(&x->x_clientlock);
                     return;
                 }
@@ -318,7 +318,7 @@ void aoo_server_removeclient(t_aoo_server *x, t_pd *c, int32_t id)
                 return;
             }
         }
-        bug("aoo_server_release: %s not found!", classname(c));
+        bug("aoo_node_release: %s not found!", classname(obj));
         aoo_lock_unlock(&x->x_clientlock);
     } else if (x->x_numclients == 1){
         // last instance
@@ -364,16 +364,16 @@ void aoo_server_removeclient(t_aoo_server *x, t_pd *c, int32_t id)
         aoo_lock_destroy(&x->x_clientlock);
         pthread_cond_destroy(&x->x_condition);
 
-        verbose(0, "released aoo server on port %d", x->x_port);
+        verbose(0, "released aoo node on port %d", x->x_port);
 
         freebytes(x, sizeof(*x));
     } else {
-        bug("aoo_server_release: negative refcount!");
+        bug("aoo_node_release: negative refcount!");
     }
 }
 
-void aoo_server_setup(void)
+void aoo_node_setup(void)
 {
-    aoo_server_class = class_new(gensym("aoo socket receiver"), 0, 0,
-                                  sizeof(t_aoo_server), CLASS_PD, A_NULL);
+    aoo_node_class = class_new(gensym("aoo socket receiver"), 0, 0,
+                                  sizeof(t_aoo_node), CLASS_PD, A_NULL);
 }

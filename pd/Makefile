@@ -45,7 +45,7 @@ make-lib-executable=yes
 lib.setup.sources = src/aoo_setup.c
 
 common.sources = \
-    src/aoo_server.c \
+    src/aoo_node.c \
     src/aoo_common.c \
     src/aoo_net.c \
     $(empty)

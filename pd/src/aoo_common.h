@@ -32,20 +32,20 @@
 
 #define classname(x) class_getname(*(t_pd *)x)
 
-/*///////////////////////////// aoo_server /////////////////////////////*/
+/*///////////////////////////// aoo_node /////////////////////////////*/
 
-typedef struct _aoo_server t_aoo_server;
+typedef struct _aoo_node t_aoo_node;
 
-t_aoo_server *aoo_server_addclient(t_pd *client, int32_t id, int port);
+int aoo_node_port(t_aoo_node *node);
 
-void aoo_server_removeclient(t_aoo_server *server, t_pd *client, int32_t id);
+t_aoo_node * aoo_node_add(int port, t_pd *obj, int32_t id);
 
-t_endpoint * aoo_server_getendpoint(t_aoo_server *server,
-                                    const struct sockaddr_storage *sa, socklen_t len);
+void aoo_node_release(t_aoo_node *node, t_pd *obj, int32_t id);
 
-int aoo_server_port(t_aoo_server *);
+t_endpoint * aoo_node_endpoint(t_aoo_node * node,
+                               const struct sockaddr_storage *sa, socklen_t len);
 
-void aoo_server_notify(t_aoo_server *x);
+void aoo_node_notify(t_aoo_node *node);
 
 /*///////////////////////////// aoo_lock /////////////////////////////*/
 

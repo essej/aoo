@@ -36,8 +36,8 @@ typedef struct _aoo_send
     // sinks
     t_sink *x_sinks;
     int x_numsinks;
-    // server
-    t_aoo_server *x_server;
+    // node
+    t_aoo_node *x_node;
     aoo_lock x_lock;
     // events
     t_clock *x_clock;
@@ -249,8 +249,8 @@ static void aoo_send_doremovesink(t_aoo_send *x, t_endpoint *e, int32_t id)
 
 static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
-    if (!x->x_server){
-        pd_error(x, "%s: can't add sink - no server!", classname(x));
+    if (!x->x_node){
+        pd_error(x, "%s: can't add sink - no node!", classname(x));
     }
 
     if (argc < 3){
@@ -264,7 +264,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     if (aoo_getsinkarg(x, argc, argv, &sa, &len, &id)){
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
-        t_endpoint *e = aoo_server_getendpoint(x->x_server, &sa, len);
+        t_endpoint *e = aoo_node_endpoint(x->x_node, &sa, len);
         // check if sink exists
         if (id != AOO_ID_WILDCARD){
             for (int i = 0; i < x->x_numsinks; ++i){
@@ -319,8 +319,8 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
-    if (!x->x_server){
-        pd_error(x, "%s: can't remove sink - no server!", classname(x));
+    if (!x->x_node){
+        pd_error(x, "%s: can't remove sink - no node!", classname(x));
     }
 
     if (!argc){
@@ -362,7 +362,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
                 }
             }
         } else {
-            e = aoo_server_getendpoint(x->x_server, &sa, len);
+            e = aoo_node_endpoint(x->x_node, &sa, len);
         }
 
         if (!e){
@@ -428,8 +428,8 @@ static t_int * aoo_send_perform(t_int *w)
 
     uint64_t t = aoo_osctime_get();
     if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n, t) > 0){
-        if (x->x_server){
-            aoo_server_notify(x->x_server);
+        if (x->x_node){
+            aoo_node_notify(x->x_node);
         }
     }
     if (aoo_source_events_available(x->x_aoo_source) > 0){
@@ -481,7 +481,7 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     int id = atom_getfloatarg(1, argc, argv);
     x->x_id = id > 0 ? id : 0;
     x->x_aoo_source = aoo_source_new(x->x_id);
-    x->x_server = port ? aoo_server_addclient((t_pd *)x, x->x_id, port) : 0;
+    x->x_node = port ? aoo_node_add(port, (t_pd *)x, x->x_id) : 0;
 
     // arg #3: num channels
     int nchannels = atom_getfloatarg(2, argc, argv);
@@ -514,8 +514,8 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_send_free(t_aoo_send *x)
 {
-    if (x->x_server){
-        aoo_server_removeclient(x->x_server, (t_pd *)x, x->x_id);
+    if (x->x_node){
+        aoo_node_release(x->x_node, (t_pd *)x, x->x_id);
     }
 
     aoo_source_free(x->x_aoo_source);

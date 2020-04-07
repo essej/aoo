@@ -162,7 +162,7 @@ struct aoo_format;
 #define AOO_ID_WILDCARD -1
 #define AOO_ID_NONE INT32_MIN
 
-// get the type and ID from an AoO OSC message, e.g. in /aoo/src/<id>/data
+// get the type (AOO_TYPE) and ID from an AoO OSC message, e.g. in /aoo/src/<id>/data
 // returns 1 on success, 0 on fail
 AOO_API int32_t aoo_parsepattern(const char *msg, int32_t n,
                                  int32_t *type, int32_t *id);
