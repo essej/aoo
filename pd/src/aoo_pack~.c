@@ -37,7 +37,18 @@ typedef struct _aoo_pack
     t_outlet *x_eventout;
     int32_t x_sink_id;
     int32_t x_sink_chn;
+    int x_accept;
 } t_aoo_pack;
+
+static int32_t aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)
+{
+    t_atom *a = (t_atom *)alloca(n * sizeof(t_atom));
+    for (int i = 0; i < n; ++i){
+        SETFLOAT(&a[i], (unsigned char)data[i]);
+    }
+    outlet_list(x->x_out, &s_list, n, a);
+    return 1;
+}
 
 static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, int32_t n)
 {
@@ -60,16 +71,27 @@ static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, 
         }
         case AOO_INVITE_EVENT:
         {
-            t_atom msg;
-            SETFLOAT(&msg, ((aoo_sink_event *)events[i])->id);
-            outlet_anything(x->x_eventout, gensym("invite"), 1, &msg);
+            aoo_sink_event *e = (aoo_sink_event *)events[i];
+            if (x->x_accept){
+                aoo_source_add_sink(x->x_aoo_source, x,
+                                    e->id, (aoo_replyfn)aoo_pack_reply);
+            } else {
+                t_atom msg;
+                SETFLOAT(&msg, e->id);
+                outlet_anything(x->x_eventout, gensym("invite"), 1, &msg);
+            }
             break;
         }
         case AOO_UNINVITE_EVENT:
         {
-            t_atom msg;
-            SETFLOAT(&msg, ((aoo_sink_event *)events[i])->id);
-            outlet_anything(x->x_eventout, gensym("uninvite"), 1, &msg);
+            aoo_sink_event *e = (aoo_sink_event *)events[i];
+            if (x->x_accept){
+                aoo_source_remove_sink(x->x_aoo_source, x, e->id);
+            } else {
+                t_atom msg;
+                SETFLOAT(&msg, e->id);
+                outlet_anything(x->x_eventout, gensym("uninvite"), 1, &msg);
+            }
             break;
         }
         default:
@@ -84,16 +106,6 @@ static void aoo_pack_tick(t_aoo_pack *x)
     while (aoo_source_send(x->x_aoo_source)) ;
 
     aoo_source_handle_events(x->x_aoo_source, (aoo_eventhandler)aoo_pack_handle_events, x);
-}
-
-static int32_t aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)
-{
-    t_atom *a = (t_atom *)alloca(n * sizeof(t_atom));
-    for (int i = 0; i < n; ++i){
-        SETFLOAT(&a[i], (unsigned char)data[i]);
-    }
-    outlet_list(x->x_out, &s_list, n, a);
-    return 1;
 }
 
 static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -112,6 +124,11 @@ static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
     if (aoo_parseformat(x, &f, argc, argv)){
         aoo_source_set_format(x->x_aoo_source, &f.header);
     }
+}
+
+static void aoo_pack_accept(t_aoo_pack *x, t_floatarg f)
+{
+    x->x_accept = f != 0;
 }
 
 static void aoo_pack_channel(t_aoo_pack *x, t_floatarg f)
@@ -241,6 +258,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
 
     x->x_f = 0;
     x->x_clock = clock_new(x, (t_method)aoo_pack_tick);
+    x->x_accept = 1;
 
     // arg #1: ID
     int src = atom_getfloatarg(0, argc, argv);
@@ -310,6 +328,7 @@ void aoo_pack_tilde_setup(void)
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_clear, gensym("clear"), A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_start, gensym("start"), A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_stop, gensym("stop"), A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_accept, gensym("accept"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_format, gensym("format"), A_GIMME, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_channel, gensym("channel"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);

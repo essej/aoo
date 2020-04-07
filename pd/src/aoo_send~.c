@@ -42,6 +42,7 @@ typedef struct _aoo_send
     // events
     t_clock *x_clock;
     t_outlet *x_eventout;
+    int x_accept;
 } t_aoo_send;
 
 // called from the network receive thread
@@ -89,22 +90,30 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
         case AOO_INVITE_EVENT:
         {
             aoo_sink_event *e = (aoo_sink_event *)events[i];
-
-            t_atom msg[3];
-            if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
-                continue;
+            if (x->x_accept){
+                aoo_source_add_sink(x->x_aoo_source, e->endpoint,
+                                    e->id, (aoo_replyfn)endpoint_send);
+            } else {
+                t_atom msg[3];
+                if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
+                    continue;
+                }
+                outlet_anything(x->x_eventout, gensym("invite"), 3, msg);
             }
-            outlet_anything(x->x_eventout, gensym("invite"), 3, msg);
             break;
         }
         case AOO_UNINVITE_EVENT:
         {
             aoo_sink_event *e = (aoo_sink_event *)events[i];
-            t_atom msg[3];
-            if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
-                continue;
+            if (x->x_accept){
+                aoo_source_remove_sink(x->x_aoo_source, e->endpoint, e->id);
+            } else {
+                t_atom msg[3];
+                if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
+                    continue;
+                }
+                outlet_anything(x->x_eventout, gensym("uninvite"), 3, msg);
             }
-            outlet_anything(x->x_eventout, gensym("uninvite"), 3, msg);
             break;
         }
         default:
@@ -139,6 +148,11 @@ static t_sink *aoo_send_findsink(t_aoo_send *x,
         }
     }
     return 0;
+}
+
+static void aoo_send_accept(t_aoo_send *x, t_floatarg f)
+{
+    x->x_accept = f != 0;
 }
 
 static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
@@ -453,9 +467,11 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 {
     t_aoo_send *x = (t_aoo_send *)pd_new(aoo_send_class);
 
+    x->x_f = 0;
     x->x_clock = clock_new(x, (t_method)aoo_send_tick);
     x->x_sinks = 0;
     x->x_numsinks = 0;
+    x->x_accept = 1;
     aoo_lock_init(&x->x_lock);
 
     // arg #1: port number
@@ -524,6 +540,7 @@ void aoo_send_tilde_setup(void)
     class_addmethod(aoo_send_class, (t_method)aoo_send_remove, gensym("remove"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_start, gensym("start"), A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_stop, gensym("stop"), A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_accept, gensym("accept"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_format, gensym("format"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_channel, gensym("channel"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
