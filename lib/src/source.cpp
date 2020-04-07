@@ -2,7 +2,7 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
-#include "aoo_source.hpp"
+#include "source.hpp"
 #include "aoo/aoo_utils.hpp"
 
 #include "oscpack/osc/OscOutboundPacketStream.h"

@@ -51,11 +51,11 @@ common.sources = \
     $(empty)
 
 shared.sources = \
-    $(AOO)/src/aoo_imp.cpp \
-    $(AOO)/src/aoo_source.cpp \
-    $(AOO)/src/aoo_sink.cpp \
-    $(AOO)/src/aoo_pcm.cpp \
-    $(AOO)/src/aoo_opus.cpp \
+    $(AOO)/src/common.cpp \
+    $(AOO)/src/source.cpp \
+    $(AOO)/src/sink.cpp \
+    $(AOO)/src/codec_pcm.cpp \
+    $(AOO)/src/codec_opus.cpp \
     $(AOO)/src/lib/oscpack/osc/OscTypes.cpp \
     $(AOO)/src/lib/oscpack/osc/OscReceivedElements.cpp \
     $(AOO)/src/lib/oscpack/osc/OscOutboundPacketStream.cpp \
