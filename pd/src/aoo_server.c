@@ -265,6 +265,9 @@ t_aoo_server* aoo_server_addclient(t_pd *c, int32_t id, int port)
             return 0;
         }
 
+        // increase receive buffer size to 1 MB
+        socket_setrecvbufsize(sock, 2 << 20);
+
         // now create aoo server instance
         x = (t_aoo_server *)getbytes(sizeof(t_aoo_server));
         x->x_pd = aoo_server_class;
