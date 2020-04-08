@@ -11,7 +11,7 @@ namespace net {
 
 class server final : public iserver {
 public:
-    server(int socket);
+    server(int tcpsocket, int udpsocket);
     ~server();
 
     int32_t run() override;
@@ -22,7 +22,8 @@ public:
 
     int32_t handle_events(aoo_eventhandler fn, void *user) override;
 private:
-    int socket_;
+    int tcpsocket_;
+    int udpsocket_;
 };
 
 } // net

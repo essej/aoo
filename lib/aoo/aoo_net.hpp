@@ -29,7 +29,7 @@ namespace net {
 //
 // If you want to be on the safe safe, use the C interface :-)
 
-/*//////////////////////// AoO source ///////////////////////*/
+/*//////////////////////// AoO server ///////////////////////*/
 
 class iserver {
 public:
@@ -75,7 +75,7 @@ inline void iserver::destroy(iserver *server){
     aoonet_server_free(server);
 }
 
-/*//////////////////////// AoO sink ///////////////////////*/
+/*//////////////////////// AoO client ///////////////////////*/
 
 class iclient {
 public:
@@ -89,7 +89,7 @@ public:
     using pointer = std::unique_ptr<iclient, deleter>;
 
     // create a new AoO sink instance
-    static iclient * create(int32_t id);
+    static iclient * create(void *socket, aoo_sendfn fn, int32_t *err);
 
     // destroy the AoO sink instance
     static void destroy(iclient *client);
@@ -132,8 +132,8 @@ protected:
     ~iclient(){} // non-virtual!
 };
 
-inline iclient * iclient::create(int socket){
-    return aoonet_client_new(socket);
+inline iclient * iclient::create(void *socket, aoo_sendfn fn, int32_t *err){
+    return aoonet_client_new(socket, fn, err);
 }
 
 inline void iclient::destroy(iclient *client){
