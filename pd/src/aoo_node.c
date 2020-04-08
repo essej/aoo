@@ -28,7 +28,9 @@ typedef struct _aoo_receive t_aoo_receive;
 void aoo_receive_send(t_aoo_receive *x);
 
 void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
-                                int32_t n, void *src, aoo_replyfn fn);
+                                int32_t n, void *endpoint, aoo_replyfn fn);
+
+// aoo_send
 
 extern t_class *aoo_send_class;
 
@@ -37,7 +39,7 @@ typedef struct _aoo_send t_aoo_send;
 void aoo_send_send(t_aoo_send *x);
 
 void aoo_send_handle_message(t_aoo_send *x, const char * data,
-                                int32_t n, void *src, aoo_replyfn fn);
+                             int32_t n, void *endpoint, aoo_replyfn fn);
 
 static void lower_thread_priority(void)
 {
