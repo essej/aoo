@@ -2,6 +2,7 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
+#include "aoo/aoo_net.h"
 #include "aoo/aoo_utils.hpp"
 #include "aoo/aoo_pcm.h"
 #include "aoo/aoo_opus.h"
@@ -85,7 +86,20 @@ int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *type, int32_t *id)
         {
             *type = AOO_TYPE_SINK;
             offset += AOO_MSG_SINK_LEN;
-        } else {
+        }
+        else if (n >= (offset + AOO_MSG_SERVER_LEN)
+            && !memcmp(msg + offset, AOO_MSG_SERVER, AOO_MSG_SERVER_LEN))
+        {
+            *type = AOO_TYPE_SERVER;
+            return offset + AOO_MSG_SERVER_LEN;
+        }
+        else if (n >= (offset + AOO_MSG_CLIENT_LEN)
+            && !memcmp(msg + offset, AOO_MSG_CLIENT, AOO_MSG_CLIENT_LEN))
+        {
+            *type = AOO_TYPE_CLIENT;
+            return offset + AOO_MSG_CLIENT_LEN;
+        }
+        else {
             // TODO only print relevant part of OSC address string
             LOG_ERROR("aoo_parsepattern: unknown destination " << msg + offset);
             return 0;

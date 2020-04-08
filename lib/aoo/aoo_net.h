@@ -11,6 +11,16 @@ extern "C"
 {
 #endif
 
+#define AOO_MSG_SERVER "/server"
+#define AOO_MSG_SERVER_LEN 7
+#define AOO_MSG_CLIENT "/client"
+#define AOO_MSG_CLIENT_LEN 7
+
+typedef enum aoonet_type {
+    AOO_TYPE_SERVER = 0,
+    AOO_TYPE_CLIENT
+} aoonet_type;
+
 /*///////////////////////// AOO server /////////////////////////*/
 
 #ifdef __cplusplus
