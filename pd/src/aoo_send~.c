@@ -45,12 +45,12 @@ typedef struct _aoo_send
 
 // called from the network receive thread
 void aoo_send_handle_message(t_aoo_send *x, const char * data,
-                                int32_t n, void *src, aoo_replyfn fn)
+                                int32_t n, void *endpoint, aoo_replyfn fn)
 {
     // synchronize with aoo_receive_dsp()
     aoo_lock_lock_shared(&x->x_lock);
     // handle incoming message
-    aoo_source_handle_message(x->x_aoo_source, data, n, src, fn);
+    aoo_source_handle_message(x->x_aoo_source, data, n, endpoint, fn);
     aoo_lock_unlock_shared(&x->x_lock);
 }
 
@@ -478,7 +478,7 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     int id = atom_getfloatarg(1, argc, argv);
     x->x_id = id > 0 ? id : 0;
     x->x_aoo_source = aoo_source_new(x->x_id);
-    x->x_node = port ? aoo_node_add(port, (t_pd *)x, x->x_id) : 0;
+    x->x_node = port > 0 ? aoo_node_add(port, (t_pd *)x, x->x_id) : 0;
 
     // arg #3: num channels
     int nchannels = atom_getfloatarg(2, argc, argv);
