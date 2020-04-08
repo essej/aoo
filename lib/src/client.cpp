@@ -13,7 +13,9 @@ typedef int socklen_t;
 #include <unistd.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
+#include <errno.h>
 #endif
 
 #include <cstring>

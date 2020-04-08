@@ -19,6 +19,8 @@ class.sources = \
     src/aoo_route.c \
     src/aoo_send~.c \
     src/aoo_receive~.c \
+    src/aoo_server.c \
+    src/aoo_client.c \
     $(empty)
 
 AOO = ../lib
