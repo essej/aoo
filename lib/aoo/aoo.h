@@ -152,8 +152,6 @@ AOO_API void aoo_initialize(void);
 // terminate AoO library - call only once!
 AOO_API void aoo_terminate(void);
 
-struct aoo_format;
-
 /*//////////////////// OSC ////////////////////////////*/
 
 // id: the source or sink ID
@@ -420,11 +418,11 @@ AOO_API int32_t aoo_source_remove_sink(aoo_source *src, void *sink, int32_t id);
 // remove all sinks (always threadsafe)
 AOO_API void aoo_source_remove_all(aoo_source *src);
 
-// handle messages from sinks - might call the reply function (threadsafe, but not reentrant)
+// handle messages from sinks (threadsafe, but not reentrant)
 AOO_API int32_t aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
                                  void *sink, aoo_replyfn fn);
 
-// send outgoing messages - will call the reply function (threadsafe, but not rentrant)
+// send outgoing messages - will call the reply function (threadsafe, but not reentrant)
 AOO_API int32_t aoo_source_send(aoo_source *src);
 
 // process audio blocks (threadsafe, but not reentrant)
@@ -438,7 +436,7 @@ AOO_API int32_t aoo_source_process(aoo_source *src, const aoo_sample **data,
 AOO_API int32_t aoo_source_events_available(aoo_source *src);
 
 // handle events (threadsafe, but not reentrant)
-// will all the event handler function one or more times
+// will call the event handler function one or more times
 AOO_API int32_t aoo_source_handle_events(aoo_source *src, aoo_eventhandler fn, void *user);
 
 // set/get options (always threadsafe)
@@ -549,11 +547,11 @@ AOO_API int32_t aoo_sink_uninvite_source(aoo_sink *sink, void *endpoint, int32_t
 // uninvite all sources (always threadsafe)
 AOO_API int32_t aoo_sink_uninvite_all(aoo_sink *sink);
 
-// handle messages from sources - might call the reply function (threadsafe, but not reentrant)
+// handle messages from sources (threadsafe, but not reentrant)
 AOO_API int32_t aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_t n,
-                                       void *src, aoo_replyfn fn);
+                                        void *src, aoo_replyfn fn);
 
-// send outgoing messages - will call the reply function (threadsafe, but not rentrant)
+// send outgoing messages - will call the reply function (threadsafe, but not reentrant)
 AOO_API int32_t aoo_sink_send(aoo_sink *sink);
 
 // process audio (threadsafe, but not reentrant)
@@ -564,7 +562,7 @@ AOO_API int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,
 AOO_API int32_t aoo_sink_events_available(aoo_sink *sink);
 
 // handle events (threadsafe, but not reentrant)
-// will all the event handler function one or more times
+// will call the event handler function one or more times
 AOO_API int32_t aoo_sink_handle_events(aoo_sink *sink, aoo_eventhandler fn, void *user);
 
 // set/get options (always threadsafe)

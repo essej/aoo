@@ -59,11 +59,11 @@ public:
     // remove all sinks (always threadsafe)
     virtual void remove_all() = 0;
 
-    // handle messages from sinks - might call the reply function (threadsafe, but not reentrant)
+    // handle messages from sinks (threadsafe, but not reentrant)
     virtual int32_t handle_message(const char *data, int32_t n,
                                 void *endpoint, aoo_replyfn fn) = 0;
 
-    // send outgoing messages - will call the reply function (threadsafe, but not rentrant)
+    // send outgoing messages - will call the reply function (threadsafe, but not reentrant)
     virtual int32_t send() = 0;
 
     // process audio blocks (threadsafe, but not reentrant)
@@ -76,7 +76,8 @@ public:
     // get number of pending events (always thread safe)
     virtual int32_t events_available() = 0;
 
-    // get next available event (threadsafe, but not rentrant)
+    // handle events (threadsafe, but not reentrant)
+    // will call the event handler function one or more times
     virtual int32_t handle_events(aoo_eventhandler fn, void *user) = 0;
 
     //---------------------- options ----------------------//
@@ -191,11 +192,11 @@ public:
     // uninvite all sources (always thread safe)
     virtual int32_t uninvite_all() = 0;
 
-    // handle messages from sources - might call the reply function (threadsafe, but not reentrant)
+    // handle messages from sources (threadsafe, but not reentrant)
     virtual int32_t handle_message(const char *data, int32_t n,
                                    void *endpoint, aoo_replyfn fn) = 0;
 
-    // send outgoing messages - will call the reply function (threadsafe, but not rentrant)
+    // send outgoing messages - will call the reply function (threadsafe, but not reentrant)
     virtual int32_t send() = 0;
 
     // process audio (threadsafe, but not reentrant)
@@ -204,7 +205,8 @@ public:
     // get number of pending events (always thread safe)
     virtual int32_t events_available() = 0;
 
-    // get next available event (threadsafe, but not rentrant)
+    // handle events (threadsafe, but not reentrant)
+    // will call the event handler function one or more times
     virtual int32_t handle_events(aoo_eventhandler fn, void *user) = 0;
 
     //---------------------- options ----------------------//
