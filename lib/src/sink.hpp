@@ -57,7 +57,7 @@ struct stream_state {
     bool need_ping(time_tag& t1, time_tag& t2){
         // check pingtime2 because it ensures that pingtime1 has been set
         auto pingtime2 = pingtime2_.exchange(time_tag{});
-        if (pingtime2.seconds > 0){
+        if (!pingtime2.empty()){
             t1 = pingtime1_.load();
             t2 = pingtime2;
             return true;

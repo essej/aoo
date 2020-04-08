@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
@@ -24,59 +24,61 @@ struct time_tag {
     static double duration(time_tag t1, time_tag t2);
 
     time_tag() = default;
-    time_tag(uint32_t _seconds, uint32_t _nanos)
-        : seconds(_seconds), nanos(_nanos){}
+    time_tag(uint32_t _high, uint32_t _low)
+        : high(_high), low(_low){}
     time_tag(uint64_t ui){
-        seconds = ui >> 32;
-        nanos = (uint32_t)ui;
+        high = ui >> 32;
+        low = (uint32_t)ui;
     }
     time_tag(double s){
-        seconds = (uint64_t)s;
-        double fract = s - (double)seconds;
-        nanos = fract * 4294967296.0;
+        high = (uint64_t)s;
+        double fract = s - (double)high;
+        low = fract * 4294967296.0;
     }
 
-    uint32_t seconds = 0;
-    uint32_t nanos = 0;
+    uint32_t high = 0;
+    uint32_t low = 0;
 
     void clear(){
-        seconds = 0;
-        nanos = 0;
+        high = 0;
+        low = 0;
     }
 
+    bool empty() const { return (high + low) == 0; }
+
     double to_double() const {
-        return (double)seconds + (double)nanos / 4294967296.0;
+        return (double)high + (double)low / 4294967296.0;
     }
     uint64_t to_uint64() const {
-        return (uint64_t)seconds << 32 | (uint64_t)nanos;
+        return (uint64_t)high << 32 | (uint64_t)low;
     }
 };
 
 
 inline time_tag operator+(time_tag lhs, time_tag rhs){
     time_tag result;
-    uint64_t ns = lhs.nanos + rhs.nanos;
-    result.nanos = ns & 0xFFFFFFFF;
-    result.seconds = lhs.seconds + rhs.seconds + (ns >> 32);
+    uint64_t ns = lhs.low + rhs.low;
+    result.low = ns & 0xFFFFFFFF;
+    result.high = lhs.high + rhs.high + (ns >> 32);
     return result;
 }
 
 inline time_tag operator-(time_tag lhs, time_tag rhs){
     time_tag result;
-    uint64_t ns = ((uint64_t)1 << 32) + lhs.nanos - rhs.nanos;
-    result.nanos = ns & 0xFFFFFFFF;
-    result.seconds = lhs.seconds - rhs.seconds - !(ns >> 32);
+    uint64_t ns = ((uint64_t)1 << 32) + lhs.low - rhs.low;
+    result.low = ns & 0xFFFFFFFF;
+    result.high = lhs.high - rhs.high - !(ns >> 32);
     return result;
 }
 
 inline bool operator==(time_tag lhs, time_tag rhs){
-    return lhs.seconds == rhs.seconds && lhs.nanos == rhs.nanos;
+    return lhs.high == rhs.high && lhs.low == rhs.low;
 }
 inline bool operator<(time_tag lhs, time_tag rhs){
-    if (lhs.seconds < rhs.seconds){
+    if (lhs.high < rhs.high){
         return true;
     } else {
-        return lhs.seconds == rhs.seconds && lhs.nanos < rhs.nanos;
+        return lhs.high == rhs.high && lhs.low < rhs.low;
     }
 }
 inline bool operator!=(time_tag lhs, time_tag rhs){ return !operator==(lhs,rhs); }
