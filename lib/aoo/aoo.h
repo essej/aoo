@@ -63,8 +63,10 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #define AOO_MSG_UNINVITE "/uninvite"
 #define AOO_MSG_UNINVITE_LEN 9
 
-#define AOO_TYPE_SOURCE 0
-#define AOO_TYPE_SINK 1
+typedef enum aoo_type {
+    AOO_TYPE_SOURCE = 0,
+    AOO_TYPE_SINK
+} aoo_type;
 
 #define AOO_MAXPACKETSIZE 4096 // ?
 
