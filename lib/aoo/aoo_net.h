@@ -70,8 +70,15 @@ using aoonet_client = aoo::net::iclient;
 typedef struct aoonet_client aoonet_client;
 #endif
 
+typedef int32_t (*aoo_sendfn)(
+        void *,             // user
+        const char *,       // data
+        int32_t,            // numbytes
+        void *              // addr
+);
+
 // create a new AOO client for the given UDP socket
-AOO_API aoonet_client * aoonet_client_new(int socket);
+AOO_API aoonet_client * aoonet_client_new(void *udpsocket, aoo_sendfn fn, int32_t *err);
 
 // destroy AOO client
 AOO_API void aoonet_client_free(aoonet_client *client);

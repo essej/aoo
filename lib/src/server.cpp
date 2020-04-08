@@ -4,16 +4,81 @@
 
 #include "server.hpp"
 
+#ifdef _WIN32
+#include <winsock2.h>
+typedef int socklen_t;
+#else
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#endif
+
+#include <cstring>
+
+void socket_close(int sock){
+#ifdef _WIN32
+    closesocket(sock);
+#else
+    close(sock);
+#endif
+}
+
+int32_t socket_errno(){
+#ifdef _WIN32
+    return WSAGetLastError();
+#else
+    return errno;
+#endif
+}
+
 /*//////////////////// AoO server /////////////////////*/
 
 aoonet_server * aoonet_server_new(int port, int32_t *err) {
-    int socket = 0;
+    // bind to 'any' address
+    sockaddr_in sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sin_family = AF_INET;
+    sa.sin_addr.s_addr = INADDR_ANY;
+    sa.sin_port = htons(port);
 
-    return new aoo::net::server(socket);
+    // create and bind TCP socket
+    int tcpsocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (tcpsocket < 0){
+        *err = socket_errno();
+        socket_close(tcpsocket);
+        return nullptr;
+    }
+    if (bind(tcpsocket, (sockaddr *)&sa, sizeof(sa)) < 0){
+        *err = socket_errno();
+
+        return nullptr;
+    }
+    // set TCP_NODELAY
+    int val = 1;
+    setsockopt(tcpsocket, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
+
+    // create and bind UDP socket
+    int udpsocket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (udpsocket < 0){
+        *err = socket_errno();
+        socket_close(tcpsocket);
+        return nullptr;
+    }
+    if (bind(udpsocket, (sockaddr *)&sa, sizeof(sa)) < 0){
+        *err = socket_errno();
+        socket_close(tcpsocket);
+        socket_close(udpsocket);
+        return nullptr;
+    }
+
+    return new aoo::net::server(tcpsocket, udpsocket);
 }
 
-aoo::net::server::server(int socket)
-    : socket_(socket){}
+aoo::net::server::server(int tcpsocket, int udpsocket)
+    : tcpsocket_(tcpsocket), udpsocket_(udpsocket){}
 
 void aoonet_server_free(aoonet_server *server){
     // cast to correct type because base class
@@ -21,7 +86,10 @@ void aoonet_server_free(aoonet_server *server){
     delete static_cast<aoo::net::server *>(server);
 }
 
-aoo::net::server::~server() {}
+aoo::net::server::~server() {
+    socket_close(tcpsocket_);
+    socket_close(udpsocket_);
+}
 
 int32_t aoonet_server_run(aoonet_server *server){
     return server->run();

@@ -11,7 +11,7 @@ namespace net {
 
 class client final : public iclient {
 public:
-    client(int socket);
+    client(int tcpsocket, void *udpsocket, aoo_sendfn fn);
     ~client();
 
     int32_t run() override;
@@ -35,7 +35,9 @@ public:
 
     int32_t handle_events(aoo_eventhandler fn, void *user) override;
 private:
-    int socket_;
+    int tcpsocket_;
+    void *udpsocket_;
+    aoo_sendfn sendfn_;
 };
 
 } // net

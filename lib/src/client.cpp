@@ -4,14 +4,39 @@
 
 #include "client.hpp"
 
+#ifdef _WIN32
+#include <winsock2.h>
+typedef int socklen_t;
+#else
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#endif
+
+#include <cstring>
+
+void socket_close(int sock);
+
+int32_t socket_errno();
+
 /*//////////////////// AoO client /////////////////////*/
 
-aoonet_client * aoonet_client_new(int socket) {
-    return new aoo::net::client(socket);
+aoonet_client * aoonet_client_new(void *udpsocket, aoo_sendfn fn, int32_t *err) {
+    int tcpsocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (tcpsocket < 0){
+        *err = socket_errno();
+        socket_close(tcpsocket);
+        return nullptr;
+    }
+
+    return new aoo::net::client(tcpsocket, udpsocket, fn);
 }
 
-aoo::net::client::client(int socket)
-    : socket_(socket){}
+aoo::net::client::client(int tcpsocket, void *udpsocket, aoo_sendfn fn)
+    : tcpsocket_(tcpsocket), udpsocket_(udpsocket), sendfn_(fn) {}
 
 void aoonet_client_free(aoonet_client *client){
     // cast to correct type because base class
