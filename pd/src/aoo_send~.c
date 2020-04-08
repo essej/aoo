@@ -2,8 +2,6 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
-#include "m_pd.h"
-
 #include "aoo_common.h"
 
 #include <string.h>
@@ -461,7 +459,6 @@ static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
 
     dsp_add(aoo_send_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 }
-
 
 static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 {
