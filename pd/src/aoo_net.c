@@ -167,11 +167,11 @@ int socket_getaddr(const char *hostname, int port,
 
 /*//////////////////// endpoint ///////////////////////*/
 
-t_endpoint * endpoint_new(int socket, const struct sockaddr_storage *sa, socklen_t len)
+t_endpoint * endpoint_new(void *owner, const struct sockaddr_storage *sa, socklen_t len)
 {
     t_endpoint *e = (t_endpoint *)getbytes(sizeof(t_endpoint));
     if (e){
-        e->socket = socket;
+        e->owner = owner;
         memcpy(&e->addr, sa, len);
         e->addrlen = len;
         e->next = 0;
@@ -186,7 +186,8 @@ void endpoint_free(t_endpoint *e)
 
 int endpoint_send(t_endpoint *e, const char *data, int size)
 {
-    int result = sendto(e->socket, data, size, 0,
+    int socket = *((int *)e->owner);
+    int result = sendto(socket, data, size, 0,
                        (const struct sockaddr *)&e->addr, sizeof(e->addr));
     if (result < 0){
         socket_error_print("sendto");

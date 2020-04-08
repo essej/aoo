@@ -34,13 +34,13 @@ void socket_error_print(const char *label);
 
 // use linked list for persistent memory
 typedef struct _endpoint {
-    int socket;
+    void *owner;
     struct sockaddr_storage addr;
     socklen_t addrlen;
     struct _endpoint *next;
 } t_endpoint;
 
-t_endpoint * endpoint_new(int socket, const struct sockaddr_storage *sa, socklen_t len);
+t_endpoint * endpoint_new(void *owner, const struct sockaddr_storage *sa, socklen_t len);
 
 void endpoint_free(t_endpoint *e);
 

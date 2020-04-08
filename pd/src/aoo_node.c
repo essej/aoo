@@ -93,7 +93,7 @@ t_endpoint * aoo_node_endpoint(t_aoo_node *x,
     t_endpoint *ep = endpoint_find(x->x_endpoints, sa);
     if (!ep){
         // add endpoint
-        ep = endpoint_new(x->x_socket, sa, len);
+        ep = endpoint_new(&x->x_socket, sa, len);
         ep->next = x->x_endpoints;
         x->x_endpoints = ep;
     }
@@ -160,7 +160,7 @@ static void* aoo_node_receive(void *y)
             t_endpoint *ep = endpoint_find(x->x_endpoints, &sa);
             if (!ep){
                 // add endpoint
-                ep = endpoint_new(x->x_socket, &sa, len);
+                ep = endpoint_new(&x->x_socket, &sa, len);
                 ep->next = x->x_endpoints;
                 x->x_endpoints = ep;
             }
