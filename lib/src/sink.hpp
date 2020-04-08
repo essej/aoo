@@ -193,6 +193,8 @@ public:
     sink(int32_t id)
         : id_(id) {}
 
+    ~sink(){}
+
     int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
     int32_t invite_source(void *endpoint, int32_t id, aoo_replyfn fn) override;
