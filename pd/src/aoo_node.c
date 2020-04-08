@@ -3,23 +3,14 @@
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
 #include "aoo_common.h"
-
-#ifdef _WIN32
-#include <winsock2.h>
-typedef int socklen_t;
-#else
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <unistd.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#endif
+#include "aoo/aoo_net.h"
 
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
 #include <errno.h>
+
+// aoo_receive
 
 extern t_class *aoo_receive_class;
 
@@ -40,6 +31,17 @@ void aoo_send_send(t_aoo_send *x);
 
 void aoo_send_handle_message(t_aoo_send *x, const char * data,
                              int32_t n, void *endpoint, aoo_replyfn fn);
+
+// aoo_client
+
+extern t_class *aoo_client_class;
+
+typedef struct _aoo_client t_aoo_client;
+
+void aoo_client_send(t_aoo_client *x);
+
+void aoo_client_handle_message(t_aoo_client *x, const char * data,
+                               int32_t n, void *src, aoo_replyfn fn);
 
 static void lower_thread_priority(void)
 {
@@ -101,6 +103,10 @@ t_endpoint * aoo_node_endpoint(t_aoo_node *x,
     return ep;
 }
 
+int aoo_node_socket(t_aoo_node *x)
+{
+    return x->x_socket;
+}
 
 int aoo_node_port(t_aoo_node *x)
 {
@@ -110,6 +116,12 @@ int aoo_node_port(t_aoo_node *x)
 void aoo_node_notify(t_aoo_node *x)
 {
     pthread_cond_signal(&x->x_condition);
+}
+
+int32_t aoo_node_sendto(t_aoo_node *node, const char *buf, int32_t size,
+                        const struct sockaddr *addr)
+{
+    return socket_sendto(node->x_socket, buf, size, addr);
 }
 
 static void* aoo_node_send(void *y)
@@ -130,6 +142,8 @@ static void* aoo_node_send(void *y)
                 aoo_receive_send((t_aoo_receive *)c->c_obj);
             } else if (pd_class(c->c_obj) == aoo_send_class){
                 aoo_send_send((t_aoo_send *)c->c_obj);
+            } else if (pd_class(c->c_obj) == aoo_client_class){
+                aoo_client_send((t_aoo_client *)c->c_obj);
             } else {
                 fprintf(stderr, "bug: aoo_node_send\n");
                 fflush(stderr);
@@ -195,6 +209,19 @@ static void* aoo_node_receive(void *y)
                                 break;
                         }
                     }
+                } else if (type == AOO_TYPE_CLIENT){
+                    // forward OSC packet to matching senders(s)
+                    for (int i = 0; i < x->x_numclients; ++i){
+                        if (pd_class(x->x_clients[i].c_obj) == aoo_client_class)
+                        {
+                            t_aoo_client *c = (t_aoo_client *)x->x_clients[i].c_obj;
+                            aoo_client_handle_message(c, buf, nbytes,
+                                ep, (aoo_replyfn)endpoint_send);
+                            break;
+                        }
+                    }
+                } else if (type == AOO_TYPE_SERVER){
+                    // ignore
                 } else {
                     fprintf(stderr, "bug: unknown aoo type\n");
                     fflush(stderr);
@@ -235,8 +262,13 @@ t_aoo_node* aoo_node_add(int port, t_pd *obj, int32_t id)
                 if (obj == x->x_clients[i].c_obj){
                     bug("aoo_node_add: client already added!");
                 } else {
-                    pd_error(obj, "%s with ID %d on port %d already exists!",
-                             classname(obj), id, port);
+                    if (pd_class(obj) == aoo_client_class){
+                        pd_error(obj, "%s on port %d already exists!",
+                                 classname(obj), port);
+                    } else {
+                        pd_error(obj, "%s with ID %d on port %d already exists!",
+                                 classname(obj), id, port);
+                    }
                 }
                 aoo_lock_unlock(&x->x_clientlock);
                 return 0;

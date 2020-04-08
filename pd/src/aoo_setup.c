@@ -10,6 +10,8 @@ void aoo_pack_tilde_setup(void);
 void aoo_unpack_tilde_setup(void);
 void aoo_route_setup(void);
 void aoo_node_setup(void);
+void aoo_server_setup(void);
+void aoo_client_setup(void);
 
 EXPORT void aoo_setup(void)
 {
@@ -37,4 +39,6 @@ EXPORT void aoo_setup(void)
     aoo_unpack_tilde_setup();
     aoo_route_setup();
     aoo_node_setup();
+    aoo_server_setup();
+    aoo_client_setup();
 }

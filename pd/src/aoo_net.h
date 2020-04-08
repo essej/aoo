@@ -19,6 +19,8 @@ int socket_close(int socket);
 
 int socket_bind(int socket, int port);
 
+int socket_sendto(int socket, const char *buf, int size, const struct sockaddr *addr);
+
 int socket_receive(int socket, char *buf, int size,
                    struct sockaddr_storage *sa, socklen_t *len,
                    int nonblocking);
@@ -29,6 +31,10 @@ int socket_signal(int socket, int port);
 
 int socket_getaddr(const char *hostname, int port,
                    struct sockaddr_storage *sa, socklen_t *len);
+
+int socket_errno();
+
+int socket_strerror(int err, char *buf, int size);
 
 void socket_error_print(const char *label);
 

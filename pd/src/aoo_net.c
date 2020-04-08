@@ -14,29 +14,49 @@ typedef int socklen_t;
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#endif
-#include <stdio.h>
 #include <errno.h>
+#endif
+
+#include <stdio.h>
 #include <string.h>
 
 /*///////////////////////// socket /////////////////////////////////*/
 
-void socket_error_print(const char *label)
+int socket_errno()
 {
 #ifdef _WIN32
     int err = WSAGetLastError();
     if (err == WSAECONNRESET){
-        return; // ignore
+        return 0; // ignore
     }
-    char str[1024];
-    str[0] = 0;
-    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0,
-                   err, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT), str,
-                   sizeof(str), NULL);
 #else
     int err = errno;
-    const char *str = strerror(err);
 #endif
+    return err;
+}
+
+int socket_strerror(int err, char *buf, int size)
+{
+#ifdef _WIN32
+    buf[0] = 0;
+    return FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0,
+                          err, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT), buf,
+                          size, NULL);
+#else
+    return snprintf(buf, size, "%s", strerror(err));
+#endif
+}
+
+void socket_error_print(const char *label)
+{
+    char str[1024];
+
+    int err = socket_errno();
+    if (!err){
+        return;
+    }
+
+    socket_strerror(err, str, sizeof(str));
     if (label){
         fprintf(stderr, "%s: %s (%d)\n", label, str, err);
     } else {
@@ -78,6 +98,16 @@ int socket_close(int socket)
 #else
     return close(socket);
 #endif
+}
+
+int socket_sendto(int socket, const char *buf, int size, const struct sockaddr *addr)
+{
+    if (addr->sa_family == AF_INET){
+        return sendto(socket, buf, size, 0, addr, sizeof(struct sockaddr_in));
+    } else {
+        // not supported yet
+        return -1;
+    }
 }
 
 int socket_receive(int socket, char *buf, int size,

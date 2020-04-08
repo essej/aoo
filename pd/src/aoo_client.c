@@ -1,0 +1,148 @@
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
+ * For information on usage and redistribution, and for a DISCLAIMER OF ALL
+ * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
+
+#include "aoo_common.h"
+#include "aoo/aoo_net.h"
+
+#include <pthread.h>
+
+#define AOO_CLIENT_POLL_INTERVAL 10
+
+t_class *aoo_client_class;
+
+typedef struct _aoo_client
+{
+    t_object x_obj;
+    aoonet_client *x_client;
+    t_aoo_node *x_node;
+    pthread_t x_thread;
+    t_clock *x_clock;
+    t_outlet *x_stateout;
+    t_outlet *x_msgout;
+} t_aoo_client;
+
+void aoo_client_send(t_aoo_client *x)
+{
+    aoonet_client_send(x->x_client);
+}
+
+void aoo_client_handle_message(t_aoo_client *x, const char * data,
+                               int32_t n, void *endpoint, aoo_replyfn fn)
+{
+    t_endpoint *e = (t_endpoint *)endpoint;
+    aoonet_client_handle_message(x->x_client, data, n, &e->addr);
+}
+
+static int32_t aoo_client_handle_events(t_aoo_client *x,
+                                        const aoo_event **events, int32_t n)
+{
+    return 1;
+}
+
+static void aoo_client_tick(t_aoo_client *x)
+{
+    aoonet_client_handle_events(x->x_client,
+                               (aoo_eventhandler)aoo_client_handle_events, x);
+
+    aoo_node_notify(x->x_node);
+
+    clock_delay(x->x_clock, AOO_CLIENT_POLL_INTERVAL);
+}
+
+static void * aoo_client_threadfn(void *y)
+{
+    t_aoo_client *x = (t_aoo_client *)y;
+    aoonet_client_run(x->x_client);
+    return 0;
+}
+
+static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (argc < 4){
+        pd_error(x, "%s: too few arguments for '%s' method", classname(x), s->s_name);
+        return;
+    }
+    if (x->x_client){
+        t_symbol *host = atom_getsymbol(argv);
+        int port = atom_getfloat(argv + 1);
+        t_symbol *username = atom_getsymbol(argv + 2);
+        t_symbol *pwd = atom_getsymbol(argv + 3);
+        aoonet_client_connect(x->x_client, host->s_name, port,
+                              username->s_name, pwd->s_name);
+    }
+}
+
+static void aoo_client_disconnect(t_aoo_client *x)
+{
+    if (x->x_client){
+        aoonet_client_disconnect(x->x_client);
+    }
+}
+
+static void aoo_client_group_join(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (argc < 2){
+        pd_error(x, "%s: too few arguments for '%s' method", classname(x), s->s_name);
+        return;
+    }
+    if (x->x_client){
+        t_symbol *group = atom_getsymbol(argv);
+        t_symbol *pwd = atom_getsymbol(argv + 1);
+        aoonet_client_group_join(x->x_client, group->s_name, pwd->s_name);
+    }
+}
+
+static void aoo_client_group_leave(t_aoo_client *x, t_symbol *s)
+{
+    if (x->x_client){
+        aoonet_client_group_leave(x->x_client, s->s_name);
+    }
+}
+
+static void * aoo_client_new(t_symbol *s, int argc, t_atom *argv)
+{
+    t_aoo_client *x = (t_aoo_client *)pd_new(aoo_client_class);
+
+    x->x_clock = clock_new(x, (t_method)aoo_client_tick);
+    x->x_stateout = outlet_new(&x->x_obj, 0);
+    x->x_msgout = outlet_new(&x->x_obj, 0);
+
+    int port = argc ? atom_getfloat(argv) : 0;
+
+    x->x_node = port > 0 ? aoo_node_add(port, (t_pd *)x, 0) : 0;
+
+    if (x->x_node){
+        int32_t err;
+        x->x_client = aoonet_client_new(x->x_node, (aoo_sendfn)aoo_node_sendto, &err);
+        if (x->x_client){
+            verbose(0, "new aoo client on port %d", port);
+            // start thread
+            pthread_create(&x->x_thread, 0, aoo_client_threadfn, x);
+            // start clock
+            clock_delay(x->x_clock, AOO_CLIENT_POLL_INTERVAL);
+        } else {
+            char buf[MAXPDSTRING];
+            socket_strerror(err, buf, sizeof(buf));
+            pd_error(x, "%s: %s (%d)", classname(x), buf, err);
+        }
+    }
+    return x;
+}
+
+static void aoo_client_free(t_aoo_client *x)
+{
+    if (x->x_client){
+        aoonet_client_quit(x->x_client);
+        // wait for thread to finish
+        pthread_join(x->x_thread, 0);
+        aoonet_client_free(x->x_client);
+    }
+    clock_free(x->x_clock);
+}
+
+void aoo_client_setup(void)
+{
+    aoo_client_class = class_new(gensym("aoo_client"), (t_newmethod)(void *)aoo_client_new,
+        (t_method)aoo_client_free, sizeof(t_aoo_client), 0, A_GIMME, A_NULL);
+}
