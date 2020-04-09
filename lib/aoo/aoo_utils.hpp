@@ -54,6 +54,7 @@
 #endif
 
 #if defined(__linux__) || defined(__CYGWIN__) || defined(__GNU__) || \
+    defined(__EMSCRIPTEN__) || \
     defined(ANDROID)
 #include <endian.h>
 #endif
