@@ -80,15 +80,9 @@ static void aoo_client_disconnect(t_aoo_client *x)
     }
 }
 
-static void aoo_client_group_join(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
+static void aoo_client_group_join(t_aoo_client *x, t_symbol *group, t_symbol *pwd)
 {
-    if (argc < 2){
-        pd_error(x, "%s: too few arguments for '%s' method", classname(x), s->s_name);
-        return;
-    }
     if (x->x_client){
-        t_symbol *group = atom_getsymbol(argv);
-        t_symbol *pwd = atom_getsymbol(argv + 1);
         aoonet_client_group_join(x->x_client, group->s_name, pwd->s_name);
     }
 }
@@ -113,18 +107,13 @@ static void * aoo_client_new(t_symbol *s, int argc, t_atom *argv)
     x->x_node = port > 0 ? aoo_node_add(port, (t_pd *)x, 0) : 0;
 
     if (x->x_node){
-        int32_t err;
-        x->x_client = aoonet_client_new(x->x_node, (aoo_sendfn)aoo_node_sendto, &err);
+        x->x_client = aoonet_client_new(x->x_node, (aoo_sendfn)aoo_node_sendto);
         if (x->x_client){
             verbose(0, "new aoo client on port %d", port);
             // start thread
             pthread_create(&x->x_thread, 0, aoo_client_threadfn, x);
             // start clock
             clock_delay(x->x_clock, AOO_CLIENT_POLL_INTERVAL);
-        } else {
-            char buf[MAXPDSTRING];
-            socket_strerror(err, buf, sizeof(buf));
-            pd_error(x, "%s: %s (%d)", classname(x), buf, err);
         }
     }
     return x;
@@ -145,4 +134,12 @@ void aoo_client_setup(void)
 {
     aoo_client_class = class_new(gensym("aoo_client"), (t_newmethod)(void *)aoo_client_new,
         (t_method)aoo_client_free, sizeof(t_aoo_client), 0, A_GIMME, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_connect,
+                    gensym("connect"), A_GIMME, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_disconnect,
+                    gensym("disconnect"), A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_connect,
+                    gensym("group_join"), A_SYMBOL, A_SYMBOL, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_connect,
+                    gensym("group_leave"), A_SYMBOL, A_NULL);
 }

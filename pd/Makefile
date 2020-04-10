@@ -62,6 +62,7 @@ shared.sources = \
     $(AOO)/src/sink.cpp \
     $(AOO)/src/server.cpp \
     $(AOO)/src/client.cpp \
+    $(AOO)/src/net_utils.cpp \
     $(AOO)/src/codec_pcm.cpp \
     $(AOO)/src/codec_opus.cpp \
     $(AOO)/src/lib/oscpack/osc/OscTypes.cpp \
