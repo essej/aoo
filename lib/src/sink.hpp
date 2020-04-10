@@ -5,6 +5,7 @@
 #pragma once
 
 #include "aoo/aoo.hpp"
+#include "aoo/aoo_utils.hpp"
 #include "common.hpp"
 #include "lockfree.hpp"
 #include "time_dll.hpp"

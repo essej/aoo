@@ -78,7 +78,7 @@ typedef int32_t (*aoo_sendfn)(
 );
 
 // create a new AOO client for the given UDP socket
-AOO_API aoonet_client * aoonet_client_new(void *udpsocket, aoo_sendfn fn, int32_t *err);
+AOO_API aoonet_client * aoonet_client_new(void *udpsocket, aoo_sendfn fn);
 
 // destroy AOO client
 AOO_API void aoonet_client_free(aoonet_client *client);
