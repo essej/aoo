@@ -378,7 +378,7 @@ void client::wait_for_event(float timeout){
         }
     }
 #else
-    struct fd_set rdset;
+    fd_set rdset;
     FD_ZERO(&rdset);
     int fdmax = std::max<int>(waitpipe_[0], tcpsocket_); // tcpsocket might be -1
     FD_SET(waitpipe_[0], &rdset);
