@@ -31,7 +31,8 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
 #ifndef _WIN32
     val = 1;
     if (ioctl(udpsocket, FIONBIO, (char *)&val) < 0){
-        fprintf(stderr, "aoo_server: couldn't set socket to non-blocking (%d)\n", socket_errno());
+        *err = aoo::net::socket_errno();
+        fprintf(stderr, "aoo_server: couldn't set socket to non-blocking (%d)\n", *err);
         fflush(stderr);
         aoo::net::socket_close(udpsocket);
         return nullptr;
@@ -76,8 +77,9 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
     // (this is not necessary on Windows, because WSAEventSelect will do it automatically)
 #ifndef _WIN32
     val = 1;
-    if (ioctl(tcpsocket_, FIONBIO, (char *)&val) < 0){
-        fprintf(stderr, "aoo_server: couldn't set socket to non-blocking (%d)\n", socket_errno());
+    if (ioctl(tcpsocket, FIONBIO, (char *)&val) < 0){
+        *err = aoo::net::socket_errno();
+        fprintf(stderr, "aoo_server: couldn't set socket to non-blocking (%d)\n", *err);
         fflush(stderr);
         aoo::net::socket_close(tcpsocket);
         aoo::net::socket_close(udpsocket);
@@ -275,12 +277,12 @@ void server::wait_for_event(){
 #else
     // allocate three extra slots for master TCP socket, UDP socket and wait pipe
     int numfds = (clients_.size() + 3);
-    auto fds = (struct pollfd *)alloca(numfds * sizeof(pollfd));
+    auto fds = (struct pollfd *)alloca(numfds * sizeof(struct pollfd));
     for (int i = 0; i < numfds; ++i){
         fds[i].events = POLLIN;
         fds[i].revents = 0;
     }
-
+    int numclients = clients_.size();
     for (int i = 0; i < numclients; ++i){
         fds[i].fd = clients_[i].socket;
     }
@@ -356,7 +358,7 @@ void server::receive_udp(){
     while (true){
         char buf[AOO_MAXPACKETSIZE];
         ip_address addr;
-        auto result = recvfrom(udpsocket_, buf, sizeof(buf), 0,
+        int32_t result = recvfrom(udpsocket_, buf, sizeof(buf), 0,
                                (struct sockaddr *)&addr.addr, &addr.len);
         if (result > 0){
             try {

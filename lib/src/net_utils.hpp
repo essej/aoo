@@ -6,6 +6,7 @@ typedef int socklen_t;
 #else
 #include <sys/socket.h>
 #include <sys/select.h>
+#include <poll.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
