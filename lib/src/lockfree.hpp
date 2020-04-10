@@ -68,7 +68,7 @@ class queue {
     }
 
     void read(T& out) {
-        out = data_[rdhead_];
+        out = std::move(data_[rdhead_]);
         rdhead_ = (rdhead_ + 1) % capacity();
         --balance_;
         assert(balance_ >= 0);
@@ -92,8 +92,9 @@ class queue {
         }
     }
 
-    void write(const T& value) {
-        data_[wrhead_] = value;
+    template<typename U>
+    void write(U&& value) {
+        data_[wrhead_] = std::forward<U>(value);
         wrhead_ = (wrhead_ + 1) % capacity();
         ++balance_;
         assert(balance_ <= capacity());
