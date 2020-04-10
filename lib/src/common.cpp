@@ -1060,16 +1060,14 @@ int32_t dynamic_resampler::write_available(){
 void dynamic_resampler::write(const aoo_sample *data, int32_t n){
     auto size = (int32_t)buffer_.size();
     auto end = wrpos_ + n;
-    int32_t n1, n2;
+    int32_t split;
     if (end > size){
-        n1 = size - wrpos_;
-        n2 = end - size;
+        split = size - wrpos_;
     } else {
-        n1 = n;
-        n2 = 0;
+        split = n;
     }
-    std::copy(data, data + n1, &buffer_[wrpos_]);
-    std::copy(data + n1, data + n, &buffer_[0]);
+    std::copy(data, data + split, &buffer_[wrpos_]);
+    std::copy(data + split, data + n, &buffer_[0]);
     wrpos_ += n;
     if (wrpos_ >= size){
         wrpos_ -= size;
