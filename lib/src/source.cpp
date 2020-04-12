@@ -500,6 +500,10 @@ int32_t aoo_source_send(aoo_source *src) {
 // We have to make a local copy of the sink list, but this should be
 // rather cheap in comparison to encoding and sending the audio data.
 int32_t aoo::source::send(){
+    if (!play_.load()){
+        return false;
+    }
+
     bool didsomething = false;
 
     if (send_format()){
