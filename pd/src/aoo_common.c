@@ -344,6 +344,8 @@ int aoo_printformat(const aoo_format_storage *f, int argc, t_atom *argv)
         }
         SETSYMBOL(argv + 5, signaltype);
         return 6;
+    } else {
+        error("aoo: unknown format!");
     }
     return 0;
 }

@@ -20,7 +20,7 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
-#define DO_LOG(x) (std::cerr << x << std::endl)
+#define DO_LOG(x) do { std::cerr << x << std::endl; } while (false);
 
 #if LOGLEVEL >= 0
  #define LOG_ERROR(x) DO_LOG(x)
