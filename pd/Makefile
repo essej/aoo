@@ -23,6 +23,9 @@ class.sources = \
 
 AOO = ../lib
 
+OPUS_CFLAGS =
+OPUS_LIBS = -lopus
+
 cflags = \
     -I$(AOO) \
     -I$(AOO)/src \
@@ -36,6 +39,7 @@ cflags = \
     -DAOO_DEBUG_DLL=0 \
     -DAOO_DEBUG_RESAMPLING=0 \
     -DAOO_DEBUG_BLOCK_BUFFER=0 \
+    $(OPUS_CFLAGS) \
     $(empty)
 
 ldlibs =
@@ -65,16 +69,16 @@ shared.sources = \
 $(shared.sources:.cpp=.o): cxx.flags += -std=c++14
 
 define forWindows
-    ldlibs += -lws2_32 -lopus -static-libstdc++ -static-libgcc
+    ldlibs += -lws2_32 $(OPUS_LIBS) -static-libstdc++ -static-libgcc
 endef
 
 define forDarwin
     cflags += -mmacosx-version-min=10.9
-    ldlibs += -lpthread -lopus
+    ldlibs += -lpthread $(OPUS_LIBS)
 endef
 
 define forLinux
-    ldlibs += -pthread -lopus
+    ldlibs += -pthread $(OPUS_LIBS)
 endef
 
 # all extra files to be included in binary distribution of the library
