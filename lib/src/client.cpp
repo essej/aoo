@@ -7,6 +7,29 @@
 #include <cstring>
 #include <functional>
 
+#include "md5/md5.h"
+
+namespace aoo {
+namespace net {
+
+std::string encrypt(const std::string& input){
+    uint8_t result[16];
+    MD5_CTX ctx;
+    MD5Init(&ctx);
+    MD5Update(&ctx, (uint8_t *)input.data(), input.size());
+    MD5Final(result, &ctx);
+
+    char output[33];
+    for (int i = 0; i < 16; ++i){
+        sprintf(&output[i * 2], "%02X", result[i]);
+    }
+
+    return output;
+}
+
+}
+} // aoo
+
 /*//////////////////// AoO client /////////////////////*/
 
 aoonet_client * aoonet_client_new(void *udpsocket, aoo_sendfn fn, int port) {
@@ -128,7 +151,7 @@ int32_t aoo::net::client::connect(const char *host, int port,
     }
 
     username_ = username;
-    password_ = pwd;
+    password_ = encrypt(pwd);
 
     state_ = client_state::connecting;
 
@@ -162,7 +185,7 @@ int32_t aoonet_client_group_join(aoonet_client *client, const char *group, const
 }
 
 int32_t aoo::net::client::group_join(const char *group, const char *pwd){
-    push_command(std::make_unique<group_join_cmd>(group, pwd));
+    push_command(std::make_unique<group_join_cmd>(group, encrypt(pwd)));
 
     signal();
 
@@ -193,7 +216,7 @@ int32_t aoo::net::client::handle_message(const char *data, int32_t n, void *addr
         osc::ReceivedPacket packet(data, n);
         osc::ReceivedMessage msg(packet);
 
-        LOG_VERBOSE("aoo_client: handle UDP message " << msg.AddressPattern());
+        LOG_DEBUG("aoo_client: handle UDP message " << msg.AddressPattern());
 
         ip_address address((struct sockaddr *)addr);
         if (address == remote_addr_){

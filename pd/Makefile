@@ -62,6 +62,7 @@ shared.sources = \
     $(AOO)/src/net_utils.cpp \
     $(AOO)/src/codec_pcm.cpp \
     $(AOO)/src/codec_opus.cpp \
+    $(AOO)/src/lib/md5/md5.cpp \
     $(AOO)/src/lib/oscpack/osc/OscTypes.cpp \
     $(AOO)/src/lib/oscpack/osc/OscReceivedElements.cpp \
     $(AOO)/src/lib/oscpack/osc/OscOutboundPacketStream.cpp \
