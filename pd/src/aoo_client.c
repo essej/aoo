@@ -68,6 +68,7 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
         int port = atom_getfloat(argv + 1);
         t_symbol *username = atom_getsymbol(argv + 2);
         t_symbol *pwd = atom_getsymbol(argv + 3);
+
         aoonet_client_connect(x->x_client, host->s_name, port,
                               username->s_name, pwd->s_name);
     }
@@ -127,6 +128,10 @@ static void aoo_client_free(t_aoo_client *x)
         pthread_join(x->x_thread, 0);
         aoonet_client_free(x->x_client);
     }
+    if (x->x_node){
+        aoo_node_release(x->x_node, (t_pd *)x, 0);
+    }
+
     clock_free(x->x_clock);
 }
 
