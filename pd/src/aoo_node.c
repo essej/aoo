@@ -41,7 +41,7 @@ typedef struct _aoo_client t_aoo_client;
 void aoo_client_send(t_aoo_client *x);
 
 void aoo_client_handle_message(t_aoo_client *x, const char * data,
-                               int32_t n, void *src, aoo_replyfn fn);
+                               int32_t n, void *endpoint, aoo_replyfn fn);
 
 static void lower_thread_priority(void)
 {
