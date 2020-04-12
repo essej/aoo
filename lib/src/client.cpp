@@ -106,7 +106,7 @@ int32_t aoo::net::client::run(){
                 timeout = ping_interval - delta;
             }
         } else {
-            timeout = 1e9;
+            timeout = -1;
         }
 
         wait_for_event(timeout);
@@ -220,6 +220,7 @@ int32_t aoo::net::client::handle_message(const char *data, int32_t n, void *addr
 
         ip_address address((struct sockaddr *)addr);
         if (address == remote_addr_){
+            // server message
             handle_server_message_udp(msg);
         } else {
             // peer message
@@ -432,6 +433,7 @@ void client::do_group_leave(const std::string &group){
 }
 
 void client::wait_for_event(float timeout){
+    LOG_DEBUG("aoo_server: wait " << timeout << " seconds");
 #ifdef _WIN32
     HANDLE events[2];
     int numevents;
@@ -443,9 +445,10 @@ void client::wait_for_event(float timeout){
         numevents = 1;
     }
 
-    DWORD time = timeout * 1000;
+    DWORD time = timeout < 0 ? INFINITE : (timeout * 1000 + 0.5); // round up to 1 ms!
     DWORD result = WaitForMultipleObjects(numevents, events, FALSE, time);
     if (result == WAIT_TIMEOUT){
+        LOG_DEBUG("aoo_server: timed out");
         return;
     }
     // only the second event is a socket
@@ -477,7 +480,8 @@ void client::wait_for_event(float timeout){
     fds[1].events = POLLIN;
     fds[1].revents = 0;
 
-    int result = poll(fds, 2, timeout * 1000.0);
+    // round up to 1 ms! negative value: block indefinitely
+    int result = poll(fds, 2, timeout * 1000.0 + 0.5);
     if (result < 0){
         int err = errno;
         if (err == EINTR){
@@ -511,7 +515,7 @@ void client::wait_for_event(float timeout){
     time.tv_sec = (time_t)timeout;
     time.tv_usec = (timeout - (double)time.tv_sec) * 1000000;
 
-    if (select(fdmax + 1, &rdset, 0, 0, &time) < 0){
+    if (select(fdmax + 1, &rdset, 0, 0, timeout < 0 ? nullptr : &time) < 0){
         int err = errno;
         if (err == EINTR){
             // ?
@@ -725,11 +729,19 @@ void client::handle_server_message_udp(const osc::ReceivedMessage &msg){
 
             signal();
         }
+    } else {
+        LOG_WARNING("aoo_client: received unknown UDP message "
+                    << msg.AddressPattern() << " from server");
     }
 }
 
 void client::handle_peer_message_udp(const osc::ReceivedMessage &msg, const ip_address &addr){
+    if (false){
 
+    } else {
+        LOG_WARNING("aoo_client: received unknown UDP message "
+                    << msg.AddressPattern() << " from peer " << addr.name());
+    }
 }
 
 void client::signal(){
