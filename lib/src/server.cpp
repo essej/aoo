@@ -23,6 +23,7 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
     int udpsocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (udpsocket < 0){
         *err = aoo::net::socket_errno();
+        LOG_ERROR("aoo_server: couldn't create UDP socket (" << *err << ")");
         return nullptr;
     }
 
@@ -32,8 +33,7 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
     val = 1;
     if (ioctl(udpsocket, FIONBIO, (char *)&val) < 0){
         *err = aoo::net::socket_errno();
-        fprintf(stderr, "aoo_server: couldn't set socket to non-blocking (%d)\n", *err);
-        fflush(stderr);
+        LOG_ERROR("aoo_server: couldn't set socket to non-blocking (" << *err << ")");
         aoo::net::socket_close(udpsocket);
         return nullptr;
     }
@@ -41,6 +41,7 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
 
     if (bind(udpsocket, (sockaddr *)&sa, sizeof(sa)) < 0){
         *err = aoo::net::socket_errno();
+        LOG_ERROR("aoo_server: couldn't bind UDP socket (" << *err << ")");
         aoo::net::socket_close(udpsocket);
         return nullptr;
     }
@@ -49,6 +50,7 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
     int tcpsocket = socket(AF_INET, SOCK_STREAM, 0);
     if (tcpsocket < 0){
         *err = aoo::net::socket_errno();
+        LOG_ERROR("aoo_server: couldn't create TCP socket (" << *err << ")");
         aoo::net::socket_close(udpsocket);
         return nullptr;
     }
@@ -59,8 +61,7 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
                       (char *)&val, sizeof(val)) < 0)
     {
         *err = aoo::net::socket_errno();
-        fprintf(stderr, "aoo_server: couldn't set SO_REUSEADDR (%d)\n", *err);
-        fflush(stderr);
+        LOG_ERROR("aoo_server: couldn't set SO_REUSEADDR (" << *err << ")");
         aoo::net::socket_close(tcpsocket);
         aoo::net::socket_close(udpsocket);
         return nullptr;
@@ -68,8 +69,7 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
 
     // set TCP_NODELAY
     if (setsockopt(tcpsocket, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val)) < 0){
-        fprintf(stderr, "aoo_server: couldn't set TCP_NODELAY\n");
-        fflush(stderr);
+        LOG_WARNING("aoo_server: couldn't set TCP_NODELAY");
         // ignore
     }
 
@@ -79,8 +79,7 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
     val = 1;
     if (ioctl(tcpsocket, FIONBIO, (char *)&val) < 0){
         *err = aoo::net::socket_errno();
-        fprintf(stderr, "aoo_server: couldn't set socket to non-blocking (%d)\n", *err);
-        fflush(stderr);
+        LOG_ERROR("aoo_server: couldn't set socket to non-blocking (" << *err << ")");
         aoo::net::socket_close(tcpsocket);
         aoo::net::socket_close(udpsocket);
         return nullptr;
@@ -90,6 +89,7 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
     // bind TCP socket
     if (bind(tcpsocket, (sockaddr *)&sa, sizeof(sa)) < 0){
         *err = aoo::net::socket_errno();
+        LOG_ERROR("aoo_server: couldn't bind TCP socket (" << *err << ")");
         aoo::net::socket_close(tcpsocket);
         aoo::net::socket_close(udpsocket);
         return nullptr;
@@ -98,6 +98,7 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
     // listen
     if (listen(tcpsocket, 32) < 0){
         *err = aoo::net::socket_errno();
+        LOG_ERROR("aoo_server: listen() failed (" << *err << ")");
         aoo::net::socket_close(tcpsocket);
         aoo::net::socket_close(udpsocket);
         return nullptr;
@@ -223,18 +224,15 @@ void server::wait_for_event(){
             // accept new clients
             while (true){
                 ip_address addr;
-                auto sock = accept(tcpsocket_, (struct sockaddr *)&addr.addr, &addr.len);
+                auto sock = accept(tcpsocket_, (struct sockaddr *)&addr.address, &addr.length);
                 if (sock != INVALID_SOCKET){
                     clients_.emplace_back(*this, sock, addr);
-                    fprintf(stderr, "aoo_server: accepted client (IP: %s, port: %d)\n",
-                            inet_ntoa(reinterpret_cast<struct sockaddr_in *>(&addr.addr)->sin_addr),
-                            (int)htons(reinterpret_cast<struct sockaddr_in *>(&addr.addr)->sin_port));
-                    fflush(stderr);
+                    LOG_VERBOSE("aoo_server: accepted client (IP: "
+                                << addr.name() << ", port: " << addr.port() << ")");
                 } else {
                     int err = socket_errno();
                     if (err != WSAEWOULDBLOCK){
-                        fprintf(stderr, "aoo_server: couldn't accept client (%d)\n", socket_errno());
-                        fflush(stderr);
+                        LOG_ERROR("aoo_server: couldn't accept client (" << err << ")");
                     }
                     break;
                 }
@@ -264,8 +262,7 @@ void server::wait_for_event(){
             } else if (ne.lNetworkEvents & FD_CLOSE){
                 // connection was closed
                 int err = ne.iErrorCode[FD_CLOSE_BIT];
-                fprintf(stderr, "aoo_server: client connection was closed (%d)\n", err);
-                fflush(stderr);
+                LOG_VERBOSE("aoo_server: client connection was closed (" << err << ")");
 
                 clients_[i].close();
                 didclose = true;
@@ -299,8 +296,7 @@ void server::wait_for_event(){
         if (err == EINTR){
             // ?
         } else {
-            fprintf(stderr, "aoo_server: poll failed (%d)\n", err);
-            fflush(stderr);
+            LOG_ERROR("aoo_server: poll failed (" << err << ")");
             // what to do?
         }
         return;
@@ -310,25 +306,29 @@ void server::wait_for_event(){
         // accept new clients
         while (true){
             ip_address addr;
-            auto sock = accept(tcpsocket_, (struct sockaddr *)&addr.addr, &addr.len);
+            auto sock = accept(tcpsocket_, (struct sockaddr *)&addr.address, &addr.length);
             if (sock >= 0){
                 clients_.emplace_back(*this, sock, addr);
-                fprintf(stderr, "aoo_server: accepted client (IP: %s, port: %d)\n",
-                        inet_ntoa(reinterpret_cast<struct sockaddr_in *>(&addr.addr)->sin_addr),
-                        (int)htons(reinterpret_cast<struct sockaddr_in *>(&addr.len)->sin_port));
-                fflush(stderr);
+                LOG_VERBOSE("aoo_server: accepted client (IP: "
+                            << addr.name() << ", port: " << addr.port() << ")");
             } else {
                 int err = socket_errno();
                 if (err != EWOULDBLOCK){
-                    fprintf(stderr, "aoo_server: couldn't accept client (%d)\n", socket_errno());
-                    fflush(stderr);
+                    LOG_ERROR("aoo_server: couldn't accept client (" << err << ")");
                 }
                 break;
             }
         }
     }
+
     if (fds[udpindex].revents & POLLIN){
         receive_udp();
+    }
+
+    if (fds[waitindex].revents & POLLIN){
+        // clear pipe
+        char c;
+        read(waitpipe_[0], &c, 1);
     }
 
     for (int i = 0; i < numclients; ++i){
@@ -359,7 +359,7 @@ void server::receive_udp(){
         char buf[AOO_MAXPACKETSIZE];
         ip_address addr;
         int32_t result = recvfrom(udpsocket_, buf, sizeof(buf), 0,
-                               (struct sockaddr *)&addr.addr, &addr.len);
+                               (struct sockaddr *)&addr.address, &addr.length);
         if (result > 0){
             try {
                 osc::ReceivedPacket packet(buf, result);
@@ -370,7 +370,7 @@ void server::receive_udp(){
                     while (it != bundle.ElementsEnd()){
                         if (it->IsMessage()){
                             osc::ReceivedMessage msg(*it);
-                            handle_udp_message(addr, msg);
+                            handle_udp_message(msg, addr);
                         } else if (it->IsBundle()){
                             osc::ReceivedBundle bundle2(*it);
                             dispatchBundle(bundle2);
@@ -383,7 +383,7 @@ void server::receive_udp(){
 
                 if (packet.IsMessage()){
                     osc::ReceivedMessage msg(packet);
-                    handle_udp_message(addr, msg);
+                    handle_udp_message(msg, addr);
                 } else if (packet.IsBundle()){
                     osc::ReceivedBundle bundle(packet);
                     dispatchBundle(bundle);
@@ -391,8 +391,7 @@ void server::receive_udp(){
                     // ignore
                 }
             } catch (const osc::Exception& e){
-                fprintf(stderr, "aoo_server: %s\n", e.what());
-                fflush(stderr);
+                LOG_ERROR("aoo_server: " << e.what());
             }
         } else if (result < 0){
             int err = socket_errno();
@@ -403,24 +402,45 @@ void server::receive_udp(){
         #endif
             {
             #if 0
-                fprintf(stderr, "aoo_server: recv() would block\n");
-                fflush(stderr);
+                LOG_VERBOSE("aoo_server: recv() would block");
             #endif
             }
             else
             {
                 // TODO handle error
-                fprintf(stderr, "aoo_server: recv() failed (%d)\n", err);
-                fflush(stderr);
+                LOG_ERROR("aoo_server: recv() failed (" << err << ")");
             }
             return;
         }
     }
 }
 
-void server::handle_udp_message(const ip_address& addr,
-                                const osc::ReceivedMessage &msg)
+void server::send_udp_message(const char *msg, int32_t size,
+                              const ip_address &addr)
 {
+    int result = ::sendto(udpsocket_, msg, size, 0,
+                          (struct sockaddr *)&addr.address, addr.length);
+    if (result < 0){
+        int err = socket_errno();
+    #ifdef _WIN32
+        if (err != WSAEWOULDBLOCK)
+    #else
+        if (err != EWOULDBLOCK)
+    #endif
+        {
+            // TODO handle error
+            LOG_ERROR("aoo_server: send() failed (" << err << ")");
+        } else {
+            LOG_VERBOSE("aoo_server: send() would block");
+        }
+    }
+}
+
+void server::handle_udp_message(const osc::ReceivedMessage &msg,
+                                const ip_address& addr)
+{
+    LOG_VERBOSE("aoo_server: handle UDP message " << msg.AddressPattern());
+
     if (!strcmp(msg.AddressPattern(),
                 AOO_MSG_DOMAIN AOO_MSG_SERVER AOO_MSG_PING))
     {
@@ -430,28 +450,18 @@ void server::handle_udp_message(const ip_address& addr,
         reply << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_CLIENT AOO_MSG_PING)
               << osc::EndMessage;
 
-        int result = ::sendto(udpsocket_, reply.Data(), reply.Size(), 0,
-                          (struct sockaddr *)&addr.addr, addr.len);
-        if (result < 0){
-            int err = socket_errno();
-        #ifdef _WIN32
-            if (err != WSAEWOULDBLOCK)
-        #else
-            if (err != EWOULDBLOCK)
-        #endif
-            {
-                // TODO handle error
-                fprintf(stderr, "aoo_server: send() failed (%d)\n", err);
-                fflush(stderr);
-            } else {
-                fprintf(stderr, "aoo_server: send() would block\n");
-                fflush(stderr);
-                // LATER buffer data and send next time
-            }
-        }
+        send_udp_message(reply.Data(), reply.Size(), addr);
+    } else if (!strcmp(msg.AddressPattern(),
+                       AOO_MSG_DOMAIN AOO_MSG_SERVER "/request")){
+        // reply with /reply message
+        char buf[64];
+        osc::OutboundPacketStream reply(buf, sizeof(buf));
+        reply << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_CLIENT "/reply")
+              << addr.name().c_str() << addr.port() << osc::EndMessage;
+
+        send_udp_message(reply.Data(), reply.Size(), addr);
     } else {
-        fprintf(stderr, "aoo_server: not an AOO message!\n");
-        fflush(stderr);
+        LOG_ERROR("aoo_server: unknown message " << msg.AddressPattern());
     }
 }
 
@@ -459,7 +469,7 @@ void server::signal(){
 #ifdef _WIN32
     SetEvent(waitevent_);
 #else
-    write(waitpipe_[1], "\n", 1);
+    write(waitpipe_[1], "\0", 1);
 #endif
 }
 
@@ -521,8 +531,7 @@ void client_endpoint::send_message(const char *msg, int32_t size){
                 if (res >= 0){
                     nbytes += res;
                 #if 0
-                    fprintf(stderr, "aoo_server: sent %d bytes\n", res);
-                    fflush(stderr);
+                    LOG_VERBOSE("aoo_server: sent " << res << " bytes");
                 #endif
                 } else {
                     auto err = socket_errno();
@@ -533,23 +542,19 @@ void client_endpoint::send_message(const char *msg, int32_t size){
                 #endif
                     {
                         // TODO handle error
-                        fprintf(stderr, "aoo_server: send() failed (%d)\n", socket_errno());
-                        fflush(stderr);
+                        LOG_ERROR("aoo_server: send() failed (" << err << ")");
                     } else {
                         // store in pending buffer
                         pending_send_data_.assign(buf + nbytes, buf + total);
-                        fprintf(stderr, "aoo_server: send() would block\n");
-                        fflush(stderr);
+                        LOG_VERBOSE("aoo_server: send() would block");
                     }
                     return;
                 }
             }
         }
-        fprintf(stderr, "aoo_server: sent %s to client\n", msg);
-        fflush(stderr);
+        LOG_DEBUG("aoo_server: sent " << msg << " to client");
     } else {
-        fprintf(stderr, "aoo_server: couldn't send %s to client\n", msg);
-        fflush(stderr);
+        LOG_ERROR("aoo_server: couldn't send " << msg << " to client");
     }
 }
 
@@ -559,8 +564,7 @@ bool client_endpoint::receive_data(){
         char buffer[AOO_MAXPACKETSIZE];
         auto result = recv(socket, buffer, sizeof(buffer), 0);
         if (result == 0){
-            fprintf(stderr, "client_endpoint: connection was closed\n");
-            fflush(stderr);
+            LOG_WARNING("client_endpoint: connection was closed");
             return false;
         }
         if (result < 0){
@@ -572,16 +576,14 @@ bool client_endpoint::receive_data(){
         #endif
             {
             #if 0
-                fprintf(stderr, "client_endpoint: recv() would block\n");
-                fflush(stderr);
+                LOG_VERBOSE("client_endpoint: recv() would block");
             #endif
                 return true;
             }
             else
             {
                 // TODO handle error
-                fprintf(stderr, "client_endpoint: recv() failed (%d)\n", err);
-                fflush(stderr);
+                LOG_ERROR("client_endpoint: recv() failed (" << err << ")");
                 return false;
             }
         }
@@ -623,8 +625,7 @@ bool client_endpoint::receive_data(){
                         // ignore
                     }
                 } catch (const osc::Exception& e){
-                    fprintf(stderr, "aoo_server: %s\n", e.what());
-                    fflush(stderr);
+                    LOG_ERROR("aoo_server: " << e.what());
                 }
             } else {
                 break;
@@ -635,17 +636,61 @@ bool client_endpoint::receive_data(){
 }
 
 void client_endpoint::handle_message(const osc::ReceivedMessage &msg){
-    fprintf(stderr, "aoo_server: got %s message\n", msg.AddressPattern());
-    fflush(stderr);
+    LOG_DEBUG("aoo_server: got message " << msg.AddressPattern());
     if (!strcmp(msg.AddressPattern(), AOO_MSG_DOMAIN AOO_MSG_SERVER AOO_MSG_PING)){
-        // send /ping reply
-        char buf[AOO_MAXPACKETSIZE];
-        osc::OutboundPacketStream reply(buf, sizeof(buf));
-        reply << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_CLIENT AOO_MSG_PING)
-              << osc::EndMessage;
+        handle_ping();
+    } else if (!strcmp(msg.AddressPattern(), AOO_MSG_DOMAIN AOO_MSG_SERVER "/login")){
+        try {
+            auto it = msg.ArgumentsBegin();
+            std::string username = (it++)->AsString();
+            std::string password = (it++)->AsString();
+            std::string public_ip = (it++)->AsString();
+            int32_t public_port = (it++)->AsInt32();
+            std::string local_ip = (it++)->AsString();
+            int32_t local_port = (it++)->AsInt32();
 
-        send_message(reply.Data(), reply.Size());
+            handle_login(username, password, public_ip, public_port, local_ip, local_port);
+        } catch (const osc::Exception& e){
+            // send /login reply
+            char buf[AOO_MAXPACKETSIZE];
+            osc::OutboundPacketStream reply(buf, sizeof(buf));
+            reply << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_CLIENT "/login")
+                  << (int32_t)0 << e.what() << osc::EndMessage;
+
+            send_message(reply.Data(), reply.Size());
+        }
     }
+}
+
+void client_endpoint::handle_ping(){
+    // send /ping reply
+    char buf[AOO_MAXPACKETSIZE];
+    osc::OutboundPacketStream reply(buf, sizeof(buf));
+    reply << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_CLIENT AOO_MSG_PING)
+          << osc::EndMessage;
+
+    send_message(reply.Data(), reply.Size());
+}
+
+void client_endpoint::handle_login(const std::string& name, const std::string& pwd,
+                                   const std::string& public_ip, int32_t public_port,
+                                   const std::string& local_ip, int32_t local_port)
+{
+    int32_t result = 1;
+    std::string errmsg;
+
+    // TODO
+    LOG_VERBOSE("aoo_server: login: username: " << name << ", password: " << pwd
+                << ", public IP: " << public_ip << ", public port: " << public_port
+                << ", local IP: " << local_ip << ", local port: " << local_port);
+
+    // send /login reply
+    char buf[AOO_MAXPACKETSIZE];
+    osc::OutboundPacketStream reply(buf, sizeof(buf));
+    reply << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_CLIENT "/login")
+          << result << errmsg.c_str() << osc::EndMessage;
+
+    send_message(reply.Data(), reply.Size());
 }
 
 } // net

@@ -107,7 +107,7 @@ static void * aoo_client_new(t_symbol *s, int argc, t_atom *argv)
     x->x_node = port > 0 ? aoo_node_add(port, (t_pd *)x, 0) : 0;
 
     if (x->x_node){
-        x->x_client = aoonet_client_new(x->x_node, (aoo_sendfn)aoo_node_sendto);
+        x->x_client = aoonet_client_new(x->x_node, (aoo_sendfn)aoo_node_sendto, port);
         if (x->x_client){
             verbose(0, "new aoo client on port %d", port);
             // start thread
