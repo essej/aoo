@@ -175,7 +175,7 @@ int32_t encoder_setformat(void *enc, aoo_format *f){
 
     // save and print settings
     memcpy(&c->format, fmt, sizeof(aoo_format_opus));
-    c->format.header.codec = AOO_CODEC_OPUS;
+    c->format.header.codec = AOO_CODEC_OPUS; // !
     print_settings(c->format);
 
     return 1;
@@ -274,7 +274,7 @@ bool decoder_dosetformat(decoder *c, aoo_format_opus& f){
         opus_multistream_decoder_ctl(c->state, OPUS_GET_SIGNAL(&f.signal_type));
         // save and print settings
         memcpy(&c->format, &f, sizeof(aoo_format_opus));
-        c->format.header.codec = AOO_CODEC_OPUS;
+        c->format.header.codec = AOO_CODEC_OPUS; // !
         print_settings(f);
         return true;
     } else {
@@ -301,6 +301,10 @@ int32_t decoder_setformat(void *dec, aoo_format *f)
 
 int32_t decoder_readformat(void *dec, const aoo_format *fmt,
                            const char *buf, int32_t size){
+    if (strcmp(fmt->codec, AOO_CODEC_OPUS)){
+        LOG_ERROR("opus: wrong format!");
+        return -1;
+    }
     if (size >= 12){
         auto c = static_cast<decoder *>(dec);
         aoo_format_opus f;
