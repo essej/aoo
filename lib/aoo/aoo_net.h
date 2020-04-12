@@ -17,7 +17,7 @@ extern "C"
 #define AOO_MSG_CLIENT_LEN 7
 
 typedef enum aoonet_type {
-    AOO_TYPE_SERVER = 0,
+    AOO_TYPE_SERVER = 1000,
     AOO_TYPE_CLIENT
 } aoonet_type;
 
@@ -78,7 +78,7 @@ typedef int32_t (*aoo_sendfn)(
 );
 
 // create a new AOO client for the given UDP socket
-AOO_API aoonet_client * aoonet_client_new(void *udpsocket, aoo_sendfn fn);
+AOO_API aoonet_client * aoonet_client_new(void *udpsocket, aoo_sendfn fn, int port);
 
 // destroy AOO client
 AOO_API void aoonet_client_free(aoonet_client *client);

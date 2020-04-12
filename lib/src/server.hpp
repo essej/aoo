@@ -5,6 +5,7 @@
 #pragma once
 
 #include "aoo/aoo_net.hpp"
+#include "aoo/aoo_utils.hpp"
 #include "lockfree.hpp"
 #include "common.hpp"
 #include "net_utils.hpp"
@@ -47,6 +48,12 @@ private:
     std::vector<uint8_t> pending_send_data_;
 
     void handle_message(const osc::ReceivedMessage& msg);
+
+    void handle_ping();
+
+    void handle_login(const std::string& name, const std::string& pwd,
+                      const std::string& public_ip, int32_t public_port,
+                      const std::string& local_ip, int32_t local_port);
 };
 
 class server final : public iserver {
@@ -88,8 +95,11 @@ private:
 
     void receive_udp();
 
-    void handle_udp_message(const ip_address& addr,
-                            const osc::ReceivedMessage& msg);
+    void send_udp_message(const char *msg, int32_t size,
+                          const ip_address& addr);
+
+    void handle_udp_message(const osc::ReceivedMessage& msg,
+                            const ip_address& addr);
 
     void signal();
 };

@@ -45,7 +45,7 @@ int socket_connect(int socket, const ip_address& addr, float timeout)
     // set nonblocking and connect
     socket_set_nonblocking(socket, 1);
 
-    if (connect(socket, (const struct sockaddr *)&addr.addr, addr.len) < 0)
+    if (connect(socket, (const struct sockaddr *)&addr.address, addr.length) < 0)
     {
         int status;
         struct timeval timeoutval;

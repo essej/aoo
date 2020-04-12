@@ -231,6 +231,8 @@ static void* aoo_node_receive(void *y)
                 pthread_cond_signal(&x->x_condition);
             } else {
                 // not a valid AoO OSC message
+                fprintf(stderr, "aoo_node: not a valid AOO message!\n");
+                fflush(stderr);
             }
         } else if (nbytes < 0){
             // ignore errors when quitting
