@@ -293,16 +293,9 @@ void client::do_connect(const std::string &host, int port)
         return;
     }
 
-    if (try_connect(host, port) != 0){
-       if (tcpsocket_ >= 0){
-        #ifdef _WIN32
-            // unregister event from socket.
-            // actually, I think this happens automatically when closing the socket.
-            WSAEventSelect(tcpsocket_, sockevent_, 0);
-        #endif
-            socket_close(tcpsocket_);
-            tcpsocket_ = -1;
-        }
+    int err = try_connect(host, port);
+    if (err != 0){
+        do_disconnect(command_reason::error, err);
         return;
     }
 
