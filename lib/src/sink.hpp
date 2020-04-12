@@ -179,7 +179,9 @@ private:
     spinlock eventqueuelock_;
     void push_event(const event& e){
         scoped_lock<spinlock> l(eventqueuelock_);
-        eventqueue_.write(e);
+        if (eventqueue_.write_available()){
+            eventqueue_.write(e);
+        }
     }
     dynamic_resampler resampler_;
     // thread synchronization
