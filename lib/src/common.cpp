@@ -9,42 +9,12 @@
 #include "common.hpp"
 
 #include <unordered_map>
-#include <chrono>
 #include <algorithm>
 #include <cassert>
 
-// for shared_lock and time
-#ifdef _WIN32
-#include <synchapi.h>
-#include <windows.h>
-#endif
-
-// for spinlock
-// Intel
-#if defined(__i386__) || defined(_M_IX86) || defined(__x86_64__) || defined(_M_X64)
-  #define CPU_INTEL
-  #include <immintrin.h>
-// ARM
-#elif defined(__arm__) || defined(_M_ARM) || defined(__aarch64__)
-  #define CPU_ARM
-#else
-// fallback
-  #include <thread>
-#endif
+/*////////////// codec plugins ///////////////*/
 
 namespace aoo {
-
-void pause_cpu(){
-#if defined(CPU_INTEL)
-    _mm_pause();
-#elif defined(CPU_ARM)
-    __asm__ __volatile__("yield");
-#else // fallback
-    std::this_thread::sleep_for(std::chrono::microseconds(0));
-#endif
-}
-
-/*////////////// codec plugins ///////////////*/
 
 static std::unordered_map<std::string, std::unique_ptr<aoo::codec>> codec_dict;
 
@@ -87,17 +57,17 @@ int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *type, int32_t *id)
             *type = AOO_TYPE_SINK;
             offset += AOO_MSG_SINK_LEN;
         }
-        else if (n >= (offset + AOO_MSG_SERVER_LEN)
-            && !memcmp(msg + offset, AOO_MSG_SERVER, AOO_MSG_SERVER_LEN))
+        else if (n >= (offset + AOONET_MSG_SERVER_LEN)
+            && !memcmp(msg + offset, AOONET_MSG_SERVER, AOONET_MSG_SERVER_LEN))
         {
             *type = AOO_TYPE_SERVER;
-            return offset + AOO_MSG_SERVER_LEN;
+            return offset + AOONET_MSG_SERVER_LEN;
         }
-        else if (n >= (offset + AOO_MSG_CLIENT_LEN)
-            && !memcmp(msg + offset, AOO_MSG_CLIENT, AOO_MSG_CLIENT_LEN))
+        else if (n >= (offset + AOONET_MSG_CLIENT_LEN)
+            && !memcmp(msg + offset, AOONET_MSG_CLIENT, AOONET_MSG_CLIENT_LEN))
         {
             *type = AOO_TYPE_CLIENT;
-            return offset + AOO_MSG_CLIENT_LEN;
+            return offset + AOONET_MSG_CLIENT_LEN;
         }
         else {
             // TODO only print relevant part of OSC address string
@@ -124,7 +94,7 @@ int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *type, int32_t *id)
 
 // OSC time stamp (NTP time)
 uint64_t aoo_osctime_get(void){
-    return aoo::time_tag::get().to_uint64();
+    return aoo::time_tag::now().to_uint64();
 }
 
 double aoo_osctime_toseconds(uint64_t t){
@@ -140,51 +110,6 @@ double aoo_osctime_duration(uint64_t t1, uint64_t t2){
 }
 
 namespace aoo {
-
-/*////////////////////////// time tag //////////////////////////*/
-
-// OSC time stamp (NTP time)
-time_tag time_tag::get(){
-#if defined(_WIN32) && 0
-    // make sure to get the highest precision
-    // LATER try to use GetSystemTimePreciseAsFileTime
-    // (only available on Windows 8 and above)
-    FILETIME ft;
-    GetSystemTimeAsFileTime(&ft);
-    // GetSystemTimeAsFileTime returns the number of
-    // 100-nanosecond ticks since Jan 1, 1601.
-    LARGE_INTEGER date;
-    date.HighPart = ft.dwHighDateTime;
-    date.LowPart = ft.dwLowDateTime;
-    auto d = lldiv(date.QuadPart, 10000000);
-    auto seconds = d.quot;
-    auto nanos = d.rem * 100;
-    // Kudos to https://www.frenk.com/2009/12/convert-filetime-to-unix-timestamp/
-    // Between Jan 1, 1601 and Jan 1, 1970 there are 11644473600 seconds
-    seconds -= 11644473600;
-#else
-    // use system clock (1970 epoch)
-    auto epoch = std::chrono::system_clock::now().time_since_epoch();
-    auto s = std::chrono::duration_cast<std::chrono::seconds>(epoch);
-    auto ns = epoch - s;
-    auto seconds = s.count();
-    auto nanos = ns.count();
-#endif
-    // add number of seconds between 1900 and 1970 (including leap years!)
-    uint32_t high = seconds + 2208988800UL;
-    // fractional part in nanoseconds mapped to the range of uint32_t
-    uint32_t low = nanos * 4.294967296; // 2^32 / 1e9
-    return time_tag(high, low);
-}
-
-double time_tag::duration(time_tag t1, time_tag t2){
-    if (t2 >= t1){
-        return (t2 - t1).to_double();
-    } else {
-        LOG_DEBUG("t2 is smaller than t1!");
-        return (t1 - t2).to_double() * -1.0;
-    }
-}
 
 /*////////////////////////// codec /////////////////////////////*/
 
@@ -240,135 +165,6 @@ std::unique_ptr<decoder> codec::create_decoder() const {
         return nullptr;
     }
 }
-
-
-/*/////////////////////// spinlock //////////////////////////*/
-
-void spinlock::lock(){
-    // only try to modify the shared state if the lock seems to be available.
-    // this should prevent unnecessary cache invalidation.
-    do {
-        while (locked_.load(std::memory_order_relaxed)){
-            pause_cpu();
-        }
-    } while (!try_lock());
-}
-
-bool spinlock::try_lock(){
-    // if the previous value was false, it means be could aquire the lock.
-    // this is faster than a CAS loop.
-    return !locked_.exchange(true, std::memory_order_acquire);
-}
-
-void spinlock::unlock(){
-    locked_.store(false, std::memory_order_release);
-}
-
-/*//////////////////// shared spinlock ///////////////////////*/
-
-// exclusive
-void shared_spinlock::lock(){
-    // only try to modify the shared state if the lock seems to be available.
-    // this should prevent unnecessary cache invalidation.
-    do {
-        while (state_.load(std::memory_order_relaxed) != UNLOCKED){
-            pause_cpu();
-        }
-    } while (!try_lock());
-}
-
-bool shared_spinlock::try_lock(){
-    // check if state is UNLOCKED and set to LOCKED on success.
-    uint32_t expected = UNLOCKED;
-    return state_.compare_exchange_strong(expected, LOCKED, std::memory_order_acq_rel);
-}
-
-void shared_spinlock::unlock(){
-    // set to UNLOCKED
-    state_.store(UNLOCKED, std::memory_order_release);
-}
-
-// shared
-void shared_spinlock::lock_shared(){
-    while (!try_lock_shared()){
-        pause_cpu();
-    }
-}
-
-bool shared_spinlock::try_lock_shared(){
-    // optimistically increment the reader count and then
-    // check whether the LOCKED bit is *not* set,
-    // otherwise we simply decrement the reader count again.
-    // this is optimized for the likely case that there's no writer.
-    auto state = state_.fetch_add(1, std::memory_order_acquire);
-    if (!(state & LOCKED)){
-        return true;
-    } else {
-        state_.fetch_sub(1, std::memory_order_release);
-        return false;
-    }
-}
-
-void shared_spinlock::unlock_shared(){
-    // decrement the reader count
-    state_.fetch_sub(1, std::memory_order_release);
-}
-
-/*////////////////////// shared_mutex //////////////////////*/
-
-#ifdef _WIN32
-shared_mutex::shared_mutex() {
-    InitializeSRWLock((PSRWLOCK)& rwlock_);
-}
-shared_mutex::~shared_mutex() {}
-// exclusive
-void shared_mutex::lock() {
-    AcquireSRWLockExclusive((PSRWLOCK)&rwlock_);
-}
-bool shared_mutex::try_lock() {
-    return TryAcquireSRWLockExclusive((PSRWLOCK)&rwlock_);
-}
-void shared_mutex::unlock() {
-    ReleaseSRWLockExclusive((PSRWLOCK)&rwlock_);
-}
-// shared
-void shared_mutex::lock_shared() {
-    AcquireSRWLockShared((PSRWLOCK)&rwlock_);
-}
-bool shared_mutex::try_lock_shared() {
-    return TryAcquireSRWLockShared((PSRWLOCK)&rwlock_);
-}
-void shared_mutex::unlock_shared() {
-    ReleaseSRWLockShared((PSRWLOCK)&rwlock_);
-}
-#else
-shared_mutex::shared_mutex() {
-    pthread_rwlock_init(&rwlock_, nullptr);
-}
-shared_mutex::~shared_mutex() {
-    pthread_rwlock_destroy(&rwlock_);
-}
-// exclusive
-void shared_mutex::lock() {
-    pthread_rwlock_wrlock(&rwlock_);
-}
-bool shared_mutex::try_lock() {
-    return pthread_rwlock_trywrlock(&rwlock_) == 0;
-}
-void shared_mutex::unlock() {
-    pthread_rwlock_unlock(&rwlock_);
-}
-// shared
-void shared_mutex::lock_shared() {
-    pthread_rwlock_rdlock(&rwlock_);
-}
-bool shared_mutex::try_lock_shared() {
-    return pthread_rwlock_tryrdlock(&rwlock_) == 0;
-}
-void shared_mutex::unlock_shared() {
-    pthread_rwlock_unlock(&rwlock_);
-}
-#endif
 
 /*////////////////////////// block /////////////////////////////*/
 
@@ -1128,7 +924,7 @@ void dynamic_resampler::read(aoo_sample *data, int32_t n){
 timer::timer(const timer& other){
     last_ = other.last_.load();
     elapsed_ = other.elapsed_.load();
-#if AOO_CHECK_TIMER
+#if AOO_TIMEFILTER_CHECK
     static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
     delta_ = other.delta_;
     sum_ = other.sum_;
@@ -1140,7 +936,7 @@ timer::timer(const timer& other){
 timer& timer::operator=(const timer& other){
     last_ = other.last_.load();
     elapsed_ = other.elapsed_.load();
-#if AOO_CHECK_TIMER
+#if AOO_TIMEFILTER_CHECK
     static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
     delta_ = other.delta_;
     sum_ = other.sum_;

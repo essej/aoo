@@ -5,6 +5,9 @@
 #pragma once
 
 #include "aoo/aoo.hpp"
+
+#include "time.hpp"
+#include "sync.hpp"
 #include "common.hpp"
 #include "lockfree.hpp"
 #include "time_dll.hpp"

@@ -20,6 +20,11 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
+// 0: error, 1: warning, 2: verbose, 3: debug
+#ifndef LOGLEVEL
+ #define LOGLEVEL 1
+#endif
+
 #define DO_LOG(x) do { std::cerr << x << std::endl; } while (false);
 
 #if LOGLEVEL >= 0

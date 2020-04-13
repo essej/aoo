@@ -76,12 +76,12 @@ int32_t aoonet_client_run(aoonet_client *client){
 }
 
 int32_t aoo::net::client::run(){
-    start_time_ = aoo_osctime_get();
+    start_time_ = time_tag::now();
 
     while (!quit_.load()){
         double timeout = 0;
 
-        time_tag now = aoo_osctime_get();
+        time_tag now = time_tag::now();
         auto elapsed_time = time_tag::duration(start_time_, now);
 
         if (tcpsocket_ >= 0 && state_.load() == client_state::connected){
@@ -92,7 +92,7 @@ int32_t aoo::net::client::run(){
                 if (tcpsocket_ >= 0){
                     char buf[64];
                     osc::OutboundPacketStream msg(buf, sizeof(buf));
-                    msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SERVER AOO_MSG_PING)
+                    msg << osc::BeginMessage(AOONET_MSG_SERVER_PING)
                         << osc::EndMessage;
 
                     send_server_message_tcp(msg.Data(), msg.Size());
@@ -241,7 +241,7 @@ int32_t aoonet_client_send(aoonet_client *client){
 int32_t aoo::net::client::send(){
     auto state = state_.load();
     if (state != client_state::disconnected){
-        time_tag now = aoo_osctime_get();
+        time_tag now = time_tag::now();
         auto elapsed_time = time_tag::duration(start_time_, now);
         auto delta = elapsed_time - last_udp_ping_time_;
 
@@ -263,8 +263,7 @@ int32_t aoo::net::client::send(){
             if (delta >= request_interval_.load()){
                 char buf[64];
                 osc::OutboundPacketStream msg(buf, sizeof(buf));
-                msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SERVER "/request")
-                    << osc::EndMessage;
+                msg << osc::BeginMessage(AOONET_MSG_SERVER_REQUEST) << osc::EndMessage;
 
                 send_server_message_udp(msg.Data(), msg.Size());
                 last_udp_ping_time_ = elapsed_time;
@@ -274,7 +273,7 @@ int32_t aoo::net::client::send(){
             if (delta >= ping_interval_.load()){
                 char buf[64];
                 osc::OutboundPacketStream msg(buf, sizeof(buf));
-                msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SERVER AOO_MSG_PING)
+                msg << osc::BeginMessage(AOONET_MSG_SERVER_PING)
                     << osc::EndMessage;
 
                 send_server_message_udp(msg.Data(), msg.Size());
@@ -415,7 +414,7 @@ int client::try_connect(const std::string &host, int port){
 void client::do_login(){
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
-    msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SERVER "/login")
+    msg << osc::BeginMessage(AOONET_MSG_SERVER_LOGIN)
         << username_.c_str() << password_.c_str()
         << public_addr_.name().c_str() << public_addr_.port()
         << local_addr_.name().c_str() << local_addr_.port()
@@ -676,9 +675,9 @@ void client::send_server_message_udp(const char *data, int32_t size)
 
 void client::handle_server_message_tcp(const osc::ReceivedMessage& msg){
     LOG_DEBUG("aoo_client: got message " << msg.AddressPattern() << " from server");
-    if (!strcmp(msg.AddressPattern(), AOO_MSG_DOMAIN AOO_MSG_CLIENT AOO_MSG_PING)){
+    if (!strcmp(msg.AddressPattern(), AOONET_MSG_CLIENT_PING)){
         LOG_VERBOSE("aoo_client: got TCP ping from server");
-    } else if (!strcmp(msg.AddressPattern(), AOO_MSG_DOMAIN AOO_MSG_CLIENT "/login")){
+    } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_CLIENT_LOGIN)){
         if (state_.load() == client_state::login){
             // retrieve result
             if (msg.ArgumentCount() < 1){
@@ -706,9 +705,9 @@ void client::handle_server_message_tcp(const osc::ReceivedMessage& msg){
 }
 
 void client::handle_server_message_udp(const osc::ReceivedMessage &msg){
-    if (!strcmp(msg.AddressPattern(), AOO_MSG_DOMAIN AOO_MSG_CLIENT AOO_MSG_PING)){
+    if (!strcmp(msg.AddressPattern(), AOONET_MSG_CLIENT_PING)){
         LOG_VERBOSE("aoo_client: got UDP ping from server");
-    } else if (!strcmp(msg.AddressPattern(), AOO_MSG_DOMAIN AOO_MSG_CLIENT "/reply")){
+    } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_CLIENT_REPLY)){
         client_state expected = client_state::handshake;
         if (state_.compare_exchange_strong(expected, client_state::login)){
             // retrieve public IP + port

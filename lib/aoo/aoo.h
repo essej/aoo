@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <stdint.h>
+#include "aoo_types.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -16,36 +16,6 @@ extern "C"
 #define AOO_VERSION_BUGFIX 0
 #define AOO_VERSION_PRERELEASE 1 // 0: no pre-release
 
-#ifndef AOO_API
-# ifndef AOO_STATIC
-#  if defined(_WIN32) // Windows
-#   if defined(AOO_BUILD)
-#      if defined(DLL_EXPORT)
-#        define AOO_API __declspec(dllexport)
-#      else
-#        define AOO_API
-#      endif
-#   else
-#    define AOO_API __declspec(dllimport)
-#   endif
-#  elif defined(__GNUC__) && defined(AOO_BUILD) // GNU C
-#   define AOO_API __attribute__ ((visibility ("default")))
-#  else // Other
-#   define AOO_API
-#  endif
-# else // AOO_STATIC
-#  define AOO_API
-# endif
-#endif
-
-#ifndef AOO_SAMPLETYPE
-#define AOO_SAMPLETYPE float
-#endif
-
-typedef AOO_SAMPLETYPE aoo_sample;
-
-#define AOO_MSG_DOMAIN "/aoo"
-#define AOO_MSG_DOMAIN_LEN 4
 #define AOO_MSG_SOURCE "/src"
 #define AOO_MSG_SOURCE_LEN 4
 #define AOO_MSG_SINK "/sink"
@@ -63,22 +33,6 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #define AOO_MSG_UNINVITE "/uninvite"
 #define AOO_MSG_UNINVITE_LEN 9
 
-typedef enum aoo_type {
-    AOO_TYPE_SOURCE = 0,
-    AOO_TYPE_SINK
-} aoo_type;
-
-#define AOO_MAXPACKETSIZE 4096 // ?
-
-#ifndef AOO_CLIP_OUTPUT
-#define AOO_CLIP_OUTPUT 0
-#endif
-
-// 0: error, 1: warning, 2: verbose, 3: debug
-#ifndef LOGLEVEL
- #define LOGLEVEL 2
-#endif
-
 #ifndef AOO_DEBUG_DLL
  #define AOO_DEBUG_DLL 0
 #endif
@@ -90,6 +44,16 @@ typedef enum aoo_type {
 #ifndef AOO_DEBUG_BLOCK_BUFFER
  #define AOO_DEBUG_BLOCK_BUFFER 0
 #endif
+
+#ifndef AOO_CLIP_OUTPUT
+#define AOO_CLIP_OUTPUT 0
+#endif
+
+typedef enum aoo_type
+{
+    AOO_TYPE_SOURCE = 0,
+    AOO_TYPE_SINK
+} aoo_type;
 
 /*////////// default values ////////////*/
 
@@ -179,13 +143,6 @@ AOO_API uint64_t aoo_osctime_fromseconds(double s);
 // get time difference in seconds between two NTP timestamps
 AOO_API double aoo_osctime_duration(uint64_t t1, uint64_t t2);
 
-// reply function for endpoints
-typedef int32_t (*aoo_replyfn)(
-        void *,         // endpoint
-        const char *,   // data
-        int32_t         // number of bytes
-);
-
 /*//////////////////// AoO events /////////////////////*/
 
 #define AOO_EVENTQUEUESIZE 64
@@ -216,19 +173,6 @@ typedef enum aoo_event_type
     // sink: large gap between blocks
     AOO_BLOCK_GAP_EVENT
 } aoo_event_type;
-
-// base event
-typedef struct aoo_event
-{
-    int32_t type;
-} aoo_event;
-
-// event handler
-typedef int32_t (*aoo_eventhandler)(
-        void *,             // user
-        const aoo_event **, // event array
-        int32_t n           // number of events
-);
 
 #define AOO_ENDPOINT_EVENT  \
     int32_t type;           \

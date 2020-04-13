@@ -58,6 +58,8 @@ common.sources = \
 
 shared.sources = \
     $(AOO)/src/common.cpp \
+    $(AOO)/src/sync.cpp \
+    $(AOO)/src/time.cpp \
     $(AOO)/src/source.cpp \
     $(AOO)/src/sink.cpp \
     $(AOO)/src/server.cpp \

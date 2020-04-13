@@ -6,194 +6,16 @@
 
 #include "aoo/aoo.h"
 
+#include "time.hpp"
+#include "sync.hpp"
+
 #include <vector>
 #include <array>
 #include <memory>
 #include <atomic>
 
-// for shared_lock
-#include <shared_mutex>
-#ifndef _WIN32
-#include <pthread.h>
-#endif
 
 namespace aoo {
-
-struct time_tag {
-    static time_tag get();
-    static double duration(time_tag t1, time_tag t2);
-
-    time_tag() = default;
-    time_tag(uint32_t _high, uint32_t _low)
-        : high(_high), low(_low){}
-    time_tag(uint64_t ui){
-        high = ui >> 32;
-        low = (uint32_t)ui;
-    }
-    time_tag(double s){
-        high = (uint64_t)s;
-        double fract = s - (double)high;
-        low = fract * 4294967296.0;
-    }
-
-    uint32_t high = 0;
-    uint32_t low = 0;
-
-    void clear(){
-        high = 0;
-        low = 0;
-    }
-
-    bool empty() const { return (high + low) == 0; }
-
-    double to_double() const {
-        return (double)high + (double)low / 4294967296.0;
-    }
-    uint64_t to_uint64() const {
-        return (uint64_t)high << 32 | (uint64_t)low;
-    }
-};
-
-
-inline time_tag operator+(time_tag lhs, time_tag rhs){
-    time_tag result;
-    uint64_t ns = lhs.low + rhs.low;
-    result.low = ns & 0xFFFFFFFF;
-    result.high = lhs.high + rhs.high + (ns >> 32);
-    return result;
-}
-
-inline time_tag operator-(time_tag lhs, time_tag rhs){
-    time_tag result;
-    uint64_t ns = ((uint64_t)1 << 32) + lhs.low - rhs.low;
-    result.low = ns & 0xFFFFFFFF;
-    result.high = lhs.high - rhs.high - !(ns >> 32);
-    return result;
-}
-
-inline bool operator==(time_tag lhs, time_tag rhs){
-    return lhs.high == rhs.high && lhs.low == rhs.low;
-}
-inline bool operator<(time_tag lhs, time_tag rhs){
-    if (lhs.high < rhs.high){
-        return true;
-    } else {
-        return lhs.high == rhs.high && lhs.low < rhs.low;
-    }
-}
-inline bool operator!=(time_tag lhs, time_tag rhs){ return !operator==(lhs,rhs); }
-inline bool operator> (time_tag lhs, time_tag rhs){ return  operator< (rhs,lhs); }
-inline bool operator<=(time_tag lhs, time_tag rhs){ return !operator> (lhs,rhs); }
-inline bool operator>=(time_tag lhs, time_tag rhs){ return !operator< (lhs,rhs); }
-
-/*////////////////// simple spin lock ////////////////////*/
-
-class spinlock {
-public:
-    spinlock() = default;
-    spinlock(const spinlock&) = delete;
-    spinlock& operator=(const spinlock&) = delete;
-    void lock();
-    bool try_lock();
-    void unlock();
-protected:
-    std::atomic<uint32_t> locked_{false};
-};
-
-/*/////////////////// shared spin lock /////////////////////////*/
-
-class shared_spinlock {
-public:
-    shared_spinlock() = default;
-    shared_spinlock(const shared_spinlock&) = delete;
-    shared_spinlock& operator=(const shared_spinlock&) = delete;
-    // exclusive
-    void lock();
-    bool try_lock();
-    void unlock();
-    // shared
-    void lock_shared();
-    bool try_lock_shared();
-    void unlock_shared();
-protected:
-    const uint32_t UNLOCKED = 0;
-    const uint32_t LOCKED = 0x80000000;
-    std::atomic<uint32_t> state_{0};
-};
-
-// paddeded spin locks
-
-template<typename T, size_t N>
-class alignas(N) padded_class : public T {
-    // pad and align to prevent false sharing
-    char pad_[N - sizeof(T)];
-};
-
-static const size_t CACHELINE_SIZE = 64;
-
-using padded_spinlock = padded_class<spinlock, CACHELINE_SIZE>;
-
-using padded_shared_spinlock =  padded_class<shared_spinlock, CACHELINE_SIZE>;
-
-
-/*//////////////////////// shared_mutex //////////////////////////*/
-
-// The std::mutex implementation on Windows is bad on both MSVC and MinGW:
-// the MSVC version apparantely has some additional overhead; winpthreads (MinGW) doesn't even use the obvious
-// platform primitive (SRWLOCK), they rather roll their own mutex based on atomics and Events, which is bad for our use case.
-//
-// Older OSX versions (OSX 10.11 and below) don't have std:shared_mutex...
-//
-// Even on Linux, there's some overhead for things we don't need, so we use pthreads directly.
-
-class shared_mutex {
-public:
-    shared_mutex();
-    ~shared_mutex();
-    shared_mutex(const shared_mutex&) = delete;
-    shared_mutex& operator=(const shared_mutex&) = delete;
-    // exclusive
-    void lock();
-    bool try_lock();
-    void unlock();
-    // shared
-    void lock_shared();
-    bool try_lock_shared();
-    void unlock_shared();
-private:
-#ifdef _WIN32
-    void* rwlock_; // avoid including windows headers (SWRLOCK is pointer sized)
-#else
-    pthread_rwlock_t rwlock_;
-#endif
-};
-
-using shared_lock = std::shared_lock<shared_mutex>;
-using unique_lock = std::unique_lock<shared_mutex>;
-
-template<typename T>
-class scoped_lock {
-public:
-    scoped_lock(T& lock)
-        : lock_(&lock){ lock_->lock(); }
-    scoped_lock(const T& lock) = delete;
-    scoped_lock& operator=(const T& lock) = delete;
-    ~scoped_lock() { lock_->unlock(); }
-private:
-    T* lock_;
-};
-
-template<typename T>
-class shared_scoped_lock {
-public:
-    shared_scoped_lock(T& lock)
-        : lock_(&lock){ lock_->lock_shared(); }
-    shared_scoped_lock(const T& lock) = delete;
-    shared_scoped_lock& operator=(const T& lock) = delete;
-    ~shared_scoped_lock() { lock_->unlock_shared(); }
-private:
-    T* lock_;
-};
 
 class dynamic_resampler {
 public:
@@ -410,6 +232,8 @@ private:
     int32_t oldest_ = 0;
     int32_t head_ = 0;
 };
+
+/*//////////////////////// timer //////////////////////*/
 
 class timer {
 public:

@@ -6,8 +6,8 @@
 
 #include "aoo/aoo_net.hpp"
 #include "aoo/aoo_utils.hpp"
+
 #include "lockfree.hpp"
-#include "common.hpp"
 #include "net_utils.hpp"
 #include "SLIP.hpp"
 
