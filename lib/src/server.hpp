@@ -59,6 +59,7 @@ private:
 class server final : public iserver {
 public:
     struct icommand {
+        virtual ~icommand(){}
         virtual void perform(server&) = 0;
     };
 

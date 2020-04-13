@@ -41,6 +41,7 @@ enum class command_reason {
 class client final : public iclient {
 public:
     struct icommand {
+        virtual ~icommand(){}
         virtual void perform(client&) = 0;
     };
 
