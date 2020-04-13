@@ -68,6 +68,7 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
     }
 
     // set TCP_NODELAY
+    val = 1;
     if (setsockopt(tcpsocket, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val)) < 0){
         LOG_WARNING("aoo_server: couldn't set TCP_NODELAY");
         // ignore
@@ -476,10 +477,30 @@ void server::signal(){
 client_endpoint::client_endpoint(server &s, int sock, const ip_address &addr)
     : server_(&s), socket(sock), tcp_addr_(addr)
 {
+    int val = 0;
+    // NOTE: on POSIX systems, the socket returned by accept() does *not*
+    // inherit file status flags and it might not inherit socket options, either.
 #ifdef _WIN32
     event = WSACreateEvent();
     WSAEventSelect(socket, event, FD_READ | FD_WRITE | FD_CLOSE);
+#else
+    // set non-blocking
+    // (this is not necessary on Windows, because WSAEventSelect will do it automatically)
+    val = 1;
+    if (ioctl(socket, FIONBIO, (char *)&val) < 0){
+        int err = aoo::net::socket_errno();
+        LOG_ERROR("client_endpoint: couldn't set socket to non-blocking (" << err << ")");
+        close();
+    }
 #endif
+
+    // set TCP_NODELAY
+    val = 1;
+    if (setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val)) < 0){
+        LOG_WARNING("client_endpoint: couldn't set TCP_NODELAY");
+        // ignore
+    }
+
     sendbuffer_.setup(65536);
     recvbuffer_.setup(65536);
 }
@@ -629,7 +650,6 @@ bool client_endpoint::receive_data(){
             }
         }
     }
-    return true;
 }
 
 void client_endpoint::handle_message(const osc::ReceivedMessage &msg){
