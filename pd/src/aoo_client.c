@@ -122,14 +122,15 @@ static void * aoo_client_new(t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_client_free(t_aoo_client *x)
 {
+    if (x->x_node){
+        aoo_node_release(x->x_node, (t_pd *)x, 0);
+    }
+
     if (x->x_client){
         aoonet_client_quit(x->x_client);
         // wait for thread to finish
         pthread_join(x->x_thread, 0);
         aoonet_client_free(x->x_client);
-    }
-    if (x->x_node){
-        aoo_node_release(x->x_node, (t_pd *)x, 0);
     }
 
     clock_free(x->x_clock);
