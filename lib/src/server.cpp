@@ -441,22 +441,19 @@ void server::handle_udp_message(const osc::ReceivedMessage &msg,
 {
     LOG_VERBOSE("aoo_server: handle UDP message " << msg.AddressPattern());
 
-    if (!strcmp(msg.AddressPattern(),
-                AOO_MSG_DOMAIN AOO_MSG_SERVER AOO_MSG_PING))
-    {
+    if (!strcmp(msg.AddressPattern(), AOONET_MSG_SERVER_PING)){
         // reply with /ping message
         char buf[64];
         osc::OutboundPacketStream reply(buf, sizeof(buf));
-        reply << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_CLIENT AOO_MSG_PING)
+        reply << osc::BeginMessage(AOONET_MSG_CLIENT_PING)
               << osc::EndMessage;
 
         send_udp_message(reply.Data(), reply.Size(), addr);
-    } else if (!strcmp(msg.AddressPattern(),
-                       AOO_MSG_DOMAIN AOO_MSG_SERVER "/request")){
+    } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_SERVER_REQUEST)){
         // reply with /reply message
         char buf[64];
         osc::OutboundPacketStream reply(buf, sizeof(buf));
-        reply << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_CLIENT "/reply")
+        reply << osc::BeginMessage(AOONET_MSG_CLIENT_REPLY)
               << addr.name().c_str() << addr.port() << osc::EndMessage;
 
         send_udp_message(reply.Data(), reply.Size(), addr);
@@ -637,9 +634,9 @@ bool client_endpoint::receive_data(){
 
 void client_endpoint::handle_message(const osc::ReceivedMessage &msg){
     LOG_DEBUG("aoo_server: got message " << msg.AddressPattern());
-    if (!strcmp(msg.AddressPattern(), AOO_MSG_DOMAIN AOO_MSG_SERVER AOO_MSG_PING)){
+    if (!strcmp(msg.AddressPattern(), AOONET_MSG_SERVER_PING)){
         handle_ping();
-    } else if (!strcmp(msg.AddressPattern(), AOO_MSG_DOMAIN AOO_MSG_SERVER "/login")){
+    } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_SERVER_LOGIN)){
         try {
             auto it = msg.ArgumentsBegin();
             std::string username = (it++)->AsString();
@@ -654,7 +651,7 @@ void client_endpoint::handle_message(const osc::ReceivedMessage &msg){
             // send /login reply
             char buf[AOO_MAXPACKETSIZE];
             osc::OutboundPacketStream reply(buf, sizeof(buf));
-            reply << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_CLIENT "/login")
+            reply << osc::BeginMessage(AOONET_MSG_CLIENT_LOGIN)
                   << (int32_t)0 << e.what() << osc::EndMessage;
 
             send_message(reply.Data(), reply.Size());
@@ -666,8 +663,7 @@ void client_endpoint::handle_ping(){
     // send /ping reply
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream reply(buf, sizeof(buf));
-    reply << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_CLIENT AOO_MSG_PING)
-          << osc::EndMessage;
+    reply << osc::BeginMessage(AOONET_MSG_CLIENT_PING) << osc::EndMessage;
 
     send_message(reply.Data(), reply.Size());
 }
@@ -687,7 +683,7 @@ void client_endpoint::handle_login(const std::string& name, const std::string& p
     // send /login reply
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream reply(buf, sizeof(buf));
-    reply << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_CLIENT "/login")
+    reply << osc::BeginMessage(AOONET_MSG_CLIENT_LOGIN)
           << result << errmsg.c_str() << osc::EndMessage;
 
     send_message(reply.Data(), reply.Size());

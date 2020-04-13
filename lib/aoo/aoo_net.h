@@ -4,17 +4,39 @@
 
 #pragma once
 
-#include "aoo.h"
+#include "aoo_types.h"
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
-#define AOO_MSG_SERVER "/server"
-#define AOO_MSG_SERVER_LEN 7
-#define AOO_MSG_CLIENT "/client"
-#define AOO_MSG_CLIENT_LEN 7
+#define AOONET_MSG_SERVER "/server"
+#define AOONET_MSG_SERVER_LEN 7
+
+#define AOONET_MSG_CLIENT "/client"
+#define AOONET_MSG_CLIENT_LEN 7
+
+#define AOONET_MSG_PING "/ping"
+#define AOONET_MSG_PING_LEN 5
+
+#define AOONET_MSG_LOGIN "/login"
+#define AOONET_MSG_LOGIN_LEN 6
+
+#define AOONET_MSG_REQUEST "/request"
+#define AOONET_MSG_REQUEST_LEN 8
+
+#define AOONET_MSG_REPLY "/reply"
+#define AOONET_MSG_REPLY_LEN 6
+
+#define AOONET_MSG_SERVER_PING AOO_MSG_DOMAIN AOONET_MSG_SERVER AOONET_MSG_PING
+#define AOONET_MSG_CLIENT_PING AOO_MSG_DOMAIN AOONET_MSG_CLIENT AOONET_MSG_PING
+
+#define AOONET_MSG_SERVER_LOGIN AOO_MSG_DOMAIN AOONET_MSG_SERVER AOONET_MSG_LOGIN
+#define AOONET_MSG_CLIENT_LOGIN AOO_MSG_DOMAIN AOONET_MSG_CLIENT AOONET_MSG_LOGIN
+
+#define AOONET_MSG_SERVER_REQUEST AOO_MSG_DOMAIN AOONET_MSG_SERVER AOONET_MSG_REQUEST
+#define AOONET_MSG_CLIENT_REPLY AOO_MSG_DOMAIN AOONET_MSG_CLIENT AOONET_MSG_REPLY
 
 typedef enum aoonet_type {
     AOO_TYPE_SERVER = 1000,
@@ -69,13 +91,6 @@ using aoonet_client = aoo::net::iclient;
 #else
 typedef struct aoonet_client aoonet_client;
 #endif
-
-typedef int32_t (*aoo_sendfn)(
-        void *,             // user
-        const char *,       // data
-        int32_t,            // numbytes
-        void *              // addr
-);
 
 // create a new AOO client for the given UDP socket
 AOO_API aoonet_client * aoonet_client_new(void *udpsocket, aoo_sendfn fn, int port);
