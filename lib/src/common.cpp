@@ -69,6 +69,12 @@ int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *type, int32_t *id)
             *type = AOO_TYPE_CLIENT;
             return offset + AOONET_MSG_CLIENT_LEN;
         }
+        else if (n >= (offset + AOONET_MSG_PEER_LEN)
+            && !memcmp(msg + offset, AOONET_MSG_PEER, AOONET_MSG_PEER_LEN))
+        {
+            *type = AOO_TYPE_PEER;
+            return offset + AOONET_MSG_PEER_LEN;
+        }
         else {
             // TODO only print relevant part of OSC address string
             LOG_ERROR("aoo_parsepattern: unknown destination " << msg + offset);
