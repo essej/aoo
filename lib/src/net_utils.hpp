@@ -50,11 +50,11 @@ struct ip_address {
         memcpy(&address, &sa, sizeof(sa));
         length = sizeof(sa);
     }
-    ip_address(const std::string& ip, int port){
+    ip_address(const std::string& host, int port){
         struct sockaddr_in sa;
         memset(&sa, 0, sizeof(sa));
         sa.sin_family = AF_INET;
-        sa.sin_addr.s_addr = inet_addr(ip.c_str());
+        sa.sin_addr.s_addr = inet_addr(host.c_str());
         sa.sin_port = htons(port);
         memcpy(&address, &sa, sizeof(sa));
         length = sizeof(sa);

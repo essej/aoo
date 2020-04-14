@@ -14,10 +14,21 @@
 #include "oscpack/osc/OscOutboundPacketStream.h"
 #include "oscpack/osc/OscReceivedElements.h"
 
+#include <memory.h>
+#include <unordered_map>
+#include <vector>
+
 namespace aoo {
 namespace net {
 
 class server;
+
+struct user;
+using user_list = std::vector<std::shared_ptr<user>>;
+
+struct group;
+using group_list = std::vector<std::shared_ptr<group>>;
+
 
 class client_endpoint {
     server *server_;
@@ -26,22 +37,22 @@ public:
     ~client_endpoint();
 
     void close();
-    bool valid() const { return socket >= 0; }
 
-    void set_public_address_udp(const ip_address& addr);
-    void set_private_address_udp(const ip_address& addr);
+    bool is_active() const { return socket >= 0; }
 
     void send_message(const char *msg, int32_t);
+
     bool receive_data();
 
     int socket;
 #ifdef _WIN32
     HANDLE event;
 #endif
+    ip_address public_address;
+    ip_address local_address;
 private:
-    ip_address tcp_addr_;
-    ip_address udp_addr_public_;
-    ip_address udp_addr_private_;
+    std::shared_ptr<user> user_;
+    ip_address addr_;
 
     SLIP sendbuffer_;
     SLIP recvbuffer_;
@@ -49,15 +60,68 @@ private:
 
     void handle_message(const osc::ReceivedMessage& msg);
 
-    void handle_ping();
+    void handle_ping(const osc::ReceivedMessage& msg);
 
-    void handle_login(const std::string& name, const std::string& pwd,
-                      const std::string& public_ip, int32_t public_port,
-                      const std::string& local_ip, int32_t local_port);
+    void handle_login(const osc::ReceivedMessage& msg);
+
+    void handle_group_join(const osc::ReceivedMessage& msg);
+
+    void handle_group_leave(const osc::ReceivedMessage& msg);
+};
+
+struct user {
+    user(const std::string& _name, const std::string& _pwd)
+        : name(_name), password(_pwd){}
+    ~user() { LOG_VERBOSE("removed user " << name); }
+
+    const std::string name;
+    const std::string password;
+    client_endpoint *endpoint = nullptr;
+
+    bool is_active() const { return endpoint != nullptr; }
+
+    void on_close(server& s);
+
+    bool add_group(std::shared_ptr<group> grp);
+
+    bool remove_group(const group& grp);
+
+    int32_t num_groups() const { return groups_.size(); }
+
+    const group_list& groups() { return groups_; }
+private:
+    group_list groups_;
+};
+
+struct group {
+    group(const std::string& _name, const std::string& _pwd)
+        : name(_name), password(_pwd){}
+    ~group() { LOG_VERBOSE("removed group " << name); }
+
+    const std::string name;
+    const std::string password;
+
+    bool add_user(std::shared_ptr<user> usr);
+
+    bool remove_user(const user& usr);
+
+    int32_t num_users() const { return users_.size(); }
+
+    const user_list& users() { return users_; }
+private:
+    user_list users_;
 };
 
 class server final : public iserver {
 public:
+    enum class error {
+        none,
+        wrong_password,
+        permission_denied
+    };
+
+    static std::string error_to_string(error e);
+
     struct icommand {
         virtual ~icommand(){}
         virtual void perform(server&) = 0;
@@ -73,6 +137,20 @@ public:
     int32_t events_available() override;
 
     int32_t handle_events(aoo_eventhandler fn, void *user) override;
+
+    std::shared_ptr<user> get_user(const std::string& name,
+                                   const std::string& pwd, error& e);
+
+    std::shared_ptr<user> find_user(const std::string& name);
+
+    std::shared_ptr<group> get_group(const std::string& name,
+                                     const std::string& pwd, error& e);
+
+    std::shared_ptr<group> find_group(const std::string& name);
+
+    void on_user_joined_group(user& usr, group& grp);
+
+    void on_user_left_group(user& usr, group& grp);
 private:
     int tcpsocket_;
     int udpsocket_;
@@ -80,7 +158,9 @@ private:
     HANDLE tcpevent_;
     HANDLE udpevent_;
 #endif
-    std::vector<client_endpoint> clients_;
+    std::vector<std::unique_ptr<client_endpoint>> clients_;
+    user_list users_;
+    group_list groups_;
     // queue
     lockfree::queue<std::unique_ptr<icommand>> commands_;
     lockfree::queue<aoo_event> events_;
@@ -93,6 +173,8 @@ private:
 #endif
 
     void wait_for_event();
+
+    void update();
 
     void receive_udp();
 
