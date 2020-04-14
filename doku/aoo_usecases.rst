@@ -16,7 +16,7 @@ virtual concert hall and rehearsal rooms
    :alt: ICE using AoO as space for playing together and on a PA system
    :width: 95%
 
-   ICE using AoO as space for playing together and on a PA system
+   Musicians using AoO as rehearsal space for playing together with conductor and binaural rendering
 
 When playing together within an ensemble or loose group of musician, normally they meet in rehearsal room loose first, then an conductor or band leader comes into play and last they are performing in an concert hall.
 
