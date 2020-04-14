@@ -2,6 +2,31 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
+// AOONET is an embeddable UDP punch hole library for creating dynamic
+// peer-2-peer networks over the public internet. It has been designed
+// to seemlessly interoperate with the AOO streaming library.
+//
+// The implementation is largely based on the techniques described in the paper
+// "Peer-to-Peer Communication Across Network Address Translators"
+// by Ford, Srisuresh and Kegel (https://bford.info/pub/net/p2pnat/)
+//
+// It uses TCP over SLIP to reliable exchange meta information between peers.
+//
+// The UDP punch hole server runs on a public endpoint and manages the public
+// and local IP endpoint addresses of all the clients.
+// It can host multiple peer-2-peer networks which are organized as called groups.
+//
+// Each client connects to the server, logs in as a user, joins one ore more groups
+// and in turn receives the public and local IP endpoint addresses from its peers.
+//
+// Currently, users and groups are automatically created on demand, but later
+// we might add the possibility to create persistent users and groups on the server.
+//
+// Later we might add TCP connections between peers, so we can reliably exchange
+// additional data, like chat messages or arbitrary OSC messages.
+//
+// Also we could support sending additional notifications from the server to all clients.
+
 #pragma once
 
 #include "aoo_types.h"

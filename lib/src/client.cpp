@@ -243,10 +243,10 @@ int32_t aoo::net::client::handle_message(const char *data, int32_t n, void *addr
                     }
                 }
             }
-            // NOTE: we might simply receive a message from a peer which
-            // we haven't added yet. This can happen when we join a group
-            // and other peers receive the notification before us, so we are
-            // already part of their peer list, but they are not part of ours (yet).
+            // NOTE: during the handshake process it is expected that
+            // we receive UDP messages which we have to ignore:
+            // a) pings from a peer which we haven't had the chance to add yet
+            // b) pings sent to the other endpoint address
             if (!success){
                 LOG_VERBOSE("aoo_client: ignoring UDP message "
                             << msg.AddressPattern() << " from endpoint "
