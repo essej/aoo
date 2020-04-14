@@ -304,9 +304,10 @@ void aoo_server_removeclient(t_aoo_server *x, t_pd *c, int32_t id)
             if (c == x->x_clients[i].c_obj){
                 if (id != x->x_clients[i].c_id){
                     bug("aoo_server_remove: wrong ID!");
+                    aoo_lock_unlock(&x->x_clientlock);
                     return;
                 }
-                memmove(&x->x_clients[i], &x->x_clients[i + 1], n - (i + 1));
+                memmove(&x->x_clients[i], &x->x_clients[i + 1], (n - i - 1) * sizeof(t_client));
                 x->x_clients = (t_client *)resizebytes(x->x_clients, n * sizeof(t_client),
                                                         (n - 1) * sizeof(t_client));
                 x->x_numclients--;
@@ -314,7 +315,7 @@ void aoo_server_removeclient(t_aoo_server *x, t_pd *c, int32_t id)
                 return;
             }
         }
-        bug("aoo_server_release: receiver not found!");
+        bug("aoo_server_release: %s not found!", classname(c));
         aoo_lock_unlock(&x->x_clientlock);
     } else if (x->x_numclients == 1){
         // last instance

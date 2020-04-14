@@ -83,6 +83,17 @@ int32_t aoo::sink::uninvite_source(void *endpoint, int32_t id, aoo_replyfn fn){
     }
 }
 
+int32_t aoo_sink_uninvite_all(aoo_sink *sink){
+    return sink->uninvite_all();
+}
+
+int32_t aoo::sink::uninvite_all(){
+    for (auto& src : sources_){
+        src.request_uninvite();
+    }
+    return 1;
+}
+
 namespace aoo {
 
 template<typename T>

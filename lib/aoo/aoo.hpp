@@ -188,6 +188,9 @@ public:
     // uninvite a source (always thread safe)
     virtual int32_t uninvite_source(void *endpoint, int32_t id, aoo_replyfn fn) = 0;
 
+    // uninvite all sources (always thread safe)
+    virtual int32_t uninvite_all() = 0;
+
     // handle messages from sources - might call the reply function (threadsafe, but not reentrant)
     virtual int32_t handle_message(const char *data, int32_t n,
                                    void *endpoint, aoo_replyfn fn) = 0;

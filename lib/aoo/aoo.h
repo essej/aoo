@@ -11,6 +11,11 @@ extern "C"
 {
 #endif
 
+#define AOO_VERSION_MAJOR 2
+#define AOO_VERSION_MINOR 0
+#define AOO_VERSION_BUGFIX 0
+#define AOO_VERSION_PRERELEASE 1
+
 #ifndef AOO_API
 # ifndef AOO_STATIC
 #  if defined(_WIN32) // Windows
@@ -543,6 +548,9 @@ AOO_API int32_t aoo_sink_invite_source(aoo_sink *sink, void *endpoint, int32_t i
 
 // uninvite a source (always threadsafe)
 AOO_API int32_t aoo_sink_uninvite_source(aoo_sink *sink, void *endpoint, int32_t id, aoo_replyfn fn);
+
+// uninvite all sources (always threadsafe)
+AOO_API int32_t aoo_sink_uninvite_all(aoo_sink *sink);
 
 // handle messages from sources - might call the reply function (threadsafe, but not reentrant)
 AOO_API int32_t aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_t n,
