@@ -16,8 +16,8 @@
    height="492.95953"
    width="719.50671"
    inkscape:export-filename="/home/winfried/repos/AVE/DIYasb-cm/pd/src/aoo/doku/figures/aoo_vision.png"
-   inkscape:export-xdpi="300"
-   inkscape:export-ydpi="300">
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96">
   <title
      id="title3391">AoO vision sketch</title>
   <defs
@@ -199,7 +199,7 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="1"
-     inkscape:cx="256.25337"
+     inkscape:cx="-11.74663"
      inkscape:cy="238.33005"
      inkscape:document-units="mm"
      inkscape:current-layer="layer3"
@@ -248,7 +248,7 @@
            rdf:resource="http://creativecommons.org/licenses/by-sa/4.0/" />
       </cc:Work>
       <cc:License
-         rdf:about="http://creativecommons.org/licenses/by-sa/3.0/">
+         rdf:about="http://creativecommons.org/licenses/by-sa/4.0/">
         <cc:permits
            rdf:resource="http://creativecommons.org/ns#Reproduction" />
         <cc:permits

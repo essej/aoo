@@ -17,8 +17,8 @@
    inkscape:version="0.92.4 (5da689c313, 2019-01-14)"
    sodipodi:docname="aoo_vrr.svg"
    inkscape:export-filename="/home/winfried/repos/AVE/DIYasb-cm/pd/src/aoo/doku/figures/aoo_vrr.png"
-   inkscape:export-xdpi="300"
-   inkscape:export-ydpi="300">
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96">
   <title
      id="title3401">AoO ICE use case</title>
   <defs
@@ -352,7 +352,7 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="0"
      inkscape:zoom="1.0547141"
-     inkscape:cx="347.96161"
+     inkscape:cx="93.864315"
      inkscape:cy="291.16073"
      inkscape:document-units="mm"
      inkscape:current-layer="layer1"
@@ -361,7 +361,7 @@
      borderlayer="true"
      inkscape:window-width="1416"
      inkscape:window-height="978"
-     inkscape:window-x="944"
+     inkscape:window-x="221"
      inkscape:window-y="0"
      inkscape:window-maximized="0"
      showborder="true"
@@ -1231,7 +1231,7 @@
            height="168.30708"
            x="549.71259"
            y="146.54982" /></flowRegion><flowPara
-         id="flowPara35010"></flowPara></flowRoot>    <flowRoot
+         id="flowPara35010" /></flowRoot>    <flowRoot
        xml:space="preserve"
        id="flowRoot35028"
        style="font-style:normal;font-weight:normal;font-size:16px;line-height:0px;font-family:sans-serif;text-align:start;letter-spacing:0px;word-spacing:0px;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
@@ -1242,7 +1242,7 @@
            height="168.30708"
            x="558.57086"
            y="146.54982" /></flowRegion><flowPara
-         id="flowPara35034"></flowPara></flowRoot>    <text
+         id="flowPara35034" /></flowRoot>    <text
        id="text35250"
        y="766.23151"
        x="546.51367"
@@ -1287,7 +1287,7 @@
            height="62.007874"
            x="142.23228"
            y="-83.765137" /></flowRegion><flowPara
-         id="flowPara35283"></flowPara></flowRoot>    <text
+         id="flowPara35283" /></flowRoot>    <text
        transform="scale(-1)"
        id="text35293"
        y="-700.21631"

@@ -12,7 +12,7 @@ Here historic Implementation are also shown.
 virtual concert hall and rehearsal rooms
 ========================================
 
-.. figure:: ./figures/aoo_vrr.pdf
+.. figure:: ./figures/aoo_vrr.png
    :alt: ICE using AoO as space for playing together and on a PA system
    :width: 95%
 
