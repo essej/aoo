@@ -7,21 +7,21 @@ Functionality
 
 What is the lowest Latency possible ?
 
-You definitely can stream between apps on the same computer. 
-Regarding latency you have to measure, but there are basically three 
-parameters regarding the latency in the case of Pd:
+Short answer: 
+ AoO does have a bit more latency than [pd~] because of the extra buffer in [aoo_receive~]. 
 
-a) network latency (negligible for localhost)
+Long answer:
+    There are basically three parameters regarding the latency in the case of Pd externals and AoO:
 
-b) hardware buffer size / Pd latency
+    a) network latency: negligible for localhost, small for LAN,  notible for WAN, worse for WLAN
 
-c) [aoo_receive~] buffer size
+    b) hardware buffer size / Pd latency depends on your hardware setup
 
-For exampke on my Windows 7 laptop with an ASIO driver and 64 sample hardware buffer size and 5ms Pd latency, I can set the [aoo_receive~] buffer size down to 4-5 ms. On some other systems, you might get even lower. One of the use cases of AOO is certainly low latency audio streaming over local networks, especially over long periods of time (literally weeks or months, given that the devices have access to a NTP time server).
+    c) [aoo_receive~] buffer size needed to catch the slowest
 
-AOO does have a bit more latency than [pd~] because of the extra buffer in [aoo_receive~]. I think it rather depends what you need: [pd~] is slaved to the parent process, but provides sample accuracy. On the other hand, when you run a seperate Pd instance and pass audio with AOO, they 
-are fully independent.
+For example on my Windows 7 laptop with an ASIO driver and 64 sample hardware buffer size and 5ms Pd latency, I can set the [aoo_receive~] buffer size down to 4-5 ms. On some other systems, you might get even lower. One of the use cases of AOO is certainly low latency audio streaming over local networks, especially over long periods of time (literally weeks or months, given that the devices have access to a NTP time server). Here routers and long ranges introduces latency, where mostly older WLAN devices on 2.4Ghz can introduce most of the latency. So better use Ethernet cables if latency matters.
 
-Give it a try and report back! Here's the latest snapshot (Just unpack 
-the .dek archive): https://git.iem.at/cm/aoo/-/jobs/10983/artifacts/download
 
+How to punch holes into firewalls ?
+
+Hole-punching is used by most Streaming platforms serving clients behind firewalls. 

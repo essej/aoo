@@ -1,6 +1,6 @@
 # Makefile for doku files and 
 
-DOCS=aoo_protocol.pdf aoo_usecases.pdf
+DOCS=aoo_protocol.pdf aoo_usecases.pdf faq.pdf
 
 all: ${DOCS}
 

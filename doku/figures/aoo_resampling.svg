@@ -16,7 +16,7 @@
    version="1.1"
    inkscape:version="0.92.4 (5da689c313, 2019-01-14)"
    sodipodi:docname="aoo_resampling.svg"
-   inkscape:export-filename="/home/winfried/projekte/AOO/doku/LAC2014/figures/aoo_resampling.png"
+   inkscape:export-filename="/home/winfried/repos/AVE/DIYasb-cm/pd/src/aoo/doku/figures/aoo_resampling.png"
    inkscape:export-xdpi="300"
    inkscape:export-ydpi="300">
   <title
@@ -159,19 +159,19 @@
      borderopacity="0.50196078"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="0"
-     inkscape:zoom="0.76272858"
-     inkscape:cx="522.82553"
-     inkscape:cy="-140.36025"
+     inkscape:zoom="0.53933055"
+     inkscape:cx="436.77163"
+     inkscape:cy="191.88118"
      inkscape:document-units="mm"
      inkscape:current-layer="layer1"
      showgrid="true"
      units="mm"
      borderlayer="true"
-     inkscape:window-width="2560"
-     inkscape:window-height="1024"
-     inkscape:window-x="0"
+     inkscape:window-width="1270"
+     inkscape:window-height="953"
+     inkscape:window-x="304"
      inkscape:window-y="0"
-     inkscape:window-maximized="1"
+     inkscape:window-maximized="0"
      showguides="true"
      inkscape:guide-bbox="true"
      fit-margin-top="1"
@@ -213,7 +213,7 @@
           </cc:Agent>
         </dc:rights>
         <cc:license
-           rdf:resource="http://creativecommons.org/licenses/by-sa/3.0/" />
+           rdf:resource="http://creativecommons.org/licenses/by-sa/4.0/" />
       </cc:Work>
       <cc:License
          rdf:about="http://creativecommons.org/licenses/by-sa/3.0/">
@@ -1460,7 +1460,7 @@
            height="53.149605"
            x="-160.52191"
            y="112.97758" /></flowRegion><flowPara
-         id="flowPara35006"></flowPara></flowRoot>    <text
+         id="flowPara35006" /></flowRoot>    <text
        id="text35012"
        y="963.37921"
        x="48.412125"
