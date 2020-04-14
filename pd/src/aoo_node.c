@@ -209,8 +209,8 @@ static void* aoo_node_receive(void *y)
                                 break;
                         }
                     }
-                } else if (type == AOO_TYPE_CLIENT){
-                    // forward OSC packet to matching senders(s)
+                } else if (type == AOO_TYPE_CLIENT || type == AOO_TYPE_PEER){
+                    // forward OSC packet to matching client
                     for (int i = 0; i < x->x_numclients; ++i){
                         if (pd_class(x->x_clients[i].c_obj) == aoo_client_class)
                         {

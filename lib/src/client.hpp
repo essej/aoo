@@ -23,6 +23,51 @@
 namespace aoo {
 namespace net {
 
+class client;
+
+class peer {
+public:
+    peer(client& client, const std::string& group, const std::string& user,
+         const ip_address& public_addr, const ip_address& local_addr);
+
+    ~peer();
+
+    bool match(const ip_address& addr) const;
+
+    bool match(const std::string& group, const std::string& user);
+
+    const std::string& group() const { return group_; }
+
+    const std::string& user() const { return user_; }
+
+    void send(time_tag now);
+
+    void handle_message(const osc::ReceivedMessage& msg,
+                        const ip_address& addr);
+
+    int32_t events_available();
+
+    int32_t handle_events(aoo_eventhandler fn, void *usr);
+
+    friend std::ostream& operator << (std::ostream& os, const peer& p);
+private:
+    typedef union event
+    {
+        int32_t type;
+    } event;
+
+    client *client_;
+    std::string group_;
+    std::string user_;
+    ip_address public_address_;
+    ip_address local_address_;
+    std::atomic<ip_address *> address_{nullptr};
+    time_tag start_time_;
+    double last_pingtime_ = 0;
+    bool timeout_ = false;
+    lockfree::queue<event> eventqueue_;
+};
+
 enum class client_state {
     disconnected,
     connecting,
@@ -80,6 +125,14 @@ public:
     void do_group_join(const std::string& group, const std::string& pwd);
 
     void do_group_leave(const std::string& group);
+
+    double ping_interval() const { return ping_interval_.load(); }
+
+    double request_interval() const { return request_interval_.load(); }
+
+    double request_timeout() const { return request_timeout_.load(); }
+
+    void send_message_udp(const char *data, int32_t size, const ip_address& addr);
 private:
     void *udpsocket_;
     aoo_sendfn sendfn_;
@@ -91,6 +144,9 @@ private:
     SLIP sendbuffer_;
     std::vector<uint8_t> pending_send_data_;
     SLIP recvbuffer_;
+    // peers
+    std::vector<std::unique_ptr<peer>> peers_;
+    aoo::shared_mutex peerlock_;
     // user
     std::string username_;
     std::string password_;
@@ -140,8 +196,15 @@ private:
 
     void handle_server_message_udp(const osc::ReceivedMessage& msg);
 
-    void handle_peer_message_udp(const osc::ReceivedMessage& msg,
-                                 const ip_address& addr);
+    void handle_login(const osc::ReceivedMessage& msg);
+
+    void handle_group_join(const osc::ReceivedMessage& msg);
+
+    void handle_group_leave(const osc::ReceivedMessage& msg);
+
+    void handle_peer_add(const osc::ReceivedMessage& msg);
+
+    void handle_peer_remove(const osc::ReceivedMessage& msg);
 
     void signal();
 };

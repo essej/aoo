@@ -144,8 +144,8 @@ void aoo_client_setup(void)
                     gensym("connect"), A_GIMME, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_disconnect,
                     gensym("disconnect"), A_NULL);
-    class_addmethod(aoo_client_class, (t_method)aoo_client_connect,
+    class_addmethod(aoo_client_class, (t_method)aoo_client_group_join,
                     gensym("group_join"), A_SYMBOL, A_SYMBOL, A_NULL);
-    class_addmethod(aoo_client_class, (t_method)aoo_client_connect,
+    class_addmethod(aoo_client_class, (t_method)aoo_client_group_leave,
                     gensym("group_leave"), A_SYMBOL, A_NULL);
 }
