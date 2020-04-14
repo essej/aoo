@@ -197,6 +197,8 @@ namespace net {
 
 std::string server::error_to_string(error e){
     switch (e){
+    case server::error::access_denied:
+        return "access denied";
     case server::error::permission_denied:
         return "permission denied";
     case server::error::wrong_password:
@@ -211,6 +213,11 @@ std::shared_ptr<user> server::get_user(const std::string& name,
 {
     auto usr = find_user(name);
     if (usr){
+        // check if someone is already logged in
+        if (usr->endpoint){
+            e = error::access_denied;
+            return nullptr;
+        }
         // check password for existing user
         if (usr->password == pwd){
             e = error::none;

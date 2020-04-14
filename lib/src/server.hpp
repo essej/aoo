@@ -117,7 +117,8 @@ public:
     enum class error {
         none,
         wrong_password,
-        permission_denied
+        permission_denied,
+        access_denied
     };
 
     static std::string error_to_string(error e);
