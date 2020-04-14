@@ -827,7 +827,8 @@ void client::handle_peer_add(const osc::ReceivedMessage& msg){
 
     // TODO event
 
-    LOG_VERBOSE("aoo_client: new peer " << *peers_.back());
+    LOG_VERBOSE("aoo_client: new peer " << *peers_.back()
+                << " (" << public_ip << ":" << public_port << ")");
 }
 
 void client::handle_peer_remove(const osc::ReceivedMessage& msg){
