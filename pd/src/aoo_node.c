@@ -181,7 +181,9 @@ static void* aoo_node_receive(void *y)
             pthread_mutex_unlock(&x->x_endpointlock);
             // get sink ID
             int32_t type, id;
-            if (aoo_parsepattern(buf, nbytes, &type, &id) > 0){
+            if ((aoo_parse_pattern(buf, nbytes, &type, &id) > 0)
+                || (aoonet_parse_pattern(buf, nbytes, &type) > 0))
+            {
                 aoo_lock_lock_shared(&x->x_clientlock);
                 if (type == AOO_TYPE_SINK){
                     // forward OSC packet to matching receiver(s)

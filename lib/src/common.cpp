@@ -2,7 +2,6 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
-#include "aoo/aoo_net.h"
 #include "aoo/aoo_utils.hpp"
 #include "aoo/aoo_pcm.h"
 #include "aoo/aoo_opus.h"
@@ -41,43 +40,25 @@ int32_t aoo_register_codec(const char *name, const aoo_codec *codec){
 
 /*//////////////////// OSC ////////////////////////////*/
 
-int32_t aoo_parsepattern(const char *msg, int32_t n, int32_t *type, int32_t *id){
+int32_t aoo_parse_pattern(const char *msg, int32_t n,
+                         int32_t *type, int32_t *id)
+{
     int32_t offset = 0;
-    if (n >= AOO_MSG_DOMAIN_LEN && !memcmp(msg, AOO_MSG_DOMAIN, AOO_MSG_DOMAIN_LEN)){
+    if (n >= AOO_MSG_DOMAIN_LEN
+        && !memcmp(msg, AOO_MSG_DOMAIN, AOO_MSG_DOMAIN_LEN))
+    {
         offset += AOO_MSG_DOMAIN_LEN;
         if (n >= (offset + AOO_MSG_SOURCE_LEN)
             && !memcmp(msg + offset, AOO_MSG_SOURCE, AOO_MSG_SOURCE_LEN))
         {
             *type = AOO_TYPE_SOURCE;
             offset += AOO_MSG_SOURCE_LEN;
-        }
-        else if (n >= (offset + AOO_MSG_SINK_LEN)
+        } else if (n >= (offset + AOO_MSG_SINK_LEN)
             && !memcmp(msg + offset, AOO_MSG_SINK, AOO_MSG_SINK_LEN))
         {
             *type = AOO_TYPE_SINK;
             offset += AOO_MSG_SINK_LEN;
-        }
-        else if (n >= (offset + AOONET_MSG_SERVER_LEN)
-            && !memcmp(msg + offset, AOONET_MSG_SERVER, AOONET_MSG_SERVER_LEN))
-        {
-            *type = AOO_TYPE_SERVER;
-            return offset + AOONET_MSG_SERVER_LEN;
-        }
-        else if (n >= (offset + AOONET_MSG_CLIENT_LEN)
-            && !memcmp(msg + offset, AOONET_MSG_CLIENT, AOONET_MSG_CLIENT_LEN))
-        {
-            *type = AOO_TYPE_CLIENT;
-            return offset + AOONET_MSG_CLIENT_LEN;
-        }
-        else if (n >= (offset + AOONET_MSG_PEER_LEN)
-            && !memcmp(msg + offset, AOONET_MSG_PEER, AOONET_MSG_PEER_LEN))
-        {
-            *type = AOO_TYPE_PEER;
-            return offset + AOONET_MSG_PEER_LEN;
-        }
-        else {
-            // TODO only print relevant part of OSC address string
-            LOG_ERROR("aoo_parsepattern: unknown destination " << msg + offset);
+        } else {
             return 0;
         }
 

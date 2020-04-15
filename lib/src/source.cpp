@@ -397,7 +397,7 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
     osc::ReceivedMessage msg(packet);
 
     int32_t type, src;
-    auto onset = aoo_parsepattern(data, n, &type, &src);
+    auto onset = aoo_parse_pattern(data, n, &type, &src);
     if (!onset){
         LOG_WARNING("aoo_source: not an AoO message!");
         return 0;

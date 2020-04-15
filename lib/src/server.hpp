@@ -182,7 +182,7 @@ private:
     void send_udp_message(const char *msg, int32_t size,
                           const ip_address& addr);
 
-    void handle_udp_message(const osc::ReceivedMessage& msg,
+    void handle_udp_message(const osc::ReceivedMessage& msg, int onset,
                             const ip_address& addr);
 
     void signal();
