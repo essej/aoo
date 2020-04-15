@@ -13,6 +13,9 @@
 #include "lockfree.hpp"
 #include "time_dll.hpp"
 
+#include "oscpack/osc/OscOutboundPacketStream.h"
+#include "oscpack/osc/OscReceivedElements.h"
+
 namespace aoo {
 
 struct stream_state {
@@ -124,22 +127,36 @@ public:
 
     // getters
     int32_t id() const { return id_; }
+
     void *endpoint() const { return endpoint_; }
+
     bool has_events() const { return  eventqueue_.read_available() > 0; }
+
     int32_t get_format(aoo_format_storage& format);
 
     // methods
     void update(const sink& s);
+
     int32_t handle_format(const sink& s, int32_t salt, const aoo_format& f,
-                               const char *setting, int32_t size);
-    int32_t handle_data(const sink& s, int32_t salt, const data_packet& d);
+                          const char *settings, int32_t size);
+
+    int32_t handle_data(const sink& s, int32_t salt,
+                                     const aoo::data_packet& d);
+
     int32_t handle_ping(const sink& s, time_tag tt);
+
     int32_t handle_events(aoo_eventhandler fn, void *user);
+
     bool send(const sink& s);
+
     bool process(const sink& s, aoo_sample *buffer, int32_t size);
+
     void request_recover(){ streamstate_.request_recover(); }
+
     void request_format(){ streamstate_.request_format(); }
+
     void request_invite(){ streamstate_.request_invitation(stream_state::INVITE); }
+
     void request_uninvite(){ streamstate_.request_invitation(stream_state::UNINVITE); }
 private:
     struct data_request {
@@ -149,14 +166,21 @@ private:
     void do_update(const sink& s);
     // handle messages
     bool check_packet(const data_packet& d);
+
     bool add_packet(const data_packet& d);
+
     void process_blocks();
+
     void check_outdated_blocks();
+
     void check_missing_blocks(const sink& s);
     // send messages
     bool send_format_request(const sink& s);
+
     int32_t send_data_request(const sink& s);
+
     bool send_notifications(const sink& s);
+
     void dosend(const char *data, int32_t n){
         fn_(endpoint_, data, n);
     }
@@ -229,16 +253,27 @@ public:
                              int32_t opt, void *ptr, int32_t size) override;
     // getters
     int32_t id() const { return id_; }
+
     int32_t nchannels() const { return nchannels_; }
+
     int32_t samplerate() const { return samplerate_; }
+
     double real_samplerate() const { return dll_.samplerate(); }
+
     int32_t blocksize() const { return blocksize_; }
+
     int32_t buffersize() const { return buffersize_; }
+
     int32_t packetsize() const { return packetsize_; }
+
     float resend_interval() const { return resend_interval_; }
+
     int32_t resend_limit() const { return resend_limit_; }
+
     int32_t resend_maxnumframes() const { return resend_maxnumframes_; }
+
     double elapsed_time() const { return timer_.get_elapsed(); }
+
     time_tag absolute_time() const { return timer_.get_absolute(); }
 private:
     // settings
@@ -266,15 +301,14 @@ private:
 
     void update_sources();
 
-    int32_t handle_format_message(void *endpoint, aoo_replyfn fn, int32_t id,
-                               int32_t salt, const aoo_format& format,
-                               const char *settings, int32_t size);
+    int32_t handle_format_message(void *endpoint, aoo_replyfn fn,
+                                  const osc::ReceivedMessage& msg);
 
-    int32_t handle_data_message(void *endpoint, aoo_replyfn fn, int32_t id,
-                               int32_t salt, const data_packet& data);
+    int32_t handle_data_message(void *endpoint, aoo_replyfn fn,
+                                const osc::ReceivedMessage& msg);
 
-    int32_t handle_ping_message(void *endpoint, aoo_replyfn fn, int32_t id,
-                               time_tag tt);
+    int32_t handle_ping_message(void *endpoint, aoo_replyfn fn,
+                                const osc::ReceivedMessage& msg);
 };
 
 } // aoo
