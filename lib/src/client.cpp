@@ -10,6 +10,36 @@
 
 #include "md5/md5.h"
 
+#define AOONET_MSG_SERVER_PING \
+    AOO_MSG_DOMAIN AOONET_MSG_SERVER AOONET_MSG_PING
+
+#define AOONET_MSG_PEER_PING \
+    AOO_MSG_DOMAIN AOONET_MSG_PEER AOONET_MSG_PING
+
+#define AOONET_MSG_SERVER_LOGIN \
+    AOO_MSG_DOMAIN AOONET_MSG_SERVER AOONET_MSG_LOGIN
+
+#define AOONET_MSG_SERVER_REQUEST \
+    AOO_MSG_DOMAIN AOONET_MSG_SERVER AOONET_MSG_REQUEST
+
+#define AOONET_MSG_SERVER_GROUP_JOIN \
+    AOO_MSG_DOMAIN AOONET_MSG_SERVER AOONET_MSG_GROUP AOONET_MSG_JOIN
+
+#define AOONET_MSG_SERVER_GROUP_LEAVE \
+    AOO_MSG_DOMAIN AOONET_MSG_SERVER AOONET_MSG_GROUP AOONET_MSG_LEAVE
+
+#define AOONET_MSG_GROUP_JOIN \
+    AOONET_MSG_GROUP AOONET_MSG_JOIN
+
+#define AOONET_MSG_GROUP_LEAVE \
+    AOONET_MSG_GROUP AOONET_MSG_LEAVE
+
+#define AOONET_MSG_PEER_JOIN \
+    AOONET_MSG_PEER AOONET_MSG_JOIN
+
+#define AOONET_MSG_PEER_LEAVE \
+    AOONET_MSG_PEER AOONET_MSG_LEAVE
+
 namespace aoo {
 namespace net {
 
@@ -30,6 +60,42 @@ std::string encrypt(const std::string& input){
 
 }
 } // aoo
+
+/*//////////////////// OSC ////////////////////////////*/
+
+int32_t aoonet_parse_pattern(const char *msg, int32_t n, int32_t *type)
+{
+    int32_t offset = 0;
+    if (n >= AOO_MSG_DOMAIN_LEN
+            && !memcmp(msg, AOO_MSG_DOMAIN, AOO_MSG_DOMAIN_LEN))
+    {
+        offset += AOO_MSG_DOMAIN_LEN;
+        if (n >= (offset + AOONET_MSG_SERVER_LEN)
+            && !memcmp(msg + offset, AOONET_MSG_SERVER, AOONET_MSG_SERVER_LEN))
+        {
+            *type = AOO_TYPE_SERVER;
+            return offset + AOONET_MSG_SERVER_LEN;
+        }
+        else if (n >= (offset + AOONET_MSG_CLIENT_LEN)
+            && !memcmp(msg + offset, AOONET_MSG_CLIENT, AOONET_MSG_CLIENT_LEN))
+        {
+            *type = AOO_TYPE_CLIENT;
+            return offset + AOONET_MSG_CLIENT_LEN;
+        }
+        else if (n >= (offset + AOONET_MSG_PEER_LEN)
+            && !memcmp(msg + offset, AOONET_MSG_PEER, AOONET_MSG_PEER_LEN))
+        {
+            *type = AOO_TYPE_PEER;
+            return offset + AOONET_MSG_PEER_LEN;
+        } else {
+            return 0;
+        }
+    } else {
+        return 0; // not an AoO message
+    }
+}
+
+
 
 /*//////////////////// AoO client /////////////////////*/
 
@@ -219,15 +285,30 @@ int32_t aoo::net::client::handle_message(const char *data, int32_t n, void *addr
         osc::ReceivedPacket packet(data, n);
         osc::ReceivedMessage msg(packet);
 
+        int32_t type;
+        auto onset = aoonet_parse_pattern(data, n, &type);
+        if (!onset){
+            LOG_WARNING("aoo_client: not an AOO NET message!");
+            return 0;
+        }
+
         LOG_DEBUG("aoo_client: handle UDP message " << msg.AddressPattern());
 
         ip_address address((struct sockaddr *)addr);
         if (address == remote_addr_){
             // server message
-            handle_server_message_udp(msg);
+            if (type != AOO_TYPE_CLIENT){
+                LOG_WARNING("aoo_client: not a server message!");
+                return 0;
+            }
+            handle_server_message_udp(msg, onset);
             return 1;
         } else {
             // peer message
+            if (type != AOO_TYPE_PEER){
+                LOG_WARNING("aoo_client: not a peer message!");
+                return 0;
+            }
             bool success = false;
             {
                 shared_lock lock(peerlock_);
@@ -238,7 +319,7 @@ int32_t aoo::net::client::handle_message(const char *data, int32_t n, void *addr
                 // with peers instead of having them all in a single vector.
                 for (auto& p : peers_){
                     if (p->match(address)){
-                        p->handle_message(msg, address);
+                        p->handle_message(msg, onset, address);
                         success = true;
                     }
                 }
@@ -718,25 +799,40 @@ void client::send_server_message_udp(const char *data, int32_t size)
 }
 
 void client::handle_server_message_tcp(const osc::ReceivedMessage& msg){
+    // first check main pattern
+    int32_t len = strlen(msg.AddressPattern());
+    int32_t onset = AOO_MSG_DOMAIN_LEN + AOONET_MSG_CLIENT_LEN;
+
+    if ((len < onset) ||
+        memcmp(msg.AddressPattern(), AOO_MSG_DOMAIN AOONET_MSG_CLIENT, onset))
+    {
+        LOG_ERROR("aoo_client: received bad message " << msg.AddressPattern()
+                  << " from server");
+        return;
+    }
+
+    // now compare subpattern
+    auto pattern = msg.AddressPattern() + onset;
+    LOG_DEBUG("aoo_client: got message " << pattern << " from server");
+
     try {
-        LOG_DEBUG("aoo_client: got message " << msg.AddressPattern() << " from server");
-        if (!strcmp(msg.AddressPattern(), AOONET_MSG_CLIENT_PING)){
+        if (!strcmp(pattern, AOONET_MSG_PING)){
             LOG_DEBUG("aoo_client: got TCP ping from server");
-        } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_CLIENT_LOGIN)){
+        } else if (!strcmp(pattern, AOONET_MSG_LOGIN)){
             handle_login(msg);
-        } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_CLIENT_GROUP_JOIN)){
+        } else if (!strcmp(pattern, AOONET_MSG_GROUP_JOIN)){
             handle_group_join(msg);
-        } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_CLIENT_GROUP_LEAVE)){
+        } else if (!strcmp(pattern, AOONET_MSG_GROUP_LEAVE)){
             handle_group_leave(msg);
-        } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_CLIENT_PEER_JOIN)){
+        } else if (!strcmp(pattern, AOONET_MSG_PEER_JOIN)){
             handle_peer_add(msg);
-        } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_CLIENT_PEER_LEAVE)){
+        } else if (!strcmp(pattern, AOONET_MSG_PEER_LEAVE)){
             handle_peer_remove(msg);
         } else {
-            LOG_ERROR("aoo_client: unknown server message " << msg.AddressPattern());
+            LOG_ERROR("aoo_client: unknown server message " << pattern);
         }
     } catch (const osc::Exception& e){
-        LOG_ERROR("aoo_client: " << msg.AddressPattern() << ": " << e.what());
+        LOG_ERROR("aoo_client: " << pattern << ": " << e.what());
     }
 }
 
@@ -852,11 +948,12 @@ void client::handle_peer_remove(const osc::ReceivedMessage& msg){
     LOG_VERBOSE("aoo_client: peer " << group << "|" << user << " left");
 }
 
-void client::handle_server_message_udp(const osc::ReceivedMessage &msg){
+void client::handle_server_message_udp(const osc::ReceivedMessage &msg, int onset){
+    auto pattern = msg.AddressPattern() + onset;
     try {
-        if (!strcmp(msg.AddressPattern(), AOONET_MSG_CLIENT_PING)){
+        if (!strcmp(pattern, AOONET_MSG_PING)){
             LOG_DEBUG("aoo_client: got UDP ping from server");
-        } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_CLIENT_REPLY)){
+        } else if (!strcmp(pattern, AOONET_MSG_REPLY)){
             client_state expected = client_state::handshake;
             if (state_.compare_exchange_strong(expected, client_state::login)){
                 // retrieve public IP + port
@@ -874,7 +971,7 @@ void client::handle_server_message_udp(const osc::ReceivedMessage &msg){
             }
         } else {
             LOG_WARNING("aoo_client: received unknown UDP message "
-                        << msg.AddressPattern() << " from server");
+                        << pattern << " from server");
         }
     } catch (const osc::Exception& e){
         LOG_ERROR("aoo_client: " << msg.AddressPattern() << ": " << e.what());
@@ -970,11 +1067,12 @@ void peer::send(time_tag now){
     }
 }
 
-void peer::handle_message(const osc::ReceivedMessage &msg,
+void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
                           const ip_address& addr)
 {
+    auto pattern = msg.AddressPattern() + onset;
     try {
-        if (!strcmp(msg.AddressPattern(), AOONET_MSG_PEER_PING)){
+        if (!strcmp(pattern, AOONET_MSG_PING)){
             if (!address_.load()){
                 // this is the first ping!
                 if (addr == public_address_){
@@ -993,11 +1091,10 @@ void peer::handle_message(const osc::ReceivedMessage &msg,
             }
         } else {
             LOG_WARNING("aoo_client: received unknown message "
-                        << msg.AddressPattern() << " from " << *this);
+                        << pattern << " from " << *this);
         }
     } catch (const osc::Exception& e){
-        LOG_ERROR("aoo_client: " << *this << ": " << msg.AddressPattern()
-                  << ": " << e.what());
+        LOG_ERROR("aoo_client: " << *this << ": " << pattern << ": " << e.what());
     }
 }
 

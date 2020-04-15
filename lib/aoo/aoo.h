@@ -16,23 +16,6 @@ extern "C"
 #define AOO_VERSION_BUGFIX 0
 #define AOO_VERSION_PRERELEASE 1 // 0: no pre-release
 
-#define AOO_MSG_SOURCE "/src"
-#define AOO_MSG_SOURCE_LEN 4
-#define AOO_MSG_SINK "/sink"
-#define AOO_MSG_SINK_LEN 5
-#define AOO_MSG_WILDCARD "/*"
-#define AOO_MSG_WILDCARD_LEN 2
-#define AOO_MSG_FORMAT "/format"
-#define AOO_MSG_FORMAT_LEN 7
-#define AOO_MSG_DATA "/data"
-#define AOO_MSG_DATA_LEN 5
-#define AOO_MSG_PING "/ping"
-#define AOO_MSG_PING_LEN 5
-#define AOO_MSG_INVITE "/invite"
-#define AOO_MSG_INVITE_LEN 7
-#define AOO_MSG_UNINVITE "/uninvite"
-#define AOO_MSG_UNINVITE_LEN 9
-
 #ifndef AOO_DEBUG_DLL
  #define AOO_DEBUG_DLL 0
 #endif
@@ -48,12 +31,6 @@ extern "C"
 #ifndef AOO_CLIP_OUTPUT
 #define AOO_CLIP_OUTPUT 0
 #endif
-
-typedef enum aoo_type
-{
-    AOO_TYPE_SOURCE = 0,
-    AOO_TYPE_SINK
-} aoo_type;
 
 /*////////// default values ////////////*/
 
@@ -120,15 +97,38 @@ AOO_API void aoo_terminate(void);
 
 /*//////////////////// OSC ////////////////////////////*/
 
+#define AOO_MSG_SOURCE "/src"
+#define AOO_MSG_SOURCE_LEN 4
+#define AOO_MSG_SINK "/sink"
+#define AOO_MSG_SINK_LEN 5
+#define AOO_MSG_WILDCARD "/*"
+#define AOO_MSG_WILDCARD_LEN 2
+#define AOO_MSG_FORMAT "/format"
+#define AOO_MSG_FORMAT_LEN 7
+#define AOO_MSG_DATA "/data"
+#define AOO_MSG_DATA_LEN 5
+#define AOO_MSG_PING "/ping"
+#define AOO_MSG_PING_LEN 5
+#define AOO_MSG_INVITE "/invite"
+#define AOO_MSG_INVITE_LEN 7
+#define AOO_MSG_UNINVITE "/uninvite"
+#define AOO_MSG_UNINVITE_LEN 9
+
 // id: the source or sink ID
 // returns: the offset to the remaining address pattern
 
 #define AOO_ID_WILDCARD -1
 #define AOO_ID_NONE INT32_MIN
 
-// get the type (AOO_TYPE) and ID from an AoO OSC message, e.g. in /aoo/src/<id>/data
-// returns 1 on success, 0 on fail
-AOO_API int32_t aoo_parsepattern(const char *msg, int32_t n,
+typedef enum aoo_type
+{
+    AOO_TYPE_SOURCE = 0,
+    AOO_TYPE_SINK
+} aoo_type;
+
+// get the aoo_type and ID from an AoO OSC message, e.g. in /aoo/src/<id>/data
+// returns the offset on success, 0 on fail
+AOO_API int32_t aoo_parse_pattern(const char *msg, int32_t n,
                                  int32_t *type, int32_t *id);
 
 // get the current NTP time

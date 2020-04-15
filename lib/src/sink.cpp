@@ -290,7 +290,7 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n, void *endpoint, a
     }
 
     int32_t type, sinkid;
-    auto onset = aoo_parsepattern(data, n, &type, &sinkid);
+    auto onset = aoo_parse_pattern(data, n, &type, &sinkid);
     if (!onset){
         LOG_WARNING("not an AoO message!");
         return 0;

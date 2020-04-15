@@ -7,6 +7,33 @@
 #include <functional>
 #include <algorithm>
 
+#define AOONET_MSG_CLIENT_PING \
+    AOO_MSG_DOMAIN AOONET_MSG_CLIENT AOONET_MSG_PING
+
+#define AOONET_MSG_CLIENT_LOGIN \
+    AOO_MSG_DOMAIN AOONET_MSG_CLIENT AOONET_MSG_LOGIN
+
+#define AOONET_MSG_CLIENT_REPLY \
+    AOO_MSG_DOMAIN AOONET_MSG_CLIENT AOONET_MSG_REPLY
+
+#define AOONET_MSG_CLIENT_GROUP_JOIN \
+    AOO_MSG_DOMAIN AOONET_MSG_CLIENT AOONET_MSG_GROUP AOONET_MSG_JOIN
+
+#define AOONET_MSG_CLIENT_GROUP_LEAVE \
+    AOO_MSG_DOMAIN AOONET_MSG_CLIENT AOONET_MSG_GROUP AOONET_MSG_LEAVE
+
+#define AOONET_MSG_CLIENT_PEER_JOIN \
+    AOO_MSG_DOMAIN AOONET_MSG_CLIENT AOONET_MSG_PEER AOONET_MSG_JOIN
+
+#define AOONET_MSG_CLIENT_PEER_LEAVE \
+    AOO_MSG_DOMAIN AOONET_MSG_CLIENT AOONET_MSG_PEER AOONET_MSG_LEAVE
+
+#define AOONET_MSG_GROUP_JOIN \
+    AOONET_MSG_GROUP AOONET_MSG_JOIN
+
+#define AOONET_MSG_GROUP_LEAVE \
+    AOONET_MSG_GROUP AOONET_MSG_LEAVE
+
 /*//////////////////// AoO server /////////////////////*/
 
 aoonet_server * aoonet_server_new(int port, int32_t *err) {
@@ -522,33 +549,21 @@ void server::receive_udp(){
         if (result > 0){
             try {
                 osc::ReceivedPacket packet(buf, result);
+                osc::ReceivedMessage msg(packet);
 
-                std::function<void(const osc::ReceivedBundle&)> dispatchBundle
-                        = [&](const osc::ReceivedBundle& bundle){
-                    auto it = bundle.ElementsBegin();
-                    while (it != bundle.ElementsEnd()){
-                        if (it->IsMessage()){
-                            osc::ReceivedMessage msg(*it);
-                            handle_udp_message(msg, addr);
-                        } else if (it->IsBundle()){
-                            osc::ReceivedBundle bundle2(*it);
-                            dispatchBundle(bundle2);
-                        } else {
-                            // ignore
-                        }
-                        ++it;
-                    }
-                };
-
-                if (packet.IsMessage()){
-                    osc::ReceivedMessage msg(packet);
-                    handle_udp_message(msg, addr);
-                } else if (packet.IsBundle()){
-                    osc::ReceivedBundle bundle(packet);
-                    dispatchBundle(bundle);
-                } else {
-                    // ignore
+                int32_t type;
+                auto onset = aoonet_parse_pattern(buf, result, &type);
+                if (!onset){
+                    LOG_WARNING("aoo_server: not an AOO NET message!");
+                    return;
                 }
+
+                if (type != AOO_TYPE_SERVER){
+                    LOG_WARNING("aoo_server: not a client message!");
+                    return;
+                }
+
+                handle_udp_message(msg, onset, addr);
             } catch (const osc::Exception& e){
                 LOG_ERROR("aoo_server: " << e.what());
             }
@@ -595,12 +610,14 @@ void server::send_udp_message(const char *msg, int32_t size,
     }
 }
 
-void server::handle_udp_message(const osc::ReceivedMessage &msg,
+void server::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
                                 const ip_address& addr)
 {
-    LOG_DEBUG("aoo_server: handle UDP message " << msg.AddressPattern());
+    auto pattern = msg.AddressPattern() + onset;
+    LOG_DEBUG("aoo_server: handle client UDP message " << pattern);
+
     try {
-        if (!strcmp(msg.AddressPattern(), AOONET_MSG_SERVER_PING)){
+        if (!strcmp(pattern, AOONET_MSG_PING)){
             // reply with /ping message
             char buf[64];
             osc::OutboundPacketStream reply(buf, sizeof(buf));
@@ -608,7 +625,7 @@ void server::handle_udp_message(const osc::ReceivedMessage &msg,
                   << osc::EndMessage;
 
             send_udp_message(reply.Data(), reply.Size(), addr);
-        } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_SERVER_REQUEST)){
+        } else if (!strcmp(pattern, AOONET_MSG_REQUEST)){
             // reply with /reply message
             char buf[64];
             osc::OutboundPacketStream reply(buf, sizeof(buf));
@@ -617,10 +634,10 @@ void server::handle_udp_message(const osc::ReceivedMessage &msg,
 
             send_udp_message(reply.Data(), reply.Size(), addr);
         } else {
-            LOG_ERROR("aoo_server: unknown message " << msg.AddressPattern());
+            LOG_ERROR("aoo_server: unknown message " << pattern);
         }
     } catch (const osc::Exception& e){
-        LOG_ERROR("aoo_server: " << msg.AddressPattern() << ": " << e.what());
+        LOG_ERROR("aoo_server: " << pattern << ": " << e.what());
     }
 }
 
@@ -870,15 +887,30 @@ bool client_endpoint::receive_data(){
 }
 
 void client_endpoint::handle_message(const osc::ReceivedMessage &msg){
-    LOG_DEBUG("aoo_server: got message " << msg.AddressPattern());
+    // first check main pattern
+    int32_t len = strlen(msg.AddressPattern());
+    int32_t onset = AOO_MSG_DOMAIN_LEN + AOONET_MSG_SERVER_LEN;
+
+    if ((len < onset) ||
+        memcmp(msg.AddressPattern(), AOO_MSG_DOMAIN AOONET_MSG_SERVER, onset))
+    {
+        LOG_ERROR("aoo_server: received bad message " << msg.AddressPattern()
+                  << " from client");
+        return;
+    }
+
+    // now compare subpattern
+    auto pattern = msg.AddressPattern() + onset;
+    LOG_DEBUG("aoo_server: got message " << pattern);
+
     try {
-        if (!strcmp(msg.AddressPattern(), AOONET_MSG_SERVER_PING)){
+        if (!strcmp(pattern, AOONET_MSG_PING)){
             handle_ping(msg);
-        } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_SERVER_LOGIN)){
+        } else if (!strcmp(pattern, AOONET_MSG_LOGIN)){
             handle_login(msg);
-        } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_SERVER_GROUP_JOIN)){
+        } else if (!strcmp(pattern, AOONET_MSG_GROUP_JOIN)){
             handle_group_join(msg);
-        } else if (!strcmp(msg.AddressPattern(), AOONET_MSG_SERVER_GROUP_LEAVE)){
+        } else if (!strcmp(pattern, AOONET_MSG_GROUP_LEAVE)){
             handle_group_leave(msg);
         } else {
             LOG_ERROR("aoo_server: unknown message " << msg.AddressPattern());

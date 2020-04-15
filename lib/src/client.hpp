@@ -42,7 +42,7 @@ public:
 
     void send(time_tag now);
 
-    void handle_message(const osc::ReceivedMessage& msg,
+    void handle_message(const osc::ReceivedMessage& msg, int onset,
                         const ip_address& addr);
 
     int32_t events_available();
@@ -194,7 +194,7 @@ private:
 
     void handle_server_message_tcp(const osc::ReceivedMessage& msg);
 
-    void handle_server_message_udp(const osc::ReceivedMessage& msg);
+    void handle_server_message_udp(const osc::ReceivedMessage& msg, int onset);
 
     void handle_login(const osc::ReceivedMessage& msg);
 
