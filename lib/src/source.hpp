@@ -12,10 +12,8 @@
 #include "lockfree.hpp"
 #include "time_dll.hpp"
 
-// forward declaration
-namespace osc {
-    class ReceivedMessageArgumentIterator;
-}
+#include "oscpack/osc/OscOutboundPacketStream.h"
+#include "oscpack/osc/OscReceivedElements.h"
 
 namespace aoo {
 
@@ -183,17 +181,20 @@ class source final : public isource {
 
     bool send_ping();
 
-    void handle_format_request(void *endpoint, aoo_replyfn fn, int32_t id);
+    void handle_format_request(void *endpoint, aoo_replyfn fn,
+                               const osc::ReceivedMessage& msg);
 
-    void handle_data_request(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt,
-                        int32_t count, osc::ReceivedMessageArgumentIterator it);
+    void handle_data_request(void *endpoint, aoo_replyfn fn,
+                             const osc::ReceivedMessage& msg);
 
-    void handle_ping(void *endpoint, aoo_replyfn fn, int32_t id,
-                     time_tag tt1, time_tag tt2);
+    void handle_ping(void *endpoint, aoo_replyfn fn,
+                     const osc::ReceivedMessage& msg);
 
-    void handle_invite(void *endpoint, aoo_replyfn fn, int32_t id);
+    void handle_invite(void *endpoint, aoo_replyfn fn,
+                       const osc::ReceivedMessage& msg);
 
-    void handle_uninvite(void *endpoint, aoo_replyfn fn, int32_t id);
+    void handle_uninvite(void *endpoint, aoo_replyfn fn,
+                         const osc::ReceivedMessage& msg);
 };
 
 } // aoo
