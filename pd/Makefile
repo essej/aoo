@@ -23,7 +23,17 @@ class.sources = \
 
 AOO = ../lib
 DEPS = ../deps
+
+## oscpack
+## set 'system_oscpack' to 'yes' (and set the appropriate
+## OSCPACK_CFLAGS/OSCPACK_LIBS) to use a system-provided
+## oscpack implementation
 OSCPACK = $(DEPS)/oscpack
+
+ifneq ($(system_oscpack),yes)
+OSCPACK_CFLAGS = -I$(OSCPACK)/..
+OSCPACK_LIBS =
+endif
 
 OPUS_CFLAGS =
 OPUS_LIBS = -lopus
@@ -32,7 +42,6 @@ cflags = \
     -I$(AOO) \
     -I$(AOO)/src \
     -I$(AOO)/src/lib \
-    -I$(OSCPACK)/.. \
     -Wno-unused -Wno-unused-parameter \
     -fvisibility=hidden \
     -DNDEBUG \
@@ -43,6 +52,7 @@ cflags = \
     -DAOO_DEBUG_RESAMPLING=0 \
     -DAOO_DEBUG_BLOCK_BUFFER=0 \
     $(OPUS_CFLAGS) \
+    $(OSCPACK_CFLAGS) \
     $(empty)
 
 ldlibs =
@@ -60,13 +70,20 @@ shared.sources = \
     $(AOO)/src/sink.cpp \
     $(AOO)/src/codec_pcm.cpp \
     $(AOO)/src/codec_opus.cpp \
+    $(empty)
+
+ifneq ($(system_oscpack),yes)
+shared.sources += \
     $(OSCPACK)/osc/OscTypes.cpp \
     $(OSCPACK)/osc/OscReceivedElements.cpp \
     $(OSCPACK)/osc/OscOutboundPacketStream.cpp \
     $(empty)
+endif
 
 # hack to set the C++ standard only for the shared library
 $(shared.sources:.cpp=.o): cxx.flags += -std=c++14
+
+ldlibs += $(OSCPACK_LIBS)
 
 define forWindows
     ldlibs += -lws2_32 $(OPUS_LIBS) -static-libstdc++ -static-libgcc
