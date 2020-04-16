@@ -22,7 +22,8 @@ class.sources = \
     $(empty)
 
 AOO = ../lib
-OSCPACK = ../deps/oscpack
+DEPS = ../deps
+OSCPACK = $(DEPS)/oscpack
 
 OPUS_CFLAGS =
 OPUS_LIBS = -lopus
