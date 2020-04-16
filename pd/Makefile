@@ -24,6 +24,30 @@ class.sources = \
     $(empty)
 
 AOO = ../lib
+DEPS = ../deps
+
+## oscpack
+## set 'system_oscpack' to 'yes' (and set the appropriate
+## OSCPACK_CFLAGS/OSCPACK_LIBS) to use a system-provided
+## oscpack implementation
+OSCPACK = $(DEPS)/oscpack
+
+ifneq ($(system_oscpack),yes)
+OSCPACK_CFLAGS = -I$(OSCPACK)/..
+OSCPACK_LIBS =
+endif
+
+## md5
+## set 'system_md5' to 'yes' (and set the appropriate
+## MD5_CFLAGS/MD5_LIBS) to use a system-provided
+## md5 implementation
+MD5 = $(DEPS)/md5
+
+ifneq ($(system_md5),yes)
+MD5_CFLAGS = -I$(MD5)/..
+MD5_LIBS =
+endif
+
 
 OPUS_CFLAGS =
 OPUS_LIBS = -lopus
@@ -42,6 +66,8 @@ cflags = \
     -DAOO_DEBUG_RESAMPLING=0 \
     -DAOO_DEBUG_BLOCK_BUFFER=0 \
     $(OPUS_CFLAGS) \
+    $(OSCPACK_CFLAGS) \
+    $(MD5_CFLAGS) \
     $(empty)
 
 ldlibs =
@@ -50,13 +76,10 @@ make-lib-executable=yes
 
 lib.setup.sources = src/aoo_setup.c
 
-common.sources = \
+shared.sources = \
     src/aoo_node.c \
     src/aoo_common.c \
     src/aoo_net.c \
-    $(empty)
-
-shared.sources = \
     $(AOO)/src/common.cpp \
     $(AOO)/src/sync.cpp \
     $(AOO)/src/time.cpp \
@@ -67,14 +90,25 @@ shared.sources = \
     $(AOO)/src/net_utils.cpp \
     $(AOO)/src/codec_pcm.cpp \
     $(AOO)/src/codec_opus.cpp \
-    $(AOO)/src/lib/md5/md5.cpp \
-    $(AOO)/src/lib/oscpack/osc/OscTypes.cpp \
-    $(AOO)/src/lib/oscpack/osc/OscReceivedElements.cpp \
-    $(AOO)/src/lib/oscpack/osc/OscOutboundPacketStream.cpp \
     $(empty)
+
+ifneq ($(system_oscpack),yes)
+shared.sources += \
+    $(OSCPACK)/osc/OscTypes.cpp \
+    $(OSCPACK)/osc/OscReceivedElements.cpp \
+    $(OSCPACK)/osc/OscOutboundPacketStream.cpp \
+    $(empty)
+endif
+ifneq ($(system_md5),yes)
+shared.sources += \
+    $(MD5)/md5.cpp \
+    $(empty)
+endif
 
 # hack to set the C++ standard only for the shared library
 $(shared.sources:.cpp=.o): cxx.flags += -std=c++14
+
+ldlibs += $(OSCPACK_LIBS) $(MD5_LIBS)
 
 define forWindows
     ldlibs += -lws2_32 $(OPUS_LIBS) -static-libstdc++ -static-libgcc
