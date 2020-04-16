@@ -48,13 +48,10 @@ make-lib-executable=yes
 
 lib.setup.sources = src/aoo_setup.c
 
-common.sources = \
+shared.sources = \
     src/aoo_node.c \
     src/aoo_common.c \
     src/aoo_net.c \
-    $(empty)
-
-shared.sources = \
     $(AOO)/src/common.cpp \
     $(AOO)/src/source.cpp \
     $(AOO)/src/sink.cpp \
