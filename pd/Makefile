@@ -22,6 +22,7 @@ class.sources = \
     $(empty)
 
 AOO = ../lib
+OSCPACK = ../deps/oscpack
 
 OPUS_CFLAGS =
 OPUS_LIBS = -lopus
@@ -30,6 +31,7 @@ cflags = \
     -I$(AOO) \
     -I$(AOO)/src \
     -I$(AOO)/src/lib \
+    -I$(OSCPACK)/.. \
     -Wno-unused -Wno-unused-parameter \
     -fvisibility=hidden \
     -DNDEBUG \
@@ -57,9 +59,9 @@ shared.sources = \
     $(AOO)/src/sink.cpp \
     $(AOO)/src/codec_pcm.cpp \
     $(AOO)/src/codec_opus.cpp \
-    $(AOO)/src/lib/oscpack/osc/OscTypes.cpp \
-    $(AOO)/src/lib/oscpack/osc/OscReceivedElements.cpp \
-    $(AOO)/src/lib/oscpack/osc/OscOutboundPacketStream.cpp \
+    $(OSCPACK)/osc/OscTypes.cpp \
+    $(OSCPACK)/osc/OscReceivedElements.cpp \
+    $(OSCPACK)/osc/OscOutboundPacketStream.cpp \
     $(empty)
 
 # hack to set the C++ standard only for the shared library
