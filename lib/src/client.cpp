@@ -46,9 +46,9 @@ namespace net {
 std::string encrypt(const std::string& input){
     uint8_t result[16];
     MD5_CTX ctx;
-    MD5Init(&ctx);
-    MD5Update(&ctx, (uint8_t *)input.data(), input.size());
-    MD5Final(result, &ctx);
+    MD5_Init(&ctx);
+    MD5_Update(&ctx, (uint8_t *)input.data(), input.size());
+    MD5_Final(result, &ctx);
 
     char output[33];
     for (int i = 0; i < 16; ++i){

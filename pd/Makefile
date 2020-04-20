@@ -101,7 +101,7 @@ shared.sources += \
 endif
 ifneq ($(system_md5),yes)
 shared.sources += \
-    $(MD5)/md5.cpp \
+    $(MD5)/md5.c \
     $(empty)
 endif
 
