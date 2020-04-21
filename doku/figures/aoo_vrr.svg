@@ -340,10 +340,10 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="0"
      inkscape:zoom="1.0547141"
-     inkscape:cx="420.93219"
-     inkscape:cy="287.85659"
+     inkscape:cx="387.85995"
+     inkscape:cy="232.33088"
      inkscape:document-units="mm"
-     inkscape:current-layer="g35746"
+     inkscape:current-layer="layer1"
      showgrid="true"
      units="mm"
      borderlayer="true"
@@ -473,7 +473,7 @@
          x="287.08524"
          sodipodi:role="line"
          style="font-size:18px;line-height:1.25;font-family:sans-serif"
-         id="tspan35287">Binaural rendering</tspan><tspan
+         id="tspan35287">Stereo/Binaural rendering</tspan><tspan
          y="971.42847"
          x="287.08524"
          sodipodi:role="line"
@@ -648,7 +648,7 @@
              x="159.44882"
              y="675.3819"
              id="tspan5678"
-             style="font-size:18px;line-height:1.25;font-family:sans-serif">muscian</tspan></text>
+             style="font-size:18px;line-height:1.25;font-family:sans-serif">musician</tspan></text>
       </g>
       <g
          inkscape:label="Ebene 1"
@@ -718,7 +718,7 @@
              y="675.3819"
              x="159.44882"
              sodipodi:role="line"
-             style="font-size:18px;line-height:1.25;font-family:sans-serif">muscian</tspan></text>
+             style="font-size:18px;line-height:1.25;font-family:sans-serif">musician</tspan></text>
       </g>
       <g
          transform="matrix(0.4703081,0.16790029,-0.16810876,0.47089204,42.444797,387.89027)"
@@ -1261,7 +1261,7 @@
              x="159.44882"
              y="675.3819"
              id="tspan3758"
-             style="font-size:18px;line-height:1.25;font-family:sans-serif">muscian</tspan></text>
+             style="font-size:18px;line-height:1.25;font-family:sans-serif">musician</tspan></text>
       </g>
       <g
          inkscape:label="Ebene 1"
