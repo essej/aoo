@@ -83,8 +83,55 @@ AOO_API int32_t aoonet_parse_pattern(const char *msg, int32_t n, int32_t *type);
 
 typedef enum aoonet_event_type
 {
-    AOONET_
+    // client events
+    AOONET_CLIENT_ERROR_EVENT = 0,
+    AOONET_CLIENT_PING_EVENT,
+    AOONET_CLIENT_CONNECT_EVENT,
+    AOONET_CLIENT_DISCONNECT_EVENT,
+    AOONET_CLIENT_GROUP_JOIN_EVENT,
+    AOONET_CLIENT_GROUP_LEAVE_EVENT,
+    AOONET_CLIENT_PEER_JOIN_EVENT,
+    AOONET_CLIENT_PEER_LEAVE_EVENT,
+    // server events
+    AOONET_SERVER_ERROR_EVENT,
+    AOONET_SERVER_PING_EVENT,
+    AOONET_SERVER_USER_ADD_EVENT,
+    AOONET_SERVER_USER_REMOVE_EVENT,
+    AOONET_SERVER_USER_JOIN_EVENT,
+    AOONET_SERVER_USER_LEAVE_EVENT,
+    AOONET_SERVER_GROUP_ADD_EVENT,
+    AOONET_SERVER_GROUP_REMOVE_EVENT,
+    AOONET_SERVER_GROUP_JOIN_EVENT,
+    AOONET_SERVER_GROUP_LEAVE_EVENT
 } aoonet_event_type;
+
+#define AOONET_REPLY_EVENT  \
+    int32_t type;           \
+    int32_t result;         \
+    const char *errormsg;   \
+
+typedef struct aoonet_reply_event
+{
+    AOONET_REPLY_EVENT
+} aoonet_reply_event;
+
+#define aoonet_client_event aoonet_reply_event
+
+typedef struct aoonet_client_group_event
+{
+    AOONET_REPLY_EVENT
+    const char *name;
+} aoonet_client_group_event;
+
+typedef struct aoonet_client_peer_event
+{
+    AOONET_REPLY_EVENT
+    const char *group;
+    const char *user;
+    void *address;
+    int32_t length;
+} aoonet_client_peer_event;
+
 
 /*///////////////////////// AOO server /////////////////////////*/
 

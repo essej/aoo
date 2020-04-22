@@ -151,7 +151,7 @@ AOO_API double aoo_osctime_duration(uint64_t t1, uint64_t t2);
 typedef enum aoo_event_type
 {
     // source: received a ping from sink
-    AOO_PING_EVENT,
+    AOO_PING_EVENT = 0,
     // source: invited by sink
     AOO_INVITE_EVENT,
     // source: uninvited by sink
