@@ -752,12 +752,13 @@ client_endpoint::~client_endpoint(){
 
 void client_endpoint::close(){
     if (socket >= 0){
+        LOG_VERBOSE("aoo_server: close client endpoint");
         socket_close(socket);
         socket = -1;
-    }
 
-    if (user_){
-        user_->on_close(*server_);
+        if (user_){
+            user_->on_close(*server_);
+        }
     }
 }
 
