@@ -40,22 +40,22 @@ public:
 
     const std::string& user() const { return user_; }
 
+    const ip_address& address() const {
+        auto addr = address_.load();
+        if (addr){
+            return *addr;
+        } else {
+            return public_address_;
+        }
+    }
+
     void send(time_tag now);
 
     void handle_message(const osc::ReceivedMessage& msg, int onset,
                         const ip_address& addr);
 
-    int32_t events_available();
-
-    int32_t handle_events(aoo_eventhandler fn, void *usr);
-
     friend std::ostream& operator << (std::ostream& os, const peer& p);
 private:
-    typedef union event
-    {
-        int32_t type;
-    } event;
-
     client *client_;
     std::string group_;
     std::string user_;
@@ -65,7 +65,6 @@ private:
     time_tag start_time_;
     double last_pingtime_ = 0;
     bool timeout_ = false;
-    lockfree::queue<event> eventqueue_;
 };
 
 enum class client_state {
@@ -88,6 +87,17 @@ public:
     struct icommand {
         virtual ~icommand(){}
         virtual void perform(client&) = 0;
+    };
+
+    struct ievent {
+        virtual ~ievent(){}
+
+        union {
+            aoo_event event_;
+            aoonet_client_event client_event_;
+            aoonet_client_group_event group_event_;
+            aoonet_client_peer_event peer_event_;
+        };
     };
 
     client(void *udpsocket, aoo_sendfn fn, int port);
@@ -133,6 +143,8 @@ public:
     double request_timeout() const { return request_timeout_.load(); }
 
     void send_message_udp(const char *data, int32_t size, const ip_address& addr);
+
+    void push_event(std::unique_ptr<ievent> e);
 private:
     void *udpsocket_;
     aoo_sendfn sendfn_;
@@ -144,8 +156,9 @@ private:
     SLIP sendbuffer_;
     std::vector<uint8_t> pending_send_data_;
     SLIP recvbuffer_;
+    shared_mutex clientlock_;
     // peers
-    std::vector<std::unique_ptr<peer>> peers_;
+    std::vector<std::shared_ptr<peer>> peers_;
     aoo::shared_mutex peerlock_;
     // user
     std::string username_;
@@ -157,7 +170,7 @@ private:
     std::atomic<client_state> state_{client_state::disconnected};
     double last_udp_ping_time_ = 0;
     double first_udp_ping_time_ = 0;
-    // queue
+    // commands
     lockfree::queue<std::unique_ptr<icommand>> commands_;
     spinlock command_lock_;
     void push_command(std::unique_ptr<icommand>&& cmd){
@@ -166,7 +179,9 @@ private:
             commands_.write(std::move(cmd));
         }
     }
-    lockfree::queue<aoo_event> events_;
+    // events
+    lockfree::queue<std::unique_ptr<ievent>> events_;
+    spinlock event_lock_;
     // signal
     std::atomic<bool> quit_{false};
 #ifdef _WIN32
@@ -208,6 +223,31 @@ private:
 
     void signal();
 };
+
+/*////////////////////// events /////////////////////*/
+
+struct client_event : client::ievent
+{
+    client_event(int32_t type, int32_t result,
+                 const char * errmsg = 0);
+    ~client_event();
+};
+
+struct group_event : client::ievent
+{
+    group_event(int32_t type, const char *name,
+               int32_t result, const char * errmsg = 0);
+    ~group_event();
+};
+
+struct peer_event : client::ievent
+{
+    peer_event(int32_t type, const char *group, const char *user,
+               const void *address, int32_t length);
+    ~peer_event();
+};
+
+/*////////////////////// commands ///////////////////*/
 
 struct connect_cmd : client::icommand
 {

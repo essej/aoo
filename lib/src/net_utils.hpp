@@ -100,6 +100,8 @@ struct ip_address {
 
 void socket_close(int sock);
 
+std::string socket_strerror(int err);
+
 int socket_errno();
 
 int socket_set_nonblocking(int socket, int nonblocking);

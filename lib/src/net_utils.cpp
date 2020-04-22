@@ -13,6 +13,20 @@ void socket_close(int sock){
 #endif
 }
 
+std::string socket_strerror(int err)
+{
+    char buf[1024];
+#ifdef _WIN32
+    buf[0] = 0;
+    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0,
+                          err, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT), buf,
+                          1024, NULL);
+#else
+    snprintf(buf, 1024, "%s", strerror(err));
+#endif
+    return buf;
+}
+
 int socket_errno(){
 #ifdef _WIN32
     return WSAGetLastError();

@@ -420,6 +420,7 @@ int32_t aoo::sink::handle_events(aoo_eventhandler fn, void *user){
     }
     int total = 0;
     // handle_events() and the source list itself are both lock-free!
+    // NOTE: the source descs are never freed, so they are always valid
     for (auto& src : sources_){
         total += src.handle_events(fn, user);
         if (total > EVENT_THROTTLE){
