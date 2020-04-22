@@ -195,6 +195,20 @@ int socket_getaddr(const char *hostname, int port,
     }
 }
 
+int sockaddr_to_atoms(const struct sockaddr *sa, socklen_t len, t_atom *a)
+{
+    // LATER add IPv6 support
+    struct sockaddr_in *addr = (struct sockaddr_in *)sa;
+    const char *host = inet_ntoa(addr->sin_addr);
+    if (!host){
+        fprintf(stderr, "inet_ntoa failed!\n");
+        return 0;
+    }
+    SETSYMBOL(a, gensym(host));
+    SETFLOAT(a + 1, ntohs(addr->sin_port));
+    return 1;
+}
+
 /*//////////////////// endpoint ///////////////////////*/
 
 t_endpoint * endpoint_new(void *owner, const struct sockaddr_storage *sa, socklen_t len)

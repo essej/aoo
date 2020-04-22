@@ -1,4 +1,4 @@
-#N canvas 319 232 1055 515 12;
+#N canvas 319 232 1055 542 12;
 #X declare -lib aoo;
 #X obj 188 264 aoo_client 9998;
 #X msg 197 232 disconnect;
@@ -30,32 +30,40 @@
 -1 -1;
 #X obj 294 463 print;
 #X msg 209 102 group_join test bar;
-#X obj 506 392 aoo_receive~ 10000 1;
-#X obj 505 465 dac~;
-#X obj 506 423 *~ 0.25;
-#X msg 506 359 bufsize \$1;
-#X obj 506 335 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X obj 515 411 aoo_receive~ 10000 1;
+#X obj 514 484 dac~;
+#X obj 515 442 *~ 0.25;
+#X msg 515 378 bufsize \$1;
+#X obj 515 354 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X msg 326 398 format opus;
 #X msg 183 361 add 77.119.128.169 44932 1;
-#X obj 643 426 route ping;
-#X obj 643 457 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
+#X obj 652 445 route ping;
+#X obj 652 476 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
 -1 -1;
-#X obj 670 456 print;
+#X obj 679 475 print;
+#X obj 188 317 print state-a;
+#X obj 293 317 print event-a;
+#X obj 516 310 print state-b;
+#X obj 623 310 print event-b;
 #X connect 0 0 4 0;
+#X connect 0 1 38 0;
 #X connect 1 0 0 0;
 #X connect 2 0 5 0;
 #X connect 3 0 0 0;
+#X connect 4 0 37 0;
 #X connect 6 0 0 0;
 #X connect 7 0 0 0;
 #X connect 8 0 0 0;
 #X connect 9 0 0 0;
 #X connect 10 0 16 0;
+#X connect 11 0 39 0;
 #X connect 12 0 16 0;
 #X connect 13 0 16 0;
 #X connect 14 0 16 0;
 #X connect 15 0 16 0;
 #X connect 16 0 11 0;
+#X connect 16 1 40 0;
 #X connect 17 0 16 0;
 #X connect 18 0 16 0;
 #X connect 20 0 22 0;

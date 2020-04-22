@@ -38,6 +38,8 @@ int socket_strerror(int err, char *buf, int size);
 
 void socket_error_print(const char *label);
 
+int sockaddr_to_atoms(const struct sockaddr *sa, socklen_t len, t_atom *a);
+
 // use linked list for persistent memory
 typedef struct _endpoint {
     void *owner;

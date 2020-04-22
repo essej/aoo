@@ -2,12 +2,13 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
-#include "aoo_common.h"
 #include "aoo/aoo_net.h"
+
+#include "aoo_common.h"
 
 #include <pthread.h>
 
-#define AOO_CLIENT_POLL_INTERVAL 10
+#define AOO_CLIENT_POLL_INTERVAL 2
 
 t_class *aoo_client_class;
 
@@ -37,6 +38,103 @@ void aoo_client_handle_message(t_aoo_client *x, const char * data,
 static int32_t aoo_client_handle_events(t_aoo_client *x,
                                         const aoo_event **events, int32_t n)
 {
+    for (int i = 0; i < n; ++i){
+        switch (events[i]->type){
+        case AOONET_CLIENT_CONNECT_EVENT:
+        {
+            aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
+            if (e->result > 0){
+                outlet_float(x->x_stateout, 1); // connected
+            } else {
+                pd_error(x, "%s: couldn't connect to server - %s",
+                         classname(x), e->errormsg);
+                outlet_float(x->x_stateout, 0); // disconnected
+            }
+            break;
+        }
+        case AOONET_CLIENT_DISCONNECT_EVENT:
+        {
+            aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
+            if (e->result == 0){
+                pd_error(x, "%s: disconnected from server - %s",
+                         classname(x), e->errormsg);
+            }
+            outlet_float(x->x_stateout, 0); // disconnected
+            break;
+        }
+        case AOONET_CLIENT_GROUP_JOIN_EVENT:
+        {
+            aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
+            if (e->result > 0){
+                t_atom msg;
+                SETSYMBOL(&msg, gensym(e->name));
+                outlet_anything(x->x_msgout, gensym("group_join"), 1, &msg);
+            } else {
+                pd_error(x, "%s: couldn't join group %s - %s",
+                         classname(x), e->name, e->errormsg);
+            }
+            break;
+        }
+        case AOONET_CLIENT_GROUP_LEAVE_EVENT:
+        {
+            aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
+            if (e->result > 0){
+                t_atom msg;
+                SETSYMBOL(&msg, gensym(e->name));
+                outlet_anything(x->x_msgout, gensym("group_leave"), 1, &msg);
+            } else {
+                pd_error(x, "%s: couldn't leave group %s - %s",
+                         classname(x), e->name, e->errormsg);
+            }
+            break;
+        }
+        case AOONET_CLIENT_PEER_JOIN_EVENT:
+        {
+            aoonet_client_peer_event *e = (aoonet_client_peer_event *)events[i];
+
+            if (e->result > 0){
+                t_atom msg[4];
+                SETSYMBOL(msg, gensym(e->group));
+                SETSYMBOL(msg + 1, gensym(e->user));
+                if (sockaddr_to_atoms((const struct sockaddr *)e->address,
+                                      e->length, msg + 2))
+                {
+                    outlet_anything(x->x_msgout, gensym("peer_join"), 4, msg);
+                }
+            } else {
+                bug("%s: AOONET_CLIENT_PEER_JOIN_EVENT", classname(x));
+            }
+            break;
+        }
+        case AOONET_CLIENT_PEER_LEAVE_EVENT:
+        {
+            aoonet_client_peer_event *e = (aoonet_client_peer_event *)events[i];
+
+            if (e->result > 0){
+                t_atom msg[4];
+                SETSYMBOL(msg, gensym(e->group));
+                SETSYMBOL(msg + 1, gensym(e->user));
+                if (sockaddr_to_atoms((const struct sockaddr *)e->address,
+                                      e->length, msg + 2))
+                {
+                    outlet_anything(x->x_msgout, gensym("peer_leave"), 4, msg);
+                }
+            } else {
+                bug("%s: AOONET_CLIENT_PEER_LEAVE_EVENT", classname(x));
+            }
+            break;
+        }
+        case AOONET_CLIENT_ERROR_EVENT:
+        {
+            aoonet_client_event *e = (aoonet_client_event *)events[i];
+            pd_error(x, "%s: %s", classname(x), e->errormsg);
+            break;
+        }
+        default:
+            pd_error(x, "%s: got unknown event %d", classname(x), events[i]->type);
+            break;
+        }
+    }
     return 1;
 }
 
