@@ -6,6 +6,7 @@ Functionality
 -------------
 
 What is the lowest Latency possible ?
+.....................................
 
 Short answer: 
  AoO does have a bit more latency than [pd~] because of the extra buffer in [aoo_receive~]. 
@@ -23,5 +24,17 @@ For example on my Windows 7 laptop with an ASIO driver and 64 sample hardware bu
 
 
 How to punch holes into firewalls ?
+...................................
 
-Hole-punching is used by most Streaming platforms serving clients behind firewalls. 
+ Hole-punching is used by most Streaming platforms serving clients behind firewalls. 
+ The main trick,  simplified described, is sending packets from the computer behind the firewall to the a receiver, which triggers a session in a NAT or similiar firewall to map incoming packages from the same IP port to the computer behind the firewall. 
+
+
+What is the DLL-timefilter?
+...........................
+
+This is a delay-locked-loop (DLL) which estimates the *real* samplerate 
+based on the system time (which is different from the nominal samplerate 
+of the audio device). This allows us to dynamically resample audio 
+coming from another machine, so you can stream over long time periods 
+and still stay in sync.
