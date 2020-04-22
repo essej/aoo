@@ -504,6 +504,11 @@ void client::do_disconnect(command_reason reason, int error){
         LOG_VERBOSE("aoo_client: disconnected");
     }
 
+    {
+        unique_lock lock(peerlock_);
+        peers_.clear();
+    }
+
     // event
     if (reason != command_reason::none){
         if (reason == command_reason::user){
