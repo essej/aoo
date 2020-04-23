@@ -479,9 +479,9 @@ void client::do_connect(const std::string &host, int port)
         // event
         std::string errmsg = socket_strerror(err);
 
-        auto event = std::make_unique<client_event>(
+        auto e = std::make_unique<event>(
             AOONET_CLIENT_CONNECT_EVENT, 0, errmsg.c_str());
-        push_event(std::move(event));
+        push_event(std::move(e));
 
         do_disconnect();
         return;
@@ -512,9 +512,9 @@ void client::do_disconnect(command_reason reason, int error){
     // event
     if (reason != command_reason::none){
         if (reason == command_reason::user){
-            auto event = std::make_unique<client_event>(
+            auto e = std::make_unique<event>(
                 AOONET_CLIENT_DISCONNECT_EVENT, 1);
-            push_event(std::move(event));
+            push_event(std::move(e));
         } else {
             std::string errmsg;
             if (reason == command_reason::timeout) {
@@ -527,9 +527,9 @@ void client::do_disconnect(command_reason reason, int error){
                     errmsg = socket_strerror(error);
                 }
             }
-            auto event = std::make_unique<client_event>(
+            auto e = std::make_unique<event>(
                 AOONET_CLIENT_DISCONNECT_EVENT, 0, errmsg.c_str());
-            push_event(std::move(event));
+            push_event(std::move(e));
         }
     }
 
@@ -937,9 +937,9 @@ void client::handle_login(const osc::ReceivedMessage& msg){
             state_ = client_state::connected;
             LOG_VERBOSE("aoo_client: successfully logged in");
             // event
-            auto event = std::make_unique<client_event>(
+            auto e = std::make_unique<event>(
                 AOONET_CLIENT_CONNECT_EVENT, 1);
-            push_event(std::move(event));
+            push_event(std::move(e));
         } else {
             std::string errmsg;
             if (msg.ArgumentCount() > 1){
@@ -950,9 +950,9 @@ void client::handle_login(const osc::ReceivedMessage& msg){
             LOG_WARNING("aoo_client: login failed: " << errmsg);
 
             // event
-            auto event = std::make_unique<client_event>(
+            auto e = std::make_unique<event>(
                 AOONET_CLIENT_CONNECT_EVENT, status, errmsg.c_str());
-            push_event(std::move(event));
+            push_event(std::move(e));
 
             do_disconnect();
         }
@@ -965,9 +965,9 @@ void client::handle_group_join(const osc::ReceivedMessage& msg){
     int32_t status = (it++)->AsInt32();
     if (status > 0){
         LOG_VERBOSE("aoo_client: successfully joined group " << group);
-        auto event = std::make_unique<group_event>(
+        auto e = std::make_unique<group_event>(
             AOONET_CLIENT_GROUP_JOIN_EVENT, group.c_str(), 1);
-        push_event(std::move(event));
+        push_event(std::move(e));
     } else {
         std::string errmsg;
         if (msg.ArgumentCount() > 2){
@@ -978,9 +978,9 @@ void client::handle_group_join(const osc::ReceivedMessage& msg){
             errmsg = "unknown error";
         }
         // event
-        auto event = std::make_unique<group_event>(
+        auto e = std::make_unique<group_event>(
             AOONET_CLIENT_GROUP_JOIN_EVENT, group.c_str(), status, errmsg.c_str());
-        push_event(std::move(event));
+        push_event(std::move(e));
     }
 }
 
@@ -997,9 +997,9 @@ void client::handle_group_leave(const osc::ReceivedMessage& msg){
                                      [&](auto& p){ return p->group() == group; });
         peers_.erase(result, peers_.end());
 
-        auto event = std::make_unique<group_event>(
+        auto e = std::make_unique<group_event>(
             AOONET_CLIENT_GROUP_LEAVE_EVENT, group.c_str(), 1);
-        push_event(std::move(event));
+        push_event(std::move(e));
     } else {
         std::string errmsg;
         if (msg.ArgumentCount() > 2){
@@ -1010,9 +1010,9 @@ void client::handle_group_leave(const osc::ReceivedMessage& msg){
             errmsg = "unknown error";
         }
         // event
-        auto event = std::make_unique<group_event>(
+        auto e = std::make_unique<group_event>(
             AOONET_CLIENT_GROUP_LEAVE_EVENT, group.c_str(), status, errmsg.c_str());
-        push_event(std::move(event));
+        push_event(std::move(e));
     }
 }
 
@@ -1064,10 +1064,10 @@ void client::handle_peer_remove(const osc::ReceivedMessage& msg){
 
     peers_.erase(result);
 
-    auto event = std::make_unique<peer_event>(
+    auto e = std::make_unique<peer_event>(
                 AOONET_CLIENT_PEER_LEAVE_EVENT,
                 group.c_str(), user.c_str(), &addr.address, addr.length);
-    push_event(std::move(event));
+    push_event(std::move(e));
 
     LOG_VERBOSE("aoo_client: peer " << group << "|" << user << " left");
 }
@@ -1113,21 +1113,21 @@ void client::signal(){
 
 /*///////////////////// events ////////////////////////*/
 
-client_event::client_event(int32_t type, int32_t result,
-                           const char * errmsg)
+client::event::event(int32_t type, int32_t result,
+                     const char * errmsg)
 {
     client_event_.type = type;
     client_event_.result = result;
     client_event_.errormsg = copy_string(errmsg);
 }
 
-client_event::~client_event()
+client::event::~event()
 {
     delete client_event_.errormsg;
 }
 
-group_event::group_event(int32_t type, const char *name,
-           int32_t result, const char *errmsg)
+client::group_event::group_event(int32_t type, const char *name,
+                                 int32_t result, const char *errmsg)
 {
     group_event_.type = type;
     group_event_.result = result;
@@ -1135,14 +1135,15 @@ group_event::group_event(int32_t type, const char *name,
     group_event_.name = copy_string(name);
 }
 
-group_event::~group_event()
+client::group_event::~group_event()
 {
     delete group_event_.errormsg;
     delete group_event_.name;
 }
 
-peer_event::peer_event(int32_t type, const char *group, const char *user,
-                       const void *address, int32_t length)
+client::peer_event::peer_event(int32_t type,
+                               const char *group, const char *user,
+                               const void *address, int32_t length)
 {
     peer_event_.type = type;
     peer_event_.result = 1;
@@ -1153,7 +1154,7 @@ peer_event::peer_event(int32_t type, const char *group, const char *user,
     peer_event_.length = length;
 }
 
-peer_event::~peer_event()
+client::peer_event::~peer_event()
 {
     delete peer_event_.user;
     delete peer_event_.group;
@@ -1162,7 +1163,8 @@ peer_event::~peer_event()
 
 /*///////////////////// peer //////////////////////////*/
 
-peer::peer(client& client, const std::string& group, const std::string& user,
+peer::peer(client& client,
+           const std::string& group, const std::string& user,
            const ip_address& public_addr, const ip_address& local_addr)
     : client_(&client), group_(group), user_(user),
       public_address_(public_addr), local_address_(local_addr)
@@ -1224,9 +1226,9 @@ void peer::send(time_tag now){
             std::stringstream ss;
             ss << "couldn't establish connection with peer " << *this;
 
-            auto event = std::make_unique<client_event>(
+            auto e = std::make_unique<client::event>(
                         AOONET_CLIENT_ERROR_EVENT, 0, ss.str().c_str());
-            client_->push_event(std::move(event));
+            client_->push_event(std::move(e));
 
             return;
         }
@@ -1265,10 +1267,10 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
                 }
 
                 // push event
-                auto event = std::make_unique<peer_event>(
+                auto e = std::make_unique<client::peer_event>(
                             AOONET_CLIENT_PEER_JOIN_EVENT,
                             group().c_str(), user().c_str(), &addr.address, addr.length);
-                client_->push_event(std::move(event));
+                client_->push_event(std::move(e));
 
                 LOG_VERBOSE("aoo_client: successfully established connection with " << *this);
             } else {

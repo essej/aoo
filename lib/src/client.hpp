@@ -222,85 +222,86 @@ private:
     void handle_peer_remove(const osc::ReceivedMessage& msg);
 
     void signal();
-};
 
-/*////////////////////// events /////////////////////*/
+    /*////////////////////// events /////////////////////*/
+public:
+    struct event : ievent
+    {
+        event(int32_t type, int32_t result,
+              const char * errmsg = 0);
+        ~event();
+    };
 
-struct client_event : client::ievent
-{
-    client_event(int32_t type, int32_t result,
-                 const char * errmsg = 0);
-    ~client_event();
-};
+    struct group_event : ievent
+    {
+        group_event(int32_t type, const char *name,
+                   int32_t result, const char * errmsg = 0);
+        ~group_event();
+    };
 
-struct group_event : client::ievent
-{
-    group_event(int32_t type, const char *name,
-               int32_t result, const char * errmsg = 0);
-    ~group_event();
-};
+    struct peer_event : ievent
+    {
+        peer_event(int32_t type,
+                   const char *group, const char *user,
+                   const void *address, int32_t length);
+        ~peer_event();
+    };
 
-struct peer_event : client::ievent
-{
-    peer_event(int32_t type, const char *group, const char *user,
-               const void *address, int32_t length);
-    ~peer_event();
-};
+    /*////////////////////// commands ///////////////////*/
+private:
+    struct connect_cmd : icommand
+    {
+        connect_cmd(const std::string& _host, int _port)
+            : host(_host), port(_port){}
 
-/*////////////////////// commands ///////////////////*/
+        void perform(client &obj) override {
+            obj.do_connect(host, port);
+        }
+        std::string host;
+        int port;
+    };
 
-struct connect_cmd : client::icommand
-{
-    connect_cmd(const std::string& _host, int _port)
-        : host(_host), port(_port){}
+    struct disconnect_cmd : icommand
+    {
+        disconnect_cmd(command_reason _reason, int _error = 0)
+            : reason(_reason), error(_error){}
 
-    void perform(client &obj) override {
-        obj.do_connect(host, port);
-    }
-    std::string host;
-    int port;
-};
+        void perform(client &obj) override {
+            obj.do_disconnect(reason, error);
+        }
+        command_reason reason;
+        int error;
+    };
 
-struct disconnect_cmd : client::icommand
-{
-    disconnect_cmd(command_reason _reason, int _error = 0)
-        : reason(_reason), error(_error){}
+    struct login_cmd : icommand
+    {
+        void perform(client& obj) override {
+            obj.do_login();
+        }
+    };
 
-    void perform(client &obj) override {
-        obj.do_disconnect(reason, error);
-    }
-    command_reason reason;
-    int error;
-};
+    struct group_join_cmd : icommand
+    {
+        group_join_cmd(const std::string& _group, const std::string& _pwd)
+            : group(_group), password(_pwd){}
 
-struct login_cmd : client::icommand
-{
-    void perform(client& obj) override {
-        obj.do_login();
-    }
-};
+        void perform(client &obj) override {
+            obj.do_group_join(group, password);
+        }
+        std::string group;
+        std::string password;
+    };
 
-struct group_join_cmd : client::icommand
-{
-    group_join_cmd(const std::string& _group, const std::string& _pwd)
-        : group(_group), password(_pwd){}
+    struct group_leave_cmd : icommand
+    {
+        group_leave_cmd(const std::string& _group)
+            : group(_group){}
 
-    void perform(client &obj) override {
-        obj.do_group_join(group, password);
-    }
-    std::string group;
-    std::string password;
-};
-
-struct group_leave_cmd : client::icommand
-{
-    group_leave_cmd(const std::string& _group)
-        : group(_group){}
-
-    void perform(client &obj) override {
-        obj.do_group_leave(group);
-    }
-    std::string group;
+        void perform(client &obj) override {
+            obj.do_group_leave(group);
+        }
+        std::string group;
+    };
 };
 
 } // net
