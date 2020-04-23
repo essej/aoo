@@ -162,7 +162,7 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         pd_error(x, "%s: too few arguments for 'channel' message", classname(x));
         return;
     }
-    if (aoo_getsinkarg(x, argc, argv, &sa, &len, &id)){
+    if (aoo_getsinkarg(x, x->x_node, argc, argv, &sa, &len, &id)){
         t_sink *sink = aoo_send_findsink(x, &sa, id);
         if (!sink){
             pd_error(x, "%s: couldn't find sink!", classname(x));
@@ -263,7 +263,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     struct sockaddr_storage sa;
     socklen_t len;
     int32_t id;
-    if (aoo_getsinkarg(x, argc, argv, &sa, &len, &id)){
+    if (aoo_getsinkarg(x, x->x_node, argc, argv, &sa, &len, &id)){
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
         t_endpoint *e = aoo_node_endpoint(x->x_node, &sa, len);
@@ -344,7 +344,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     struct sockaddr_storage sa;
     socklen_t len;
     int32_t id;
-    if (aoo_getsinkarg(x, argc, argv, &sa, &len, &id)){
+    if (aoo_getsinkarg(x, x->x_node, argc, argv, &sa, &len, &id)){
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
         t_endpoint *e = 0;

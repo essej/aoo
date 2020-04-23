@@ -1,10 +1,10 @@
-#N canvas 319 232 1055 542 12;
+#N canvas 228 221 1055 542 12;
 #X declare -lib aoo;
 #X obj 188 264 aoo_client 9998;
 #X msg 197 232 disconnect;
 #X obj 40 134 aoo_server 8000;
 #X msg 188 21 connect localhost 8000 christof foo;
-#X obj 188 291 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X obj 188 291 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
 1;
 #X floatatom 40 158 5 0 0 0 - - -;
 #X msg 198 60 connect 193.170.129.101 8002 christof foo;
@@ -12,7 +12,7 @@
 #X msg 232 170 group_join test2 bar;
 #X msg 239 202 group_leave test2;
 #X msg 524 227 disconnect;
-#X obj 515 286 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X obj 515 286 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
 1;
 #X msg 536 97 group_join test bar;
 #X msg 545 134 group_leave test;
@@ -37,7 +37,6 @@
 #X obj 515 354 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X msg 326 398 format opus;
-#X msg 183 361 add 77.119.128.169 44932 1;
 #X obj 652 445 route ping;
 #X obj 652 476 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
 -1 -1;
@@ -46,24 +45,25 @@
 #X obj 293 317 print event-a;
 #X obj 516 310 print state-b;
 #X obj 623 310 print event-b;
+#X msg 183 361 add test winnie 1;
 #X connect 0 0 4 0;
-#X connect 0 1 38 0;
+#X connect 0 1 37 0;
 #X connect 1 0 0 0;
 #X connect 2 0 5 0;
 #X connect 3 0 0 0;
-#X connect 4 0 37 0;
+#X connect 4 0 36 0;
 #X connect 6 0 0 0;
 #X connect 7 0 0 0;
 #X connect 8 0 0 0;
 #X connect 9 0 0 0;
 #X connect 10 0 16 0;
-#X connect 11 0 39 0;
+#X connect 11 0 38 0;
 #X connect 12 0 16 0;
 #X connect 13 0 16 0;
 #X connect 14 0 16 0;
 #X connect 15 0 16 0;
 #X connect 16 0 11 0;
-#X connect 16 1 40 0;
+#X connect 16 1 39 0;
 #X connect 17 0 16 0;
 #X connect 18 0 16 0;
 #X connect 20 0 22 0;
@@ -73,12 +73,12 @@
 #X connect 23 0 24 0;
 #X connect 26 0 0 0;
 #X connect 27 0 29 0;
-#X connect 27 1 34 0;
-#X connect 27 1 36 0;
+#X connect 27 1 33 0;
+#X connect 27 1 35 0;
 #X connect 29 0 28 0;
 #X connect 29 0 28 1;
 #X connect 30 0 27 0;
 #X connect 31 0 30 0;
 #X connect 32 0 22 0;
-#X connect 33 0 22 0;
-#X connect 34 0 35 0;
+#X connect 33 0 34 0;
+#X connect 40 0 22 0;

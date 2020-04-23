@@ -48,7 +48,7 @@ static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *arg
     struct sockaddr_storage sa;
     socklen_t len;
     int32_t id;
-    if (aoo_getsourcearg(x, argc, argv, &sa, &len, &id)){
+    if (aoo_getsourcearg(x, x->x_node, argc, argv, &sa, &len, &id)){
         for (int i = 0; i < x->x_numsources; ++i){
             if (endpoint_match(x->x_sources[i].s_endpoint, &sa) &&
                 x->x_sources[i].s_id == id)
@@ -101,7 +101,7 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
     socklen_t len;
     int32_t id;
     t_endpoint *e = 0;
-    if (aoo_getsourcearg(x, argc, argv, &sa, &len, &id)){
+    if (aoo_getsourcearg(x, x->x_node, argc, argv, &sa, &len, &id)){
         for (int i = 0; i < x->x_numsources; ++i){
             t_source *src = &x->x_sources[i];
             if (src->s_id == id && endpoint_match(src->s_endpoint, &sa)){

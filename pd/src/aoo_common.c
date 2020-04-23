@@ -93,21 +93,37 @@ int32_t aoo_endpoint_to_atoms(const t_endpoint *e, int32_t id, t_atom *argv)
     return 0;
 }
 
-static int aoo_getendpointarg(void *x, int argc, t_atom *argv, struct sockaddr_storage *sa,
-                              socklen_t *len, int32_t *id, const char *what)
+static int aoo_getendpointarg(void *x, t_aoo_node *node, int argc, t_atom *argv,
+                              struct sockaddr_storage *sa, socklen_t *len,
+                              int32_t *id, const char *what)
 {
     if (argc < 3){
         pd_error(x, "%s: too few arguments for %s", classname(x), what);
         return 0;
     }
 
-    t_symbol *hostname = atom_getsymbol(argv);
-    int port = atom_getfloat(argv + 1);
+    // first try peer (group|user)
+    t_endpoint *e = 0;
+    if (argv[1].a_type == A_SYMBOL){
+        t_symbol *group = atom_getsymbol(argv);
+        t_symbol *user = atom_getsymbol(argv + 1);
 
-    if (!socket_getaddr(hostname->s_name, port, sa, len)){
-        pd_error(x, "%s: couldn't resolve hostname '%s' of %s",
-                 classname(x), hostname->s_name, what);
-        return 0;
+        e = aoo_node_find_peer(node, group, user);
+    }
+
+    if (e){
+        // success - copy sockaddr
+        memcpy(sa, &e->addr, e->addrlen);
+    } else {
+        // otherwise try host|port
+        t_symbol *host = atom_getsymbol(argv);
+        int port = atom_getfloat(argv + 1);
+
+        if (!socket_getaddr(host->s_name, port, sa, len)){
+            pd_error(x, "%s: couldn't resolve hostname '%s' of %s",
+                     classname(x), host->s_name, what);
+            return 0;
+        }
     }
 
     if (argv[2].a_type == A_SYMBOL){
@@ -124,16 +140,16 @@ static int aoo_getendpointarg(void *x, int argc, t_atom *argv, struct sockaddr_s
     return 1;
 }
 
-int aoo_getsinkarg(void *x, int argc, t_atom *argv,
+int aoo_getsinkarg(void *x, t_aoo_node *node, int argc, t_atom *argv,
                    struct sockaddr_storage *sa, socklen_t *len, int32_t *id)
 {
-    return aoo_getendpointarg(x, argc, argv, sa, len, id, "sink");
+    return aoo_getendpointarg(x, node, argc, argv, sa, len, id, "sink");
 }
 
-int aoo_getsourcearg(void *x, int argc, t_atom *argv,
+int aoo_getsourcearg(void *x, t_aoo_node *node, int argc, t_atom *argv,
                      struct sockaddr_storage *sa, socklen_t *len, int32_t *id)
 {
-    return aoo_getendpointarg(x, argc, argv, sa, len, id, "source");
+    return aoo_getendpointarg(x, node, argc, argv, sa, len, id, "source");
 }
 
 static int aoo_getarg(const char *name, void *x, int which,

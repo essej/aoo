@@ -48,6 +48,7 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
             } else {
                 pd_error(x, "%s: couldn't connect to server - %s",
                          classname(x), e->errormsg);
+
                 outlet_float(x->x_stateout, 0); // disconnected
             }
             break;
@@ -59,6 +60,9 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
                 pd_error(x, "%s: disconnected from server - %s",
                          classname(x), e->errormsg);
             }
+
+            aoo_node_remove_all_peers(x->x_node);
+
             outlet_float(x->x_stateout, 0); // disconnected
             break;
         }
@@ -66,6 +70,8 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
         {
             aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
             if (e->result > 0){
+                aoo_node_remove_group(x->x_node, gensym(e->name));
+
                 t_atom msg;
                 SETSYMBOL(&msg, gensym(e->name));
                 outlet_anything(x->x_msgout, gensym("group_join"), 1, &msg);
@@ -93,6 +99,9 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
             aoonet_client_peer_event *e = (aoonet_client_peer_event *)events[i];
 
             if (e->result > 0){
+                aoo_node_add_peer(x->x_node, gensym(e->group), gensym(e->user),
+                                  (const struct sockaddr *)e->address, e->length);
+
                 t_atom msg[4];
                 SETSYMBOL(msg, gensym(e->group));
                 SETSYMBOL(msg + 1, gensym(e->user));
@@ -111,6 +120,8 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
             aoonet_client_peer_event *e = (aoonet_client_peer_event *)events[i];
 
             if (e->result > 0){
+                aoo_node_remove_peer(x->x_node, gensym(e->group), gensym(e->user));
+
                 t_atom msg[4];
                 SETSYMBOL(msg, gensym(e->group));
                 SETSYMBOL(msg + 1, gensym(e->user));
@@ -162,6 +173,9 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
         return;
     }
     if (x->x_client){
+        // first remove peers (to be sure)
+        aoo_node_remove_all_peers(x->x_node);
+
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
         t_symbol *username = atom_getsymbol(argv + 2);
@@ -175,6 +189,8 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
 static void aoo_client_disconnect(t_aoo_client *x)
 {
     if (x->x_client){
+        aoo_node_remove_all_peers(x->x_node);
+
         aoonet_client_disconnect(x->x_client);
     }
 }
@@ -221,6 +237,8 @@ static void * aoo_client_new(t_symbol *s, int argc, t_atom *argv)
 static void aoo_client_free(t_aoo_client *x)
 {
     if (x->x_node){
+        aoo_node_remove_all_peers(x->x_node);
+
         aoo_node_release(x->x_node, (t_pd *)x, 0);
     }
 

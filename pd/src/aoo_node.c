@@ -67,6 +67,13 @@ typedef struct _client
     int32_t c_id;
 } t_client;
 
+typedef struct _peer
+{
+    t_symbol *group;
+    t_symbol *user;
+    t_endpoint *endpoint;
+} t_peer;
+
 typedef struct _aoo_node
 {
     t_pd x_pd;
@@ -74,6 +81,9 @@ typedef struct _aoo_node
     // dependants
     t_client *x_clients;
     int x_numclients; // doubles as refcount
+    // peers
+    t_peer *x_peers;
+    int x_numpeers;
     // socket
     int x_socket;
     int x_port;
@@ -101,6 +111,98 @@ t_endpoint * aoo_node_endpoint(t_aoo_node *x,
     }
     pthread_mutex_unlock(&x->x_endpointlock);
     return ep;
+}
+
+static t_peer * aoo_node_dofind_peer(t_aoo_node *x, t_symbol *group, t_symbol *user)
+{
+    for (int i = 0; i < x->x_numpeers; ++i){
+        t_peer *p = &x->x_peers[i];
+        if (p->group == group && p->user == user){
+            return p;
+        }
+    }
+    return 0;
+}
+
+t_endpoint * aoo_node_find_peer(t_aoo_node *x, t_symbol *group, t_symbol *user)
+{
+    t_peer *p = aoo_node_dofind_peer(x, group, user);
+    return p ? p->endpoint : 0;
+}
+
+void aoo_node_add_peer(t_aoo_node *x, t_symbol *group, t_symbol *user,
+                       const struct sockaddr *sa, socklen_t len)
+{
+    if (aoo_node_dofind_peer(x, group, user)){
+        bug("aoo_node_add_peer");
+        return;
+    }
+
+    t_endpoint *e = aoo_node_endpoint(x, (const struct sockaddr_storage *)sa, len);
+
+    if (x->x_peers){
+        x->x_peers = resizebytes(x->x_peers, x->x_numpeers * sizeof(t_peer),
+                                 (x->x_numpeers + 1) * sizeof(t_peer));
+    } else {
+        x->x_peers = getbytes(sizeof(t_peer));
+    }
+    t_peer *p = &x->x_peers[x->x_numpeers++];
+    p->group = group;
+    p->user = user;
+    p->endpoint = e;
+}
+
+void aoo_node_remove_peer(t_aoo_node *x, t_symbol *group, t_symbol *user)
+{
+    t_peer *p = aoo_node_dofind_peer(x, group, user);
+    if (!p){
+        bug("aoo_node_remove_peer");
+        return;
+    }
+    if (x->x_numpeers > 1){
+        int index = p - x->x_peers;
+        memmove(p, p + 1, (x->x_numpeers - index - 1) * sizeof(t_peer));
+        x->x_peers = resizebytes(x->x_peers, x->x_numpeers * sizeof(t_peer),
+                                 (x->x_numpeers - 1) * sizeof(t_peer));
+    } else {
+        freebytes(x->x_peers, sizeof(t_peer));
+        x->x_peers = 0;
+    }
+    x->x_numpeers--;
+}
+
+void aoo_node_remove_group(t_aoo_node *x, t_symbol *group)
+{
+    if (x->x_peers){
+        // remove all sinks matching endpoint
+        int n = x->x_numpeers;
+        t_peer *end = x->x_peers + n;
+        for (t_peer *p = x->x_peers; p != end; ){
+            if (p->group == group){
+                memmove(p, p + 1, (end - p - 1) * sizeof(t_peer));
+                end--;
+            } else {
+                p++;
+            }
+        }
+        int newsize = end - x->x_peers;
+        if (newsize > 0){
+            x->x_peers = (t_peer *)resizebytes(x->x_peers,
+                n * sizeof(t_peer), newsize * sizeof(t_peer));
+        } else {
+            freebytes(x->x_peers, n * sizeof(t_peer));
+            x->x_peers = 0;
+        }
+        x->x_numpeers = newsize;
+    }
+}
+
+void aoo_node_remove_all_peers(t_aoo_node *x)
+{
+    if (x->x_peers){
+        freebytes(x->x_peers, x->x_numpeers * sizeof(t_peer));
+        x->x_numpeers = 0;
+    }
 }
 
 int aoo_node_socket(t_aoo_node *x)
@@ -314,6 +416,9 @@ t_aoo_node* aoo_node_add(int port, t_pd *obj, int32_t id)
         x->x_clients = (t_client *)getbytes(sizeof(t_client));
         x->x_clients[0] = client;
         x->x_numclients = 1;
+
+        x->x_peers = 0;
+        x->x_numpeers = 0;
 
         x->x_socket = sock;
         x->x_port = port;
