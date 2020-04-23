@@ -70,8 +70,6 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
         {
             aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
             if (e->result > 0){
-                aoo_node_remove_group(x->x_node, gensym(e->name));
-
                 t_atom msg;
                 SETSYMBOL(&msg, gensym(e->name));
                 outlet_anything(x->x_msgout, gensym("group_join"), 1, &msg);
@@ -85,6 +83,8 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
         {
             aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
             if (e->result > 0){
+                aoo_node_remove_group(x->x_node, gensym(e->name));
+
                 t_atom msg;
                 SETSYMBOL(&msg, gensym(e->name));
                 outlet_anything(x->x_msgout, gensym("group_leave"), 1, &msg);

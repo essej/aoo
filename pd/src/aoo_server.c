@@ -7,7 +7,7 @@
 
 #include <pthread.h>
 
-#define AOO_SERVER_POLL_INTERVAL 10
+#define AOO_SERVER_POLL_INTERVAL 2
 
 static t_class *aoo_server_class;
 
@@ -15,6 +15,7 @@ typedef struct _aoo_server
 {
     t_object x_obj;
     aoonet_server *x_server;
+    int32_t x_numusers;
     pthread_t x_thread;
     t_clock *x_clock;
     t_outlet *x_stateout;
@@ -24,6 +25,69 @@ typedef struct _aoo_server
 static int32_t aoo_server_handle_events(t_aoo_server *x,
                                         const aoo_event **events, int32_t n)
 {
+    for (int i = 0; i < n; ++i){
+        switch (events[i]->type){
+        case AOONET_SERVER_USER_JOIN_EVENT:
+        {
+            aoonet_server_user_event *e = (aoonet_server_user_event *)events[i];
+
+            t_atom msg;
+            SETSYMBOL(&msg, gensym(e->name));
+            outlet_anything(x->x_msgout, gensym("user_join"), 1, &msg);
+
+            x->x_numusers++;
+
+            outlet_float(x->x_stateout, x->x_numusers);
+
+            break;
+        }
+        case AOONET_SERVER_USER_LEAVE_EVENT:
+        {
+            aoonet_server_user_event *e = (aoonet_server_user_event *)events[i];
+
+            t_atom msg;
+            SETSYMBOL(&msg, gensym(e->name));
+            outlet_anything(x->x_msgout, gensym("user_leave"), 1, &msg);
+
+            x->x_numusers--;
+
+            outlet_float(x->x_stateout, x->x_numusers);
+
+            break;
+        }
+        case AOONET_SERVER_GROUP_JOIN_EVENT:
+        {
+            aoonet_server_group_event *e = (aoonet_server_group_event *)events[i];
+
+            t_atom msg[2];
+            SETSYMBOL(msg, gensym(e->group));
+            SETSYMBOL(msg + 1, gensym(e->user));
+            outlet_anything(x->x_msgout, gensym("group_leave"), 2, msg);
+
+            break;
+        }
+        case AOONET_SERVER_GROUP_LEAVE_EVENT:
+        {
+            aoonet_server_group_event *e = (aoonet_server_group_event *)events[i];
+
+            t_atom msg[2];
+            SETSYMBOL(msg, gensym(e->group));
+            SETSYMBOL(msg + 1, gensym(e->user));
+            outlet_anything(x->x_msgout, gensym("group_leave"), 2, msg);
+
+            break;
+        }
+        case AOONET_SERVER_ERROR_EVENT:
+        {
+            aoonet_server_event *e = (aoonet_server_event *)events[i];
+            pd_error(x, "%s: %s", classname(x), e->errormsg);
+            break;
+        }
+        default:
+            pd_error(x, "%s: got unknown event %d", classname(x), events[i]->type);
+            break;
+        }
+    }
     return 1;
 }
 
@@ -45,6 +109,7 @@ static void * aoo_server_new(t_symbol *s, int argc, t_atom *argv)
 {
     t_aoo_server *x = (t_aoo_server *)pd_new(aoo_server_class);
 
+    x->x_numusers = 0;
     x->x_clock = clock_new(x, (t_method)aoo_server_tick);
     x->x_stateout = outlet_new(&x->x_obj, 0);
     x->x_msgout = outlet_new(&x->x_obj, 0);
