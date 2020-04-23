@@ -59,12 +59,13 @@ static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, 
             double diff2 = aoo_osctime_duration(e->tt2, e->tt3) * 1000.0;
             double rtt = aoo_osctime_duration(e->tt1, e->tt3) * 1000.0;
 
-            t_atom msg[4];
+            t_atom msg[5];
             SETFLOAT(msg, e->id);
             SETFLOAT(msg + 1, diff1);
             SETFLOAT(msg + 2, diff2);
             SETFLOAT(msg + 3, rtt);
-            outlet_anything(x->x_eventout, gensym("ping"), 4, msg);
+            SETFLOAT(msg + 4, e->lost_blocks);
+            outlet_anything(x->x_eventout, gensym("ping"), 5, msg);
             break;
         }
         case AOO_INVITE_EVENT:

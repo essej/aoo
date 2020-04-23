@@ -75,14 +75,15 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
             double diff2 = aoo_osctime_duration(e->tt2, e->tt3) * 1000.0;
             double rtt = aoo_osctime_duration(e->tt1, e->tt3) * 1000.0;
 
-            t_atom msg[6];
+            t_atom msg[7];
             if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
                 continue;
             }
             SETFLOAT(msg + 3, diff1);
             SETFLOAT(msg + 4, diff2);
             SETFLOAT(msg + 5, rtt);
-            outlet_anything(x->x_eventout, gensym("ping"), 6, msg);
+            SETFLOAT(msg + 6, e->lost_blocks);
+            outlet_anything(x->x_eventout, gensym("ping"), 7, msg);
             break;
         }
         case AOO_INVITE_EVENT:

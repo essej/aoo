@@ -222,6 +222,7 @@ typedef struct aoo_ping_event {
     uint64_t tt1;
     uint64_t tt2;
     uint64_t tt3; // only for source
+    int32_t lost_blocks; // only for source
 } aoo_ping_event;
 
 /*//////////////////// AoO options ////////////////////*/

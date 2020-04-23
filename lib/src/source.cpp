@@ -1182,6 +1182,7 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn,
     auto id = (it++)->AsInt32();
     time_tag tt1 = (it++)->AsTimeTag();
     time_tag tt2 = (it++)->AsTimeTag();
+    int32_t lost_blocks = (it++)->AsInt32();
 
     LOG_DEBUG("handle ping");
 
@@ -1200,6 +1201,7 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn,
             e.sink.id = id;
             e.ping.tt1 = tt1.to_uint64();
             e.ping.tt2 = tt2.to_uint64();
+            e.ping.lost_blocks = lost_blocks;
         #if 0
             e.ping.tt3 = timer_.get_absolute().to_uint64(); // use last stream time
         #else

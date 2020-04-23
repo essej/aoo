@@ -922,6 +922,7 @@ bool source_desc::check_packet(const data_packet &d){
         // record dropped blocks
         streamstate_.add_lost(blockqueue_.size());
         if (diff > 1){
+            // record gap (measured in blocks)
             streamstate_.add_gap(diff - 1);
         }
         // clear the block queue and fill audio buffer with zeros.
@@ -1249,6 +1250,8 @@ bool source_desc::send_notifications(const sink& s){
     if (streamstate_.need_ping(pingtime1, pingtime2)){
         // only send ping if source is active
         if (streamstate_.get_state() == AOO_SOURCE_STATE_PLAY){
+            auto lost_blocks = streamstate_.get_lost_since_ping();
+
             char buffer[AOO_MAXPACKETSIZE];
             osc::OutboundPacketStream msg(buffer, sizeof(buffer));
 
@@ -1262,6 +1265,7 @@ bool source_desc::send_notifications(const sink& s){
             msg << osc::BeginMessage(address) << s.id()
                 << osc::TimeTag(pingtime1.to_uint64())
                 << osc::TimeTag(pingtime2.to_uint64())
+                << lost_blocks
                 << osc::EndMessage;
 
             dosend(msg.Data(), msg.Size());

@@ -36,8 +36,9 @@ struct stream_state {
         pingtime2_ = time_tag{};
     }
 
-    void add_lost(int32_t n) { lost_ += n; }
+    void add_lost(int32_t n) { lost_ += n; lost_since_ping_ += n; }
     int32_t get_lost() { return lost_.exchange(0); }
+    int32_t get_lost_since_ping() { return lost_since_ping_.exchange(0); }
 
     void add_reordered(int32_t n) { reordered_ += n; }
     int32_t get_reordered() { return reordered_.exchange(0); }
@@ -88,6 +89,7 @@ struct stream_state {
     void request_invitation(invitation_state state) { invite_ = state; }
     invitation_state get_invitation_state() { return invite_.exchange(NONE); }
 private:
+    std::atomic<int32_t> lost_since_ping_{0};
     std::atomic<int32_t> lost_{0};
     std::atomic<int32_t> reordered_{0};
     std::atomic<int32_t> resent_{0};

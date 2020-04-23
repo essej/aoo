@@ -1,4 +1,4 @@
-#N canvas 454 4 870 759 12;
+#N canvas 332 28 847 759 12;
 #X declare -lib aoo -path osc;
 #X obj 168 119 osc~ 440;
 #X msg 88 135 set \$1;
@@ -35,12 +35,12 @@
 #X msg 249 222 packetsize \$1;
 #X obj 249 202 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X obj 89 457 pipelist;
-#X obj 142 427 random;
-#X obj 181 402 nbx 5 14 0 100 0 0 empty empty empty 0 -8 0 10 -262144
+#X obj 89 471 pipelist;
+#X obj 142 419 random;
+#X obj 181 394 nbx 5 14 0 100 0 0 empty empty empty 0 -8 0 10 -262144
 -1 -1 0 256;
-#X floatatom 159 455 5 0 0 0 - - -;
-#X text 195 426 simulate jitter + reordering;
+#X floatatom 159 469 5 0 0 0 - - -;
+#X text 195 416 simulate jitter + reordering;
 #X obj 87 349 spigot;
 #X obj 87 236 t a b b;
 #X obj 111 308 >= 0;
@@ -84,7 +84,6 @@
 #X obj 304 652 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X msg 263 567 add localhost 9999 1;
-#X msg 288 620 clear;
 #X obj 294 676 osc~ 300;
 #X obj 370 675 osc~ 800;
 #X obj 175 229 print A;
@@ -97,7 +96,7 @@
 #X text 539 368 random dropout length;
 #X text 538 417 fixed dropout length;
 #X msg 275 592 add localhost 9999 *;
-#X msg 338 620 add foo 9999 1;
+#X msg 344 620 add foo 9999 1;
 #X msg 19 85 start;
 #X msg 27 114 stop;
 #X msg 228 622 start;
@@ -112,6 +111,10 @@
 #X msg 628 597 uninvite localhost 9999 1;
 #X obj 764 673 print C;
 #X obj 621 640 aoo_receive~ 9998 1 2;
+#X msg 288 620 remove;
+#X obj 142 443 +;
+#X obj 178 445 nbx 5 14 0 100 0 0 empty empty empty 0 -8 0 10 -262144
+-1 -1 0 256;
 #X connect 0 0 23 0;
 #X connect 1 0 23 0;
 #X connect 2 0 1 0;
@@ -132,14 +135,13 @@
 #X connect 21 0 24 0;
 #X connect 22 0 24 0;
 #X connect 23 0 34 0;
-#X connect 23 1 72 0;
+#X connect 23 1 71 0;
 #X connect 24 0 19 0;
 #X connect 24 1 25 0;
 #X connect 26 0 23 0;
 #X connect 27 0 26 0;
 #X connect 28 0 43 0;
-#X connect 29 0 28 1;
-#X connect 29 0 31 0;
+#X connect 29 0 95 0;
 #X connect 30 0 29 1;
 #X connect 33 0 54 0;
 #X connect 34 0 33 0;
@@ -158,7 +160,7 @@
 #X connect 45 0 23 0;
 #X connect 46 0 58 0;
 #X connect 47 0 46 0;
-#X connect 48 0 75 0;
+#X connect 48 0 74 0;
 #X connect 49 0 48 1;
 #X connect 50 0 51 0;
 #X connect 51 0 56 0;
@@ -174,25 +176,28 @@
 #X connect 61 0 62 0;
 #X connect 62 0 63 0;
 #X connect 64 0 61 0;
-#X connect 67 0 70 0;
-#X connect 68 0 86 0;
-#X connect 69 0 86 0;
-#X connect 70 0 86 0;
-#X connect 71 0 86 1;
-#X connect 75 0 50 1;
-#X connect 76 0 75 1;
-#X connect 79 0 86 0;
-#X connect 80 0 86 0;
+#X connect 67 0 69 0;
+#X connect 68 0 85 0;
+#X connect 69 0 85 0;
+#X connect 70 0 85 1;
+#X connect 74 0 50 1;
+#X connect 75 0 74 1;
+#X connect 78 0 85 0;
+#X connect 79 0 85 0;
+#X connect 80 0 23 0;
 #X connect 81 0 23 0;
-#X connect 82 0 23 0;
-#X connect 83 0 86 0;
-#X connect 84 0 86 0;
-#X connect 86 0 73 0;
-#X connect 86 0 74 0;
+#X connect 82 0 85 0;
+#X connect 83 0 85 0;
+#X connect 85 0 72 0;
+#X connect 85 0 73 0;
+#X connect 86 0 88 0;
 #X connect 87 0 89 0;
-#X connect 88 0 90 0;
-#X connect 91 0 94 0;
-#X connect 92 0 94 0;
-#X connect 94 0 87 0;
-#X connect 94 1 88 0;
-#X connect 94 2 93 0;
+#X connect 90 0 93 0;
+#X connect 91 0 93 0;
+#X connect 93 0 86 0;
+#X connect 93 1 87 0;
+#X connect 93 2 92 0;
+#X connect 94 0 85 0;
+#X connect 95 0 28 1;
+#X connect 95 0 31 0;
+#X connect 96 0 95 1;
