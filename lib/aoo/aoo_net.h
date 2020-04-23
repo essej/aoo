@@ -115,6 +115,21 @@ typedef struct aoonet_reply_event
     AOONET_REPLY_EVENT
 } aoonet_reply_event;
 
+#define aoonet_server_event aoonet_reply_event
+
+typedef struct aoonet_server_user_event
+{
+    int32_t type;
+    const char *name;
+} aoonet_server_user_event;
+
+typedef struct aoonet_server_group_event
+{
+    int32_t type;
+    const char *group;
+    const char *user;
+} aoonet_server_group_event;
+
 #define aoonet_client_event aoonet_reply_event
 
 typedef struct aoonet_client_group_event

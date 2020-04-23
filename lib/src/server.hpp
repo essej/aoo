@@ -128,6 +128,17 @@ public:
         virtual void perform(server&) = 0;
     };
 
+    struct ievent {
+        virtual ~ievent(){}
+
+        union {
+            aoo_event event_;
+            aoonet_server_event server_event_;
+            aoonet_server_user_event user_event_;
+            aoonet_server_group_event group_event_;
+        };
+    };
+
     server(int tcpsocket, int udpsocket);
     ~server();
 
@@ -149,6 +160,10 @@ public:
 
     std::shared_ptr<group> find_group(const std::string& name);
 
+    void on_user_joined(user& usr);
+
+    void on_user_left(user& usr);
+
     void on_user_joined_group(user& usr, group& grp);
 
     void on_user_left_group(user& usr, group& grp);
@@ -162,9 +177,14 @@ private:
     std::vector<std::unique_ptr<client_endpoint>> clients_;
     user_list users_;
     group_list groups_;
-    // queue
+    // queues
     lockfree::queue<std::unique_ptr<icommand>> commands_;
-    lockfree::queue<aoo_event> events_;
+    lockfree::queue<std::unique_ptr<ievent>> events_;
+    void push_event(std::unique_ptr<ievent> e){
+        if (events_.write_available()){
+            events_.write(std::move(e));
+        }
+    }
     // signal
     std::atomic<bool> quit_{false};
 #ifdef _WIN32
@@ -186,6 +206,28 @@ private:
                             const ip_address& addr);
 
     void signal();
+
+    /*/////////////////// events //////////////////////*/
+
+    struct event : ievent
+    {
+        event(int32_t type, int32_t result,
+                     const char * errmsg = 0);
+        ~event();
+    };
+
+    struct user_event : ievent
+    {
+        user_event(int32_t type, const char *name);
+        ~user_event();
+    };
+
+    struct group_event : ievent
+    {
+        group_event(int32_t type,
+                    const char *group, const char *user);
+        ~group_event();
+    };
 };
 
 } // net

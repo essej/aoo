@@ -34,6 +34,14 @@
 #define AOONET_MSG_GROUP_LEAVE \
     AOONET_MSG_GROUP AOONET_MSG_LEAVE
 
+namespace aoo {
+namespace net {
+
+char * copy_string(const char * s);
+
+} // net
+} // aoo
+
 /*//////////////////// AoO server /////////////////////*/
 
 aoonet_server * aoonet_server_new(int port, int32_t *err) {
@@ -216,7 +224,26 @@ int32_t aoonet_server_handle_events(aoonet_server *server, aoo_eventhandler fn, 
 }
 
 int32_t aoo::net::server::handle_events(aoo_eventhandler fn, void *user){
-    return 0;
+    // always thread-safe
+    auto n = events_.read_available();
+    if (n > 0){
+        // copy events
+        auto events = (ievent **)alloca(sizeof(ievent *) * n);
+        auto vec = (const aoo_event **)alloca(sizeof(aoo_event *) * n); // adjusted pointers
+        for (int i = 0; i < n; ++i){
+            std::unique_ptr<ievent> ptr;
+            events_.read(ptr);
+            events[i] = ptr.release(); // get raw pointer
+            vec[i] = &events[i]->event_; // adjust pointer
+        }
+        // send events
+        fn(user, vec, n);
+        // manually free events
+        for (int i = 0; i < n; ++i){
+            delete events[i];
+        }
+    }
+    return n;
 }
 
 namespace aoo {
@@ -314,6 +341,19 @@ std::shared_ptr<group> server::find_group(const std::string& name)
     return nullptr;
 }
 
+
+void server::on_user_joined(user &usr){
+    auto e = std::make_unique<user_event>(AOONET_SERVER_USER_JOIN_EVENT,
+                                          usr.name.c_str());
+    push_event(std::move(e));
+}
+
+void server::on_user_left(user &usr){
+    auto e = std::make_unique<user_event>(AOONET_SERVER_USER_LEAVE_EVENT,
+                                          usr.name.c_str());
+    push_event(std::move(e));
+}
+
 void server::on_user_joined_group(user& usr, group& grp){
     // 1) send the new member to existing group members
     // 2) send existing group members to the new member
@@ -326,10 +366,10 @@ void server::on_user_joined_group(user& usr, group& grp){
 
                 osc::OutboundPacketStream msg(buf, sizeof(buf));
                 msg << osc::BeginMessage(AOONET_MSG_CLIENT_PEER_JOIN)
-                      << grp.name.c_str() << u.name.c_str()
-                      << e->public_address.name().c_str() << e->public_address.port()
-                      << e->local_address.name().c_str() << e->local_address.port()
-                      << osc::EndMessage;
+                    << grp.name.c_str() << u.name.c_str()
+                    << e->public_address.name().c_str() << e->public_address.port()
+                    << e->local_address.name().c_str() << e->local_address.port()
+                    << osc::EndMessage;
 
                 dest->send_message(msg.Data(), msg.Size());
             };
@@ -341,6 +381,10 @@ void server::on_user_joined_group(user& usr, group& grp){
             notify(peer->endpoint, usr);
         }
     }
+
+    auto e = std::make_unique<group_event>(AOONET_SERVER_GROUP_JOIN_EVENT,
+                                          grp.name.c_str(), usr.name.c_str());
+    push_event(std::move(e));
 }
 
 void server::on_user_left_group(user& usr, group& grp){
@@ -356,6 +400,10 @@ void server::on_user_left_group(user& usr, group& grp){
             peer->endpoint->send_message(msg.Data(), msg.Size());
         }
     }
+
+    auto e = std::make_unique<group_event>(AOONET_SERVER_GROUP_LEAVE_EVENT,
+                                           grp.name.c_str(), usr.name.c_str());
+    push_event(std::move(e));
 }
 
 void server::wait_for_event(){
@@ -657,6 +705,9 @@ void user::on_close(server& s){
         grp->remove_user(*this);
         s.on_user_left_group(*this, *grp);
     }
+
+    s.on_user_left(*this);
+
     groups_.clear();
     // clear endpoint so the server knows it can remove the user
     endpoint = nullptr;
@@ -958,6 +1009,8 @@ void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
                         << ", local IP: " << local_ip << ", local port: " << local_port);
 
             result = 1;
+
+            server_->on_user_joined(*user_);
         } else {
             errmsg = server::error_to_string(err);
         }
@@ -1041,6 +1094,46 @@ void client_endpoint::handle_group_leave(const osc::ReceivedMessage& msg){
           << name.c_str() << result << errmsg.c_str() << osc::EndMessage;
 
     send_message(reply.Data(), reply.Size());
+}
+
+/*///////////////////// events ////////////////////////*/
+
+server::event::event(int32_t type, int32_t result,
+                     const char * errmsg)
+{
+    server_event_.type = type;
+    server_event_.result = result;
+    server_event_.errormsg = copy_string(errmsg);
+}
+
+server::event::~event()
+{
+    delete server_event_.errormsg;
+}
+
+server::user_event::user_event(int32_t type, const char *name)
+{
+    user_event_.type = type;
+    user_event_.name = copy_string(name);
+}
+
+server::user_event::~user_event()
+{
+    delete user_event_.name;
+}
+
+server::group_event::group_event(int32_t type,
+                         const char *group, const char *user)
+{
+    group_event_.type = type;
+    group_event_.group = copy_string(group);
+    group_event_.user = copy_string(user);
+}
+
+server::group_event::~group_event()
+{
+    delete group_event_.group;
+    delete group_event_.user;
 }
 
 } // net
