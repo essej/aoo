@@ -203,16 +203,20 @@ static void aoo_send_doremovesink(t_aoo_send *x, t_endpoint *e, int32_t id)
             t_sink *end = x->x_sinks + n;
             for (t_sink *s = x->x_sinks; s != end; ){
                 if (s->s_endpoint == e){
-                    memmove(s, s + 1,
-                            (end - s - 1) * sizeof(t_sink));
+                    memmove(s, s + 1, (end - s - 1) * sizeof(t_sink));
                     end--;
                 } else {
                     s++;
                 }
             }
             int newsize = end - x->x_sinks;
-            x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
-                n * sizeof(t_sink), newsize * sizeof(t_sink));
+            if (newsize > 0){
+                x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
+                    n * sizeof(t_sink), newsize * sizeof(t_sink));
+            } else {
+                freebytes(x->x_sinks, n * sizeof(t_sink));
+                x->x_sinks = 0;
+            }
             x->x_numsinks = newsize;
             return;
         } else {

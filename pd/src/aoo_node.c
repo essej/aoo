@@ -394,7 +394,10 @@ void aoo_node_release(t_aoo_node *x, t_pd *obj, int32_t id)
             endpoint_free(e);
             e = next;
         }
-        freebytes(x->x_clients, sizeof(t_client) * x->x_numclients);
+        if (x->x_clients)
+            freebytes(x->x_clients, sizeof(t_client) * x->x_numclients);
+        if (x->x_peers)
+            freebytes(x->x_peers, sizeof(t_peer) * x->x_numpeers);
 
         pthread_mutex_destroy(&x->x_mutex);
         aoo_lock_destroy(&x->x_clientlock);
