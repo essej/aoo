@@ -115,7 +115,7 @@ define forWindows
 endef
 
 define forDarwin
-    cflags += -mmacosx-version-min=10.9
+    cflags += -mmacosx-version-min=10.9 -DAOO_TIMEFILTER_CHECK=0
     ldlibs += -lpthread $(OPUS_LIBS)
 endef
 
