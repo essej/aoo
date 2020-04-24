@@ -201,6 +201,7 @@ void aoo_node_remove_all_peers(t_aoo_node *x)
 {
     if (x->x_peers){
         freebytes(x->x_peers, x->x_numpeers * sizeof(t_peer));
+        x->x_peers = 0;
         x->x_numpeers = 0;
     }
 }
