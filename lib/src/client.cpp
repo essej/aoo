@@ -321,9 +321,11 @@ int32_t aoo::net::client::handle_message(const char *data, int32_t n, void *addr
             return 0;
         }
 
-        LOG_DEBUG("aoo_client: handle UDP message " << msg.AddressPattern());
+        ip_address address((struct sockaddr *)addr, sizeof(sockaddr_in)); // FIXME
 
-        ip_address address((struct sockaddr *)addr);
+        LOG_DEBUG("aoo_client: handle UDP message " << msg.AddressPattern()
+            << " from " << address.name() << ":" << address.port());
+
         if (address == remote_addr_){
             // server message
             if (type != AOO_TYPE_CLIENT){
@@ -520,7 +522,6 @@ void client::do_disconnect(command_reason reason, int error){
             if (reason == command_reason::timeout) {
                 errmsg = "timed out";
             } else {
-                char buf[1024];
                 if (error == 0){
                     errmsg = "disconnected from server";
                 } else {
@@ -649,7 +650,7 @@ void client::push_event(std::unique_ptr<ievent> e)
 }
 
 void client::wait_for_event(float timeout){
-    LOG_DEBUG("aoo_server: wait " << timeout << " seconds");
+    LOG_DEBUG("aoo_client: wait " << timeout << " seconds");
 #ifdef _WIN32
     HANDLE events[2];
     int numevents;
@@ -696,8 +697,9 @@ void client::wait_for_event(float timeout){
     fds[1].events = POLLIN;
     fds[1].revents = 0;
 
-    // round up to 1 ms! negative value: block indefinitely
-    int result = poll(fds, 2, timeout * 1000.0 + 0.5);
+    // round up to 1 ms! -1: block indefinitely
+    // NOTE: macOS requires the negative timeout to exactly -1!
+    int result = poll(fds, 2, timeout < 0 ? -1 : timeout * 1000.0 + 0.5);
     if (result < 0){
         int err = errno;
         if (err == EINTR){

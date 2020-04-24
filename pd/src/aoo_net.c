@@ -232,7 +232,7 @@ int endpoint_send(t_endpoint *e, const char *data, int size)
 {
     int socket = *((int *)e->owner);
     int result = sendto(socket, data, size, 0,
-                       (const struct sockaddr *)&e->addr, sizeof(e->addr));
+                       (const struct sockaddr *)&e->addr, e->addrlen);
     if (result < 0){
         socket_error_print("sendto");
     }
@@ -254,9 +254,23 @@ int endpoint_getaddress(const t_endpoint *e, t_symbol **hostname, int *port)
 
 int endpoint_match(t_endpoint *e, const struct sockaddr_storage *sa)
 {
-    return (sa->ss_family == e->addr.ss_family)
-            && !memcmp(sa, &e->addr, e->addrlen);
-
+    if (sa->ss_family == e->addr.ss_family){
+    #if 1
+        if (sa->ss_family == AF_INET){
+            const struct sockaddr_in *a = (const struct sockaddr_in *)sa;
+            const struct sockaddr_in *b = (const struct sockaddr_in *)&e->addr;
+            return (a->sin_addr.s_addr == b->sin_addr.s_addr)
+                    && (a->sin_port == b->sin_port);
+        } else  {
+            return 0;
+        }
+    #else
+        // doesn't work reliable on BSDs if sin_len is not set
+        return !memcmp(&address, &other.address, length);
+    #endif
+    } else {
+        return 0;
+    }
 }
 
 t_endpoint * endpoint_find(t_endpoint *e, const struct sockaddr_storage *sa)

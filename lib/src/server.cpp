@@ -502,6 +502,7 @@ void server::wait_for_event(){
     fds[udpindex].fd = udpsocket_;
     fds[waitindex].fd = waitpipe_[0];
 
+    // NOTE: macOS requires the negative timeout to be exactly -1!
     int result = poll(fds, numfds, -1);
     if (result < 0){
         int err = errno;

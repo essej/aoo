@@ -66,7 +66,20 @@ struct ip_address {
 
     bool operator==(const ip_address& other) const {
         if (address.ss_family == other.address.ss_family){
-            return memcmp(&address, &other.address, length) == 0;
+        #if 1
+            if (address.ss_family == AF_INET){
+                auto a = (const struct sockaddr_in *)&address;
+                auto b = (const struct sockaddr_in *)&other.address;
+                return (a->sin_addr.s_addr == b->sin_addr.s_addr)
+                        && (a->sin_port == b->sin_port);
+            } else  {
+                // IPv6 not supported yet
+                return false;
+            }
+        #else
+            // doesn't work reliable on BSDs if sin_len is not set
+            return !memcmp(&address, &other.address, length);
+        #endif
         } else {
             return false;
         }
