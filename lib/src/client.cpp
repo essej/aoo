@@ -558,7 +558,7 @@ int client::try_connect(const std::string &host, int port){
     sa.sin_port = htons(port);
     memcpy(&sa.sin_addr, he->h_addr_list[0], he->h_length);
 
-    remote_addr_ = ip_address((struct sockaddr *)&sa);
+    remote_addr_ = ip_address((struct sockaddr *)&sa, sizeof(sa));
 
     // set TCP_NODELAY
     int val = 1;

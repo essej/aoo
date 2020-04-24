@@ -31,15 +31,9 @@ struct ip_address {
         memset(&address, 0, sizeof(address));
         length = sizeof(address);
     }
-    ip_address(const struct sockaddr *sa){
-        if (sa->sa_family == AF_INET){
-            memcpy(&address, sa, sizeof(struct sockaddr_in));
-            length = sizeof(struct sockaddr_in);
-        } else {
-            // LATER IPv6
-            memset(&address, 0, sizeof(address));
-            length = sizeof(address);
-        }
+    ip_address(const struct sockaddr *sa, socklen_t len){
+        memcpy(&address, sa, len);
+        length = len;
     }
     ip_address(uint32_t ipv4, int port){
         struct sockaddr_in sa;
