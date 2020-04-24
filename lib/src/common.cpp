@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <cassert>
+#include <cstring>
 
 /*////////////// codec plugins ///////////////*/
 
