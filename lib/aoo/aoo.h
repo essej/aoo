@@ -408,7 +408,7 @@ static inline int32_t aoo_source_stop(aoo_source *src) {
     return aoo_source_set_option(src, aoo_opt_stop, AOO_ARG_NULL);
 }
 
-static inline int32_t aoo_source_set_format(aoo_source *src, const aoo_format *f) {
+static inline int32_t aoo_source_set_format(aoo_source *src, aoo_format *f) {
     return aoo_source_set_option(src, aoo_opt_format, (void *)f, sizeof(aoo_format));
 }
 
