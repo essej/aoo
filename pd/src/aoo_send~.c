@@ -133,6 +133,12 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     f.header.nchannels = x->x_nchannels;
     if (aoo_format_parse(x, &f, argc, argv)){
         aoo_source_set_format(x->x_aoo_source, &f.header);
+        // output actual format
+        t_atom msg[16];
+        int n = aoo_format_toatoms(&f.header, 16, msg);
+        if (n > 0){
+            outlet_anything(x->x_msgout, gensym("format"), n, msg);
+        }
     }
 }
 
