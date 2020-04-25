@@ -32,7 +32,7 @@ typedef struct _aoo_pack
     t_float **x_vec;
     t_clock *x_clock;
     t_outlet *x_out;
-    t_outlet *x_eventout;
+    t_outlet *x_msgout;
     int32_t x_sink_id;
     int32_t x_sink_chn;
     int x_accept;
@@ -65,7 +65,7 @@ static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, 
             SETFLOAT(msg + 2, diff2);
             SETFLOAT(msg + 3, rtt);
             SETFLOAT(msg + 4, e->lost_blocks);
-            outlet_anything(x->x_eventout, gensym("ping"), 5, msg);
+            outlet_anything(x->x_msgout, gensym("ping"), 5, msg);
             break;
         }
         case AOO_INVITE_EVENT:
@@ -77,7 +77,7 @@ static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, 
             } else {
                 t_atom msg;
                 SETFLOAT(&msg, e->id);
-                outlet_anything(x->x_eventout, gensym("invite"), 1, &msg);
+                outlet_anything(x->x_msgout, gensym("invite"), 1, &msg);
             }
             break;
         }
@@ -89,7 +89,7 @@ static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, 
             } else {
                 t_atom msg;
                 SETFLOAT(&msg, e->id);
-                outlet_anything(x->x_eventout, gensym("uninvite"), 1, &msg);
+                outlet_anything(x->x_msgout, gensym("uninvite"), 1, &msg);
             }
             break;
         }
@@ -297,7 +297,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
     x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * nchannels);
     // make outlets
     x->x_out = outlet_new(&x->x_obj, 0);
-    x->x_eventout = outlet_new(&x->x_obj, 0);
+    x->x_msgout = outlet_new(&x->x_obj, 0);
 
     // default format
     aoo_format_storage fmt;

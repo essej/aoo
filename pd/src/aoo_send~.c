@@ -39,7 +39,7 @@ typedef struct _aoo_send
     aoo_lock x_lock;
     // events
     t_clock *x_clock;
-    t_outlet *x_eventout;
+    t_outlet *x_msgout;
     int x_accept;
 } t_aoo_send;
 
@@ -83,7 +83,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
             SETFLOAT(msg + 4, diff2);
             SETFLOAT(msg + 5, rtt);
             SETFLOAT(msg + 6, e->lost_blocks);
-            outlet_anything(x->x_eventout, gensym("ping"), 7, msg);
+            outlet_anything(x->x_msgout, gensym("ping"), 7, msg);
             break;
         }
         case AOO_INVITE_EVENT:
@@ -97,7 +97,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
                 if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
                     continue;
                 }
-                outlet_anything(x->x_eventout, gensym("invite"), 3, msg);
+                outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
             }
             break;
         }
@@ -111,7 +111,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
                 if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
                     continue;
                 }
-                outlet_anything(x->x_eventout, gensym("uninvite"), 3, msg);
+                outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
             }
             break;
         }
@@ -415,7 +415,7 @@ static void aoo_send_listsinks(t_aoo_send *x)
             } else {
                 SETFLOAT(msg + 2, s->s_id);
             }
-            outlet_anything(x->x_eventout, gensym("sink"), 3, msg);
+            outlet_anything(x->x_msgout, gensym("sink"), 3, msg);
         } else {
             pd_error(x, "%s: couldn't get endpoint address for sink", classname(x));
         }
@@ -504,7 +504,7 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * nchannels);
 
     // make event outlet
-    x->x_eventout = outlet_new(&x->x_obj, 0);
+    x->x_msgout = outlet_new(&x->x_obj, 0);
 
     // default format
     aoo_format_storage fmt;

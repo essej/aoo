@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
@@ -31,8 +31,8 @@ typedef struct _aoo_unpack
     int32_t x_blocksize;
     int32_t x_nchannels;
     t_sample **x_vec;
+    t_outlet *x_dataout;
     t_outlet *x_msgout;
-    t_outlet *x_eventout;
     t_clock *x_clock;
 } t_aoo_unpack;
 
@@ -42,7 +42,7 @@ static int32_t aoo_pack_reply(t_aoo_unpack *x, const char *data, int32_t n)
     for (int i = 0; i < n; ++i){
         SETFLOAT(&a[i], (unsigned char)data[i]);
     }
-    outlet_list(x->x_msgout, &s_list, n, a);
+    outlet_list(x->x_dataout, &s_list, n, a);
     return 1;
 }
 
@@ -120,7 +120,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
         {
             aoo_source_event *e = (aoo_source_event *)events[i];
             SETFLOAT(&msg[0], e->id);
-            outlet_anything(x->x_eventout, gensym("source_add"), 1, msg);
+            outlet_anything(x->x_msgout, gensym("source_add"), 1, msg);
             break;
         }
         case AOO_SOURCE_FORMAT_EVENT:
@@ -130,7 +130,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
             if (aoo_sink_get_source_format(x->x_aoo_sink, e->endpoint, e->id, &f) > 0) {
                 SETFLOAT(&msg[0], e->id);
                 int fsize = aoo_printformat(&f, 31, msg + 1); // skip first atom
-                outlet_anything(x->x_eventout, gensym("source_format"), fsize + 1, msg);
+                outlet_anything(x->x_msgout, gensym("source_format"), fsize + 1, msg);
             }
             break;
         }
@@ -139,7 +139,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
             aoo_source_state_event *e = (aoo_source_state_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             SETFLOAT(&msg[1], e->state);
-            outlet_anything(x->x_eventout, gensym("source_state"), 2, msg);
+            outlet_anything(x->x_msgout, gensym("source_state"), 2, msg);
             break;
         }
         case AOO_BLOCK_LOST_EVENT:
@@ -147,7 +147,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
             aoo_block_lost_event *e = (aoo_block_lost_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             SETFLOAT(&msg[1], e->count);
-            outlet_anything(x->x_eventout, gensym("block_lost"), 2, msg);
+            outlet_anything(x->x_msgout, gensym("block_lost"), 2, msg);
             break;
         }
         case AOO_BLOCK_REORDERED_EVENT:
@@ -155,7 +155,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
             aoo_block_reordered_event *e = (aoo_block_reordered_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             SETFLOAT(&msg[1], e->count);
-            outlet_anything(x->x_eventout, gensym("block_reordered"), 2, msg);
+            outlet_anything(x->x_msgout, gensym("block_reordered"), 2, msg);
             break;
         }
         case AOO_BLOCK_RESENT_EVENT:
@@ -163,7 +163,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
             aoo_block_resent_event *e = (aoo_block_resent_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             SETFLOAT(&msg[1], e->count);
-            outlet_anything(x->x_eventout, gensym("block_resent"), 2, msg);
+            outlet_anything(x->x_msgout, gensym("block_resent"), 2, msg);
             break;
         }
         case AOO_BLOCK_GAP_EVENT:
@@ -171,7 +171,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
             aoo_block_gap_event *e = (aoo_block_gap_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             SETFLOAT(&msg[1], e->count);
-            outlet_anything(x->x_eventout, gensym("block_gap"), 2, msg);
+            outlet_anything(x->x_msgout, gensym("block_gap"), 2, msg);
             break;
         }
         case AOO_PING_EVENT:
@@ -188,7 +188,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
 
             SETFLOAT(msg, e->id);
             SETFLOAT(msg + 1, diff);
-            outlet_anything(x->x_eventout, gensym("ping"), 2, msg);
+            outlet_anything(x->x_msgout, gensym("ping"), 2, msg);
             break;
         }
         default:
@@ -271,9 +271,9 @@ static void * aoo_unpack_new(t_symbol *s, int argc, t_atom *argv)
     }
     x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * nchannels);
     // message outlet
-    x->x_msgout = outlet_new(&x->x_obj, 0);
+    x->x_dataout = outlet_new(&x->x_obj, 0);
     // event outlet
-    x->x_eventout = outlet_new(&x->x_obj, 0);
+    x->x_msgout = outlet_new(&x->x_obj, 0);
 
     return x;
 }

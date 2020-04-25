@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
@@ -39,7 +39,7 @@ typedef struct _aoo_receive
     t_aoo_node * x_node;
     aoo_lock x_lock;
     // events
-    t_outlet *x_eventout;
+    t_outlet *x_msgout;
     t_clock *x_clock;
 } t_aoo_receive;
 
@@ -194,7 +194,7 @@ static void aoo_receive_listsources(t_aoo_receive *x)
             SETSYMBOL(msg, host);
             SETFLOAT(msg + 1, port);
             SETFLOAT(msg + 2, s->s_id);
-            outlet_anything(x->x_eventout, gensym("source"), 3, msg);
+            outlet_anything(x->x_msgout, gensym("source"), 3, msg);
         } else {
             pd_error(x, "%s: couldn't get endpoint address for source", classname(x));
         }
@@ -249,7 +249,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
                 continue;
             }
-            outlet_anything(x->x_eventout, gensym("source_add"), 3, msg);
+            outlet_anything(x->x_msgout, gensym("source_add"), 3, msg);
             break;
         }
         case AOO_SOURCE_FORMAT_EVENT:
@@ -261,7 +261,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             aoo_format_storage f;
             if (aoo_sink_get_source_format(x->x_aoo_sink, e->endpoint, e->id, &f) > 0) {
                 int fsize = aoo_printformat(&f, 29, msg + 3); // skip first three atoms
-                outlet_anything(x->x_eventout, gensym("source_format"), fsize + 3, msg);
+                outlet_anything(x->x_msgout, gensym("source_format"), fsize + 3, msg);
             }
             break;
         }
@@ -272,7 +272,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
                 continue;
             }
             SETFLOAT(&msg[3], e->state);
-            outlet_anything(x->x_eventout, gensym("source_state"), 4, msg);
+            outlet_anything(x->x_msgout, gensym("source_state"), 4, msg);
             break;
         }
         case AOO_BLOCK_LOST_EVENT:
@@ -282,7 +282,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
-            outlet_anything(x->x_eventout, gensym("block_lost"), 4, msg);
+            outlet_anything(x->x_msgout, gensym("block_lost"), 4, msg);
             break;
         }
         case AOO_BLOCK_REORDERED_EVENT:
@@ -292,7 +292,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
-            outlet_anything(x->x_eventout, gensym("block_reordered"), 4, msg);
+            outlet_anything(x->x_msgout, gensym("block_reordered"), 4, msg);
             break;
         }
         case AOO_BLOCK_RESENT_EVENT:
@@ -302,7 +302,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
-            outlet_anything(x->x_eventout, gensym("block_resent"), 4, msg);
+            outlet_anything(x->x_msgout, gensym("block_resent"), 4, msg);
             break;
         }
         case AOO_BLOCK_GAP_EVENT:
@@ -312,7 +312,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
-            outlet_anything(x->x_eventout, gensym("block_gap"), 4, msg);
+            outlet_anything(x->x_msgout, gensym("block_gap"), 4, msg);
             break;
         }
         case AOO_PING_EVENT:
@@ -323,7 +323,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             }
             double diff = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
             SETFLOAT(msg + 3, diff);
-            outlet_anything(x->x_eventout, gensym("ping"), 4, msg);
+            outlet_anything(x->x_msgout, gensym("ping"), 4, msg);
             break;
         }
         default:
@@ -421,7 +421,7 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
     x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * nchannels);
 
     // event outlet
-    x->x_eventout = outlet_new(&x->x_obj, 0);
+    x->x_msgout = outlet_new(&x->x_obj, 0);
 
     return x;
 }
