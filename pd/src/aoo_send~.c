@@ -131,7 +131,7 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     aoo_format_storage f;
     f.header.nchannels = x->x_nchannels;
-    if (aoo_parseformat(x, &f, argc, argv)){
+    if (aoo_format_parse(x, &f, argc, argv)){
         aoo_source_set_format(x->x_aoo_source, &f.header);
     }
 }
@@ -508,7 +508,7 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 
     // default format
     aoo_format_storage fmt;
-    aoo_defaultformat(&fmt, nchannels);
+    aoo_format_makedefault(&fmt, nchannels);
     aoo_source_set_format(x->x_aoo_source, &fmt.header);
 
     return x;

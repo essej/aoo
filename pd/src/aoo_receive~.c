@@ -260,7 +260,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             }
             aoo_format_storage f;
             if (aoo_sink_get_source_format(x->x_aoo_sink, e->endpoint, e->id, &f) > 0) {
-                int fsize = aoo_printformat(&f, 29, msg + 3); // skip first three atoms
+                int fsize = aoo_format_toatoms(&f.header, 29, msg + 3); // skip first three atoms
                 outlet_anything(x->x_msgout, gensym("source_format"), fsize + 3, msg);
             }
             break;

@@ -196,7 +196,7 @@ int aoo_parseresend(void *x, int argc, const t_atom *argv,
     return 1;
 }
 
-void aoo_defaultformat(aoo_format_storage *f, int nchannels)
+void aoo_format_makedefault(aoo_format_storage *f, int nchannels)
 {
     aoo_format_pcm *fmt = (aoo_format_pcm *)f;
     fmt->header.codec = AOO_CODEC_PCM;
@@ -206,7 +206,7 @@ void aoo_defaultformat(aoo_format_storage *f, int nchannels)
     fmt->bitdepth = AOO_PCM_FLOAT32;
 }
 
-int aoo_parseformat(void *x, aoo_format_storage *f, int argc, t_atom *argv)
+int aoo_format_parse(void *x, aoo_format_storage *f, int argc, t_atom *argv)
 {
     t_symbol *codec = atom_getsymbolarg(0, argc, argv);
     f->header.blocksize = argc > 1 ? atom_getfloat(argv + 1) : 64;
@@ -308,19 +308,24 @@ int aoo_parseformat(void *x, aoo_format_storage *f, int argc, t_atom *argv)
     return 1;
 }
 
-int aoo_printformat(const aoo_format_storage *f, int argc, t_atom *argv)
+int aoo_format_toatoms(const aoo_format *f, int argc, t_atom *argv)
 {
     if (argc < 3){
+        error("aoo_format_toatoms: too few atoms!");
         return 0;
     }
-    t_symbol *codec = gensym(f->header.codec);
+    t_symbol *codec = gensym(f->codec);
     SETSYMBOL(argv, codec);
-    SETFLOAT(argv + 1, f->header.blocksize);
-    SETFLOAT(argv + 2, f->header.samplerate);
+    SETFLOAT(argv + 1, f->blocksize);
+    SETFLOAT(argv + 2, f->samplerate);
     // omit nchannels
 
-    if (codec == gensym(AOO_CODEC_PCM) && argc >= 4){
+    if (codec == gensym(AOO_CODEC_PCM)){
         // pcm <blocksize> <samplerate> <bitdepth>
+        if (argc < 4){
+            error("aoo_format_toatoms: too few atoms for pcm format!");
+            return 0;
+        }
         aoo_format_pcm *fmt = (aoo_format_pcm *)f;
         int nbits;
         switch (fmt->bitdepth){
@@ -341,8 +346,12 @@ int aoo_printformat(const aoo_format_storage *f, int argc, t_atom *argv)
         }
         SETFLOAT(argv + 3, nbits);
         return 4;
-    } else if (codec == gensym(AOO_CODEC_OPUS) && argc >= 6){
+    } else if (codec == gensym(AOO_CODEC_OPUS)){
         // opus <blocksize> <samplerate> <bitrate> <complexity> <signaltype>
+        if (argc < 6){
+            error("aoo_format_toatoms: too few atoms for opus format!");
+            return 0;
+        }
         aoo_format_opus *fmt = (aoo_format_opus *)f;
         SETFLOAT(argv + 3, fmt->bitrate);
         SETFLOAT(argv + 4, fmt->complexity);
@@ -361,7 +370,7 @@ int aoo_printformat(const aoo_format_storage *f, int argc, t_atom *argv)
         SETSYMBOL(argv + 5, signaltype);
         return 6;
     } else {
-        error("aoo: unknown format!");
+        error("aoo_format_toatoms: unknown format %s!", codec->s_name);
     }
     return 0;
 }

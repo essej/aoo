@@ -129,7 +129,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
             aoo_format_storage f;
             if (aoo_sink_get_source_format(x->x_aoo_sink, e->endpoint, e->id, &f) > 0) {
                 SETFLOAT(&msg[0], e->id);
-                int fsize = aoo_printformat(&f, 31, msg + 1); // skip first atom
+                int fsize = aoo_format_toatoms(&f.header, 31, msg + 1); // skip first atom
                 outlet_anything(x->x_msgout, gensym("source_format"), fsize + 1, msg);
             }
             break;
