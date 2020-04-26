@@ -262,7 +262,8 @@ bool decoder_dosetformat(decoder *c, aoo_format_opus& f){
                                        &error);
     if (error == OPUS_OK){
         assert(c->state != nullptr);
-        // apply settings
+        // these are actually encoder settings and do anything on the decoder
+    #if 0
         // complexity
         opus_multistream_decoder_ctl(c->state, OPUS_SET_COMPLEXITY(f.complexity));
         opus_multistream_decoder_ctl(c->state, OPUS_GET_COMPLEXITY(&f.complexity));
@@ -272,6 +273,7 @@ bool decoder_dosetformat(decoder *c, aoo_format_opus& f){
         // signal type
         opus_multistream_decoder_ctl(c->state, OPUS_SET_SIGNAL(f.signal_type));
         opus_multistream_decoder_ctl(c->state, OPUS_GET_SIGNAL(&f.signal_type));
+    #endif
         // save and print settings
         memcpy(&c->format, &f, sizeof(aoo_format_opus));
         c->format.header.codec = AOO_CODEC_OPUS; // !
