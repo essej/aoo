@@ -5,6 +5,7 @@
 #pragma once
 
 #include <inttypes.h>
+#include <ostream>
 
 namespace aoo {
 
@@ -43,6 +44,8 @@ struct time_tag {
     uint64_t to_uint64() const {
         return (uint64_t)high << 32 | (uint64_t)low;
     }
+
+    friend std::ostream& operator << (std::ostream& os, time_tag t);
 };
 
 inline time_tag operator+(time_tag lhs, time_tag rhs){

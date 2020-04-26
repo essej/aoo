@@ -62,4 +62,20 @@ double time_tag::duration(time_tag t1, time_tag t2){
     }
 }
 
+std::ostream& operator << (std::ostream& os, time_tag t){
+    int32_t hours, minutes, seconds;
+    auto d = lldiv((int64_t)t.high, 3600);
+    hours = d.quot;
+    d = lldiv(d.rem, 60);
+    minutes = d.quot;
+    seconds = d.rem;
+
+    int32_t micros = t.low / 4294967296.0 * 1000000.0;
+
+    os << "time_tag (" << hours << ":" << minutes << ":"
+       << seconds << "." << micros << ")";
+
+    return os;
+}
+
 } // aoo
