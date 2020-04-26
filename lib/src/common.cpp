@@ -962,7 +962,7 @@ time_tag timer::get_absolute() const {
 }
 
 timer::state timer::update(time_tag t, double& error){
-    scoped_lock<spinlock> l(lock_);
+    std::unique_lock<spinlock> l(lock_);
     time_tag last = last_.load();
     if (!last.empty()){
         auto delta = time_tag::duration(last, t);
@@ -999,6 +999,8 @@ timer::state timer::update(time_tag t, double& error){
         auto average = sum_ / buffer_.size();
         auto average_error = average - delta_;
         auto last_error = delta - delta_;
+
+        l.unlock();
 
         if (average_error > delta_ * AOO_TIMEFILTER_TOLERANCE){
             LOG_WARNING("DSP tick(s) took too long!");
