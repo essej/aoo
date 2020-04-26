@@ -41,9 +41,10 @@ time_tag time_tag::now(){
     // use system clock (1970 epoch)
     auto epoch = std::chrono::system_clock::now().time_since_epoch();
     auto s = std::chrono::duration_cast<std::chrono::seconds>(epoch);
-    auto ns = epoch - s;
+    auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(epoch - s);
     auto seconds = s.count();
     auto nanos = ns.count();
+    // LOG_DEBUG("seconds: " << seconds << ", nanos: " << nanos);
 #endif
     // add number of seconds between 1900 and 1970 (including leap years!)
     uint32_t high = seconds + 2208988800UL;
