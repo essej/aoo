@@ -433,11 +433,11 @@ static inline int32_t aoo_source_get_buffersize(aoo_source *src, int32_t *n) {
     return aoo_source_get_option(src, aoo_opt_buffersize, AOO_ARG(*n));
 }
 
-static inline int32_t aoo_source_set_timefilter_bandwith(aoo_source *src, int32_t n) {
+static inline int32_t aoo_source_set_timefilter_bandwith(aoo_source *src, float n) {
     return aoo_source_set_option(src, aoo_opt_timefilter_bandwidth, AOO_ARG(n));
 }
 
-static inline int32_t aoo_source_get_timefilter_bandwidth(aoo_source *src, int32_t *n) {
+static inline int32_t aoo_source_get_timefilter_bandwidth(aoo_source *src, float *n) {
     return aoo_source_get_option(src, aoo_opt_timefilter_bandwidth, AOO_ARG(*n));
 }
 
@@ -555,11 +555,11 @@ static inline int32_t aoo_sink_get_buffersize(aoo_sink *sink, int32_t *n) {
     return aoo_sink_get_option(sink, aoo_opt_buffersize, AOO_ARG(*n));
 }
 
-static inline int32_t aoo_sink_set_timefilter_bandwith(aoo_sink *sink, int32_t n) {
+static inline int32_t aoo_sink_set_timefilter_bandwith(aoo_sink *sink, float n) {
     return aoo_sink_set_option(sink, aoo_opt_timefilter_bandwidth, AOO_ARG(n));
 }
 
-static inline int32_t aoo_sink_get_timefilter_bandwidth(aoo_sink *sink, int32_t *n) {
+static inline int32_t aoo_sink_get_timefilter_bandwidth(aoo_sink *sink, float *n) {
     return aoo_sink_get_option(sink, aoo_opt_timefilter_bandwidth, AOO_ARG(*n));
 }
 
