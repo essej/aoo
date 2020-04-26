@@ -159,6 +159,11 @@ static void aoo_pack_resend(t_aoo_pack *x, t_floatarg f)
     aoo_source_set_buffersize(x->x_aoo_source, f);
 }
 
+static void aoo_pack_redundancy(t_aoo_pack *x, t_floatarg f)
+{
+    aoo_source_set_redundancy(x->x_aoo_source, f);
+}
+
 static void aoo_pack_timefilter(t_aoo_pack *x, t_floatarg f)
 {
     aoo_source_set_timefilter_bandwith(x->x_aoo_source, f);
@@ -339,5 +344,6 @@ void aoo_pack_tilde_setup(void)
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_ping, gensym("ping"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_resend, gensym("resend"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_redundancy, gensym("redundancy"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
 }

@@ -131,6 +131,14 @@ public:
         return get_option(aoo_opt_resend_buffersize, AOO_ARG(n));
     }
 
+    int32_t set_redundancy(int32_t n){
+        return set_option(aoo_opt_redundancy, AOO_ARG(n));
+    }
+
+    int32_t get_redundancy(int32_t& n){
+        return get_option(aoo_opt_redundancy, AOO_ARG(n));
+    }
+
     virtual int32_t set_option(int32_t opt, void *ptr, int32_t size) = 0;
     virtual int32_t get_option(int32_t opt, void *ptr, int32_t size) = 0;
 

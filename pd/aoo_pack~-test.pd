@@ -1,4 +1,4 @@
-#N canvas 332 28 847 759 12;
+#N canvas 93 17 847 759 12;
 #X declare -lib aoo -path osc;
 #X obj 168 119 osc~ 440;
 #X msg 88 135 set \$1;
@@ -115,6 +115,7 @@
 #X obj 142 443 +;
 #X obj 178 445 nbx 5 14 0 100 0 0 empty empty empty 0 -8 0 10 -262144
 -1 -1 0 256;
+#X msg 370 649 redundancy 2;
 #X connect 0 0 23 0;
 #X connect 1 0 23 0;
 #X connect 2 0 1 0;
@@ -201,3 +202,4 @@
 #X connect 95 0 28 1;
 #X connect 95 0 31 0;
 #X connect 96 0 95 1;
+#X connect 97 0 85 0;

@@ -74,6 +74,11 @@ extern "C"
  #define AOO_RESEND_BUFSIZE 1000
 #endif
 
+// send redundancy
+#ifndef AOO_SEND_REDUNDANCY
+ #define AOO_SEND_REDUNDANCY 1
+#endif
+
 // max. number of resend attempts per packet
 #ifndef AOO_RESEND_LIMIT
  #define AOO_RESEND_LIMIT 5
@@ -315,7 +320,11 @@ typedef enum aoo_option
     // ---
     // This is the max. number of frames to request
     // in a single call to sink_handle_message().
-    aoo_opt_resend_maxnumframes
+    aoo_opt_resend_maxnumframes,
+    // Redundancy (int32_t)
+    // ---
+    // The number of times each frames is sent (default = 1)
+    aoo_opt_redundancy
 } aoo_option;
 
 #define AOO_ARG(x) &x, sizeof(x)
@@ -454,6 +463,14 @@ static inline int32_t aoo_source_set_resend_buffersize(aoo_source *src, int32_t 
 
 static inline int32_t aoo_source_get_resend_buffersize(aoo_source *src, int32_t *n) {
     return aoo_source_get_option(src, aoo_opt_resend_buffersize, AOO_ARG(*n));
+}
+
+static inline int32_t aoo_source_set_redundancy(aoo_source *src, int32_t n) {
+    return aoo_source_set_option(src, aoo_opt_redundancy, AOO_ARG(n));
+}
+
+static inline int32_t aoo_source_get_redundancy(aoo_source *src, int32_t *n) {
+    return aoo_source_get_option(src, aoo_opt_redundancy, AOO_ARG(*n));
 }
 
 static inline int32_t aoo_source_set_sink_channelonset(aoo_source *src, void *endpoint, int32_t id, int32_t onset) {

@@ -196,6 +196,11 @@ static void aoo_send_resend(t_aoo_send *x, t_floatarg f)
     aoo_source_set_buffersize(x->x_aoo_source, f);
 }
 
+static void aoo_send_redundancy(t_aoo_send *x, t_floatarg f)
+{
+    aoo_source_set_redundancy(x->x_aoo_source, f);
+}
+
 static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
 {
     aoo_source_set_timefilter_bandwith(x->x_aoo_source, f);
@@ -554,6 +559,7 @@ void aoo_send_tilde_setup(void)
     class_addmethod(aoo_send_class, (t_method)aoo_send_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_ping, gensym("ping"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_resend, gensym("resend"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_redundancy, gensym("redundancy"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_listsinks, gensym("list_sinks"), A_NULL);
 }

@@ -123,6 +123,12 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
+    // ping interval
+    case aoo_opt_redundancy:
+        CHECKARG(int32_t);
+        // limit it somehow, 16 times is already very high
+        redundancy_ = std::max<int32_t>(1, std::min<int32_t>(16, as<int32_t>(ptr)));
+        break;
     // unknown
     default:
         LOG_WARNING("aoo_source: unsupported option " << opt);
@@ -173,6 +179,11 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
     case aoo_opt_ping_interval:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = ping_interval_ * 1000;
+        break;
+    // ping interval
+    case aoo_opt_redundancy:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = redundancy_;
         break;
     // unknown
     default:
@@ -1014,14 +1025,17 @@ bool source::send_data(){
                     }
                 };
 
-                auto ptr = sendbuffer_.data();
-                // send large frames (might be 0)
-                for (int32_t i = 0; i < dv.quot; ++i, ptr += maxpacketsize){
-                    dosend(i, ptr, maxpacketsize);
-                }
-                // send remaining bytes as a single frame (might be the only one!)
-                if (dv.rem){
-                    dosend(dv.quot, ptr, dv.rem);
+                auto ntimes = redundancy_.load();
+                for (auto i = 0; i < ntimes; ++i){
+                    auto ptr = sendbuffer_.data();
+                    // send large frames (might be 0)
+                    for (int32_t j = 0; j < dv.quot; ++j, ptr += maxpacketsize){
+                        dosend(j, ptr, maxpacketsize);
+                    }
+                    // send remaining bytes as a single frame (might be the only one!)
+                    if (dv.rem){
+                        dosend(dv.quot, ptr, dv.rem);
+                    }
                 }
             } else {
                 LOG_WARNING("aoo_source: couldn't encode audio data!");
