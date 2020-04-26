@@ -353,7 +353,25 @@ int aoo_format_toatoms(const aoo_format *f, int argc, t_atom *argv)
             return 0;
         }
         aoo_format_opus *fmt = (aoo_format_opus *)f;
+    #if 0
         SETFLOAT(argv + 3, fmt->bitrate);
+    #else
+        // workaround for bug in opus_multistream_encoder (as of opus v1.3.2)
+        // where OPUS_GET_BITRATE would always return OPUS_AUTO.
+        // We have no chance to get the actual bitrate for "auto" and "max",
+        // so we return the symbols instead.
+        switch (fmt->bitrate){
+        case OPUS_AUTO:
+            SETSYMBOL(argv + 3, gensym("auto"));
+            break;
+        case OPUS_BITRATE_MAX:
+            SETSYMBOL(argv + 3, gensym("max"));
+            break;
+        default:
+            SETFLOAT(argv + 3, fmt->bitrate);
+            break;
+        }
+    #endif
         SETFLOAT(argv + 4, fmt->complexity);
         t_symbol *signaltype;
         switch (fmt->signal_type){

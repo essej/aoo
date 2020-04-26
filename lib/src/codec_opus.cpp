@@ -164,7 +164,14 @@ int32_t encoder_setformat(void *enc, aoo_format *f){
         opus_multistream_encoder_ctl(c->state, OPUS_GET_COMPLEXITY(&fmt->complexity));
         // bitrate
         opus_multistream_encoder_ctl(c->state, OPUS_SET_BITRATE(fmt->bitrate));
+    #if 0
+        // This control is broken in opus_multistream_encoder (as of opus v1.3.2)
+        // because it would always return the default bitrate.
+        // The only thing we can do is omit the function and just keep the input value.
+        // This means that clients have to explicitly check for OPUS_AUTO and
+        // OPUS_BITRATE_MAX when reading the 'bitrate' value after encoder_setformat().
         opus_multistream_encoder_ctl(c->state, OPUS_GET_BITRATE(&fmt->bitrate));
+    #endif
         // signal type
         opus_multistream_encoder_ctl(c->state, OPUS_SET_SIGNAL(fmt->signal_type));
         opus_multistream_encoder_ctl(c->state, OPUS_GET_SIGNAL(&fmt->signal_type));
