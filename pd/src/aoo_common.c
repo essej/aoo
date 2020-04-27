@@ -11,6 +11,7 @@
 
 #include <stdio.h>
 #include <inttypes.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <synchapi.h>
