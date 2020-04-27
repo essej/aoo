@@ -12,6 +12,8 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <sys/time.h>
 #endif
 
 namespace aoo {
@@ -20,7 +22,8 @@ namespace aoo {
 
 // OSC time stamp (NTP time)
 time_tag time_tag::now(){
-#if defined(_WIN32) && 0
+#if 1
+#if defined(_WIN32)
     // make sure to get the highest precision
     // LATER try to use GetSystemTimePreciseAsFileTime
     // (only available on Windows 8 and above)
@@ -37,6 +40,12 @@ time_tag time_tag::now(){
     // Kudos to https://www.frenk.com/2009/12/convert-filetime-to-unix-timestamp/
     // Between Jan 1, 1601 and Jan 1, 1970 there are 11644473600 seconds
     seconds -= 11644473600;
+#else
+    struct timeval v;
+    gettimeofday(&v, nullptr);
+    auto seconds = v.tv_sec;
+    auto nanos = v.tv_usec * 1000;
+#endif // _WIN32
 #else
     // use system clock (1970 epoch)
     auto epoch = std::chrono::system_clock::now().time_since_epoch();
