@@ -1241,8 +1241,8 @@ void peer::send(time_tag now){
             osc::OutboundPacketStream msg(buf, sizeof(buf));
             msg << osc::BeginMessage(AOONET_MSG_PEER_PING) << osc::EndMessage;
 
-            client_->send_message_udp(msg.Data(), msg.Size(), public_address_);
             client_->send_message_udp(msg.Data(), msg.Size(), local_address_);
+            client_->send_message_udp(msg.Data(), msg.Size(), public_address_);
 
             LOG_DEBUG("send ping to " << *this);
 
