@@ -109,13 +109,13 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
                 break;
             }
         }
+        if (!e){
+            e = aoo_node_endpoint(x->x_node, &sa, len);
+        }
+        aoo_sink_invite_source(x->x_aoo_sink, e, id, (aoo_replyfn)endpoint_send);
+        // notify send thread
+        aoo_node_notify(x->x_node);
     }
-    if (!e){
-        e = aoo_node_endpoint(x->x_node, &sa, len);
-    }
-    aoo_sink_invite_source(x->x_aoo_sink, e, id, (aoo_replyfn)endpoint_send);
-    // notify send thread
-    aoo_node_notify(x->x_node);
 }
 
 static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
