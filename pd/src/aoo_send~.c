@@ -522,6 +522,8 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     aoo_format_makedefault(&fmt, nchannels);
     aoo_source_set_format(x->x_aoo_source, &fmt.header);
 
+    aoo_source_set_buffersize(x->x_aoo_source, DEFBUFSIZE);
+
     return x;
 }
 
