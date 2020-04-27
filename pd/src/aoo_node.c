@@ -404,7 +404,9 @@ t_aoo_node* aoo_node_add(int port, t_pd *obj, int32_t id)
             return 0;
         }
 
-        // increase receive buffer size to 1 MB
+        // increase send buffer size to 65 kB
+        socket_setsendbufsize(sock, 2 << 15);
+        // increase receive buffer size to 2 MB
         socket_setrecvbufsize(sock, 2 << 20);
 
         // now create aoo node instance

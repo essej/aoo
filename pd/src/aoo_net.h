@@ -25,6 +25,8 @@ int socket_receive(int socket, char *buf, int size,
                    struct sockaddr_storage *sa, socklen_t *len,
                    int nonblocking);
 
+int socket_setsendbufsize(int socket, int bufsize);
+
 int socket_setrecvbufsize(int socket, int bufsize);
 
 int socket_signal(int socket, int port);

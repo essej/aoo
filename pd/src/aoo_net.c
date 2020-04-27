@@ -138,16 +138,45 @@ int socket_receive(int socket, char *buf, int size,
     }
 }
 
-int socket_setrecvbufsize(int socket, int bufsize)
+int socket_setsendbufsize(int socket, int bufsize)
 {
     int val = 0;
-    int len;
-#if 0
+    socklen_t len;
     len = sizeof(val);
-    getsockopt(socket, SOL_SOCKET, SO_RCVBUF, (void *)&val, &len);
+    getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void *)&val, &len);
+#if 0
     fprintf(stderr, "old recvbufsize: %d\n", val);
     fflush(stderr);
 #endif
+    if (val > bufsize){
+        return 0;
+    }
+    val = bufsize;
+    int result = setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void *)&val, sizeof(val));
+#if 0
+    if (result == 0){
+        len = sizeof(val);
+        getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void *)&val, &len);
+        fprintf(stderr, "new recvbufsize: %d\n", val);
+        fflush(stderr);
+    }
+#endif
+    return result;
+}
+
+int socket_setrecvbufsize(int socket, int bufsize)
+{
+    int val = 0;
+    socklen_t len;
+    len = sizeof(val);
+    getsockopt(socket, SOL_SOCKET, SO_RCVBUF, (void *)&val, &len);
+#if 0
+    fprintf(stderr, "old recvbufsize: %d\n", val);
+    fflush(stderr);
+#endif
+    if (val > bufsize){
+        return 0;
+    }
     val = bufsize;
     int result = setsockopt(socket, SOL_SOCKET, SO_RCVBUF, (void *)&val, sizeof(val));
 #if 0
