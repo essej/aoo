@@ -104,24 +104,29 @@ static int aoo_getendpointarg(void *x, t_aoo_node *node, int argc, t_atom *argv,
     }
 
     // first try peer (group|user)
-    t_endpoint *e = 0;
     if (argv[1].a_type == A_SYMBOL){
+        t_endpoint *e = 0;
         t_symbol *group = atom_getsymbol(argv);
         t_symbol *user = atom_getsymbol(argv + 1);
 
         e = aoo_node_find_peer(node, group, user);
-    }
 
-    if (e){
+        if (!e){
+            pd_error(x, "%s: couldn't find peer %s|%s for %s",
+                     classname(x), group->s_name, user->s_name, what);
+            return 0;
+        }
+
         // success - copy sockaddr
         memcpy(sa, &e->addr, e->addrlen);
+        *len = e->addrlen;
     } else {
         // otherwise try host|port
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
 
         if (!socket_getaddr(host->s_name, port, sa, len)){
-            pd_error(x, "%s: couldn't resolve hostname '%s' of %s",
+            pd_error(x, "%s: couldn't resolve hostname '%s' for %s",
                      classname(x), host->s_name, what);
             return 0;
         }
