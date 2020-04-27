@@ -98,8 +98,8 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
     }
 
     struct sockaddr_storage sa;
-    socklen_t len;
-    int32_t id;
+    socklen_t len = 0;
+    int32_t id = 0;
     t_endpoint *e = 0;
     if (aoo_getsourcearg(x, x->x_node, argc, argv, &sa, &len, &id)){
         for (int i = 0; i < x->x_numsources; ++i){
