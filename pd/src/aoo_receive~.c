@@ -46,8 +46,8 @@ typedef struct _aoo_receive
 static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *argv)
 {
     struct sockaddr_storage sa;
-    socklen_t len;
-    int32_t id;
+    socklen_t len = 0;
+    int32_t id = 0;
     if (aoo_getsourcearg(x, x->x_node, argc, argv, &sa, &len, &id)){
         for (int i = 0; i < x->x_numsources; ++i){
             if (endpoint_match(x->x_sources[i].s_endpoint, &sa) &&
@@ -174,7 +174,7 @@ static void aoo_receive_reset(t_aoo_receive *x, t_symbol *s, int argc, t_atom *a
 
 static void aoo_receive_resend(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
 {
-    int32_t limit, interval, maxnumframes;
+    int32_t limit = 0, interval = 0, maxnumframes = 0;
     if (!aoo_parseresend(x, argc, argv, &limit, &interval, &maxnumframes)){
         return;
     }
@@ -187,8 +187,8 @@ static void aoo_receive_listsources(t_aoo_receive *x)
 {
     for (int i = 0; i < x->x_numsources; ++i){
         t_source *s = &x->x_sources[i];
-        t_symbol *host;
-        int port;
+        t_symbol *host = 0;
+        int port = 0;
         if (endpoint_getaddress(s->s_endpoint, &host, &port)){
             t_atom msg[3];
             SETSYMBOL(msg, host);
