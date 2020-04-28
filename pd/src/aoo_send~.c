@@ -43,6 +43,76 @@ typedef struct _aoo_send
     int x_accept;
 } t_aoo_send;
 
+static void aoo_send_doaddsink(t_aoo_send *x, t_endpoint *e, int32_t id)
+{
+    int n = x->x_numsinks;
+    if (n){
+        x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
+            n * sizeof(t_sink), (n + 1) * sizeof(t_sink));
+    } else {
+        x->x_sinks = (t_sink *)getbytes(sizeof(t_sink));
+    }
+    t_sink *sink = &x->x_sinks[n];
+    sink->s_endpoint = e;
+    sink->s_id = id;
+    x->x_numsinks++;
+}
+
+static void aoo_send_doremovesink(t_aoo_send *x, t_endpoint *e, int32_t id)
+{
+    int n = x->x_numsinks;
+    if (n > 1){
+        if (id == AOO_ID_WILDCARD){
+            // remove all sinks matching endpoint
+            t_sink *end = x->x_sinks + n;
+            for (t_sink *s = x->x_sinks; s != end; ){
+                if (s->s_endpoint == e){
+                    memmove(s, s + 1, (end - s - 1) * sizeof(t_sink));
+                    end--;
+                } else {
+                    s++;
+                }
+            }
+            int newsize = end - x->x_sinks;
+            if (newsize > 0){
+                x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
+                    n * sizeof(t_sink), newsize * sizeof(t_sink));
+            } else {
+                freebytes(x->x_sinks, n * sizeof(t_sink));
+                x->x_sinks = 0;
+            }
+            x->x_numsinks = newsize;
+            return;
+        } else {
+            // remove the sink matching endpoint and id
+            for (int i = 0; i < n; ++i){
+                if ((x->x_sinks[i].s_endpoint == e) &&
+                    (x->x_sinks[i].s_id == id))
+                {
+                    memmove(&x->x_sinks[i], &x->x_sinks[i + 1],
+                            (n - i - 1) * sizeof(t_sink));
+                    x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
+                        n * sizeof(t_sink), (n - 1) * sizeof(t_sink));
+                    x->x_numsinks--;
+                    return;
+                }
+            }
+        }
+    } else if (n == 1) {
+        if ((x->x_sinks->s_endpoint == e) &&
+            (id == AOO_ID_WILDCARD || id == x->x_sinks->s_id))
+        {
+            freebytes(x->x_sinks, sizeof(t_sink));
+            x->x_sinks = 0;
+            x->x_numsinks = 0;
+            return;
+        }
+    }
+    if (id != AOO_ID_WILDCARD){
+        bug("aoo_send_doremovesink");
+    }
+}
+
 // called from the network receive thread
 void aoo_send_handle_message(t_aoo_send *x, const char * data,
                                 int32_t n, void *endpoint, aoo_replyfn fn)
@@ -92,6 +162,9 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
             if (x->x_accept){
                 aoo_source_add_sink(x->x_aoo_source, e->endpoint,
                                     e->id, (aoo_replyfn)endpoint_send);
+
+                // add sink to list
+                aoo_send_doaddsink(x, e->endpoint, e->id);
             } else {
                 t_atom msg[3];
                 if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
@@ -99,6 +172,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
                 }
                 outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
             }
+
             break;
         }
         case AOO_UNINVITE_EVENT:
@@ -106,6 +180,9 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
             aoo_sink_event *e = (aoo_sink_event *)events[i];
             if (x->x_accept){
                 aoo_source_remove_sink(x->x_aoo_source, e->endpoint, e->id);
+
+                // remove from list
+                aoo_send_doremovesink(x, e->endpoint, e->id);
             } else {
                 t_atom msg[3];
                 if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
@@ -206,61 +283,6 @@ static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
     aoo_source_set_timefilter_bandwith(x->x_aoo_source, f);
 }
 
-static void aoo_send_doremovesink(t_aoo_send *x, t_endpoint *e, int32_t id)
-{
-    int n = x->x_numsinks;
-    if (n > 1){
-        if (id == AOO_ID_WILDCARD){
-            // remove all sinks matching endpoint
-            t_sink *end = x->x_sinks + n;
-            for (t_sink *s = x->x_sinks; s != end; ){
-                if (s->s_endpoint == e){
-                    memmove(s, s + 1, (end - s - 1) * sizeof(t_sink));
-                    end--;
-                } else {
-                    s++;
-                }
-            }
-            int newsize = end - x->x_sinks;
-            if (newsize > 0){
-                x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
-                    n * sizeof(t_sink), newsize * sizeof(t_sink));
-            } else {
-                freebytes(x->x_sinks, n * sizeof(t_sink));
-                x->x_sinks = 0;
-            }
-            x->x_numsinks = newsize;
-            return;
-        } else {
-            // remove the sink matching endpoint and id
-            for (int i = 0; i < n; ++i){
-                if ((x->x_sinks[i].s_endpoint == e) &&
-                    (x->x_sinks[i].s_id == id))
-                {
-                    memmove(&x->x_sinks[i], &x->x_sinks[i + 1],
-                            (n - i - 1) * sizeof(t_sink));
-                    x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
-                        n * sizeof(t_sink), (n - 1) * sizeof(t_sink));
-                    x->x_numsinks--;
-                    return;
-                }
-            }
-        }
-    } else if (n == 1) {
-        if ((x->x_sinks->s_endpoint == e) &&
-            (id == AOO_ID_WILDCARD || id == x->x_sinks->s_id))
-        {
-            freebytes(x->x_sinks, sizeof(t_sink));
-            x->x_sinks = 0;
-            x->x_numsinks = 0;
-            return;
-        }
-    }
-    if (id != AOO_ID_WILDCARD){
-        bug("aoo_send_doremovesink");
-    }
-}
-
 static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (!x->x_node){
@@ -308,17 +330,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             aoo_send_doremovesink(x, e, AOO_ID_WILDCARD);
         }
         // add sink to list
-        int n = x->x_numsinks;
-        if (n){
-            x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
-                n * sizeof(t_sink), (n + 1) * sizeof(t_sink));
-        } else {
-            x->x_sinks = (t_sink *)getbytes(sizeof(t_sink));
-        }
-        t_sink *sink = &x->x_sinks[n];
-        sink->s_endpoint = e;
-        sink->s_id = id;
-        x->x_numsinks++;
+        aoo_send_doaddsink(x, e, id);
 
         // print message (use actual hostname)
         if (endpoint_getaddress(e, &host, &port)){
