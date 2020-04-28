@@ -23,6 +23,14 @@ class.sources = \
     src/aoo_client.c \
     $(empty)
 
+## parametrizing the build
+loglevel=1
+aoo_timefilter_bandwidth=0.0001
+aoo_debug_dll=0
+aoo_debug_resampling=0
+aoo_debug_block_buffer=0
+
+## (external) dependencies
 AOO = ../lib
 DEPS = ../deps
 
@@ -60,11 +68,11 @@ cflags = \
     -fvisibility=hidden \
     -DNDEBUG \
     -DAOO_STATIC \
-    -DLOGLEVEL=1 \
-    -DAOO_TIMEFILTER_BANDWIDTH=0.0001 \
-    -DAOO_DEBUG_DLL=0 \
-    -DAOO_DEBUG_RESAMPLING=0 \
-    -DAOO_DEBUG_BLOCK_BUFFER=0 \
+    -DLOGLEVEL=$(loglevel) \
+    -DAOO_TIMEFILTER_BANDWIDTH=$(aoo_timefilter_bandwidth) \
+    -DAOO_DEBUG_DLL=$(aoo_debug_dll) \
+    -DAOO_DEBUG_RESAMPLING=$(aoo_debug_resampling) \
+    -DAOO_DEBUG_BLOCK_BUFFER=$(aoo_debug_block_buffer) \
     $(OPUS_CFLAGS) \
     $(OSCPACK_CFLAGS) \
     $(MD5_CFLAGS) \
