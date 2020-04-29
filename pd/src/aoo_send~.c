@@ -159,17 +159,22 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
         case AOO_INVITE_EVENT:
         {
             aoo_sink_event *e = (aoo_sink_event *)events[i];
+
+            t_atom msg[3];
+            if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
+                bug("aoo_endpoint_to_atoms");
+                continue;
+            }
+
             if (x->x_accept){
                 aoo_source_add_sink(x->x_aoo_source, e->endpoint,
                                     e->id, (aoo_replyfn)endpoint_send);
 
                 // add sink to list
                 aoo_send_doaddsink(x, e->endpoint, e->id);
+
+                outlet_anything(x->x_msgout, gensym("sink_add"), 3, msg);
             } else {
-                t_atom msg[3];
-                if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
-                    continue;
-                }
                 outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
             }
 
@@ -178,16 +183,21 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
         case AOO_UNINVITE_EVENT:
         {
             aoo_sink_event *e = (aoo_sink_event *)events[i];
+
+            t_atom msg[3];
+            if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
+                bug("aoo_endpoint_to_atoms");
+                continue;
+            }
+
             if (x->x_accept){
                 aoo_source_remove_sink(x->x_aoo_source, e->endpoint, e->id);
 
                 // remove from list
                 aoo_send_doremovesink(x, e->endpoint, e->id);
+
+                outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
             } else {
-                t_atom msg[3];
-                if (!aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
-                    continue;
-                }
                 outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
             }
             break;

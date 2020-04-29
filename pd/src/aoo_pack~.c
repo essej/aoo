@@ -71,12 +71,16 @@ static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, 
         case AOO_INVITE_EVENT:
         {
             aoo_sink_event *e = (aoo_sink_event *)events[i];
+
+            t_atom msg;
+            SETFLOAT(&msg, e->id);
+
             if (x->x_accept){
                 aoo_source_add_sink(x->x_aoo_source, x,
                                     e->id, (aoo_replyfn)aoo_pack_reply);
+
+                outlet_anything(x->x_msgout, gensym("sink_add"), 1, &msg);
             } else {
-                t_atom msg;
-                SETFLOAT(&msg, e->id);
                 outlet_anything(x->x_msgout, gensym("invite"), 1, &msg);
             }
             break;
@@ -84,11 +88,15 @@ static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, 
         case AOO_UNINVITE_EVENT:
         {
             aoo_sink_event *e = (aoo_sink_event *)events[i];
+
+            t_atom msg;
+            SETFLOAT(&msg, e->id);
+
             if (x->x_accept){
                 aoo_source_remove_sink(x->x_aoo_source, x, e->id);
+
+                outlet_anything(x->x_msgout, gensym("sink_remove"), 1, &msg);
             } else {
-                t_atom msg;
-                SETFLOAT(&msg, e->id);
                 outlet_anything(x->x_msgout, gensym("uninvite"), 1, &msg);
             }
             break;

@@ -183,10 +183,8 @@ onset]);
 #X msg 76 271 start;
 #X obj 478 19 declare -lib aoo;
 #X obj 29 531 aoo_send~ 9998 1 2;
-#N canvas 663 209 632 539 events 0;
+#N canvas 670 34 632 703 events 0;
 #X obj 37 37 inlet;
-#X obj 88 87 print SINK;
-#X obj 37 61 route ping sink;
 #X obj 37 86 outlet;
 #X text 33 322 [invite <host> <port> <ID>(;
 #X text 32 415 [uninvite <host> <port> <ID>(;
@@ -214,9 +212,21 @@ ignore it., f 62;
 #X text 64 440 A sink ask you to stop sending audio messages.;
 #X text 64 145 A periodic message exchanged between source and sink
 \, so the source knows that the sink is receiving its messages.;
-#X connect 0 0 2 0;
-#X connect 2 0 3 0;
-#X connect 2 1 1 0;
+#X obj 37 61 route ping;
+#X obj 104 87 print aoo_send~;
+#X text 31 514 [sink_add <host> <port> <ID>(;
+#X text 30 586 [sink_remove <host> <port> <ID>(;
+#X text 60 559 This event is only sent when auto accept is turned on
+(default), f 65;
+#X text 60 634 This event is only sent when auto accept is turned on
+(default), f 65;
+#X text 62 535 A sink has been added after receiving an invite message.
+, f 59;
+#X text 62 610 A sink has been removed after receiving an uninvite
+message., f 63;
+#X connect 0 0 17 0;
+#X connect 17 0 1 0;
+#X connect 17 1 18 0;
 #X restore 29 560 pd events;
 #X text 50 591 ping;
 #X text 256 272 Note: you can use these two methods to send "audio
@@ -260,7 +270,7 @@ events" instead of continuous streams., f 36;
 from sinks., f 65;
 #X text 113 55 0: (un)invitations cause a [invite( resp. [uninvite(
 event which, f 64;
-#X text 138 74 has to handled manually.;
+#X text 138 74 has to be handled manually.;
 #X connect 0 0 1 0;
 #X connect 1 0 12 0;
 #X connect 3 0 4 0;
