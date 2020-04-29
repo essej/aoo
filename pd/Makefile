@@ -73,6 +73,14 @@ cflags = \
     -DAOO_DEBUG_DLL=$(aoo_debug_dll) \
     -DAOO_DEBUG_RESAMPLING=$(aoo_debug_resampling) \
     -DAOO_DEBUG_BLOCK_BUFFER=$(aoo_debug_block_buffer) \
+    $(empty)
+
+ifneq ($(aoo_timefilter_check),)
+cflags += \
+    -DAOO_TIMEFILTER_CHECK=$(aoo_timefilter_check)
+endif
+
+cflags += \
     $(OPUS_CFLAGS) \
     $(OSCPACK_CFLAGS) \
     $(MD5_CFLAGS) \
