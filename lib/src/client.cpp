@@ -366,7 +366,7 @@ int32_t aoo::net::client::handle_message(const char *data, int32_t n, void *addr
             }
         }
     } catch (const osc::Exception& e){
-        LOG_ERROR("aoo_client: " << e.what());
+        LOG_ERROR("aoo_client: exception in handle_message: " << e.what());
     }
 
     return 0;
@@ -800,7 +800,7 @@ void client::receive_data(){
                             // ignore
                         }
                     } catch (const osc::Exception& e){
-                        LOG_ERROR("aoo_client: " << e.what());
+                        LOG_ERROR("aoo_client: exception in receive_data: " << e.what());
                     }
                 } else {
                     break;
@@ -926,7 +926,8 @@ void client::handle_server_message_tcp(const osc::ReceivedMessage& msg){
             LOG_ERROR("aoo_client: unknown server message " << pattern);
         }
     } catch (const osc::Exception& e){
-        LOG_ERROR("aoo_client: " << pattern << ": " << e.what());
+        LOG_ERROR("aoo_client: exception on handling " << pattern
+                  << " message: " << e.what());
     }
 }
 
@@ -1100,7 +1101,8 @@ void client::handle_server_message_udp(const osc::ReceivedMessage &msg, int onse
                         << pattern << " from server");
         }
     } catch (const osc::Exception& e){
-        LOG_ERROR("aoo_client: " << msg.AddressPattern() << ": " << e.what());
+        LOG_ERROR("aoo_client: exception on handling " << pattern
+                  << " message: " << e.what());
     }
 }
 
@@ -1284,7 +1286,8 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
                         << pattern << " from " << *this);
         }
     } catch (const osc::Exception& e){
-        LOG_ERROR("aoo_client: " << *this << ": " << pattern << ": " << e.what());
+        LOG_ERROR("aoo_client: " << *this << ": exception on handling "
+                  << pattern << " message: " << e.what());
     }
 }
 

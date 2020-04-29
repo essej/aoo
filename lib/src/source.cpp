@@ -444,7 +444,7 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
             LOG_WARNING("unknown message " << pattern);
         }
     } catch (const osc::Exception& e){
-        LOG_ERROR(e.what());
+        LOG_ERROR("aoo_source: exception in handle_message: " << e.what());
     }
     return 0;
 }

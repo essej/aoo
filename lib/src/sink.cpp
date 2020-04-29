@@ -314,7 +314,7 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n,
             LOG_WARNING("unknown message " << pattern);
         }
     } catch (const osc::Exception& e){
-        LOG_ERROR(e.what());
+        LOG_ERROR("aoo_sink: exception in handle_message: " << e.what());
     }
     return 0;
 }
