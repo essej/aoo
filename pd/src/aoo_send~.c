@@ -296,7 +296,8 @@ static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
 static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (!x->x_node){
-        pd_error(x, "%s: can't add sink - no node!", classname(x));
+        pd_error(x, "%s: can't add sink - no socket!", classname(x));
+        return;
     }
 
     if (argc < 3){
@@ -356,7 +357,8 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (!x->x_node){
-        pd_error(x, "%s: can't remove sink - no node!", classname(x));
+        pd_error(x, "%s: can't remove sink - no socket!", classname(x));
+        return;
     }
 
     if (!argc){

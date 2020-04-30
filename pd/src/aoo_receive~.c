@@ -88,7 +88,7 @@ void aoo_receive_send(t_aoo_receive *x)
 static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (!x->x_node){
-        pd_error(x, "%s: can't invite source - no server!", classname(x));
+        pd_error(x, "%s: can't invite source - no socket!", classname(x));
         return;
     }
 
@@ -121,7 +121,8 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
 static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (!x->x_node){
-        pd_error(x, "%s: can't uninvite source - no server!", classname(x));
+        pd_error(x, "%s: can't uninvite source - no socket!", classname(x));
+        return;
     }
 
     if (!argc){
