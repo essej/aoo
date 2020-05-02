@@ -251,7 +251,7 @@ public:
     time_tag get_absolute() const;
     state update(time_tag t, double& error);
 private:
-    std::atomic<time_tag> last_;
+    std::atomic<uint64_t> last_;
     std::atomic<double> elapsed_{0};
 
 #if AOO_TIMEFILTER_CHECK

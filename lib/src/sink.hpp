@@ -32,8 +32,8 @@ struct stream_state {
         recover_ = false;
         format_ = false;
         invite_ = NONE;
-        pingtime1_ = time_tag{};
-        pingtime2_ = time_tag{};
+        pingtime1_ = 0;
+        pingtime2_ = 0;
     }
 
     void add_lost(int32_t n) { lost_ += n; lost_since_ping_ += n; }
@@ -58,14 +58,14 @@ struct stream_state {
     }
 
     void set_ping(time_tag t1, time_tag t2){
-        pingtime1_ = t1;
-        pingtime2_ = t2;
+        pingtime1_ = t1.to_uint64();
+        pingtime2_ = t2.to_uint64();
     }
 
     bool need_ping(time_tag& t1, time_tag& t2){
         // check pingtime2 because it ensures that pingtime1 has been set
-        auto pingtime2 = pingtime2_.exchange(time_tag{});
-        if (!pingtime2.empty()){
+        auto pingtime2 = pingtime2_.exchange(0);
+        if (pingtime2){
             t1 = pingtime1_.load();
             t2 = pingtime2;
             return true;
@@ -98,8 +98,8 @@ private:
     std::atomic<invitation_state> invite_{NONE};
     std::atomic<bool> recover_{false};
     std::atomic<bool> format_{false};
-    std::atomic<time_tag> pingtime1_;
-    std::atomic<time_tag> pingtime2_;
+    std::atomic<uint64_t> pingtime1_;
+    std::atomic<uint64_t> pingtime2_;
 };
 
 struct block_info {

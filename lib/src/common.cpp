@@ -943,7 +943,7 @@ void timer::setup(int32_t sr, int32_t blocksize){
 
 void timer::reset(){
     scoped_lock<spinlock> l(lock_);
-    last_ = time_tag{};
+    last_ = 0;
     elapsed_ = 0;
 #if AOO_TIMEFILTER_CHECK
     // fill ringbuffer with nominal delta
@@ -965,9 +965,10 @@ timer::state timer::update(time_tag t, double& error){
     std::unique_lock<spinlock> l(lock_);
     time_tag last = last_.load();
     if (!last.empty()){
+        last_ = t.to_uint64(); // first!
+
         auto delta = time_tag::duration(last, t);
         elapsed_ = elapsed_ + delta;
-        last_ = t;
 
     #if AOO_TIMEFILTER_CHECK
         // check delta and return error
@@ -1022,7 +1023,7 @@ timer::state timer::update(time_tag t, double& error){
 
         return state::ok;
     } else {
-        last_ = t;
+        last_ = t.to_uint64();
         return state::reset;
     }
 }
