@@ -767,7 +767,7 @@ void source::update(){
 
         // reset time DLL to be on the safe side
         timer_.reset();
-        lastpingtime_ = 0;
+        lastpingtime_ = -1000; // force first ping
 
         // Start new sequence and resend format.
         // We naturally want to do this when setting the format,
@@ -1064,7 +1064,7 @@ bool source::send_ping(){
     auto elapsed = timer_.get_elapsed();
     auto pingtime = lastpingtime_.load();
     auto interval = ping_interval_.load(); // 0: no ping
-    if (interval > 0 && (elapsed - pingtime) > interval){
+    if (interval > 0 && (elapsed - pingtime) >= interval){
         // only copy sinks which require a format update!
         shared_lock sinklock(sink_mutex_);
         int32_t numsinks = sinks_.size();
