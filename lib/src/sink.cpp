@@ -714,11 +714,12 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
 // /aoo/sink/<id>/ping <src> <time>
 
 int32_t source_desc::handle_ping(const sink &s, time_tag tt){
-#if 0
+#if 1
     if (streamstate_.get_state() != AOO_SOURCE_STATE_PLAY){
         return 0;
     }
 #endif
+
 #if 0
     time_tag tt2 = s.absolute_time(); // use last stream time
 #else
@@ -1253,8 +1254,12 @@ bool source_desc::send_notifications(const sink& s){
     time_tag pingtime1;
     time_tag pingtime2;
     if (streamstate_.need_ping(pingtime1, pingtime2)){
+    #if 1
         // only send ping if source is active
         if (streamstate_.get_state() == AOO_SOURCE_STATE_PLAY){
+    #else
+        {
+    #endif
             auto lost_blocks = streamstate_.get_lost_since_ping();
 
             char buffer[AOO_MAXPACKETSIZE];
