@@ -972,30 +972,55 @@ bool source_desc::add_packet(const data_packet& d){
     if (!block){
         if (blockqueue_.full()){
             // if the queue is full, we have to drop a block;
-            // in this case we send a block of zeros to the audio buffer
+            // in this case we send a block of zeros to the audio buffer.
             auto old = blockqueue_.front().sequence;
-            auto nsamples = audioqueue_.blocksize();
-            if (audioqueue_.write_available() && infoqueue_.write_available()){
-                auto ptr = audioqueue_.write_data();
-                for (int i = 0; i < nsamples; ++i){
-                    ptr[i] = 0;
+            // first we check if the first block is about to be read next,
+            // which means that we have a buffer overflow (the source is too fast)
+            if (old == next_){
+                // record dropped blocks
+                streamstate_.add_lost(blockqueue_.size());
+                // clear the block queue and fill audio buffer with zeros.
+                blockqueue_.clear();
+                ack_list_.clear();
+                next_ = d.sequence;
+                // push silent blocks to keep the buffer full, but leave room for one block!
+                int count = 0;
+                auto nsamples = audioqueue_.blocksize();
+                while (audioqueue_.write_available() > 1 && infoqueue_.write_available() > 1){
+                    auto ptr = audioqueue_.write_data();
+                    std::fill(ptr, ptr + nsamples, 0);
+                    audioqueue_.write_commit();
+                    // push nominal samplerate + default channel (0)
+                    block_info i;
+                    i.sr = decoder_->samplerate();
+                    i.channel = 0;
+                    infoqueue_.write(i);
+
+                    count++;
                 }
-                audioqueue_.write_commit();
-                // push nominal samplerate + default channel (0)
-                block_info i;
-                i.sr = decoder_->samplerate();
-                i.channel = 0;
-                infoqueue_.write(i);
-                // update 'next'
-                if (next_ <= old){
-                    next_ = old + 1;
+                LOG_VERBOSE("dropped " << count << " blocks to handle buffer overrun");
+            } else {
+                auto nsamples = audioqueue_.blocksize();
+                if (audioqueue_.write_available() && infoqueue_.write_available()){
+                    auto ptr = audioqueue_.write_data();
+                    std::fill(ptr, ptr + nsamples, 0);
+                    audioqueue_.write_commit();
+                    // push nominal samplerate + default channel (0)
+                    block_info i;
+                    i.sr = decoder_->samplerate();
+                    i.channel = 0;
+                    infoqueue_.write(i);
+                    // update 'next'
+                    if (next_ <= old){
+                        next_ = old + 1;
+                    }
                 }
+                LOG_VERBOSE("dropped block " << old);
+                // remove block from acklist
+                ack_list_.remove(old);
+                // record dropped block
+                streamstate_.add_lost(1);
             }
-            LOG_VERBOSE("dropped block " << old);
-            // remove block from acklist
-            ack_list_.remove(old);
-            // record dropped block
-            streamstate_.add_lost(1);
         }
         // add new block
         block = blockqueue_.insert(d.sequence, d.samplerate,
