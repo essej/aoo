@@ -29,6 +29,7 @@ struct stream_state {
         resent_ = 0;
         gap_ = 0;
         state_ = AOO_SOURCE_STATE_STOP;
+        underrun_ = false;
         recover_ = false;
         format_ = false;
         invite_ = NONE;
@@ -74,6 +75,9 @@ struct stream_state {
         }
     }
 
+    void set_underrun() { underrun_ = true; }
+    bool have_underrun() { return underrun_.exchange(false); }
+
     void request_recover() { recover_ = true; }
     bool need_recover() { return recover_.exchange(false); }
 
@@ -96,6 +100,7 @@ private:
     std::atomic<int32_t> gap_{0};
     std::atomic<aoo_source_state> state_{AOO_SOURCE_STATE_STOP};
     std::atomic<invitation_state> invite_{NONE};
+    std::atomic<bool> underrun_{false};
     std::atomic<bool> recover_{false};
     std::atomic<bool> format_{false};
     std::atomic<uint64_t> pingtime1_;

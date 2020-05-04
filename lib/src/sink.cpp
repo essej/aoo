@@ -906,6 +906,9 @@ bool source_desc::check_packet(const data_packet &d){
     // check for empty block (= skipped)
     bool dropped = d.totalsize == 0;
 
+    // check for buffer underrun
+    bool underrun = streamstate_.have_underrun();
+
     // check and update newest sequence number
     if (diff < 0){
         // TODO the following distinction doesn't seem to work reliably.
@@ -924,7 +927,7 @@ bool source_desc::check_packet(const data_packet &d){
         newest_ = d.sequence;
     }
 
-    if (large_gap || recover || dropped){
+    if (large_gap || recover || dropped || underrun){
         // record dropped blocks
         streamstate_.add_lost(blockqueue_.size());
         if (diff > 1){
@@ -940,9 +943,7 @@ bool source_desc::check_packet(const data_packet &d){
         auto nsamples = audioqueue_.blocksize();
         while (audioqueue_.write_available() > 1 && infoqueue_.write_available() > 1){
             auto ptr = audioqueue_.write_data();
-            for (int i = 0; i < nsamples; ++i){
-                ptr[i] = 0;
-            }
+            std::fill(ptr, ptr + nsamples, 0);
             audioqueue_.write_commit();
             // push nominal samplerate + default channel (0)
             block_info i;
@@ -952,9 +953,12 @@ bool source_desc::check_packet(const data_packet &d){
 
             count++;
         }
-        LOG_VERBOSE("wrote " << count << " silent blocks for "
-                    << (large_gap ? "transmission gap" :
-                        recover ? "recovery" : "host timing gap"));
+        auto reason = large_gap ? "transmission gap"
+                      : recover ? "sink xrun"
+                      : dropped ? "source xrun"
+                      : underrun ? "buffer underrun"
+                      : "?";
+        LOG_VERBOSE("wrote " << count << " silent blocks for " << reason);
         if (dropped){
             next_++;
             return false;
