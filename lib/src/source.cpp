@@ -2,11 +2,8 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
-#include "aoo_source.hpp"
+#include "source.hpp"
 #include "aoo/aoo_utils.hpp"
-
-#include "oscpack/osc/OscOutboundPacketStream.h"
-#include "oscpack/osc/OscReceivedElements.h"
 
 #include <cstring>
 #include <algorithm>
@@ -126,6 +123,12 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
+    // ping interval
+    case aoo_opt_redundancy:
+        CHECKARG(int32_t);
+        // limit it somehow, 16 times is already very high
+        redundancy_ = std::max<int32_t>(1, std::min<int32_t>(16, as<int32_t>(ptr)));
+        break;
     // unknown
     default:
         LOG_WARNING("aoo_source: unsupported option " << opt);
@@ -176,6 +179,11 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
     case aoo_opt_ping_interval:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = ping_interval_ * 1000;
+        break;
+    // ping interval
+    case aoo_opt_redundancy:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = redundancy_;
         break;
     // unknown
     default:
@@ -393,97 +401,50 @@ int32_t aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
 
 // /aoo/src/<id>/format <sink>
 int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn){
-    osc::ReceivedPacket packet(data, n);
-    osc::ReceivedMessage msg(packet);
+    try {
+        osc::ReceivedPacket packet(data, n);
+        osc::ReceivedMessage msg(packet);
 
-    int32_t type, src;
-    auto onset = aoo_parsepattern(data, n, &type, &src);
-    if (!onset){
-        LOG_WARNING("aoo_source: not an AoO message!");
-        return 0;
-    }
-    if (type != AOO_TYPE_SOURCE){
-        LOG_WARNING("aoo_source: not a source message!");
-        return 0;
-    }
-    if (src == AOO_ID_WILDCARD){
-        LOG_WARNING("aoo_source: can't handle wildcard messages (yet)!");
-        return 0;
-    }
-    if (src != id_){
-        LOG_WARNING("aoo_source: wrong source ID!");
-        return 0;
-    }
+        int32_t type, src;
+        auto onset = aoo_parse_pattern(data, n, &type, &src);
+        if (!onset){
+            LOG_WARNING("aoo_source: not an AoO message!");
+            return 0;
+        }
+        if (type != AOO_TYPE_SOURCE){
+            LOG_WARNING("aoo_source: not a source message!");
+            return 0;
+        }
+        if (src == AOO_ID_WILDCARD){
+            LOG_WARNING("aoo_source: can't handle wildcard messages (yet)!");
+            return 0;
+        }
+        if (src != id_){
+            LOG_WARNING("aoo_source: wrong source ID!");
+            return 0;
+        }
 
-    if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_FORMAT)){
-        if (msg.ArgumentCount() == 1){
-            try {
-                auto it = msg.ArgumentsBegin();
-                auto id = it->AsInt32();
-
-                handle_format_request(endpoint, fn, id);
-
-                return 1;
-            } catch (const osc::Exception& e){
-                LOG_ERROR(e.what());
-            }
+        auto pattern = msg.AddressPattern() + onset;
+        if (!strcmp(pattern, AOO_MSG_FORMAT)){
+            handle_format_request(endpoint, fn, msg);
+            return 1;
+        } else if (!strcmp(pattern, AOO_MSG_DATA)){
+            handle_data_request(endpoint, fn, msg);
+            return 1;
+        } else if (!strcmp(pattern, AOO_MSG_INVITE)){
+            handle_invite(endpoint, fn, msg);
+            return 1;
+        } else if (!strcmp(pattern, AOO_MSG_UNINVITE)){
+            handle_uninvite(endpoint, fn, msg);
+            return 1;
+        } else if (!strcmp(pattern, AOO_MSG_PING)){
+            handle_ping(endpoint, fn, msg);
+            return 1;
         } else {
-            LOG_ERROR("wrong number of arguments for /request message");
+            LOG_WARNING("unknown message " << pattern);
         }
-    } else if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_DATA)){
-        auto count = msg.ArgumentCount();
-        if (count >= 4){
-            try {
-                auto it = msg.ArgumentsBegin();
-                auto id = (it++)->AsInt32();
-                auto salt = (it++)->AsInt32();
-
-                handle_data_request(endpoint, fn, id, salt, count - 2, it);
-
-                return 1;
-            } catch (const osc::Exception& e){
-                LOG_ERROR(e.what());
-            }
-        } else {
-            LOG_ERROR("bad number of arguments for /resend message");
-        }
-    } else if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_INVITE)){
-        try {
-            auto it = msg.ArgumentsBegin();
-            auto id = it->AsInt32();
-
-            handle_invite(endpoint, fn, id);
-
-            return 1;
-        } catch (const osc::Exception& e){
-            LOG_ERROR(e.what());
-        }
-    } else if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_UNINVITE)){
-        try {
-            auto it = msg.ArgumentsBegin();
-            auto id = it->AsInt32();
-
-            handle_uninvite(endpoint, fn, id);
-
-            return 1;
-        } catch (const osc::Exception& e){
-            LOG_ERROR(e.what());
-        }
-    } else if (!strcmp(msg.AddressPattern() + onset, AOO_MSG_PING)){
-        try {
-            auto it = msg.ArgumentsBegin();
-            auto id = (it++)->AsInt32();
-            time_tag t1 = (it++)->AsTimeTag();
-            time_tag t2 = (it++)->AsTimeTag();
-
-            handle_ping(endpoint, fn, id, t1, t2);
-
-            return 1;
-        } catch (const osc::Exception& e){
-            LOG_ERROR(e.what());
-        }
-    } else {
-        LOG_WARNING("unknown message '" << (msg.AddressPattern() + onset) << "'");
+    } catch (const osc::Exception& e){
+        LOG_ERROR(e.what());
     }
     return 0;
 }
@@ -500,6 +461,10 @@ int32_t aoo_source_send(aoo_source *src) {
 // We have to make a local copy of the sink list, but this should be
 // rather cheap in comparison to encoding and sending the audio data.
 int32_t aoo::source::send(){
+    if (!play_.load()){
+        return false;
+    }
+
     bool didsomething = false;
 
     if (send_format()){
@@ -1060,14 +1025,17 @@ bool source::send_data(){
                     }
                 };
 
-                auto ptr = sendbuffer_.data();
-                // send large frames (might be 0)
-                for (int32_t i = 0; i < dv.quot; ++i, ptr += maxpacketsize){
-                    dosend(i, ptr, maxpacketsize);
-                }
-                // send remaining bytes as a single frame (might be the only one!)
-                if (dv.rem){
-                    dosend(dv.quot, ptr, dv.rem);
+                auto ntimes = redundancy_.load();
+                for (auto i = 0; i < ntimes; ++i){
+                    auto ptr = sendbuffer_.data();
+                    // send large frames (might be 0)
+                    for (int32_t j = 0; j < dv.quot; ++j, ptr += maxpacketsize){
+                        dosend(j, ptr, maxpacketsize);
+                    }
+                    // send remaining bytes as a single frame (might be the only one!)
+                    if (dv.rem){
+                        dosend(dv.quot, ptr, dv.rem);
+                    }
                 }
             } else {
                 LOG_WARNING("aoo_source: couldn't encode audio data!");
@@ -1117,7 +1085,11 @@ bool source::send_ping(){
     }
 }
 
-void source::handle_format_request(void *endpoint, aoo_replyfn fn, int32_t id){
+void source::handle_format_request(void *endpoint, aoo_replyfn fn,
+                                   const osc::ReceivedMessage& msg)
+{
+    auto id = msg.ArgumentsBegin()->AsInt32();
+
     LOG_DEBUG("handle format request");
 
     // check if sink exists (not strictly necessary, but might help catch errors)
@@ -1134,8 +1106,13 @@ void source::handle_format_request(void *endpoint, aoo_replyfn fn, int32_t id){
     }
 }
 
-void source::handle_data_request(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt,
-                               int32_t count, osc::ReceivedMessageArgumentIterator it){
+void source::handle_data_request(void *endpoint, aoo_replyfn fn,
+                                 const osc::ReceivedMessage& msg)
+{
+    auto it = msg.ArgumentsBegin();
+    auto id = (it++)->AsInt32();
+    auto salt = (it++)->AsInt32();
+
     LOG_DEBUG("handle data request");
 
     // check if sink exists (not strictly necessary, but might help catch errors)
@@ -1145,7 +1122,7 @@ void source::handle_data_request(void *endpoint, aoo_replyfn fn, int32_t id, int
 
     if (sink){
         // get pairs of [seq, frame]
-        int npairs = count / 2;
+        int npairs = (msg.ArgumentCount() - 2) / 2;
         while (npairs--){
             auto seq = (it++)->AsInt32();
             auto frame = (it++)->AsInt32();
@@ -1158,7 +1135,13 @@ void source::handle_data_request(void *endpoint, aoo_replyfn fn, int32_t id, int
     }
 }
 
-void source::handle_invite(void *endpoint, aoo_replyfn fn, int32_t id){
+void source::handle_invite(void *endpoint, aoo_replyfn fn,
+                           const osc::ReceivedMessage& msg)
+{
+    auto id = msg.ArgumentsBegin()->AsInt32();
+
+    LOG_DEBUG("handle invite");
+
     // check if sink exists (not strictly necessary, but might help catch errors)
     shared_lock lock(sink_mutex_); // reader lock!
     auto sink = find_sink(endpoint, id);
@@ -1179,7 +1162,13 @@ void source::handle_invite(void *endpoint, aoo_replyfn fn, int32_t id){
     }
 }
 
-void source::handle_uninvite(void *endpoint, aoo_replyfn fn, int32_t id){
+void source::handle_uninvite(void *endpoint, aoo_replyfn fn,
+                             const osc::ReceivedMessage& msg)
+{
+    auto id = msg.ArgumentsBegin()->AsInt32();
+
+    LOG_DEBUG("handle uninvite");
+
     // check if sink exists (not strictly necessary, but might help catch errors)
     shared_lock lock(sink_mutex_); // reader lock!
     auto sink = find_sink(endpoint, id);
@@ -1200,8 +1189,15 @@ void source::handle_uninvite(void *endpoint, aoo_replyfn fn, int32_t id){
     }
 }
 
-void source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id,
-                         time_tag tt1, time_tag tt2){
+void source::handle_ping(void *endpoint, aoo_replyfn fn,
+                         const osc::ReceivedMessage& msg)
+{
+    auto it = msg.ArgumentsBegin();
+    auto id = (it++)->AsInt32();
+    time_tag tt1 = (it++)->AsTimeTag();
+    time_tag tt2 = (it++)->AsTimeTag();
+    int32_t lost_blocks = (it++)->AsInt32();
+
     LOG_DEBUG("handle ping");
 
     // check if sink exists (not strictly necessary, but might help catch errors)
@@ -1219,6 +1215,7 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn, int32_t id,
             e.sink.id = id;
             e.ping.tt1 = tt1.to_uint64();
             e.ping.tt2 = tt2.to_uint64();
+            e.ping.lost_blocks = lost_blocks;
         #if 0
             e.ping.tt3 = timer_.get_absolute().to_uint64(); // use last stream time
         #else

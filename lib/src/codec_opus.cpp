@@ -164,7 +164,14 @@ int32_t encoder_setformat(void *enc, aoo_format *f){
         opus_multistream_encoder_ctl(c->state, OPUS_GET_COMPLEXITY(&fmt->complexity));
         // bitrate
         opus_multistream_encoder_ctl(c->state, OPUS_SET_BITRATE(fmt->bitrate));
+    #if 0
+        // This control is broken in opus_multistream_encoder (as of opus v1.3.2)
+        // because it would always return the default bitrate.
+        // The only thing we can do is omit the function and just keep the input value.
+        // This means that clients have to explicitly check for OPUS_AUTO and
+        // OPUS_BITRATE_MAX when reading the 'bitrate' value after encoder_setformat().
         opus_multistream_encoder_ctl(c->state, OPUS_GET_BITRATE(&fmt->bitrate));
+    #endif
         // signal type
         opus_multistream_encoder_ctl(c->state, OPUS_SET_SIGNAL(fmt->signal_type));
         opus_multistream_encoder_ctl(c->state, OPUS_GET_SIGNAL(&fmt->signal_type));
@@ -175,7 +182,7 @@ int32_t encoder_setformat(void *enc, aoo_format *f){
 
     // save and print settings
     memcpy(&c->format, fmt, sizeof(aoo_format_opus));
-    c->format.header.codec = AOO_CODEC_OPUS;
+    c->format.header.codec = AOO_CODEC_OPUS; // !
     print_settings(c->format);
 
     return 1;
@@ -262,7 +269,8 @@ bool decoder_dosetformat(decoder *c, aoo_format_opus& f){
                                        &error);
     if (error == OPUS_OK){
         assert(c->state != nullptr);
-        // apply settings
+        // these are actually encoder settings and do anything on the decoder
+    #if 0
         // complexity
         opus_multistream_decoder_ctl(c->state, OPUS_SET_COMPLEXITY(f.complexity));
         opus_multistream_decoder_ctl(c->state, OPUS_GET_COMPLEXITY(&f.complexity));
@@ -272,9 +280,10 @@ bool decoder_dosetformat(decoder *c, aoo_format_opus& f){
         // signal type
         opus_multistream_decoder_ctl(c->state, OPUS_SET_SIGNAL(f.signal_type));
         opus_multistream_decoder_ctl(c->state, OPUS_GET_SIGNAL(&f.signal_type));
+    #endif
         // save and print settings
         memcpy(&c->format, &f, sizeof(aoo_format_opus));
-        c->format.header.codec = AOO_CODEC_OPUS;
+        c->format.header.codec = AOO_CODEC_OPUS; // !
         print_settings(f);
         return true;
     } else {
@@ -301,6 +310,10 @@ int32_t decoder_setformat(void *dec, aoo_format *f)
 
 int32_t decoder_readformat(void *dec, const aoo_format *fmt,
                            const char *buf, int32_t size){
+    if (strcmp(fmt->codec, AOO_CODEC_OPUS)){
+        LOG_ERROR("opus: wrong format!");
+        return -1;
+    }
     if (size >= 12){
         auto c = static_cast<decoder *>(dec);
         aoo_format_opus f;

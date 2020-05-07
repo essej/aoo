@@ -168,7 +168,7 @@ int32_t codec_setformat(void *enc, aoo_format *f)
 
     // save and print settings
     memcpy(&c->format, fmt, sizeof(aoo_format_pcm));
-    c->format.header.codec = AOO_CODEC_PCM;
+    c->format.header.codec = AOO_CODEC_PCM; // !
     print_settings(c->format);
 
     return 1;
@@ -308,6 +308,7 @@ int32_t decoder_readformat(void *dec, const aoo_format *fmt,
         {
             memcpy(&c->format.header, fmt, sizeof(aoo_format));
             c->format.bitdepth = (aoo_pcm_bitdepth)aoo::from_bytes<int32_t>(buf);
+            c->format.header.codec = AOO_CODEC_PCM; // !
             print_settings(c->format);
             return 4;
         } else {

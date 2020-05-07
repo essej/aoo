@@ -14,29 +14,49 @@ typedef int socklen_t;
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#endif
-#include <stdio.h>
 #include <errno.h>
+#endif
+
+#include <stdio.h>
 #include <string.h>
 
 /*///////////////////////// socket /////////////////////////////////*/
 
-void socket_error_print(const char *label)
+int socket_errno()
 {
 #ifdef _WIN32
     int err = WSAGetLastError();
     if (err == WSAECONNRESET){
-        return; // ignore
+        return 0; // ignore
     }
-    char str[1024];
-    str[0] = 0;
-    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0,
-                   err, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT), str,
-                   sizeof(str), NULL);
 #else
     int err = errno;
-    const char *str = strerror(err);
 #endif
+    return err;
+}
+
+int socket_strerror(int err, char *buf, int size)
+{
+#ifdef _WIN32
+    buf[0] = 0;
+    return FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0,
+                          err, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT), buf,
+                          size, NULL);
+#else
+    return snprintf(buf, size, "%s", strerror(err));
+#endif
+}
+
+void socket_error_print(const char *label)
+{
+    char str[1024];
+
+    int err = socket_errno();
+    if (!err){
+        return;
+    }
+
+    socket_strerror(err, str, sizeof(str));
     if (label){
         fprintf(stderr, "%s: %s (%d)\n", label, str, err);
     } else {
@@ -80,6 +100,16 @@ int socket_close(int socket)
 #endif
 }
 
+int socket_sendto(int socket, const char *buf, int size, const struct sockaddr *addr)
+{
+    if (addr->sa_family == AF_INET){
+        return sendto(socket, buf, size, 0, addr, sizeof(struct sockaddr_in));
+    } else {
+        // not supported yet
+        return -1;
+    }
+}
+
 int socket_receive(int socket, char *buf, int size,
                    struct sockaddr_storage *sa, socklen_t *len,
                    int nonblocking)
@@ -106,6 +136,58 @@ int socket_receive(int socket, char *buf, int size,
     } else {
         return recv(socket, buf, size, 0);
     }
+}
+
+int socket_setsendbufsize(int socket, int bufsize)
+{
+    int val = 0;
+    socklen_t len;
+    len = sizeof(val);
+    getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void *)&val, &len);
+#if 0
+    fprintf(stderr, "old recvbufsize: %d\n", val);
+    fflush(stderr);
+#endif
+    if (val > bufsize){
+        return 0;
+    }
+    val = bufsize;
+    int result = setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void *)&val, sizeof(val));
+#if 0
+    if (result == 0){
+        len = sizeof(val);
+        getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void *)&val, &len);
+        fprintf(stderr, "new recvbufsize: %d\n", val);
+        fflush(stderr);
+    }
+#endif
+    return result;
+}
+
+int socket_setrecvbufsize(int socket, int bufsize)
+{
+    int val = 0;
+    socklen_t len;
+    len = sizeof(val);
+    getsockopt(socket, SOL_SOCKET, SO_RCVBUF, (void *)&val, &len);
+#if 0
+    fprintf(stderr, "old recvbufsize: %d\n", val);
+    fflush(stderr);
+#endif
+    if (val > bufsize){
+        return 0;
+    }
+    val = bufsize;
+    int result = setsockopt(socket, SOL_SOCKET, SO_RCVBUF, (void *)&val, sizeof(val));
+#if 0
+    if (result == 0){
+        len = sizeof(val);
+        getsockopt(socket, SOL_SOCKET, SO_RCVBUF, (void *)&val, &len);
+        fprintf(stderr, "new recvbufsize: %d\n", val);
+        fflush(stderr);
+    }
+#endif
+    return result;
 }
 
 int socket_signal(int socket, int port)
@@ -142,13 +224,27 @@ int socket_getaddr(const char *hostname, int port,
     }
 }
 
+int sockaddr_to_atoms(const struct sockaddr *sa, socklen_t len, t_atom *a)
+{
+    // LATER add IPv6 support
+    struct sockaddr_in *addr = (struct sockaddr_in *)sa;
+    const char *host = inet_ntoa(addr->sin_addr);
+    if (!host){
+        fprintf(stderr, "inet_ntoa failed!\n");
+        return 0;
+    }
+    SETSYMBOL(a, gensym(host));
+    SETFLOAT(a + 1, ntohs(addr->sin_port));
+    return 1;
+}
+
 /*//////////////////// endpoint ///////////////////////*/
 
-t_endpoint * endpoint_new(int socket, const struct sockaddr_storage *sa, socklen_t len)
+t_endpoint * endpoint_new(void *owner, const struct sockaddr_storage *sa, socklen_t len)
 {
     t_endpoint *e = (t_endpoint *)getbytes(sizeof(t_endpoint));
     if (e){
-        e->socket = socket;
+        e->owner = owner;
         memcpy(&e->addr, sa, len);
         e->addrlen = len;
         e->next = 0;
@@ -163,8 +259,9 @@ void endpoint_free(t_endpoint *e)
 
 int endpoint_send(t_endpoint *e, const char *data, int size)
 {
-    int result = sendto(e->socket, data, size, 0,
-                       (const struct sockaddr *)&e->addr, sizeof(e->addr));
+    int socket = *((int *)e->owner);
+    int result = sendto(socket, data, size, 0,
+                       (const struct sockaddr *)&e->addr, e->addrlen);
     if (result < 0){
         socket_error_print("sendto");
     }
@@ -186,9 +283,23 @@ int endpoint_getaddress(const t_endpoint *e, t_symbol **hostname, int *port)
 
 int endpoint_match(t_endpoint *e, const struct sockaddr_storage *sa)
 {
-    return (sa->ss_family == e->addr.ss_family)
-            && !memcmp(sa, &e->addr, e->addrlen);
-
+    if (sa->ss_family == e->addr.ss_family){
+    #if 1
+        if (sa->ss_family == AF_INET){
+            const struct sockaddr_in *a = (const struct sockaddr_in *)sa;
+            const struct sockaddr_in *b = (const struct sockaddr_in *)&e->addr;
+            return (a->sin_addr.s_addr == b->sin_addr.s_addr)
+                    && (a->sin_port == b->sin_port);
+        } else  {
+            return 0;
+        }
+    #else
+        // doesn't work reliable on BSDs if sin_len is not set
+        return !memcmp(&address, &other.address, length);
+    #endif
+    } else {
+        return 0;
+    }
 }
 
 t_endpoint * endpoint_find(t_endpoint *e, const struct sockaddr_storage *sa)

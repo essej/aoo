@@ -20,7 +20,12 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
-#define DO_LOG(x) (std::cerr << x << std::endl)
+// 0: error, 1: warning, 2: verbose, 3: debug
+#ifndef LOGLEVEL
+ #define LOGLEVEL 1
+#endif
+
+#define DO_LOG(x) do { std::cerr << x << std::endl; } while (false);
 
 #if LOGLEVEL >= 0
  #define LOG_ERROR(x) DO_LOG(x)
@@ -54,6 +59,7 @@
 #endif
 
 #if defined(__linux__) || defined(__CYGWIN__) || defined(__GNU__) || \
+    defined(__EMSCRIPTEN__) || \
     defined(ANDROID)
 #include <endian.h>
 #endif

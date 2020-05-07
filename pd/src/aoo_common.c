@@ -11,6 +11,7 @@
 
 #include <stdio.h>
 #include <inttypes.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <synchapi.h>
@@ -93,21 +94,42 @@ int32_t aoo_endpoint_to_atoms(const t_endpoint *e, int32_t id, t_atom *argv)
     return 0;
 }
 
-static int aoo_getendpointarg(void *x, int argc, t_atom *argv, struct sockaddr_storage *sa,
-                              socklen_t *len, int32_t *id, const char *what)
+static int aoo_getendpointarg(void *x, t_aoo_node *node, int argc, t_atom *argv,
+                              struct sockaddr_storage *sa, socklen_t *len,
+                              int32_t *id, const char *what)
 {
     if (argc < 3){
         pd_error(x, "%s: too few arguments for %s", classname(x), what);
         return 0;
     }
 
-    t_symbol *hostname = atom_getsymbol(argv);
-    int port = atom_getfloat(argv + 1);
+    // first try peer (group|user)
+    if (argv[1].a_type == A_SYMBOL){
+        t_endpoint *e = 0;
+        t_symbol *group = atom_getsymbol(argv);
+        t_symbol *user = atom_getsymbol(argv + 1);
 
-    if (!socket_getaddr(hostname->s_name, port, sa, len)){
-        pd_error(x, "%s: couldn't resolve hostname '%s' of %s",
-                 classname(x), hostname->s_name, what);
-        return 0;
+        e = aoo_node_find_peer(node, group, user);
+
+        if (!e){
+            pd_error(x, "%s: couldn't find peer %s|%s for %s",
+                     classname(x), group->s_name, user->s_name, what);
+            return 0;
+        }
+
+        // success - copy sockaddr
+        memcpy(sa, &e->addr, e->addrlen);
+        *len = e->addrlen;
+    } else {
+        // otherwise try host|port
+        t_symbol *host = atom_getsymbol(argv);
+        int port = atom_getfloat(argv + 1);
+
+        if (!socket_getaddr(host->s_name, port, sa, len)){
+            pd_error(x, "%s: couldn't resolve hostname '%s' for %s",
+                     classname(x), host->s_name, what);
+            return 0;
+        }
     }
 
     if (argv[2].a_type == A_SYMBOL){
@@ -124,16 +146,16 @@ static int aoo_getendpointarg(void *x, int argc, t_atom *argv, struct sockaddr_s
     return 1;
 }
 
-int aoo_getsinkarg(void *x, int argc, t_atom *argv,
+int aoo_getsinkarg(void *x, t_aoo_node *node, int argc, t_atom *argv,
                    struct sockaddr_storage *sa, socklen_t *len, int32_t *id)
 {
-    return aoo_getendpointarg(x, argc, argv, sa, len, id, "sink");
+    return aoo_getendpointarg(x, node, argc, argv, sa, len, id, "sink");
 }
 
-int aoo_getsourcearg(void *x, int argc, t_atom *argv,
+int aoo_getsourcearg(void *x, t_aoo_node *node, int argc, t_atom *argv,
                      struct sockaddr_storage *sa, socklen_t *len, int32_t *id)
 {
-    return aoo_getendpointarg(x, argc, argv, sa, len, id, "source");
+    return aoo_getendpointarg(x, node, argc, argv, sa, len, id, "source");
 }
 
 static int aoo_getarg(const char *name, void *x, int which,
@@ -180,7 +202,7 @@ int aoo_parseresend(void *x, int argc, const t_atom *argv,
     return 1;
 }
 
-void aoo_defaultformat(aoo_format_storage *f, int nchannels)
+void aoo_format_makedefault(aoo_format_storage *f, int nchannels)
 {
     aoo_format_pcm *fmt = (aoo_format_pcm *)f;
     fmt->header.codec = AOO_CODEC_PCM;
@@ -190,7 +212,7 @@ void aoo_defaultformat(aoo_format_storage *f, int nchannels)
     fmt->bitdepth = AOO_PCM_FLOAT32;
 }
 
-int aoo_parseformat(void *x, aoo_format_storage *f, int argc, t_atom *argv)
+int aoo_format_parse(void *x, aoo_format_storage *f, int argc, t_atom *argv)
 {
     t_symbol *codec = atom_getsymbolarg(0, argc, argv);
     f->header.blocksize = argc > 1 ? atom_getfloat(argv + 1) : 64;
@@ -292,19 +314,24 @@ int aoo_parseformat(void *x, aoo_format_storage *f, int argc, t_atom *argv)
     return 1;
 }
 
-int aoo_printformat(const aoo_format_storage *f, int argc, t_atom *argv)
+int aoo_format_toatoms(const aoo_format *f, int argc, t_atom *argv)
 {
     if (argc < 3){
+        error("aoo_format_toatoms: too few atoms!");
         return 0;
     }
-    t_symbol *codec = gensym(f->header.codec);
+    t_symbol *codec = gensym(f->codec);
     SETSYMBOL(argv, codec);
-    SETFLOAT(argv + 1, f->header.blocksize);
-    SETFLOAT(argv + 2, f->header.samplerate);
+    SETFLOAT(argv + 1, f->blocksize);
+    SETFLOAT(argv + 2, f->samplerate);
     // omit nchannels
 
-    if (codec == gensym(AOO_CODEC_PCM) && argc >= 4){
+    if (codec == gensym(AOO_CODEC_PCM)){
         // pcm <blocksize> <samplerate> <bitdepth>
+        if (argc < 4){
+            error("aoo_format_toatoms: too few atoms for pcm format!");
+            return 0;
+        }
         aoo_format_pcm *fmt = (aoo_format_pcm *)f;
         int nbits;
         switch (fmt->bitdepth){
@@ -325,10 +352,32 @@ int aoo_printformat(const aoo_format_storage *f, int argc, t_atom *argv)
         }
         SETFLOAT(argv + 3, nbits);
         return 4;
-    } else if (codec == gensym(AOO_CODEC_OPUS) && argc >= 6){
+    } else if (codec == gensym(AOO_CODEC_OPUS)){
         // opus <blocksize> <samplerate> <bitrate> <complexity> <signaltype>
+        if (argc < 6){
+            error("aoo_format_toatoms: too few atoms for opus format!");
+            return 0;
+        }
         aoo_format_opus *fmt = (aoo_format_opus *)f;
+    #if 0
         SETFLOAT(argv + 3, fmt->bitrate);
+    #else
+        // workaround for bug in opus_multistream_encoder (as of opus v1.3.2)
+        // where OPUS_GET_BITRATE would always return OPUS_AUTO.
+        // We have no chance to get the actual bitrate for "auto" and "max",
+        // so we return the symbols instead.
+        switch (fmt->bitrate){
+        case OPUS_AUTO:
+            SETSYMBOL(argv + 3, gensym("auto"));
+            break;
+        case OPUS_BITRATE_MAX:
+            SETSYMBOL(argv + 3, gensym("max"));
+            break;
+        default:
+            SETFLOAT(argv + 3, fmt->bitrate);
+            break;
+        }
+    #endif
         SETFLOAT(argv + 4, fmt->complexity);
         t_symbol *signaltype;
         switch (fmt->signal_type){
@@ -344,6 +393,8 @@ int aoo_printformat(const aoo_format_storage *f, int argc, t_atom *argv)
         }
         SETSYMBOL(argv + 5, signaltype);
         return 6;
+    } else {
+        error("aoo_format_toatoms: unknown format %s!", codec->s_name);
     }
     return 0;
 }

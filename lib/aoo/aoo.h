@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <stdint.h>
+#include "aoo_types.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -14,68 +14,7 @@ extern "C"
 #define AOO_VERSION_MAJOR 2
 #define AOO_VERSION_MINOR 0
 #define AOO_VERSION_BUGFIX 0
-#define AOO_VERSION_PRERELEASE 1
-
-#ifndef AOO_API
-# ifndef AOO_STATIC
-#  if defined(_WIN32) // Windows
-#   if defined(AOO_BUILD)
-#      if defined(DLL_EXPORT)
-#        define AOO_API __declspec(dllexport)
-#      else
-#        define AOO_API
-#      endif
-#   else
-#    define AOO_API __declspec(dllimport)
-#   endif
-#  elif defined(__GNUC__) && defined(AOO_BUILD) // GNU C
-#   define AOO_API __attribute__ ((visibility ("default")))
-#  else // Other
-#   define AOO_API
-#  endif
-# else // AOO_STATIC
-#  define AOO_API
-# endif
-#endif
-
-#ifndef AOO_SAMPLETYPE
-#define AOO_SAMPLETYPE float
-#endif
-
-typedef AOO_SAMPLETYPE aoo_sample;
-
-#define AOO_MSG_DOMAIN "/aoo"
-#define AOO_MSG_DOMAIN_LEN 4
-#define AOO_MSG_SOURCE "/src"
-#define AOO_MSG_SOURCE_LEN 4
-#define AOO_MSG_SINK "/sink"
-#define AOO_MSG_SINK_LEN 5
-#define AOO_MSG_WILDCARD "/*"
-#define AOO_MSG_WILDCARD_LEN 2
-#define AOO_MSG_FORMAT "/format"
-#define AOO_MSG_FORMAT_LEN 7
-#define AOO_MSG_DATA "/data"
-#define AOO_MSG_DATA_LEN 5
-#define AOO_MSG_PING "/ping"
-#define AOO_MSG_PING_LEN 5
-#define AOO_MSG_INVITE "/invite"
-#define AOO_MSG_INVITE_LEN 7
-#define AOO_MSG_UNINVITE "/uninvite"
-#define AOO_MSG_UNINVITE_LEN 9
-
-#define AOO_TYPE_SOURCE 0
-#define AOO_TYPE_SINK 1
-
-#define AOO_MAXPACKETSIZE 4096 // ?
-
-#ifndef AOO_CLIP_OUTPUT
-#define AOO_CLIP_OUTPUT 0
-#endif
-
-// 0: error, 1: warning, 2: verbose, 3: debug
-#ifndef LOGLEVEL
- #define LOGLEVEL 2
-#endif
+#define AOO_VERSION_PRERELEASE 1 // 0: no pre-release
 
 #ifndef AOO_DEBUG_DLL
  #define AOO_DEBUG_DLL 0
@@ -87,6 +26,10 @@ typedef AOO_SAMPLETYPE aoo_sample;
 
 #ifndef AOO_DEBUG_BLOCK_BUFFER
  #define AOO_DEBUG_BLOCK_BUFFER 0
+#endif
+
+#ifndef AOO_CLIP_OUTPUT
+#define AOO_CLIP_OUTPUT 0
 #endif
 
 /*////////// default values ////////////*/
@@ -131,6 +74,11 @@ typedef AOO_SAMPLETYPE aoo_sample;
  #define AOO_RESEND_BUFSIZE 1000
 #endif
 
+// send redundancy
+#ifndef AOO_SEND_REDUNDANCY
+ #define AOO_SEND_REDUNDANCY 1
+#endif
+
 // max. number of resend attempts per packet
 #ifndef AOO_RESEND_LIMIT
  #define AOO_RESEND_LIMIT 5
@@ -152,9 +100,24 @@ AOO_API void aoo_initialize(void);
 // terminate AoO library - call only once!
 AOO_API void aoo_terminate(void);
 
-struct aoo_format;
-
 /*//////////////////// OSC ////////////////////////////*/
+
+#define AOO_MSG_SOURCE "/src"
+#define AOO_MSG_SOURCE_LEN 4
+#define AOO_MSG_SINK "/sink"
+#define AOO_MSG_SINK_LEN 5
+#define AOO_MSG_WILDCARD "/*"
+#define AOO_MSG_WILDCARD_LEN 2
+#define AOO_MSG_FORMAT "/format"
+#define AOO_MSG_FORMAT_LEN 7
+#define AOO_MSG_DATA "/data"
+#define AOO_MSG_DATA_LEN 5
+#define AOO_MSG_PING "/ping"
+#define AOO_MSG_PING_LEN 5
+#define AOO_MSG_INVITE "/invite"
+#define AOO_MSG_INVITE_LEN 7
+#define AOO_MSG_UNINVITE "/uninvite"
+#define AOO_MSG_UNINVITE_LEN 9
 
 // id: the source or sink ID
 // returns: the offset to the remaining address pattern
@@ -162,9 +125,15 @@ struct aoo_format;
 #define AOO_ID_WILDCARD -1
 #define AOO_ID_NONE INT32_MIN
 
-// get the type and ID from an AoO OSC message, e.g. in /aoo/src/<id>/data
-// returns 1 on success, 0 on fail
-AOO_API int32_t aoo_parsepattern(const char *msg, int32_t n,
+typedef enum aoo_type
+{
+    AOO_TYPE_SOURCE = 0,
+    AOO_TYPE_SINK
+} aoo_type;
+
+// get the aoo_type and ID from an AoO OSC message, e.g. in /aoo/src/<id>/data
+// returns the offset on success, 0 on fail
+AOO_API int32_t aoo_parse_pattern(const char *msg, int32_t n,
                                  int32_t *type, int32_t *id);
 
 // get the current NTP time
@@ -176,18 +145,8 @@ AOO_API double aoo_osctime_toseconds(uint64_t t);
 // convert seconds to NTP time
 AOO_API uint64_t aoo_osctime_fromseconds(double s);
 
-// add seconds to NTP timestamp
-AOO_API uint64_t aoo_osctime_addseconds(uint64_t t, double s);
-
-// subtract two NTP timestamps
-AOO_API double aoo_osctime_diff(uint64_t t1, uint64_t t2);
-
-// reply function for endpoints
-typedef int32_t (*aoo_replyfn)(
-        void *,         // endpoint
-        const char *,   // data
-        int32_t         // number of bytes
-);
+// get time difference in seconds between two NTP timestamps
+AOO_API double aoo_osctime_duration(uint64_t t1, uint64_t t2);
 
 /*//////////////////// AoO events /////////////////////*/
 
@@ -197,7 +156,7 @@ typedef int32_t (*aoo_replyfn)(
 typedef enum aoo_event_type
 {
     // source: received a ping from sink
-    AOO_PING_EVENT,
+    AOO_PING_EVENT = 0,
     // source: invited by sink
     AOO_INVITE_EVENT,
     // source: uninvited by sink
@@ -219,19 +178,6 @@ typedef enum aoo_event_type
     // sink: large gap between blocks
     AOO_BLOCK_GAP_EVENT
 } aoo_event_type;
-
-// base event
-typedef struct aoo_event
-{
-    int32_t type;
-} aoo_event;
-
-// event handler
-typedef int32_t (*aoo_eventhandler)(
-        void *,             // user
-        const aoo_event **, // event array
-        int32_t n           // number of events
-);
 
 #define AOO_ENDPOINT_EVENT  \
     int32_t type;           \
@@ -281,6 +227,7 @@ typedef struct aoo_ping_event {
     uint64_t tt1;
     uint64_t tt2;
     uint64_t tt3; // only for source
+    int32_t lost_blocks; // only for source
 } aoo_ping_event;
 
 /*//////////////////// AoO options ////////////////////*/
@@ -373,7 +320,11 @@ typedef enum aoo_option
     // ---
     // This is the max. number of frames to request
     // in a single call to sink_handle_message().
-    aoo_opt_resend_maxnumframes
+    aoo_opt_resend_maxnumframes,
+    // Redundancy (int32_t)
+    // ---
+    // The number of times each frames is sent (default = 1)
+    aoo_opt_redundancy
 } aoo_option;
 
 #define AOO_ARG(x) &x, sizeof(x)
@@ -423,11 +374,11 @@ AOO_API int32_t aoo_source_remove_sink(aoo_source *src, void *sink, int32_t id);
 // remove all sinks (always threadsafe)
 AOO_API void aoo_source_remove_all(aoo_source *src);
 
-// handle messages from sinks - might call the reply function (threadsafe, but not reentrant)
+// handle messages from sinks (threadsafe, but not reentrant)
 AOO_API int32_t aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
                                  void *sink, aoo_replyfn fn);
 
-// send outgoing messages - will call the reply function (threadsafe, but not rentrant)
+// send outgoing messages - will call the reply function (threadsafe, but not reentrant)
 AOO_API int32_t aoo_source_send(aoo_source *src);
 
 // process audio blocks (threadsafe, but not reentrant)
@@ -441,7 +392,7 @@ AOO_API int32_t aoo_source_process(aoo_source *src, const aoo_sample **data,
 AOO_API int32_t aoo_source_events_available(aoo_source *src);
 
 // handle events (threadsafe, but not reentrant)
-// will all the event handler function one or more times
+// will call the event handler function one or more times
 AOO_API int32_t aoo_source_handle_events(aoo_source *src, aoo_eventhandler fn, void *user);
 
 // set/get options (always threadsafe)
@@ -466,7 +417,7 @@ static inline int32_t aoo_source_stop(aoo_source *src) {
     return aoo_source_set_option(src, aoo_opt_stop, AOO_ARG_NULL);
 }
 
-static inline int32_t aoo_source_set_format(aoo_source *src, const aoo_format *f) {
+static inline int32_t aoo_source_set_format(aoo_source *src, aoo_format *f) {
     return aoo_source_set_option(src, aoo_opt_format, (void *)f, sizeof(aoo_format));
 }
 
@@ -482,11 +433,11 @@ static inline int32_t aoo_source_get_buffersize(aoo_source *src, int32_t *n) {
     return aoo_source_get_option(src, aoo_opt_buffersize, AOO_ARG(*n));
 }
 
-static inline int32_t aoo_source_set_timefilter_bandwith(aoo_source *src, int32_t n) {
+static inline int32_t aoo_source_set_timefilter_bandwith(aoo_source *src, float n) {
     return aoo_source_set_option(src, aoo_opt_timefilter_bandwidth, AOO_ARG(n));
 }
 
-static inline int32_t aoo_source_get_timefilter_bandwidth(aoo_source *src, int32_t *n) {
+static inline int32_t aoo_source_get_timefilter_bandwidth(aoo_source *src, float *n) {
     return aoo_source_get_option(src, aoo_opt_timefilter_bandwidth, AOO_ARG(*n));
 }
 
@@ -512,6 +463,14 @@ static inline int32_t aoo_source_set_resend_buffersize(aoo_source *src, int32_t 
 
 static inline int32_t aoo_source_get_resend_buffersize(aoo_source *src, int32_t *n) {
     return aoo_source_get_option(src, aoo_opt_resend_buffersize, AOO_ARG(*n));
+}
+
+static inline int32_t aoo_source_set_redundancy(aoo_source *src, int32_t n) {
+    return aoo_source_set_option(src, aoo_opt_redundancy, AOO_ARG(n));
+}
+
+static inline int32_t aoo_source_get_redundancy(aoo_source *src, int32_t *n) {
+    return aoo_source_get_option(src, aoo_opt_redundancy, AOO_ARG(*n));
 }
 
 static inline int32_t aoo_source_set_sink_channelonset(aoo_source *src, void *endpoint, int32_t id, int32_t onset) {
@@ -552,11 +511,11 @@ AOO_API int32_t aoo_sink_uninvite_source(aoo_sink *sink, void *endpoint, int32_t
 // uninvite all sources (always threadsafe)
 AOO_API int32_t aoo_sink_uninvite_all(aoo_sink *sink);
 
-// handle messages from sources - might call the reply function (threadsafe, but not reentrant)
+// handle messages from sources (threadsafe, but not reentrant)
 AOO_API int32_t aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_t n,
-                                       void *src, aoo_replyfn fn);
+                                        void *src, aoo_replyfn fn);
 
-// send outgoing messages - will call the reply function (threadsafe, but not rentrant)
+// send outgoing messages - will call the reply function (threadsafe, but not reentrant)
 AOO_API int32_t aoo_sink_send(aoo_sink *sink);
 
 // process audio (threadsafe, but not reentrant)
@@ -567,7 +526,7 @@ AOO_API int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,
 AOO_API int32_t aoo_sink_events_available(aoo_sink *sink);
 
 // handle events (threadsafe, but not reentrant)
-// will all the event handler function one or more times
+// will call the event handler function one or more times
 AOO_API int32_t aoo_sink_handle_events(aoo_sink *sink, aoo_eventhandler fn, void *user);
 
 // set/get options (always threadsafe)
@@ -596,11 +555,11 @@ static inline int32_t aoo_sink_get_buffersize(aoo_sink *sink, int32_t *n) {
     return aoo_sink_get_option(sink, aoo_opt_buffersize, AOO_ARG(*n));
 }
 
-static inline int32_t aoo_sink_set_timefilter_bandwith(aoo_sink *sink, int32_t n) {
+static inline int32_t aoo_sink_set_timefilter_bandwith(aoo_sink *sink, float n) {
     return aoo_sink_set_option(sink, aoo_opt_timefilter_bandwidth, AOO_ARG(n));
 }
 
-static inline int32_t aoo_sink_get_timefilter_bandwidth(aoo_sink *sink, int32_t *n) {
+static inline int32_t aoo_sink_get_timefilter_bandwidth(aoo_sink *sink, float *n) {
     return aoo_sink_get_option(sink, aoo_opt_timefilter_bandwidth, AOO_ARG(*n));
 }
 
