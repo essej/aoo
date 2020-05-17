@@ -453,6 +453,14 @@ int32_t sink::handle_format_message(void *endpoint, aoo_replyfn fn,
     auto it = msg.ArgumentsBegin();
 
     int32_t id = (it++)->AsInt32();
+    int32_t version = (it++)->AsInt32();
+
+    // LATER handle this in the source_desc (e.g. ignoring further messages)
+    if (!check_version(version)){
+        LOG_ERROR("aoo_sink: source version not supported");
+        return 0;
+    }
+
     int32_t salt = (it++)->AsInt32();
     // get format from arguments
     aoo_format f;
@@ -1201,7 +1209,7 @@ resend_missing_done:
 #endif
 }
 
-// /aoo/src/<id>/format <sink>
+// /aoo/src/<id>/format <version> <sink>
 
 bool source_desc::send_format_request(const sink& s) {
     if (streamstate_.need_format()){
@@ -1216,7 +1224,8 @@ bool source_desc::send_format_request(const sink& s) {
         snprintf(address, sizeof(address), "%s%s/%d%s",
                  AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_FORMAT);
 
-        msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
+        msg << osc::BeginMessage(address) << s.id() << (int32_t)make_version()
+            << osc::EndMessage;
 
         dosend(msg.Data(), msg.Size());
 

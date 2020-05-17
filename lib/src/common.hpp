@@ -17,6 +17,10 @@
 
 namespace aoo {
 
+bool check_version(uint32_t version);
+
+uint32_t make_version();
+
 class dynamic_resampler {
 public:
     void setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_t srto, int32_t nchannels);

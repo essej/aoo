@@ -638,7 +638,7 @@ void endpoint::send_data(int32_t src, int32_t salt, const aoo::data_packet& d) c
     send(msg.Data(), msg.Size());
 }
 
-// /aoo/sink/<id>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
+// /aoo/sink/<id>/format <src> <version> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
 
 void endpoint::send_format(int32_t src, int32_t salt, const aoo_format& f,
                             const char *options, int32_t size) const {
@@ -660,7 +660,7 @@ void endpoint::send_format(int32_t src, int32_t salt, const aoo_format& f,
         msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_FORMAT);
     }
 
-    msg << src << salt << f.nchannels << f.samplerate << f.blocksize
+    msg << src << (int32_t)make_version() << salt << f.nchannels << f.samplerate << f.blocksize
         << f.codec << osc::Blob(options, size) << osc::EndMessage;
 
     send(msg.Data(), msg.Size());
@@ -1088,9 +1088,18 @@ bool source::send_ping(){
 void source::handle_format_request(void *endpoint, aoo_replyfn fn,
                                    const osc::ReceivedMessage& msg)
 {
-    auto id = msg.ArgumentsBegin()->AsInt32();
-
     LOG_DEBUG("handle format request");
+
+    auto it = msg.ArgumentsBegin();
+
+    auto id = (it++)->AsInt32();
+    auto version = (it++)->AsInt32();
+
+    // LATER handle this in the sink_desc (e.g. not sending data)
+    if (!check_version(version)){
+        LOG_ERROR("aoo_source: sink version not supported");
+        return;
+    }
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     shared_lock lock(sink_mutex_); // reader lock!

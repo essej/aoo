@@ -12,6 +12,30 @@
 #include <cassert>
 #include <cstring>
 
+/*/////////////// version ////////////////////*/
+
+namespace aoo {
+
+bool check_version(uint32_t version){
+    auto major = (version >> 24) & 255;
+    auto minor = (version >> 16) & 255;
+    auto bugfix = (version >> 8) & 255;
+
+    if (major != AOO_VERSION_MAJOR){
+        return false;
+    }
+
+    return true;
+}
+
+uint32_t make_version(){
+    // make version: major, minor, bugfix, [protocol]
+    return ((uint32_t)AOO_VERSION_MAJOR << 24) | ((uint32_t)AOO_VERSION_MINOR << 16)
+            | ((uint32_t)AOO_VERSION_BUGFIX << 8);
+}
+
+}
+
 /*////////////// codec plugins ///////////////*/
 
 namespace aoo {
