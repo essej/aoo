@@ -974,9 +974,9 @@ bool source_desc::add_packet(const data_packet& d){
             // if the queue is full, we have to drop a block;
             // in this case we send a block of zeros to the audio buffer.
             auto old = blockqueue_.front().sequence;
-            // first we check if the first block is about to be read next,
+            // first we check if the first (complete) block is about to be read next,
             // which means that we have a buffer overflow (the source is too fast)
-            if (old == next_){
+            if (old == next_ && blockqueue_.front().complete()){
                 // record dropped blocks
                 streamstate_.add_lost(blockqueue_.size());
                 // clear the block queue and fill audio buffer with zeros.
