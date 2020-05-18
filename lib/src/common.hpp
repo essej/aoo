@@ -180,7 +180,8 @@ public:
     block_ack();
     block_ack(int32_t seq, int32_t limit);
 
-    bool check(double time, double interval);
+    bool update(double time, double interval);
+    int32_t remaining() const { return count_; }
     int32_t sequence;
 private:
     int32_t count_;

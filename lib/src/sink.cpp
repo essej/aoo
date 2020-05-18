@@ -1058,8 +1058,6 @@ bool source_desc::add_packet(const data_packet& d){
     return true;
 }
 
-#define AOO_RESEND_THRESHOLD 4
-
 void source_desc::process_blocks(){
     // Transfer all consecutive complete blocks as long as
     // no previous (expected) blocks are missing.
@@ -1071,16 +1069,12 @@ void source_desc::process_blocks(){
     int32_t next = next_;
     while (b != blockqueue_.end() && audioqueue_.write_available())
     {
-        // check if the buffer is running low, so we might skip blocks
-        auto available = infoqueue_.write_available();
-        assert(available > 0);
-        bool force = (infoqueue_.capacity() - available) <= AOO_RESEND_THRESHOLD;
-
         const char *data;
         int32_t size;
         block_info i;
 
         if (b->sequence == next && b->complete()){
+            // block is ready
             LOG_DEBUG("write samples (" << b->sequence << ")");
             data = b->data();
             size = b->size();
@@ -1088,7 +1082,8 @@ void source_desc::process_blocks(){
             i.channel = b->channel;
 
             b++;
-        } else if (force){
+        } else if (!ack_list_.get(next).remaining()){
+            // block won't be resent, just drop it
             data = nullptr;
             size = 0;
             i.sr = decoder_->samplerate();
@@ -1101,6 +1096,7 @@ void source_desc::process_blocks(){
             LOG_VERBOSE("dropped block " << next);
             streamstate_.add_lost(1);
         } else {
+            // wait for block
             break;
         }
 
@@ -1168,6 +1164,7 @@ void source_desc::check_missing_blocks(const sink& s){
     }
     // don't check below a certain threshold,
     // because we might just experience packet reordering.
+    // TODO find something better
     if (blockqueue_.size() < AOO_BLOCKQUEUE_CHECK_THRESHOLD){
         return;
     }
@@ -1182,7 +1179,7 @@ void source_desc::check_missing_blocks(const sink& s){
         if (!it->complete() && resendqueue_.write_available()){
             // insert ack (if needed)
             auto& ack = ack_list_.get(it->sequence);
-            if (ack.check(s.elapsed_time(), s.resend_interval())){
+            if (ack.update(s.elapsed_time(), s.resend_interval())){
                 for (int i = 0; i < it->num_frames(); ++i){
                     if (!it->has_frame(i)){
                         if (numframes < s.resend_maxnumframes()){
@@ -1207,7 +1204,7 @@ resend_incomplete_done:
             for (int i = 0; i < missing && resendqueue_.write_available(); ++i){
                 // insert ack (if necessary)
                 auto& ack = ack_list_.get(next + i);
-                if (ack.check(s.elapsed_time(), s.resend_interval())){
+                if (ack.update(s.elapsed_time(), s.resend_interval())){
                     if (numframes + it->num_frames() <= s.resend_maxnumframes()){
                         resendqueue_.write(data_request { next + i, -1 }); // whole block
                         numframes += it->num_frames();

@@ -284,7 +284,7 @@ block_ack::block_ack(int32_t seq, int32_t limit)
     timestamp_ = -1e009;
 }
 
-bool block_ack::check(double time, double interval){
+bool block_ack::update(double time, double interval){
     if (count_ > 0){
         auto diff = time - timestamp_;
         if (diff >= interval){
