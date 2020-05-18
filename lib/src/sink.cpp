@@ -949,17 +949,17 @@ bool source_desc::check_packet(const data_packet &d){
         blockqueue_.clear();
         ack_list_.clear();
         next_ = d.sequence;
-        // push silent blocks to keep the buffer full, but leave room for one block!
+        // push empty blocks to keep the buffer full, but leave room for one block!
         int count = 0;
         auto nsamples = audioqueue_.blocksize();
         while (audioqueue_.write_available() > 1 && infoqueue_.write_available() > 1){
             auto ptr = audioqueue_.write_data();
-            std::fill(ptr, ptr + nsamples, 0);
+            decoder_->decode(nullptr, 0, ptr, nsamples);
             audioqueue_.write_commit();
-            // push nominal samplerate + default channel (0)
+            // push nominal samplerate + current channel
             block_info i;
             i.sr = decoder_->samplerate();
-            i.channel = 0;
+            i.channel = channel_;
             infoqueue_.write(i);
 
             count++;
@@ -971,7 +971,7 @@ bool source_desc::check_packet(const data_packet &d){
                           : dropped ? "source xrun"
                           : underrun ? "buffer underrun"
                           : "?";
-            LOG_VERBOSE("wrote " << count << " silent blocks for " << reason);
+            LOG_VERBOSE("wrote " << count << " empty blocks for " << reason);
         }
 
         if (dropped){
