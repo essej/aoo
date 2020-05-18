@@ -30,6 +30,7 @@ typedef struct _aoo_receive
     int32_t x_samplerate;
     int32_t x_blocksize;
     int32_t x_nchannels;
+    int32_t x_port;
     int32_t x_id;
     t_sample **x_vec;
     // sinks
@@ -398,18 +399,30 @@ static void aoo_receive_port(t_aoo_receive *x, t_floatarg f)
     }
 
     x->x_node = port ? aoo_node_add(port, (t_pd *)x, x->x_id) : 0;
+    x->x_port = port;
 }
 
 static void aoo_receive_id(t_aoo_receive *x, t_floatarg f)
 {
     int id = f;
 
+    if (id == x->x_id){
+        return;
+    }
+
     if (id < 0){
         pd_error(x, "%s: bad id %d", classname(x), id);
         return;
     }
 
+    if (x->x_node){
+        aoo_node_release(x->x_node, (t_pd *)x, x->x_id);
+    }
+
     aoo_sink_set_id(x->x_aoo_sink, id);
+
+    x->x_node = x->x_port ? aoo_node_add(x->x_port, (t_pd *)x, id) : 0;
+    x->x_id = id;
 }
 
 static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
@@ -428,7 +441,7 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
     aoo_lock_init(&x->x_lock);
 
     // arg #1: port number
-    int port = atom_getfloatarg(0, argc, argv);
+    x->x_port = atom_getfloatarg(0, argc, argv);
 
     // arg #2: ID
     int id = atom_getfloatarg(1, argc, argv);
@@ -463,7 +476,7 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
     aoo_receive_buffersize(x, buffersize);
 
     // finally we're ready to receive messages
-    aoo_receive_port(x, port);
+    aoo_receive_port(x, x->x_port);
 
     return x;
 }
