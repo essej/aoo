@@ -873,10 +873,10 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
             e.source_state.id = id_;
             e.source_state.state = AOO_SOURCE_STATE_STOP;
             push_event(e);
-        }
 
-        // this doesn't do anything if the stream simply stopped
-        streamstate_.set_underrun();
+            // this doesn't do anything if the stream simply stopped
+            streamstate_.set_underrun();
+        }
 
         return false;
     }
