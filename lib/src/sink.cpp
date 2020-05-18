@@ -110,6 +110,18 @@ int32_t aoo_sink_set_option(aoo_sink *sink, int32_t opt, void *p, int32_t size)
 int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
+    // id
+    case aoo_opt_id:
+    {
+        CHECKARG(int32_t);
+        auto newid = as<int32_t>(ptr);
+        if (id_.exchange(newid) != newid){
+            // LATER think of a way to safely clear source list
+            update_sources();
+            timer_.reset();
+        }
+        break;
+    }
     // reset
     case aoo_opt_reset:
         update_sources();
@@ -181,6 +193,10 @@ int32_t aoo_sink_get_option(aoo_sink *sink, int32_t opt, void *p, int32_t size)
 int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
+    // id
+    case aoo_opt_id:
+        as<int32_t>(ptr) = id();
+        break;
     // buffer size
     case aoo_opt_buffersize:
         CHECKARG(int32_t);
@@ -298,7 +314,7 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n,
             LOG_WARNING("not a sink message!");
             return 0;
         }
-        if (sinkid != id_ && sinkid != AOO_ID_WILDCARD){
+        if (sinkid != id() && sinkid != AOO_ID_WILDCARD){
             LOG_WARNING("wrong sink ID!");
             return 0;
         }

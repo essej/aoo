@@ -53,6 +53,16 @@ int32_t aoo_source_set_option(aoo_source *src, int32_t opt, void *p, int32_t siz
 int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
+    // id
+    case aoo_opt_id:
+    {
+        auto newid = as<int32_t>(ptr);
+        if (id_.exchange(newid) != newid){
+            unique_lock lock(update_mutex_); // writer lock!
+            update();
+        }
+        break;
+    }
     // stop
     case aoo_opt_stop:
         play_ = false;
@@ -145,6 +155,11 @@ int32_t aoo_source_get_option(aoo_source *src, int32_t opt, void *p, int32_t siz
 int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
+    // id
+    case aoo_opt_id:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = id();
+        break;
     // format
     case aoo_opt_format:
         CHECKARG(aoo_format_storage);
@@ -419,7 +434,7 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
             LOG_WARNING("aoo_source: can't handle wildcard messages (yet)!");
             return 0;
         }
-        if (src != id_){
+        if (src != id()){
             LOG_WARNING("aoo_source: wrong source ID!");
             return 0;
         }
@@ -837,7 +852,7 @@ bool source::send_format(){
         // now we don't hold any lock!
 
         for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_format(id_, salt, fmt, settings, size);
+            sinks[i].send_format(id(), salt, fmt, settings, size);
         }
     }
 
@@ -845,7 +860,7 @@ bool source::send_format(){
         while (formatrequestqueue_.read_available()){
             endpoint ep;
             formatrequestqueue_.read(ep);
-            ep.send_format(id_, salt, fmt, settings, size);
+            ep.send_format(id(), salt, fmt, settings, size);
         }
     }
 
@@ -906,7 +921,7 @@ bool source::resend_data(){
                     d.framenum = i;
                     d.data = frameptr[i];
                     d.size = framesize[i];
-                    request.send_data(id_, salt, d);
+                    request.send_data(id(), salt, d);
                 }
             } else {
                 // Copy a single frame
@@ -921,7 +936,7 @@ bool source::resend_data(){
                     d.framenum = request.frame;
                     d.data = sendbuffer_.data();
                     d.size = size;
-                    request.send_data(id_, salt, d);
+                    request.send_data(id(), salt, d);
                 } else {
                     LOG_ERROR("frame number " << request.frame << " out of range!");
                 }
@@ -972,7 +987,7 @@ bool source::send_data(){
 
         // send block to sinks
         for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_data(id_, salt, d);
+            sinks[i].send_data(id(), salt, d);
         }
         --dropped_;
     } else if (audioqueue_.read_available() && srqueue_.read_available()){
@@ -1021,7 +1036,7 @@ bool source::send_data(){
                     d.size = n;
                     for (int i = 0; i < numsinks; ++i){
                         d.channel = sinks[i].channel;
-                        sinks[i].send_data(id_, salt, d);
+                        sinks[i].send_data(id(), salt, d);
                     }
                 };
 
@@ -1075,7 +1090,7 @@ bool source::send_ping(){
         auto tt = timer_.get_absolute();
 
         for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_ping(id_, tt);
+            sinks[i].send_ping(id(), tt);
         }
 
         lastpingtime_ = elapsed;

@@ -259,7 +259,7 @@ public:
     int32_t get_sourceoption(void *endpoint, int32_t id,
                              int32_t opt, void *ptr, int32_t size) override;
     // getters
-    int32_t id() const { return id_; }
+    int32_t id() const { return id_.load(std::memory_order_relaxed); }
 
     int32_t nchannels() const { return nchannels_; }
 
@@ -284,7 +284,7 @@ public:
     time_tag absolute_time() const { return timer_.get_absolute(); }
 private:
     // settings
-    const int32_t id_;
+    std::atomic<int32_t> id_;
     int32_t nchannels_ = 0;
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;

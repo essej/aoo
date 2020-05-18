@@ -96,6 +96,8 @@ class source final : public isource {
     source(int32_t id);
     ~source();
 
+    int32_t id() const { return id_.load(std::memory_order_relaxed); }
+
     int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
     int32_t add_sink(void *sink, int32_t id, aoo_replyfn fn) override;
@@ -125,7 +127,7 @@ class source final : public isource {
                            int32_t opt, void *ptr, int32_t size) override;
  private:
     // settings
-    const int32_t id_;
+    std::atomic<int32_t> id_;
     int32_t salt_ = 0;
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
