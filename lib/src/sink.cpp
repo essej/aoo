@@ -875,6 +875,9 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
             push_event(e);
         }
 
+        // this doesn't do anything if the stream simply stopped
+        streamstate_.set_underrun();
+
         return false;
     }
 }
@@ -961,12 +964,16 @@ bool source_desc::check_packet(const data_packet &d){
 
             count++;
         }
-        auto reason = large_gap ? "transmission gap"
-                      : recover ? "sink xrun"
-                      : dropped ? "source xrun"
-                      : underrun ? "buffer underrun"
-                      : "?";
-        LOG_VERBOSE("wrote " << count << " silent blocks for " << reason);
+
+        if (count > 0){
+            auto reason = large_gap ? "transmission gap"
+                          : recover ? "sink xrun"
+                          : dropped ? "source xrun"
+                          : underrun ? "buffer underrun"
+                          : "?";
+            LOG_VERBOSE("wrote " << count << " silent blocks for " << reason);
+        }
+
         if (dropped){
             next_++;
             return false;
