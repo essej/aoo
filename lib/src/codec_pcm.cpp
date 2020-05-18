@@ -263,6 +263,13 @@ int32_t decoder_decode(void *dec,
     auto c = static_cast<codec *>(dec);
     assert(c->format.header.blocksize != 0);
 
+    if (!buf){
+        for (int i = 0; i < n; ++i){
+            s[i] = 0;
+        }
+        return 0;
+    }
+
     auto samplesize = bytes_per_sample(c->format.bitdepth);
 
     if (n < (size / samplesize)){
