@@ -1058,6 +1058,8 @@ bool source_desc::add_packet(const data_packet& d){
     return true;
 }
 
+#define AOO_RESEND_THRESHOLD 4
+
 void source_desc::process_blocks(){
     // Transfer all consecutive complete blocks as long as
     // no previous (expected) blocks are missing.
@@ -1066,38 +1068,61 @@ void source_desc::process_blocks(){
     }
 
     auto b = blockqueue_.begin();
-    int32_t count = 0;
     int32_t next = next_;
-    while ((b != blockqueue_.end()) && b->complete()
-           && (b->sequence == next)
-           && audioqueue_.write_available() && infoqueue_.write_available())
+    while (b != blockqueue_.end() && audioqueue_.write_available())
     {
-        LOG_DEBUG("write samples (" << b->sequence << ")");
+        // check if the buffer is running low, so we might skip blocks
+        auto available = infoqueue_.write_available();
+        assert(available > 0);
+        bool force = (infoqueue_.capacity() - available) <= AOO_RESEND_THRESHOLD;
 
+        const char *data;
+        int32_t size;
+        block_info i;
+
+        if (b->sequence == next && b->complete()){
+            LOG_DEBUG("write samples (" << b->sequence << ")");
+            data = b->data();
+            size = b->size();
+            i.sr = b->samplerate;
+            i.channel = b->channel;
+
+            b++;
+        } else if (force){
+            data = nullptr;
+            size = 0;
+            i.sr = decoder_->samplerate();
+            i.channel = channel_;
+
+            if (b->sequence == next){
+                b++;
+            }
+
+            LOG_VERBOSE("dropped block " << next);
+            streamstate_.add_lost(1);
+        } else {
+            break;
+        }
+
+        next++;
+
+        // decode data and push samples
         auto ptr = audioqueue_.write_data();
         auto nsamples = audioqueue_.blocksize();
-        assert(b->data() != nullptr && b->size() > 0 && ptr != nullptr && nsamples > 0);
         // decode audio data
-        if (decoder_->decode(b->data(), b->size(), ptr, nsamples) <= 0){
-            LOG_VERBOSE("bad block: size = " << b->size() << ", nsamples = " << nsamples);
+        if (decoder_->decode(data, size, ptr, nsamples) < 0){
+            LOG_WARNING("aoo_sink: couldn't decode block!");
             // decoder failed - fill with zeros
             std::fill(ptr, ptr + nsamples, 0);
         }
-
         audioqueue_.write_commit();
 
         // push info
-        block_info i;
-        i.sr = b->samplerate;
-        i.channel = b->channel;
         infoqueue_.write(i);
-
-        count++;
-        b++;
-        next++;
     }
     next_ = next;
     // pop blocks
+    auto count = b - blockqueue_.begin();
     while (count--){
     #if 1
         // remove block from acklist
