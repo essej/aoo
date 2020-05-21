@@ -61,7 +61,7 @@ extern "C"
 
 // the tolerance for deviations from the nominal block period
 #ifndef AOO_TIMEFILTER_TOLERANCE
- #define AOO_TIMEFILTER_TOLERANCE 0.1
+ #define AOO_TIMEFILTER_TOLERANCE 0.25
 #endif
 
 // ping interval (sink to source) in ms
