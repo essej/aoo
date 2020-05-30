@@ -1,4 +1,4 @@
-#N canvas 233 41 682 683 12;
+#N canvas 381 75 682 683 12;
 #X declare -lib aoo;
 #X text 247 401 creation arguments:;
 #N canvas 135 97 551 377 pcm 0;
@@ -183,50 +183,53 @@ onset]);
 #X msg 76 271 start;
 #X obj 478 19 declare -lib aoo;
 #X obj 29 531 aoo_send~ 9998 1 2;
-#N canvas 670 34 632 703 events 0;
-#X obj 37 37 inlet;
-#X obj 37 86 outlet;
-#X text 33 322 [invite <host> <port> <ID>(;
-#X text 32 415 [uninvite <host> <port> <ID>(;
-#X text 64 185 It also tells you the network latency:;
-#X text 66 206 <delta1> is the approx. delay between source and sink
+#N canvas 681 50 632 660 events 0;
+#X obj 37 26 inlet;
+#X obj 37 120 outlet;
+#X text 33 351 [invite <host> <port> <ID>(;
+#X text 32 444 [uninvite <host> <port> <ID>(;
+#X text 64 214 It also tells you the network latency:;
+#X text 66 235 <delta1> is the approx. delay between source and sink
 (in ms), f 62;
-#X text 66 227 <delta2> is the approx. delay between sink and source
+#X text 66 256 <delta2> is the approx. delay between sink and source
 (in ms), f 62;
-#X text 35 123 [ping <host> <port> <ID> <delta1> <delta2> <rtt>(;
-#X text 66 247 <rtt> is the approx. roundtrip time (in ms) \, as measured
+#X text 35 152 [ping <host> <port> <ID> <delta1> <delta2> <rtt>(;
+#X text 66 276 <rtt> is the approx. roundtrip time (in ms) \, as measured
 on the source, f 71;
-#X text 67 269 NOTE: The roundtrip time is not necessarily the same
+#X text 67 298 NOTE: The roundtrip time is not necessarily the same
 as the sum of the deltas \, especially if the two clocks are not perfectly
 in sync. If one clock runs significantly early or late \, the deltas
 can even be negative!, f 73;
-#X text 62 389 This event is only sent when auto accept is turned off
+#X text 62 418 This event is only sent when auto accept is turned off
 with [accept 0(., f 73;
-#X text 62 485 This event is only sent when auto accept is turned off
+#X text 62 514 This event is only sent when auto accept is turned off
 with [accept 0(., f 73;
-#X text 63 367 You may respond with [add <host> <port> <ID>( or ignore
+#X text 63 396 You may respond with [add <host> <port> <ID>( or ignore
 it.;
-#X text 62 462 You may respond with [remove <host> <port> <ID>( or
+#X text 62 491 You may respond with [remove <host> <port> <ID>( or
 ignore it., f 62;
-#X text 64 345 A sink invites you to send audio messages.;
-#X text 64 440 A sink ask you to stop sending audio messages.;
-#X text 64 145 A periodic message exchanged between source and sink
+#X text 64 374 A sink invites you to send audio messages.;
+#X text 64 174 A periodic message exchanged between source and sink
 \, so the source knows that the sink is receiving its messages.;
-#X obj 37 61 route ping;
-#X obj 104 87 print aoo_send~;
-#X text 31 514 [sink_add <host> <port> <ID>(;
-#X text 30 586 [sink_remove <host> <port> <ID>(;
-#X text 60 559 This event is only sent when auto accept is turned on
-(default), f 65;
-#X text 60 634 This event is only sent when auto accept is turned on
-(default), f 65;
-#X text 62 535 A sink has been added after receiving an invite message.
-, f 59;
-#X text 62 610 A sink has been removed after receiving an uninvite
-message., f 63;
-#X connect 0 0 17 0;
-#X connect 17 0 1 0;
-#X connect 17 1 18 0;
+#X obj 37 50 route ping, f 17;
+#X obj 153 122 print aoo_send~;
+#X text 31 543 [sink_add <host> <port> <ID>(;
+#X text 30 592 [sink_remove <host> <port> <ID>(;
+#X text 62 616 A sink has been removed., f 25;
+#X obj 37 75 t a a;
+#X obj 69 99 spigot;
+#X obj 108 78 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+1;
+#X text 133 77 show pings;
+#X text 64 469 A sink asks you to stop sending audio messages.;
+#X text 62 564 A sink has been added.;
+#X connect 0 0 16 0;
+#X connect 16 0 21 0;
+#X connect 16 1 17 0;
+#X connect 21 0 1 0;
+#X connect 21 1 22 0;
+#X connect 22 0 17 0;
+#X connect 23 0 22 1;
 #X restore 29 560 pd events;
 #X text 50 591 ping;
 #X text 256 272 Note: you can use these two methods to send "audio
@@ -273,7 +276,7 @@ event which, f 64;
 #X text 156 154 has to be handled manually.;
 #X msg 29 32 port \$1;
 #X obj 29 12 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
--262144 -1 -1 11000 256;
+-262144 -1 -1 0 256;
 #X msg 41 80 id \$1;
 #X obj 41 61 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
 -262144 -1 -1 0 256;
