@@ -88,7 +88,11 @@ int32_t aoo_endpoint_to_atoms(const t_endpoint *e, int32_t id, t_atom *argv)
     if (endpoint_getaddress(e, &host, &port)){
         SETSYMBOL(argv, host);
         SETFLOAT(argv + 1, port);
-        SETFLOAT(argv + 2, id);
+        if (id == AOO_ID_WILDCARD){
+            SETSYMBOL(argv + 2, gensym("*"));
+        } else {
+            SETFLOAT(argv + 2, id);
+        }
         return 1;
     }
     return 0;
