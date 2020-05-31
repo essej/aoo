@@ -5,6 +5,7 @@
 #include "aoo_common.h"
 
 #include "string.h"
+#include "stdlib.h"
 
 #ifdef _WIN32
 #include <windows.h>
