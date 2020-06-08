@@ -1057,8 +1057,13 @@ timer::state timer::update(time_tag t, double& error){
 void aoo_initialize(){
     static bool initialized = false;
     if (!initialized){
+        // register codecs
         aoo_codec_pcm_setup(aoo_register_codec);
+
+    #if USE_CODEC_OPUS
         aoo_codec_opus_setup(aoo_register_codec);
+    #endif
+
         initialized = true;
     }
 }

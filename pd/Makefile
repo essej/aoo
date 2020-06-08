@@ -24,7 +24,8 @@ class.sources = \
     $(empty)
 
 ## parametrizing the build
-loglevel=1
+loglevel=2
+use_codec_opus=yes
 aoo_timefilter_bandwidth=0.0001
 aoo_timefilter_tolerance=0.25
 aoo_debug_dll=0
@@ -57,10 +58,6 @@ MD5_CFLAGS = -I$(MD5)/..
 MD5_LIBS =
 endif
 
-
-OPUS_CFLAGS =
-OPUS_LIBS = -lopus
-
 cflags = \
     -I$(AOO) \
     -I$(AOO)/src \
@@ -83,7 +80,6 @@ cflags += \
 endif
 
 cflags += \
-    $(OPUS_CFLAGS) \
     $(OSCPACK_CFLAGS) \
     $(MD5_CFLAGS) \
     $(empty)
@@ -107,7 +103,6 @@ shared.sources = \
     $(AOO)/src/client.cpp \
     $(AOO)/src/net_utils.cpp \
     $(AOO)/src/codec_pcm.cpp \
-    $(AOO)/src/codec_opus.cpp \
     $(empty)
 
 ifneq ($(system_oscpack),yes)
@@ -128,17 +123,29 @@ $(shared.sources:.cpp=.o): cxx.flags += -std=c++14
 
 ldlibs += $(OSCPACK_LIBS) $(MD5_LIBS)
 
+# Opus
+# set 'use_codec_opus' to 'yes' to enable the Opus audio codec
+OPUS_CFLAGS = -DUSE_CODEC_OPUS=1
+OPUS_LIBS = -lopus
+
+ifeq ($(use_codec_opus),yes)
+cflags += $(OPUS_CFLAGS)
+ldlibs += $(OPUS_LIBS)
+shared.sources += $(AOO)/src/codec_opus.cpp
+endif
+
+# platform specific options
 define forWindows
-    ldlibs += -lws2_32 $(OPUS_LIBS) -static-libstdc++ -static-libgcc
+    ldlibs += -lws2_32 -static-libstdc++ -static-libgcc
 endef
 
 define forDarwin
     cflags += -mmacosx-version-min=10.9
-    ldlibs += -lpthread $(OPUS_LIBS)
+    ldlibs += -lpthread
 endef
 
 define forLinux
-    ldlibs += -pthread $(OPUS_LIBS)
+    ldlibs += -pthread
 endef
 
 # all extra files to be included in binary distribution of the library
