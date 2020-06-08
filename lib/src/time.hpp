@@ -13,6 +13,7 @@ namespace aoo {
 
 struct time_tag {
     static time_tag now();
+
     static double duration(time_tag t1, time_tag t2);
 
     time_tag() = default;

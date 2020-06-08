@@ -20,6 +20,31 @@ namespace aoo {
 
 /*////////////////////////// time tag //////////////////////////*/
 
+#ifdef _WIN32
+
+using system_time_fn = VOID WINAPI (*)(LPFILETIME);
+
+// GetSystemTimePreciseAsFileTime is only available in Windows 8 and above.
+// For older versions of Windows we fall back to GetSystemTimeAsFileTime.
+system_time_fn get_system_time = [](){
+    auto module = LoadLibraryA("Kernel32.dll");
+    if (module){
+        auto fn = (void *)GetProcAddress(module, "GetSystemTimePreciseAsFileTime");
+        if (fn){
+            return reinterpret_cast<system_time_fn>(fn);
+            LOG_VERBOSE("using GetSystemTimePreciseAsFileTime");
+        } else {
+            LOG_VERBOSE("using GetSystemTimeAsFileTime");
+        }
+    } else {
+        LOG_ERROR("couldn't open kernel32.dll!");
+    }
+
+    return &GetSystemTimeAsFileTime;
+}();
+
+#endif
+
 // OSC time stamp (NTP time)
 time_tag time_tag::now(){
 #if 1
@@ -28,7 +53,7 @@ time_tag time_tag::now(){
     // LATER try to use GetSystemTimePreciseAsFileTime
     // (only available on Windows 8 and above)
     FILETIME ft;
-    GetSystemTimeAsFileTime(&ft);
+    get_system_time(&ft);
     // GetSystemTimeAsFileTime returns the number of
     // 100-nanosecond ticks since Jan 1, 1601.
     LARGE_INTEGER date;
