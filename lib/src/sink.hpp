@@ -29,11 +29,12 @@ struct stream_state {
         resent_ = 0;
         gap_ = 0;
         state_ = AOO_SOURCE_STATE_STOP;
+        underrun_ = false;
         recover_ = false;
         format_ = false;
         invite_ = NONE;
-        pingtime1_ = time_tag{};
-        pingtime2_ = time_tag{};
+        pingtime1_ = 0;
+        pingtime2_ = 0;
     }
 
     void add_lost(int32_t n) { lost_ += n; lost_since_ping_ += n; }
@@ -58,14 +59,14 @@ struct stream_state {
     }
 
     void set_ping(time_tag t1, time_tag t2){
-        pingtime1_ = t1;
-        pingtime2_ = t2;
+        pingtime1_ = t1.to_uint64();
+        pingtime2_ = t2.to_uint64();
     }
 
     bool need_ping(time_tag& t1, time_tag& t2){
         // check pingtime2 because it ensures that pingtime1 has been set
-        auto pingtime2 = pingtime2_.exchange(time_tag{});
-        if (!pingtime2.empty()){
+        auto pingtime2 = pingtime2_.exchange(0);
+        if (pingtime2){
             t1 = pingtime1_.load();
             t2 = pingtime2;
             return true;
@@ -73,6 +74,9 @@ struct stream_state {
             return false;
         }
     }
+
+    void set_underrun() { underrun_ = true; }
+    bool have_underrun() { return underrun_.exchange(false); }
 
     void request_recover() { recover_ = true; }
     bool need_recover() { return recover_.exchange(false); }
@@ -96,10 +100,11 @@ private:
     std::atomic<int32_t> gap_{0};
     std::atomic<aoo_source_state> state_{AOO_SOURCE_STATE_STOP};
     std::atomic<invitation_state> invite_{NONE};
+    std::atomic<bool> underrun_{false};
     std::atomic<bool> recover_{false};
     std::atomic<bool> format_{false};
-    std::atomic<time_tag> pingtime1_;
-    std::atomic<time_tag> pingtime2_;
+    std::atomic<uint64_t> pingtime1_;
+    std::atomic<uint64_t> pingtime2_;
 };
 
 struct block_info {
@@ -254,7 +259,7 @@ public:
     int32_t get_sourceoption(void *endpoint, int32_t id,
                              int32_t opt, void *ptr, int32_t size) override;
     // getters
-    int32_t id() const { return id_; }
+    int32_t id() const { return id_.load(std::memory_order_relaxed); }
 
     int32_t nchannels() const { return nchannels_; }
 
@@ -279,7 +284,7 @@ public:
     time_tag absolute_time() const { return timer_.get_absolute(); }
 private:
     // settings
-    const int32_t id_;
+    std::atomic<int32_t> id_;
     int32_t nchannels_ = 0;
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;

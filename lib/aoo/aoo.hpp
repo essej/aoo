@@ -91,6 +91,14 @@ public:
         return set_option(aoo_opt_stop, AOO_ARG_NULL);
     }
 
+    int32_t set_id(int32_t id){
+        return set_option(aoo_opt_id, AOO_ARG(id));
+    }
+
+    int32_t get_id(int32_t &id){
+        return get_option(aoo_opt_id, AOO_ARG(id));
+    }
+
     int32_t set_format(aoo_format& f){
         return set_option(aoo_opt_format, AOO_ARG(f));
     }
@@ -222,6 +230,14 @@ public:
 
     int32_t reset(){
         return set_option(aoo_opt_reset, AOO_ARG_NULL);
+    }
+
+    int32_t set_id(int32_t id){
+        return set_option(aoo_opt_id, AOO_ARG(id));
+    }
+
+    int32_t get_id(int32_t &id){
+        return get_option(aoo_opt_id, AOO_ARG(id));
     }
 
     int32_t set_buffersize(int32_t n){

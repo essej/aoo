@@ -53,6 +53,16 @@ int32_t aoo_source_set_option(aoo_source *src, int32_t opt, void *p, int32_t siz
 int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
+    // id
+    case aoo_opt_id:
+    {
+        auto newid = as<int32_t>(ptr);
+        if (id_.exchange(newid) != newid){
+            unique_lock lock(update_mutex_); // writer lock!
+            update();
+        }
+        break;
+    }
     // stop
     case aoo_opt_stop:
         play_ = false;
@@ -145,6 +155,11 @@ int32_t aoo_source_get_option(aoo_source *src, int32_t opt, void *p, int32_t siz
 int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
+    // id
+    case aoo_opt_id:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = id();
+        break;
     // format
     case aoo_opt_format:
         CHECKARG(aoo_format_storage);
@@ -419,7 +434,7 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
             LOG_WARNING("aoo_source: can't handle wildcard messages (yet)!");
             return 0;
         }
-        if (src != id_){
+        if (src != id()){
             LOG_WARNING("aoo_source: wrong source ID!");
             return 0;
         }
@@ -444,7 +459,7 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
             LOG_WARNING("unknown message " << pattern);
         }
     } catch (const osc::Exception& e){
-        LOG_ERROR(e.what());
+        LOG_ERROR("aoo_source: exception in handle_message: " << e.what());
     }
     return 0;
 }
@@ -638,7 +653,7 @@ void endpoint::send_data(int32_t src, int32_t salt, const aoo::data_packet& d) c
     send(msg.Data(), msg.Size());
 }
 
-// /aoo/sink/<id>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
+// /aoo/sink/<id>/format <src> <version> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
 
 void endpoint::send_format(int32_t src, int32_t salt, const aoo_format& f,
                             const char *options, int32_t size) const {
@@ -660,7 +675,7 @@ void endpoint::send_format(int32_t src, int32_t salt, const aoo_format& f,
         msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_FORMAT);
     }
 
-    msg << src << salt << f.nchannels << f.samplerate << f.blocksize
+    msg << src << (int32_t)make_version() << salt << f.nchannels << f.samplerate << f.blocksize
         << f.codec << osc::Blob(options, size) << osc::EndMessage;
 
     send(msg.Data(), msg.Size());
@@ -767,7 +782,7 @@ void source::update(){
 
         // reset time DLL to be on the safe side
         timer_.reset();
-        lastpingtime_ = 0;
+        lastpingtime_ = -1000; // force first ping
 
         // Start new sequence and resend format.
         // We naturally want to do this when setting the format,
@@ -837,7 +852,7 @@ bool source::send_format(){
         // now we don't hold any lock!
 
         for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_format(id_, salt, fmt, settings, size);
+            sinks[i].send_format(id(), salt, fmt, settings, size);
         }
     }
 
@@ -845,7 +860,7 @@ bool source::send_format(){
         while (formatrequestqueue_.read_available()){
             endpoint ep;
             formatrequestqueue_.read(ep);
-            ep.send_format(id_, salt, fmt, settings, size);
+            ep.send_format(id(), salt, fmt, settings, size);
         }
     }
 
@@ -906,7 +921,7 @@ bool source::resend_data(){
                     d.framenum = i;
                     d.data = frameptr[i];
                     d.size = framesize[i];
-                    request.send_data(id_, salt, d);
+                    request.send_data(id(), salt, d);
                 }
             } else {
                 // Copy a single frame
@@ -921,7 +936,7 @@ bool source::resend_data(){
                     d.framenum = request.frame;
                     d.data = sendbuffer_.data();
                     d.size = size;
-                    request.send_data(id_, salt, d);
+                    request.send_data(id(), salt, d);
                 } else {
                     LOG_ERROR("frame number " << request.frame << " out of range!");
                 }
@@ -972,7 +987,7 @@ bool source::send_data(){
 
         // send block to sinks
         for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_data(id_, salt, d);
+            sinks[i].send_data(id(), salt, d);
         }
         --dropped_;
     } else if (audioqueue_.read_available() && srqueue_.read_available()){
@@ -1021,7 +1036,7 @@ bool source::send_data(){
                     d.size = n;
                     for (int i = 0; i < numsinks; ++i){
                         d.channel = sinks[i].channel;
-                        sinks[i].send_data(id_, salt, d);
+                        sinks[i].send_data(id(), salt, d);
                     }
                 };
 
@@ -1064,7 +1079,7 @@ bool source::send_ping(){
     auto elapsed = timer_.get_elapsed();
     auto pingtime = lastpingtime_.load();
     auto interval = ping_interval_.load(); // 0: no ping
-    if (interval > 0 && (elapsed - pingtime) > interval){
+    if (interval > 0 && (elapsed - pingtime) >= interval){
         // only copy sinks which require a format update!
         shared_lock sinklock(sink_mutex_);
         int32_t numsinks = sinks_.size();
@@ -1075,7 +1090,7 @@ bool source::send_ping(){
         auto tt = timer_.get_absolute();
 
         for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_ping(id_, tt);
+            sinks[i].send_ping(id(), tt);
         }
 
         lastpingtime_ = elapsed;
@@ -1088,9 +1103,18 @@ bool source::send_ping(){
 void source::handle_format_request(void *endpoint, aoo_replyfn fn,
                                    const osc::ReceivedMessage& msg)
 {
-    auto id = msg.ArgumentsBegin()->AsInt32();
-
     LOG_DEBUG("handle format request");
+
+    auto it = msg.ArgumentsBegin();
+
+    auto id = (it++)->AsInt32();
+    auto version = (it++)->AsInt32();
+
+    // LATER handle this in the sink_desc (e.g. not sending data)
+    if (!check_version(version)){
+        LOG_ERROR("aoo_source: sink version not supported");
+        return;
+    }
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     shared_lock lock(sink_mutex_); // reader lock!

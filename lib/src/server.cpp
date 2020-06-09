@@ -614,7 +614,7 @@ void server::receive_udp(){
 
                 handle_udp_message(msg, onset, addr);
             } catch (const osc::Exception& e){
-                LOG_ERROR("aoo_server: " << e.what());
+                LOG_ERROR("aoo_server: exception in receive_udp: " << e.what());
             }
         } else if (result < 0){
             int err = socket_errno();
@@ -668,7 +668,7 @@ void server::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
     try {
         if (!strcmp(pattern, AOONET_MSG_PING)){
             // reply with /ping message
-            char buf[64];
+            char buf[512];
             osc::OutboundPacketStream reply(buf, sizeof(buf));
             reply << osc::BeginMessage(AOONET_MSG_CLIENT_PING)
                   << osc::EndMessage;
@@ -676,7 +676,7 @@ void server::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
             send_udp_message(reply.Data(), reply.Size(), addr);
         } else if (!strcmp(pattern, AOONET_MSG_REQUEST)){
             // reply with /reply message
-            char buf[64];
+            char buf[512];
             osc::OutboundPacketStream reply(buf, sizeof(buf));
             reply << osc::BeginMessage(AOONET_MSG_CLIENT_REPLY)
                   << addr.name().c_str() << addr.port() << osc::EndMessage;
@@ -686,7 +686,8 @@ void server::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
             LOG_ERROR("aoo_server: unknown message " << pattern);
         }
     } catch (const osc::Exception& e){
-        LOG_ERROR("aoo_server: " << pattern << ": " << e.what());
+        LOG_ERROR("aoo_server: exception on handling " << pattern
+                  << " message: " << e.what());
     }
 }
 
@@ -930,7 +931,7 @@ bool client_endpoint::receive_data(){
                         // ignore
                     }
                 } catch (const osc::Exception& e){
-                    LOG_ERROR("aoo_server: " << e.what());
+                    LOG_ERROR("aoo_server: exception in client_endpoint::receive_data: " << e.what());
                 }
             } else {
                 break;
@@ -969,7 +970,8 @@ void client_endpoint::handle_message(const osc::ReceivedMessage &msg){
             LOG_ERROR("aoo_server: unknown message " << msg.AddressPattern());
         }
     } catch (const osc::Exception& e){
-        LOG_ERROR("aoo_server: " << msg.AddressPattern() << ": " << e.what());
+        LOG_ERROR("aoo_server: exception on handling " << msg.AddressPattern()
+                  << " message: " << e.what());
     }
 }
 

@@ -110,6 +110,18 @@ int32_t aoo_sink_set_option(aoo_sink *sink, int32_t opt, void *p, int32_t size)
 int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
+    // id
+    case aoo_opt_id:
+    {
+        CHECKARG(int32_t);
+        auto newid = as<int32_t>(ptr);
+        if (id_.exchange(newid) != newid){
+            // LATER think of a way to safely clear source list
+            update_sources();
+            timer_.reset();
+        }
+        break;
+    }
     // reset
     case aoo_opt_reset:
         update_sources();
@@ -181,6 +193,10 @@ int32_t aoo_sink_get_option(aoo_sink *sink, int32_t opt, void *p, int32_t size)
 int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
+    // id
+    case aoo_opt_id:
+        as<int32_t>(ptr) = id();
+        break;
     // buffer size
     case aoo_opt_buffersize:
         CHECKARG(int32_t);
@@ -298,7 +314,7 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n,
             LOG_WARNING("not a sink message!");
             return 0;
         }
-        if (sinkid != id_ && sinkid != AOO_ID_WILDCARD){
+        if (sinkid != id() && sinkid != AOO_ID_WILDCARD){
             LOG_WARNING("wrong sink ID!");
             return 0;
         }
@@ -314,7 +330,7 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n,
             LOG_WARNING("unknown message " << pattern);
         }
     } catch (const osc::Exception& e){
-        LOG_ERROR(e.what());
+        LOG_ERROR("aoo_sink: exception in handle_message: " << e.what());
     }
     return 0;
 }
@@ -453,6 +469,14 @@ int32_t sink::handle_format_message(void *endpoint, aoo_replyfn fn,
     auto it = msg.ArgumentsBegin();
 
     int32_t id = (it++)->AsInt32();
+    int32_t version = (it++)->AsInt32();
+
+    // LATER handle this in the source_desc (e.g. ignoring further messages)
+    if (!check_version(version)){
+        LOG_ERROR("aoo_sink: source version not supported");
+        return 0;
+    }
+
     int32_t salt = (it++)->AsInt32();
     // get format from arguments
     aoo_format f;
@@ -714,9 +738,12 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
 // /aoo/sink/<id>/ping <src> <time>
 
 int32_t source_desc::handle_ping(const sink &s, time_tag tt){
+#if 1
     if (streamstate_.get_state() != AOO_SOURCE_STATE_PLAY){
         return 0;
     }
+#endif
+
 #if 0
     time_tag tt2 = s.absolute_time(); // use last stream time
 #else
@@ -862,6 +889,9 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
             e.source_state.id = id_;
             e.source_state.state = AOO_SOURCE_STATE_STOP;
             push_event(e);
+
+            // this doesn't do anything if the stream simply stopped
+            streamstate_.set_underrun();
         }
 
         return false;
@@ -903,6 +933,9 @@ bool source_desc::check_packet(const data_packet &d){
     // check for empty block (= skipped)
     bool dropped = d.totalsize == 0;
 
+    // check for buffer underrun
+    bool underrun = streamstate_.have_underrun();
+
     // check and update newest sequence number
     if (diff < 0){
         // TODO the following distinction doesn't seem to work reliably.
@@ -921,7 +954,7 @@ bool source_desc::check_packet(const data_packet &d){
         newest_ = d.sequence;
     }
 
-    if (large_gap || recover || dropped){
+    if (large_gap || recover || dropped || underrun){
         // record dropped blocks
         streamstate_.add_lost(blockqueue_.size());
         if (diff > 1){
@@ -932,26 +965,31 @@ bool source_desc::check_packet(const data_packet &d){
         blockqueue_.clear();
         ack_list_.clear();
         next_ = d.sequence;
-        // push silent blocks to keep the buffer full, but leave room for one block!
+        // push empty blocks to keep the buffer full, but leave room for one block!
         int count = 0;
         auto nsamples = audioqueue_.blocksize();
         while (audioqueue_.write_available() > 1 && infoqueue_.write_available() > 1){
             auto ptr = audioqueue_.write_data();
-            for (int i = 0; i < nsamples; ++i){
-                ptr[i] = 0;
-            }
+            decoder_->decode(nullptr, 0, ptr, nsamples);
             audioqueue_.write_commit();
-            // push nominal samplerate + default channel (0)
+            // push nominal samplerate + current channel
             block_info i;
             i.sr = decoder_->samplerate();
-            i.channel = 0;
+            i.channel = channel_;
             infoqueue_.write(i);
 
             count++;
         }
-        LOG_VERBOSE("wrote " << count << " silent blocks for "
-                    << (large_gap ? "transmission gap" :
-                        recover ? "recovery" : "host timing gap"));
+
+        if (count > 0){
+            auto reason = large_gap ? "transmission gap"
+                          : recover ? "sink xrun"
+                          : dropped ? "source xrun"
+                          : underrun ? "buffer underrun"
+                          : "?";
+            LOG_VERBOSE("wrote " << count << " empty blocks for " << reason);
+        }
+
         if (dropped){
             next_++;
             return false;
@@ -965,30 +1003,56 @@ bool source_desc::add_packet(const data_packet& d){
     if (!block){
         if (blockqueue_.full()){
             // if the queue is full, we have to drop a block;
-            // in this case we send a block of zeros to the audio buffer
+            // in this case we send a block of zeros to the audio buffer.
             auto old = blockqueue_.front().sequence;
-            auto nsamples = audioqueue_.blocksize();
-            if (audioqueue_.write_available() && infoqueue_.write_available()){
-                auto ptr = audioqueue_.write_data();
-                for (int i = 0; i < nsamples; ++i){
-                    ptr[i] = 0;
+            // first we check if the first (complete) block is about to be read next,
+            // which means that we have a buffer overflow (the source is too fast)
+            if (old == next_ && blockqueue_.front().complete()){
+                // clear the block queue and fill audio buffer with zeros.
+                blockqueue_.clear();
+                ack_list_.clear();
+                // push empty blocks to keep the buffer full, but leave room for one block!
+                int count = 0;
+                auto nsamples = audioqueue_.blocksize();
+                while (audioqueue_.write_available() > 1 && infoqueue_.write_available() > 1){
+                    auto ptr = audioqueue_.write_data();
+                    decoder_->decode(nullptr, 0, ptr, nsamples);
+                    audioqueue_.write_commit();
+                    // push nominal samplerate + current channel
+                    block_info i;
+                    i.sr = decoder_->samplerate();
+                    i.channel = channel_;
+                    infoqueue_.write(i);
+
+                    count++;
                 }
-                audioqueue_.write_commit();
-                // push nominal samplerate + default channel (0)
-                block_info i;
-                i.sr = decoder_->samplerate();
-                i.channel = 0;
-                infoqueue_.write(i);
-                // update 'next'
+                // record dropped blocks
+                streamstate_.add_lost(blockqueue_.size());
+                // update 'next'!
+                next_ = d.sequence;
+                LOG_VERBOSE("dropped " << count << " blocks to handle buffer overrun");
+            } else {
+                if (audioqueue_.write_available() && infoqueue_.write_available()){
+                    auto ptr = audioqueue_.write_data();
+                    auto nsamples = audioqueue_.blocksize();
+                    decoder_->decode(nullptr, 0, ptr, nsamples);
+                    audioqueue_.write_commit();
+                    // push nominal samplerate + current channel
+                    block_info i;
+                    i.sr = decoder_->samplerate();
+                    i.channel = channel_;
+                    infoqueue_.write(i);
+                }
+                // record dropped block
+                streamstate_.add_lost(1);
+                // remove block from acklist
+                ack_list_.remove(old);
+                // update 'next'!
                 if (next_ <= old){
                     next_ = old + 1;
                 }
+                LOG_VERBOSE("dropped block " << old << " (queue full)");
             }
-            LOG_VERBOSE("dropped block " << old);
-            // remove block from acklist
-            ack_list_.remove(old);
-            // record dropped block
-            streamstate_.add_lost(1);
         }
         // add new block
         block = blockqueue_.insert(d.sequence, d.samplerate,
@@ -1018,38 +1082,59 @@ void source_desc::process_blocks(){
     }
 
     auto b = blockqueue_.begin();
-    int32_t count = 0;
     int32_t next = next_;
-    while ((b != blockqueue_.end()) && b->complete()
-           && (b->sequence == next)
-           && audioqueue_.write_available() && infoqueue_.write_available())
+    while (b != blockqueue_.end() && audioqueue_.write_available())
     {
-        LOG_DEBUG("write samples (" << b->sequence << ")");
+        const char *data;
+        int32_t size;
+        block_info i;
 
+        if (b->sequence == next && b->complete()){
+            // block is ready
+            LOG_DEBUG("write samples (" << b->sequence << ")");
+            data = b->data();
+            size = b->size();
+            i.sr = b->samplerate;
+            i.channel = b->channel;
+
+            b++;
+        } else if (!ack_list_.get(next).remaining()){
+            // block won't be resent, just drop it
+            data = nullptr;
+            size = 0;
+            i.sr = decoder_->samplerate();
+            i.channel = channel_;
+
+            if (b->sequence == next){
+                b++;
+            }
+
+            LOG_VERBOSE("dropped block " << next);
+            streamstate_.add_lost(1);
+        } else {
+            // wait for block
+            break;
+        }
+
+        next++;
+
+        // decode data and push samples
         auto ptr = audioqueue_.write_data();
         auto nsamples = audioqueue_.blocksize();
-        assert(b->data() != nullptr && b->size() > 0 && ptr != nullptr && nsamples > 0);
         // decode audio data
-        if (decoder_->decode(b->data(), b->size(), ptr, nsamples) <= 0){
-            LOG_VERBOSE("bad block: size = " << b->size() << ", nsamples = " << nsamples);
+        if (decoder_->decode(data, size, ptr, nsamples) < 0){
+            LOG_WARNING("aoo_sink: couldn't decode block!");
             // decoder failed - fill with zeros
             std::fill(ptr, ptr + nsamples, 0);
         }
-
         audioqueue_.write_commit();
 
         // push info
-        block_info i;
-        i.sr = b->samplerate;
-        i.channel = b->channel;
         infoqueue_.write(i);
-
-        count++;
-        b++;
-        next++;
     }
     next_ = next;
     // pop blocks
+    auto count = b - blockqueue_.begin();
     while (count--){
     #if 1
         // remove block from acklist
@@ -1095,6 +1180,7 @@ void source_desc::check_missing_blocks(const sink& s){
     }
     // don't check below a certain threshold,
     // because we might just experience packet reordering.
+    // TODO find something better
     if (blockqueue_.size() < AOO_BLOCKQUEUE_CHECK_THRESHOLD){
         return;
     }
@@ -1109,7 +1195,7 @@ void source_desc::check_missing_blocks(const sink& s){
         if (!it->complete() && resendqueue_.write_available()){
             // insert ack (if needed)
             auto& ack = ack_list_.get(it->sequence);
-            if (ack.check(s.elapsed_time(), s.resend_interval())){
+            if (ack.update(s.elapsed_time(), s.resend_interval())){
                 for (int i = 0; i < it->num_frames(); ++i){
                     if (!it->has_frame(i)){
                         if (numframes < s.resend_maxnumframes()){
@@ -1134,7 +1220,7 @@ resend_incomplete_done:
             for (int i = 0; i < missing && resendqueue_.write_available(); ++i){
                 // insert ack (if necessary)
                 auto& ack = ack_list_.get(next + i);
-                if (ack.check(s.elapsed_time(), s.resend_interval())){
+                if (ack.update(s.elapsed_time(), s.resend_interval())){
                     if (numframes + it->num_frames() <= s.resend_maxnumframes()){
                         resendqueue_.write(data_request { next + i, -1 }); // whole block
                         numframes += it->num_frames();
@@ -1169,7 +1255,7 @@ resend_missing_done:
 #endif
 }
 
-// /aoo/src/<id>/format <sink>
+// /aoo/src/<id>/format <version> <sink>
 
 bool source_desc::send_format_request(const sink& s) {
     if (streamstate_.need_format()){
@@ -1184,7 +1270,8 @@ bool source_desc::send_format_request(const sink& s) {
         snprintf(address, sizeof(address), "%s%s/%d%s",
                  AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_FORMAT);
 
-        msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
+        msg << osc::BeginMessage(address) << s.id() << (int32_t)make_version()
+            << osc::EndMessage;
 
         dosend(msg.Data(), msg.Size());
 
@@ -1251,8 +1338,12 @@ bool source_desc::send_notifications(const sink& s){
     time_tag pingtime1;
     time_tag pingtime2;
     if (streamstate_.need_ping(pingtime1, pingtime2)){
+    #if 1
         // only send ping if source is active
         if (streamstate_.get_state() == AOO_SOURCE_STATE_PLAY){
+    #else
+        {
+    #endif
             auto lost_blocks = streamstate_.get_lost_since_ping();
 
             char buffer[AOO_MAXPACKETSIZE];

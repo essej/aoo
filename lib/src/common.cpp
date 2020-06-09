@@ -12,6 +12,30 @@
 #include <cassert>
 #include <cstring>
 
+/*/////////////// version ////////////////////*/
+
+namespace aoo {
+
+bool check_version(uint32_t version){
+    auto major = (version >> 24) & 255;
+    auto minor = (version >> 16) & 255;
+    auto bugfix = (version >> 8) & 255;
+
+    if (major != AOO_VERSION_MAJOR){
+        return false;
+    }
+
+    return true;
+}
+
+uint32_t make_version(){
+    // make version: major, minor, bugfix, [protocol]
+    return ((uint32_t)AOO_VERSION_MAJOR << 24) | ((uint32_t)AOO_VERSION_MINOR << 16)
+            | ((uint32_t)AOO_VERSION_BUGFIX << 8);
+}
+
+}
+
 /*////////////// codec plugins ///////////////*/
 
 namespace aoo {
@@ -260,7 +284,7 @@ block_ack::block_ack(int32_t seq, int32_t limit)
     timestamp_ = -1e009;
 }
 
-bool block_ack::check(double time, double interval){
+bool block_ack::update(double time, double interval){
     if (count_ > 0){
         auto diff = time - timestamp_;
         if (diff >= interval){
@@ -943,7 +967,7 @@ void timer::setup(int32_t sr, int32_t blocksize){
 
 void timer::reset(){
     scoped_lock<spinlock> l(lock_);
-    last_ = time_tag{};
+    last_ = 0;
     elapsed_ = 0;
 #if AOO_TIMEFILTER_CHECK
     // fill ringbuffer with nominal delta
@@ -965,9 +989,10 @@ timer::state timer::update(time_tag t, double& error){
     std::unique_lock<spinlock> l(lock_);
     time_tag last = last_.load();
     if (!last.empty()){
+        last_ = t.to_uint64(); // first!
+
         auto delta = time_tag::duration(last, t);
         elapsed_ = elapsed_ + delta;
-        last_ = t;
 
     #if AOO_TIMEFILTER_CHECK
         // check delta and return error
@@ -1022,7 +1047,7 @@ timer::state timer::update(time_tag t, double& error){
 
         return state::ok;
     } else {
-        last_ = t;
+        last_ = t.to_uint64();
         return state::reset;
     }
 }

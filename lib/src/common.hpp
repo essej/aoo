@@ -17,6 +17,10 @@
 
 namespace aoo {
 
+bool check_version(uint32_t version);
+
+uint32_t make_version();
+
 class dynamic_resampler {
 public:
     void setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_t srto, int32_t nchannels);
@@ -176,7 +180,8 @@ public:
     block_ack();
     block_ack(int32_t seq, int32_t limit);
 
-    bool check(double time, double interval);
+    bool update(double time, double interval);
+    int32_t remaining() const { return count_; }
     int32_t sequence;
 private:
     int32_t count_;
@@ -251,7 +256,7 @@ public:
     time_tag get_absolute() const;
     state update(time_tag t, double& error);
 private:
-    std::atomic<time_tag> last_;
+    std::atomic<uint64_t> last_;
     std::atomic<double> elapsed_{0};
 
 #if AOO_TIMEFILTER_CHECK

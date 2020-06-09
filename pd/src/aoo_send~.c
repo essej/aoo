@@ -29,6 +29,7 @@ typedef struct _aoo_send
     int32_t x_samplerate;
     int32_t x_blocksize;
     int32_t x_nchannels;
+    int32_t x_port;
     int32_t x_id;
     t_float **x_vec;
     // sinks
@@ -296,7 +297,8 @@ static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
 static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (!x->x_node){
-        pd_error(x, "%s: can't add sink - no node!", classname(x));
+        pd_error(x, "%s: can't add sink - no socket!", classname(x));
+        return;
     }
 
     if (argc < 3){
@@ -356,7 +358,8 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (!x->x_node){
-        pd_error(x, "%s: can't remove sink - no node!", classname(x));
+        pd_error(x, "%s: can't remove sink - no socket!", classname(x));
+        return;
     }
 
     if (!argc){
@@ -498,6 +501,47 @@ static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
     dsp_add(aoo_send_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 }
 
+static void aoo_send_port(t_aoo_send *x, t_floatarg f)
+{
+    int port = f;
+
+    // 0 is allowed -> don't listen
+    if (port < 0){
+        pd_error(x, "%s: bad port %d", classname(x), port);
+        return;
+    }
+
+    if (x->x_node){
+        aoo_node_release(x->x_node, (t_pd *)x, x->x_id);
+    }
+
+    x->x_node = port ? aoo_node_add(port, (t_pd *)x, x->x_id) : 0;
+    x->x_port = port;
+}
+
+static void aoo_send_id(t_aoo_send *x, t_floatarg f)
+{
+    int id = f;
+
+    if (id == x->x_id){
+        return;
+    }
+
+    if (id < 0){
+        pd_error(x, "%s: bad id %d", classname(x), id);
+        return;
+    }
+
+    if (x->x_node){
+        aoo_node_release(x->x_node, (t_pd *)x, x->x_id);
+    }
+
+    aoo_source_set_id(x->x_aoo_source, id);
+
+    x->x_node = x->x_port ? aoo_node_add(x->x_port, (t_pd *)x, id) : 0;
+    x->x_id = id;
+}
+
 static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 {
     t_aoo_send *x = (t_aoo_send *)pd_new(aoo_send_class);
@@ -507,16 +551,22 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     x->x_sinks = 0;
     x->x_numsinks = 0;
     x->x_accept = 1;
+    x->x_node = 0;
+    x->x_blocksize = 0;
+    x->x_samplerate = 0;
+
     aoo_lock_init(&x->x_lock);
 
     // arg #1: port number
-    int port = atom_getfloatarg(0, argc, argv);
+    x->x_port = atom_getfloatarg(0, argc, argv);
 
     // arg #2: ID
     int id = atom_getfloatarg(1, argc, argv);
-    x->x_id = id > 0 ? id : 0;
-    x->x_aoo_source = aoo_source_new(x->x_id);
-    x->x_node = port > 0 ? aoo_node_add(port, (t_pd *)x, x->x_id) : 0;
+    if (id < 0){
+        pd_error(x, "%s: bad id % d, setting to 0", classname(x), id);
+        id = 0;
+    }
+    x->x_id = id;
 
     // arg #3: num channels
     int nchannels = atom_getfloatarg(2, argc, argv);
@@ -524,8 +574,6 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
         nchannels = 1;
     }
     x->x_nchannels = nchannels;
-    x->x_blocksize = 0;
-    x->x_samplerate = 0;
 
     // make additional inlets
     if (nchannels > 1){
@@ -539,18 +587,24 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     // make event outlet
     x->x_msgout = outlet_new(&x->x_obj, 0);
 
-    // default format
+    // create and initialize aoo_source object
+    x->x_aoo_source = aoo_source_new(x->x_id);
+
     aoo_format_storage fmt;
     aoo_format_makedefault(&fmt, nchannels);
     aoo_source_set_format(x->x_aoo_source, &fmt.header);
 
     aoo_source_set_buffersize(x->x_aoo_source, DEFBUFSIZE);
 
+    // finally we're ready to receive messages
+    aoo_send_port(x, x->x_port);
+
     return x;
 }
 
 static void aoo_send_free(t_aoo_send *x)
 {
+    // first stop receiving messages
     if (x->x_node){
         aoo_node_release(x->x_node, (t_pd *)x, x->x_id);
     }
@@ -572,18 +626,36 @@ void aoo_send_tilde_setup(void)
     aoo_send_class = class_new(gensym("aoo_send~"), (t_newmethod)(void *)aoo_send_new,
         (t_method)aoo_send_free, sizeof(t_aoo_send), 0, A_GIMME, A_NULL);
     CLASS_MAINSIGNALIN(aoo_send_class, t_aoo_send, x_f);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_dsp, gensym("dsp"), A_CANT, A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_add, gensym("add"), A_GIMME, A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_remove, gensym("remove"), A_GIMME, A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_start, gensym("start"), A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_stop, gensym("stop"), A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_accept, gensym("accept"), A_FLOAT, A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_format, gensym("format"), A_GIMME, A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_channel, gensym("channel"), A_GIMME, A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_packetsize, gensym("packetsize"), A_FLOAT, A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_ping, gensym("ping"), A_FLOAT, A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_resend, gensym("resend"), A_FLOAT, A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_redundancy, gensym("redundancy"), A_FLOAT, A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_listsinks, gensym("list_sinks"), A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_dsp,
+                    gensym("dsp"), A_CANT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_port,
+                    gensym("port"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_id,
+                    gensym("id"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_add,
+                    gensym("add"), A_GIMME, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_remove,
+                    gensym("remove"), A_GIMME, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_start,
+                    gensym("start"), A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_stop,
+                    gensym("stop"), A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_accept,
+                    gensym("accept"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_format,
+                    gensym("format"), A_GIMME, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_channel,
+                    gensym("channel"), A_GIMME, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_packetsize,
+                    gensym("packetsize"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_ping,
+                    gensym("ping"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_resend,
+                    gensym("resend"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_redundancy,
+                    gensym("redundancy"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_timefilter,
+                    gensym("timefilter"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_listsinks,
+                    gensym("list_sinks"), A_NULL);
 }

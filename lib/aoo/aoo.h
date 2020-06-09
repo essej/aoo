@@ -14,7 +14,7 @@ extern "C"
 #define AOO_VERSION_MAJOR 2
 #define AOO_VERSION_MINOR 0
 #define AOO_VERSION_BUGFIX 0
-#define AOO_VERSION_PRERELEASE 1 // 0: no pre-release
+#define AOO_VERSION_PRERELEASE 2 // 0: no pre-release
 
 #ifndef AOO_DEBUG_DLL
  #define AOO_DEBUG_DLL 0
@@ -61,7 +61,7 @@ extern "C"
 
 // the tolerance for deviations from the nominal block period
 #ifndef AOO_TIMEFILTER_TOLERANCE
- #define AOO_TIMEFILTER_TOLERANCE 0.1
+ #define AOO_TIMEFILTER_TOLERANCE 0.25
 #endif
 
 // ping interval (sink to source) in ms
@@ -234,6 +234,8 @@ typedef struct aoo_ping_event {
 
 typedef enum aoo_option
 {
+    // The source/sink ID
+    aoo_opt_id = 0,
     // Stream format (set: aoo_format, get: aoo_format_storage)
     // ---
     // The settings for the audio codec to be used for a stream.
@@ -242,7 +244,7 @@ typedef enum aoo_option
     // set in sources.
     // If you want to get the format, you have to pass a
     // aoo_format_storage, which is filled with the format.
-    aoo_opt_format = 0,
+    aoo_opt_format,
     // Reset the source/sink (NULL)
     aoo_opt_reset,
     // Start the source/sink (NULL)
@@ -417,6 +419,14 @@ static inline int32_t aoo_source_stop(aoo_source *src) {
     return aoo_source_set_option(src, aoo_opt_stop, AOO_ARG_NULL);
 }
 
+static inline int32_t aoo_source_set_id(aoo_source *src, int32_t id) {
+    return aoo_source_set_option(src, aoo_opt_id, AOO_ARG(id));
+}
+
+static inline int32_t aoo_source_get_id(aoo_source *src, int32_t *id) {
+    return aoo_source_get_option(src, aoo_opt_id, AOO_ARG(*id));
+}
+
 static inline int32_t aoo_source_set_format(aoo_source *src, aoo_format *f) {
     return aoo_source_set_option(src, aoo_opt_format, (void *)f, sizeof(aoo_format));
 }
@@ -542,6 +552,14 @@ AOO_API int32_t aoo_sink_get_sourceoption(aoo_sink *sink, void *endpoint, int32_
                               int32_t opt, void *p, int32_t size);
 
 // wrapper functions for frequently used options
+
+static inline int32_t aoo_sink_set_id(aoo_sink *sink, int32_t id) {
+    return aoo_sink_set_option(sink, aoo_opt_id, AOO_ARG(id));
+}
+
+static inline int32_t aoo_sink_get_id(aoo_sink *sink, int32_t *id) {
+    return aoo_sink_get_option(sink, aoo_opt_id, AOO_ARG(*id));
+}
 
 static inline int32_t aoo_sink_reset(aoo_sink *sink) {
     return aoo_sink_set_option(sink, aoo_opt_reset, AOO_ARG_NULL);

@@ -26,6 +26,7 @@ class.sources = \
 ## parametrizing the build
 loglevel=1
 aoo_timefilter_bandwidth=0.0001
+aoo_timefilter_tolerance=0.25
 aoo_debug_dll=0
 aoo_debug_resampling=0
 aoo_debug_block_buffer=0
@@ -70,9 +71,18 @@ cflags = \
     -DAOO_STATIC \
     -DLOGLEVEL=$(loglevel) \
     -DAOO_TIMEFILTER_BANDWIDTH=$(aoo_timefilter_bandwidth) \
+    -DAOO_TIMEFILTER_TOLERANCE=$(aoo_timefilter_tolerance) \
     -DAOO_DEBUG_DLL=$(aoo_debug_dll) \
     -DAOO_DEBUG_RESAMPLING=$(aoo_debug_resampling) \
     -DAOO_DEBUG_BLOCK_BUFFER=$(aoo_debug_block_buffer) \
+    $(empty)
+
+ifneq ($(aoo_timefilter_check),)
+cflags += \
+    -DAOO_TIMEFILTER_CHECK=$(aoo_timefilter_check)
+endif
+
+cflags += \
     $(OPUS_CFLAGS) \
     $(OSCPACK_CFLAGS) \
     $(MD5_CFLAGS) \
