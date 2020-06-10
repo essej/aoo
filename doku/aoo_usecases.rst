@@ -18,52 +18,11 @@ virtual concert hall and rehearsal rooms
 
    Musicians using AoO as rehearsal space for playing together with conductor and binaural rendering
 
-When playing together within an ensemble or loose group of musician, normally they meet in rehearsal room loose first, then an conductor or band leader comes into play and last they are performing in an concert hall.
-
-Playing over the network at home or a private rehearsal room is never the same, but we can get near. First we have to think about, like nowadays mostly applied, it is like playing with microphones,  like using live amplification or like a studio session. With the computer in between for the network connection.
-
-sound check
-...........
-
-So the first thing like doing a sound check, since everybody is at home or on separate places, everybody is his own sound technician for setting up the devices:
-
-1. choosing a appropriate microphone and Audiointerface with stands and a monitoring system, from Headphone to monitor boxes, stands for scores and the computer monitor and keyboard like as PC, notebook or tablet.
-
-This should be done before rehearsal within an own tutorial with possible feedback from educated audio engineers.
-
-2. Running the VRR application, setting up the correct level and filters for playing with others. There should be an automated help to get the levels right, since they are send to each other maybe without further fading.
-
-So play in 10 sec of materials with loops and the right sound can be adjusted or automatically set but afterwards fixed.
-
-3. Store the setup so 1. and 2. has only be done once on the same set.
-
-virtual playing room
-....................
-
-When specifying an audio-network for playing together within an ensemble, a focus was set on the collaborating efforts to be done to gain the unity of the individuals.
-
-So, like a musicians with acoustic instrument, joining a band implies a need for a place where the musician has a ”virtual sound space“ they can join. So they provide sound sources and need to plugin audio channels on a virtual mixing desk. With AoO the participant just needs to connect to the network, wireless or wired, choosing the sinks to play to and send phrases of audio with AoO when needed. This is done by the server, which renders the monitoring signal. 
-There could be 2 szenarios, first the monitoring signal is a mix of the other, but the musician itself (n-1), so an individually monitoring signal is calculated for each musician. Only the conductor hears them all and can play back the mix to the musicians. His microphone is mixed into the monitoring signal as well.
-The second version is all get the binaural mix of all. So the the musician has to train to hear himself with delay of latency, but this has to be choosen on each piece individually or by skills of the musician.
-
-And an third version for extreme performance would be each musian sends its stream to all other with the spatial information, so the AoO-VRR application does the ambisonics mix for the musician. Therefore firewalls hole-punching has to be done.
-
-
-time synchronization and conducting
-....................................
-
-There are pieces where the time synchronization is crucial, so AoO has a time synchronous mode, which means, synchronized over network time, which can be as accurate as one sample, all signals played at the same time are mixed in the sum within the excact time position. Even if musicians has different latencies, if the play to a time synchronized click, or visual tick they should be synchron on the output. 
-On other music it is better to play as low latency as possible for each musician like more improvisation and jaming.
-
-
-Firewall punch holes
-....................
-
-Hole-punching is used by most Streaming plattforms serving clients behind firewalls. The problem is that as stream send from A to B needs also a stream to be send back to the client A from B. Since as connection UDP for better latency is used und a connectionless interface, the firewall needs to know to whom the packets should be delivered which is mostly stored in session there for a short time. So we have to send some packets from A to B to get as session for sending back the streaming data.
-
-Now the problem is if A and B is behind a firewall and want to send streams to each other without using a server as gateway to get better latencies. The server "only" needs to exchange the real addresses of the firewalls and the clients have to firstly punch a hole in the firewall where the stream is send. This does not work with every firewall architecture, but could be a solution.
-
-Further discussion is needed for this use case, combined with tests.
+See VRR_ homepage dokumentation [VRR DOKU]_ for further info.
+ 
+ .. _VRR http://vrr.iem.at/
+ 
+ .. [VRR DOKU] http://vrr.iem.at/docs/vrr
 
 stream boxes  
 ============
