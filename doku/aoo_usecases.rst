@@ -18,11 +18,13 @@ virtual concert hall and rehearsal rooms
 
    Musicians using AoO as rehearsal space for playing together with conductor and binaural rendering
 
-See VRR_ homepage dokumentation [VRR DOKU]_ for further info.
+See VRR_ homepage dokumentation [VRR_DOKU] for further info.
  
- .. _VRR http://vrr.iem.at/
+.. _VRR: http://vrr.iem.at/
+
  
- .. [VRR DOKU] http://vrr.iem.at/docs/vrr
+
+.. [VRR_DOKU] http://vrr.iem.at/docs/vrr
 
 stream boxes  
 ============
