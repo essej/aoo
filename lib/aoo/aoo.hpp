@@ -272,12 +272,12 @@ public:
         return get_option(aoo_opt_ping_interval, AOO_ARG(n));
     }
 
-    int32_t set_resend_limit(int32_t n){
-        return set_option(aoo_opt_resend_limit, AOO_ARG(n));
+    int32_t set_resend_enable(bool b){
+        return set_option(aoo_opt_resend_enable, AOO_ARG(b));
     }
 
-    int32_t get_resend_limit(int32_t& n){
-        return get_option(aoo_opt_resend_limit, AOO_ARG(n));
+    int32_t get_resend_enable(bool& b){
+        return get_option(aoo_opt_resend_enable, AOO_ARG(b));
     }
 
     int32_t set_resend_interval(int32_t n){

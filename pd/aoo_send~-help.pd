@@ -28,11 +28,11 @@
 #X text 244 155 64-bit float;
 #X text 28 55 blocksize;
 #X text 102 55 samplerate;
-#X text 186 56 bitdepth (default: 4);
 #X text 128 295 all arguments are optional!;
 #X text 39 240 [format pcm <blocksize> <samplerate> <bitdepth>(;
 #X msg 41 295 format pcm;
 #X text 29 28 uncompressed PCM;
+#X text 186 56 bitdepth;
 #X connect 1 0 5 0;
 #X connect 2 0 5 0;
 #X connect 3 0 5 0;
@@ -52,7 +52,7 @@
 #X connect 15 0 13 0;
 #X connect 16 0 13 0;
 #X connect 17 0 9 0;
-#X connect 27 0 0 0;
+#X connect 26 0 0 0;
 #X restore 99 438 pd pcm;
 #N canvas 104 170 832 547 opus 0;
 #X obj 50 493 outlet;
@@ -255,10 +255,9 @@ events" instead of continuous streams., f 36;
 10 -262144 -1 -1 0 256;
 #X msg 89 286 timefilter \$1;
 #X text 193 287 time DLL filter bandwidth (default: 0.0001);
-#X msg 94 338 resend \$1;
 #X obj 94 317 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X text 173 338 buffersize (ms) for resending lost packets (default:
+#X text 179 339 buffersize (ms) for resending lost packets (default:
 1000);
 #X msg 69 188 ping \$1;
 #X obj 69 167 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
@@ -282,20 +281,21 @@ event which, f 64;
 -262144 -1 -1 0 256;
 #X text 98 31 change receive port;
 #X text 98 81 change AoO source ID;
+#X msg 94 338 history \$1;
 #X connect 0 0 1 0;
-#X connect 1 0 12 0;
+#X connect 1 0 11 0;
 #X connect 3 0 4 0;
-#X connect 4 0 12 0;
-#X connect 6 0 12 0;
-#X connect 7 0 6 0;
-#X connect 9 0 12 0;
-#X connect 10 0 9 0;
+#X connect 4 0 11 0;
+#X connect 6 0 23 0;
+#X connect 8 0 11 0;
+#X connect 9 0 8 0;
+#X connect 12 0 11 0;
 #X connect 13 0 12 0;
-#X connect 14 0 13 0;
-#X connect 18 0 12 0;
-#X connect 19 0 18 0;
-#X connect 20 0 12 0;
-#X connect 21 0 20 0;
+#X connect 17 0 11 0;
+#X connect 18 0 17 0;
+#X connect 19 0 11 0;
+#X connect 20 0 19 0;
+#X connect 23 0 11 0;
 #X restore 97 384 pd advanced;
 #X text 25 636 see also;
 #X obj 98 636 aoo_receive~;

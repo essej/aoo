@@ -231,7 +231,7 @@ static t_int * aoo_pack_perform(t_int *w)
 
     uint64_t t = aoo_osctime_get();
     if (aoo_source_process(x->x_aoo_source,(const aoo_sample **)x->x_vec, n, t) > 0){
-        clock_set(x->x_clock, 0);
+        clock_delay(x->x_clock, 0);
     }
     return w + 3;
 }

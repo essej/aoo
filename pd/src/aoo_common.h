@@ -91,10 +91,6 @@ int aoo_getsinkarg(void *x, t_aoo_node *node, int argc, t_atom *argv,
 int aoo_getsourcearg(void *x, t_aoo_node *node, int argc, t_atom *argv,
                      struct sockaddr_storage *sa, socklen_t *len, int32_t *id);
 
-int aoo_parseresend(void *x, int argc, const t_atom *argv,
-                    int32_t *limit, int32_t *interval,
-                    int32_t *maxnumframes);
-
 void aoo_format_makedefault(aoo_format_storage *f, int nchannels);
 
 int aoo_format_parse(void *x, aoo_format_storage *f, int argc, t_atom *argv);

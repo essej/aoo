@@ -540,7 +540,7 @@ static t_int * aoo_send_perform(t_int *w)
         }
     }
     if (aoo_source_events_available(x->x_aoo_source) > 0){
-        clock_set(x->x_clock, 0);
+        clock_delay(x->x_clock, 0);
     }
 
     return w + 3;

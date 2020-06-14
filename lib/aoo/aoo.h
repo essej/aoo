@@ -14,18 +14,26 @@ extern "C"
 #define AOO_VERSION_MAJOR 2
 #define AOO_VERSION_MINOR 0
 #define AOO_VERSION_BUGFIX 0
-#define AOO_VERSION_PRERELEASE 2 // 0: no pre-release
+#define AOO_VERSION_PRERELEASE 3 // 0: no pre-release
 
 #ifndef AOO_DEBUG_DLL
  #define AOO_DEBUG_DLL 0
+#endif
+
+#ifndef AOO_DEBUG_TIMEFILTER
+ #define AOO_DEBUG_TIMEFILTER 0
 #endif
 
 #ifndef AOO_DEBUG_RESAMPLING
  #define AOO_DEBUG_RESAMPLING 0
 #endif
 
-#ifndef AOO_DEBUG_BLOCK_BUFFER
- #define AOO_DEBUG_BLOCK_BUFFER 0
+#ifndef AOO_DEBUG_AUDIO_BUFFER
+ #define AOO_DEBUG_AUDIO_BUFFER 0
+#endif
+
+#ifndef AOO_DEBUG_JITTER_BUFFER
+ #define AOO_DEBUG_JITTER_BUFFER 0
 #endif
 
 #ifndef AOO_CLIP_OUTPUT
@@ -79,9 +87,9 @@ extern "C"
  #define AOO_SEND_REDUNDANCY 1
 #endif
 
-// max. number of resend attempts per packet
-#ifndef AOO_RESEND_LIMIT
- #define AOO_RESEND_LIMIT 5
+// enable/disable packet resending
+#ifndef AOO_RESEND_ENABLE
+ #define AOO_RESEND_ENABLE 1
 #endif
 
 // interval between resend attempts in ms
@@ -296,19 +304,14 @@ typedef enum aoo_option
     // a sink after the source hasn't received a ping
     // for a certain amount of time.
     aoo_opt_ping_interval,
+    // Enable/disable resending (int32_t)
+    aoo_opt_resend_enable,
     // Resend buffer size in ms (int32_t).
     // ---
     // The source keeps the last N ms of audio in a buffer,
-    // so it can resend parts of it if requested, e.g. to
+    // so it can resend parts of it, if requested, e.g. to
     // handle packet loss.
     aoo_opt_resend_buffersize,
-    // Resend limit (int32_t)
-    // ---
-    // The max. number of resend attempts per frame.
-    // The sink will stop to request a missing frame
-    // after this limit has been reached.
-    // If set to 0, resending is effectively disabled.
-    aoo_opt_resend_limit,           // int32_t
     // Resend interval in ms (int32_t)
     // ---
     // This is the interval between individual resend
@@ -589,12 +592,12 @@ static inline int32_t aoo_sink_get_packetsize(aoo_sink *sink, int32_t *n) {
     return aoo_sink_get_option(sink, aoo_opt_packetsize, AOO_ARG(*n));
 }
 
-static inline int32_t aoo_sink_set_resend_limit(aoo_sink *sink, int32_t n) {
-    return aoo_sink_set_option(sink, aoo_opt_resend_limit, AOO_ARG(n));
+static inline int32_t aoo_sink_set_resend_enable(aoo_sink *sink, int32_t b) {
+    return aoo_sink_set_option(sink, aoo_opt_resend_enable, AOO_ARG(b));
 }
 
-static inline int32_t aoo_sink_get_resend_limit(aoo_sink *sink, int32_t *n) {
-    return aoo_sink_get_option(sink, aoo_opt_resend_limit, AOO_ARG(*n));
+static inline int32_t aoo_sink_get_resend_enable(aoo_sink *sink, int32_t *b) {
+    return aoo_sink_get_option(sink, aoo_opt_resend_enable, AOO_ARG(*b));
 }
 
 static inline int32_t aoo_sink_set_resend_interval(aoo_sink *sink, int32_t n) {

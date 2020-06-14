@@ -24,13 +24,16 @@ class.sources = \
     $(empty)
 
 ## parametrizing the build
-loglevel=2
+loglevel=1
 use_codec_opus=yes
 aoo_timefilter_bandwidth=0.0001
 aoo_timefilter_tolerance=0.25
+aoo_debug=yes
+aoo_debug_timefilter=0
 aoo_debug_dll=0
 aoo_debug_resampling=0
-aoo_debug_block_buffer=0
+aoo_debug_audio_buffer=0
+aoo_debug_jitter_buffer=0
 
 ## (external) dependencies
 AOO = ../lib
@@ -64,15 +67,22 @@ cflags = \
     -I$(AOO)/src/lib \
     -Wno-unused -Wno-unused-parameter \
     -fvisibility=hidden \
-    -DNDEBUG \
     -DAOO_STATIC \
     -DLOGLEVEL=$(loglevel) \
     -DAOO_TIMEFILTER_BANDWIDTH=$(aoo_timefilter_bandwidth) \
     -DAOO_TIMEFILTER_TOLERANCE=$(aoo_timefilter_tolerance) \
     -DAOO_DEBUG_DLL=$(aoo_debug_dll) \
+    -DAOO_DEBUG_TIMEFILTER=$(aoo_debug_timefilter) \
     -DAOO_DEBUG_RESAMPLING=$(aoo_debug_resampling) \
-    -DAOO_DEBUG_BLOCK_BUFFER=$(aoo_debug_block_buffer) \
+    -DAOO_DEBUG_AUDIO_BUFFER=$(aoo_debug_audio_buffer) \
+    -DAOO_DEBUG_JITTER_BUFFER=$(aoo_debug_jitter_buffer) \
     $(empty)
+
+ifneq ($(aoo_debug),yes)
+cflags += -DNDEBUG
+else
+cflags += -g
+endif
 
 ifneq ($(aoo_timefilter_check),)
 cflags += \

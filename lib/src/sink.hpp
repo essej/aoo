@@ -30,7 +30,7 @@ struct stream_state {
         gap_ = 0;
         state_ = AOO_SOURCE_STATE_STOP;
         underrun_ = false;
-        recover_ = false;
+        xrun_ = 0;
         format_ = false;
         invite_ = NONE;
         pingtime1_ = 0;
@@ -75,11 +75,8 @@ struct stream_state {
         }
     }
 
-    void set_underrun() { underrun_ = true; }
-    bool have_underrun() { return underrun_.exchange(false); }
-
-    void request_recover() { recover_ = true; }
-    bool need_recover() { return recover_.exchange(false); }
+    void add_xrun(int32_t nblocks) { xrun_ += nblocks; }
+    int32_t get_xrun() { return xrun_.exchange(0); }
 
     void request_format() { format_ = true; }
     bool need_format() { return format_.exchange(false); }
@@ -98,10 +95,10 @@ private:
     std::atomic<int32_t> reordered_{0};
     std::atomic<int32_t> resent_{0};
     std::atomic<int32_t> gap_{0};
+    std::atomic<int32_t> xrun_{false};
     std::atomic<aoo_source_state> state_{AOO_SOURCE_STATE_STOP};
     std::atomic<invitation_state> invite_{NONE};
     std::atomic<bool> underrun_{false};
-    std::atomic<bool> recover_{false};
     std::atomic<bool> format_{false};
     std::atomic<uint64_t> pingtime1_;
     std::atomic<uint64_t> pingtime2_;
@@ -158,7 +155,7 @@ public:
 
     bool process(const sink& s, aoo_sample *buffer, int32_t size);
 
-    void request_recover(){ streamstate_.request_recover(); }
+    void add_xrun(int32_t n){ streamstate_.add_xrun(n); }
 
     void request_format(){ streamstate_.request_format(); }
 
@@ -172,13 +169,13 @@ private:
     };
     void do_update(const sink& s);
     // handle messages
+    void recover(const char *reason, int32_t n = 0);
+
     bool check_packet(const data_packet& d);
 
     bool add_packet(const data_packet& d);
 
     void process_blocks();
-
-    void check_outdated_blocks();
 
     void check_missing_blocks(const sink& s);
     // send messages
@@ -192,21 +189,18 @@ private:
         fn_(endpoint_, data, n);
     }
     // data
-    void * const endpoint_;
+    void *const endpoint_;
     const aoo_replyfn fn_;
     const int32_t id_;
     int32_t salt_;
     // audio decoder
     std::unique_ptr<aoo::decoder> decoder_;
     // state
-    int32_t newest_ = 0; // sequence number of most recent incoming block
-    int32_t next_ = 0; // next outgoing block
     int32_t channel_ = 0; // recent channel onset
     double samplerate_ = 0; // recent samplerate
     stream_state streamstate_;
     // queues and buffers
-    block_queue blockqueue_;
-    block_ack_list ack_list_;
+    jitter_buffer jitterbuffer_;
     lockfree::queue<aoo_sample> audioqueue_;
     lockfree::queue<block_info> infoqueue_;
     lockfree::queue<data_request> resendqueue_;
@@ -273,9 +267,9 @@ public:
 
     int32_t packetsize() const { return packetsize_; }
 
-    float resend_interval() const { return resend_interval_; }
+    bool resend_enabled() const { return resend_enabled_; }
 
-    int32_t resend_limit() const { return resend_limit_; }
+    float resend_interval() const { return resend_interval_; }
 
     int32_t resend_maxnumframes() const { return resend_maxnumframes_; }
 
@@ -293,7 +287,7 @@ private:
     // options
     std::atomic<int32_t> buffersize_{ AOO_SINK_BUFSIZE };
     std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
-    std::atomic<int32_t> resend_limit_{ AOO_RESEND_LIMIT };
+    std::atomic<bool> resend_enabled_{AOO_RESEND_ENABLE};
     std::atomic<float> resend_interval_{ AOO_RESEND_INTERVAL * 0.001 };
     std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
     // the sources

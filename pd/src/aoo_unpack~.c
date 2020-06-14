@@ -99,15 +99,19 @@ static void aoo_unpack_packetsize(t_aoo_unpack *x, t_floatarg f)
     aoo_sink_set_packetsize(x->x_aoo_sink, f);
 }
 
-static void aoo_unpack_resend(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)
+static void aoo_unpack_resend(t_aoo_unpack *x, t_floatarg f)
 {
-    int32_t limit, interval, maxnumframes;
-    if (!aoo_parseresend(x, argc, argv, &limit, &interval, &maxnumframes)){
-        return;
-    }
-    aoo_sink_set_resend_limit(x->x_aoo_sink, limit);
-    aoo_sink_set_resend_interval(x->x_aoo_sink, interval);
-    aoo_sink_set_resend_maxnumframes(x->x_aoo_sink, maxnumframes);
+    aoo_sink_set_resend_enable(x->x_aoo_sink, f != 0);
+}
+
+static void aoo_unpack_resend_limit(t_aoo_unpack *x, t_floatarg f)
+{
+    aoo_sink_set_resend_maxnumframes(x->x_aoo_sink, f);
+}
+
+static void aoo_unpack_resend_interval(t_aoo_unpack *x, t_floatarg f)
+{
+    aoo_sink_set_resend_interval(x->x_aoo_sink, f);
 }
 
 static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **events, int32_t n)
@@ -303,7 +307,11 @@ void aoo_unpack_tilde_setup(void)
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_packetsize,
                     gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_resend,
-                    gensym("resend"), A_GIMME, A_NULL);
+                    gensym("resend"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_resend_limit,
+                    gensym("resend_limit"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_resend_interval,
+                    gensym("resend_interval"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_reset,
                     gensym("reset"), A_GIMME, A_NULL);
 }

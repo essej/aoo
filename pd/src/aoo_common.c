@@ -183,29 +183,6 @@ static int aoo_getarg(const char *name, void *x, int which,
     return 1;
 }
 
-int aoo_parseresend(void *x, int argc, const t_atom *argv,
-                    int32_t *limit, int32_t *interval,
-                    int32_t *maxnumframes)
-{
-    t_float f;
-    if (aoo_getarg("limit", x, 0, argc, argv, &f, AOO_RESEND_LIMIT)){
-        *limit = f;
-    } else {
-        return 0;
-    }
-    if (aoo_getarg("interval", x, 1, argc, argv, &f, AOO_RESEND_INTERVAL)){
-        *interval = f;
-    } else {
-        return 0;
-    }
-    if (aoo_getarg("maxnumframes", x, 2, argc, argv, &f, AOO_RESEND_MAXNUMFRAMES)){
-        *maxnumframes = f;
-    } else {
-        return 0;
-    }
-    return 1;
-}
-
 void aoo_format_makedefault(aoo_format_storage *f, int nchannels)
 {
     aoo_format_pcm *fmt = (aoo_format_pcm *)f;

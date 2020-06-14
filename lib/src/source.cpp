@@ -1020,8 +1020,8 @@ bool source::send_data(){
                 d.nframes = dv.quot + (dv.rem != 0);
 
                 // save block
-                history_.push(d.sequence, d.samplerate, sendbuffer_.data(),
-                              d.totalsize, d.nframes, maxpacketsize);
+                history_.push()->set(d.sequence, d.samplerate, d.channel, sendbuffer_.data(),
+                                     d.totalsize, d.nframes, maxpacketsize);
 
                 // unlock before sending!
                 updatelock.unlock();

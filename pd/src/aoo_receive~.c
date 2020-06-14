@@ -174,15 +174,19 @@ static void aoo_receive_reset(t_aoo_receive *x, t_symbol *s, int argc, t_atom *a
     }
 }
 
-static void aoo_receive_resend(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
+static void aoo_receive_resend(t_aoo_receive *x, t_floatarg f)
 {
-    int32_t limit = 0, interval = 0, maxnumframes = 0;
-    if (!aoo_parseresend(x, argc, argv, &limit, &interval, &maxnumframes)){
-        return;
-    }
-    aoo_sink_set_resend_limit(x->x_aoo_sink, limit);
-    aoo_sink_set_resend_interval(x->x_aoo_sink, interval);
-    aoo_sink_set_resend_maxnumframes(x->x_aoo_sink, maxnumframes);
+    aoo_sink_set_resend_enable(x->x_aoo_sink, f != 0);
+}
+
+static void aoo_receive_resend_limit(t_aoo_receive *x, t_floatarg f)
+{
+    aoo_sink_set_resend_maxnumframes(x->x_aoo_sink, f);
+}
+
+static void aoo_receive_resend_interval(t_aoo_receive *x, t_floatarg f)
+{
+    aoo_sink_set_resend_interval(x->x_aoo_sink, f);
 }
 
 static void aoo_receive_listsources(t_aoo_receive *x)
@@ -520,7 +524,11 @@ void aoo_receive_tilde_setup(void)
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_packetsize,
                     gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_resend,
-                    gensym("resend"), A_GIMME, A_NULL);
+                    gensym("resend"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_resend_limit,
+                    gensym("resend_limit"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_resend_interval,
+                    gensym("resend_interval"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_listsources,
                     gensym("list_sources"), A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_reset,

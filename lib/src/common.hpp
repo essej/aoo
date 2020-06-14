@@ -11,6 +11,7 @@
 
 #include <vector>
 #include <array>
+#include <bitset>
 #include <memory>
 #include <atomic>
 
@@ -30,6 +31,8 @@ public:
     void write(const aoo_sample* data, int32_t n);
     int32_t read_available();
     void read(aoo_sample* data, int32_t n);
+
+    double ratio() const { return ideal_ratio_; }
 private:
     std::vector<aoo_sample> buffer_;
     int32_t nchannels_ = 0;
@@ -37,6 +40,7 @@ private:
     int32_t wrpos_ = 0;
     double balance_ = 0;
     double ratio_ = 1.0;
+    double ideal_ratio_ = 1.0;
 };
 
 class base_codec {
@@ -123,16 +127,11 @@ class block {
 public:
     // methods
     void set(int32_t seq, double sr, int32_t chn,
-          int32_t nbytes, int32_t nframes);
-    void set(int32_t seq, double sr, int32_t chn,
              const char *data, int32_t nbytes,
              int32_t nframes, int32_t framesize);
     const char* data() const { return buffer_.data(); }
     int32_t size() const { return buffer_.size(); }
-    bool complete() const;
-    void add_frame(int32_t which, const char *data, int32_t n);
     int32_t get_frame(int32_t which, char * data, int32_t n);
-    bool has_frame(int32_t which) const;
     int32_t frame_size(int32_t which) const;
     int32_t num_frames() const { return numframes_; }
     // data
@@ -141,86 +140,103 @@ public:
     int32_t channel = 0;
 protected:
     std::vector<char> buffer_;
-    uint64_t frames_ = 0; // bitfield (later expand)
     int32_t numframes_ = 0;
     int32_t framesize_ = 0;
 };
 
-class block_queue {
+class received_block : public block {
 public:
+    void init(int32_t seq, bool dropped);
+    void init(int32_t seq, double sr, int32_t chn,
+              int32_t nbytes, int32_t nframes);
+    int32_t resend_count() const;
+    bool dropped() const ;
+    bool complete() const;
+    int32_t count_frames() const;
+    bool has_frame(int32_t which) const;
+    void add_frame(int32_t which, const char *data, int32_t n);
+    bool update(double time, double interval);
+protected:
+    std::bitset<256> frames_ = 0;
+    double timestamp_ = 0;
+    int32_t numtries_ = 0;
+    bool dropped_ = false;
+};
+
+class jitter_buffer {
+public:
+    template<typename T, typename U>
+    class base_iterator {
+        T *data_;
+        U *owner_;
+    public:
+        base_iterator(U* owner)
+            : data_(nullptr), owner_(owner){}
+        base_iterator(U* owner, T* data)
+            : data_(data), owner_(owner){}
+        base_iterator(const base_iterator&) = default;
+        base_iterator& operator=(const base_iterator&) = default;
+        T& operator*() { return *data_; }
+        T* operator->() { return data_; }
+        base_iterator& operator++() {
+            auto next = data_ + 1;
+            if (next == &(*owner_->data_.end())){
+                next = &(*owner_->data_.begin());
+            }
+            if (next == &owner_->data_[owner_->head_]){
+                next = nullptr; // sentinel
+            }
+            data_ = next;
+            return *this;
+        }
+        base_iterator operator++(int) {
+            base_iterator old = *this;
+            operator++();
+            return old;
+        }
+        bool operator==(const base_iterator& other){
+            return data_ == other.data_;
+        }
+        bool operator!=(const base_iterator& other){
+            return data_ != other.data_;
+        }
+    };
+
+    using iterator = base_iterator<received_block, jitter_buffer>;
+    using const_iterator = base_iterator<const received_block, const jitter_buffer>;
+
     void clear();
     void resize(int32_t n);
     bool empty() const;
     bool full() const;
     int32_t size() const;
     int32_t capacity() const;
-    block* insert(int32_t seq, double sr, int32_t chn,
-                  int32_t nbytes, int32_t nframes);
-    block* find(int32_t seq);
+
+    int32_t oldest() const { return oldest_; }
+    int32_t newest() const { return newest_; }
+
+    received_block* find(int32_t seq);
+    received_block* push_back(int32_t seq);
     void pop_front();
-    void pop_back();
 
-    block& front();
-    block& back();
-    block *begin();
-    block *end();
-    block& operator[](int32_t i);
+    received_block& front();
+    const received_block& front() const;
+    received_block& back();
+    const received_block& back() const;
 
-    friend std::ostream& operator<<(std::ostream& os, const block_queue& b);
+    iterator begin();
+    const_iterator begin() const;
+    iterator end();
+    const_iterator end() const;
+
+    friend std::ostream& operator<<(std::ostream& os, const jitter_buffer& b);
 private:
-    std::vector<block> blocks_;
+    std::vector<received_block> data_;
     int32_t size_ = 0;
-};
-
-class block_ack {
-public:
-    static const int32_t EMPTY = -1;
-    static const int32_t DELETED = -2;
-
-    block_ack();
-    block_ack(int32_t seq, int32_t limit);
-
-    bool update(double time, double interval);
-    int32_t remaining() const { return count_; }
-    int32_t sequence;
-private:
-    int32_t count_;
-    double timestamp_;
-};
-
-#define BLOCK_ACK_LIST_HASHTABLE 1
-#define BLOCK_ACK_LIST_SORTED 1
-
-class block_ack_list {
-public:
-    block_ack_list();
-
-    void set_limit(int32_t limit);
-    block_ack* find(int32_t seq);
-    block_ack& get(int32_t seq);
-    bool remove(int32_t seq);
-    int32_t remove_before(int32_t seq);
-    void clear();
-    bool empty() const;
-    int32_t size() const;
-
-    friend std::ostream& operator<<(std::ostream& os, const block_ack_list& b);
-private:
-#if !BLOCK_ACK_LIST_HASHTABLE
-#if BLOCK_ACK_LIST_SORTED
-    std::vector<block_ack>::iterator lower_bound(int32_t seq);
-#endif
-#else
-    void rehash();
-
-    static const int32_t initial_size_ = 16;
-
-    int32_t size_;
-    int32_t deleted_;
-    int32_t oldest_;
-#endif
-    int32_t limit_ = 0;
-    std::vector<block_ack> data_;
+    int32_t head_ = 0;
+    int32_t tail_ = 0;
+    int32_t oldest_ = -1;
+    int32_t newest_ = -1;
 };
 
 class history_buffer {
@@ -229,9 +245,7 @@ public:
     int32_t capacity() const;
     void resize(int32_t n);
     block * find(int32_t seq);
-    void push(int32_t seq, double sr,
-             const char *data, int32_t nbytes,
-             int32_t nframes, int32_t framesize);
+    block * push();
 private:
     std::vector<block> buffer_;
     int32_t oldest_ = 0;
