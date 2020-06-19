@@ -10,14 +10,14 @@
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    sodipodi:docname="aoo_vision.svg"
-   inkscape:version="0.48.3.1 r9886"
+   inkscape:version="0.92.4 (5da689c313, 2019-01-14)"
    version="1.1"
    id="svg2"
    height="492.95953"
    width="719.50671"
-   inkscape:export-filename="/home/winfried/projekte/AOO/doku/LAC2014/figures/aoo_vision.png"
-   inkscape:export-xdpi="300"
-   inkscape:export-ydpi="300">
+   inkscape:export-filename="/home/winfried/repos/AVE/DIYasb-cm/pd/src/aoo/doku/figures/aoo_vision.png"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96">
   <title
      id="title3391">AoO vision sketch</title>
   <defs
@@ -199,17 +199,17 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="1"
-     inkscape:cx="359.75337"
+     inkscape:cx="-11.74663"
      inkscape:cy="238.33005"
      inkscape:document-units="mm"
      inkscape:current-layer="layer3"
      showgrid="false"
      units="mm"
-     inkscape:window-width="1366"
-     inkscape:window-height="721"
-     inkscape:window-x="-2"
-     inkscape:window-y="-3"
-     inkscape:window-maximized="1"
+     inkscape:window-width="1114"
+     inkscape:window-height="886"
+     inkscape:window-x="708"
+     inkscape:window-y="81"
+     inkscape:window-maximized="0"
      inkscape:snap-grids="true"
      inkscape:snap-page="false"
      fit-margin-top="0"
@@ -222,12 +222,12 @@
        enabled="true"
        snapvisiblegridlinesonly="true"
        units="mm"
-       spacingx="5mm"
-       spacingy="5mm"
+       spacingx="17.716535"
+       spacingy="17.716535"
        type="xygrid"
        id="grid3078"
-       originx="-3.3269769mm"
-       originy="-4.1753742mm" />
+       originx="-11.788501"
+       originy="-14.794633" />
   </sodipodi:namedview>
   <metadata
      id="metadata7">
@@ -245,10 +245,10 @@
           </cc:Agent>
         </dc:creator>
         <cc:license
-           rdf:resource="http://creativecommons.org/licenses/by-sa/3.0/" />
+           rdf:resource="http://creativecommons.org/licenses/by-sa/4.0/" />
       </cc:Work>
       <cc:License
-         rdf:about="http://creativecommons.org/licenses/by-sa/3.0/">
+         rdf:about="http://creativecommons.org/licenses/by-sa/4.0/">
         <cc:permits
            rdf:resource="http://creativecommons.org/ns#Reproduction" />
         <cc:permits

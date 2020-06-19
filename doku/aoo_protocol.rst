@@ -8,7 +8,7 @@ AoO - Protocol -towards message based audio systems
 
 NOTE: documentation can be behind the implementation, as long as alpha and beta releases are done !!!
 
-The deployment of distributed audio systems in the context of computermusic and audio installation is explored within this library, to implement the vision of transition from static streaming audio networks to flexible dynamic audio networks. Audio data is send on demand only. Sharing sources and sinks allows us to create arbitrary audio networks, without boundaries.
+The deployment of distributed audio systems in the context of computermusic and audio installations is explored within this library, to implement the vision of transition from static streaming audio networks to flexible dynamic audio networks. Audio data is send on demand only. Sharing sources and sinks allows us to create arbitrary audio networks, without boundaries.
 
 This idea of message based audio systems, which has been investigated within several projects from  playing Ambisonics spatial audio systems, streaming over Large Area Networks (LAN) and playing within a computermusic ensembles.
 

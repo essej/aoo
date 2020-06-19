@@ -8,8 +8,26 @@ Use Cases was the driving motor for development of AoO. Here the important Proje
 
 Here historic Implementation are also shown.
 
-Streaming Boxes  
-===============
+
+virtual concert hall and rehearsal rooms
+========================================
+
+.. figure:: ./figures/aoo_vrr.png
+   :alt: ICE using AoO as space for playing together and on a PA system
+   :width: 95%
+
+   Musicians using AoO as rehearsal space for playing together with conductor and binaural rendering
+
+See VRR_ homepage dokumentation [VRR_DOKU] for further info.
+ 
+.. _VRR: http://vrr.iem.at/
+
+ 
+
+.. [VRR_DOKU] http://vrr.iem.at/docs/vrr
+
+stream boxes  
+============
 
 A reference project can be found at IEM git server, which is the realisation of streams for Bill Fontana just exploring in Graz:
 
@@ -26,9 +44,8 @@ A reference project can be found at IEM git server, which is the realisation of 
 Doku: To be done... there and here
 
 
-
-Playing together
-================
+Playing together on stages
+==========================
 
 .. .. centered::
 
@@ -40,8 +57,7 @@ Playing together
 
    first concert of IEM computermusic ensemble ICE playing over a HUB
 
-
-When specifying an audio-network for playing togehter within an ensemble, a focus was set on the collaborating efforts to be done to gain the unity of the individuals.
+When specifying an audio-network for playing together within an ensemble, a focus was set on the collaborating efforts to be done to gain the unity of the individuals.
 
 So, like a musicians with acoustic instrument, joining a band with Linux audio-computer implies a need for a place where the musician has a ”virtual sound space“ they can join. So they provide sound sources and need to plugin audio channels on a virtual mixing desk. With AoO the participant just needs to connect to the network, wireless or wired, choosing the sinks to play to and send phrases of audio with AoO when needed.
 
@@ -55,7 +71,7 @@ Using a message audio system, each musicians only sends sound data if playing, l
 
 .. _fig-aoo_ice:
 
-.. figure:: ./figures/aoo_ice.pdf
+.. figure:: ./figures/aoo_ice.png
    :alt: ICE using AoO as space for playing together and on a PA system
    :width: 95%
 
@@ -72,7 +88,7 @@ message based Ambisonics spatial audio systems
 
 .. _fig-aoo_embedded:
 
-.. figure:: ./figures/aoo_ave.pdf
+.. figure:: ./figures/aoo_ave.png
    :alt: AoO with embedded devices for spatial audio system
    :width: 80%
 
@@ -109,7 +125,6 @@ The first implementation of the nodes has been done with special micro-controlle
 
 
 The main advantage, besides the low cost and autonomous system, is that one or more sound technicians or computer musicians can enter the dome, plug into the network with their portable devices and play the sound dome either addressing speakers individually, with audio material spatializing live with additional OSC messages or a generated or prerecorded Ambisonics audio material.
-
 
 .. raw:: latex
 
