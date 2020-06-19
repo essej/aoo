@@ -121,6 +121,7 @@ or out of sync), f 47;
 #X restore 89 262 pd advanced;
 #X text 37 509 see also;
 #X obj 107 509 aoo_send~;
+#X obj 184 509 aoo_server;
 #X connect 1 0 16 0;
 #X connect 2 0 1 0;
 #X connect 3 0 4 0;

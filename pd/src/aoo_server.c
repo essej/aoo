@@ -62,7 +62,7 @@ static int32_t aoo_server_handle_events(t_aoo_server *x,
             t_atom msg[2];
             SETSYMBOL(msg, gensym(e->group));
             SETSYMBOL(msg + 1, gensym(e->user));
-            outlet_anything(x->x_msgout, gensym("group_leave"), 2, msg);
+            outlet_anything(x->x_msgout, gensym("group_join"), 2, msg);
 
             break;
         }

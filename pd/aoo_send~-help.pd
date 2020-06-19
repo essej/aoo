@@ -1,4 +1,4 @@
-#N canvas 381 75 682 683 12;
+#N canvas 381 75 682 686 12;
 #X declare -lib aoo;
 #X text 247 401 creation arguments:;
 #N canvas 135 97 551 377 pcm 0;
@@ -299,6 +299,7 @@ event which, f 64;
 #X restore 97 384 pd advanced;
 #X text 25 636 see also;
 #X obj 98 636 aoo_receive~;
+#X obj 203 637 aoo_server;
 #X connect 1 0 31 0;
 #X connect 2 0 31 0;
 #X connect 4 0 14 0;
