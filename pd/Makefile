@@ -118,9 +118,6 @@ shared.sources += \
     $(empty)
 endif
 
-# hack to set the C++ standard only for the shared library
-$(shared.sources:.cpp=.o): cxx.flags += -std=c++14
-
 ldlibs += $(OSCPACK_LIBS) $(MD5_LIBS)
 
 # Opus
@@ -133,6 +130,9 @@ cflags += $(OPUS_CFLAGS)
 ldlibs += $(OPUS_LIBS)
 shared.sources += $(AOO)/src/codec_opus.cpp
 endif
+
+# hack to set the C++ standard only for the shared library
+$(shared.sources:.cpp=.o): cxx.flags += -std=c++14
 
 # platform specific options
 define forWindows
