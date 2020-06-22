@@ -558,7 +558,7 @@ int32_t sink::handle_ping_message(void *endpoint, aoo_replyfn fn,
     if (src){
         return src->handle_ping(*this, tt);
     } else {
-        LOG_WARNING("couldn't find source for " << AOO_MSG_PING << " message");
+        LOG_WARNING("couldn't find source " << id << " for " << AOO_MSG_PING << " message");
         return 0;
     }
 }
