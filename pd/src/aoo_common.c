@@ -2,12 +2,12 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
-#include "m_pd.h"
-#include "aoo/aoo.h"
-#include "aoo/aoo_pcm.h"
-#include "aoo/aoo_opus.h"
 
 #include "aoo_common.h"
+#include "aoo/aoo_pcm.h"
+#if USE_CODEC_OPUS
+#include "aoo/aoo_opus.h"
+#endif
 
 #include <stdio.h>
 #include <inttypes.h>
