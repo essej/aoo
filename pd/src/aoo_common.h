@@ -14,8 +14,6 @@
 #endif
 
 #include "aoo/aoo.h"
-#include "aoo/aoo_pcm.h"
-#include "aoo/aoo_opus.h"
 
 #ifndef _WIN32
 #include <pthread.h>
