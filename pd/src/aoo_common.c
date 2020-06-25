@@ -246,7 +246,9 @@ int aoo_format_parse(void *x, aoo_format_storage *f, int argc, t_atom *argv)
             pd_error(x, "%s: bad bitdepth argument %d", classname(x), bitdepth);
             return 0;
         }
-    } else if (codec == gensym(AOO_CODEC_OPUS)){
+    }
+#if USE_CODEC_OPUS
+    else if (codec == gensym(AOO_CODEC_OPUS)){
         aoo_format_opus *fmt = (aoo_format_opus *)f;
         fmt->header.codec = AOO_CODEC_OPUS;
         // bitrate ("auto", "max" or float)
@@ -311,7 +313,9 @@ int aoo_format_parse(void *x, aoo_format_storage *f, int argc, t_atom *argv)
         } else {
             fmt->signal_type = OPUS_AUTO;
         }
-    } else {
+    }
+#endif
+    else {
         pd_error(x, "%s: unknown codec '%s'", classname(x), codec->s_name);
         return 0;
     }
@@ -356,7 +360,9 @@ int aoo_format_toatoms(const aoo_format *f, int argc, t_atom *argv)
         }
         SETFLOAT(argv + 3, nbits);
         return 4;
-    } else if (codec == gensym(AOO_CODEC_OPUS)){
+    }
+#if USE_CODEC_OPUS
+    else if (codec == gensym(AOO_CODEC_OPUS)){
         // opus <blocksize> <samplerate> <bitrate> <complexity> <signaltype>
         if (argc < 6){
             error("aoo_format_toatoms: too few atoms for opus format!");
@@ -397,7 +403,9 @@ int aoo_format_toatoms(const aoo_format *f, int argc, t_atom *argv)
         }
         SETSYMBOL(argv + 5, signaltype);
         return 6;
-    } else {
+    }
+#endif
+    else {
         error("aoo_format_toatoms: unknown format %s!", codec->s_name);
     }
     return 0;
