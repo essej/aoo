@@ -193,18 +193,35 @@ void aoo_format_makedefault(aoo_format_storage *f, int nchannels)
     fmt->bitdepth = AOO_PCM_FLOAT32;
 }
 
+int32_t aoo_format_getparam(void *x, int argc, t_atom *argv, int which,
+                                 const char *name, int32_t def)
+{
+    if (argc > which){
+        if (argv[which].a_type == A_FLOAT){
+            return argv[which].a_w.w_float;
+        }
+    #if 1
+        t_symbol *s = atom_getsymbol(argv + which);
+        if (s != gensym("auto")){
+            pd_error(x, "%s: bad %s argument %s, using %d", classname(x), name, s->s_name, def);
+        }
+    #endif
+    }
+    return def;
+}
+
 int aoo_format_parse(void *x, aoo_format_storage *f, int argc, t_atom *argv)
 {
     t_symbol *codec = atom_getsymbolarg(0, argc, argv);
-    f->header.blocksize = argc > 1 ? atom_getfloat(argv + 1) : 64;
-    f->header.samplerate = argc > 2 ? atom_getfloat(argv + 2) : sys_getsr();
-    // omit nchannels
 
     if (codec == gensym(AOO_CODEC_PCM)){
         aoo_format_pcm *fmt = (aoo_format_pcm *)f;
         fmt->header.codec = AOO_CODEC_PCM;
+        fmt->header.blocksize = aoo_format_getparam(x, argc, argv, 1, "blocksize", 64);
+        fmt->header.samplerate = aoo_format_getparam(x, argc, argv, 2, "samplerate", sys_getsr());
+        // fmt->header.nchannels
 
-        int bitdepth = argc > 3 ? atom_getfloat(argv + 3) : 4;
+        int bitdepth = aoo_format_getparam(x, argc, argv, 3, "bitdepth", 4);
         switch (bitdepth){
         case 2:
             fmt->bitdepth = AOO_PCM_INT16;
@@ -212,7 +229,6 @@ int aoo_format_parse(void *x, aoo_format_storage *f, int argc, t_atom *argv)
         case 3:
             fmt->bitdepth = AOO_PCM_INT24;
             break;
-        case 0: // default
         case 4:
             fmt->bitdepth = AOO_PCM_FLOAT32;
             break;
@@ -228,6 +244,10 @@ int aoo_format_parse(void *x, aoo_format_storage *f, int argc, t_atom *argv)
     else if (codec == gensym(AOO_CODEC_OPUS)){
         aoo_format_opus *fmt = (aoo_format_opus *)f;
         fmt->header.codec = AOO_CODEC_OPUS;
+        fmt->header.blocksize = aoo_format_getparam(x, argc, argv, 1, "blocksize", 480); // 10ms
+        fmt->header.samplerate = aoo_format_getparam(x, argc, argv, 2, "samplerate", 48000);
+        // fmt->header.nchannels
+
         // bitrate ("auto", "max" or float)
         if (argc > 3){
             if (argv[3].a_type == A_SYMBOL){
@@ -253,26 +273,12 @@ int aoo_format_parse(void *x, aoo_format_storage *f, int argc, t_atom *argv)
             fmt->bitrate = OPUS_AUTO;
         }
         // complexity ("auto" or 0-10)
-        if (argc > 4){
-            if (argv[4].a_type == A_SYMBOL){
-                t_symbol *sym = argv[4].a_w.w_symbol;
-                if (sym == gensym("auto")){
-                    fmt->complexity = OPUS_AUTO;
-                } else {
-                    pd_error(x, "%s: bad complexity argument '%s'", classname(x), sym->s_name);
-                    return 0;
-                }
-            } else {
-                int complexity = atom_getfloat(argv + 4);
-                if (complexity < 0 || complexity > 10){
-                    pd_error(x, "%s: complexity value %d out of range", classname(x), complexity);
-                    return 0;
-                }
-                fmt->complexity = complexity;
-            }
-        } else {
-            fmt->complexity = OPUS_AUTO;
+        int complexity = aoo_format_getparam(x, argc, argv, 4, "complexity", OPUS_AUTO);
+        if ((complexity < 0 || complexity > 10) && complexity != OPUS_AUTO){
+            pd_error(x, "%s: complexity value %d out of range", classname(x), complexity);
+            return 0;
         }
+        fmt->complexity = complexity;
         // signal type ("auto", "music", "voice")
         if (argc > 5){
             t_symbol *type = atom_getsymbol(argv + 5);
