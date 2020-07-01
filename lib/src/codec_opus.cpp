@@ -66,19 +66,20 @@ void validate_format(aoo_format_opus& f)
         f.header.nchannels = 1;
     }
     // validate blocksize
-    int minblocksize = f.header.samplerate / 400; // 120 samples @ 48 kHz
-    int maxblocksize = minblocksize * 24; // 2880 samples @ 48 kHz
+    const int minblocksize = f.header.samplerate / 400; // 2.5 ms (e.g. 120 samples @ 48 kHz)
+    const int maxblocksize = minblocksize * 24; // 60 ms (e.g. 2880 samples @ 48 kHz)
     int blocksize = f.header.blocksize;
-    if (blocksize < minblocksize){
+    if (blocksize <= minblocksize){
         f.header.blocksize = minblocksize;
-    } else if (blocksize > maxblocksize){
+    } else if (blocksize >= maxblocksize){
         f.header.blocksize = maxblocksize;
     } else {
-        // round down
-        while (blocksize > (minblocksize * 2)){
-            minblocksize *= 2;
+        // round down to nearest multiple of 2.5 ms (in power of 2 steps)
+        int result = minblocksize;
+        while (result <= blocksize){
+            result *= 2;
         }
-        f.header.blocksize = minblocksize;
+        f.header.blocksize = result / 2;
     }
     // bitrate, complexity and signal type should be validated by opus
 }
