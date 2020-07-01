@@ -349,6 +349,22 @@ int32_t aoo::sink::send(){
     return didsomething;
 }
 
+int32_t aoo_sink_decode(aoo_sink *sink) {
+    return sink->decode();
+}
+
+int32_t aoo::sink::decode() {
+    bool result = false;
+
+    for (auto& s : sources_){
+        if (s.decode(*this)){
+            result = true;
+        }
+    }
+
+    return result;
+}
+
 int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,
                          int32_t nsamples, uint64_t t) {
     return sink->process(data, nsamples, t);
@@ -768,6 +784,19 @@ bool source_desc::send(const sink& s){
         didsomething = true;
     }
     return didsomething;
+}
+
+bool source_desc::decode(const sink& s){
+    // synchronize with update()!
+    shared_lock lock(mutex_);
+
+    // process blocks and send audio
+    process_blocks();
+
+    // check and resend missing blocks
+    check_missing_blocks(s);
+
+    return true;
 }
 
 bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){

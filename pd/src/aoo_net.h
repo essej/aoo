@@ -23,7 +23,7 @@ int socket_sendto(int socket, const char *buf, int size, const struct sockaddr *
 
 int socket_receive(int socket, char *buf, int size,
                    struct sockaddr_storage *sa, socklen_t *len,
-                   int nonblocking);
+                   int32_t timeout);
 
 int socket_setsendbufsize(int socket, int bufsize);
 

@@ -153,6 +153,8 @@ public:
 
     bool send(const sink& s);
 
+    bool decode(const sink& s);
+
     bool process(const sink& s, aoo_sample *buffer, int32_t size);
 
     void add_xrun(int32_t n){ streamstate_.add_xrun(n); }
@@ -236,6 +238,8 @@ public:
                            void *endpoint, aoo_replyfn fn) override;
 
     int32_t send() override;
+
+    int32_t decode() override;
 
     int32_t process(aoo_sample **data, int32_t nsamples, uint64_t t) override;
 

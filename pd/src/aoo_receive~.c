@@ -76,6 +76,12 @@ void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
     aoo_lock_unlock_shared(&x->x_lock);
 }
 
+// called from the network receive thread
+void aoo_receive_update(t_aoo_receive *x)
+{
+    aoo_sink_decode(x->x_aoo_sink);
+}
+
 // called from the network send thread
 void aoo_receive_send(t_aoo_receive *x)
 {

@@ -531,6 +531,9 @@ AOO_API int32_t aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_
 // send outgoing messages - will call the reply function (threadsafe, but not reentrant)
 AOO_API int32_t aoo_sink_send(aoo_sink *sink);
 
+// decode blocks (threadsafe, but not reentrant)
+AOO_API int32_t aoo_sink_decode(aoo_sink *sink);
+
 // process audio (threadsafe, but not reentrant)
 AOO_API int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,
                                  int32_t nsamples, uint64_t t);

@@ -9,7 +9,7 @@
 typedef int socklen_t;
 #else
 #include <sys/socket.h>
-#include <sys/select.h>
+#include <sys/poll.h>
 #include <unistd.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -112,22 +112,25 @@ int socket_sendto(int socket, const char *buf, int size, const struct sockaddr *
 
 int socket_receive(int socket, char *buf, int size,
                    struct sockaddr_storage *sa, socklen_t *len,
-                   int nonblocking)
+                   int32_t timeout)
 {
-    if (nonblocking){
-        // non-blocking receive via select()
-        struct timeval tv;
-        tv.tv_sec = 0;
-        tv.tv_usec = 0;
-        fd_set rdset;
-        FD_ZERO(&rdset);
-        FD_SET(socket, &rdset);
-        if (select(socket + 1, &rdset, 0, 0, &tv) > 0){
-            if (!FD_ISSET(socket, &rdset)){
-                return 0;
-            }
-        } else {
-            return 0;
+    if (timeout >= 0){
+        // non-blocking receive via poll()
+        struct pollfd p;
+        p.fd = socket;
+        p.revents = 0;
+        p.events = POLLIN;
+    #ifdef _WIN32
+        int result = WSAPoll(&p, 1, timeout / 1000);
+    #else
+        int result = poll(&p, 1, timeout / 1000);
+    #endif
+        if (result < 0){
+            socket_error_print("poll");
+            return -1; // poll failed
+        }
+        if (!(result > 0 && (p.revents & POLLIN))){
+            return 0; // timeout
         }
     }
     if (sa && len){

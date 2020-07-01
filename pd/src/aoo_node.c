@@ -14,13 +14,7 @@
  #define AOO_NODE_POLL 0
 #endif
 
-#if AOO_NODE_POLL
- #ifdef _WIN32
-  #include <winsock2.h>
- #else
-  #include <sys/poll.h>
- #endif
-#endif // AOO_NODE_POLL
+#define AOO_POLL_INTERVAL 1000 // microseconds
 
 // aoo_receive
 
@@ -32,6 +26,8 @@ void aoo_receive_send(t_aoo_receive *x);
 
 void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
                                 int32_t n, void *endpoint, aoo_replyfn fn);
+
+void aoo_receive_update(t_aoo_receive *x);
 
 // aoo_send
 
@@ -272,7 +268,8 @@ void aoo_node_doreceive(t_aoo_node *x)
     struct sockaddr_storage sa;
     socklen_t len;
     char buf[AOO_MAXPACKETSIZE];
-    int nbytes = socket_receive(x->x_socket, buf, AOO_MAXPACKETSIZE, &sa, &len, 0);
+    int nbytes = socket_receive(x->x_socket, buf, AOO_MAXPACKETSIZE,
+                                &sa, &len, AOO_POLL_INTERVAL);
     if (nbytes > 0){
         // try to find endpoint
         pthread_mutex_lock(&x->x_endpointlock);
@@ -343,7 +340,21 @@ void aoo_node_doreceive(t_aoo_node *x)
             fprintf(stderr, "aoo_node: not a valid AOO message!\n");
             fflush(stderr);
         }
-    } else if (nbytes < 0){
+    } else if (nbytes == 0){
+        // timeout -> update receivers
+        aoo_lock_lock_shared(&x->x_clientlock);
+        for (int i = 0; i < x->x_numclients; ++i){
+            if (pd_class(x->x_clients[i].c_obj) == aoo_receive_class){
+                t_aoo_receive *rcv = (t_aoo_receive *)x->x_clients[i].c_obj;
+                aoo_receive_update(rcv);
+            }
+        }
+        aoo_lock_unlock_shared(&x->x_clientlock);
+    #if !AOO_NODE_POLL
+        // notify send thread
+        pthread_cond_signal(&x->x_condition);
+    #endif
+    } else {
         // ignore errors when quitting
         if (!x->x_quit){
             socket_error_print("recv");
@@ -352,7 +363,6 @@ void aoo_node_doreceive(t_aoo_node *x)
 }
 
 #if AOO_NODE_POLL
-
 static void* aoo_node_thread(void *y)
 {
     t_aoo_node *x = (t_aoo_node *)y;
@@ -360,26 +370,12 @@ static void* aoo_node_thread(void *y)
     lower_thread_priority();
 
     while (!x->x_quit){
-        struct pollfd p;
-        p.fd = x->x_socket;
-        p.revents = 0;
-        p.events = POLLIN;
-
-        int result = poll(&p, 1, 1); // 1 ms timeout
-        if (result < 0){
-            int err = errno;
-            fprintf(stderr, "poll() failed: %s\n", strerror(err));
-            break;
-        }
-        if (result > 0 && (p.revents & POLLIN)){
-            aoo_node_doreceive(x);
-        }
+        aoo_node_doreceive(x);
         aoo_node_dosend(x);
     }
 
     return 0;
 }
-
 #else
 static void* aoo_node_send(void *y)
 {
