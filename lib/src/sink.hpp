@@ -78,6 +78,9 @@ struct stream_state {
     void add_xrun(int32_t nblocks) { xrun_ += nblocks; }
     int32_t get_xrun() { return xrun_.exchange(0); }
 
+    void set_underrun() { underrun_.store(true); }
+    bool have_underrun() { return underrun_.exchange(false); }
+
     void request_format() { format_ = true; }
     bool need_format() { return format_.exchange(false); }
 

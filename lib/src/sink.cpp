@@ -908,6 +908,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
             e.source_state.state = AOO_SOURCE_STATE_STOP;
             push_event(e);
         }
+        streamstate_.set_underrun(); // notify network thread!
 
         return false;
     }
@@ -1096,7 +1097,7 @@ void source_desc::process_blocks(){
         }
 
         // check for buffer underrun
-        if (available == capacity){
+        if (streamstate_.have_underrun()){
             recover("audio buffer underrun");
             return;
         }
