@@ -758,12 +758,15 @@ void source::update(){
 
     if (blocksize_ > 0){
         assert(samplerate_ > 0 && nchannels_ > 0);
-        // setup audio buffer
-        auto nsamples = encoder_->blocksize() * nchannels_;
-        double bufsize = (double)buffersize_ * encoder_->samplerate() * 0.001;
+
+        // recalculate buffersize from ms to samples
+        double bufsize = buffersize_ * 0.001 * encoder_->samplerate();
         auto d = div(bufsize, encoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         nbuffers = std::max<int32_t>(nbuffers, 1); // need at least 1 buffer!
+
+        // resize audio buffer
+        auto nsamples = encoder_->blocksize() * nchannels_;
         audioqueue_.resize(nbuffers * nsamples, nsamples);
         srqueue_.resize(nbuffers, 1);
         LOG_DEBUG("aoo::source::update: nbuffers = " << nbuffers);

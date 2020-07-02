@@ -616,20 +616,23 @@ void source_desc::do_update(const sink &s){
     // resize audio ring buffer
     if (decoder_ && decoder_->blocksize() > 0 && decoder_->samplerate() > 0){
         // recalculate buffersize from ms to samples
-        double bufsize = (double)s.buffersize() * decoder_->samplerate() * 0.001;
+        double bufsize = s.buffersize() * 0.001 * decoder_->samplerate();
         auto d = div(bufsize, decoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         nbuffers = std::max<int32_t>(1, nbuffers); // e.g. if buffersize_ is 0
+
         // resize audio buffer and initially fill with zeros.
         auto nsamples = decoder_->nchannels() * decoder_->blocksize();
         audioqueue_.resize(nbuffers * nsamples, nsamples);
         infoqueue_.resize(nbuffers, 1);
+        channel_ = 0;
+        samplerate_ = decoder_->samplerate();
         int count = 0;
         while (audioqueue_.write_available() && infoqueue_.write_available()){
             audioqueue_.write_commit();
             // push nominal samplerate + default channel (0)
             block_info i;
-            i.sr = decoder_->samplerate();
+            i.sr = samplerate_;
             i.channel = 0;
             infoqueue_.write(i);
             count++;
@@ -639,13 +642,13 @@ void source_desc::do_update(const sink &s){
         // don't touch the event queue once constructed
         eventqueue_.reset();
     #endif
+
         // setup resampler
         resampler_.setup(decoder_->blocksize(), s.blocksize(),
-                            decoder_->samplerate(), s.samplerate(), decoder_->nchannels());
+                         decoder_->samplerate(), s.samplerate(), decoder_->nchannels());
         // resize block queue
         jitterbuffer_.resize(nbuffers + 4); // extra capacity for network jitter (allows lower buffersizes)
-        channel_ = 0;
-        samplerate_ = decoder_->samplerate();
+
         streamstate_.reset();
         LOG_DEBUG("update source " << id_ << ": sr = " << decoder_->samplerate()
                     << ", blocksize = " << decoder_->blocksize() << ", nchannels = "
