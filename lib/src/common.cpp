@@ -552,6 +552,7 @@ std::ostream& operator<<(std::ostream& os, const jitter_buffer& jb){
 #define AOO_RESAMPLER_SPACE 3
 
 void dynamic_resampler::setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_t srto, int32_t nchannels){
+    clear();
     nchannels_ = nchannels;
     auto blocksize = std::max<int32_t>(nfrom, nto);
 #if 0
@@ -562,7 +563,7 @@ void dynamic_resampler::setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_
     buffer_.resize(blocksize * nchannels_ * AOO_RESAMPLER_SPACE); // extra space for fluctuations
 #endif
     ideal_ratio_ = srto / srfrom;
-    clear();
+    update(srfrom, srto);
 }
 
 void dynamic_resampler::clear(){

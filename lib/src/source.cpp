@@ -772,7 +772,6 @@ void source::update(){
         if (blocksize_ != encoder_->blocksize() || samplerate_ != encoder_->samplerate()){
             resampler_.setup(blocksize_, encoder_->blocksize(),
                              samplerate_, encoder_->samplerate(), nchannels_);
-            resampler_.update(samplerate_, encoder_->samplerate());
         } else {
             resampler_.clear();
         }
