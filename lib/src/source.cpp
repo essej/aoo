@@ -541,9 +541,8 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     }
 
     // non-interleaved -> interleaved
-    auto insamples = blocksize_ * nchannels_;
-    auto outsamples = encoder_->blocksize() * nchannels_;
-    auto *buf = (aoo_sample *)alloca(insamples * sizeof(aoo_sample));
+    auto nsamples = blocksize_ * nchannels_;
+    auto *buf = (aoo_sample *)alloca(nsamples * sizeof(aoo_sample));
     for (int i = 0; i < nchannels_; ++i){
         for (int j = 0; j < n; ++j){
             buf[j * nchannels_ + i] = data[i][j];
@@ -552,18 +551,15 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
 
     if (encoder_->blocksize() != blocksize_ || encoder_->samplerate() != samplerate_){
         // go through resampler
-        if (resampler_.write_available() >= insamples){
-            resampler_.write(buf, insamples);
-        } else {
+        if (!resampler_.write(buf, nsamples)){
             // LOG_DEBUG("couldn't process");
-            return false;
+            return 0;
         }
-        while (resampler_.read_available() >= outsamples
-               && audioqueue_.write_available()
-               && srqueue_.write_available())
-        {
+        while (audioqueue_.write_available() && srqueue_.write_available()){
             // copy audio samples
-            resampler_.read(audioqueue_.write_data(), audioqueue_.blocksize());
+            if (!resampler_.read(audioqueue_.write_data(), audioqueue_.blocksize())){
+                break;
+            }
             audioqueue_.write_commit();
 
             // push samplerate
@@ -574,7 +570,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
         // bypass resampler
         if (audioqueue_.write_available() && srqueue_.write_available()){
             // copy audio samples
-            std::copy(buf, buf + outsamples, audioqueue_.write_data());
+            std::copy(buf, buf + audioqueue_.blocksize(), audioqueue_.write_data());
             audioqueue_.write_commit();
 
             // push samplerate

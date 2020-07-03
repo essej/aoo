@@ -812,24 +812,23 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         return false;
     }
 
-    int32_t nsamples = audioqueue_.blocksize();
-
 #if AOO_DEBUG_AUDIO_BUFFER
     auto capacity = audioqueue_.capacity() / audioqueue_.blocksize();
     DO_LOG("audioqueue: " << audioqueue_.read_available() << " / " << capacity);
 #endif
 
-    while (audioqueue_.read_available() && infoqueue_.read_available()
-           && resampler_.write_available() >= nsamples){
+    while (audioqueue_.read_available() && infoqueue_.read_available()){
+        // write audio into resampler
+        if (!resampler_.write(audioqueue_.read_data(), audioqueue_.blocksize())){
+            break;
+        }
+        audioqueue_.read_commit();
+
         // get block info and set current channel + samplerate
         block_info info;
         infoqueue_.read(info);
         channel_ = info.channel;
         samplerate_ = info.sr;
-
-        // write audio into resampler
-        resampler_.write(audioqueue_.read_data(), nsamples);
-        audioqueue_.read_commit();
 
         // record stream state
         int32_t lost = streamstate_.get_lost();
@@ -869,11 +868,9 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
     resampler_.update(samplerate_, s.real_samplerate());
     // read samples from resampler
     auto nchannels = decoder_->nchannels();
-    auto readsamples = s.blocksize() * nchannels;
-    if (resampler_.read_available() >= readsamples){
-        auto buf = (aoo_sample *)alloca(readsamples * sizeof(aoo_sample));
-        resampler_.read(buf, readsamples);
-
+    auto readsize = s.blocksize() * nchannels;
+    auto readbuf = (aoo_sample *)alloca(readsize * sizeof(aoo_sample));
+    if (resampler_.read(readbuf, readsize)){
         // sum source into sink (interleaved -> non-interleaved),
         // starting at the desired sink channel offset.
         // out of bound source channels are silently ignored.
@@ -883,7 +880,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
                 auto n = s.blocksize();
                 auto out = buffer + n * chn;
                 for (int j = 0; j < n; ++j){
-                    out[j] += buf[j * nchannels + i];
+                    out[j] += readbuf[j * nchannels + i];
                 }
             }
         }

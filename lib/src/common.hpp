@@ -27,10 +27,8 @@ public:
     void setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_t srto, int32_t nchannels);
     void clear();
     void update(double srfrom, double srto);
-    int32_t write_available();
-    void write(const aoo_sample* data, int32_t n);
-    int32_t read_available();
-    void read(aoo_sample* data, int32_t n);
+    bool write(const aoo_sample* data, int32_t n);
+    bool read(aoo_sample* data, int32_t n);
 
     double ratio() const { return ideal_ratio_; }
 private:
