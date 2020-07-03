@@ -547,8 +547,8 @@ int client::try_connect(const std::string &host, int port){
     // resolve host name
     struct hostent *he = gethostbyname(host.c_str());
     if (!he){
-        int err = socket_errno();
-        LOG_ERROR("aoo_client: couldn't connect (" << err << ")");
+        int err = h_errno;
+        LOG_ERROR("aoo_client: couldn't resolve hostname (" << err << ")");
         return err;
     }
 
