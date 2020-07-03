@@ -541,7 +541,8 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     }
 
     // non-interleaved -> interleaved
-    auto insamples = blocksize_ * nchannels_;
+    //auto insamples = blocksize_ * nchannels_;
+    auto insamples = n * nchannels_;
     auto outsamples = encoder_->blocksize() * nchannels_;
     auto *buf = (aoo_sample *)alloca(insamples * sizeof(aoo_sample));
     for (int i = 0; i < nchannels_; ++i){
@@ -550,27 +551,56 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
         }
     }
 
-    if (encoder_->blocksize() != blocksize_ || encoder_->samplerate() != samplerate_){
-        // go through resampler
-        if (resampler_.write_available() >= insamples){
-            resampler_.write(buf, insamples);
-        } else {
-            // LOG_DEBUG("couldn't process");
-            return false;
-        }
-        while (resampler_.read_available() >= outsamples
-               && audioqueue_.write_available()
-               && srqueue_.write_available())
-        {
-            // copy audio samples
-            resampler_.read(audioqueue_.write_data(), audioqueue_.blocksize());
-            audioqueue_.write_commit();
+    // ALWAYS use resampling buffer, just in case the caller needs to call us 
+    // with varying sample counts on occasion. This can happen for various reasons
+    // including being used within an audio plugin where the host may split the audio call
+    // back calling with fewer samples. More importantly, this allows us to better decouple 
+    // the audio process blocksize from the audioqueue blocksize (which matches the codec blocksize).
 
-            // push samplerate
-            auto ratio = (double)encoder_->samplerate() / (double)samplerate_;
-            srqueue_.write(dll_.samplerate() * ratio);
+    //if (encoder_->blocksize() != blocksize_ || encoder_->samplerate() != samplerate_)
+    {
+        // go through resampler
+        auto samplesleft = insamples;
+        auto * pbuf = buf;
+
+        auto availsamples = resampler_.write_available();
+        
+        while (samplesleft > 0) {
+            auto usesamples = std::min(samplesleft, availsamples);
+            
+            resampler_.write(pbuf, usesamples);
+
+            samplesleft -= usesamples;
+            
+            bool didconsume = false;
+            
+            while (resampler_.read_available() >= outsamples
+                   && audioqueue_.write_available()
+                   && srqueue_.write_available())
+            {
+                // copy audio samples
+                resampler_.read(audioqueue_.write_data(), audioqueue_.blocksize());
+                audioqueue_.write_commit();
+                
+                // push samplerate
+                auto ratio = (double)encoder_->samplerate() / (double)samplerate_;
+                srqueue_.write(dll_.samplerate() * ratio);
+
+                didconsume = true;
+            }
+
+            // now update after any processing
+            availsamples = resampler_.write_available();
+            
+            if (!didconsume && samplesleft > availsamples) {
+                // didn't consume any, and we can't fit any more
+                // LOG_WARNING("resampler could not handle all input samples, " << samplesleft << " unprocessed, avail " << availsamples);
+                break;
+            }
         }
-    } else {
+    } 
+#if 0
+    else {
         // bypass resampler
         if (audioqueue_.write_available() && srqueue_.write_available()){
             // copy audio samples
@@ -583,6 +613,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
             // LOG_DEBUG("couldn't process");
         }
     }
+#endif
     return 1;
 }
 
@@ -769,13 +800,13 @@ void source::update(){
         LOG_DEBUG("aoo::source::update: nbuffers = " << nbuffers);
 
         // resampler
-        if (blocksize_ != encoder_->blocksize() || samplerate_ != encoder_->samplerate()){
+       // if (blocksize_ != encoder_->blocksize() || samplerate_ != encoder_->samplerate()){
             resampler_.setup(blocksize_, encoder_->blocksize(),
                              samplerate_, encoder_->samplerate(), nchannels_);
             resampler_.update(samplerate_, encoder_->samplerate());
-        } else {
-            resampler_.clear();
-        }
+        //} else {
+        //    resampler_.clear();
+        //}
 
         // history buffer
         update_historybuffer();

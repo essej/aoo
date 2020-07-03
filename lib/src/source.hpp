@@ -131,6 +131,7 @@ class source final : public isource {
     int32_t salt_ = 0;
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
+    int32_t maxblocksize_ = 0;
     int32_t samplerate_ = 0;
     // audio encoder
     std::unique_ptr<encoder> encoder_;

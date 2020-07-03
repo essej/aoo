@@ -820,7 +820,7 @@ std::ostream& operator<<(std::ostream& os, const block_queue& b){
 
 /*////////////////////////// dynamic_resampler /////////////////////////////*/
 
-#define AOO_RESAMPLER_SPACE 3
+#define AOO_RESAMPLER_SPACE 8 // was 3
 
 void dynamic_resampler::setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_t srto, int32_t nchannels){
     nchannels_ = nchannels;

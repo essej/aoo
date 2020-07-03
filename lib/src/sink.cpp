@@ -970,7 +970,9 @@ bool source_desc::check_packet(const data_packet &d){
         auto nsamples = audioqueue_.blocksize();
         while (audioqueue_.write_available() > 1 && infoqueue_.write_available() > 1){
             auto ptr = audioqueue_.write_data();
-            decoder_->decode(nullptr, 0, ptr, nsamples);
+            if (!decoder_->decode(nullptr, 0, ptr, nsamples)) {
+                LOG_WARNING("decode failed nsamples: " << nsamples);
+            }
             audioqueue_.write_commit();
             // push nominal samplerate + current channel
             block_info i;

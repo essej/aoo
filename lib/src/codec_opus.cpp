@@ -75,7 +75,7 @@ void validate_format(aoo_format_opus& f)
         f.header.blocksize = maxblocksize;
     } else {
         // round down
-        while (blocksize > (minblocksize * 2)){
+        while (blocksize > (minblocksize * 2)-1){
             minblocksize *= 2;
         }
         f.header.blocksize = minblocksize;
@@ -236,8 +236,9 @@ int32_t decoder_decode(void *dec,
                     c->state, (const unsigned char *)buf, size, s, framesize, 0);
         if (result > 0){
             return result;
-        } else {
+        } else if (result < 0) {
             LOG_VERBOSE("Opus: opus_decode_float() failed with error code " << result);
+            return result;
         }
     }
     return 0;
