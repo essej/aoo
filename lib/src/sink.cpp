@@ -6,6 +6,7 @@
 #include "aoo/aoo_utils.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 /*//////////////////// aoo_sink /////////////////////*/
 
@@ -616,10 +617,14 @@ void source_desc::do_update(const sink &s){
     // resize audio ring buffer
     if (decoder_ && decoder_->blocksize() > 0 && decoder_->samplerate() > 0){
         // recalculate buffersize from ms to samples
-        double bufsize = s.buffersize() * 0.001 * decoder_->samplerate();
+        int32_t bufsize = (double)s.buffersize() * 0.001 * decoder_->samplerate();
         auto d = div(bufsize, decoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
-        nbuffers = std::max<int32_t>(1, nbuffers); // e.g. if buffersize_ is 0
+        // minimum buffer size increases when downsampling!
+        int32_t minbuffers = std::ceil((double)decoder_->samplerate() / (double)s.samplerate());
+        nbuffers = std::max<int32_t>(nbuffers, minbuffers);
+        LOG_DEBUG("source_desc: buffersize (ms): " << s.buffersize()
+                  << ", samples: " << bufsize << ", nbuffers = " << nbuffers);
 
         // resize audio buffer and initially fill with zeros.
         auto nsamples = decoder_->nchannels() * decoder_->blocksize();
@@ -650,9 +655,6 @@ void source_desc::do_update(const sink &s){
         jitterbuffer_.resize(nbuffers + 4); // extra capacity for network jitter (allows lower buffersizes)
 
         streamstate_.reset();
-        LOG_DEBUG("update source " << id_ << ": sr = " << decoder_->samplerate()
-                    << ", blocksize = " << decoder_->blocksize() << ", nchannels = "
-                    << decoder_->nchannels() << ", bufsize = " << nbuffers * nsamples);
     }
 }
 

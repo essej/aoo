@@ -8,6 +8,7 @@
 #include <cstring>
 #include <algorithm>
 #include <random>
+#include <cmath>
 
 /*//////////////////// AoO source /////////////////////*/
 
@@ -756,16 +757,19 @@ void source::update(){
         assert(samplerate_ > 0 && nchannels_ > 0);
 
         // recalculate buffersize from ms to samples
-        double bufsize = buffersize_ * 0.001 * encoder_->samplerate();
+        int32_t bufsize = (double)buffersize_ * 0.001 * encoder_->samplerate();
         auto d = div(bufsize, encoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
-        nbuffers = std::max<int32_t>(nbuffers, 1); // need at least 1 buffer!
+        // minimum buffer size increases when upsampling!
+        int32_t minbuffers = std::ceil((double)encoder_->samplerate() / (double)samplerate_);
+        nbuffers = std::max<int32_t>(nbuffers, minbuffers);
+        LOG_DEBUG("aoo_source: buffersize (ms): " << buffersize_
+                  << ", samples: " << bufsize << ", nbuffers = " << nbuffers);
 
         // resize audio buffer
         auto nsamples = encoder_->blocksize() * nchannels_;
         audioqueue_.resize(nbuffers * nsamples, nsamples);
         srqueue_.resize(nbuffers, 1);
-        LOG_DEBUG("aoo::source::update: nbuffers = " << nbuffers);
 
         // resampler
         if (blocksize_ != encoder_->blocksize() || samplerate_ != encoder_->samplerate()){
