@@ -802,10 +802,13 @@ void source::update(){
 
 void source::update_historybuffer(){
     if (samplerate_ > 0 && encoder_){
-        double bufsize = (double)resend_buffersize_ * 0.001 * samplerate_;
+        int32_t bufsize = (double)resend_buffersize_ * 0.001 * encoder_->samplerate();
         auto d = div(bufsize, encoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         history_.resize(nbuffers);
+        LOG_DEBUG("aoo_source: history buffersize (ms): " << resend_buffersize_
+                  << ", samples: " << bufsize << ", nbuffers = " << nbuffers);
+
     }
 }
 
