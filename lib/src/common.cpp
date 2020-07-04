@@ -4,7 +4,9 @@
 
 #include "aoo/aoo_utils.hpp"
 #include "aoo/aoo_pcm.h"
+#if USE_CODEC_OPUS
 #include "aoo/aoo_opus.h"
+#endif
 #include "common.hpp"
 
 #include <unordered_map>
