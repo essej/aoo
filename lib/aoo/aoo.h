@@ -49,7 +49,7 @@ extern "C"
 
 // source buffer size in ms
 #ifndef AOO_SOURCE_BUFSIZE
- #define AOO_SOURCE_BUFSIZE 10
+ #define AOO_SOURCE_BUFSIZE 25
 #endif
 
 // sink buffer size in ms

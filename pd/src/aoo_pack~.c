@@ -284,8 +284,7 @@ static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
 
     // since process() and send() are called from the same thread,
     // we can use the minimal buffer size and thus safe some memory.
-    int32_t bufsize = 0;
-    aoo_source_set_buffersize(x->x_aoo_source, bufsize);
+    aoo_source_set_buffersize(x->x_aoo_source, 0);
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
