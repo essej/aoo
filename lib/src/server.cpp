@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <algorithm>
+#include <random>
 
 #define AOONET_MSG_CLIENT_PING \
     AOO_MSG_DOMAIN AOONET_MSG_CLIENT AOONET_MSG_PING
@@ -369,6 +370,7 @@ void server::on_user_joined_group(user& usr, group& grp){
                     << grp.name.c_str() << u.name.c_str()
                     << e->public_address.name().c_str() << e->public_address.port()
                     << e->local_address.name().c_str() << e->local_address.port()
+                    << e->token
                     << osc::EndMessage;
 
                 dest->send_message(msg.Data(), msg.Size());
@@ -794,6 +796,12 @@ client_endpoint::client_endpoint(server &s, int sock, const ip_address &addr)
 
     sendbuffer_.setup(65536);
     recvbuffer_.setup(65536);
+
+    // generate random token
+    std::random_device randdev;
+    std::default_random_engine reng(randdev());
+    std::uniform_int_distribution<int64_t> uniform_dist(1); // minimum of 1, max of maxint
+    token = uniform_dist(reng);
 }
 
 client_endpoint::~client_endpoint(){
@@ -1009,7 +1017,7 @@ void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
             LOG_VERBOSE("aoo_server: login: "
                         << "username: " << username << ", password: " << password
                         << ", public IP: " << public_ip << ", public port: " << public_port
-                        << ", local IP: " << local_ip << ", local port: " << local_port);
+                        << ", local IP: " << local_ip << ", local port: " << local_port << ", token: " << token);
 
             result = 1;
 

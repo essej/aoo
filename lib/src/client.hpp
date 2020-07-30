@@ -28,7 +28,7 @@ class client;
 class peer {
 public:
     peer(client& client, const std::string& group, const std::string& user,
-         const ip_address& public_addr, const ip_address& local_addr);
+         const ip_address& public_addr, const ip_address& local_addr, int64_t token=0);
 
     ~peer();
 
@@ -36,6 +36,10 @@ public:
 
     bool match(const std::string& group, const std::string& user);
 
+    bool match_token(int64_t token) const;
+
+    void set_public_address(const ip_address & addr);
+    
     const std::string& group() const { return group_; }
 
     const std::string& user() const { return user_; }
@@ -61,6 +65,7 @@ private:
     std::string user_;
     ip_address public_address_;
     ip_address local_address_;
+    int64_t token_;
     std::atomic<ip_address *> address_{nullptr};
     time_tag start_time_;
     double last_pingtime_ = 0;

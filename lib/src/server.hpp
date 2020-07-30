@@ -17,6 +17,7 @@
 #include <memory.h>
 #include <unordered_map>
 #include <vector>
+#include <random>
 
 namespace aoo {
 namespace net {
@@ -50,10 +51,11 @@ public:
 #endif
     ip_address public_address;
     ip_address local_address;
+    int64_t token;
 private:
     std::shared_ptr<user> user_;
     ip_address addr_;
-
+    
     SLIP sendbuffer_;
     SLIP recvbuffer_;
     std::vector<uint8_t> pending_send_data_;

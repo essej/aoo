@@ -348,8 +348,26 @@ int32_t aoo::net::client::handle_message(const char *data, int32_t n, void *addr
                 // user can join multiple groups.
                 // LATER make this more efficient, e.g. by associating IP endpoints
                 // with peers instead of having them all in a single vector.
+
+                auto pattern = msg.AddressPattern() + onset;
+                int64_t token = 0;
+                if (!strcmp(pattern, AOONET_MSG_PING) && msg.ArgumentCount() > 0){
+                    token = msg.ArgumentsBegin()->AsInt64();
+                }
+                        
                 for (auto& p : peers_){
                     if (p->match(address)){
+                        p->handle_message(msg, onset, address);
+                        success = true;
+                    } else if (token > 0 && p->match_token(token)) {
+                        // this message doesn't match one of the addresses given by the server for this peer
+                        // but it DOES match the random token for the peer, which means we might be dealing
+                        // with a symmetric NAT for that peer. so we will assign the address here as the *real* address
+
+                        LOG_VERBOSE("aoo_client: found matching token, changing public address for endpoint "
+                                    << address.name() << ":" << address.port());
+
+                        p->set_public_address(address);
                         p->handle_message(msg, onset, address);
                         success = true;
                     }
@@ -1027,7 +1045,8 @@ void client::handle_peer_add(const osc::ReceivedMessage& msg){
     int32_t public_port = (it++)->AsInt32();
     std::string local_ip = (it++)->AsString();
     int32_t local_port = (it++)->AsInt32();
-
+    int64_t token = msg.ArgumentCount() > 6 ? (it++)->AsInt64() : 0;
+    
     ip_address public_addr(public_ip, public_port);
     ip_address local_addr(local_ip, local_port);
 
@@ -1041,12 +1060,12 @@ void client::handle_peer_add(const osc::ReceivedMessage& msg){
         }
     }
     peers_.push_back(std::make_unique<peer>(*this, group, user,
-                                            public_addr, local_addr));
+                                            public_addr, local_addr, token));
 
     // don't handle event yet, wait for ping handshake
 
     LOG_VERBOSE("aoo_client: new peer " << *peers_.back()
-                << " (" << public_ip << ":" << public_port << ")");
+                << " (" << public_ip << ":" << public_port << ") token: " << token);
 }
 
 void client::handle_peer_remove(const osc::ReceivedMessage& msg){
@@ -1169,9 +1188,9 @@ client::peer_event::~peer_event()
 
 peer::peer(client& client,
            const std::string& group, const std::string& user,
-           const ip_address& public_addr, const ip_address& local_addr)
+           const ip_address& public_addr, const ip_address& local_addr, int64_t token)
     : client_(&client), group_(group), user_(user),
-      public_address_(public_addr), local_address_(local_addr)
+      public_address_(public_addr), local_address_(local_addr), token_(token)
 {
     start_time_ = time_tag::now();
 
@@ -1195,6 +1214,17 @@ bool peer::match(const std::string& group, const std::string& user)
 {
     return group_ == group && user_ == user;
 }
+
+bool peer::match_token(int64_t token) const
+{
+    return token_ == token;
+}
+
+void peer::set_public_address(const ip_address & addr)
+{
+    public_address_ = addr;
+}
+
 
 std::ostream& operator << (std::ostream& os, const peer& p)
 {
@@ -1239,9 +1269,9 @@ void peer::send(time_tag now){
         // send handshakes in fast succession to *both* addresses
         // until we get a reply from one of them (see handle_message())
         if (delta >= client_->request_interval()){
-            char buf[64];
+            char buf[80];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
-            msg << osc::BeginMessage(AOONET_MSG_PEER_PING) << osc::EndMessage;
+            msg << osc::BeginMessage(AOONET_MSG_PEER_PING) << token_ << osc::EndMessage;
 
             client_->send_message_udp(msg.Data(), msg.Size(), local_address_);
             client_->send_message_udp(msg.Data(), msg.Size(), public_address_);
