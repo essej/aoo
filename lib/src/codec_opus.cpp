@@ -25,12 +25,28 @@ void print_settings(const aoo_format_opus& f){
         break;
     }
 
+    const char *apptype;
+    switch (f.application_type){
+    case OPUS_APPLICATION_RESTRICTED_LOWDELAY:
+        apptype = "lowdelay";
+        break;
+    case OPUS_APPLICATION_VOIP:
+        apptype = "voice";
+        break;
+    case OPUS_APPLICATION_AUDIO:
+    default:
+        apptype = "audio";
+        break;
+    }
+
+    
     LOG_VERBOSE("Opus settings: "
                 << "nchannels = " << f.header.nchannels
                 << ", blocksize = " << f.header.blocksize
                 << ", samplerate = " << f.header.samplerate
                 << ", bitrate = " << f.bitrate
                 << ", complexity = " << f.complexity
+                << ", application = " << apptype
                 << ", signal type = " << type);
 }
 
@@ -79,6 +95,10 @@ void validate_format(aoo_format_opus& f)
             minblocksize *= 2;
         }
         f.header.blocksize = minblocksize;
+    }
+    // validate application type, default to AUDIO
+    if (f.application_type == 0) {
+        f.application_type = OPUS_APPLICATION_AUDIO;
     }
     // bitrate, complexity and signal type should be validated by opus
 }
@@ -155,7 +175,7 @@ int32_t encoder_setformat(void *enc, aoo_format *f){
     // create state
     c->state = opus_multistream_encoder_create(fmt->header.samplerate,
                                        nchannels, nchannels, 0, mapping,
-                                       OPUS_APPLICATION_AUDIO, &error);
+                                       fmt->application_type, &error);
     if (error == OPUS_OK){
         assert(c->state != nullptr);
         // apply settings
@@ -192,14 +212,15 @@ int32_t encoder_setformat(void *enc, aoo_format *f){
 
 int32_t encoder_writeformat(void *enc, aoo_format *fmt,
                             char *buf, int32_t size){
-    if (size >= 12){
+    if (size >= 16){
         auto c = static_cast<encoder *>(enc);
         memcpy(fmt, &c->format.header, sizeof(aoo_format));
         aoo::to_bytes<int32_t>(c->format.bitrate, buf);
         aoo::to_bytes<int32_t>(c->format.complexity, buf + 4);
         aoo::to_bytes<int32_t>(c->format.signal_type, buf + 8);
+        aoo::to_bytes<int32_t>(c->format.application_type, buf + 12);
 
-        return 12;
+        return 16;
     } else {
         LOG_WARNING("Opus: couldn't write settings");
         return -1;
@@ -323,7 +344,12 @@ int32_t decoder_readformat(void *dec, const aoo_format *fmt,
         f.bitrate = aoo::from_bytes<int32_t>(buf);
         f.complexity = aoo::from_bytes<int32_t>(buf + 4);
         f.signal_type = aoo::from_bytes<int32_t>(buf + 8);
-
+        if (size >= 16) {
+            f.application_type = aoo::from_bytes<int32_t>(buf + 12);
+        } else {
+            f.application_type = OPUS_APPLICATION_AUDIO;
+        }
+        
         if (decoder_dosetformat(c, f)){
             return 12; // number of bytes
         } else {
