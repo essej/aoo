@@ -150,6 +150,8 @@ public:
     void send_message_udp(const char *data, int32_t size, const ip_address& addr);
 
     void push_event(std::unique_ptr<ievent> e);
+    
+    int64_t get_token() const { return token_; }
 private:
     void *udpsocket_;
     aoo_sendfn sendfn_;
@@ -175,6 +177,8 @@ private:
     std::atomic<client_state> state_{client_state::disconnected};
     double last_udp_ping_time_ = 0;
     double first_udp_ping_time_ = 0;
+    int64_t token_ = 0;
+    
     // commands
     lockfree::queue<std::unique_ptr<icommand>> commands_;
     spinlock command_lock_;

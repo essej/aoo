@@ -8,6 +8,7 @@
 #include <functional>
 #include <algorithm>
 #include <sstream>
+#include <random>
 
 #include "md5/md5.h"
 
@@ -147,6 +148,12 @@ aoo::net::client::client(void *udpsocket, aoo_sendfn fn, int port)
     events_.resize(256, 1);
     sendbuffer_.setup(65536);
     recvbuffer_.setup(65536);
+    
+    // generate random token
+    std::random_device randdev;
+    std::default_random_engine reng(randdev());
+    std::uniform_int_distribution<int64_t> uniform_dist(1); // minimum of 1, max of maxint
+    token_ = uniform_dist(reng);
 }
 
 void aoonet_client_free(aoonet_client *client){
@@ -631,6 +638,7 @@ void client::do_login(){
         << username_.c_str() << password_.c_str()
         << public_addr_.name().c_str() << public_addr_.port()
         << local_addr_.name().c_str() << local_addr_.port()
+        << token_
         << osc::EndMessage;
 
     send_server_message_tcp(msg.Data(), msg.Size());
@@ -1271,7 +1279,7 @@ void peer::send(time_tag now){
         if (delta >= client_->request_interval()){
             char buf[80];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
-            msg << osc::BeginMessage(AOONET_MSG_PEER_PING) << token_ << osc::EndMessage;
+            msg << osc::BeginMessage(AOONET_MSG_PEER_PING) << client_->get_token() << osc::EndMessage;
 
             client_->send_message_udp(msg.Data(), msg.Size(), local_address_);
             client_->send_message_udp(msg.Data(), msg.Size(), public_address_);

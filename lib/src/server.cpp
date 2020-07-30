@@ -798,10 +798,10 @@ client_endpoint::client_endpoint(server &s, int sock, const ip_address &addr)
     recvbuffer_.setup(65536);
 
     // generate random token
-    std::random_device randdev;
-    std::default_random_engine reng(randdev());
-    std::uniform_int_distribution<int64_t> uniform_dist(1); // minimum of 1, max of maxint
-    token = uniform_dist(reng);
+    //std::random_device randdev;
+    //std::default_random_engine reng(randdev());
+    //std::uniform_int_distribution<int64_t> uniform_dist(1); // minimum of 1, max of maxint
+    //token = uniform_dist(reng);
 }
 
 client_endpoint::~client_endpoint(){
@@ -1004,7 +1004,12 @@ void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
     int32_t public_port = (it++)->AsInt32();
     std::string local_ip = (it++)->AsString();
     int32_t local_port = (it++)->AsInt32();
-
+    int64_t ctoken = msg.ArgumentCount() > 6 ? (it++)->AsInt64() : 0;
+    
+    if (ctoken) {
+        token = ctoken;
+    }
+    
     server::error err;
     if (!user_){
         user_ = server_->get_user(username, password, err);
