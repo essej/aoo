@@ -543,7 +543,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     // non-interleaved -> interleaved
     //auto insamples = blocksize_ * nchannels_;
     auto insamples = n * nchannels_;
-    auto outsamples = encoder_->blocksize() * nchannels_;
+    auto outsamples = audioqueue_.blocksize(); // encoder_->blocksize() * nchannels_;
     auto *buf = (aoo_sample *)alloca(insamples * sizeof(aoo_sample));
     for (int i = 0; i < nchannels_; ++i){
         for (int j = 0; j < n; ++j){
@@ -579,7 +579,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
                    && srqueue_.write_available())
             {
                 // copy audio samples
-                resampler_.read(audioqueue_.write_data(), audioqueue_.blocksize());
+                resampler_.read(audioqueue_.write_data(), outsamples);
                 audioqueue_.write_commit();
                 
                 // push samplerate
@@ -594,7 +594,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
             
             if (!didconsume && samplesleft > availsamples) {
                 // didn't consume any, and we can't fit any more
-                // LOG_WARNING("resampler could not handle all input samples, " << samplesleft << " unprocessed, avail " << availsamples);
+                //LOG_WARNING("resampler could not handle all input samples, " << samplesleft << " unprocessed, avail " << availsamples << " audioqu_wravail: " << audioqueue_.write_available()  << " audqbs: " << audioqueue_.blocksize() << " encbs: " << encoder_->blocksize());
                 break;
             }
         }
@@ -792,12 +792,13 @@ void source::update(){
         // setup audio buffer
         auto nsamples = encoder_->blocksize() * nchannels_;
         double bufsize = (double)buffersize_ * encoder_->samplerate() * 0.001;
+        bufsize = std::max(bufsize, (double)blocksize_); // needs to be at least one processing blocksize_ worth!
         auto d = div(bufsize, encoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         nbuffers = std::max<int32_t>(nbuffers, 1); // need at least 1 buffer!
         audioqueue_.resize(nbuffers * nsamples, nsamples);
         srqueue_.resize(nbuffers, 1);
-        LOG_DEBUG("aoo::source::update: nbuffers = " << nbuffers);
+        LOG_DEBUG("aoo::source::update: nbuffers = " << nbuffers << " dquot: " << d.quot << " drem: " << d.rem <<  " bufsize: " << bufsize << " bs: " << encoder_->blocksize());
 
         // resampler
        // if (blocksize_ != encoder_->blocksize() || samplerate_ != encoder_->samplerate()){

@@ -278,6 +278,9 @@ int32_t aoo::sink::get_sourceoption(void *endpoint, int32_t id,
         case aoo_opt_format:
             CHECKARG(aoo_format_storage);
             return src->get_format(as<aoo_format_storage>(p));
+        case aoo_opt_buffer_fill_ratio:
+            CHECKARG(float);
+            return src->get_buffer_fill_ratio(as<float>(p));
         // unsupported
         default:
             LOG_WARNING("aoo_sink: unsupported source option " << opt);
@@ -356,12 +359,15 @@ int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,
 
 #define AOO_MAXNUMEVENTS 256
 
-int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
+int32_t aoo::sink::process(aoo_sample **data, int32_t nsampframes, uint64_t t){
+    // we need to respect the nframes passed in here, which may be smaller than
+    // the blocksize (the host may be splitting the processing, etc)
     std::fill(buffer_.begin(), buffer_.end(), 0);
 
     bool didsomething = false;
 
     // update time DLL filter
+    // TODO deal with when we are called with less than the blocksize for this
     double error;
     auto state = timer_.update(t, error);
     if (state == timer::state::reset){
@@ -385,7 +391,7 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
     // the mutex is uncontended most of the time, but LATER we might replace
     // this with a lockless and/or waitfree solution
     for (auto& src : sources_){
-        if (src.process(*this, buffer_.data(), buffer_.size())){
+        if (src.process(*this, buffer_.data(), blocksize_, nsampframes)){
             didsomething = true;
         }
     }
@@ -403,7 +409,7 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
         // copy buffers
         for (int i = 0; i < nchannels_; ++i){
             auto buf = &buffer_[i * blocksize_];
-            std::copy(buf, buf + blocksize_, data[i]);
+            std::copy(buf, buf + nsampframes, data[i]);
         }
         return 1;
     } else {
@@ -589,6 +595,16 @@ int32_t source_desc::get_format(aoo_format_storage &format){
     }
 }
 
+int32_t source_desc::get_buffer_fill_ratio(float &ratio){
+    if (audioqueue_.capacity() > 0) {
+        ratio = (audioqueue_.read_available() * audioqueue_.blocksize()) / (float)audioqueue_.capacity();
+    } else {
+        ratio = 0.0f;
+    }
+    return 1;
+}
+
+
 void source_desc::update(const sink &s){
     // take writer lock!
     unique_lock lock(mutex_);
@@ -600,6 +616,7 @@ void source_desc::do_update(const sink &s){
     if (decoder_ && decoder_->blocksize() > 0 && decoder_->samplerate() > 0){
         // recalculate buffersize from ms to samples
         double bufsize = (double)s.buffersize() * decoder_->samplerate() * 0.001;
+        bufsize = std::max(bufsize, (double)s.blocksize()); // needs to be at least one processing blocksize worth!
         auto d = div(bufsize, decoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         nbuffers = std::max<int32_t>(1, nbuffers); // e.g. if buffersize_ is 0
@@ -617,7 +634,7 @@ void source_desc::do_update(const sink &s){
             infoqueue_.write(i);
             count++;
         };
-        LOG_DEBUG("write " << count << " silent blocks");
+        LOG_VERBOSE("reset source queues to " << nbuffers << " buffers");
     #if 0
         // don't touch the event queue once constructed
         eventqueue_.reset();
@@ -626,7 +643,7 @@ void source_desc::do_update(const sink &s){
         resampler_.setup(decoder_->blocksize(), s.blocksize(),
                             decoder_->samplerate(), s.samplerate(), decoder_->nchannels());
         // resize block queue
-        blockqueue_.resize(nbuffers + 16); // extra capacity for network jitter (allows lower buffersizes)
+        blockqueue_.resize(nbuffers + 32); // extra capacity for network jitter (allows lower buffersizes) (should be option?)
         newest_ = 0;
         next_ = -1;
         channel_ = 0;
@@ -634,6 +651,10 @@ void source_desc::do_update(const sink &s){
         streamstate_.reset();
         ack_list_.set_limit(s.resend_limit());
         ack_list_.clear();
+
+        // start in a need recovery state so the buffer is re-filled when we get the first data
+        streamstate_.request_recover();
+
         LOG_DEBUG("update source " << id_ << ": sr = " << decoder_->samplerate()
                     << ", blocksize = " << decoder_->blocksize() << ", nchannels = "
                     << decoder_->nchannels() << ", bufsize = " << nbuffers * nsamples);
@@ -780,7 +801,7 @@ bool source_desc::send(const sink& s){
     return didsomething;
 }
 
-bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
+bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t stride, int32_t numsampleframes){
     // synchronize with handle_format() and update()!
     // the mutex should be uncontended most of the time.
     // NOTE: We could use try_lock() and skip the block if we couldn't aquire the lock.
@@ -790,6 +811,13 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         return false;
     }
 
+    // don't process anything until the first few blocks are recv'd into the blockqueue
+    // after a reset to keep the jitter buffer as full as possible at the start
+    //if (streamstate_.get_blocks_recvd() <  std::min(infoqueue_.capacity()/2, 10)) {
+    //    LOG_VERBOSE("waiting for some blocks: " << streamstate_.get_blocks_recvd());
+    //    return false;
+    //}
+    
     int32_t nsamples = audioqueue_.blocksize();
 
 #if 0
@@ -847,7 +875,12 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
     resampler_.update(samplerate_, s.real_samplerate());
     // read samples from resampler
     auto nchannels = decoder_->nchannels();
-    auto readsamples = s.blocksize() * nchannels;
+    // we need to respect the sample frame size passed in this method
+    // because it may be less than the sink blocksize
+    auto readsamples = numsampleframes * nchannels;
+    
+    //LOG_VERBOSE("s.blocksize: " << s.blocksize() << "  size: " << nframes << "  stride: " << stride);
+    
     if (resampler_.read_available() >= readsamples){
         auto buf = (aoo_sample *)alloca(readsamples * sizeof(aoo_sample));
         resampler_.read(buf, readsamples);
@@ -859,8 +892,8 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
             auto chn = i + channel_;
             // ignore out-of-bound source channels!
             if (chn < s.nchannels()){
-                auto n = s.blocksize();
-                auto out = buffer + n * chn;
+                auto n = numsampleframes;
+                auto out = buffer + stride * chn;
                 for (int j = 0; j < n; ++j){
                     out[j] += buf[j * nchannels + i];
                 }

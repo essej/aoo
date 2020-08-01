@@ -140,6 +140,8 @@ public:
     bool has_events() const { return  eventqueue_.read_available() > 0; }
 
     int32_t get_format(aoo_format_storage& format);
+    
+    int32_t get_buffer_fill_ratio(float &ratio);
 
     // methods
     void update(const sink& s);
@@ -156,7 +158,7 @@ public:
 
     bool send(const sink& s);
 
-    bool process(const sink& s, aoo_sample *buffer, int32_t size);
+    bool process(const sink& s, aoo_sample *buffer, int32_t stride, int32_t numsampleframes);
 
     void request_recover(){ streamstate_.request_recover(); }
 
@@ -243,7 +245,7 @@ public:
 
     int32_t send() override;
 
-    int32_t process(aoo_sample **data, int32_t nsamples, uint64_t t) override;
+    int32_t process(aoo_sample **data, int32_t nsampframes, uint64_t t) override;
 
     int32_t events_available() override;
 

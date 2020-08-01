@@ -326,7 +326,12 @@ typedef enum aoo_option
     // Redundancy (int32_t)
     // ---
     // The number of times each frames is sent (default = 1)
-    aoo_opt_redundancy
+    aoo_opt_redundancy,
+    // buffer fill ratio (float)
+    // ---
+    // This is a read-only option used for sink::get_sourceoption() or source::get_sinkoption()
+    // giving a ratio of how full the buffer is where 0 is empty, and 1 is full
+    aoo_opt_buffer_fill_ratio
 } aoo_option;
 
 #define AOO_ARG(x) &x, sizeof(x)
