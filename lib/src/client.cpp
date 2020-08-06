@@ -366,12 +366,13 @@ int32_t aoo::net::client::handle_message(const char *data, int32_t n, void *addr
                     if (p->match(address)){
                         p->handle_message(msg, onset, address);
                         success = true;
-                    } else if (token > 0 && p->match_token(token)) {
+                    } else if (!p->has_real_address() && token > 0 && p->match_token(token)) {
                         // this message doesn't match one of the addresses given by the server for this peer
                         // but it DOES match the random token for the peer, which means we might be dealing
                         // with a symmetric NAT for that peer. so we will assign the address here as the *real* address
 
                         LOG_VERBOSE("aoo_client: found matching token, changing public address for endpoint "
+                                    << p->address().name() << ":" << p->address().port() << " TO "
                                     << address.name() << ":" << address.port());
 
                         p->set_public_address(address);

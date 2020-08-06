@@ -16,7 +16,7 @@
 #include "oscpack/osc/OscOutboundPacketStream.h"
 #include "oscpack/osc/OscReceivedElements.h"
 
-#define AOO_NET_CLIENT_PING_INTERVAL 1000
+#define AOO_NET_CLIENT_PING_INTERVAL 2000
 #define AOO_NET_CLIENT_REQUEST_INTERVAL 100
 #define AOO_NET_CLIENT_REQUEST_TIMEOUT 5000
 
@@ -37,13 +37,18 @@ public:
     bool match(const std::string& group, const std::string& user);
 
     bool match_token(int64_t token) const;
-
+    
     void set_public_address(const ip_address & addr);
     
     const std::string& group() const { return group_; }
 
     const std::string& user() const { return user_; }
 
+    bool has_real_address() const {
+        auto addr = address_.load();
+        return addr != 0;
+    }
+    
     const ip_address& address() const {
         auto addr = address_.load();
         if (addr){
