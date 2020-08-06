@@ -191,6 +191,10 @@ int32_t aoo::net::server::run(){
         // wait for networking or other events
         wait_for_event();
 
+        if (quit_.load()) {
+            break;
+        }
+
         // handle commands
         while (commands_.read_available()){
             std::unique_ptr<icommand> cmd;
@@ -199,6 +203,13 @@ int32_t aoo::net::server::run(){
         }
     }
 
+    // need to close all the clients sockets without
+    // having them send anything out, so that active communication
+    // between connected peers can continue if the server goes down for maintainence
+    for (int i = 0; i < clients_.size(); ++i){
+        clients_[i]->close(false);
+    }
+    
     return 1;
 }
 
@@ -517,6 +528,16 @@ void server::wait_for_event(){
         return;
     }
 
+    if (fds[waitindex].revents & POLLIN){
+        // clear pipe
+        char c;
+        read(waitpipe_[0], &c, 1);
+    }
+
+    if (quit_.load()) {
+        return;
+    }
+    
     if (fds[tcpindex].revents & POLLIN){
         // accept new clients
         while (true){
@@ -540,11 +561,6 @@ void server::wait_for_event(){
         receive_udp();
     }
 
-    if (fds[waitindex].revents & POLLIN){
-        // clear pipe
-        char c;
-        read(waitpipe_[0], &c, 1);
-    }
 
     for (int i = 0; i < numclients; ++i){
         if (fds[i].revents & POLLIN){
@@ -811,13 +827,13 @@ client_endpoint::~client_endpoint(){
     close();
 }
 
-void client_endpoint::close(){
+void client_endpoint::close(bool notify){
     if (socket >= 0){
         LOG_VERBOSE("aoo_server: close client endpoint");
         socket_close(socket);
         socket = -1;
 
-        if (user_){
+        if (user_ && notify){
             user_->on_close(*server_);
         }
     }

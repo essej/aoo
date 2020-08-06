@@ -37,7 +37,7 @@ public:
     client_endpoint(server &s, int sock, const ip_address& addr);
     ~client_endpoint();
 
-    void close();
+    void close(bool notify=true);
 
     bool is_active() const { return socket >= 0; }
 
@@ -45,7 +45,7 @@ public:
 
     bool receive_data();
 
-    int socket;
+    int socket = -1;
 #ifdef _WIN32
     HANDLE event;
 #endif
