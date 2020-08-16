@@ -267,7 +267,7 @@ public:
 
     int32_t samplerate() const { return samplerate_; }
 
-    double real_samplerate() const { return dll_.samplerate(); }
+    double real_samplerate() const { return ignore_dll_ ? samplerate_ : dll_.samplerate(); }
 
     int32_t blocksize() const { return blocksize_; }
 
@@ -303,6 +303,7 @@ private:
     // timing
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
     time_dll dll_;
+    bool ignore_dll_ = false;
     timer timer_;
 
     // helper methods

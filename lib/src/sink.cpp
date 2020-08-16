@@ -6,6 +6,7 @@
 #include "aoo/aoo_utils.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 /*//////////////////// aoo_sink /////////////////////*/
 
@@ -370,6 +371,8 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsampframes, uint64_t t){
     // TODO deal with when we are called with less than the blocksize for this
     double error;
     auto state = timer_.update(t, error);
+    
+   
     if (state == timer::state::reset){
         LOG_DEBUG("setup time DLL filter for sink");
         dll_.setup(samplerate_, blocksize_, bandwidth_, 0);
@@ -388,6 +391,12 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsampframes, uint64_t t){
     #endif
     }
 
+    // if the DLL samplerate is any more than +/- 10% of our nominal, we'll ignore it
+    // some shenanigans are going on
+    if (fabs(dll_.samplerate() - ((double)samplerate_)) > 0.1*samplerate_) {
+        ignore_dll_ = true;
+    }
+    
     // the mutex is uncontended most of the time, but LATER we might replace
     // this with a lockless and/or waitfree solution
     for (auto& src : sources_){

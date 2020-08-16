@@ -8,6 +8,7 @@
 #include <cstring>
 #include <algorithm>
 #include <random>
+#include <cmath>
 
 /*//////////////////// AoO source /////////////////////*/
 
@@ -532,6 +533,13 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     #endif
     }
 
+    // if the DLL samplerate is any more than +/- 10% of our nominal, we'll ignore it
+    // some shenanigans are going on
+    bool ignoredll = false;
+    if (fabs(dll_.samplerate() - (double)samplerate_) > 0.1*samplerate_) {
+        ignoredll = true;
+    }
+    
     // the mutex should be uncontended most of the time.
     // NOTE: We could use try_lock() and skip the block if we couldn't aquire the lock.
     shared_lock lock(update_mutex_);
@@ -583,8 +591,12 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
                 audioqueue_.write_commit();
                 
                 // push samplerate
-                auto ratio = (double)encoder_->samplerate() / (double)samplerate_;
-                srqueue_.write(dll_.samplerate() * ratio);
+                if (!ignoredll) {
+                    auto ratio = (double)encoder_->samplerate() / (double)samplerate_;
+                    srqueue_.write(dll_.samplerate() * ratio);
+                } else {
+                    srqueue_.write(encoder_->samplerate());
+                }
 
                 didconsume = true;
             }
