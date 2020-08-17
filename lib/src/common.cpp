@@ -923,8 +923,11 @@ void dynamic_resampler::read(aoo_sample *data, int32_t n){
             n1 = n;
             n2 = 0;
         }
-        std::copy(&buffer_[pos], &buffer_[pos + n1], data);
-        std::copy(&buffer_[0], &buffer_[n2], data + n1);
+
+        memcpy(data, &buffer_[pos], n1 * nchannels_ * sizeof(aoo_sample));
+        memcpy(data, &buffer_[0], n2 * nchannels_ * sizeof(aoo_sample));
+        //std::copy(&buffer_[pos], &buffer_[pos + n1], data);
+        //std::copy(&buffer_[0], &buffer_[n2], data + n1);
         rdpos_ += n / nchannels_;
         if (rdpos_ >= limit){
             rdpos_ -= limit;
