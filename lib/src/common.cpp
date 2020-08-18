@@ -919,13 +919,14 @@ void dynamic_resampler::read(aoo_sample *data, int32_t n){
         if (end > size){
             n1 = size - pos;
             n2 = end - size;
+            memcpy(data, &buffer_[pos], n1 * sizeof(aoo_sample));
+            memcpy(data + n1, &buffer_[0], n2 * sizeof(aoo_sample));
         } else {
             n1 = n;
             n2 = 0;
+            memcpy(data, &buffer_[pos], n1 * sizeof(aoo_sample));
         }
 
-        memcpy(data, &buffer_[pos], n1 * nchannels_ * sizeof(aoo_sample));
-        memcpy(data + n1, &buffer_[0], n2 * nchannels_ * sizeof(aoo_sample));
         //std::copy(&buffer_[pos], &buffer_[pos + n1], data);
         //std::copy(&buffer_[0], &buffer_[n2], data + n1);
         rdpos_ += n / nchannels_;
