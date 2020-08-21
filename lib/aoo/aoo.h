@@ -16,6 +16,9 @@ extern "C"
 #define AOO_VERSION_BUGFIX 0
 #define AOO_VERSION_PRERELEASE 2 // 0: no pre-release
 
+// these are bit masks to go in the least significant byte of the version
+#define AOO_PROTOCOL_FLAG_COMPACT_DATA 0x1 // supports compact data message
+
 #ifndef AOO_DEBUG_DLL
  #define AOO_DEBUG_DLL 0
 #endif
@@ -51,7 +54,8 @@ extern "C"
 
 // time DLL filter bandwidth
 #ifndef AOO_TIMEFILTER_BANDWIDTH
- #define AOO_TIMEFILTER_BANDWIDTH 0.012
+// #define AOO_TIMEFILTER_BANDWIDTH 0.012
+ #define AOO_TIMEFILTER_BANDWIDTH 0.008
 #endif
 
 // try to catch timing issues (e.g. blocking audio thread)
@@ -118,6 +122,8 @@ AOO_API void aoo_terminate(void);
 #define AOO_MSG_INVITE_LEN 7
 #define AOO_MSG_UNINVITE "/uninvite"
 #define AOO_MSG_UNINVITE_LEN 9
+#define AOO_MSG_COMPACT_DATA "/d"
+#define AOO_MSG_COMPACT_DATA_LEN 2
 
 // id: the source or sink ID
 // returns: the offset to the remaining address pattern
@@ -194,6 +200,7 @@ typedef struct aoo_source_event
 typedef struct aoo_sink_event
 {
     AOO_ENDPOINT_EVENT
+    int32_t flags;
 } aoo_sink_event;
 
 // source state event
@@ -331,7 +338,11 @@ typedef enum aoo_option
     // ---
     // This is a read-only option used for sink::get_sourceoption() or source::get_sinkoption()
     // giving a ratio of how full the buffer is where 0 is empty, and 1 is full
-    aoo_opt_buffer_fill_ratio
+    aoo_opt_buffer_fill_ratio,
+    // protocol flags (int32_t) but only least significant byte is used
+    // ---
+    // that are supported, for use in the version that gets sent with format messages and format requests
+    aoo_opt_protocol_flags
 } aoo_option;
 
 #define AOO_ARG(x) &x, sizeof(x)

@@ -143,11 +143,15 @@ public:
     
     int32_t get_buffer_fill_ratio(float &ratio);
 
+    int32_t get_current_salt() const { return salt_; }
+    
+    void set_protocol_flags(int32_t flags) { protocol_flags_ = flags; }
+    
     // methods
     void update(const sink& s);
 
     int32_t handle_format(const sink& s, int32_t salt, const aoo_format& f,
-                          const char *settings, int32_t size);
+                          const char *settings, int32_t size, int32_t version);
 
     int32_t handle_data(const sink& s, int32_t salt,
                                      const aoo::data_packet& d);
@@ -205,6 +209,7 @@ private:
     int32_t next_ = 0; // next outgoing block
     int32_t channel_ = 0; // recent channel onset
     double samplerate_ = 0; // recent samplerate
+    int32_t protocol_flags_ = 0; // protocol flags sent from the remote source
     stream_state streamstate_;
     // queues and buffers
     block_queue blockqueue_;
@@ -284,6 +289,9 @@ public:
     double elapsed_time() const { return timer_.get_elapsed(); }
 
     time_tag absolute_time() const { return timer_.get_absolute(); }
+
+    int32_t protocol_flags() const { return protocol_flags_; }
+
 private:
     // settings
     std::atomic<int32_t> id_;
@@ -298,6 +306,7 @@ private:
     std::atomic<int32_t> resend_limit_{ AOO_RESEND_LIMIT };
     std::atomic<float> resend_interval_{ AOO_RESEND_INTERVAL * 0.001 };
     std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
+    std::atomic<int32_t> protocol_flags_{ 0 };
     // the sources
     lockfree::list<source_desc> sources_;
     // timing
@@ -305,9 +314,9 @@ private:
     time_dll dll_;
     bool ignore_dll_ = false;
     timer timer_;
-
     // helper methods
     source_desc *find_source(void *endpoint, int32_t id);
+    source_desc *find_source_by_salt(void *endpoint, int32_t salt);
 
     void update_sources();
 
@@ -316,6 +325,9 @@ private:
 
     int32_t handle_data_message(void *endpoint, aoo_replyfn fn,
                                 const osc::ReceivedMessage& msg);
+
+    int32_t handle_compact_data_message(void *endpoint, aoo_replyfn fn,
+                                        const osc::ReceivedMessage& msg);
 
     int32_t handle_ping_message(void *endpoint, aoo_replyfn fn,
                                 const osc::ReceivedMessage& msg);

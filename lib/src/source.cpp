@@ -262,6 +262,15 @@ int32_t aoo::source::set_sinkoption(void *endpoint, int32_t id,
                             << " on channel " << chn);
                 break;
             }
+            case aoo_opt_protocol_flags:
+            {
+                CHECKARG(int32_t);
+                auto flags = as<int32_t>(ptr);
+                sink->protocol_flags = flags;
+                LOG_VERBOSE("aoo_source: protocol_flags to sink " << sink->id
+                            << " flags " << flags);
+                break;
+            }
             // unknown
             default:
                 LOG_WARNING("aoo_source: unknown sink option " << opt);
@@ -685,15 +694,46 @@ void endpoint::send_data(int32_t src, int32_t salt, const aoo::data_packet& d) c
         msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_DATA);
     }
 
-    LOG_DEBUG("send block: seq = " << d.sequence << ", sr = " << d.samplerate
-              << ", chn = " << d.channel << ", totalsize = " << d.totalsize
-              << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
-
     msg << src << salt << d.sequence << d.samplerate << d.channel
         << d.totalsize << d.nframes << d.framenum
         << osc::Blob(d.data, d.size) << osc::EndMessage;
 
-    send(msg.Data(), msg.Size());
+    LOG_DEBUG("send block: seq = " << d.sequence << ", sr = " << d.samplerate
+              << ", chn = " << d.channel << ", totalsize = " << d.totalsize
+              << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size << " msgsize: " << msg.Size() << "  overhead = " << (int) (100 * (1.0 - d.size/(double)msg.Size())) << "%");
+
+
+    send(msg.Data(), (int32_t)msg.Size());
+}
+
+// /d <salt> <seq> <data>
+// /d <salt> <seq> <srate> <data>
+
+void endpoint::send_data_compact(int32_t src, int32_t salt, const aoo::data_packet& d, bool sendrate) {
+    // call without lock!
+
+    char buf[AOO_MAXPACKETSIZE];
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
+    
+    msg << osc::BeginMessage(AOO_MSG_COMPACT_DATA);
+
+    // the salt is how we identify both ourselves and our target
+    
+    msg << salt << d.sequence;
+    
+    // only use the 4 argument version (with samplerate as double) if there is big enough divergence from prior samplerate
+    if (sendrate) {
+        msg << d.samplerate;
+    }
+    
+    msg << osc::Blob(d.data, d.size) << osc::EndMessage;
+
+    LOG_DEBUG("send compact block: seq = " << d.sequence << ", sr = " << d.samplerate
+              << ", chn = " << d.channel << ", totalsize = " << d.totalsize
+              << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size << " msgsize: " << msg.Size() << "  overhead = " << (int) (100 * (1.0 - d.size/(double)msg.Size())) << "%");
+
+
+    send(msg.Data(), (int32_t)msg.Size());
 }
 
 // /aoo/sink/<id>/format <src> <version> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
@@ -718,10 +758,10 @@ void endpoint::send_format(int32_t src, int32_t salt, const aoo_format& f,
         msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_FORMAT);
     }
 
-    msg << src << (int32_t)make_version() << salt << f.nchannels << f.samplerate << f.blocksize
+    msg << src << (int32_t)make_version(AOO_PROTOCOL_FLAG_COMPACT_DATA) << salt << f.nchannels << f.samplerate << f.blocksize
         << f.codec << osc::Blob(options, size) << osc::EndMessage;
 
-    send(msg.Data(), msg.Size());
+    send(msg.Data(), (int32_t)msg.Size());
 }
 
 // /aoo/sink/<id>/ping <src> <time>
@@ -747,7 +787,7 @@ void endpoint::send_ping(int32_t src, time_tag t) const {
 
     msg << src << osc::TimeTag(t.to_uint64()) << osc::EndMessage;
 
-    send(msg.Data(), msg.Size());
+    send(msg.Data(), (int32_t)msg.Size());
 }
 
 /*///////////////////////// source ////////////////////////////////*/
@@ -1022,7 +1062,7 @@ bool source::send_data(){
 
         // make local copy of sink descriptors
         shared_lock listlock(sink_mutex_);
-        int32_t numsinks = sinks_.size();
+        int32_t numsinks = (int32_t) sinks_.size();
         auto sinks = (sink_desc *)alloca((numsinks + 1) * sizeof(sink_desc)); // avoid alloca(0)
         std::copy(sinks_.begin(), sinks_.end(), sinks);
 
@@ -1031,13 +1071,13 @@ bool source::send_data(){
 
         // send block to sinks
         for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_data(id(), salt, d);
+            sinks[i].send_data(id(), salt, d);            
         }
         --dropped_;
     } else if (audioqueue_.read_available() && srqueue_.read_available()){
         // make local copy of sink descriptors
         shared_lock listlock(sink_mutex_);
-        int32_t numsinks = sinks_.size();
+        int32_t numsinks = (int32_t) sinks_.size();
         auto sinks = (sink_desc *)alloca((numsinks + 1) * sizeof(sink_desc)); // avoid alloca(0)
         std::copy(sinks_.begin(), sinks_.end(), sinks);
 
@@ -1047,6 +1087,13 @@ bool source::send_data(){
         d.sequence = sequence_++;
         srqueue_.read(d.samplerate); // always read samplerate from ringbuffer
 
+        // for compact data sending purposes... only send rate when necessary
+        bool sendrate = false;
+        if (abs(d.samplerate - prev_sent_samplerate_) > 0.1) {
+            sendrate = true;
+            prev_sent_samplerate_ = d.samplerate;
+        }
+        
         if (numsinks){
             // copy and convert audio samples to blob data
             auto nchannels = encoder_->nchannels();
@@ -1054,7 +1101,7 @@ bool source::send_data(){
             sendbuffer_.resize(sizeof(double) * nchannels * blocksize); // overallocate
 
             d.totalsize = encoder_->encode(audioqueue_.read_data(), audioqueue_.blocksize(),
-                                           sendbuffer_.data(), sendbuffer_.size());
+                                           sendbuffer_.data(), (int32_t) sendbuffer_.size());
             audioqueue_.read_commit();
 
             if (d.totalsize > 0){
@@ -1080,7 +1127,12 @@ bool source::send_data(){
                     d.size = n;
                     for (int i = 0; i < numsinks; ++i){
                         d.channel = sinks[i].channel;
-                        sinks[i].send_data(id(), salt, d);
+                        // if the protocol_flags allow using the compact data message, use it if appropriate
+                        if (d.nframes == 1 && d.channel == 0 && sinks[i].protocol_flags & AOO_PROTOCOL_FLAG_COMPACT_DATA) {
+                            sinks[i].send_data_compact(id(), salt, d, sendrate);                
+                        } else {
+                            sinks[i].send_data(id(), salt, d);
+                        }
                     }
                 };
 
@@ -1126,7 +1178,7 @@ bool source::send_ping(){
     if (interval > 0 && (elapsed - pingtime) >= interval){
         // only copy sinks which require a format update!
         shared_lock sinklock(sink_mutex_);
-        int32_t numsinks = sinks_.size();
+        int32_t numsinks = (int32_t) sinks_.size();
         auto sinks = (aoo::sink_desc *)alloca((numsinks + 1) * sizeof(aoo::sink_desc)); // avoid alloca(0)
         std::copy(sinks_.begin(), sinks_.end(), sinks);
         sinklock.unlock();
@@ -1166,6 +1218,7 @@ void source::handle_format_request(void *endpoint, aoo_replyfn fn,
     lock.unlock();
 
     if (sink){
+        sink->protocol_flags = version & 0xFF;
         if (formatrequestqueue_.write_available()){
             formatrequestqueue_.write(aoo::endpoint { endpoint, fn, id });
         }
@@ -1206,7 +1259,9 @@ void source::handle_data_request(void *endpoint, aoo_replyfn fn,
 void source::handle_invite(void *endpoint, aoo_replyfn fn,
                            const osc::ReceivedMessage& msg)
 {
-    auto id = msg.ArgumentsBegin()->AsInt32();
+    auto it = msg.ArgumentsBegin();
+    auto id = (it++)->AsInt32();
+    auto flags = it == msg.ArgumentsEnd() ? 0 : it->AsInt32();
 
     LOG_DEBUG("handle invite");
 
@@ -1223,6 +1278,7 @@ void source::handle_invite(void *endpoint, aoo_replyfn fn,
             e.sink.endpoint = endpoint;
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
             e.sink.id = id;
+            e.sink.flags = flags;
             eventqueue_.write(e);
         }
     } else {

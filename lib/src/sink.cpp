@@ -59,8 +59,10 @@ int32_t aoo::sink::invite_source(void *endpoint, int32_t id, aoo_replyfn fn){
         // discard data message, add source and request format!
         sources_.emplace_front(endpoint, fn, id, 0);
         src = &sources_.front();
+        src->set_protocol_flags(protocol_flags_);
     }
     src->request_invite();
+
     return 1;
 }
 
@@ -178,6 +180,11 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         CHECKARG(int32_t);
         resend_maxnumframes_ = std::max<int32_t>(1, as<int32_t>(ptr));
         break;
+    // buffer size
+    case aoo_opt_protocol_flags:
+        CHECKARG(int32_t);
+        protocol_flags_ = as<int32_t>(ptr) & 0xff;
+        break;
     // unknown
     default:
         LOG_WARNING("aoo_sink: unsupported option " << opt);
@@ -227,6 +234,10 @@ int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
     case aoo_opt_resend_maxnumframes:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = resend_maxnumframes_;
+        break;
+    case aoo_opt_protocol_flags:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = protocol_flags_;
         break;
     // unknown
     default:
@@ -314,9 +325,26 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n,
             LOG_WARNING("not an AoO message!");
             return 0;
         }
+        
         if (type != AOO_TYPE_SINK){
             LOG_WARNING("not a sink message!");
             return 0;
+        }
+        if (sinkid == AOO_ID_NONE) {
+            // special case, this is a be a compact data message
+            // use the salt to see if it matches the current salt for us
+            // using salt as unique token instead of dealing with a long OSC message and arguments
+            auto it = msg.ArgumentsBegin();
+            //auto id = (it++)->AsInt32();
+            auto salt = (it++)->AsInt32();
+            auto src = find_source_by_salt(endpoint, salt);
+            if (src){
+                return handle_compact_data_message(endpoint, fn, msg);
+            }
+            else {
+                //LOG_WARNING("compact data doesn't match!");
+                return 0;
+            }
         }
         if (sinkid != id() && sinkid != AOO_ID_WILDCARD){
             LOG_WARNING("wrong sink ID!");
@@ -472,6 +500,15 @@ aoo::source_desc * sink::find_source(void *endpoint, int32_t id){
     return nullptr;
 }
 
+aoo::source_desc * sink::find_source_by_salt(void *endpoint, int32_t salt){
+    for (auto& src : sources_){
+        if ((src.endpoint() == endpoint) && (src.get_current_salt() == salt)){
+            return &src;
+        }
+    }
+    return nullptr;
+}
+
 void sink::update_sources(){
     for (auto& src : sources_){
         src.update(*this);
@@ -514,9 +551,10 @@ int32_t sink::handle_format_message(void *endpoint, aoo_replyfn fn,
         // not found - add new source
         sources_.emplace_front(endpoint, fn, id, salt);
         src = &sources_.front();
+        src->set_protocol_flags(protocol_flags_);
     }
 
-    return src->handle_format(*this, salt, f, (const char *)settings, size);
+    return src->handle_format(*this, salt, f, (const char *)settings, size, version);
 }
 
 int32_t sink::handle_data_message(void *endpoint, aoo_replyfn fn,
@@ -551,7 +589,46 @@ int32_t sink::handle_data_message(void *endpoint, aoo_replyfn fn,
         // discard data message, add source and request format!
         sources_.emplace_front(endpoint, fn, id, salt);
         src = &sources_.front();
+        src->set_protocol_flags(protocol_flags_);
         src->request_format();
+        return 0;
+    }
+}
+
+int32_t sink::handle_compact_data_message(void *endpoint, aoo_replyfn fn,
+                                          const osc::ReceivedMessage& msg)
+{
+    // /d <i:salt> <i:seq> <b:data>
+    // /d <i:salt> <i:seq> <f:srate> <b:data>
+    auto it = msg.ArgumentsBegin();
+
+    aoo::data_packet d;
+
+    auto salt = (it++)->AsInt32();
+    d.sequence = (it++)->AsInt32();
+    if (msg.ArgumentCount() == 4) {
+        d.samplerate = (it++)->AsDouble();
+    }
+    else {
+        d.samplerate = 0; // marker to use last
+    }
+    const void *blobdata;
+    osc::osc_bundle_element_size_t blobsize;
+    (it++)->AsBlob(blobdata, blobsize);
+    // reconstruct the rest from prior format
+    d.channel = 0 ;
+    d.nframes = 1;
+    d.framenum = 0;
+    d.data = (const char *)blobdata;
+    d.size = blobsize;
+    d.totalsize = d.size;
+
+    // try to find existing source by salt
+    auto src = find_source_by_salt(endpoint, salt);
+    if (src){
+        return src->handle_data(*this, salt, d);
+    } else {
+        // discard data message
         return 0;
     }
 }
@@ -673,7 +750,7 @@ void source_desc::do_update(const sink &s){
 // /aoo/sink/<id>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <settings...>
 
 int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format& f,
-                                   const char *settings, int32_t size){
+                                   const char *settings, int32_t size, int32_t version){
     // take writer lock!
     unique_lock lock(mutex_);
 
@@ -694,6 +771,9 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
         }
     }
 
+    // see what protocol flags are in the LSB of the version
+    protocol_flags_ = (0xFF & version);
+    
     // read format
     decoder_->read_format(f, settings, size);
 
@@ -1099,8 +1179,10 @@ bool source_desc::add_packet(const data_packet& d){
             }
         }
         // add new block
-        block = blockqueue_.insert(d.sequence, d.samplerate,
-                                   d.channel, d.totalsize, d.nframes);
+        double srate = d.samplerate > 0 ? d.samplerate : samplerate_;
+        int chan = d.channel >= 0 ? d.channel : channel_;
+        block = blockqueue_.insert(d.sequence, srate,
+                                   chan, d.totalsize, d.nframes);
     } else if (block->has_frame(d.framenum)){
         LOG_VERBOSE("frame " << d.framenum << " of block " << d.sequence << " already received!");
         return false;
@@ -1314,10 +1396,10 @@ bool source_desc::send_format_request(const sink& s) {
         snprintf(address, sizeof(address), "%s%s/%d%s",
                  AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_FORMAT);
 
-        msg << osc::BeginMessage(address) << s.id() << (int32_t)make_version()
+        msg << osc::BeginMessage(address) << s.id() << (int32_t)make_version(s.protocol_flags())
             << osc::EndMessage;
 
-        dosend(msg.Data(), msg.Size());
+        dosend(msg.Data(), (int32_t)msg.Size());
 
         return true;
     } else {
@@ -1360,7 +1442,7 @@ int32_t source_desc::send_data_request(const sink &s){
             }
             msg << osc::EndMessage;
 
-            dosend(msg.Data(), msg.Size());
+            dosend(msg.Data(), (int32_t)msg.Size());
         };
 
         for (int i = 0; i < d.quot; ++i){
@@ -1406,7 +1488,7 @@ bool source_desc::send_notifications(const sink& s){
                 << lost_blocks
                 << osc::EndMessage;
 
-            dosend(msg.Data(), msg.Size());
+            dosend(msg.Data(), (int32_t)msg.Size());
 
             LOG_DEBUG("send /ping to source " << id_);
             didsomething = true;
@@ -1425,11 +1507,11 @@ bool source_desc::send_notifications(const sink& s){
         snprintf(address, sizeof(address), "%s%s/%d%s",
                  AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_INVITE);
 
-        msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
+        msg << osc::BeginMessage(address) << s.id() << (int32_t) protocol_flags_ << osc::EndMessage;
 
-        dosend(msg.Data(), msg.Size());
+        dosend(msg.Data(), (int32_t)msg.Size());
 
-        LOG_DEBUG("send /invite to source " << id_);
+        LOG_DEBUG("send /invite to source " << id_ << " flags: " << protocol_flags_);
 
         didsomething = true;
     } else if (invitation == stream_state::UNINVITE){
@@ -1445,7 +1527,7 @@ bool source_desc::send_notifications(const sink& s){
 
         msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
 
-        dosend(msg.Data(), msg.Size());
+        dosend(msg.Data(), (int32_t)msg.Size());
 
         LOG_DEBUG("send /uninvite source " << id_);
 

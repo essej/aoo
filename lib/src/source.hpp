@@ -20,15 +20,16 @@ namespace aoo {
 struct endpoint {
     endpoint() = default;
     endpoint(void *_user, aoo_replyfn _fn, int32_t _id)
-        : user(_user), fn(_fn), id(_id){}
+      : user(_user), fn(_fn), id(_id){}
 
     // data
     void *user = nullptr;
     aoo_replyfn fn = nullptr;
     int32_t id = 0;
-
+    
     // methods
     void send_data(int32_t src, int32_t salt, const data_packet& data) const;
+    void send_data_compact(int32_t src, int32_t salt, const data_packet& data, bool sendrate=false);
 
     void send_format(int32_t src, int32_t salt, const aoo_format& f,
                      const char *options, int32_t size) const;
@@ -38,6 +39,8 @@ struct endpoint {
     void send(const char *data, int32_t n) const {
         fn(user, data, n);
     }
+    
+
 };
 
 struct data_request : endpoint {
@@ -65,23 +68,27 @@ struct invite_request : endpoint {
 
 struct sink_desc : endpoint {
     sink_desc(void *_user, aoo_replyfn _fn, int32_t _id)
-        : endpoint(_user, _fn, _id), channel(0), format_changed(true) {}
+        : endpoint(_user, _fn, _id), channel(0), format_changed(true), protocol_flags(0) {}
     sink_desc(const sink_desc& other)
         : endpoint(other.user, other.fn, other.id),
           channel(other.channel.load()),
-          format_changed(other.format_changed.load()){}
+          format_changed(other.format_changed.load()),
+          protocol_flags(other.protocol_flags.load()){}
     sink_desc& operator=(const sink_desc& other){
         user = other.user;
         fn = other.fn;
         id = other.id;
         channel = other.channel.load();
         format_changed = other.format_changed.load();
+        protocol_flags = other.protocol_flags.load();
         return *this;
     }
 
     // data
     std::atomic<int16_t> channel;
     std::atomic<bool> format_changed;
+    std::atomic<int8_t> protocol_flags;
+
 };
 
 class source final : public isource {
@@ -125,6 +132,9 @@ class source final : public isource {
 
     int32_t get_sinkoption(void *endpoint, int32_t id,
                            int32_t opt, void *ptr, int32_t size) override;
+    
+    int32_t protocol_flags() const { return protocol_flags_; }
+
  private:
     // settings
     std::atomic<int32_t> id_;
@@ -165,7 +175,10 @@ class source final : public isource {
     std::atomic<int32_t> redundancy_{ AOO_SEND_REDUNDANCY };
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
     std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };
-
+    std::atomic<int32_t> protocol_flags_{ 0 };
+    // runtime
+    double prev_sent_samplerate_ = 0.0;
+    
     // helper methods
     sink_desc * find_sink(void *endpoint, int32_t id);
 

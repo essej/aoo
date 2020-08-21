@@ -19,7 +19,7 @@ namespace aoo {
 
 bool check_version(uint32_t version);
 
-uint32_t make_version();
+uint32_t make_version(uint8_t protocolflags = 0);
 
 class dynamic_resampler {
 public:

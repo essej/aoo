@@ -30,10 +30,10 @@ bool check_version(uint32_t version){
     return true;
 }
 
-uint32_t make_version(){
+uint32_t make_version(uint8_t protocolflags){
     // make version: major, minor, bugfix, [protocol]
     return ((uint32_t)AOO_VERSION_MAJOR << 24) | ((uint32_t)AOO_VERSION_MINOR << 16)
-            | ((uint32_t)AOO_VERSION_BUGFIX << 8);
+            | ((uint32_t)AOO_VERSION_BUGFIX << 8) | ((uint32_t) protocolflags);
 }
 
 }
@@ -71,7 +71,16 @@ int32_t aoo_parse_pattern(const char *msg, int32_t n,
                          int32_t *type, int32_t *id)
 {
     int32_t offset = 0;
-    if (n >= AOO_MSG_DOMAIN_LEN
+    // special case the compact data message which doesn't use the aoo domain
+    if (n >= AOO_MSG_COMPACT_DATA_LEN
+        && !memcmp(msg, AOO_MSG_COMPACT_DATA, AOO_MSG_COMPACT_DATA_LEN)) 
+    {
+        *type = AOO_TYPE_SINK;
+        offset += AOO_MSG_COMPACT_DATA_LEN;
+        *id = AOO_ID_NONE; // will be looked up later
+        return offset;
+    }
+    else if (n >= AOO_MSG_DOMAIN_LEN
         && !memcmp(msg, AOO_MSG_DOMAIN, AOO_MSG_DOMAIN_LEN))
     {
         offset += AOO_MSG_DOMAIN_LEN;
