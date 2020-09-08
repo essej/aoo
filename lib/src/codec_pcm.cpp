@@ -174,6 +174,38 @@ int32_t codec_setformat(void *enc, aoo_format *f)
     return 1;
 }
 
+int32_t encoder_readformat(void *enc, aoo_format *fmt,
+                           const char *buf, int32_t size)
+{
+    if (size >= 4){
+        auto c = static_cast<codec *>(enc);
+        // TODO validate
+        if (!strcmp(fmt->codec, AOO_CODEC_PCM) && fmt->blocksize > 0
+                && fmt->samplerate > 0 && fmt->blocksize > 0)
+        {
+            memcpy(&c->format.header, fmt, sizeof(aoo_format));
+            c->format.bitdepth = (aoo_pcm_bitdepth)aoo::from_bytes<int32_t>(buf);
+            c->format.header.codec = AOO_CODEC_PCM; // !
+            //print_settings(c->format);
+            
+            if (codec_setformat(enc, &c->format.header)) {     
+                // it could have been modified during validation, need to re-write the base format of 
+                // passed in value
+                memcpy(fmt, &c->format.header, sizeof(aoo_format));
+                return 4;
+            }
+            else {
+                return -1;
+            }
+        } else {
+            LOG_ERROR("PCM: bad format!");
+        }
+    } else {
+        LOG_ERROR("PCM: couldn't read format - not enough data!");
+    }
+    return -1;
+}
+
 int32_t codec_getformat(void *x, aoo_format_storage *f)
 {
     auto c = static_cast<codec *>(x);
@@ -237,9 +269,16 @@ int32_t encoder_writeformat(void *enc, aoo_format *fmt,
                             char *buf, int32_t size)
 {
     if (size >= 4){
-        auto c = static_cast<codec *>(enc);
-        memcpy(fmt, &c->format.header, sizeof(aoo_format));
-        aoo::to_bytes<int32_t>(c->format.bitdepth, buf);
+        aoo_format_pcm * ofmt;
+        if (enc == nullptr) {
+            ofmt = reinterpret_cast<aoo_format_pcm *>(fmt);            
+        }
+        else {
+            auto c = static_cast<codec *>(enc);
+            ofmt = &c->format;
+            memcpy(fmt, &ofmt->header, sizeof(aoo_format));
+        }
+        aoo::to_bytes<int32_t>(ofmt->bitdepth, buf);
 
         return 4;
     } else {
@@ -304,7 +343,7 @@ int32_t decoder_decode(void *dec,
     return size / samplesize;
 }
 
-int32_t decoder_readformat(void *dec, const aoo_format *fmt,
+int32_t decoder_readformat(void *dec, aoo_format *fmt,
                            const char *buf, int32_t size)
 {
     if (size >= 4){
@@ -317,6 +356,7 @@ int32_t decoder_readformat(void *dec, const aoo_format *fmt,
             c->format.bitdepth = (aoo_pcm_bitdepth)aoo::from_bytes<int32_t>(buf);
             c->format.header.codec = AOO_CODEC_PCM; // !
             print_settings(c->format);
+            
             return 4;
         } else {
             LOG_ERROR("PCM: bad format!");
@@ -333,6 +373,7 @@ aoo_codec codec_class = {
     encoder_free,
     codec_setformat,
     codec_getformat,
+    encoder_readformat,
     encoder_writeformat,
     encoder_encode,
     decoder_new,

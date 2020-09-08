@@ -155,6 +155,10 @@ public:
         return get_option(aoo_opt_ping_interval, AOO_ARG(n));
     }
 
+    int32_t set_respect_codec_change_requests(int32_t n){
+        return set_option(aoo_opt_respect_codec_change_requests, AOO_ARG(n));
+    }
+
     
     virtual int32_t set_option(int32_t opt, void *ptr, int32_t size) = 0;
     virtual int32_t get_option(int32_t opt, void *ptr, int32_t size) = 0;
@@ -311,6 +315,8 @@ public:
         return get_sourceoption(endpoint, id, aoo_opt_format, AOO_ARG(f));
     }
 
+    virtual int32_t request_source_codec_change(void *endpoint, int32_t id, aoo_format & f) = 0;
+    
     virtual int32_t set_sourceoption(void *endpoint, int32_t id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
     virtual int32_t get_sourceoption(void *endpoint, int32_t id,

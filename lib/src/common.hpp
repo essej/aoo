@@ -49,6 +49,7 @@ public:
     int32_t nchannels() const { return nchannels_; }
     int32_t samplerate() const { return samplerate_; }
     int32_t blocksize() const { return blocksize_; }
+    
 protected:
     const aoo_codec *codec_;
     void *obj_;
@@ -71,6 +72,8 @@ public:
     int32_t write_format(aoo_format& fmt, char *buf, int32_t size){
         return codec_->encoder_writeformat(obj_, &fmt, buf, size);
     }
+    int32_t read_format(const aoo_format& fmt, const char *buf, int32_t size);
+    
     int32_t encode(const aoo_sample *s, int32_t n, char *buf, int32_t size){
         return codec_->encoder_encode(obj_, s, n, buf, size);
     }
@@ -102,6 +105,14 @@ public:
     }
     std::unique_ptr<encoder> create_encoder() const;
     std::unique_ptr<decoder> create_decoder() const;
+    
+    int32_t serialize_format(aoo_format& fmt, char *buf, int32_t size) const{
+        // calling writeformat with a null encoder reference just serializes the passed in
+        // aoo_format (which is assumed to already be of the specific type for this codec)
+        // options into the buf
+        return codec_->encoder_writeformat(nullptr, &fmt, buf, size);
+    }
+
 private:
     const aoo_codec *codec_;
 };

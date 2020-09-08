@@ -140,6 +140,10 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
         // limit it somehow, 16 times is already very high
         redundancy_ = std::max<int32_t>(1, std::min<int32_t>(16, as<int32_t>(ptr)));
         break;
+    case aoo_opt_respect_codec_change_requests:
+        CHECKARG(int32_t);
+        respect_codec_change_req_ = as<int32_t>(ptr);
+        break;
     // unknown
     default:
         LOG_WARNING("aoo_source: unsupported option " << opt);
@@ -464,6 +468,9 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
             return 1;
         } else if (!strcmp(pattern, AOO_MSG_PING)){
             handle_ping(endpoint, fn, msg);
+            return 1;
+        } else if (!strcmp(pattern, AOO_MSG_CODEC_CHANGE)){
+            handle_codec_change(endpoint, fn, msg);
             return 1;
         } else {
             LOG_WARNING("unknown message " << pattern);
@@ -1351,5 +1358,85 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn,
         LOG_VERBOSE("ignoring '" << AOO_MSG_PING << "' message: sink not found");
     }
 }
+
+// /aoo/src/<id>/codecchange <sink> <numchannels> <samplerate> <blocksize> <codec> <options...>
+
+void source::handle_codec_change(void *endpoint, aoo_replyfn fn,
+                                 const osc::ReceivedMessage& msg)
+{
+    if (!respect_codec_change_req_) {
+        LOG_WARNING("Not allowing codec change request");
+        return;
+    }
+    
+    auto it = msg.ArgumentsBegin();
+
+    int32_t id = (it++)->AsInt32();
+
+    // get requested codec and format options from arguments
+    // use our existing format for the other params
+    aoo_format f;
+    auto chans = (it++)->AsInt32();
+    auto srate = (it++)->AsInt32();
+    auto bsize = (it++)->AsInt32();
+    f.codec = (it++)->AsString();
+
+    f.nchannels = nchannels_; // use existing for now
+    f.samplerate = samplerate_; // use existing for now
+    f.blocksize = bsize;
+    const void *settings;
+    osc::osc_bundle_element_size_t size;
+    (it++)->AsBlob(settings, size);
+
+    if (id < 0){
+        LOG_WARNING("bad ID for " << AOO_MSG_FORMAT << " message");
+        return;
+    }
+    
+   
+    // check if sink exists (not strictly necessary, but might help catch errors)
+    shared_lock lock(sink_mutex_); // reader lock!
+    auto sink = find_sink(endpoint, id);
+    lock.unlock();
+
+    if (sink){
+        { // only if the requesting sink exists we will respect this request
+            LOG_DEBUG("handle codec change");
+            unique_lock lock(update_mutex_); // writer lock!
+            
+            if (!encoder_ || strcmp(encoder_->name(), f.codec)){
+                auto codec = aoo::find_codec(f.codec);
+                if (codec){
+                    encoder_ = codec->create_encoder();
+                } else {
+                    LOG_ERROR("codec '" << f.codec << "' not supported!");
+                    return;
+                }
+                if (!encoder_){
+                    LOG_ERROR("couldn't create encoder!");
+                    return;
+                }
+            }
+        
+            encoder_->read_format(f, (const char *)settings, size);
+            update();
+        }
+               
+        
+        // push "codec change" event
+        if (eventqueue_.write_available()){
+            event e;
+            e.type = AOO_CHANGECODEC_EVENT;
+            e.sink.endpoint = endpoint;
+            // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
+            e.sink.id = id;
+            eventqueue_.write(e);
+        }
+    } else {
+        LOG_VERBOSE("ignoring '" << AOO_CHANGECODEC_EVENT << "' message: sink not found");
+    }
+}
+
+
 
 } // aoo

@@ -35,6 +35,7 @@ struct stream_state {
         invite_ = NONE;
         pingtime1_ = 0;
         pingtime2_ = 0;
+        codecchange_ = false;
     }
 
     void add_lost(int32_t n) { lost_ += n; lost_since_ping_ += n; }
@@ -84,6 +85,16 @@ struct stream_state {
     void request_format() { format_ = true; }
     bool need_format() { return format_.exchange(false); }
 
+    void request_codec_change(const aoo_format& f, const char *options, int32_t size) { 
+        memcpy(&codecchange_format_.header, &f, sizeof(aoo_format));
+        memcpy(codecchange_format_.data, options, size);
+        codecchange_datasize_ = size;
+        codecchange_ = true;           
+    }
+    bool need_codec_change() { return codecchange_.exchange(false); }
+
+    aoo_format_storage &  get_codec_change_format(int32_t & datasize) { datasize = codecchange_datasize_; return codecchange_format_; }
+    
     enum invitation_state {
         NONE = 0,
         INVITE = 1,
@@ -103,8 +114,12 @@ private:
     std::atomic<bool> underrun_{false};
     std::atomic<bool> recover_{false};
     std::atomic<bool> format_{false};
+    std::atomic<bool> codecchange_{false};
     std::atomic<uint64_t> pingtime1_;
     std::atomic<uint64_t> pingtime2_;
+    
+    aoo_format_storage codecchange_format_;
+    int32_t codecchange_datasize_ = 0;
 };
 
 struct block_info {
@@ -168,6 +183,8 @@ public:
 
     void request_format(){ streamstate_.request_format(); }
 
+    void request_codec_change(aoo_format & f);
+
     void request_invite(){ streamstate_.request_invitation(stream_state::INVITE); }
 
     void request_uninvite(){ streamstate_.request_invitation(stream_state::UNINVITE); }
@@ -189,6 +206,7 @@ private:
     void check_missing_blocks(const sink& s);
     // send messages
     bool send_format_request(const sink& s);
+    bool send_codec_change_request(const sink& s);
 
     int32_t send_data_request(const sink& s);
 
@@ -242,7 +260,7 @@ public:
     int32_t invite_source(void *endpoint, int32_t id, aoo_replyfn fn) override;
 
     int32_t uninvite_source(void *endpoint, int32_t id, aoo_replyfn fn) override;
-
+                             
     int32_t uninvite_all() override;
 
     int32_t handle_message(const char *data, int32_t n,
@@ -265,6 +283,10 @@ public:
 
     int32_t get_sourceoption(void *endpoint, int32_t id,
                              int32_t opt, void *ptr, int32_t size) override;
+                             
+    int32_t request_source_codec_change(void *endpoint, int32_t id, aoo_format & f) override;
+                             
+
     // getters
     int32_t id() const { return id_.load(std::memory_order_relaxed); }
 

@@ -124,6 +124,8 @@ AOO_API void aoo_terminate(void);
 #define AOO_MSG_UNINVITE_LEN 9
 #define AOO_MSG_COMPACT_DATA "/d"
 #define AOO_MSG_COMPACT_DATA_LEN 2
+#define AOO_MSG_CODEC_CHANGE "/codecchange"
+#define AOO_MSG_CODEC_CHANGE_LEN 12
 
 // id: the source or sink ID
 // returns: the offset to the remaining address pattern
@@ -167,6 +169,8 @@ typedef enum aoo_event_type
     AOO_INVITE_EVENT,
     // source: uninvited by sink
     AOO_UNINVITE_EVENT,
+    // source: requested change codec by a sink
+    AOO_CHANGECODEC_EVENT,
     // sink: source added
     AOO_SOURCE_ADD_EVENT,
     // sink: source removed (non implemented yet)
@@ -342,7 +346,11 @@ typedef enum aoo_option
     // protocol flags (int32_t) but only least significant byte is used
     // ---
     // that are supported, for use in the version that gets sent with format messages and format requests
-    aoo_opt_protocol_flags
+    aoo_opt_protocol_flags,
+    // For sources, respect codec change requests from a sink : (int32_t) 0 or 1
+    // ---
+    // If > 0 the source will change its codec immediately when requested to by a remote sink
+    aoo_opt_respect_codec_change_requests
 } aoo_option;
 
 #define AOO_ARG(x) &x, sizeof(x)
@@ -658,7 +666,7 @@ typedef int32_t (*aoo_codec_writeformat)(
 
 typedef int32_t (*aoo_codec_readformat)(
         void *,             // the decoder instance
-        const aoo_format *, // the base format
+        aoo_format *,       // the base format
         const char *,       // input buffer
         int32_t             // number of bytes
 );
@@ -688,6 +696,7 @@ typedef struct aoo_codec
     aoo_codec_free encoder_free;
     aoo_codec_setformat encoder_setformat;
     aoo_codec_getformat encoder_getformat;
+    aoo_codec_readformat encoder_readformat;
     aoo_codec_writeformat encoder_writeformat;
     aoo_codec_encode encoder_encode;
     // decoder

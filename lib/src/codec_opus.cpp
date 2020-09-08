@@ -213,16 +213,62 @@ int32_t encoder_setformat(void *enc, aoo_format *f){
 int32_t encoder_writeformat(void *enc, aoo_format *fmt,
                             char *buf, int32_t size){
     if (size >= 16){
-        auto c = static_cast<encoder *>(enc);
-        memcpy(fmt, &c->format.header, sizeof(aoo_format));
-        aoo::to_bytes<int32_t>(c->format.bitrate, buf);
-        aoo::to_bytes<int32_t>(c->format.complexity, buf + 4);
-        aoo::to_bytes<int32_t>(c->format.signal_type, buf + 8);
-        aoo::to_bytes<int32_t>(c->format.application_type, buf + 12);
-
+        // if encoder is null we assume the format passed in
+        // is actually a reference to an aoo_format_opus,
+        // and this call is used for serialization purposes
+        aoo_format_opus * ofmt;
+        if (enc == nullptr) {
+            ofmt = reinterpret_cast<aoo_format_opus *>(fmt);            
+        }
+        else {
+            auto c = static_cast<encoder *>(enc);
+            ofmt = &c->format;
+            memcpy(fmt, &ofmt->header, sizeof(aoo_format));
+        }
+        aoo::to_bytes<int32_t>(ofmt->bitrate, buf);
+        aoo::to_bytes<int32_t>(ofmt->complexity, buf + 4);
+        aoo::to_bytes<int32_t>(ofmt->signal_type, buf + 8);
+        aoo::to_bytes<int32_t>(ofmt->application_type, buf + 12);
         return 16;
     } else {
         LOG_WARNING("Opus: couldn't write settings");
+        return -1;
+    }
+}
+
+int32_t encoder_readformat(void *enc, aoo_format *fmt,
+                           const char *buf, int32_t size){
+    if (strcmp(fmt->codec, AOO_CODEC_OPUS)){
+        LOG_ERROR("opus: wrong format!");
+        return -1;
+    }
+    if (size >= 12){
+        auto c = static_cast<encoder *>(enc);
+        aoo_format_opus f;
+        int32_t retsize = 12;
+        // opus will validate for us
+        memcpy(&f.header, fmt, sizeof(aoo_format));
+        f.bitrate = aoo::from_bytes<int32_t>(buf);
+        f.complexity = aoo::from_bytes<int32_t>(buf + 4);
+        f.signal_type = aoo::from_bytes<int32_t>(buf + 8);
+        if (size >= 16) {
+            f.application_type = aoo::from_bytes<int32_t>(buf + 12);
+            retsize = 16;
+        } else {
+            f.application_type = OPUS_APPLICATION_AUDIO;
+        }
+        
+        if (encoder_setformat(c, reinterpret_cast<aoo_format *>(&f))){
+            // it could have been modified during validation, need to re-write the base format of 
+            // passed in value
+            memcpy(fmt, &f.header, sizeof(aoo_format));
+            
+            return retsize; // number of bytes
+        } else {
+            return -1; // error
+        }
+    } else {
+        LOG_ERROR("Opus: couldn't read format - too little data!");
         return -1;
     }
 }
@@ -330,7 +376,7 @@ int32_t decoder_setformat(void *dec, aoo_format *f)
 
 #define decoder_getformat codec_getformat
 
-int32_t decoder_readformat(void *dec, const aoo_format *fmt,
+int32_t decoder_readformat(void *dec, aoo_format *fmt,
                            const char *buf, int32_t size){
     if (strcmp(fmt->codec, AOO_CODEC_OPUS)){
         LOG_ERROR("opus: wrong format!");
@@ -339,6 +385,7 @@ int32_t decoder_readformat(void *dec, const aoo_format *fmt,
     if (size >= 12){
         auto c = static_cast<decoder *>(dec);
         aoo_format_opus f;
+        int32_t retsize = 12;
         // opus will validate for us
         memcpy(&f.header, fmt, sizeof(aoo_format));
         f.bitrate = aoo::from_bytes<int32_t>(buf);
@@ -346,12 +393,13 @@ int32_t decoder_readformat(void *dec, const aoo_format *fmt,
         f.signal_type = aoo::from_bytes<int32_t>(buf + 8);
         if (size >= 16) {
             f.application_type = aoo::from_bytes<int32_t>(buf + 12);
+            retsize = 16;
         } else {
             f.application_type = OPUS_APPLICATION_AUDIO;
         }
         
         if (decoder_dosetformat(c, f)){
-            return 12; // number of bytes
+            return retsize; // number of bytes
         } else {
             return -1; // error
         }
@@ -367,6 +415,7 @@ aoo_codec codec_class = {
     encoder_free,
     encoder_setformat,
     encoder_getformat,
+    encoder_readformat,
     encoder_writeformat,
     encoder_encode,
     decoder_new,

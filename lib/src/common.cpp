@@ -149,6 +149,19 @@ bool encoder::set_format(aoo_format& fmt){
     }
 }
 
+int32_t encoder::read_format(const aoo_format& fmt, const char *buf, int32_t size){
+    aoo_format_storage nfmt;
+    memcpy(&nfmt.header, &fmt, sizeof(aoo_format));
+    auto result = codec_->encoder_readformat(obj_, &nfmt.header, buf, size);
+    if (result > 0) {
+        // assign after validation!
+        nchannels_ = nfmt.header.nchannels;
+        samplerate_ = nfmt.header.samplerate;
+        blocksize_ = nfmt.header.blocksize;
+    }
+    return result;
+}
+
 bool decoder::set_format(aoo_format& fmt){
     auto result = codec_->decoder_setformat(obj_, &fmt);
     if (result > 0){
@@ -163,11 +176,13 @@ bool decoder::set_format(aoo_format& fmt){
 }
 
 int32_t decoder::read_format(const aoo_format& fmt, const char *opt, int32_t size){
-    auto result = codec_->decoder_readformat(obj_, &fmt, opt, size);
+    aoo_format_storage nfmt;
+    memcpy(&nfmt.header, &fmt, sizeof(aoo_format));
+    auto result = codec_->decoder_readformat(obj_, &nfmt.header, opt, size);
     if (result >= 0){
-        nchannels_ = fmt.nchannels;
-        samplerate_ = fmt.samplerate;
-        blocksize_ = fmt.blocksize;
+        nchannels_ = nfmt.header.nchannels;
+        samplerate_ = nfmt.header.samplerate;
+        blocksize_ = nfmt.header.blocksize;
     }
     return result;
 }

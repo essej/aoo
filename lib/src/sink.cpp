@@ -94,6 +94,18 @@ int32_t aoo::sink::uninvite_all(){
     return 1;
 }
 
+int32_t aoo::sink::request_source_codec_change(void *endpoint, int32_t id, aoo_format & f)
+{
+    auto src = find_source(endpoint, id);
+    if (src){
+        src->request_codec_change(f);
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+
 namespace aoo {
 
 template<typename T>
@@ -681,6 +693,19 @@ int32_t source_desc::get_format(aoo_format_storage &format){
     }
 }
 
+void source_desc::request_codec_change(aoo_format & f)
+{    
+    auto c = aoo::find_codec(f.codec);
+    if (c){
+        char buf[256];
+        int32_t optsize = c->serialize_format(f, buf, sizeof(buf));
+        streamstate_.request_codec_change(f, buf, optsize);     
+    } else {
+        LOG_ERROR("codec '" << f.codec << "' not supported!");
+        return;
+    }
+}
+
 int32_t source_desc::get_buffer_fill_ratio(float &ratio){
     if (audioqueue_.capacity() > 0) {
         ratio = (audioqueue_.read_available() * audioqueue_.blocksize()) / (float)audioqueue_.capacity();
@@ -879,6 +904,9 @@ bool source_desc::send(const sink& s){
     bool didsomething = false;
 
     if (send_format_request(s)){
+        didsomething = true;
+    }
+    if (send_codec_change_request(s)){
         didsomething = true;
     }
     if (send_data_request(s)){
@@ -1407,6 +1435,35 @@ bool source_desc::send_format_request(const sink& s) {
     }
 }
 
+
+// /aoo/src/<id>/codecchange <sink> <numchannels> <samplerate> <blocksize> <codec> <options...>
+
+bool source_desc::send_codec_change_request(const sink& s) {
+    if (streamstate_.need_codec_change()){
+        LOG_VERBOSE("request change of codec for source " << id_);
+        char buf[AOO_MAXPACKETSIZE];
+        osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+        int32_t size = 0;
+        const aoo_format_storage & f = streamstate_.get_codec_change_format(size);
+        
+        // make OSC address pattern
+        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN +
+                AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_CODEC_CHANGE_LEN;
+        char address[max_addr_size];
+        snprintf(address, sizeof(address), "%s%s/%d%s",
+                 AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_CODEC_CHANGE);
+
+        msg << osc::BeginMessage(address) << s.id() << f.header.nchannels << f.header.samplerate << f.header.blocksize << f.header.codec << osc::Blob(f.data, size)
+            << osc::EndMessage;
+
+        dosend(msg.Data(), (int32_t)msg.Size());
+
+        return true;
+    } else {
+        return false;
+    }
+}
 
 // /aoo/src/<id>/data <sink> <salt> <seq0> <frame0> <seq1> <frame1> ...
 

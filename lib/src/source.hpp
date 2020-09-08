@@ -176,6 +176,7 @@ class source final : public isource {
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
     std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };
     std::atomic<int32_t> protocol_flags_{ 0 };
+    std::atomic<int32_t> respect_codec_change_req_{ 0 };
     // runtime
     double prev_sent_samplerate_ = 0.0;
     
@@ -212,6 +213,9 @@ class source final : public isource {
 
     void handle_uninvite(void *endpoint, aoo_replyfn fn,
                          const osc::ReceivedMessage& msg);
+    
+    void handle_codec_change(void *endpoint, aoo_replyfn fn,
+                               const osc::ReceivedMessage& msg);
 };
 
 } // aoo
