@@ -188,9 +188,9 @@ EXPORT void aoo_setup(void)
     int offset = 0;
     offset += snprintf(version, sizeof(version), "%d.%d",
                        AOO_VERSION_MAJOR, AOO_VERSION_MINOR);
-#if AOO_VERSION_BUGFIX > 0
+#if AOO_VERSION_PATCH > 0
     offset += snprintf(version + offset, sizeof(version) - offset,
-                       ".%d", AOO_VERSION_BUGFIX);
+                       ".%d", AOO_VERSION_PATCH);
 #endif
 #if AOO_VERSION_PRERELEASE > 0
     offset += snprintf(version + offset, sizeof(version) - offset,

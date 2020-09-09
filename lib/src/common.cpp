@@ -31,7 +31,7 @@ bool check_version(uint32_t version){
 uint32_t make_version(){
     // make version: major, minor, bugfix, [protocol]
     return ((uint32_t)AOO_VERSION_MAJOR << 24) | ((uint32_t)AOO_VERSION_MINOR << 16)
-            | ((uint32_t)AOO_VERSION_BUGFIX << 8);
+            | ((uint32_t)AOO_VERSION_PATCH << 8);
 }
 
 }

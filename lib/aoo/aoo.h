@@ -13,7 +13,7 @@ extern "C"
 
 #define AOO_VERSION_MAJOR 2
 #define AOO_VERSION_MINOR 0
-#define AOO_VERSION_BUGFIX 0
+#define AOO_VERSION_PATCH 0
 #define AOO_VERSION_PRERELEASE 3 // 0: no pre-release
 
 #ifndef AOO_DEBUG_DLL
