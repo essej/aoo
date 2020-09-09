@@ -5,7 +5,7 @@
 #include "sync.hpp"
 
 #ifdef _WIN32
-#include <synchapi.h>
+#include <windows.h>
 #else
 #include <pthread.h>
 #endif
