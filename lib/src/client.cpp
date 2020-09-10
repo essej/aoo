@@ -1071,8 +1071,14 @@ void client::handle_peer_add(const osc::ReceivedMessage& msg){
     peers_.push_back(std::make_unique<peer>(*this, group, user,
                                             public_addr, local_addr, token));
 
-    // don't handle event yet, wait for ping handshake
+    // push prejoin event, real join event will be sent after handshake and real address is discovered
+    
+    auto e = std::make_unique<client::peer_event>(
+                AOONET_CLIENT_PEER_PREJOIN_EVENT,
+                group.c_str(), user.c_str(), nullptr, 0);
+    push_event(std::move(e));
 
+    
     LOG_VERBOSE("aoo_client: new peer " << *peers_.back()
                 << " (" << public_ip << ":" << public_port << ") token: " << token);
 }
@@ -1190,7 +1196,9 @@ client::peer_event::~peer_event()
 {
     delete peer_event_.user;
     delete peer_event_.group;
-    free_sockaddr(peer_event_.address);
+    if (peer_event_.address) {
+        free_sockaddr(peer_event_.address);
+    }
 }
 
 /*///////////////////// peer //////////////////////////*/
@@ -1266,12 +1274,19 @@ void peer::send(time_tag now){
                       << client_->request_timeout() << " seconds");
             timeout_ = true;
 
-            std::stringstream ss;
-            ss << "couldn't establish connection with peer " << *this;
 
-            auto e = std::make_unique<client::event>(
-                        AOONET_CLIENT_ERROR_EVENT, 0, ss.str().c_str());
+            // this at least lets us present to the user that a particular user@group failed to establish
+            auto e = std::make_unique<client::peer_event>(
+                        AOONET_CLIENT_PEER_JOINFAIL_EVENT,
+                        group().c_str(), user().c_str(), nullptr, 0);
             client_->push_event(std::move(e));
+
+            //std::stringstream ss;
+            //ss << "couldn't establish connection with peer " << *this;
+            //
+            //auto e = std::make_unique<client::event>(
+            //            AOONET_CLIENT_ERROR_EVENT, 0, ss.str().c_str());
+            //client_->push_event(std::move(e));
 
             return;
         }
