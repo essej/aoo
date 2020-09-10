@@ -162,7 +162,7 @@ variables:
 #    - for lib in pd sc; do
     - for lib in pd; do
         for dir in ./*/$lib/aoo; do
-          name=aoo_${CI_COMMIT_REF_NAME}_$(basename "${dir%/$lib/aoo}");
+          name=aoo_$lib_${CI_COMMIT_REF_NAME}_$(basename "${dir%/$lib/aoo}");
           (cd "${dir}/../" && zip -r "../../${name}.zip" ./aoo)
         ; done
       ; done
