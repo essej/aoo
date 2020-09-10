@@ -18,8 +18,6 @@ variables:
   - git submodule update --init
   - cmake -Hdeps/opus -Bdeps/opus/build -DOPUS_STACK_PROTECTOR=OFF
    -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE -DCMAKE_INSTALL_PREFIX=deps/opus
-# terrible hack to fix undefined reference to __memcpy_chk on MinGW. this doesn't happen on my machine...
-  - sed -i -- 's/_FORTIFY_SOURCE=2/_FORTIFY_SOURCE=0/g' ./deps/opus/build/CMakeFiles/opus.dir/flags.make
   - make -C deps/opus/build install VERBOSE=1
 
 .script:cmake: &script_cmake
