@@ -115,6 +115,14 @@ public:
         return get_option(aoo_opt_buffersize, AOO_ARG(n));
     }
 
+    int32_t set_dynamic_resampling(int32_t n){
+        return set_option(aoo_opt_dynamic_resampling, AOO_ARG(n));
+    }
+
+    int32_t get_dynamic_resampling(int32_t& n){
+        return get_option(aoo_opt_dynamic_resampling, AOO_ARG(n));
+    }
+
     int32_t set_timefilter_bandwidth(float f){
         return set_option(aoo_opt_timefilter_bandwidth, AOO_ARG(f));
     }
@@ -259,6 +267,14 @@ public:
 
     int32_t get_buffersize(int32_t& n){
         return get_option(aoo_opt_buffersize, AOO_ARG(n));
+    }
+
+    int32_t set_dynamic_resampling(int32_t n){
+        return set_option(aoo_opt_dynamic_resampling, AOO_ARG(n));
+    }
+
+    int32_t get_dynamic_resampling(int32_t& n){
+        return get_option(aoo_opt_dynamic_resampling, AOO_ARG(n));
     }
 
     int32_t set_timefilter_bandwidth(float f){

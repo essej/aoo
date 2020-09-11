@@ -276,6 +276,10 @@ typedef enum aoo_option
     // but for unreliable/unpredictable networks
     // you might need to increased it significantly.
     aoo_opt_buffersize,
+    // Enable sample rate DLL dynamic resampling : (int32_t) 0 or 1
+    // ---
+    // If > 0 the sample rate will be dynamically resampled based on effective samplerate using DLL
+    aoo_opt_dynamic_resampling,
     // Time filter DLL bandwidth (float)
     // ---
     // The time DLL filter estimates the effective samplerate
@@ -688,6 +692,9 @@ typedef int32_t (*aoo_codec_decode)(
 
 );
 
+typedef int32_t (*aoo_codec_reset)(void *) ;
+
+
 typedef struct aoo_codec
 {
     const char *name;
@@ -699,6 +706,7 @@ typedef struct aoo_codec
     aoo_codec_readformat encoder_readformat;
     aoo_codec_writeformat encoder_writeformat;
     aoo_codec_encode encoder_encode;
+    aoo_codec_reset encoder_reset;
     // decoder
     aoo_codec_new decoder_new;
     aoo_codec_free decoder_free;
@@ -706,6 +714,7 @@ typedef struct aoo_codec
     aoo_codec_getformat decoder_getformat;
     aoo_codec_readformat decoder_readformat;
     aoo_codec_decode decoder_decode;
+    aoo_codec_reset decoder_reset;
 } aoo_codec;
 
 // register an external codec plugin

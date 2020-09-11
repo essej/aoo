@@ -225,6 +225,7 @@ private:
     // state
     int32_t newest_ = 0; // sequence number of most recent incoming block
     int32_t next_ = 0; // next outgoing block
+    int32_t nextneedsfadein_ = -1; // sequence number that needs fadein
     int32_t channel_ = 0; // recent channel onset
     double samplerate_ = 0; // recent samplerate
     int32_t protocol_flags_ = 0; // protocol flags sent from the remote source
@@ -332,6 +333,7 @@ private:
     // the sources
     lockfree::list<source_desc> sources_;
     // timing
+    std::atomic<int32_t> dynamic_resampling_{ 1 };
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
     time_dll dll_;
     bool ignore_dll_ = false;

@@ -173,12 +173,17 @@ class source final : public isource {
     std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
     std::atomic<int32_t> resend_buffersize_{ AOO_RESEND_BUFSIZE };
     std::atomic<int32_t> redundancy_{ AOO_SEND_REDUNDANCY };
+    std::atomic<int32_t> dynamic_resampling_{ 1 };
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
     std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };
     std::atomic<int32_t> protocol_flags_{ 0 };
     std::atomic<int32_t> respect_codec_change_req_{ 0 };
     // runtime
     double prev_sent_samplerate_ = 0.0;
+    std::atomic<int32_t> activeplay_ { 0 };
+    std::atomic<int32_t> flushingout_ { 0 };
+    bool lastplay_ = false;
+    int32_t pushing_silent_frames_ = 0;
     
     // helper methods
     sink_desc * find_sink(void *endpoint, int32_t id);

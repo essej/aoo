@@ -109,6 +109,11 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
+    // dynamic resampling
+    case aoo_opt_dynamic_resampling:
+        CHECKARG(int32_t);
+        dynamic_resampling_ = std::max<int32_t>(0, as<int32_t>(ptr));
+        break;
     // timefilter bandwidth
     case aoo_opt_timefilter_bandwidth:
         CHECKARG(float);
@@ -493,7 +498,7 @@ int32_t aoo_source_send(aoo_source *src) {
 // We have to make a local copy of the sink list, but this should be
 // rather cheap in comparison to encoding and sending the audio data.
 int32_t aoo::source::send(){
-    if (!play_.load()){
+    if (!play_.load() && !activeplay_.load()){
         return false;
     }
 
@@ -523,7 +528,7 @@ int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, 
 }
 
 int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
-    if (!play_){
+    if (!play_ && !activeplay_){
         return 0; // pausing
     }
 
@@ -551,10 +556,11 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
 
     // if the DLL samplerate is any more than +/- 10% of our nominal, we'll ignore it
     // some shenanigans are going on
-    bool ignoredll = false;
+    bool ignoredll = !dynamic_resampling_.load();;
     if (fabs(dll_.samplerate() - (double)samplerate_) > 0.1*samplerate_) {
         ignoredll = true;
     }
+    
     
     // the mutex should be uncontended most of the time.
     // NOTE: We could use try_lock() and skip the block if we couldn't aquire the lock.
@@ -564,14 +570,59 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
         return 0;
     }
 
+     bool dofadein = play_ && !lastplay_;
+     bool dofadeout = !play_ && lastplay_;
+     
+     if (dofadeout) {
+         pushing_silent_frames_ = 4 * encoder_->blocksize();
+         LOG_WARNING("do play fadeout, pushing silent: " << pushing_silent_frames_);
+     }
+     if (dofadein) {
+         LOG_WARNING("do play fadein");
+     }
+     
+     lastplay_ = play_;
+
+     bool pushingSilence = !dofadeout && !play_ && pushing_silent_frames_ > 0;
+     
+     if (play_) {
+         activeplay_ = true;
+     } 
+     else if (!dofadeout && pushing_silent_frames_ <= 0 && !flushingout_) {
+         // already done our fadeout, and we aren't active anymore, so don't do any more processing
+         //LOG_WARNING("last play processing");
+         //activeplay_ = 0;
+         pushing_silent_frames_ = 0;
+         flushingout_ = 1;
+         // activeplay_ will be set to false in the sending when it runs out of data
+         return 0;
+     }
+
+    
+
+
+    
     // non-interleaved -> interleaved
     //auto insamples = blocksize_ * nchannels_;
     auto insamples = n * nchannels_;
     auto outsamples = audioqueue_.blocksize(); // encoder_->blocksize() * nchannels_;
     auto *buf = (aoo_sample *)alloca(insamples * sizeof(aoo_sample));
-    for (int i = 0; i < nchannels_; ++i){
-        for (int j = 0; j < n; ++j){
-            buf[j * nchannels_ + i] = data[i][j];
+
+    if (n > 0 && (dofadein || dofadeout || pushingSilence)) {
+        const float fadedelta = dofadeout ? (-1.0f / n) : pushingSilence ? 0.0f : (1.0f / n);
+        
+        for (int i = 0; i < nchannels_; ++i){
+            float gain = dofadeout ? 1.0f : 0.0f;
+            for (int j = 0; j < n; ++j){
+                buf[j * nchannels_ + i] = data[i][j] * gain;
+                gain += fadedelta;
+            }
+        }
+    } else {
+        for (int i = 0; i < nchannels_; ++i){
+            for (int j = 0; j < n; ++j){
+                buf[j * nchannels_ + i] = data[i][j];
+            }
         }
     }
 
@@ -642,6 +693,11 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
         }
     }
 #endif
+    
+    if (pushing_silent_frames_ > 0) {
+        pushing_silent_frames_ -= n;
+    }
+    
     return 1;
 }
 
@@ -870,11 +926,15 @@ void source::update(){
 
         // history buffer
         update_historybuffer();
-
+        
+        // reset encoder state to avoid old garbage
+        encoder_->reset();
+        
         // reset time DLL to be on the safe side
         timer_.reset();
         lastpingtime_ = -1000; // force first ping
-
+        lastplay_ = false;
+        
         // Start new sequence and resend format.
         // We naturally want to do this when setting the format,
         // but it's good to also do it in setup() to eliminate
@@ -1163,7 +1223,12 @@ bool source::send_data(){
             audioqueue_.read_commit();
         }
     } else {
-        // LOG_DEBUG("couldn't send");
+        // LOG_DEBUG("couldn't send");       
+        if (!play_.load() && flushingout_.load() ) {
+            LOG_WARNING("finished flushing out");
+            activeplay_ = 0;
+            flushingout_ = 0;
+        }
         return 0;
     }
 

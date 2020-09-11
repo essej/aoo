@@ -273,6 +273,16 @@ int32_t encoder_readformat(void *enc, aoo_format *fmt,
     }
 }
 
+int32_t encoder_reset(void *enc) {
+    auto c = static_cast<encoder *>(enc);
+    if (c->state){
+        opus_multistream_encoder_ctl(c->state, OPUS_RESET_STATE);
+        return 1;
+    }
+    return 0;
+}
+
+
 /*/////////////////////// decoder ///////////////////////////*/
 
 struct decoder : codec {
@@ -409,6 +419,16 @@ int32_t decoder_readformat(void *dec, aoo_format *fmt,
     }
 }
 
+int32_t decoder_reset(void *enc) {
+    auto c = static_cast<decoder *>(enc);
+    if (c->state){
+        opus_multistream_decoder_ctl(c->state, OPUS_RESET_STATE);
+        return 1;
+    }
+    return 0;
+}
+
+
 aoo_codec codec_class = {
     AOO_CODEC_OPUS,
     encoder_new,
@@ -418,12 +438,14 @@ aoo_codec codec_class = {
     encoder_readformat,
     encoder_writeformat,
     encoder_encode,
+    encoder_reset,
     decoder_new,
     decoder_free,
     decoder_setformat,
     decoder_getformat,
     decoder_readformat,
-    decoder_decode
+    decoder_decode,
+    decoder_reset
 };
 
 } // namespace

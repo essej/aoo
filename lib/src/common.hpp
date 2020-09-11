@@ -77,6 +77,11 @@ public:
     int32_t encode(const aoo_sample *s, int32_t n, char *buf, int32_t size){
         return codec_->encoder_encode(obj_, s, n, buf, size);
     }
+
+    int32_t reset() {
+        return codec_->encoder_reset(obj_);
+    }
+
 };
 
 class decoder : public base_codec {
@@ -93,6 +98,9 @@ public:
     int32_t read_format(const aoo_format& fmt, const char *opt, int32_t size);
     int32_t decode(const char *buf, int32_t size, aoo_sample *s, int32_t n){
         return codec_->decoder_decode(obj_, buf, size, s, n);
+    }
+    int32_t reset() {
+        return codec_->decoder_reset(obj_);
     }
 };
 

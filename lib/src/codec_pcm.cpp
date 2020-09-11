@@ -206,6 +206,14 @@ int32_t encoder_readformat(void *enc, aoo_format *fmt,
     return -1;
 }
 
+int32_t codec_reset(void *enc) {
+    auto c = static_cast<codec *>(enc);
+    if (c){
+        return 1;
+    }
+    return 0;
+}
+
 int32_t codec_getformat(void *x, aoo_format_storage *f)
 {
     auto c = static_cast<codec *>(x);
@@ -376,12 +384,14 @@ aoo_codec codec_class = {
     encoder_readformat,
     encoder_writeformat,
     encoder_encode,
+    codec_reset,
     decoder_new,
     decoder_free,
     codec_setformat,
     codec_getformat,
     decoder_readformat,
-    decoder_decode
+    decoder_decode,
+    codec_reset
 };
 
 } // namespace

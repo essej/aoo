@@ -154,6 +154,11 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
+    // dynamic resampling
+    case aoo_opt_dynamic_resampling:
+        CHECKARG(int32_t);
+        dynamic_resampling_ = std::max<int32_t>(0, as<int32_t>(ptr));
+        break;
     // timefilter bandwidth
     case aoo_opt_timefilter_bandwidth:
         CHECKARG(float);
@@ -433,9 +438,11 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsampframes, uint64_t t){
 
     // if the DLL samplerate is any more than +/- 10% of our nominal, we'll ignore it
     // some shenanigans are going on
-    if (fabs(dll_.samplerate() - ((double)samplerate_)) > 0.1*samplerate_) {
-        ignore_dll_ = true;
+    bool ignoredll = !dynamic_resampling_.load();
+    if (!ignoredll && fabs(dll_.samplerate() - ((double)samplerate_)) > 0.1*samplerate_) {
+        ignoredll = true;
     }
+    ignore_dll_ = ignoredll;
     
     // the mutex is uncontended most of the time, but LATER we might replace
     // this with a lockless and/or waitfree solution
@@ -757,11 +764,14 @@ void source_desc::do_update(const sink &s){
         blockqueue_.resize(nbuffers + 32); // extra capacity for network jitter (allows lower buffersizes) (should be option?)
         newest_ = 0;
         next_ = -1;
+        nextneedsfadein_ = 0;
         channel_ = 0;
         samplerate_ = decoder_->samplerate();
         streamstate_.reset();
         ack_list_.set_limit(s.resend_limit());
         ack_list_.clear();
+
+        decoder_->reset();
 
         // start in a need recovery state so the buffer is re-filled when we get the first data
         streamstate_.request_recover();
@@ -841,6 +851,7 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
 
     if (next_ < 0){
         next_ = d.sequence;
+        nextneedsfadein_ = next_;
     }
 
     // check data packet
@@ -1140,10 +1151,12 @@ bool source_desc::check_packet(const data_packet &d){
                           : underrun ? "buffer underrun"
                           : "?";
             LOG_VERBOSE("wrote " << count << " empty blocks for " << reason);
+            nextneedsfadein_ = next_;
         }
 
         if (dropped){
             next_++;
+            nextneedsfadein_ = next_;
             return false;
         }
     }
@@ -1242,7 +1255,16 @@ void source_desc::process_blocks(){
         const char *data;
         int32_t size;
         block_info i;
-
+        const bool dofadein = b->sequence == nextneedsfadein_;
+        
+        if (nextneedsfadein_ >= 0) {
+            LOG_WARNING("Next needsfade: " << nextneedsfadein_ << "  next: " << next_ << " newest: " << newest_);
+        }
+        
+        if (dofadein) {
+            decoder_->reset();
+        }
+        
         if (b->sequence == next && b->complete()){
             // block is ready
             LOG_DEBUG("write samples (" << b->sequence << ")");
@@ -1280,6 +1302,22 @@ void source_desc::process_blocks(){
             LOG_WARNING("aoo_sink: couldn't decode block!");
             // decoder failed - fill with zeros
             std::fill(ptr, ptr + nsamples, 0);
+        }
+        else if (dofadein) {
+            // fade the samples in
+            LOG_WARNING("fading in block");
+            auto nchannels = decoder_->nchannels();
+            const int sframes = nsamples/nchannels;
+            for (int i = 0; i < nchannels; ++i){
+                float gain = 0.0f;
+                const float gaindelta = 1.0f / sframes;
+                for (int j = 0; j < sframes; ++j){
+                    ptr[j*nchannels+i] *= gain;
+                    gain += gaindelta;
+                }
+            }                   
+            
+            nextneedsfadein_ = -1;
         }
         audioqueue_.write_commit();
 
