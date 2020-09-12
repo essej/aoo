@@ -2,11 +2,9 @@ cmake_minimum_required (VERSION 2.8)
 
 set(INCLUDE "../include/aoonet")
 
-set(AOONET_PUBLIC_HEADERS "${INCLUDE}/aoonet.h" "${INCLUDE}/aoonet.hpp")
+file(GLOB AOONET_HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp" "src/*.hpp")
 
-file(GLOB AOONET_HEADERS "src/*.hpp")
-
-file(GLOB AOONET_SRC ${AOONET_PUBLIC_HEADERS} ${AOONET_HEADERS}
+file(GLOB AOONET_SRC ${AOONET_HEADERS}
     ${AOO_COMMON_SRC} ${OSCPACK_SRC} "src/*.cpp")
 
 # static library
@@ -27,10 +25,12 @@ if (BUILD_AOONET_SHARED)
         target_link_libraries(${AOONET_SHARED} "ws2_32")
     endif()
 
-    set_target_properties(${AOONET_SHARED} PROPERTIES
-        PUBLIC_HEADER "${AOONET_PUBLIC_HEADERS}")
-
+    # install shared libraries
     install(TARGETS ${AOONET_SHARED}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${AOONET_SHARED})
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    # install public headers (note the trailing slash!)
+    install(DIRECTORY "${INCLUDE}/"
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${AOONET_SHARED})
 endif()

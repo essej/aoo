@@ -34,17 +34,14 @@ set(OPTIONS
 
 set(INCLUDE "../include/aoo")
 
-set(AOO_PUBLIC_HEADERS "${INCLUDE}/aoo.h" "${INCLUDE}/aoo.hpp"
-    "${INCLUDE}/aoo_types.h" "${INCLUDE}/codec/aoo_pcm.h" )
+file(GLOB AOO_HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp"
+     "${INCLUDE}/codec/aoo_pcm.h" "src/*.hpp")
 if (CODEC_OPUS)
-    list(APPEND AOO_PUBLIC_HEADERS "${INCLUDE}/codec/aoo_opus.h")
+    list(APPEND AOO_HEADERS "${INCLUDE}/codec/aoo_opus.h")
 endif()
 
-file(GLOB AOO_HEADERS "src/*.hpp")
-
-file(GLOB AOO_SRC ${AOO_PUBLIC_HEADERS} ${AOO_HEADERS}
-    ${AOO_COMMON_SRC} ${OSCPACK_SRC} "src/*.cpp"
-    "src/codec/pcm.cpp")
+file(GLOB AOO_SRC ${AOO_HEADERS} ${AOO_COMMON_SRC}
+     ${OSCPACK_SRC} "src/*.cpp" "src/codec/pcm.cpp")
 if (CODEC_OPUS)
     list(APPEND AOO_SRC "src/codec/opus.cpp")
 endif()
@@ -64,12 +61,14 @@ if (BUILD_AOO_SHARED)
     if (WIN32 OR MINGW)
         target_compile_definitions(${AOO_SHARED} PUBLIC "-DDLL_EXPORT")
     endif()
-    target_link_libraries(${AOO_SHARED} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS} )
+    target_link_libraries(${AOO_SHARED} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS})
 
-    set_target_properties(${AOO_SHARED} PROPERTIES
-        PUBLIC_HEADER "${AOO_PUBLIC_HEADERS}")
-
+    # install shared libraries
     install(TARGETS ${AOO_SHARED}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${AOO_SHARED})
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    # install public headers (note the trailing slash!)
+    install(DIRECTORY "${INCLUDE}/"
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${AOO_SHARED})
 endif()
