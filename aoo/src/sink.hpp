@@ -5,12 +5,16 @@
 #pragma once
 
 #include "aoo/aoo.hpp"
-#include "aoo/aoo_utils.hpp"
 
-#include "time.hpp"
-#include "sync.hpp"
-#include "common.hpp"
-#include "lockfree.hpp"
+#include "common/lockfree.hpp"
+#include "common/sync.hpp"
+#include "common/time.hpp"
+#include "common/utils.hpp"
+
+#include "buffer.hpp"
+#include "codec.hpp"
+#include "resampler.hpp"
+#include "timer.hpp"
 #include "time_dll.hpp"
 
 #include "oscpack/osc/OscOutboundPacketStream.h"

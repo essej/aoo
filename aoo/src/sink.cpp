@@ -3,7 +3,6 @@
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
 #include "sink.hpp"
-#include "aoo/aoo_utils.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -480,6 +479,8 @@ void sink::update_sources(){
         src.update(*this);
     }
 }
+
+bool check_version(uint32_t);
 
 int32_t sink::handle_format_message(void *endpoint, aoo_replyfn fn,
                                     const osc::ReceivedMessage& msg)
@@ -1211,6 +1212,8 @@ resend_done:
 }
 
 // /aoo/src/<id>/format <version> <sink>
+
+uint32_t make_version();
 
 bool source_desc::send_format_request(const sink& s) {
     if (streamstate_.need_format()){

@@ -3,7 +3,8 @@
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
 #include "aoo_common.h"
-#include "aoo/aoo_net.h"
+
+#include "aoonet/aoonet.h"
 
 #include <pthread.h>
 

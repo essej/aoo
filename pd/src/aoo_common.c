@@ -4,9 +4,10 @@
 
 
 #include "aoo_common.h"
-#include "aoo/aoo_pcm.h"
+
+#include "aoo/codec/aoo_pcm.h"
 #if USE_CODEC_OPUS
-#include "aoo/aoo_opus.h"
+#include "aoo/codec/aoo_opus.h"
 #endif
 
 #include <stdio.h>

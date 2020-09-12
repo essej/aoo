@@ -4,10 +4,11 @@
 
 #pragma once
 
-#include "aoo/aoo_net.hpp"
-#include "aoo/aoo_utils.hpp"
+#include "aoonet/aoonet.hpp"
 
-#include "lockfree.hpp"
+#include "common/utils.hpp"
+#include "common/lockfree.hpp"
+
 #include "net_utils.hpp"
 #include "SLIP.hpp"
 

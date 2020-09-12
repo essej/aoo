@@ -7,6 +7,8 @@
 #include <inttypes.h>
 #include <ostream>
 
+#include "utils.hpp"
+
 namespace aoo {
 
 /*////////////////////////// time tag //////////////////////////*/

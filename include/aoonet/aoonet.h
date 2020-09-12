@@ -29,7 +29,7 @@
 
 #pragma once
 
-#include "aoo_types.h"
+#include "aoo/aoo_types.h"
 
 #ifdef __cplusplus
 extern "C"

@@ -3,7 +3,6 @@
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
 #include "source.hpp"
-#include "aoo/aoo_utils.hpp"
 
 #include <cstring>
 #include <algorithm>
@@ -652,6 +651,8 @@ void endpoint::send_data(int32_t src, int32_t salt, const aoo::data_packet& d) c
 
 // /aoo/sink/<id>/format <src> <version> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
 
+uint32_t make_version();
+
 void endpoint::send_format(int32_t src, int32_t salt, const aoo_format& f,
                             const char *options, int32_t size) const {
     // call without lock!
@@ -1104,6 +1105,8 @@ bool source::send_ping(){
         return false;
     }
 }
+
+bool check_version(uint32_t);
 
 void source::handle_format_request(void *endpoint, aoo_replyfn fn,
                                    const osc::ReceivedMessage& msg)

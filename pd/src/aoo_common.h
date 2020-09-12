@@ -6,14 +6,9 @@
 
 #include "m_pd.h"
 
-#include "aoo_net.h"
-
-// hack for pd-lib-builder
-#ifdef AOO_BUILD
-#undef AOO_BUILD
-#endif
-
 #include "aoo/aoo.h"
+
+#include "aoo_net.h"
 
 #ifndef _WIN32
 #include <pthread.h>

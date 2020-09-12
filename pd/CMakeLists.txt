@@ -1,13 +1,12 @@
+cmake_minimum_required (VERSION 2.8)
+
 set(PROJECT "pd")
 set(FILENAME "aoo")
 message(STATUS "---\n*** ${FILENAME} ***")
 
-set(HEADERS "src/aoo_common.h" "src/aoo_net.h")
+file(GLOB HEADERS "src/*.h")
 
-set(SRC ${HEADERS} "src/aoo_client.c" "src/aoo_common.c"
-    "src/aoo_net.c" "src/aoo_node.c" "src/aoo_pack~.c"
-    "src/aoo_receive~.c" "src/aoo_route.c" "src/aoo_send~.c"
-    "src/aoo_server.c" "src/aoo_setup.c" "src/aoo_unpack~.c")
+file(GLOB SRC ${HEADERS} "src/*.c")
 
 # Pd directories:
 if (NOT PD_DIR)

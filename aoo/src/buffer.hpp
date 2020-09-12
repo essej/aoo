@@ -1,114 +1,12 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
- * For information on usage and redistribution, and for a DISCLAIMER OF ALL
- * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
-
 #pragma once
 
 #include "aoo/aoo.h"
 
-#include "time.hpp"
-#include "sync.hpp"
-
+#include <stdint.h>
 #include <vector>
-#include <array>
 #include <bitset>
-#include <memory>
-#include <atomic>
-
 
 namespace aoo {
-
-bool check_version(uint32_t version);
-
-uint32_t make_version();
-
-class dynamic_resampler {
-public:
-    void setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_t srto, int32_t nchannels);
-    void clear();
-    void update(double srfrom, double srto);
-    bool write(const aoo_sample* data, int32_t n);
-    bool read(aoo_sample* data, int32_t n);
-
-    double ratio() const { return ideal_ratio_; }
-private:
-    std::vector<aoo_sample> buffer_;
-    int32_t nchannels_ = 0;
-    double rdpos_ = 0;
-    int32_t wrpos_ = 0;
-    double balance_ = 0;
-    double ratio_ = 1.0;
-    double ideal_ratio_ = 1.0;
-};
-
-class base_codec {
-public:
-    base_codec(const aoo_codec *codec, void *obj)
-        : codec_(codec), obj_(obj){}
-    base_codec(const aoo_codec&) = delete;
-
-    const char *name() const { return codec_->name; }
-    int32_t nchannels() const { return nchannels_; }
-    int32_t samplerate() const { return samplerate_; }
-    int32_t blocksize() const { return blocksize_; }
-protected:
-    const aoo_codec *codec_;
-    void *obj_;
-    int32_t nchannels_ = 0;
-    int32_t samplerate_ = 0;
-    int32_t blocksize_ = 0;
-};
-
-class encoder : public base_codec {
-public:
-    using base_codec::base_codec;
-    ~encoder(){
-        codec_->encoder_free(obj_);
-    }
-
-    bool set_format(aoo_format& fmt);
-    bool get_format(aoo_format_storage& fmt) const {
-        return codec_->encoder_getformat(obj_, &fmt) > 0;
-    }
-    int32_t write_format(aoo_format& fmt, char *buf, int32_t size){
-        return codec_->encoder_writeformat(obj_, &fmt, buf, size);
-    }
-    int32_t encode(const aoo_sample *s, int32_t n, char *buf, int32_t size){
-        return codec_->encoder_encode(obj_, s, n, buf, size);
-    }
-};
-
-class decoder : public base_codec {
-public:
-    using base_codec::base_codec;
-    ~decoder(){
-        codec_->decoder_free(obj_);
-    }
-
-    bool set_format(aoo_format& fmt);
-    bool get_format(aoo_format_storage& f) const {
-        return codec_->decoder_getformat(obj_, &f) > 0;
-    }
-    int32_t read_format(const aoo_format& fmt, const char *opt, int32_t size);
-    int32_t decode(const char *buf, int32_t size, aoo_sample *s, int32_t n){
-        return codec_->decoder_decode(obj_, buf, size, s, n);
-    }
-};
-
-class codec {
-public:
-    codec(const aoo_codec *c)
-        : codec_(c){}
-    const char *name() const {
-        return codec_->name;
-    }
-    std::unique_ptr<encoder> create_encoder() const;
-    std::unique_ptr<decoder> create_decoder() const;
-private:
-    const aoo_codec *codec_;
-};
-
-const codec * find_codec(const std::string& name);
 
 struct data_packet {
     int32_t sequence;
@@ -250,38 +148,4 @@ private:
     int32_t head_ = 0;
 };
 
-/*//////////////////////// timer //////////////////////*/
-
-class timer {
-public:
-    enum class state {
-        reset,
-        ok,
-        error
-    };
-    timer() = default;
-    timer(const timer& other);
-    timer& operator=(const timer& other);
-    void setup(int32_t sr, int32_t blocksize);
-    void reset();
-    double get_elapsed() const;
-    time_tag get_absolute() const;
-    state update(time_tag t, double& error);
-private:
-    std::atomic<uint64_t> last_;
-    std::atomic<double> elapsed_{0};
-
-#if AOO_TIMEFILTER_CHECK
-    // moving average filter to detect timing issues
-    static const size_t buffersize_ = 64;
-
-    double delta_ = 0;
-    double sum_ = 0;
-    std::array<double, buffersize_> buffer_;
-    int32_t head_ = 0;
-#endif
-
-    spinlock lock_;
-};
-
-} // aoo
+}

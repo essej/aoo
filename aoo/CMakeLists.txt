@@ -1,4 +1,4 @@
-# AOO
+cmake_minimum_required (VERSION 2.8)
 
 # compile time options
 set(TIMEFILTER_BANDWIDTH 0.0001 CACHE STRING "default time filter bandwidth")
@@ -32,23 +32,21 @@ set(OPTIONS
     "-DAOO_DEBUG_JITTER_BUFFER=$<BOOL:${DEBUG_JITTER_BUFFER}>"
 )
 
-set(AOO_PUBLIC_HEADERS "aoo/aoo.h" "aoo/aoo.hpp"
-    "aoo/aoo_types.h" "aoo/aoo_pcm.h" )
+set(INCLUDE "../include/aoo")
+
+set(AOO_PUBLIC_HEADERS "${INCLUDE}/aoo.h" "${INCLUDE}/aoo.hpp"
+    "${INCLUDE}/aoo_types.h" "${INCLUDE}/codec/aoo_pcm.h" )
 if (CODEC_OPUS)
-    list(APPEND AOO_PUBLIC_HEADERS "aoo/aoo_opus.h")
+    list(APPEND AOO_PUBLIC_HEADERS "${INCLUDE}/codec/aoo_opus.h")
 endif()
 
+file(GLOB AOO_HEADERS "src/*.hpp")
 
-set(AOO_HEADERS "aoo/aoo_utils.hpp" "src/common.hpp"
-    "src/lockfree.hpp" "src/sink.hpp" "src/source.hpp"
-    "src/sync.hpp" "src/time.hpp" "src/time_dll.hpp")
-
-set(AOO_SRC ${AOO_PUBLIC_HEADERS} ${AOO_HEADERS} ${OSCPACK_SRC}
-    "src/codec_pcm.cpp" "src/common.cpp" "src/sink.cpp"
-    "src/source.cpp" "src/sync.cpp" "src/time.cpp")
-
+file(GLOB AOO_SRC ${AOO_PUBLIC_HEADERS} ${AOO_HEADERS}
+    ${AOO_COMMON_SRC} ${OSCPACK_SRC} "src/*.cpp"
+    "src/codec/pcm.cpp")
 if (CODEC_OPUS)
-    list(APPEND AOO_SRC "src/codec_opus.cpp")
+    list(APPEND AOO_SRC "src/codec/opus.cpp")
 endif()
 
 # static library
@@ -57,6 +55,8 @@ add_library(${AOO_STATIC} STATIC ${AOO_SRC})
 target_compile_definitions(${AOO_STATIC} PUBLIC ${OPTIONS} "-DAOO_STATIC")
 
 # shared library
+option(BUILD_AOO_SHARED "build 'aoo' as shared library" ON)
+
 if (BUILD_AOO_SHARED)
     add_library(${AOO_SHARED} SHARED ${AOO_SRC})
 
@@ -72,37 +72,4 @@ if (BUILD_AOO_SHARED)
     install(TARGETS ${AOO_SHARED}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${AOO_SHARED})
-endif()
-
-# AOONET
-set(AOONET_PUBLIC_HEADERS "aoo/aoo_net.h" "aoo/aoo_net.hpp")
-
-set(AOONET_HEADERS "src/client.hpp" "src/lockfree.hpp" "src/net_utils.hpp"
-    "src/server.hpp" "src/SLIP.hpp" "src/sync.hpp" "src/time.hpp")
-
-set(AOONET_SRC ${AOO_PUBLIC_HEADERS} ${AOONET_HEADERS} ${OSCPACK_SRC}
-    "src/client.cpp" "src/net_utils.cpp" "src/server.cpp" "src/sync.cpp" "src/time.cpp")
-
-# static library
-add_library(${AOONET_STATIC} STATIC ${AOONET_SRC})
-
-target_compile_definitions(${AOONET_STATIC} PUBLIC "-DAOO_STATIC")
-
-# shared library
-if (BUILD_AOONET_SHARED)
-    add_library(${AOONET_SHARED} SHARED ${AOONET_SRC})
-
-    target_compile_definitions(${AOONET_SHARED} PUBLIC "-DAOO_BUILD")
-    target_link_libraries(${AOONET_SHARED} ${MD5_LIB} ${OSCPACK_LIB} ${LIBS})
-    if (WIN32 OR MINGW)
-        target_compile_definitions(${AOONET_SHARED} PUBLIC "-DDLL_EXPORT")
-        target_link_libraries(${AOONET_SHARED} "ws2_32")
-    endif()
-
-    set_target_properties(${AOONET_SHARED} PROPERTIES
-        PUBLIC_HEADER "${AOONET_PUBLIC_HEADERS}")
-
-    install(TARGETS ${AOONET_SHARED}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${AOONET_SHARED})
 endif()

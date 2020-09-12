@@ -155,20 +155,25 @@ if (APPLE)
     list(APPEND LIBS "-lpthread")
 endif()
 
+# public headers
+include_directories(.)
+include_directories(include)
+
+# common sources
+file(GLOB AOO_COMMON_SRC "${CMAKE_SOURCE_DIR}/common/*.cpp")
+file(GLOB AOO_COMMON_HEADERS "${CMAKE_SOURCE_DIR}/common/*.hpp")
+
 # "aoo" library
-option(BUILD_AOO_SHARED "build 'aoo' as shared library" ON)
 set(AOO_SHARED "aoo")
 set(AOO_STATIC "aoo_static")
+add_subdirectory(aoo)
 
 # "aoonet" library
-option(BUILD_AOONET_SHARED "build 'aoonet' as shared library" ON)
 set(AOONET_SHARED "aoonet")
 set(AOONET_STATIC "aoonet_static")
+add_subdirectory(aoonet)
 
-include_directories(lib)
-add_subdirectory(lib)
-
-# Pd
+# Pd external
 option(BUILD_PD_EXTERNAL "build Pd external" ON)
 if (BUILD_PD_EXTERNAL)
     add_subdirectory(pd)

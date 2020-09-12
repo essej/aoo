@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "aoo.h"
+#include "aoo/aoo.h"
 
 #include <opus/opus_multistream.h>
 
