@@ -1,5 +1,7 @@
 cmake_minimum_required (VERSION 2.8)
 
+include(GNUInstallDirs)
+
 set(PROJECT "aoo")
 message(STATUS "Project: ${PROJECT}")
 project(${PROJECT})
@@ -20,6 +22,8 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
+message(STATUS "CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}")
+
 if(LINUX AND CMAKE_COMPILER_IS_GNUCXX)
 	option(STATIC_LIBS "link with static libraries (libstdc++ and libgcc)" ON)
 endif()
@@ -27,8 +31,6 @@ if(MINGW)
 	option(STATIC_LIBS "link with static libraries (libstdc++, libgcc and phread)" ON)
 	set(CMAKE_EXECUTABLE_SUFFIX ".exe")
 endif()
-
-set(CMAKE_INSTALL_PREFIX "" CACHE INTERNAL "Prefix prepended to install directories")
 
 # logging
 set(LOGLEVEL 2 CACHE STRING "LOGLEVEL")
@@ -123,15 +125,15 @@ if (CODEC_OPUS)
 
     option(SYSTEM_OPUS "use system provided Opus library" OFF)
     if (SYSTEM_OPUS)
-        set(OPUS_LIB "opus" CACHE STRING "Opus linker flags")
+        set(CODEC_OPUS_LIB "opus" CACHE STRING "Opus linker flags")
     else()
         include_directories("deps/opus/include")
-        find_library(OPUS_LIB "opus" HINTS "deps/opus/lib" REQUIRED)
+        find_library(CODEC_OPUS_LIB "opus" HINTS "deps/opus/lib" REQUIRED)
         if (MINGW)
             list(APPEND LIBS "ssp") # for fortified functions
         endif()
     endif()
-    message(STATUS "Opus library: ${OPUS_LIB}")
+    message(STATUS "Opus library: ${CODEC_OPUS_LIB}")
 endif()
 
 # platform specific linker flags
@@ -153,16 +155,21 @@ if (APPLE)
     list(APPEND LIBS "-lpthread")
 endif()
 
-# AOO library
-set(AOO "aoo")
-set(AOONET "aoonet")
+# "aoo" library
+option(BUILD_AOO_SHARED "build 'aoo' as shared library" ON)
+set(AOO_SHARED "aoo")
 set(AOO_STATIC "aoo_static")
+
+# "aoonet" library
+option(BUILD_AOONET_SHARED "build 'aoonet' as shared library" ON)
+set(AOONET_SHARED "aoonet")
 set(AOONET_STATIC "aoonet_static")
+
 include_directories(lib)
 add_subdirectory(lib)
 
 # Pd
-option(PD "build Pd external" ON)
-if (PD)
+option(BUILD_PD_EXTERNAL "build Pd external" ON)
+if (BUILD_PD_EXTERNAL)
     add_subdirectory(pd)
 endif()

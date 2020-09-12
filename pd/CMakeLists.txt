@@ -1,4 +1,4 @@
-set(PROJECT "pd_aoo")
+set(PROJECT "pd")
 set(FILENAME "aoo")
 message(STATUS "---\n*** ${FILENAME} ***")
 
@@ -64,9 +64,9 @@ message(STATUS "PD_EXTENSION: ${CMAKE_SHARED_MODULE_SUFFIX}")
 # the Pd external
 add_library(${PROJECT} MODULE ${SRC})
 set_target_properties(${PROJECT} PROPERTIES OUTPUT_NAME ${FILENAME})
-target_compile_definitions(${AOO} PUBLIC "-DAOO_STATIC")
+target_compile_definitions(${PROJECT} PUBLIC "-DAOO_STATIC")
 target_link_libraries(${PROJECT} ${AOO_STATIC} ${AOONET_STATIC}
-    ${MD5_LIB} ${OSCPACK_LIB} ${OPUS_LIB} ${LIBS})
+    ${MD5_LIB} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS})
 set_target_properties(${PROJECT} PROPERTIES LINK_FLAGS_RELEASE -s)
 
 # platform specific definitions and options

@@ -21,9 +21,10 @@ variables:
   - make -C deps/opus/build install VERBOSE=1
 
 .script:cmake: &script_cmake
-  - cmake -H. -Bbuild -DSTATIC_LIBS=${STATIC_LIBS}
-   -DPD_EXTENSION=${PD_EXTENSION} -DPD_DIR="${PD_PATH}" -DPD_INSTALLDIR="$(pwd)/${CI_JOB_NAME%_*}/pd"
-#   -DSUPERNOVA=${SUPERNOVA} -DSC_INCLUDEDIR="${SC_PATH}" -DSC_INSTALLDIR="$(pwd)/${CI_JOB_NAME%_*}/sc"
+  - prefix="$(pwd)/build/${CI_JOB_NAME%_*}"
+  - cmake -H. -Bbuild -DSTATIC_LIBS=${STATIC_LIBS} -DCMAKE_INSTALL_PREFIX="$prefix/aoo"
+   -DPD_EXTENSION=${PD_EXTENSION} -DPD_DIR="${PD_PATH}" -DPD_INSTALLDIR="$prefix/pd"
+#   -DSUPERNOVA=${SUPERNOVA} -DSC_INCLUDEDIR="${SC_PATH}" -DSC_INSTALLDIR="$prefix/sc"
 
 ### build snippets
 .script:make: &script_make
@@ -41,8 +42,9 @@ variables:
   artifacts:
     name: ${CI_PROJECT_NAME}_${CI_COMMIT_REF_NAME}_${CI_JOB_NAME%_*}
     paths:
-      - "${CI_JOB_NAME%_*}/pd/aoo"
-#      - "${CI_JOB_NAME%_*}/sc/aoo"
+      - "build/${CI_JOB_NAME%_*}/aoo"
+      - "build/${CI_JOB_NAME%_*}/pd/aoo"
+#      - "build/${CI_JOB_NAME%_*}/sc/aoo"
 
 .snapshot:
   except:
@@ -155,22 +157,31 @@ variables:
   variables:
     DEKEN_ROOT: "yes"
   before_script:
-    - apt-get update && apt-get --no-install-recommends -y install deken git zip
+    - apt-get update && apt-get --no-install-recommends -y install deken zip
   script:
 # create zip files for all platform (e.g. aoo_v0.3.0_w32.zip)
     - rm -f ./*.zip
-#    - for lib in pd sc; do
-    - for lib in pd; do
-        for dir in ./*/$lib/aoo; do
-          name=aoo_$lib_${CI_COMMIT_REF_NAME}_$(basename "${dir%/$lib/aoo}");
-          (cd "${dir}/../" && zip -r "../../${name}.zip" ./aoo)
+    - root=$(pwd)
+# Pd + SuperCollider:
+    - for dir in ./build/*; do
+        for lib in pd; do
+          name=aoo_${lib}_${CI_COMMIT_REF_NAME}_$(basename "$dir").zip;
+          echo create $name;
+          (cd "$dir/$lib" && zip -r "${root}/${name}" ./aoo)
         ; done
       ; done
-# create a single binary deken packages for all platforms
+# C/C++ library:
+    - for dir in ./build/*; do
+        name=aoo_${CI_COMMIT_REF_NAME}_$(basename "$dir").zip;
+        echo create $name;
+        (cd "$dir" && zip -r "${root}/${name}" ./aoo)
+      ; done
+# Deken:
     - rm -f ./*.dek
     - rm -rf ./pd/aoo
     - mkdir -p ./pd/aoo
-    - for dir in ./*/pd/aoo; do cp -r $dir/* ./pd/aoo; done
+# create a single deken package containing binaries for all platforms
+    - for dir in ./build/*/pd/aoo; do cp -r $dir/* ./pd/aoo; done
     - deken package --version="${CI_COMMIT_TAG#v}" ./pd/aoo
 # upload deken package (optional)
     - test -z "${CI_COMMIT_TAG}" || test -z "${DEKEN_USERNAME}" || test -z "${DEKEN_PASSWORD}" || deken upload --no-source-error ./*.dek
