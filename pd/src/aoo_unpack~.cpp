@@ -2,7 +2,7 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
-#include "aoo_common.h"
+#include "aoo_common.hpp"
 
 #include <string.h>
 #include <assert.h>
@@ -183,7 +183,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
             aoo_ping_event *e = (aoo_ping_event *)events[i];
             t_symbol *host;
             int port;
-            if (!endpoint_getaddress(e->endpoint, &host, &port)){
+            if (!endpoint_getaddress((t_endpoint *)e->endpoint, &host, &port)){
                 continue;
             }
             uint64_t t1 = e->tt1;

@@ -2,7 +2,7 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
-#include "aoo_net.h"
+#include "aoo_net.hpp"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -146,7 +146,7 @@ int socket_setsendbufsize(int socket, int bufsize)
     int val = 0;
     socklen_t len;
     len = sizeof(val);
-    getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void *)&val, &len);
+    getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char *)&val, &len);
 #if 0
     fprintf(stderr, "old recvbufsize: %d\n", val);
     fflush(stderr);
@@ -155,7 +155,7 @@ int socket_setsendbufsize(int socket, int bufsize)
         return 0;
     }
     val = bufsize;
-    int result = setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void *)&val, sizeof(val));
+    int result = setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char *)&val, sizeof(val));
 #if 0
     if (result == 0){
         len = sizeof(val);
@@ -172,7 +172,7 @@ int socket_setrecvbufsize(int socket, int bufsize)
     int val = 0;
     socklen_t len;
     len = sizeof(val);
-    getsockopt(socket, SOL_SOCKET, SO_RCVBUF, (void *)&val, &len);
+    getsockopt(socket, SOL_SOCKET, SO_RCVBUF, (char *)&val, &len);
 #if 0
     fprintf(stderr, "old recvbufsize: %d\n", val);
     fflush(stderr);
@@ -181,7 +181,7 @@ int socket_setrecvbufsize(int socket, int bufsize)
         return 0;
     }
     val = bufsize;
-    int result = setsockopt(socket, SOL_SOCKET, SO_RCVBUF, (void *)&val, sizeof(val));
+    int result = setsockopt(socket, SOL_SOCKET, SO_RCVBUF, (char *)&val, sizeof(val));
 #if 0
     if (result == 0){
         len = sizeof(val);

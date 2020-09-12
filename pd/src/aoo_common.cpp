@@ -3,7 +3,7 @@
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
 
-#include "aoo_common.h"
+#include "aoo_common.hpp"
 
 #include "aoo/codec/aoo_pcm.h"
 #if USE_CODEC_OPUS

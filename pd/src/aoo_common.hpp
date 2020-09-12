@@ -8,7 +8,7 @@
 
 #include "aoo/aoo.h"
 
-#include "aoo_net.h"
+#include "aoo_net.hpp"
 
 #ifndef _WIN32
 #include <pthread.h>

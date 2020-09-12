@@ -4,9 +4,9 @@ set(PROJECT "pd")
 set(FILENAME "aoo")
 message(STATUS "---\n*** ${FILENAME} ***")
 
-file(GLOB HEADERS "src/*.h")
+file(GLOB HEADERS "src/*.hpp")
 
-file(GLOB SRC ${HEADERS} "src/*.c")
+file(GLOB SRC ${HEADERS} "src/*.cpp")
 
 # Pd directories:
 if (NOT PD_DIR)

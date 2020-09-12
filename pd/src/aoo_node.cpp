@@ -2,7 +2,7 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
-#include "aoo_common.h"
+#include "aoo_common.hpp"
 
 #include "aoonet/aoonet.h"
 
@@ -154,10 +154,10 @@ void aoo_node_add_peer(t_aoo_node *x, t_symbol *group, t_symbol *user,
     t_endpoint *e = aoo_node_endpoint(x, (const struct sockaddr_storage *)sa, len);
 
     if (x->x_peers){
-        x->x_peers = resizebytes(x->x_peers, x->x_numpeers * sizeof(t_peer),
+        x->x_peers = (t_peer *)resizebytes(x->x_peers, x->x_numpeers * sizeof(t_peer),
                                  (x->x_numpeers + 1) * sizeof(t_peer));
     } else {
-        x->x_peers = getbytes(sizeof(t_peer));
+        x->x_peers = (t_peer *)getbytes(sizeof(t_peer));
     }
     t_peer *p = &x->x_peers[x->x_numpeers++];
     p->group = group;
@@ -175,7 +175,7 @@ void aoo_node_remove_peer(t_aoo_node *x, t_symbol *group, t_symbol *user)
     if (x->x_numpeers > 1){
         int index = p - x->x_peers;
         memmove(p, p + 1, (x->x_numpeers - index - 1) * sizeof(t_peer));
-        x->x_peers = resizebytes(x->x_peers, x->x_numpeers * sizeof(t_peer),
+        x->x_peers = (t_peer *)resizebytes(x->x_peers, x->x_numpeers * sizeof(t_peer),
                                  (x->x_numpeers - 1) * sizeof(t_peer));
     } else {
         freebytes(x->x_peers, sizeof(t_peer));

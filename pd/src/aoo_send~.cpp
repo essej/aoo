@@ -2,7 +2,7 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
-#include "aoo_common.h"
+#include "aoo_common.hpp"
 
 #include <string.h>
 #include <assert.h>
@@ -238,7 +238,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
             double rtt = aoo_osctime_duration(e->tt1, e->tt3) * 1000.0;
 
             t_atom msg[7];
-            if (aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
+            if (aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
                 SETFLOAT(msg + 3, diff1);
                 SETFLOAT(msg + 4, diff2);
                 SETFLOAT(msg + 5, rtt);
@@ -254,10 +254,10 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
             aoo_sink_event *e = (aoo_sink_event *)events[i];
 
             if (x->x_accept){
-                aoo_send_doaddsink(x, e->endpoint, e->id);
+                aoo_send_doaddsink(x, (t_endpoint *)e->endpoint, e->id);
             } else {
                 t_atom msg[3];
-                if (aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
+                if (aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
                     outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
                 } else {
                     bug("aoo_endpoint_to_atoms");
@@ -271,10 +271,10 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
             aoo_sink_event *e = (aoo_sink_event *)events[i];
 
             if (x->x_accept){
-                aoo_send_doremovesink(x, e->endpoint, e->id);
+                aoo_send_doremovesink(x, (t_endpoint *)e->endpoint, e->id);
             } else {
                 t_atom msg[3];
-                if (aoo_endpoint_to_atoms(e->endpoint, e->id, msg)){
+                if (aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
                     outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
                 } else {
                     bug("aoo_endpoint_to_atoms");
