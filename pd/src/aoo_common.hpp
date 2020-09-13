@@ -6,7 +6,7 @@
 
 #include "m_pd.h"
 
-#include "aoo/aoo.h"
+#include "aoo/aoo.hpp"
 
 #include "aoo_net.hpp"
 

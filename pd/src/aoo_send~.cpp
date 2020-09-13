@@ -6,6 +6,7 @@
 
 #include "common/sync.hpp"
 
+#include <vector>
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
@@ -28,51 +29,44 @@
 
 t_class *aoo_send_class;
 
-typedef struct _sink
+struct t_sink
 {
     t_endpoint *s_endpoint;
     int32_t s_id;
-} t_sink;
+};
 
-typedef struct _aoo_send
+struct t_aoo_send
 {
+    t_aoo_send(int argc, t_atom *argv);
+    ~t_aoo_send();
+
     t_object x_obj;
-    t_float x_f;
-    aoo_source *x_aoo_source;
-    int32_t x_samplerate;
-    int32_t x_blocksize;
-    int32_t x_nchannels;
-    int32_t x_port;
-    int32_t x_id;
-    t_float **x_vec;
+
+    t_float x_f = 0;
+    aoo::isource::pointer x_source;
+    int32_t x_samplerate = 0;
+    int32_t x_blocksize = 0;
+    int32_t x_nchannels = 0;
+    int32_t x_port = 0;
+    int32_t x_id = 0;
+    std::unique_ptr<t_float *[]> x_vec;
     // sinks
-    t_sink *x_sinks;
-    int x_numsinks;
+    std::vector<t_sink> x_sinks;
     // node
-    t_node *x_node;
+    t_node *x_node = nullptr;
     aoo::shared_mutex x_lock;
     // events
-    t_clock *x_clock;
-    t_outlet *x_msgout;
-    int x_accept;
-} t_aoo_send;
+    t_clock *x_clock = nullptr;
+    t_outlet *x_msgout = nullptr;
+    bool x_accept = true;
+};
 
 static void aoo_send_doaddsink(t_aoo_send *x, t_endpoint *e, int32_t id)
 {
-    aoo_source_add_sink(x->x_aoo_source, e, id, (aoo_replyfn)endpoint_send);
+    x->x_source->add_sink(e, id, (aoo_replyfn)endpoint_send);
 
     // add sink to list
-    int n = x->x_numsinks;
-    if (n){
-        x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
-            n * sizeof(t_sink), (n + 1) * sizeof(t_sink));
-    } else {
-        x->x_sinks = (t_sink *)getbytes(sizeof(t_sink));
-    }
-    t_sink *sink = &x->x_sinks[n];
-    sink->s_endpoint = e;
-    sink->s_id = id;
-    x->x_numsinks++;
+    x->x_sinks.push_back({e, id});
 
     // output message
     t_atom msg[3];
@@ -85,20 +79,18 @@ static void aoo_send_doaddsink(t_aoo_send *x, t_endpoint *e, int32_t id)
 
 static void aoo_send_doremoveall(t_aoo_send *x)
 {
-    aoo_source_remove_all(x->x_aoo_source);
+    x->x_source->remove_all();
 
-    int numsinks = x->x_numsinks;
+    int numsinks = x->x_sinks.size();
     if (!numsinks){
         return;
     }
 
-    // temporary copies
+    // temporary copies (for reentrancy)
     t_sink *sinks = (t_sink *)alloca(sizeof(t_sink) * numsinks);
-    memcpy(sinks, x->x_sinks, sizeof(t_sink) * numsinks);
+    std::copy(x->x_sinks.begin(), x->x_sinks.end(), sinks);
 
-    // clear sink list
-    freebytes(x->x_sinks, x->x_numsinks * sizeof(t_sink));
-    x->x_numsinks = 0;
+    x->x_sinks.clear();
 
     // output messages
     for (int i = 0; i < numsinks; ++i){
@@ -114,94 +106,54 @@ static void aoo_send_doremoveall(t_aoo_send *x)
 
 static void aoo_send_doremovesink(t_aoo_send *x, t_endpoint *e, int32_t id)
 {
-    aoo_source_remove_sink(x->x_aoo_source, e, id);
+    x->x_source->remove_sink(e, id);
 
     // remove from list
-    int n = x->x_numsinks;
-    if (n > 1){
-        if (id == AOO_ID_WILDCARD){
-            // pre-allocate temporary copies
-            int removed = 0;
-            t_sink *sinks = (t_sink *)alloca(sizeof(t_sink) * n);
+    if (id == AOO_ID_WILDCARD){
+        // pre-allocate array of removed sinks
+        int removed = 0;
+        t_sink *sinks = (t_sink *)alloca(sizeof(t_sink) * x->x_sinks.size());
 
-            // remove all sinks matching endpoint
-            t_sink *end = x->x_sinks + n;
-            for (t_sink *s = x->x_sinks; s != end; ){
-                if (s->s_endpoint == e){
-                    sinks[removed++] = *s;
-                    memmove(s, s + 1, (end - s - 1) * sizeof(t_sink));
-                    end--;
-                } else {
-                    s++;
-                }
-            }
-            int newsize = end - x->x_sinks;
-            if (newsize > 0){
-                x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
-                    n * sizeof(t_sink), newsize * sizeof(t_sink));
+        // remove all sinks matching endpoint
+        for (auto it = x->x_sinks.begin(); it != x->x_sinks.end();){
+            if (it->s_endpoint == e){
+                sinks[removed++] = *it;
+                it = x->x_sinks.erase(it);
             } else {
-                freebytes(x->x_sinks, n * sizeof(t_sink));
-                x->x_sinks = 0;
-            }
-            x->x_numsinks = newsize;
-
-            // output messages
-            for (int i = 0; i < removed; ++i){
-                t_atom msg[3];
-                if (aoo_endpoint_to_atoms(sinks[i].s_endpoint, sinks[i].s_id, msg))
-                {
-                    outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
-                } else {
-                    bug("aoo_endpoint_to_atoms");
-                }
-            }
-            return;
-        } else {
-            // remove the sink matching endpoint and id
-            for (int i = 0; i < n; ++i){
-                if ((x->x_sinks[i].s_endpoint == e) &&
-                    (x->x_sinks[i].s_id == id))
-                {
-                    memmove(&x->x_sinks[i], &x->x_sinks[i + 1],
-                            (n - i - 1) * sizeof(t_sink));
-                    x->x_sinks = (t_sink *)resizebytes(x->x_sinks,
-                        n * sizeof(t_sink), (n - 1) * sizeof(t_sink));
-                    x->x_numsinks--;
-
-                    // output message
-                    t_atom msg[3];
-                    if (aoo_endpoint_to_atoms(e, id, msg)){
-                        outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
-                    } else {
-                        bug("aoo_endpoint_to_atoms");
-                    }
-                    return;
-                }
+                ++it;
             }
         }
-    } else if (n == 1) {
-        if ((x->x_sinks->s_endpoint == e) &&
-            (id == AOO_ID_WILDCARD || id == x->x_sinks->s_id))
-        {
-            // get the actual sink ID, in case 'id' is a wildcard
-            int32_t old = x->x_sinks->s_id;
 
-            freebytes(x->x_sinks, sizeof(t_sink));
-            x->x_sinks = 0;
-            x->x_numsinks = 0;
-
-            // output message
+        // output messages
+        for (int i = 0; i < removed; ++i){
             t_atom msg[3];
-            if (aoo_endpoint_to_atoms(e, old, msg)){
+            if (aoo_endpoint_to_atoms(sinks[i].s_endpoint, sinks[i].s_id, msg))
+            {
                 outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
             } else {
                 bug("aoo_endpoint_to_atoms");
             }
-            return;
+        }
+        return;
+    } else {
+        // remove the sink matching endpoint and id
+        for (auto it = x->x_sinks.begin(); it != x->x_sinks.end(); ++it){
+            if (it->s_endpoint == e && it->s_id == id){
+                x->x_sinks.erase(it);
+
+                // output message
+                t_atom msg[3];
+                if (aoo_endpoint_to_atoms(e, id, msg)){
+                    outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
+                } else {
+                    bug("aoo_endpoint_to_atoms");
+                }
+                return;
+            }
         }
     }
 
-    // wildcard IDs are allowed to not match anything
+    // only wildcard IDs are allowed to not match anything
     if (id != AOO_ID_WILDCARD){
         bug("aoo_send_doremovesink");
     }
@@ -214,7 +166,7 @@ void aoo_send_handle_message(t_aoo_send *x, const char * data,
     // synchronize with aoo_receive_dsp()
     aoo::shared_scoped_lock lock(x->x_lock);
     // handle incoming message
-    aoo_source_handle_message(x->x_aoo_source, data, n, endpoint, fn);
+    x->x_source->handle_message(data, n, endpoint, fn);
 }
 
 // called from the network send thread
@@ -223,7 +175,7 @@ void aoo_send_send(t_aoo_send *x)
     // synchronize with aoo_receive_dsp()
     aoo::shared_scoped_lock lock(x->x_lock);
     // send outgoing messages
-    while (aoo_source_send(x->x_aoo_source)) ;
+    while (x->x_source->send()) ;
 }
 
 static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, int32_t n)
@@ -291,7 +243,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
 
 static void aoo_send_tick(t_aoo_send *x)
 {
-    aoo_source_handle_events(x->x_aoo_source, (aoo_eventhandler)aoo_send_handle_events, x);
+    x->x_source->handle_events((aoo_eventhandler)aoo_send_handle_events, x);
 }
 
 static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
@@ -299,7 +251,7 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     aoo_format_storage f;
     f.header.nchannels = x->x_nchannels;
     if (aoo_format_parse(x, &f, argc, argv)){
-        aoo_source_set_format(x->x_aoo_source, &f.header);
+        x->x_source->set_format(f.header);
         // output actual format
         t_atom msg[16];
         int n = aoo_format_toatoms(&f.header, 16, msg);
@@ -312,14 +264,12 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 static t_sink *aoo_send_findsink(t_aoo_send *x,
                                  const struct sockaddr_storage *sa, int32_t id)
 {
-    for (int i = 0; i < x->x_numsinks; ++i){
-        if (x->x_sinks[i].s_id == id &&
-            endpoint_match(x->x_sinks[i].s_endpoint, sa))
-        {
-            return &x->x_sinks[i];
+    for (auto& sink : x->x_sinks){
+        if (sink.s_id == id && endpoint_match(sink.s_endpoint, sa)){
+            return &sink;
         }
     }
-    return 0;
+    return nullptr;
 }
 
 static void aoo_send_accept(t_aoo_send *x, t_floatarg f)
@@ -344,33 +294,33 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         }
         int32_t chn = atom_getfloat(argv + 3);
 
-        aoo_source_set_sink_channelonset(x->x_aoo_source, sink->s_endpoint, sink->s_id, chn);
+        x->x_source->set_sink_channelonset(sink->s_endpoint, sink->s_id, chn);
     }
 }
 
 static void aoo_send_packetsize(t_aoo_send *x, t_floatarg f)
 {
-    aoo_source_set_packetsize(x->x_aoo_source, f);
+    x->x_source->set_packetsize(f);
 }
 
 static void aoo_send_ping(t_aoo_send *x, t_floatarg f)
 {
-    aoo_source_set_ping_interval(x->x_aoo_source, f);
+    x->x_source->set_ping_interval(f);
 }
 
 static void aoo_send_resend(t_aoo_send *x, t_floatarg f)
 {
-    aoo_source_set_buffersize(x->x_aoo_source, f);
+    x->x_source->set_buffersize(f);
 }
 
 static void aoo_send_redundancy(t_aoo_send *x, t_floatarg f)
 {
-    aoo_source_set_redundancy(x->x_aoo_source, f);
+    x->x_source->set_redundancy(f);
 }
 
 static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
 {
-    aoo_source_set_timefilter_bandwith(x->x_aoo_source, f);
+    x->x_source->set_timefilter_bandwidth(f);
 }
 
 static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
@@ -394,13 +344,13 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         t_endpoint *e = aoo_node_endpoint(x->x_node, &sa, len);
         // check if sink exists
         if (id != AOO_ID_WILDCARD){
-            for (int i = 0; i < x->x_numsinks; ++i){
-                if (x->x_sinks[i].s_endpoint == e){
-                    if (x->x_sinks[i].s_id == AOO_ID_WILDCARD){
+            for (auto& sink : x->x_sinks){
+                if (sink.s_endpoint == e){
+                    if (sink.s_id == AOO_ID_WILDCARD){
                         pd_error(x, "%s: sink %s %d %d already added via wildcard!",
                                  classname(x), host->s_name, port, id);
                         return;
-                    } else if (x->x_sinks[i].s_id == id){
+                    } else if (sink.s_id == id){
                         pd_error(x, "%s: sink %s %d %d already added!",
                                  classname(x), host->s_name, port, id);
                         return;
@@ -410,8 +360,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         }
 
         if (argc > 3){
-            int32_t chn = atom_getfloat(argv + 3);
-            aoo_source_set_sink_channelonset(x->x_aoo_source, e, id, chn);
+            x->x_source->set_sink_channelonset(e, id, atom_getfloat(argv + 3));
         }
 
         if (id == AOO_ID_WILDCARD){
@@ -458,15 +407,14 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         t_endpoint *e = 0;
         if (id != AOO_ID_WILDCARD){
             // check if sink exists
-            for (int i = 0; i < x->x_numsinks; ++i){
-                t_sink *sink = &x->x_sinks[i];
-                if (endpoint_match(sink->s_endpoint, &sa)){
-                    if (sink->s_id == AOO_ID_WILDCARD){
+            for (auto& sink : x->x_sinks){
+                if (endpoint_match(sink.s_endpoint, &sa)){
+                    if (sink.s_id == AOO_ID_WILDCARD){
                         pd_error(x, "%s: can't remove sink %s %d %d because of wildcard!",
                                  classname(x), host->s_name, port, id);
                         return;
-                    } else if (sink->s_id == id) {
-                        e = sink->s_endpoint;
+                    } else if (sink.s_id == id) {
+                        e = sink.s_endpoint;
                         break;
                     }
                 }
@@ -496,28 +444,27 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_send_start(t_aoo_send *x)
 {
-    aoo_source_start(x->x_aoo_source);
+    x->x_source->start();
 }
 
 static void aoo_send_stop(t_aoo_send *x)
 {
-    aoo_source_stop(x->x_aoo_source);
+    x->x_source->stop();
 }
 
 static void aoo_send_listsinks(t_aoo_send *x)
 {
-    for (int i = 0; i < x->x_numsinks; ++i){
-        t_sink *s = &x->x_sinks[i];
+    for (auto& sink : x->x_sinks){
         t_symbol *host;
         int port;
-        if (endpoint_getaddress(s->s_endpoint, &host, &port)){
+        if (endpoint_getaddress(sink.s_endpoint, &host, &port)){
             t_atom msg[3];
             SETSYMBOL(msg, host);
             SETFLOAT(msg + 1, port);
-            if (s->s_id == AOO_ID_WILDCARD){
+            if (sink.s_id == AOO_ID_WILDCARD){
                 SETSYMBOL(msg + 2, gensym("*"));
             } else {
-                SETFLOAT(msg + 2, s->s_id);
+                SETFLOAT(msg + 2, sink.s_id);
             }
             outlet_anything(x->x_msgout, gensym("sink"), 3, msg);
         } else {
@@ -534,12 +481,12 @@ static t_int * aoo_send_perform(t_int *w)
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
     uint64_t t = aoo_osctime_get();
-    if (aoo_source_process(x->x_aoo_source, (const aoo_sample **)x->x_vec, n, t) > 0){
+    if (x->x_source->process((const aoo_sample **)x->x_vec.get(), n, t) > 0){
         if (x->x_node){
             aoo_node_notify(x->x_node);
         }
     }
-    if (aoo_source_events_available(x->x_aoo_source) > 0){
+    if (x->x_source->events_available() > 0){
         clock_delay(x->x_clock, 0);
     }
 
@@ -559,7 +506,7 @@ static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
     aoo::scoped_lock lock(x->x_lock); // writer lock!
 
     if (blocksize != x->x_blocksize || samplerate != x->x_samplerate){
-        aoo_source_setup(x->x_aoo_source, samplerate, blocksize, x->x_nchannels);
+        x->x_source->setup(samplerate, blocksize, x->x_nchannels);
         x->x_blocksize = blocksize;
         x->x_samplerate = samplerate;
     }
@@ -602,7 +549,7 @@ static void aoo_send_id(t_aoo_send *x, t_floatarg f)
         aoo_node_release(x->x_node, (t_pd *)x, x->x_id);
     }
 
-    aoo_source_set_id(x->x_aoo_source, id);
+    x->x_source->set_id(id);
 
     x->x_node = x->x_port ? aoo_node_add(x->x_port, (t_pd *)x, id) : 0;
     x->x_id = id;
@@ -610,77 +557,71 @@ static void aoo_send_id(t_aoo_send *x, t_floatarg f)
 
 static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 {
-    t_aoo_send *x = (t_aoo_send *)pd_new(aoo_send_class);
+    void *x = pd_new(aoo_send_class);
+    new (x) t_aoo_send(argc, argv);
+    return x;
+}
 
-    x->x_f = 0;
-    x->x_clock = clock_new(x, (t_method)aoo_send_tick);
-    x->x_sinks = 0;
-    x->x_numsinks = 0;
-    x->x_accept = 1;
-    x->x_node = 0;
-    x->x_blocksize = 0;
-    x->x_samplerate = 0;
+t_aoo_send::t_aoo_send(int argc, t_atom *argv)
+{
+    x_clock = clock_new(this, (t_method)aoo_send_tick);
 
     // arg #1: port number
-    x->x_port = atom_getfloatarg(0, argc, argv);
+    x_port = atom_getfloatarg(0, argc, argv);
 
     // arg #2: ID
     int id = atom_getfloatarg(1, argc, argv);
     if (id < 0){
-        pd_error(x, "%s: bad id % d, setting to 0", classname(x), id);
+        pd_error(this, "%s: bad id % d, setting to 0", classname(this), id);
         id = 0;
     }
-    x->x_id = id;
+    x_id = id;
 
     // arg #3: num channels
     int nchannels = atom_getfloatarg(2, argc, argv);
     if (nchannels < 1){
         nchannels = 1;
     }
-    x->x_nchannels = nchannels;
+    x_nchannels = nchannels;
 
     // make additional inlets
     if (nchannels > 1){
         int i = nchannels;
         while (--i){
-            inlet_new(&x->x_obj, &x->x_obj.ob_pd, &s_signal, &s_signal);
+            inlet_new(&x_obj, &x_obj.ob_pd, &s_signal, &s_signal);
         }
     }
-    x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * nchannels);
+    x_vec = std::make_unique<t_sample *[]>(nchannels);
 
     // make event outlet
-    x->x_msgout = outlet_new(&x->x_obj, 0);
+    x_msgout = outlet_new(&x_obj, 0);
 
     // create and initialize aoo_source object
-    x->x_aoo_source = aoo_source_new(x->x_id);
+    x_source.reset(aoo::isource::create(x_id));
 
     aoo_format_storage fmt;
     aoo_format_makedefault(&fmt, nchannels);
-    aoo_source_set_format(x->x_aoo_source, &fmt.header);
+    x_source->set_format(fmt.header);
 
-    aoo_source_set_buffersize(x->x_aoo_source, DEFBUFSIZE);
+    x_source->set_buffersize(DEFBUFSIZE);
 
     // finally we're ready to receive messages
-    aoo_send_port(x, x->x_port);
-
-    return x;
+    aoo_send_port(this, x_port);
 }
 
 static void aoo_send_free(t_aoo_send *x)
 {
+    x->~t_aoo_send();
+}
+
+t_aoo_send::~t_aoo_send()
+{
     // first stop receiving messages
-    if (x->x_node){
-        aoo_node_release(x->x_node, (t_pd *)x, x->x_id);
+    if (x_node){
+        aoo_node_release(x_node, (t_pd *)this, x_id);
     }
 
-    aoo_source_free(x->x_aoo_source);
-
-    freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
-    if (x->x_sinks){
-        freebytes(x->x_sinks, x->x_numsinks * sizeof(t_sink));
-    }
-
-    clock_free(x->x_clock);
+    clock_free(x_clock);
 }
 
 void aoo_send_tilde_setup(void)

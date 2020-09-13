@@ -21,22 +21,26 @@
 
 static t_class *aoo_pack_class;
 
-typedef struct _aoo_pack
+struct t_aoo_pack
 {
+    t_aoo_pack(int argc, t_atom *argv);
+    ~t_aoo_pack();
+
     t_object x_obj;
+
     t_float x_f;
-    aoo_source *x_aoo_source;
-    int32_t x_samplerate;
-    int32_t x_blocksize;
-    int32_t x_nchannels;
-    t_float **x_vec;
-    t_clock *x_clock;
-    t_outlet *x_out;
-    t_outlet *x_msgout;
-    int32_t x_sink_id;
-    int32_t x_sink_chn;
-    int x_accept;
-} t_aoo_pack;
+    aoo::isource::pointer x_source;
+    int32_t x_samplerate = 0;
+    int32_t x_blocksize = 0;
+    int32_t x_nchannels = 0;
+    std::unique_ptr<t_float *[]> x_vec;
+    t_clock *x_clock = nullptr;
+    t_outlet *x_out = nullptr;
+    t_outlet *x_msgout = nullptr;
+    int32_t x_sink_id = 0;
+    int32_t x_sink_chn = 0;
+    bool x_accept = false;
+};
 
 static int32_t aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)
 {
@@ -76,8 +80,7 @@ static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, 
             SETFLOAT(&msg, e->id);
 
             if (x->x_accept){
-                aoo_source_add_sink(x->x_aoo_source, x,
-                                    e->id, (aoo_replyfn)aoo_pack_reply);
+                x->x_source->add_sink(x, e->id, (aoo_replyfn)aoo_pack_reply);
 
                 outlet_anything(x->x_msgout, gensym("sink_add"), 1, &msg);
             } else {
@@ -93,7 +96,7 @@ static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, 
             SETFLOAT(&msg, e->id);
 
             if (x->x_accept){
-                aoo_source_remove_sink(x->x_aoo_source, x, e->id);
+                x->x_source->remove_sink(x, e->id);
 
                 outlet_anything(x->x_msgout, gensym("sink_remove"), 1, &msg);
             } else {
@@ -110,9 +113,9 @@ static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, 
 
 static void aoo_pack_tick(t_aoo_pack *x)
 {
-    while (aoo_source_send(x->x_aoo_source)) ;
+    while (x->x_source->send()) ;
 
-    aoo_source_handle_events(x->x_aoo_source, (aoo_eventhandler)aoo_pack_handle_events, x);
+    x->x_source->handle_events((aoo_eventhandler)aoo_pack_handle_events, x);
 }
 
 static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -121,7 +124,7 @@ static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
     for (int i = 0; i < argc; ++i){
         msg[i] = (int)(argv[i].a_type == A_FLOAT ? argv[i].a_w.w_float : 0.f);
     }
-    aoo_source_handle_message(x->x_aoo_source, msg, argc, x, (aoo_replyfn)aoo_pack_reply);
+    x->x_source->handle_message(msg, argc, x, (aoo_replyfn)aoo_pack_reply);
 }
 
 static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -129,7 +132,7 @@ static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
     aoo_format_storage f;
     f.header.nchannels = x->x_nchannels;
     if (aoo_format_parse(x, &f, argc, argv)){
-        aoo_source_set_format(x->x_aoo_source, &f.header);
+        x->x_source->set_format(f.header);
         // output actual format
         t_atom msg[16];
         int n = aoo_format_toatoms(&f.header, 16, msg);
@@ -148,44 +151,44 @@ static void aoo_pack_channel(t_aoo_pack *x, t_floatarg f)
 {
     x->x_sink_chn = f > 0 ? f : 0;
     if (x->x_sink_id != AOO_ID_NONE){
-        aoo_source_set_sink_channelonset(x->x_aoo_source, x, x->x_sink_id, x->x_sink_chn);
+        x->x_source->set_sink_channelonset(x, x->x_sink_id, x->x_sink_chn);
     }
 }
 
 static void aoo_pack_packetsize(t_aoo_pack *x, t_floatarg f)
 {
-    aoo_source_set_packetsize(x->x_aoo_source, f);
+    x->x_source->set_packetsize(f);
 }
 
 static void aoo_pack_ping(t_aoo_pack *x, t_floatarg f)
 {
-    aoo_source_set_ping_interval(x->x_aoo_source, f);
+    x->x_source->set_ping_interval(f);
 }
 
 static void aoo_pack_resend(t_aoo_pack *x, t_floatarg f)
 {
-    aoo_source_set_buffersize(x->x_aoo_source, f);
+    x->x_source->set_buffersize(f);
 }
 
 static void aoo_pack_redundancy(t_aoo_pack *x, t_floatarg f)
 {
-    aoo_source_set_redundancy(x->x_aoo_source, f);
+    x->x_source->set_redundancy(f);
 }
 
 static void aoo_pack_timefilter(t_aoo_pack *x, t_floatarg f)
 {
-    aoo_source_set_timefilter_bandwith(x->x_aoo_source, f);
+    x->x_source->set_timefilter_bandwidth(f);
 }
 
 static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (argc){
         // remove old sink
-        aoo_source_remove_all(x->x_aoo_source);
+        x->x_source->remove_all();
         // add new sink
         if (argv->a_type == A_SYMBOL){
             if (*argv->a_w.w_symbol->s_name == '*'){
-                aoo_source_add_sink(x->x_aoo_source, x, AOO_ID_WILDCARD, (aoo_replyfn)aoo_pack_reply);
+                x->x_source->add_sink(x, AOO_ID_WILDCARD, (aoo_replyfn)aoo_pack_reply);
             } else {
                 pd_error(x, "%s: bad argument '%s' to 'set' message!",
                          classname(x), argv->a_w.w_symbol->s_name);
@@ -194,7 +197,7 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
             x->x_sink_id = AOO_ID_WILDCARD;
         } else {
             int32_t id = atom_getfloat(argv);
-            aoo_source_add_sink(x->x_aoo_source, x, id, (aoo_replyfn)aoo_pack_reply);
+            x->x_source->add_sink(x, id, (aoo_replyfn)aoo_pack_reply);
             x->x_sink_id = id;
         }
         // set channel (if provided)
@@ -208,18 +211,18 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_pack_clear(t_aoo_pack *x)
 {
-    aoo_source_remove_all(x->x_aoo_source);
+    x->x_source->remove_all();
     x->x_sink_id = AOO_ID_NONE;
 }
 
 static void aoo_pack_start(t_aoo_pack *x)
 {
-    aoo_source_start(x->x_aoo_source);
+    x->x_source->start();
 }
 
 static void aoo_pack_stop(t_aoo_pack *x)
 {
-    aoo_source_stop(x->x_aoo_source);
+    x->x_source->stop();
 }
 
 static t_int * aoo_pack_perform(t_int *w)
@@ -230,7 +233,7 @@ static t_int * aoo_pack_perform(t_int *w)
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
     uint64_t t = aoo_osctime_get();
-    if (aoo_source_process(x->x_aoo_source,(const aoo_sample **)x->x_vec, n, t) > 0){
+    if (x->x_source->process((const aoo_sample **)x->x_vec.get(), n, t) > 0){
         clock_delay(x->x_clock, 0);
     }
     return w + 3;
@@ -246,7 +249,7 @@ static void aoo_pack_dsp(t_aoo_pack *x, t_signal **sp)
     }
 
     if (blocksize != x->x_blocksize || samplerate != x->x_samplerate){
-        aoo_source_setup(x->x_aoo_source, samplerate, blocksize, x->x_nchannels);
+        x->x_source->setup(samplerate, blocksize, x->x_nchannels);
         x->x_blocksize = blocksize;
         x->x_samplerate = samplerate;
     }
@@ -272,65 +275,71 @@ static void aoo_pack_loadbang(t_aoo_pack *x, t_floatarg f)
 
 static void * aoo_pack_new(t_symbol *s, int argc, t_atom *argv)
 {
-    t_aoo_pack *x = (t_aoo_pack *)pd_new(aoo_pack_class);
+    void *x = pd_new(aoo_pack_class);
+    new (x) t_aoo_pack(argc, argv);
+    return x;
+}
 
-    x->x_f = 0;
-    x->x_clock = clock_new(x, (t_method)aoo_pack_tick);
-    x->x_accept = 1;
+t_aoo_pack::t_aoo_pack(int argc, t_atom *argv)
+{
+    x_f = 0;
+    x_clock = clock_new(this, (t_method)aoo_pack_tick);
+    x_accept = 1;
 
     // arg #1: ID
     int src = atom_getfloatarg(0, argc, argv);
-    x->x_aoo_source = aoo_source_new(src >= 0 ? src : 0);
-
-    // since process() and send() are called from the same thread,
-    // we can use the minimal buffer size and thus safe some memory.
-    aoo_source_set_buffersize(x->x_aoo_source, 0);
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
     if (nchannels < 1){
         nchannels = 1;
     }
-    x->x_nchannels = nchannels;
-    x->x_samplerate = 0;
-    x->x_blocksize = 0;
+    x_nchannels = nchannels;
 
     // arg #3: sink ID
     if (argc > 2){
-        x->x_sink_id = atom_getfloat(argv + 2);
+        x_sink_id = atom_getfloat(argv + 2);
     } else {
-        x->x_sink_id = AOO_ID_NONE;
+        x_sink_id = AOO_ID_NONE;
     }
 
     // arg #4: sink channel
-    x->x_sink_chn = atom_getfloatarg(3, argc, argv);
+    x_sink_chn = atom_getfloatarg(3, argc, argv);
 
     // make additional inlets
     if (nchannels > 1){
         int i = nchannels;
         while (--i){
-            inlet_new(&x->x_obj, &x->x_obj.ob_pd, &s_signal, &s_signal);
+            inlet_new(&x_obj, &x_obj.ob_pd, &s_signal, &s_signal);
         }
     }
-    x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * nchannels);
+    x_vec = std::make_unique<t_sample *[]>(nchannels);
+
     // make outlets
-    x->x_out = outlet_new(&x->x_obj, 0);
-    x->x_msgout = outlet_new(&x->x_obj, 0);
+    x_out = outlet_new(&x_obj, 0);
+    x_msgout = outlet_new(&x_obj, 0);
+
+    // create and initialize aoo_sink object
+    x_source.reset(aoo::isource::create(src >= 0 ? src : 0));
 
     // default format
     aoo_format_storage fmt;
     aoo_format_makedefault(&fmt, nchannels);
-    aoo_source_set_format(x->x_aoo_source, &fmt.header);
+    x_source->set_format(fmt.header);
 
-    return x;
+    // since process() and send() are called from the same thread,
+    // we can use the minimal buffer size and thus save some memory.
+    x_source->set_buffersize(0);
 }
 
 static void aoo_pack_free(t_aoo_pack *x)
 {
-    // clean up
-    freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
-    clock_free(x->x_clock);
-    aoo_source_free(x->x_aoo_source);
+    x->~t_aoo_pack();
+}
+
+t_aoo_pack::~t_aoo_pack()
+{
+    clock_free(x_clock);
 }
 
 void aoo_pack_tilde_setup(void)

@@ -27,7 +27,7 @@
 
 extern t_class *aoo_receive_class;
 
-typedef struct _aoo_receive t_aoo_receive;
+struct t_aoo_receive;
 
 void aoo_receive_send(t_aoo_receive *x);
 
@@ -40,7 +40,7 @@ void aoo_receive_update(t_aoo_receive *x);
 
 extern t_class *aoo_send_class;
 
-typedef struct _aoo_send t_aoo_send;
+struct t_aoo_send;
 
 void aoo_send_send(t_aoo_send *x);
 

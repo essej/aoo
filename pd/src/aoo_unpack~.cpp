@@ -22,19 +22,23 @@
 
 static t_class *aoo_unpack_class;
 
-typedef struct _aoo_unpack
+struct t_aoo_unpack
 {
+    t_aoo_unpack(int argc, t_atom *argv);
+    ~t_aoo_unpack();
+
     t_object x_obj;
-    t_float x_f;
-    aoo_sink *x_aoo_sink;
-    int32_t x_samplerate;
-    int32_t x_blocksize;
-    int32_t x_nchannels;
-    t_sample **x_vec;
-    t_outlet *x_dataout;
-    t_outlet *x_msgout;
-    t_clock *x_clock;
-} t_aoo_unpack;
+
+    t_float x_f = 0;
+    aoo::isink::pointer x_sink;
+    int32_t x_samplerate = 0;
+    int32_t x_blocksize = 0;
+    int32_t x_nchannels = 0;
+    std::unique_ptr<t_sample *[]> x_vec;
+    t_outlet *x_dataout = nullptr;
+    t_outlet *x_msgout = nullptr;
+    t_clock *x_clock = nullptr;
+};
 
 static int32_t aoo_pack_reply(t_aoo_unpack *x, const char *data, int32_t n)
 {
@@ -53,33 +57,33 @@ static void aoo_unpack_list(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv
         msg[i] = (int)(argv[i].a_type == A_FLOAT ? argv[i].a_w.w_float : 0.f);
     }
     // handle incoming message
-    aoo_sink_handle_message(x->x_aoo_sink, msg, argc, x, (aoo_replyfn)aoo_pack_reply);
+    x->x_sink->handle_message(msg, argc, x, (aoo_replyfn)aoo_pack_reply);
     // send outgoing messages
-    while (aoo_sink_send(x->x_aoo_sink)) ;
+    while (x->x_sink->send()) ;
 }
 
 static void aoo_unpack_invite(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_sink_invite_source(x->x_aoo_sink, x, (int32_t)f, (aoo_replyfn)aoo_pack_reply);
+    x->x_sink->invite_source(x, (int32_t)f, (aoo_replyfn)aoo_pack_reply);
     // send outgoing messages
-    while (aoo_sink_send(x->x_aoo_sink)) ;
+    while (x->x_sink->send()) ;
 }
 
 static void aoo_unpack_uninvite(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_sink_uninvite_source(x->x_aoo_sink, x, (int32_t)f, (aoo_replyfn)aoo_pack_reply);
+    x->x_sink->uninvite_source(x, (int32_t)f, (aoo_replyfn)aoo_pack_reply);
     // send outgoing messages
-    while (aoo_sink_send(x->x_aoo_sink)) ;
+    while (x->x_sink->send()) ;
 }
 
 static void aoo_unpack_buffersize(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_sink_set_buffersize(x->x_aoo_sink, f);
+    x->x_sink->set_buffersize(f);
 }
 
 static void aoo_unpack_timefilter(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_sink_set_timefilter_bandwith(x->x_aoo_sink, f);
+    x->x_sink->set_timefilter_bandwidth(f);
 }
 
 static void aoo_unpack_reset(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)
@@ -87,31 +91,31 @@ static void aoo_unpack_reset(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *arg
     if (argc){
         // reset specific source
         int32_t id = atom_getfloat(argv);
-        aoo_sink_reset_source(x->x_aoo_sink, x, id);
+        x->x_sink->reset_source(x, id);
     } else {
         // reset all sources
-        aoo_sink_reset(x->x_aoo_sink);
+        x->x_sink->reset();
     }
 }
 
 static void aoo_unpack_packetsize(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_sink_set_packetsize(x->x_aoo_sink, f);
+    x->x_sink->set_packetsize(f);
 }
 
 static void aoo_unpack_resend(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_sink_set_resend_enable(x->x_aoo_sink, f != 0);
+    x->x_sink->set_resend_enable(f != 0);
 }
 
 static void aoo_unpack_resend_limit(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_sink_set_resend_maxnumframes(x->x_aoo_sink, f);
+    x->x_sink->set_resend_maxnumframes(f);
 }
 
 static void aoo_unpack_resend_interval(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_sink_set_resend_interval(x->x_aoo_sink, f);
+    x->x_sink->set_resend_interval(f);
 }
 
 static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **events, int32_t n)
@@ -131,7 +135,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
         {
             aoo_source_event *e = (aoo_source_event *)events[i];
             aoo_format_storage f;
-            if (aoo_sink_get_source_format(x->x_aoo_sink, e->endpoint, e->id, &f) > 0) {
+            if (x->x_sink->get_source_format(e->endpoint, e->id, f) > 0) {
                 SETFLOAT(&msg[0], e->id);
                 int fsize = aoo_format_toatoms(&f.header, 31, msg + 1); // skip first atom
                 outlet_anything(x->x_msgout, gensym("source_format"), fsize + 1, msg);
@@ -204,7 +208,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
 
 static void aoo_unpack_tick(t_aoo_unpack *x)
 {
-    aoo_sink_handle_events(x->x_aoo_sink, (aoo_eventhandler)aoo_unpack_handle_events, x);
+    x->x_sink->handle_events((aoo_eventhandler)aoo_unpack_handle_events, x);
 }
 
 uint64_t aoo_pd_osctime(int n, t_float sr);
@@ -215,15 +219,15 @@ static t_int * aoo_unpack_perform(t_int *w)
     int n = (int)(w[2]);
 
     uint64_t t = aoo_osctime_get();
-    if (aoo_sink_process(x->x_aoo_sink, x->x_vec, n, t) <= 0){
+    if (x->x_sink->process(x->x_vec.get(), n, t) <= 0){
         // output zeros
         for (int i = 0; i < x->x_nchannels; ++i){
-            memset(x->x_vec[i], 0, sizeof(t_float) * n);
+            std::fill(x->x_vec[i], x->x_vec[i] + n, 0);
         }
     }
 
     // handle events
-    if (aoo_sink_events_available(x->x_aoo_sink)){
+    if (x->x_sink->events_available()){
         clock_delay(x->x_clock, 0);
     }
 
@@ -240,7 +244,7 @@ static void aoo_unpack_dsp(t_aoo_unpack *x, t_signal **sp)
     }
 
     if (blocksize != x->x_blocksize || samplerate != x->x_samplerate){
-        aoo_sink_setup(x->x_aoo_sink, samplerate, blocksize, x->x_nchannels);
+        x->x_sink->setup(samplerate, blocksize, x->x_nchannels);
         x->x_blocksize = blocksize;
         x->x_samplerate = samplerate;
     }
@@ -250,44 +254,52 @@ static void aoo_unpack_dsp(t_aoo_unpack *x, t_signal **sp)
 
 static void * aoo_unpack_new(t_symbol *s, int argc, t_atom *argv)
 {
-    t_aoo_unpack *x = (t_aoo_unpack *)pd_new(aoo_unpack_class);
-    x->x_clock = clock_new(x, (t_method)aoo_unpack_tick);
+    void *x = pd_new(aoo_unpack_class);
+    new (x) t_aoo_unpack(argc, argv);
+    return x;
+}
+
+t_aoo_unpack::t_aoo_unpack(int argc, t_atom *argv)
+{
+    x_clock = clock_new(this, (t_method)aoo_unpack_tick);
 
     // arg #1: ID
     int id = atom_getfloatarg(0, argc, argv);
-    x->x_aoo_sink = aoo_sink_new(id >= 0 ? id : 0);
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
     if (nchannels < 1){
         nchannels = 1;
     }
-    x->x_nchannels = nchannels;
-    x->x_samplerate = 0;
-    x->x_blocksize = 0;
+    x_nchannels = nchannels;
 
     // arg #3: buffer size (ms)
-    aoo_unpack_buffersize(x, argc > 2 ? atom_getfloat(argv + 2) : DEFBUFSIZE);
+    int buffersize = argc > 2 ? atom_getfloat(argv + 2) : DEFBUFSIZE;
 
     // make signal outlets
     for (int i = 0; i < nchannels; ++i){
-        outlet_new(&x->x_obj, &s_signal);
+        outlet_new(&x_obj, &s_signal);
     }
-    x->x_vec = (t_sample **)getbytes(sizeof(t_sample *) * nchannels);
+    x_vec = std::make_unique<t_sample *[]>(nchannels);
     // message outlet
-    x->x_dataout = outlet_new(&x->x_obj, 0);
+    x_dataout = outlet_new(&x_obj, 0);
     // event outlet
-    x->x_msgout = outlet_new(&x->x_obj, 0);
+    x_msgout = outlet_new(&x_obj, 0);
 
-    return x;
+    // create and initialize aoo_sink object
+    x_sink.reset(aoo::isink::create(id >= 0 ? id : 0));
+
+    x_sink->set_buffersize(buffersize);
 }
 
 static void aoo_unpack_free(t_aoo_unpack *x)
 {
-    // clean up
-    freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
-    clock_free(x->x_clock);
-    aoo_sink_free(x->x_aoo_sink);
+    x->~t_aoo_unpack();
+}
+
+t_aoo_unpack::~t_aoo_unpack()
+{
+    clock_free(x_clock);
 }
 
 void aoo_unpack_tilde_setup(void)
