@@ -51,7 +51,7 @@ void aoo_send_handle_message(t_aoo_send *x, const char * data,
 
 extern t_class *aoo_client_class;
 
-typedef struct _aoo_client t_aoo_client;
+struct t_aoo_client;
 
 void aoo_client_send(t_aoo_client *x);
 

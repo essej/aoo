@@ -4,35 +4,39 @@
 
 #include "aoo_common.hpp"
 
-#include "aoonet/aoonet.h"
+#include "aoonet/aoonet.hpp"
 
-#include <pthread.h>
+#include <thread>
 
 #define AOO_CLIENT_POLL_INTERVAL 2
 
 t_class *aoo_client_class;
 
-typedef struct _aoo_client
+struct t_aoo_client
 {
+    t_aoo_client(int argc, t_atom *argv);
+    ~t_aoo_client();
+
     t_object x_obj;
-    aoonet_client *x_client;
-    t_node *x_node;
-    pthread_t x_thread;
-    t_clock *x_clock;
-    t_outlet *x_stateout;
-    t_outlet *x_msgout;
-} t_aoo_client;
+
+    aoo::net::iclient::pointer x_client;
+    t_node *x_node = nullptr;
+    std::thread x_thread;
+    t_clock *x_clock = nullptr;
+    t_outlet *x_stateout = nullptr;
+    t_outlet *x_msgout = nullptr;
+};
 
 void aoo_client_send(t_aoo_client *x)
 {
-    aoonet_client_send(x->x_client);
+    x->x_client->send();
 }
 
 void aoo_client_handle_message(t_aoo_client *x, const char * data,
                                int32_t n, void *endpoint, aoo_replyfn fn)
 {
     t_endpoint *e = (t_endpoint *)endpoint;
-    aoonet_client_handle_message(x->x_client, data, n, &e->addr);
+    x->x_client->handle_message(data, n, &e->addr);
 }
 
 static int32_t aoo_client_handle_events(t_aoo_client *x,
@@ -151,19 +155,11 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
 
 static void aoo_client_tick(t_aoo_client *x)
 {
-    aoonet_client_handle_events(x->x_client,
-                               (aoo_eventhandler)aoo_client_handle_events, x);
+    x->x_client->handle_events((aoo_eventhandler)aoo_client_handle_events, x);
 
     aoo_node_notify(x->x_node);
 
     clock_delay(x->x_clock, AOO_CLIENT_POLL_INTERVAL);
-}
-
-static void * aoo_client_threadfn(void *y)
-{
-    t_aoo_client *x = (t_aoo_client *)y;
-    aoonet_client_run(x->x_client);
-    return 0;
 }
 
 static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
@@ -181,8 +177,7 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
         t_symbol *username = atom_getsymbol(argv + 2);
         t_symbol *pwd = atom_getsymbol(argv + 3);
 
-        aoonet_client_connect(x->x_client, host->s_name, port,
-                              username->s_name, pwd->s_name);
+        x->x_client->connect(host->s_name, port, username->s_name, pwd->s_name);
     }
 }
 
@@ -191,65 +186,76 @@ static void aoo_client_disconnect(t_aoo_client *x)
     if (x->x_client){
         aoo_node_remove_all_peers(x->x_node);
 
-        aoonet_client_disconnect(x->x_client);
+        x->x_client->disconnect();
     }
 }
 
 static void aoo_client_group_join(t_aoo_client *x, t_symbol *group, t_symbol *pwd)
 {
     if (x->x_client){
-        aoonet_client_group_join(x->x_client, group->s_name, pwd->s_name);
+        x->x_client->group_join(group->s_name, pwd->s_name);
     }
 }
 
 static void aoo_client_group_leave(t_aoo_client *x, t_symbol *s)
 {
     if (x->x_client){
-        aoonet_client_group_leave(x->x_client, s->s_name);
+        x->x_client->group_leave(s->s_name);
     }
 }
 
 static void * aoo_client_new(t_symbol *s, int argc, t_atom *argv)
 {
-    t_aoo_client *x = (t_aoo_client *)pd_new(aoo_client_class);
+    void *x = pd_new(aoo_client_class);
+    new (x) t_aoo_client(argc, argv);
+    return x;
+}
 
-    x->x_clock = clock_new(x, (t_method)aoo_client_tick);
-    x->x_stateout = outlet_new(&x->x_obj, 0);
-    x->x_msgout = outlet_new(&x->x_obj, 0);
+t_aoo_client::t_aoo_client(int argc, t_atom *argv)
+{
+    x_clock = clock_new(this, (t_method)aoo_client_tick);
+    x_stateout = outlet_new(&x_obj, 0);
+    x_msgout = outlet_new(&x_obj, 0);
 
     int port = argc ? atom_getfloat(argv) : 0;
 
-    x->x_node = port > 0 ? aoo_node_add(port, (t_pd *)x, 0) : 0;
+    x_node = port > 0 ? aoo_node_add(port, (t_pd *)this, 0) : 0;
 
-    if (x->x_node){
-        x->x_client = aoonet_client_new(x->x_node, (aoo_sendfn)aoo_node_sendto, port);
-        if (x->x_client){
+    if (x_node){
+        x_client.reset(aoo::net::iclient::create(
+                           x_node,(aoo_sendfn)aoo_node_sendto, port));
+        if (x_client){
             verbose(0, "new aoo client on port %d", port);
             // start thread
-            pthread_create(&x->x_thread, 0, aoo_client_threadfn, x);
+            x_thread = std::thread([this](){
+               x_client->run();
+            });
             // start clock
-            clock_delay(x->x_clock, AOO_CLIENT_POLL_INTERVAL);
+            clock_delay(x_clock, AOO_CLIENT_POLL_INTERVAL);
         }
     }
-    return x;
 }
 
 static void aoo_client_free(t_aoo_client *x)
 {
-    if (x->x_node){
-        aoo_node_remove_all_peers(x->x_node);
+    x->~t_aoo_client();
+}
 
-        aoo_node_release(x->x_node, (t_pd *)x, 0);
+t_aoo_client::~t_aoo_client()
+{
+    if (x_node){
+        aoo_node_remove_all_peers(x_node);
+
+        aoo_node_release(x_node, (t_pd *)this, 0);
     }
 
-    if (x->x_client){
-        aoonet_client_quit(x->x_client);
+    if (x_client){
+        x_client->quit();
         // wait for thread to finish
-        pthread_join(x->x_thread, 0);
-        aoonet_client_free(x->x_client);
+        x_thread.join();
     }
 
-    clock_free(x->x_clock);
+    clock_free(x_clock);
 }
 
 void aoo_client_setup(void)

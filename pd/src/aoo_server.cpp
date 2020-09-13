@@ -4,24 +4,28 @@
 
 #include "aoo_common.hpp"
 
-#include "aoonet/aoonet.h"
+#include "aoonet/aoonet.hpp"
 
-#include <pthread.h>
+#include <thread>
 
 #define AOO_SERVER_POLL_INTERVAL 2
 
 static t_class *aoo_server_class;
 
-typedef struct _aoo_server
+struct t_aoo_server
 {
+    t_aoo_server(int argc, t_atom *argv);
+    ~t_aoo_server();
+
     t_object x_obj;
-    aoonet_server *x_server;
-    int32_t x_numusers;
-    pthread_t x_thread;
-    t_clock *x_clock;
-    t_outlet *x_stateout;
-    t_outlet *x_msgout;
-} t_aoo_server;
+
+    aoo::net::iserver::pointer x_server;
+    int32_t x_numusers = 0;
+    std::thread x_thread;
+    t_clock *x_clock = nullptr;
+    t_outlet *x_stateout = nullptr;
+    t_outlet *x_msgout = nullptr;
+};
 
 static int32_t aoo_server_handle_events(t_aoo_server *x,
                                         const aoo_event **events, int32_t n)
@@ -94,56 +98,57 @@ static int32_t aoo_server_handle_events(t_aoo_server *x,
 
 static void aoo_server_tick(t_aoo_server *x)
 {
-    aoonet_server_handle_events(x->x_server,
-                               (aoo_eventhandler)aoo_server_handle_events, x);
+    x->x_server->handle_events((aoo_eventhandler)aoo_server_handle_events, x);
     clock_delay(x->x_clock, AOO_SERVER_POLL_INTERVAL);
-}
-
-static void *aoo_server_threadfn(void *y)
-{
-    t_aoo_server *x = (t_aoo_server *)y;
-    aoonet_server_run(x->x_server);
-    return 0;
 }
 
 static void * aoo_server_new(t_symbol *s, int argc, t_atom *argv)
 {
-    t_aoo_server *x = (t_aoo_server *)pd_new(aoo_server_class);
+    void *x = pd_new(aoo_server_class);
+    new (x) t_aoo_server(argc, argv);
+    return x;
+}
 
-    x->x_numusers = 0;
-    x->x_clock = clock_new(x, (t_method)aoo_server_tick);
-    x->x_stateout = outlet_new(&x->x_obj, 0);
-    x->x_msgout = outlet_new(&x->x_obj, 0);
+t_aoo_server::t_aoo_server(int argc, t_atom *argv)
+{
+    x_clock = clock_new(this, (t_method)aoo_server_tick);
+    x_stateout = outlet_new(&x_obj, 0);
+    x_msgout = outlet_new(&x_obj, 0);
 
     int port = argc ? atom_getfloat(argv) : 0;
 
     if (port > 0){
         int32_t err;
-        x->x_server = aoonet_server_new(port, &err);
-        if (x->x_server){
+        x_server.reset(aoo::net::iserver::create(port, &err));
+        if (x_server){
             verbose(0, "aoo server listening on port %d", port);
             // start thread
-            pthread_create(&x->x_thread, 0, aoo_server_threadfn, x);
+            x_thread = std::thread([this](){
+                x_server->run();
+            });
             // start clock
-            clock_delay(x->x_clock, AOO_SERVER_POLL_INTERVAL);
+            clock_delay(x_clock, AOO_SERVER_POLL_INTERVAL);
         } else {
             char buf[MAXPDSTRING];
             socket_strerror(err, buf, sizeof(buf));
-            pd_error(x, "%s: %s (%d)", classname(x), buf, err);
+            pd_error(this, "%s: %s (%d)", classname(this), buf, err);
         }
     }
-    return x;
 }
 
 static void aoo_server_free(t_aoo_server *x)
 {
-    if (x->x_server){
-        aoonet_server_quit(x->x_server);
+    x->~t_aoo_server();
+}
+
+t_aoo_server::~t_aoo_server()
+{
+    if (x_server){
+        x_server->quit();
         // wait for thread to finish
-        pthread_join(x->x_thread, 0);
-        aoonet_server_free(x->x_server);
+        x_thread.join();
     }
-    clock_free(x->x_clock);
+    clock_free(x_clock);
 }
 
 void aoo_server_setup(void)
