@@ -216,7 +216,7 @@ private:
     lockfree::queue<event> eventqueue_;
     spinlock eventqueuelock_;
     void push_event(const event& e){
-        scoped_lock<spinlock> l(eventqueuelock_);
+        _scoped_lock<spinlock> l(eventqueuelock_);
         if (eventqueue_.write_available()){
             eventqueue_.write(e);
         }

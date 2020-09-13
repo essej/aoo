@@ -98,27 +98,31 @@ using shared_lock = std::shared_lock<shared_mutex>;
 using unique_lock = std::unique_lock<shared_mutex>;
 
 template<typename T>
-class scoped_lock {
+class _scoped_lock {
 public:
-    scoped_lock(T& lock)
+    _scoped_lock(T& lock)
         : lock_(&lock){ lock_->lock(); }
-    scoped_lock(const T& lock) = delete;
-    scoped_lock& operator=(const T& lock) = delete;
-    ~scoped_lock() { lock_->unlock(); }
+    _scoped_lock(const T& lock) = delete;
+    _scoped_lock& operator=(const T& lock) = delete;
+    ~_scoped_lock() { lock_->unlock(); }
 private:
     T* lock_;
 };
 
+using scoped_lock = _scoped_lock<shared_mutex>;
+
 template<typename T>
-class shared_scoped_lock {
+class _shared_scoped_lock {
 public:
-    shared_scoped_lock(T& lock)
+    _shared_scoped_lock(T& lock)
         : lock_(&lock){ lock_->lock_shared(); }
-    shared_scoped_lock(const T& lock) = delete;
-    shared_scoped_lock& operator=(const T& lock) = delete;
-    ~shared_scoped_lock() { lock_->unlock_shared(); }
+    _shared_scoped_lock(const T& lock) = delete;
+    _shared_scoped_lock& operator=(const T& lock) = delete;
+    ~_shared_scoped_lock() { lock_->unlock_shared(); }
 private:
     T* lock_;
 };
+
+using shared_scoped_lock = _shared_scoped_lock<shared_mutex>;
 
 } // aoo

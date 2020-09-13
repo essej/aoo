@@ -643,7 +643,7 @@ void client::send_message_udp(const char *data, int32_t size, const ip_address& 
 
 void client::push_event(std::unique_ptr<ievent> e)
 {
-    scoped_lock<spinlock> lock(event_lock_);
+    _scoped_lock<spinlock> lock(event_lock_);
     if (events_.write_available()){
         events_.write(std::move(e));
     }

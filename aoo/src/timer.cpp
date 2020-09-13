@@ -35,7 +35,7 @@ void timer::setup(int32_t sr, int32_t blocksize){
 }
 
 void timer::reset(){
-    scoped_lock<spinlock> l(lock_);
+    _scoped_lock<spinlock> l(lock_);
     last_ = 0;
     elapsed_ = 0;
 #if AOO_TIMEFILTER_CHECK

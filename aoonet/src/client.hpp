@@ -175,7 +175,7 @@ private:
     lockfree::queue<std::unique_ptr<icommand>> commands_;
     spinlock command_lock_;
     void push_command(std::unique_ptr<icommand>&& cmd){
-        scoped_lock<spinlock> lock(command_lock_);
+        _scoped_lock<spinlock> lock(command_lock_);
         if (commands_.write_available()){
             commands_.write(std::move(cmd));
         }
