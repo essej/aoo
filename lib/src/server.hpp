@@ -162,6 +162,9 @@ public:
 
     std::shared_ptr<group> find_group(const std::string& name);
 
+    int32_t get_group_count() const override;
+    int32_t get_user_count() const override;
+    
     void on_user_joined(user& usr);
 
     void on_user_left(user& usr);

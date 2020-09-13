@@ -353,6 +353,15 @@ std::shared_ptr<group> server::find_group(const std::string& name)
     return nullptr;
 }
 
+int32_t server::get_group_count() const
+{
+    return (int32_t) groups_.size();
+}
+
+int32_t server::get_user_count() const
+{
+    return (int32_t) users_.size();    
+}
 
 void server::on_user_joined(user &usr){
     auto e = std::make_unique<user_event>(AOONET_SERVER_USER_JOIN_EVENT,

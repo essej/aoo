@@ -63,6 +63,13 @@ public:
 
     // LATER add methods to add/remove users and groups
     // and set/get server options, group options and user options
+    
+    // get number of currently active groups
+    virtual int32_t get_group_count() const = 0;
+
+    // get number of currently active users
+    virtual int32_t get_user_count() const = 0;
+
 protected:
     ~iserver(){} // non-virtual!
 };
