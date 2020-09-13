@@ -52,26 +52,8 @@ void aoo_node_remove_peer(t_node *node, t_symbol *group, t_symbol *user);
 
 void aoo_node_remove_group(t_node *node, t_symbol *group);
 
-/*///////////////////////////// aoo_lock /////////////////////////////*/
-
-#ifdef _WIN32
-typedef void * aoo_lock;
-#else
-typedef pthread_rwlock_t aoo_lock;
-#endif
-
-void aoo_lock_init(aoo_lock *x);
-
-void aoo_lock_destroy(aoo_lock *x);
-
-void aoo_lock_lock(aoo_lock *x);
-
-void aoo_lock_lock_shared(aoo_lock *x);
-
-void aoo_lock_unlock(aoo_lock *x);
 void aoo_node_remove_all_peers(t_node *node);
 
-void aoo_lock_unlock_shared(aoo_lock *x);
 void aoo_node_notify(t_node *node);
 
 /*///////////////////////////// helper functions ///////////////////////////////*/

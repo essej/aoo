@@ -4,6 +4,8 @@
 
 #include "aoo_common.hpp"
 
+#include "common/sync.hpp"
+
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
@@ -38,7 +40,7 @@ typedef struct _aoo_receive
     int x_numsources;
     // server
     t_node * x_node;
-    aoo_lock x_lock;
+    aoo::shared_mutex x_lock;
     // events
     t_outlet *x_msgout;
     t_clock *x_clock;
@@ -70,10 +72,9 @@ void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
                                 int32_t n, void *endpoint, aoo_replyfn fn)
 {
     // synchronize with aoo_receive_dsp()
-    aoo_lock_lock_shared(&x->x_lock);
+    aoo::shared_scoped_lock lock(x->x_lock);
     // handle incoming message
     aoo_sink_handle_message(x->x_aoo_sink, data, n, endpoint, fn);
-    aoo_lock_unlock_shared(&x->x_lock);
 }
 
 // called from the network receive thread
@@ -86,10 +87,9 @@ void aoo_receive_update(t_aoo_receive *x)
 void aoo_receive_send(t_aoo_receive *x)
 {
     // synchronize with aoo_receive_dsp()
-    aoo_lock_lock_shared(&x->x_lock);
+    aoo::shared_scoped_lock lock(x->x_lock);
     // send outgoing messages
     while (aoo_sink_send(x->x_aoo_sink)) ;
-    aoo_lock_unlock_shared(&x->x_lock);
 }
 
 static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
@@ -381,15 +381,13 @@ static void aoo_receive_dsp(t_aoo_receive *x, t_signal **sp)
     }
 
     // synchronize with network threads!
-    aoo_lock_lock(&x->x_lock); // writer lock!
+    aoo::scoped_lock lock(x->x_lock); // writer lock!
 
     if (blocksize != x->x_blocksize || samplerate != x->x_samplerate){
         aoo_sink_setup(x->x_aoo_sink, samplerate, blocksize, x->x_nchannels);
         x->x_blocksize = blocksize;
         x->x_samplerate = samplerate;
     }
-
-    aoo_lock_unlock(&x->x_lock);
 
     dsp_add(aoo_receive_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 }
@@ -448,8 +446,6 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
     x->x_node = 0;
     x->x_clock = clock_new(x, (t_method)aoo_receive_tick);
 
-    aoo_lock_init(&x->x_lock);
-
     // arg #1: port number
     x->x_port = atom_getfloatarg(0, argc, argv);
 
@@ -498,8 +494,6 @@ static void aoo_receive_free(t_aoo_receive *x)
     }
 
     aoo_sink_free(x->x_aoo_sink);
-
-    aoo_lock_destroy(&x->x_lock);
 
     freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
     if (x->x_sources){

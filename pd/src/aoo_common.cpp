@@ -20,66 +20,6 @@
 
 #define CLAMP(x, a, b) ((x) < (a) ? (a) : (x) > (b) ? (b) : (x))
 
-/*///////////////////////////// aoo_lock /////////////////////////////*/
-
-#ifdef _WIN32
-void aoo_lock_init(aoo_lock *x)
-{
-    InitializeSRWLock((SRWLOCK *)x);
-}
-
-void aoo_lock_destroy(aoo_lock *x){}
-
-void aoo_lock_lock(aoo_lock *x)
-{
-    AcquireSRWLockExclusive((SRWLOCK *)x);
-}
-
-void aoo_lock_lock_shared(aoo_lock *x)
-{
-    AcquireSRWLockShared((SRWLOCK *)x);
-}
-
-void aoo_lock_unlock(aoo_lock *x)
-{
-    ReleaseSRWLockExclusive((SRWLOCK *)x);
-}
-
-void aoo_lock_unlock_shared(aoo_lock *x){
-    ReleaseSRWLockShared((SRWLOCK *)x);
-}
-#else
-void aoo_lock_init(aoo_lock *x)
-{
-    pthread_rwlock_init(x, 0);
-}
-
-void aoo_lock_destroy(aoo_lock *x)
-{
-    pthread_rwlock_destroy(x);
-}
-
-void aoo_lock_lock(aoo_lock *x)
-{
-    pthread_rwlock_wrlock(x);
-}
-
-void aoo_lock_lock_shared(aoo_lock *x)
-{
-    pthread_rwlock_rdlock(x);
-}
-
-void aoo_lock_unlock(aoo_lock *x)
-{
-    pthread_rwlock_unlock(x);
-}
-
-void aoo_lock_unlock_shared(aoo_lock *x)
-{
-    pthread_rwlock_unlock(x);
-}
-#endif
-
 /*/////////////////////////// helper functions ///////////////////////////////////////*/
 
 int32_t aoo_endpoint_to_atoms(const t_endpoint *e, int32_t id, t_atom *argv)

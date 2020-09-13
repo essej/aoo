@@ -4,6 +4,8 @@
 
 #include "aoo_common.hpp"
 
+#include "common/sync.hpp"
+
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
@@ -47,8 +49,8 @@ typedef struct _aoo_send
     t_sink *x_sinks;
     int x_numsinks;
     // node
-    aoo_lock x_lock;
     t_node *x_node;
+    aoo::shared_mutex x_lock;
     // events
     t_clock *x_clock;
     t_outlet *x_msgout;
@@ -210,20 +212,18 @@ void aoo_send_handle_message(t_aoo_send *x, const char * data,
                                 int32_t n, void *endpoint, aoo_replyfn fn)
 {
     // synchronize with aoo_receive_dsp()
-    aoo_lock_lock_shared(&x->x_lock);
+    aoo::shared_scoped_lock lock(x->x_lock);
     // handle incoming message
     aoo_source_handle_message(x->x_aoo_source, data, n, endpoint, fn);
-    aoo_lock_unlock_shared(&x->x_lock);
 }
 
 // called from the network send thread
 void aoo_send_send(t_aoo_send *x)
 {
     // synchronize with aoo_receive_dsp()
-    aoo_lock_lock_shared(&x->x_lock);
+    aoo::shared_scoped_lock lock(x->x_lock);
     // send outgoing messages
     while (aoo_source_send(x->x_aoo_source)) ;
-    aoo_lock_unlock_shared(&x->x_lock);
 }
 
 static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, int32_t n)
@@ -556,15 +556,13 @@ static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
     }
 
     // synchronize with network threads!
-    aoo_lock_lock(&x->x_lock); // writer lock!
+    aoo::scoped_lock lock(x->x_lock); // writer lock!
 
     if (blocksize != x->x_blocksize || samplerate != x->x_samplerate){
         aoo_source_setup(x->x_aoo_source, samplerate, blocksize, x->x_nchannels);
         x->x_blocksize = blocksize;
         x->x_samplerate = samplerate;
     }
-
-    aoo_lock_unlock(&x->x_lock);
 
     dsp_add(aoo_send_perform, 2, (t_int)x, (t_int)x->x_blocksize);
 }
@@ -623,8 +621,6 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
     x->x_blocksize = 0;
     x->x_samplerate = 0;
 
-    aoo_lock_init(&x->x_lock);
-
     // arg #1: port number
     x->x_port = atom_getfloatarg(0, argc, argv);
 
@@ -678,8 +674,6 @@ static void aoo_send_free(t_aoo_send *x)
     }
 
     aoo_source_free(x->x_aoo_source);
-
-    aoo_lock_destroy(&x->x_lock);
 
     freebytes(x->x_vec, sizeof(t_sample *) * x->x_nchannels);
     if (x->x_sinks){
