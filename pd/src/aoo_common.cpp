@@ -99,7 +99,7 @@ int32_t aoo_endpoint_to_atoms(const t_endpoint *e, int32_t id, t_atom *argv)
     return 0;
 }
 
-static int aoo_getendpointarg(void *x, t_aoo_node *node, int argc, t_atom *argv,
+static int aoo_getendpointarg(void *x, t_node *node, int argc, t_atom *argv,
                               struct sockaddr_storage *sa, socklen_t *len,
                               int32_t *id, const char *what)
 {
@@ -151,13 +151,13 @@ static int aoo_getendpointarg(void *x, t_aoo_node *node, int argc, t_atom *argv,
     return 1;
 }
 
-int aoo_getsinkarg(void *x, t_aoo_node *node, int argc, t_atom *argv,
+int aoo_getsinkarg(void *x, t_node *node, int argc, t_atom *argv,
                    struct sockaddr_storage *sa, socklen_t *len, int32_t *id)
 {
     return aoo_getendpointarg(x, node, argc, argv, sa, len, id, "sink");
 }
 
-int aoo_getsourcearg(void *x, t_aoo_node *node, int argc, t_atom *argv,
+int aoo_getsourcearg(void *x, t_node *node, int argc, t_atom *argv,
                      struct sockaddr_storage *sa, socklen_t *len, int32_t *id)
 {
     return aoo_getendpointarg(x, node, argc, argv, sa, len, id, "source");

@@ -16,7 +16,7 @@ typedef struct _aoo_client
 {
     t_object x_obj;
     aoonet_client *x_client;
-    t_aoo_node *x_node;
+    t_node *x_node;
     pthread_t x_thread;
     t_clock *x_clock;
     t_outlet *x_stateout;

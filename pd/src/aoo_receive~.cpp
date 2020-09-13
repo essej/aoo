@@ -37,7 +37,7 @@ typedef struct _aoo_receive
     t_source *x_sources;
     int x_numsources;
     // server
-    t_aoo_node * x_node;
+    t_node * x_node;
     aoo_lock x_lock;
     // events
     t_outlet *x_msgout;

@@ -70,21 +70,24 @@ static void lower_thread_priority(void)
 
 static t_class *aoo_node_class;
 
-typedef struct _client
+struct t_client
 {
     t_pd *c_obj;
     int32_t c_id;
-} t_client;
+};
 
-typedef struct _peer
+struct t_peer
 {
     t_symbol *group;
     t_symbol *user;
     t_endpoint *endpoint;
-} t_peer;
+};
 
-typedef struct _aoo_node
+struct t_node
 {
+    t_node();
+    ~t_node();
+
     t_pd x_pd;
     t_symbol *x_sym;
     // dependants
@@ -111,7 +114,7 @@ typedef struct _aoo_node
     int x_quit; // should be atomic, but works anyway
 } t_aoo_node;
 
-t_endpoint * aoo_node_endpoint(t_aoo_node *x,
+t_endpoint * aoo_node_endpoint(t_node *x,
                                const struct sockaddr_storage *sa, socklen_t len)
 {
     pthread_mutex_lock(&x->x_endpointlock);
@@ -126,7 +129,7 @@ t_endpoint * aoo_node_endpoint(t_aoo_node *x,
     return ep;
 }
 
-static t_peer * aoo_node_dofind_peer(t_aoo_node *x, t_symbol *group, t_symbol *user)
+static t_peer * aoo_node_dofind_peer(t_node *x, t_symbol *group, t_symbol *user)
 {
     for (int i = 0; i < x->x_numpeers; ++i){
         t_peer *p = &x->x_peers[i];
@@ -137,13 +140,13 @@ static t_peer * aoo_node_dofind_peer(t_aoo_node *x, t_symbol *group, t_symbol *u
     return 0;
 }
 
-t_endpoint * aoo_node_find_peer(t_aoo_node *x, t_symbol *group, t_symbol *user)
+t_endpoint * aoo_node_find_peer(t_node *x, t_symbol *group, t_symbol *user)
 {
     t_peer *p = aoo_node_dofind_peer(x, group, user);
     return p ? p->endpoint : 0;
 }
 
-void aoo_node_add_peer(t_aoo_node *x, t_symbol *group, t_symbol *user,
+void aoo_node_add_peer(t_node *x, t_symbol *group, t_symbol *user,
                        const struct sockaddr *sa, socklen_t len)
 {
     if (aoo_node_dofind_peer(x, group, user)){
@@ -165,7 +168,7 @@ void aoo_node_add_peer(t_aoo_node *x, t_symbol *group, t_symbol *user,
     p->endpoint = e;
 }
 
-void aoo_node_remove_peer(t_aoo_node *x, t_symbol *group, t_symbol *user)
+void aoo_node_remove_peer(t_node *x, t_symbol *group, t_symbol *user)
 {
     t_peer *p = aoo_node_dofind_peer(x, group, user);
     if (!p){
@@ -184,7 +187,7 @@ void aoo_node_remove_peer(t_aoo_node *x, t_symbol *group, t_symbol *user)
     x->x_numpeers--;
 }
 
-void aoo_node_remove_group(t_aoo_node *x, t_symbol *group)
+void aoo_node_remove_group(t_node *x, t_symbol *group)
 {
     if (x->x_peers){
         // remove all sinks matching endpoint
@@ -210,7 +213,7 @@ void aoo_node_remove_group(t_aoo_node *x, t_symbol *group)
     }
 }
 
-void aoo_node_remove_all_peers(t_aoo_node *x)
+void aoo_node_remove_all_peers(t_node *x)
 {
     if (x->x_peers){
         freebytes(x->x_peers, x->x_numpeers * sizeof(t_peer));
@@ -219,33 +222,33 @@ void aoo_node_remove_all_peers(t_aoo_node *x)
     }
 }
 
-int aoo_node_socket(t_aoo_node *x)
+int aoo_node_socket(t_node *x)
 {
     return x->x_socket;
 }
 
-int aoo_node_port(t_aoo_node *x)
+int aoo_node_port(t_node *x)
 {
     return x->x_port;
 }
 
-void aoo_node_notify(t_aoo_node *x)
+void aoo_node_notify(t_node *x)
 {
 #if !AOO_NODE_POLL
-    pthread_cond_signal(&x->x_condition);
+    x->x_condition.notify_all();
 #endif
 }
 
-int32_t aoo_node_sendto(t_aoo_node *x, const char *buf, int32_t size,
+int32_t aoo_node_sendto(t_node *x, const char *buf, int32_t size,
                         const struct sockaddr *addr)
 {
     int result = socket_sendto(x->x_socket, buf, size, addr);
     return result;
 }
 
-void aoo_node_dosend(t_aoo_node *x)
+void aoo_node_dosend(t_node *x)
 {
-    aoo_lock_lock_shared(&x->x_clientlock);
+    aoo::shared_scoped_lock lock(x->x_clientlock);
 
     for (int i = 0; i < x->x_numclients; ++i){
         t_client *c = &x->x_clients[i];
@@ -264,7 +267,7 @@ void aoo_node_dosend(t_aoo_node *x)
     aoo_lock_unlock_shared(&x->x_clientlock);
 }
 
-void aoo_node_doreceive(t_aoo_node *x)
+void aoo_node_doreceive(t_node *x)
 {
     struct sockaddr_storage sa;
     socklen_t len;
@@ -364,59 +367,46 @@ void aoo_node_doreceive(t_aoo_node *x)
 }
 
 #if AOO_NODE_POLL
-static void* aoo_node_thread(void *y)
+static void aoo_node_thread(t_node *x)
 {
-    t_aoo_node *x = (t_aoo_node *)y;
-
     lower_thread_priority();
 
     while (!x->x_quit){
         aoo_node_doreceive(x);
         aoo_node_dosend(x);
     }
-
-    return 0;
 }
 #else
-static void* aoo_node_send(void *y)
+static void aoo_node_send(t_node *x)
 {
-    t_aoo_node *x = (t_aoo_node *)y;
-
     lower_thread_priority();
 
-    pthread_mutex_lock(&x->x_mutex);
+    std::unique_lock<std::mutex> lock(x->x_mutex);
     while (!x->x_quit){
-        pthread_cond_wait(&x->x_condition, &x->x_mutex);
+        x->x_condition.wait(lock);
 
         aoo_node_dosend(x);
     }
-    pthread_mutex_unlock(&x->x_mutex);
-
-    return 0;
 }
 
-static void* aoo_node_receive(void *y)
+static void aoo_node_receive(t_node *x)
 {
-    t_aoo_node *x = (t_aoo_node *)y;
-
     lower_thread_priority();
 
     while (!x->x_quit){
         aoo_node_doreceive(x);
     }
-
-    return 0;
 }
 #endif // AOO_NODE_POLL
 
-t_aoo_node* aoo_node_add(int port, t_pd *obj, int32_t id)
+t_node* aoo_node_add(int port, t_pd *obj, int32_t id)
 {
     // make bind symbol for port number
     char buf[64];
     snprintf(buf, sizeof(buf), "aoo_node %d", port);
     t_symbol *s = gensym(buf);
     t_client client = { obj, id };
-    t_aoo_node *x = (t_aoo_node *)pd_findbyclass(s, aoo_node_class);
+    t_node *x = (t_node *)pd_findbyclass(s, aoo_node_class);
     if (x){
         // check receiver and add to list
         aoo_lock_lock(&x->x_clientlock);
@@ -469,7 +459,7 @@ t_aoo_node* aoo_node_add(int port, t_pd *obj, int32_t id)
         socket_setrecvbufsize(sock, 2 << 20);
 
         // now create aoo node instance
-        x = (t_aoo_node *)getbytes(sizeof(t_aoo_node));
+        x = (t_node *)getbytes(sizeof(t_node));
         x->x_pd = aoo_node_class;
         x->x_sym = s;
         pd_bind(&x->x_pd, s);
@@ -504,7 +494,7 @@ t_aoo_node* aoo_node_add(int port, t_pd *obj, int32_t id)
     return x;
 }
 
-void aoo_node_release(t_aoo_node *x, t_pd *obj, int32_t id)
+void aoo_node_release(t_node *x, t_pd *obj, int32_t id)
 {
     if (x->x_numclients > 1){
         // just remove receiver from list
@@ -594,5 +584,5 @@ void aoo_node_release(t_aoo_node *x, t_pd *obj, int32_t id)
 void aoo_node_setup(void)
 {
     aoo_node_class = class_new(gensym("aoo socket receiver"), 0, 0,
-                                  sizeof(t_aoo_node), CLASS_PD, A_NULL);
+                                  sizeof(t_node), CLASS_PD, A_NULL);
 }

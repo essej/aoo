@@ -47,8 +47,8 @@ typedef struct _aoo_send
     t_sink *x_sinks;
     int x_numsinks;
     // node
-    t_aoo_node *x_node;
     aoo_lock x_lock;
+    t_node *x_node;
     // events
     t_clock *x_clock;
     t_outlet *x_msgout;
