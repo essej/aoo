@@ -771,8 +771,6 @@ void source_desc::do_update(const sink &s){
         ack_list_.set_limit(s.resend_limit());
         ack_list_.clear();
 
-        decoder_->reset();
-
         // start in a need recovery state so the buffer is re-filled when we get the first data
         streamstate_.request_recover();
 
@@ -1151,7 +1149,9 @@ bool source_desc::check_packet(const data_packet &d){
                           : underrun ? "buffer underrun"
                           : "?";
             LOG_VERBOSE("wrote " << count << " empty blocks for " << reason);
+            //if (large_gap > 0) {
             nextneedsfadein_ = next_;
+            //}
         }
 
         if (dropped){
@@ -1256,14 +1256,6 @@ void source_desc::process_blocks(){
         int32_t size;
         block_info i;
         const bool dofadein = b->sequence == nextneedsfadein_;
-        
-        if (nextneedsfadein_ >= 0) {
-            LOG_WARNING("Next needsfade: " << nextneedsfadein_ << "  next: " << next_ << " newest: " << newest_);
-        }
-        
-        if (dofadein) {
-            decoder_->reset();
-        }
         
         if (b->sequence == next && b->complete()){
             // block is ready
