@@ -147,6 +147,14 @@ public:
         return get_option(aoo_opt_redundancy, AOO_ARG(n));
     }
 
+    int32_t set_ping_interval(int32_t ms){
+        return set_option(aoo_opt_ping_interval, AOO_ARG(ms));
+    }
+
+    int32_t get_ping_interval(int32_t& ms){
+        return get_option(aoo_opt_ping_interval, AOO_ARG(ms));
+    }
+
     virtual int32_t set_option(int32_t opt, void *ptr, int32_t size) = 0;
     virtual int32_t get_option(int32_t opt, void *ptr, int32_t size) = 0;
 

@@ -446,7 +446,7 @@ static inline int32_t aoo_source_get_buffersize(aoo_source *src, int32_t *n) {
     return aoo_source_get_option(src, aoo_opt_buffersize, AOO_ARG(*n));
 }
 
-static inline int32_t aoo_source_set_timefilter_bandwith(aoo_source *src, float n) {
+static inline int32_t aoo_source_set_timefilter_bandwidth(aoo_source *src, float n) {
     return aoo_source_set_option(src, aoo_opt_timefilter_bandwidth, AOO_ARG(n));
 }
 
