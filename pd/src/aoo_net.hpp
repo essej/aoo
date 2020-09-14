@@ -13,6 +13,8 @@ typedef int socklen_t;
 
 #include "m_pd.h"
 
+namespace aoo {
+
 /*///////////// socket ////////////*/
 
 int socket_udp(void);
@@ -21,20 +23,21 @@ int socket_close(int socket);
 
 int socket_bind(int socket, int port);
 
-int socket_sendto(int socket, const char *buf, int size, const struct sockaddr *addr);
+int socket_sendto(int socket, const char *buf, int size,
+                  const sockaddr *addr);
 
 int socket_receive(int socket, char *buf, int size,
-                   struct sockaddr_storage *sa, socklen_t *len,
+                   sockaddr_storage *sa, socklen_t *len,
                    int32_t timeout);
 
 int socket_setsendbufsize(int socket, int bufsize);
 
 int socket_setrecvbufsize(int socket, int bufsize);
 
-int socket_signal(int socket, int port);
+bool socket_signal(int socket, int port);
 
-int socket_getaddr(const char *hostname, int port,
-                   struct sockaddr_storage *sa, socklen_t *len);
+bool socket_getaddr(const char *hostname, int port,
+                   sockaddr_storage &sa, socklen_t &len);
 
 int socket_errno();
 
@@ -42,27 +45,29 @@ int socket_strerror(int err, char *buf, int size);
 
 void socket_error_print(const char *label);
 
-int sockaddr_to_atoms(const struct sockaddr *sa, socklen_t len, t_atom *a);
+int sockaddr_to_atoms(const sockaddr *sa, int argc, t_atom *argv);
 
 /*/////////////////// t_endpoint /////////////////*/
 
 struct t_endpoint {
-    t_endpoint(void *owner, const struct sockaddr_storage *sa, socklen_t len);
+    t_endpoint(void *owner, const sockaddr_storage *sa, socklen_t len);
 
     void *e_owner;
-    struct sockaddr_storage e_addr;
+    sockaddr_storage e_addr;
     socklen_t e_addrlen;
 
     int send(const char *data, int size) const;
 
-    bool get_address(t_symbol **hostname, int *port) const;
+    bool get_address(t_symbol *& hostname, int &port) const;
 
-    bool match(const struct sockaddr_storage *sa) const;
+    bool match(const sockaddr_storage *sa) const;
 
-    bool to_atoms(int32_t id, t_atom *argv) const;
+    int to_atoms(int32_t id, int argc, t_atom *argv) const;
 };
 
 static int32_t endpoint_send(void *x, const char *data, int32_t size)
 {
     return static_cast<t_endpoint *>(x)->send(data, size);
 }
+
+} // aoo

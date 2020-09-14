@@ -6,16 +6,18 @@
 
 #include <string.h>
 
+using namespace aoo;
+
 static t_class *aoo_route_class;
 
-typedef struct _aoo_route
+struct t_aoo_route
 {
     t_object x_obj;
     int x_n;
     t_outlet **x_outlets;
     t_atom *x_selectors;
     t_outlet *x_rejectout;
-} t_aoo_route;
+};
 
 static void aoo_route_list(t_aoo_route *x, t_symbol *s, int argc, t_atom *argv)
 {

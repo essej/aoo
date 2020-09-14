@@ -8,6 +8,8 @@
 
 #include <thread>
 
+using namespace aoo;
+
 #define AOO_CLIENT_POLL_INTERVAL 2
 
 t_class *aoo_client_class;
@@ -109,9 +111,7 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
                 t_atom msg[4];
                 SETSYMBOL(msg, gensym(e->group));
                 SETSYMBOL(msg + 1, gensym(e->user));
-                if (sockaddr_to_atoms((const struct sockaddr *)e->address,
-                                      e->length, msg + 2))
-                {
+                if (sockaddr_to_atoms((const sockaddr *)e->address, 2, msg + 2)){
                     outlet_anything(x->x_msgout, gensym("peer_join"), 4, msg);
                 }
             } else {

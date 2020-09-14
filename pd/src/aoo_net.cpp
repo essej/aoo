@@ -22,6 +22,8 @@ typedef int socklen_t;
 #include <stdio.h>
 #include <string.h>
 
+namespace aoo {
+
 /*///////////////////////// socket /////////////////////////////////*/
 
 int socket_errno()
@@ -113,7 +115,7 @@ int socket_sendto(int socket, const char *buf, int size, const struct sockaddr *
 }
 
 int socket_receive(int socket, char *buf, int size,
-                   struct sockaddr_storage *sa, socklen_t *len,
+                   sockaddr_storage *sa, socklen_t *len,
                    int32_t timeout)
 {
     if (timeout >= 0){
@@ -195,7 +197,7 @@ int socket_setrecvbufsize(int socket, int bufsize)
     return result;
 }
 
-int socket_signal(int socket, int port)
+bool socket_signal(int socket, int port)
 {
     // wake up blocking recv() by sending an empty packet
     struct sockaddr_in sa;
@@ -205,34 +207,37 @@ int socket_signal(int socket, int port)
     sa.sin_port = htons(port);
     if (sendto(socket, 0, 0, 0, (struct sockaddr *)&sa, sizeof(sa)) < 0){
         socket_error_print("sendto");
-        return 0;
+        return false;
     } else {
-        return 1;
+        return true;
     }
 }
 
-int socket_getaddr(const char *hostname, int port,
-                   struct sockaddr_storage *sa, socklen_t *len)
+bool socket_getaddr(const char *hostname, int port,
+                   struct sockaddr_storage &sa, socklen_t &len)
 {
-    struct hostent *he = gethostbyname(hostname);
+    auto he = gethostbyname(hostname);
     if (he){
-        struct sockaddr_in *addr = (struct sockaddr_in *)sa;
+        auto addr = (sockaddr_in *)&sa;
         // zero out to make sure that memcmp() works! see socket_match()
         memset(addr, 0, sizeof(*addr));
         addr->sin_family = AF_INET;
         addr->sin_port = htons(port);
         memcpy(&addr->sin_addr, he->h_addr_list[0], he->h_length);
-        *len = sizeof(struct sockaddr_in);
-        return 1;
+        len = sizeof(sockaddr_in);
+        return true;
     } else {
-        return 0;
+        return false;
     }
 }
 
-int sockaddr_to_atoms(const struct sockaddr *sa, socklen_t len, t_atom *a)
+int sockaddr_to_atoms(const sockaddr *sa, int argc, t_atom *a)
 {
+    if (argc < 2){
+        return 0;
+    }
     // LATER add IPv6 support
-    struct sockaddr_in *addr = (struct sockaddr_in *)sa;
+    auto *addr = (sockaddr_in *)sa;
     const char *host = inet_ntoa(addr->sin_addr);
     if (!host){
         fprintf(stderr, "inet_ntoa failed!\n");
@@ -240,7 +245,7 @@ int sockaddr_to_atoms(const struct sockaddr *sa, socklen_t len, t_atom *a)
     }
     SETSYMBOL(a, gensym(host));
     SETFLOAT(a + 1, ntohs(addr->sin_port));
-    return 1;
+    return 2;
 }
 
 /*//////////////////// endpoint ///////////////////////*/
@@ -265,7 +270,7 @@ int t_endpoint::send(const char *data, int size) const
     return result;
 }
 
-bool t_endpoint::get_address(t_symbol **hostname, int *port) const
+bool t_endpoint::get_address(t_symbol *& hostname, int &port) const
 {
     auto addr = (struct sockaddr_in *)&e_addr;
     auto host = inet_ntoa(addr->sin_addr);
@@ -273,18 +278,18 @@ bool t_endpoint::get_address(t_symbol **hostname, int *port) const
         fprintf(stderr, "inet_ntoa failed!\n");
         return false;
     }
-    *hostname = gensym(host);
-    *port = ntohs(addr->sin_port);
+    hostname = gensym(host);
+    port = ntohs(addr->sin_port);
     return true;
 }
 
-bool t_endpoint::match(const struct sockaddr_storage *sa) const
+bool t_endpoint::match(const sockaddr_storage *sa) const
 {
     if (sa->ss_family == e_addr.ss_family){
     #if 1
         if (sa->ss_family == AF_INET){
-            auto a = (const struct sockaddr_in *)sa;
-            auto b = (const struct sockaddr_in *)&e_addr;
+            auto a = (const sockaddr_in *)sa;
+            auto b = (const sockaddr_in *)&e_addr;
             return (a->sin_addr.s_addr == b->sin_addr.s_addr)
                     && (a->sin_port == b->sin_port);
         } else  {
@@ -292,18 +297,21 @@ bool t_endpoint::match(const struct sockaddr_storage *sa) const
         }
     #else
         // doesn't work reliable on BSDs if sin_len is not set
-        return !memcmp(&address, &other.address, length);
+        return !memcmp(sa, &e_addr, e_addrlen);
     #endif
     } else {
         return false;
     }
 }
 
-bool t_endpoint::to_atoms(int32_t id, t_atom *argv) const
+int t_endpoint::to_atoms(int32_t id, int argc, t_atom *argv) const
 {
     t_symbol *host;
     int port;
-    if (get_address(&host, &port)){
+    if (argc < 3){
+        return 0;
+    }
+    if (get_address(host, port)){
         SETSYMBOL(argv, host);
         SETFLOAT(argv + 1, port);
         if (id == AOO_ID_WILDCARD){
@@ -311,8 +319,9 @@ bool t_endpoint::to_atoms(int32_t id, t_atom *argv) const
         } else {
             SETFLOAT(argv + 2, id);
         }
-        return true;
+        return 3;
     }
-    return false;
+    return 0;
 }
 
+} // aoo

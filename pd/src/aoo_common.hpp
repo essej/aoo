@@ -25,39 +25,52 @@
 
 #define classname(x) class_getname(*(t_pd *)x)
 
+namespace aoo {
+
 /*///////////////////////////// aoo_node /////////////////////////////*/
 
 struct i_node {
+    static i_node * get(int port, t_pd *obj, int32_t id);
+
     virtual ~i_node(){}
 
+    virtual void release(t_pd *obj, int32_t id);
+
     virtual int socket() const = 0;
+
     virtual int port() const = 0;
+
     virtual int sendto(const char *buf, int32_t size,
-                       const struct sockaddr *addr) = 0;
-    virtual t_endpoint *endpoint(const sockaddr_storage *sa,
-                                 socklen_t len) = 0;
-    virtual t_endpoint * find_peer(t_symbol *group, t_symbol *user) = 0;
+                       const sockaddr *addr) = 0;
+
+    virtual t_endpoint *endpoint(const sockaddr_storage *sa, socklen_t len) = 0;
+
     virtual void add_peer(t_symbol *group, t_symbol *user,
                           const sockaddr *sa, socklen_t len) = 0;
-    virtual void remove_peer(t_symbol *group, t_symbol *user) = 0;
-    virtual void remove_group(t_symbol *group) = 0;
-    virtual void remove_all_peers() = 0;
-    virtual void notify() = 0;
 
-    static i_node * get(int port, t_pd *obj, int32_t id);
-    virtual void release(t_pd *obj, int32_t id);
+    virtual t_endpoint * find_peer(t_symbol *group, t_symbol *user) = 0;
+
+    virtual void remove_peer(t_symbol *group, t_symbol *user) = 0;
+
+    virtual void remove_all_peers() = 0;
+
+    virtual void remove_group(t_symbol *group) = 0;
+
+    virtual void notify() = 0;
 };
 
 /*///////////////////////////// helper functions ///////////////////////////////*/
 
-int aoo_getsinkarg(void *x, i_node *node, int argc, t_atom *argv,
-                   struct sockaddr_storage *sa, socklen_t *len, int32_t *id);
+bool get_sinkarg(void *x, i_node *node, int argc, t_atom *argv,
+                sockaddr_storage &sa, socklen_t &len, int32_t &id);
 
-int aoo_getsourcearg(void *x, i_node *node, int argc, t_atom *argv,
-                     struct sockaddr_storage *sa, socklen_t *len, int32_t *id);
+bool get_sourcearg(void *x, i_node *node, int argc, t_atom *argv,
+                  sockaddr_storage &sa, socklen_t &len, int32_t &id);
 
-void aoo_format_makedefault(aoo_format_storage *f, int nchannels);
+void format_makedefault(aoo_format_storage &f, int nchannels);
 
-int aoo_format_parse(void *x, aoo_format_storage *f, int argc, t_atom *argv);
+bool format_parse(void *x, aoo_format_storage &f, int argc, t_atom *argv);
 
-int aoo_format_toatoms(const aoo_format *f, int argc, t_atom *argv);
+int format_to_atoms(const aoo_format &f, int argc, t_atom *argv);
+
+} // aoo

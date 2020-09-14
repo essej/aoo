@@ -19,6 +19,8 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
+using namespace aoo;
+
 static t_class *aoo_pack_class;
 
 struct t_aoo_pack
@@ -131,11 +133,11 @@ static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 {
     aoo_format_storage f;
     f.header.nchannels = x->x_nchannels;
-    if (aoo_format_parse(x, &f, argc, argv)){
+    if (format_parse(x, f, argc, argv)){
         x->x_source->set_format(f.header);
         // output actual format
         t_atom msg[16];
-        int n = aoo_format_toatoms(&f.header, 16, msg);
+        int n = format_to_atoms(f.header, 16, msg);
         if (n > 0){
             outlet_anything(x->x_msgout, gensym("format"), n, msg);
         }
@@ -324,7 +326,7 @@ t_aoo_pack::t_aoo_pack(int argc, t_atom *argv)
 
     // default format
     aoo_format_storage fmt;
-    aoo_format_makedefault(&fmt, nchannels);
+    format_makedefault(fmt, nchannels);
     x_source->set_format(fmt.header);
 
     // since process() and send() are called from the same thread,

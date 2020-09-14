@@ -19,6 +19,8 @@
 #include <mutex>
 #include <atomic>
 
+using namespace aoo;
+
 #ifndef AOO_NODE_POLL
  #define AOO_NODE_POLL 0
 #endif
@@ -119,26 +121,40 @@ struct t_node : public i_node
     std::atomic<bool> x_quit{false};
 
     // public methods
+    void release(t_pd *obj, int32_t id) override;
+
     int socket() const override { return x_socket; }
+
     int port() const override { return x_port; }
+
     int sendto(const char *buf, int32_t size,
                const sockaddr *addr) override;
+
     t_endpoint * endpoint(const struct sockaddr_storage *sa,
                           socklen_t len) override;
+
     t_endpoint * find_peer(t_symbol *group, t_symbol *user) override;
+
     void add_peer(t_symbol *group, t_symbol *user,
                   const struct sockaddr *sa, socklen_t len) override;
+
     void remove_peer(t_symbol *group, t_symbol *user) override;
+
     void remove_all_peers() override;
+
     void remove_group(t_symbol *group) override;
+
     void notify() override;
-    void release(t_pd *obj, int32_t id) override;
 
     // private methods
     bool add_client(t_pd *obj, int32_t id);
+
     t_endpoint* find_endpoint(const struct sockaddr_storage *sa);
+
     t_peer * do_find_peer(t_symbol *group, t_symbol *user);
+
     void do_send();
+
     void do_receive();
 };
 

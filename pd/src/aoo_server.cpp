@@ -8,6 +8,8 @@
 
 #include <thread>
 
+using namespace aoo;
+
 #define AOO_SERVER_POLL_INTERVAL 2
 
 static t_class *aoo_server_class;

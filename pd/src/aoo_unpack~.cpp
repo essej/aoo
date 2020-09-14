@@ -18,6 +18,8 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
+using namespace aoo;
+
 #define DEFBUFSIZE 20
 
 static t_class *aoo_unpack_class;
@@ -137,7 +139,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
             aoo_format_storage f;
             if (x->x_sink->get_source_format(e->endpoint, e->id, f) > 0) {
                 SETFLOAT(&msg[0], e->id);
-                int fsize = aoo_format_toatoms(&f.header, 31, msg + 1); // skip first atom
+                int fsize = format_to_atoms(f.header, 31, msg + 1); // skip first atom
                 outlet_anything(x->x_msgout, gensym("source_format"), fsize + 1, msg);
             }
             break;
@@ -187,7 +189,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
             aoo_ping_event *e = (aoo_ping_event *)events[i];
             t_symbol *host;
             int port;
-            if (!static_cast<t_endpoint *>(e->endpoint)->get_address(&host, &port)){
+            if (!static_cast<t_endpoint *>(e->endpoint)->get_address(host, port)){
                 continue;
             }
             uint64_t t1 = e->tt1;
