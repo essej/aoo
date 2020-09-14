@@ -19,9 +19,9 @@ namespace aoo {
 struct i_node {
     static i_node * get(int port, t_pd *obj, int32_t id);
 
-    virtual ~i_node(){}
+    virtual ~i_node() {}
 
-    virtual void release(t_pd *obj, int32_t id);
+    virtual void release(t_pd *obj, int32_t id) = 0;
 
     virtual int socket() const = 0;
 
@@ -32,10 +32,10 @@ struct i_node {
 
     virtual t_endpoint *endpoint(const sockaddr *sa, socklen_t len) = 0;
 
+    virtual t_endpoint * find_peer(t_symbol *group, t_symbol *user) = 0;
+
     virtual void add_peer(t_symbol *group, t_symbol *user,
                           const sockaddr *sa, socklen_t len) = 0;
-
-    virtual t_endpoint * find_peer(t_symbol *group, t_symbol *user) = 0;
 
     virtual void remove_peer(t_symbol *group, t_symbol *user) = 0;
 

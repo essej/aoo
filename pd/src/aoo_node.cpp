@@ -78,8 +78,6 @@ static void lower_thread_priority(void)
 
 /*////////////////////// aoo node //////////////////*/
 
-static t_class *aoo_node_class;
-
 struct t_client
 {
     t_pd *c_obj;
@@ -93,13 +91,28 @@ struct t_peer
     t_endpoint *endpoint;
 };
 
-struct t_node : public i_node
+static t_class *node_proxy_class;
+
+struct t_node;
+
+struct t_node_proxy
 {
-    t_node(int socket, int port, t_symbol *s);
-    ~t_node();
+    t_node_proxy(t_node *node){
+        x_pd = node_proxy_class;
+        x_node = node;
+    }
 
     t_pd x_pd;
-    t_symbol *x_sym;
+    t_node *x_node;
+};
+
+struct t_node : public i_node
+{
+    t_node(t_symbol *s, int socket, int port);
+    ~t_node();
+
+    t_node_proxy x_proxy; // we can't directly bind t_node because of vtable
+    t_symbol *x_bindsym;
     // dependants
     std::vector<t_client> x_clients;
     aoo::shared_mutex x_clientlock;
@@ -427,14 +440,16 @@ static void node_receive_thread(t_node *x)
 
 i_node * i_node::get(int port, t_pd *obj, int32_t id)
 {
+    t_node *x = nullptr;
     // make bind symbol for port number
     char buf[64];
     snprintf(buf, sizeof(buf), "aoo_node %d", port);
     t_symbol *s = gensym(buf);
-    t_node *x = (t_node *)pd_findbyclass(s, aoo_node_class);
-    if (!x){
-        // make new aoo node
-
+    // find or create node
+    auto y = (t_node_proxy *)pd_findbyclass(s, node_proxy_class);
+    if (y){
+        x = y->x_node;
+    } else {
         // first create socket
         int sock = socket_udp();
         if (sock < 0){
@@ -455,7 +470,7 @@ i_node * i_node::get(int port, t_pd *obj, int32_t id)
         socket_setrecvbufsize(sock, 2 << 20);
 
         // finally create aoo node instance
-        x = new t_node(sock, port, s);
+        x = new t_node(s, sock, port);
     }
 
     if (!x->add_client(obj, id)){
@@ -466,11 +481,11 @@ i_node * i_node::get(int port, t_pd *obj, int32_t id)
     return x;
 }
 
-t_node::t_node(int socket, int port, t_symbol *s)
-    : x_socket(socket), x_port(port), x_sym(s)
+t_node::t_node(t_symbol *s, int socket, int port)
+    : x_proxy(this), x_bindsym(s),
+      x_socket(socket), x_port(port)
 {
-    x_pd = aoo_node_class;
-    pd_bind(&x_pd, s);
+    pd_bind(&x_proxy.x_pd, x_bindsym);
 
     // start threads
 #if AOO_NODE_POLL
@@ -509,8 +524,7 @@ void t_node::release(t_pd *obj, int32_t id)
 
 t_node::~t_node()
 {
-    pd_unbind(&x_pd, x_sym);
-
+    pd_unbind(&x_proxy.x_pd, x_bindsym);
     // tell the threads that we're done
 #if AOO_NODE_POLL
     // don't bother waking up the thread...
@@ -518,7 +532,7 @@ t_node::~t_node()
     x_quit = true;
     x_thread.join();
 
-    socket_close(x->x_socket);
+    socket_close(x_socket);
 #else
     {
         std::lock_guard<std::mutex> l(x_mutex);
@@ -553,6 +567,6 @@ t_node::~t_node()
 
 void aoo_node_setup(void)
 {
-    aoo_node_class = class_new(gensym("aoo socket receiver"), 0, 0,
-                                  sizeof(t_node), CLASS_PD, A_NULL);
+    node_proxy_class = class_new(gensym("aoo node proxy"), 0, 0,
+                               sizeof(t_node_proxy), CLASS_PD, A_NULL);
 }
