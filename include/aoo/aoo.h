@@ -130,9 +130,6 @@ AOO_API void aoo_terminate(void);
 // id: the source or sink ID
 // returns: the offset to the remaining address pattern
 
-#define AOO_ID_WILDCARD -1
-#define AOO_ID_NONE INT32_MIN
-
 typedef enum aoo_type
 {
     AOO_TYPE_SOURCE = 0,

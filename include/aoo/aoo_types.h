@@ -36,6 +36,9 @@ extern "C"
 #define AOO_MSG_DOMAIN "/aoo"
 #define AOO_MSG_DOMAIN_LEN 4
 
+#define AOO_ID_WILDCARD -1
+#define AOO_ID_NONE INT32_MIN
+
 #define AOO_MAXPACKETSIZE 4096 // ?
 
 #ifndef AOO_SAMPLETYPE
