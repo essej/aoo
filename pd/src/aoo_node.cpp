@@ -214,7 +214,8 @@ void t_node::remove_peer(t_symbol *group, t_symbol *user)
 {
     t_peer *p = do_find_peer(group, user);
     if (p){
-        x_peers.erase(std::vector<t_peer>::iterator(p));
+        auto pos = x_peers.begin() + (p - x_peers.data());
+        x_peers.erase(pos);
     } else {
         bug("aoo_node_remove_peer");
     }

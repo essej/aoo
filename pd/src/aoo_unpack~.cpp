@@ -224,7 +224,7 @@ static t_int * aoo_unpack_perform(t_int *w)
     if (x->x_sink->process(x->x_vec.get(), n, t) <= 0){
         // output zeros
         for (int i = 0; i < x->x_nchannels; ++i){
-            std::fill(x->x_vec[i], x->x_vec[i] + n, 0);
+            memset(x->x_vec[i], 0, sizeof(t_sample) * n);
         }
     }
 
