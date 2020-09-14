@@ -50,7 +50,7 @@ int sockaddr_to_atoms(const sockaddr *sa, int argc, t_atom *argv);
 /*/////////////////// t_endpoint /////////////////*/
 
 struct t_endpoint {
-    t_endpoint(void *owner, const sockaddr_storage *sa, socklen_t len);
+    t_endpoint(void *owner, const sockaddr *sa, socklen_t len);
 
     void *e_owner;
     sockaddr_storage e_addr;
@@ -60,7 +60,7 @@ struct t_endpoint {
 
     bool get_address(t_symbol *& hostname, int &port) const;
 
-    bool match(const sockaddr_storage *sa) const;
+    bool match(const sockaddr *sa) const;
 
     int to_atoms(int32_t id, int argc, t_atom *argv) const;
 };

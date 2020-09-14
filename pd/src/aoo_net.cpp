@@ -250,8 +250,7 @@ int sockaddr_to_atoms(const sockaddr *sa, int argc, t_atom *a)
 
 /*//////////////////// endpoint ///////////////////////*/
 
-t_endpoint::t_endpoint(void *owner,
-                       const struct sockaddr_storage *sa, socklen_t len)
+t_endpoint::t_endpoint(void *owner, const sockaddr *sa, socklen_t len)
 {
     e_owner = owner;
     memcpy(&e_addr, sa, len);
@@ -283,11 +282,11 @@ bool t_endpoint::get_address(t_symbol *& hostname, int &port) const
     return true;
 }
 
-bool t_endpoint::match(const sockaddr_storage *sa) const
+bool t_endpoint::match(const sockaddr *sa) const
 {
-    if (sa->ss_family == e_addr.ss_family){
+    if (sa->sa_family == e_addr.ss_family){
     #if 1
-        if (sa->ss_family == AF_INET){
+        if (sa->sa_family == AF_INET){
             auto a = (const sockaddr_in *)sa;
             auto b = (const sockaddr_in *)&e_addr;
             return (a->sin_addr.s_addr == b->sin_addr.s_addr)

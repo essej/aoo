@@ -261,8 +261,7 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     }
 }
 
-static t_sink *aoo_send_findsink(t_aoo_send *x,
-                                 const struct sockaddr_storage *sa, int32_t id)
+static t_sink *aoo_send_findsink(t_aoo_send *x, const sockaddr *sa, int32_t id)
 {
     for (auto& sink : x->x_sinks){
         if (sink.s_id == id && sink.s_endpoint->match(sa)){
@@ -287,7 +286,7 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         return;
     }
     if (get_sinkarg(x, x->x_node, argc, argv, sa, len, id)){
-        t_sink *sink = aoo_send_findsink(x, &sa, id);
+        t_sink *sink = aoo_send_findsink(x, (const sockaddr *)&sa, id);
         if (!sink){
             pd_error(x, "%s: couldn't find sink!", classname(x));
             return;
@@ -341,7 +340,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     if (get_sinkarg(x, x->x_node, argc, argv, sa, len, id)){
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
-        t_endpoint *e = x->x_node->endpoint(&sa, len);
+        t_endpoint *e = x->x_node->endpoint((const sockaddr *)&sa, len);
         // check if sink exists
         if (id != AOO_ID_WILDCARD){
             for (auto& sink : x->x_sinks){
@@ -408,7 +407,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         if (id != AOO_ID_WILDCARD){
             // check if sink exists
             for (auto& sink : x->x_sinks){
-                if (sink.s_endpoint->match(&sa)){
+                if (sink.s_endpoint->match((const sockaddr *)&sa)){
                     if (sink.s_id == AOO_ID_WILDCARD){
                         pd_error(x, "%s: can't remove sink %s %d %d because of wildcard!",
                                  classname(x), host->s_name, port, id);
@@ -420,7 +419,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
                 }
             }
         } else {
-            e = x->x_node->endpoint(&sa, len);
+            e = x->x_node->endpoint((const sockaddr *)&sa, len);
         }
 
         if (!e){

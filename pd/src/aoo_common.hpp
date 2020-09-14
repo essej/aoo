@@ -43,7 +43,7 @@ struct i_node {
     virtual int sendto(const char *buf, int32_t size,
                        const sockaddr *addr) = 0;
 
-    virtual t_endpoint *endpoint(const sockaddr_storage *sa, socklen_t len) = 0;
+    virtual t_endpoint *endpoint(const sockaddr *sa, socklen_t len) = 0;
 
     virtual void add_peer(t_symbol *group, t_symbol *user,
                           const sockaddr *sa, socklen_t len) = 0;
