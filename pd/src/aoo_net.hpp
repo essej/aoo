@@ -13,6 +13,8 @@ typedef int socklen_t;
 
 #include "m_pd.h"
 
+/*///////////// socket ////////////*/
+
 int socket_udp(void);
 
 int socket_close(int socket);
@@ -42,22 +44,25 @@ void socket_error_print(const char *label);
 
 int sockaddr_to_atoms(const struct sockaddr *sa, socklen_t len, t_atom *a);
 
-// use linked list for persistent memory
-typedef struct _endpoint {
-    void *owner;
-    struct sockaddr_storage addr;
-    socklen_t addrlen;
-    struct _endpoint *next;
-} t_endpoint;
+/*/////////////////// t_endpoint /////////////////*/
 
-t_endpoint * endpoint_new(void *owner, const struct sockaddr_storage *sa, socklen_t len);
+struct t_endpoint {
+    t_endpoint(void *owner, const struct sockaddr_storage *sa, socklen_t len);
 
-void endpoint_free(t_endpoint *e);
+    void *e_owner;
+    struct sockaddr_storage e_addr;
+    socklen_t e_addrlen;
 
-int endpoint_send(t_endpoint *e, const char *data, int size);
+    int send(const char *data, int size) const;
 
-int endpoint_getaddress(const t_endpoint *e, t_symbol **hostname, int *port);
+    bool get_address(t_symbol **hostname, int *port) const;
 
-t_endpoint * endpoint_find(t_endpoint *e, const struct sockaddr_storage *sa);
+    bool match(const struct sockaddr_storage *sa) const;
 
-int endpoint_match(t_endpoint *e, const struct sockaddr_storage *sa);
+    bool to_atoms(int32_t id, t_atom *argv) const;
+};
+
+static int32_t endpoint_send(void *x, const char *data, int32_t size)
+{
+    return static_cast<t_endpoint *>(x)->send(data, size);
+}

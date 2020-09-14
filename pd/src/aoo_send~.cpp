@@ -53,7 +53,7 @@ struct t_aoo_send
     // sinks
     std::vector<t_sink> x_sinks;
     // node
-    t_node *x_node = nullptr;
+    i_node *x_node = nullptr;
     aoo::shared_mutex x_lock;
     // events
     t_clock *x_clock = nullptr;
@@ -70,7 +70,7 @@ static void aoo_send_doaddsink(t_aoo_send *x, t_endpoint *e, int32_t id)
 
     // output message
     t_atom msg[3];
-    if (aoo_endpoint_to_atoms(e, id, msg)){
+    if (e->to_atoms(id, msg)){
         outlet_anything(x->x_msgout, gensym("sink_add"), 3, msg);
     } else {
         bug("aoo_endpoint_to_atoms");
@@ -95,8 +95,7 @@ static void aoo_send_doremoveall(t_aoo_send *x)
     // output messages
     for (int i = 0; i < numsinks; ++i){
         t_atom msg[3];
-        if (aoo_endpoint_to_atoms(sinks[i].s_endpoint, sinks[i].s_id, msg))
-        {
+        if (sinks[i].s_endpoint->to_atoms(sinks[i].s_id, msg)){
             outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
         } else {
             bug("aoo_endpoint_to_atoms");
@@ -127,8 +126,7 @@ static void aoo_send_doremovesink(t_aoo_send *x, t_endpoint *e, int32_t id)
         // output messages
         for (int i = 0; i < removed; ++i){
             t_atom msg[3];
-            if (aoo_endpoint_to_atoms(sinks[i].s_endpoint, sinks[i].s_id, msg))
-            {
+            if (sinks[i].s_endpoint->to_atoms(sinks[i].s_id, msg)){
                 outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
             } else {
                 bug("aoo_endpoint_to_atoms");
@@ -143,7 +141,7 @@ static void aoo_send_doremovesink(t_aoo_send *x, t_endpoint *e, int32_t id)
 
                 // output message
                 t_atom msg[3];
-                if (aoo_endpoint_to_atoms(e, id, msg)){
+                if (e->to_atoms(id, msg)){
                     outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
                 } else {
                     bug("aoo_endpoint_to_atoms");
@@ -190,7 +188,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
             double rtt = aoo_osctime_duration(e->tt1, e->tt3) * 1000.0;
 
             t_atom msg[7];
-            if (aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
+            if (static_cast<t_endpoint *>(e->endpoint)->to_atoms(e->id, msg)){
                 SETFLOAT(msg + 3, diff1);
                 SETFLOAT(msg + 4, diff2);
                 SETFLOAT(msg + 5, rtt);
@@ -209,7 +207,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
                 aoo_send_doaddsink(x, (t_endpoint *)e->endpoint, e->id);
             } else {
                 t_atom msg[3];
-                if (aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
+                if (static_cast<t_endpoint *>(e->endpoint)->to_atoms(e->id, msg)){
                     outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
                 } else {
                     bug("aoo_endpoint_to_atoms");
@@ -226,7 +224,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
                 aoo_send_doremovesink(x, (t_endpoint *)e->endpoint, e->id);
             } else {
                 t_atom msg[3];
-                if (aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
+                if (static_cast<t_endpoint *>(e->endpoint)->to_atoms(e->id, msg)){
                     outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
                 } else {
                     bug("aoo_endpoint_to_atoms");
@@ -265,7 +263,7 @@ static t_sink *aoo_send_findsink(t_aoo_send *x,
                                  const struct sockaddr_storage *sa, int32_t id)
 {
     for (auto& sink : x->x_sinks){
-        if (sink.s_id == id && endpoint_match(sink.s_endpoint, sa)){
+        if (sink.s_id == id && sink.s_endpoint->match(sa)){
             return &sink;
         }
     }
@@ -341,7 +339,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     if (aoo_getsinkarg(x, x->x_node, argc, argv, &sa, &len, &id)){
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
-        t_endpoint *e = aoo_node_endpoint(x->x_node, &sa, len);
+        t_endpoint *e = x->x_node->endpoint(&sa, len);
         // check if sink exists
         if (id != AOO_ID_WILDCARD){
             for (auto& sink : x->x_sinks){
@@ -371,7 +369,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         aoo_send_doaddsink(x, e, id);
 
         // print message (use actual hostname)
-        if (endpoint_getaddress(e, &host, &port)){
+        if (e->get_address(&host, &port)){
             if (id == AOO_ID_WILDCARD){
                 verbose(0, "added all sinks on %s %d", host->s_name, port);
             } else {
@@ -408,7 +406,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         if (id != AOO_ID_WILDCARD){
             // check if sink exists
             for (auto& sink : x->x_sinks){
-                if (endpoint_match(sink.s_endpoint, &sa)){
+                if (sink.s_endpoint->match(&sa)){
                     if (sink.s_id == AOO_ID_WILDCARD){
                         pd_error(x, "%s: can't remove sink %s %d %d because of wildcard!",
                                  classname(x), host->s_name, port, id);
@@ -420,7 +418,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
                 }
             }
         } else {
-            e = aoo_node_endpoint(x->x_node, &sa, len);
+            e = x->x_node->endpoint(&sa, len);
         }
 
         if (!e){
@@ -432,7 +430,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         aoo_send_doremovesink(x, e, id);
 
         // print message (use actual hostname)
-        if (endpoint_getaddress(e, &host, &port)){
+        if (e->get_address(&host, &port)){
             if (id == AOO_ID_WILDCARD){
                 verbose(0, "removed all sinks on %s %d", host->s_name, port);
             } else {
@@ -457,7 +455,7 @@ static void aoo_send_listsinks(t_aoo_send *x)
     for (auto& sink : x->x_sinks){
         t_symbol *host;
         int port;
-        if (endpoint_getaddress(sink.s_endpoint, &host, &port)){
+        if (sink.s_endpoint->get_address(&host, &port)){
             t_atom msg[3];
             SETSYMBOL(msg, host);
             SETFLOAT(msg + 1, port);
@@ -483,7 +481,7 @@ static t_int * aoo_send_perform(t_int *w)
     uint64_t t = aoo_osctime_get();
     if (x->x_source->process((const aoo_sample **)x->x_vec.get(), n, t) > 0){
         if (x->x_node){
-            aoo_node_notify(x->x_node);
+            x->x_node->notify();
         }
     }
     if (x->x_source->events_available() > 0){
@@ -525,10 +523,10 @@ static void aoo_send_port(t_aoo_send *x, t_floatarg f)
     }
 
     if (x->x_node){
-        aoo_node_release(x->x_node, (t_pd *)x, x->x_id);
+        x->x_node->release((t_pd *)x, x->x_id);
     }
 
-    x->x_node = port ? aoo_node_add(port, (t_pd *)x, x->x_id) : 0;
+    x->x_node = port ? i_node::get(port, (t_pd *)x, x->x_id) : 0;
     x->x_port = port;
 }
 
@@ -546,12 +544,12 @@ static void aoo_send_id(t_aoo_send *x, t_floatarg f)
     }
 
     if (x->x_node){
-        aoo_node_release(x->x_node, (t_pd *)x, x->x_id);
+        x->x_node->release((t_pd *)x, x->x_id);
     }
 
     x->x_source->set_id(id);
 
-    x->x_node = x->x_port ? aoo_node_add(x->x_port, (t_pd *)x, id) : 0;
+    x->x_node = x->x_port ? i_node::get(x->x_port, (t_pd *)x, id) : 0;
     x->x_id = id;
 }
 
@@ -618,7 +616,7 @@ t_aoo_send::~t_aoo_send()
 {
     // first stop receiving messages
     if (x_node){
-        aoo_node_release(x_node, (t_pd *)this, x_id);
+        x_node->release((t_pd *)this, x_id);
     }
 
     clock_free(x_clock);

@@ -187,7 +187,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
             aoo_ping_event *e = (aoo_ping_event *)events[i];
             t_symbol *host;
             int port;
-            if (!endpoint_getaddress((t_endpoint *)e->endpoint, &host, &port)){
+            if (!static_cast<t_endpoint *>(e->endpoint)->get_address(&host, &port)){
                 continue;
             }
             uint64_t t1 = e->tt1;

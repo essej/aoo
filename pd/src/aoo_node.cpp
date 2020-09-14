@@ -8,8 +8,10 @@
 
 #include "common/sync.hpp"
 
-#include <stdio.h>
+#include <vector>
+#include <list>
 #include <string.h>
+#include <stdio.h>
 #include <errno.h>
 
 #include <thread>
@@ -89,24 +91,21 @@ struct t_peer
     t_endpoint *endpoint;
 };
 
-struct t_node
+struct t_node : public i_node
 {
-    t_node();
+    t_node(int socket, int port, t_symbol *s);
     ~t_node();
 
     t_pd x_pd;
     t_symbol *x_sym;
     // dependants
-    t_client *x_clients;
-    int x_numclients; // doubles as refcount
+    std::vector<t_client> x_clients;
     aoo::shared_mutex x_clientlock;
-    // peers
-    t_peer *x_peers;
-    int x_numpeers;
+    std::vector<t_peer> x_peers;
     // socket
-    int x_socket;
-    int x_port;
-    t_endpoint *x_endpoints;
+    int x_socket = -1;
+    int x_port = 0;
+    std::list<t_endpoint> x_endpoints; // endpoints must not move in memory!
     aoo::shared_mutex x_endpointlock;
     // threading
 #if AOO_NODE_POLL
@@ -117,152 +116,168 @@ struct t_node
     std::mutex x_mutex;
     std::condition_variable x_condition;
 #endif
-    std::atomic<bool> x_quit; // should be atomic, but works anyway
+    std::atomic<bool> x_quit{false};
+
+    // public methods
+    int socket() const override { return x_socket; }
+    int port() const override { return x_port; }
+    int sendto(const char *buf, int32_t size,
+               const sockaddr *addr) override;
+    t_endpoint * endpoint(const struct sockaddr_storage *sa,
+                          socklen_t len) override;
+    t_endpoint * find_peer(t_symbol *group, t_symbol *user) override;
+    void add_peer(t_symbol *group, t_symbol *user,
+                  const struct sockaddr *sa, socklen_t len) override;
+    void remove_peer(t_symbol *group, t_symbol *user) override;
+    void remove_all_peers() override;
+    void remove_group(t_symbol *group) override;
+    void notify() override;
+    void release(t_pd *obj, int32_t id) override;
+
+    // private methods
+    bool add_client(t_pd *obj, int32_t id);
+    t_endpoint* find_endpoint(const struct sockaddr_storage *sa);
+    t_peer * do_find_peer(t_symbol *group, t_symbol *user);
+    void do_send();
+    void do_receive();
 };
 
-t_endpoint * aoo_node_endpoint(t_node *x,
-                               const struct sockaddr_storage *sa, socklen_t len)
+// public methods
+
+int t_node::sendto(const char *buf, int32_t size,
+                       const sockaddr *addr)
 {
-    aoo::scoped_lock lock(x->x_endpointlock);
-    t_endpoint *ep = endpoint_find(x->x_endpoints, sa);
-    if (!ep){
+    return socket_sendto(x_socket, buf, size, addr);
+}
+
+t_endpoint * t_node::endpoint(const sockaddr_storage *sa, socklen_t len)
+{
+    aoo::scoped_lock lock(x_endpointlock);
+    t_endpoint *ep = find_endpoint(sa);
+    if (ep)
+        return ep;
+    else {
         // add endpoint
-        ep = endpoint_new(&x->x_socket, sa, len);
-        ep->next = x->x_endpoints;
-        x->x_endpoints = ep;
+        x_endpoints.emplace_back(&x_socket, sa, len);
+        return &x_endpoints.back();
     }
-    return ep;
 }
 
-static t_peer * aoo_node_dofind_peer(t_node *x, t_symbol *group, t_symbol *user)
+t_endpoint * t_node::find_peer(t_symbol *group, t_symbol *user)
 {
-    for (int i = 0; i < x->x_numpeers; ++i){
-        t_peer *p = &x->x_peers[i];
-        if (p->group == group && p->user == user){
-            return p;
-        }
-    }
-    return 0;
-}
-
-t_endpoint * aoo_node_find_peer(t_node *x, t_symbol *group, t_symbol *user)
-{
-    t_peer *p = aoo_node_dofind_peer(x, group, user);
+    t_peer *p = do_find_peer(group, user);
     return p ? p->endpoint : 0;
 }
 
-void aoo_node_add_peer(t_node *x, t_symbol *group, t_symbol *user,
-                       const struct sockaddr *sa, socklen_t len)
+void t_node::add_peer(t_symbol *group, t_symbol *user,
+                     const sockaddr *sa, socklen_t len)
 {
-    if (aoo_node_dofind_peer(x, group, user)){
+    if (do_find_peer(group, user)){
         bug("aoo_node_add_peer");
         return;
     }
 
-    t_endpoint *e = aoo_node_endpoint(x, (const struct sockaddr_storage *)sa, len);
+    t_endpoint *e = t_node::endpoint((const sockaddr_storage *)sa, len);
 
-    if (x->x_peers){
-        x->x_peers = (t_peer *)resizebytes(x->x_peers, x->x_numpeers * sizeof(t_peer),
-                                 (x->x_numpeers + 1) * sizeof(t_peer));
-    } else {
-        x->x_peers = (t_peer *)getbytes(sizeof(t_peer));
-    }
-    t_peer *p = &x->x_peers[x->x_numpeers++];
-    p->group = group;
-    p->user = user;
-    p->endpoint = e;
+    x_peers.push_back({ group, user, e });
 }
 
-void aoo_node_remove_peer(t_node *x, t_symbol *group, t_symbol *user)
+void t_node::remove_peer(t_symbol *group, t_symbol *user)
 {
-    t_peer *p = aoo_node_dofind_peer(x, group, user);
-    if (!p){
+    t_peer *p = do_find_peer(group, user);
+    if (p){
+        x_peers.erase(std::vector<t_peer>::iterator(p));
+    } else {
         bug("aoo_node_remove_peer");
-        return;
     }
-    if (x->x_numpeers > 1){
-        int index = p - x->x_peers;
-        memmove(p, p + 1, (x->x_numpeers - index - 1) * sizeof(t_peer));
-        x->x_peers = (t_peer *)resizebytes(x->x_peers, x->x_numpeers * sizeof(t_peer),
-                                 (x->x_numpeers - 1) * sizeof(t_peer));
-    } else {
-        freebytes(x->x_peers, sizeof(t_peer));
-        x->x_peers = 0;
-    }
-    x->x_numpeers--;
 }
 
-void aoo_node_remove_group(t_node *x, t_symbol *group)
+void t_node::remove_group(t_symbol *group)
 {
-    if (x->x_peers){
+    for (auto it = x_peers.begin(); it != x_peers.end(); ) {
         // remove all sinks matching endpoint
-        int n = x->x_numpeers;
-        t_peer *end = x->x_peers + n;
-        for (t_peer *p = x->x_peers; p != end; ){
-            if (p->group == group){
-                memmove(p, p + 1, (end - p - 1) * sizeof(t_peer));
-                end--;
-            } else {
-                p++;
-            }
-        }
-        int newsize = end - x->x_peers;
-        if (newsize > 0){
-            x->x_peers = (t_peer *)resizebytes(x->x_peers,
-                n * sizeof(t_peer), newsize * sizeof(t_peer));
+        if (it->group == group){
+            it = x_peers.erase(it);
         } else {
-            freebytes(x->x_peers, n * sizeof(t_peer));
-            x->x_peers = 0;
+            ++it;
         }
-        x->x_numpeers = newsize;
     }
 }
 
-void aoo_node_remove_all_peers(t_node *x)
+void t_node::remove_all_peers()
 {
-    if (x->x_peers){
-        freebytes(x->x_peers, x->x_numpeers * sizeof(t_peer));
-        x->x_peers = 0;
-        x->x_numpeers = 0;
-    }
+    x_peers.clear();
 }
 
-int aoo_node_socket(t_node *x)
-{
-    return x->x_socket;
-}
-
-int aoo_node_port(t_node *x)
-{
-    return x->x_port;
-}
-
-void aoo_node_notify(t_node *x)
+void t_node::notify()
 {
 #if !AOO_NODE_POLL
-    x->x_condition.notify_all();
+    x_condition.notify_all();
 #endif
 }
 
-int32_t aoo_node_sendto(t_node *x, const char *buf, int32_t size,
-                        const struct sockaddr *addr)
+// private methods
+
+bool t_node::add_client(t_pd *obj, int32_t id)
 {
-    int result = socket_sendto(x->x_socket, buf, size, addr);
-    return result;
+    // check receiver and add to list
+    aoo::scoped_lock lock(x_clientlock);
+#if 1
+    for (auto& client : x_clients)
+    {
+        if (pd_class(obj) == pd_class(client.c_obj)
+            && id == client.c_id)
+        {
+            if (obj == client.c_obj){
+                bug("aoo_node_add: client already added!");
+            } else {
+                if (pd_class(obj) == aoo_client_class){
+                    pd_error(obj, "%s on port %d already exists!",
+                             classname(obj), x_port);
+                } else {
+                    pd_error(obj, "%s with ID %d on port %d already exists!",
+                             classname(obj), id, x_port);
+                }
+            }
+            return false;
+        }
+    }
+#endif
+    x_clients.push_back({ obj, id });
+    return true;
 }
 
-void aoo_node_dosend(t_node *x)
+t_endpoint * t_node::find_endpoint(const sockaddr_storage *sa)
 {
-    aoo::shared_scoped_lock lock(x->x_clientlock);
+    for (auto& e : x_endpoints){
+        if (e.match(sa)){
+            return &e;
+        }
+    }
+    return nullptr;
+}
 
-    for (int i = 0; i < x->x_numclients; ++i){
-        t_client *c = &x->x_clients[i];
-        if (pd_class(c->c_obj) == aoo_receive_class){
-            aoo_receive_send((t_aoo_receive *)c->c_obj);
-        } else if (pd_class(c->c_obj) == aoo_send_class){
-            aoo_send_send((t_aoo_send *)c->c_obj);
-        } else if (pd_class(c->c_obj) == aoo_client_class){
-            aoo_client_send((t_aoo_client *)c->c_obj);
+t_peer * t_node::do_find_peer(t_symbol *group, t_symbol *user)
+{
+    for (auto& peer : x_peers){
+        if (peer.group == group && peer.user == user){
+            return &peer;
+        }
+    }
+    return nullptr;
+}
+
+void t_node::do_send()
+{
+    aoo::shared_scoped_lock lock(x_clientlock);
+
+    for (auto& c : x_clients){
+        if (pd_class(c.c_obj) == aoo_receive_class){
+            aoo_receive_send((t_aoo_receive *)c.c_obj);
+        } else if (pd_class(c.c_obj) == aoo_send_class){
+            aoo_send_send((t_aoo_send *)c.c_obj);
+        } else if (pd_class(c.c_obj) == aoo_client_class){
+            aoo_client_send((t_aoo_client *)c.c_obj);
         } else {
             fprintf(stderr, "bug: aoo_node_send\n");
             fflush(stderr);
@@ -270,22 +285,21 @@ void aoo_node_dosend(t_node *x)
     }
 }
 
-void aoo_node_doreceive(t_node *x)
+void t_node::do_receive()
 {
     struct sockaddr_storage sa;
     socklen_t len;
     char buf[AOO_MAXPACKETSIZE];
-    int nbytes = socket_receive(x->x_socket, buf, AOO_MAXPACKETSIZE,
+    int nbytes = socket_receive(x_socket, buf, AOO_MAXPACKETSIZE,
                                 &sa, &len, AOO_POLL_INTERVAL);
     if (nbytes > 0){
         // try to find endpoint
-        aoo::unique_lock lock(x->x_endpointlock);
-        t_endpoint *ep = endpoint_find(x->x_endpoints, &sa);
+        aoo::unique_lock lock(x_endpointlock);
+        t_endpoint *ep = find_endpoint(&sa);
         if (!ep){
             // add endpoint
-            ep = endpoint_new(&x->x_socket, &sa, len);
-            ep->next = x->x_endpoints;
-            x->x_endpoints = ep;
+            x_endpoints.emplace_back(&x_socket, &sa, len);
+            ep = &x_endpoints.back();
         }
         lock.unlock();
         // get sink ID
@@ -293,41 +307,39 @@ void aoo_node_doreceive(t_node *x)
         if ((aoo_parse_pattern(buf, nbytes, &type, &id) > 0)
             || (aoonet_parse_pattern(buf, nbytes, &type) > 0))
         {
-            aoo::shared_scoped_lock l(x->x_clientlock);
+            aoo::shared_scoped_lock l(x_clientlock);
             if (type == AOO_TYPE_SINK){
                 // forward OSC packet to matching receiver(s)
-                for (int i = 0; i < x->x_numclients; ++i){
-                    if ((pd_class(x->x_clients[i].c_obj) == aoo_receive_class) &&
-                        ((id == AOO_ID_WILDCARD) || (id == x->x_clients[i].c_id)))
+                for (auto& c : x_clients){
+                    if ((pd_class(c.c_obj) == aoo_receive_class) &&
+                        ((id == AOO_ID_WILDCARD) || (id == c.c_id)))
                     {
-                        t_aoo_receive *rcv = (t_aoo_receive *)x->x_clients[i].c_obj;
+                        t_aoo_receive *rcv = (t_aoo_receive *)c.c_obj;
                         aoo_receive_handle_message(rcv, buf, nbytes,
-                            ep, (aoo_replyfn)endpoint_send);
+                                                   ep, endpoint_send);
                         if (id != AOO_ID_WILDCARD)
                             break;
                     }
                 }
             } else if (type == AOO_TYPE_SOURCE){
                 // forward OSC packet to matching senders(s)
-                for (int i = 0; i < x->x_numclients; ++i){
-                    if ((pd_class(x->x_clients[i].c_obj) == aoo_send_class) &&
-                        ((id == AOO_ID_WILDCARD) || (id == x->x_clients[i].c_id)))
+                for (auto& c : x_clients){
+                    if ((pd_class(c.c_obj) == aoo_send_class) &&
+                        ((id == AOO_ID_WILDCARD) || (id == c.c_id)))
                     {
-                        t_aoo_send *snd = (t_aoo_send *)x->x_clients[i].c_obj;
+                        t_aoo_send *snd = (t_aoo_send *)c.c_obj;
                         aoo_send_handle_message(snd, buf, nbytes,
-                            ep, (aoo_replyfn)endpoint_send);
+                            ep, endpoint_send);
                         if (id != AOO_ID_WILDCARD)
                             break;
                     }
                 }
             } else if (type == AOO_TYPE_CLIENT || type == AOO_TYPE_PEER){
                 // forward OSC packet to matching client
-                for (int i = 0; i < x->x_numclients; ++i){
-                    if (pd_class(x->x_clients[i].c_obj) == aoo_client_class)
-                    {
-                        t_aoo_client *c = (t_aoo_client *)x->x_clients[i].c_obj;
-                        aoo_client_handle_message(c, buf, nbytes,
-                            ep, (aoo_replyfn)endpoint_send);
+                for (auto& c :x_clients){
+                    if (pd_class(c.c_obj) == aoo_client_class){
+                        aoo_client_handle_message((t_aoo_client *)c.c_obj,
+                                                  buf, nbytes, ep, endpoint_send);
                         break;
                     }
                 }
@@ -339,7 +351,7 @@ void aoo_node_doreceive(t_node *x)
             }
         #if !AOO_NODE_POLL
             // notify send thread
-            x->x_condition.notify_all();
+            x_condition.notify_all();
         #endif
         } else {
             // not a valid AoO OSC message
@@ -348,94 +360,64 @@ void aoo_node_doreceive(t_node *x)
         }
     } else if (nbytes == 0){
         // timeout -> update receivers
-        aoo::shared_scoped_lock lock(x->x_clientlock);
-        for (int i = 0; i < x->x_numclients; ++i){
-            if (pd_class(x->x_clients[i].c_obj) == aoo_receive_class){
-                t_aoo_receive *rcv = (t_aoo_receive *)x->x_clients[i].c_obj;
-                aoo_receive_update(rcv);
+        aoo::shared_scoped_lock lock(x_clientlock);
+        for (auto& c : x_clients){
+            if (pd_class(c.c_obj) == aoo_receive_class){
+                aoo_receive_update((t_aoo_receive *)c.c_obj);
             }
         }
     #if !AOO_NODE_POLL
         // notify send thread
-        x->x_condition.notify_all();
+        x_condition.notify_all();
     #endif
     } else {
         // ignore errors when quitting
-        if (!x->x_quit){
+        if (!x_quit){
             socket_error_print("recv");
         }
     }
 }
 
 #if AOO_NODE_POLL
-static void aoo_node_thread(t_node *x)
+static void node_thread(t_node *x)
 {
     lower_thread_priority();
 
     while (!x->x_quit){
-        aoo_node_doreceive(x);
-        aoo_node_dosend(x);
+        x->do_receive();
+        x->do_send();
     }
 }
 #else
-static void aoo_node_send(t_node *x)
+static void node_send_thread(t_node *x)
 {
     lower_thread_priority();
 
     std::unique_lock<std::mutex> lock(x->x_mutex);
     while (!x->x_quit){
         x->x_condition.wait(lock);
-
-        aoo_node_dosend(x);
+        x->do_send();
     }
 }
 
-static void aoo_node_receive(t_node *x)
+static void node_receive_thread(t_node *x)
 {
     lower_thread_priority();
 
     while (!x->x_quit){
-        aoo_node_doreceive(x);
+        x->do_receive();
     }
 }
 #endif // AOO_NODE_POLL
 
-t_node* aoo_node_add(int port, t_pd *obj, int32_t id)
+i_node * i_node::get(int port, t_pd *obj, int32_t id)
 {
     // make bind symbol for port number
     char buf[64];
     snprintf(buf, sizeof(buf), "aoo_node %d", port);
     t_symbol *s = gensym(buf);
-    t_client client = { obj, id };
     t_node *x = (t_node *)pd_findbyclass(s, aoo_node_class);
-    if (x){
-        // check receiver and add to list
-        aoo::scoped_lock lock(x->x_clientlock);
-    #if 1
-        for (int i = 0; i < x->x_numclients; ++i){
-            if (pd_class(obj) == pd_class(x->x_clients[i].c_obj)
-                && id == x->x_clients[i].c_id)
-            {
-                if (obj == x->x_clients[i].c_obj){
-                    bug("aoo_node_add: client already added!");
-                } else {
-                    if (pd_class(obj) == aoo_client_class){
-                        pd_error(obj, "%s on port %d already exists!",
-                                 classname(obj), port);
-                    } else {
-                        pd_error(obj, "%s with ID %d on port %d already exists!",
-                                 classname(obj), id, port);
-                    }
-                }
-                return 0;
-            }
-        }
-    #endif
-        x->x_clients = (t_client *)resizebytes(x->x_clients, sizeof(t_client) * x->x_numclients,
-                                                sizeof(t_client) * (x->x_numclients + 1));
-        x->x_clients[x->x_numclients] = client;
-        x->x_numclients++;
-    } else {
+    if (!x){
         // make new aoo node
 
         // first create socket
@@ -457,116 +439,101 @@ t_node* aoo_node_add(int port, t_pd *obj, int32_t id)
         // increase receive buffer size to 2 MB
         socket_setrecvbufsize(sock, 2 << 20);
 
-        // now create aoo node instance
-        x = (t_node *)getbytes(sizeof(t_node));
-        x->x_pd = aoo_node_class;
-        x->x_sym = s;
-        pd_bind(&x->x_pd, s);
-
-        // add receiver
-        x->x_clients = (t_client *)getbytes(sizeof(t_client));
-        x->x_clients[0] = client;
-        x->x_numclients = 1;
-
-        x->x_peers = 0;
-        x->x_numpeers = 0;
-
-        x->x_socket = sock;
-        x->x_port = port;
-        x->x_endpoints = 0;
-
-        // start threads
-        x->x_quit = 0;
-    #if AOO_NODE_POLL
-        x->x_thread = std::thread(aoo_node_thread, x);
-    #else
-        x->x_sendthread = std::thread(aoo_node_send, x);
-        x->x_receivethread = std::thread(aoo_node_receive, x);
-    #endif
-
-        verbose(0, "new aoo node on port %d", x->x_port);
+        // finally create aoo node instance
+        x = new t_node(sock, port, s);
     }
+
+    if (!x->add_client(obj, id)){
+        // never fails for new t_node!
+        return nullptr;
+    }
+
     return x;
 }
 
-void aoo_node_release(t_node *x, t_pd *obj, int32_t id)
+t_node::t_node(int socket, int port, t_symbol *s)
+    : x_socket(socket), x_port(port), x_sym(s)
 {
-    if (x->x_numclients > 1){
+    x_pd = aoo_node_class;
+    pd_bind(&x_pd, s);
+
+    // start threads
+#if AOO_NODE_POLL
+    x_thread = std::thread(node_thread, this);
+#else
+    x_sendthread = std::thread(node_send_thread, this);
+    x_receivethread = std::thread(node_receive_thread, this);
+#endif
+
+    verbose(0, "new aoo node on port %d", x_port);
+}
+
+void t_node::release(t_pd *obj, int32_t id)
+{
+    if (x_clients.size() > 1){
         // just remove receiver from list
-        aoo::scoped_lock l(x->x_clientlock);
-        int n = x->x_numclients;
-        for (int i = 0; i < n; ++i){
-            if (obj == x->x_clients[i].c_obj){
-                if (id != x->x_clients[i].c_id){
+        aoo::scoped_lock l(x_clientlock);
+        for (auto it = x_clients.begin(); it != x_clients.end(); ++it){
+            if (obj == it->c_obj){
+                if (id != it->c_id){
                     bug("aoo_node_remove: wrong ID!");
                     return;
                 }
-                memmove(&x->x_clients[i], &x->x_clients[i + 1], (n - i - 1) * sizeof(t_client));
-                x->x_clients = (t_client *)resizebytes(x->x_clients, n * sizeof(t_client),
-                                                        (n - 1) * sizeof(t_client));
-                x->x_numclients--;
+                x_clients.erase(it);
                 return;
             }
         }
         bug("aoo_node_release: %s not found!", classname(obj));
-    } else if (x->x_numclients == 1){
+    } else if (x_clients.size() == 1){
         // last instance
-        pd_unbind(&x->x_pd, x->x_sym);
-
-        // tell the threads that we're done
-    #if AOO_NODE_POLL
-        // don't bother waking up the thread...
-        // just set the flag and wait
-        x->x_quit = 1;
-        pthread_join(x->x_thread, 0);
-
-        socket_close(x->x_socket);
-    #else
-        {
-            std::lock_guard<std::mutex> l(x->x_mutex);
-            x->x_quit = 1;
-        }
-
-        // notify send thread
-        x->x_condition.notify_all();
-
-        // try to wake up receive thread
-        aoo::unique_lock lock(x->x_clientlock);
-        int didit = socket_signal(x->x_socket, x->x_port);
-        if (!didit){
-            // force wakeup by closing the socket.
-            // this is not nice and probably undefined behavior,
-            // the MSDN docs explicitly forbid it!
-            socket_close(x->x_socket);
-        }
-        lock.unlock();
-
-        // wait for threads
-        x->x_sendthread.join();
-        x->x_receivethread.join();
-
-        if (didit){
-            socket_close(x->x_socket);
-        }
-    #endif
-        // free memory
-        t_endpoint *e = x->x_endpoints;
-        while (e){
-            t_endpoint *next = e->next;
-            endpoint_free(e);
-            e = next;
-        }
-        if (x->x_clients)
-            freebytes(x->x_clients, sizeof(t_client) * x->x_numclients);
-        if (x->x_peers)
-            freebytes(x->x_peers, sizeof(t_peer) * x->x_numpeers);
-
-        verbose(0, "released aoo node on port %d", x->x_port);
-
-        freebytes(x, sizeof(*x));
+        delete this;
     } else {
         bug("aoo_node_release: negative refcount!");
     }
+}
+
+t_node::~t_node()
+{
+    pd_unbind(&x_pd, x_sym);
+
+    // tell the threads that we're done
+#if AOO_NODE_POLL
+    // don't bother waking up the thread...
+    // just set the flag and wait
+    x_quit = true;
+    x_thread.join();
+
+    socket_close(x->x_socket);
+#else
+    {
+        std::lock_guard<std::mutex> l(x_mutex);
+        x_quit = true;
+    }
+
+    // notify send thread
+    x_condition.notify_all();
+
+    // try to wake up receive thread
+    aoo::unique_lock lock(x_clientlock);
+    int didit = socket_signal(x_socket, x_port);
+    if (!didit){
+        // force wakeup by closing the socket.
+        // this is not nice and probably undefined behavior,
+        // the MSDN docs explicitly forbid it!
+        socket_close(x_socket);
+    }
+    lock.unlock();
+
+    // wait for threads
+    x_sendthread.join();
+    x_receivethread.join();
+
+    if (didit){
+        socket_close(x_socket);
+    }
+#endif
+
+    verbose(0, "released aoo node on port %d", x_port);
 }
 
 void aoo_node_setup(void)

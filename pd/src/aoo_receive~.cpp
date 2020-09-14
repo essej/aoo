@@ -43,7 +43,7 @@ struct t_aoo_receive
     // sinks
     std::vector<t_source> x_sources;
     // server
-    t_node * x_node = nullptr;
+    i_node * x_node = nullptr;
     aoo::shared_mutex x_lock;
     // events
     t_outlet *x_msgout = nullptr;
@@ -57,7 +57,7 @@ static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *arg
     int32_t id = 0;
     if (aoo_getsourcearg(x, x->x_node, argc, argv, &sa, &len, &id)){
         for (auto& src : x->x_sources){
-            if (endpoint_match(src.s_endpoint, &sa) && src.s_id == id)
+            if (src.s_endpoint->match(&sa) && src.s_id == id)
             {
                 return &src;
             }
@@ -113,17 +113,17 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
     t_endpoint *e = 0;
     if (aoo_getsourcearg(x, x->x_node, argc, argv, &sa, &len, &id)){
         for (auto& src : x->x_sources){
-            if (src.s_id == id && endpoint_match(src.s_endpoint, &sa)){
+            if (src.s_id == id && src.s_endpoint->match(&sa)){
                 e = src.s_endpoint;
                 break;
             }
         }
         if (!e){
-            e = aoo_node_endpoint(x->x_node, &sa, len);
+            e = x->x_node->endpoint(&sa, len);
         }
         x->x_sink->invite_source(e, id, (aoo_replyfn)endpoint_send);
         // notify send thread
-        aoo_node_notify(x->x_node);
+        x->x_node->notify();
     }
 }
 
@@ -149,7 +149,7 @@ static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom
         x->x_sink->uninvite_source(src->s_endpoint, src->s_id,
                                    (aoo_replyfn)endpoint_send);
         // notify send thread
-        aoo_node_notify(x->x_node);
+        x->x_node->notify();
     }
 }
 
@@ -203,7 +203,7 @@ static void aoo_receive_listsources(t_aoo_receive *x)
     {
         t_symbol *host = 0;
         int port = 0;
-        if (endpoint_getaddress(src.s_endpoint, &host, &port)){
+        if (src.s_endpoint->get_address(&host, &port)){
             t_atom msg[3];
             SETSYMBOL(msg, host);
             SETFLOAT(msg + 1, port);
@@ -219,17 +219,17 @@ static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
 {
     int port = f;
     if (x->x_node){
-        if (aoo_node_port(x->x_node) == port){
+        if (x->x_node->port() == port){
             return;
         }
         // release old node
-        aoo_node_release(x->x_node, (t_pd *)x, x->x_id);
+        x->x_node->release((t_pd *)x, x->x_id);
     }
     // add new node
     if (port){
-        x->x_node = aoo_node_add(port, (t_pd *)x, x->x_id);
+        x->x_node = i_node::get(port, (t_pd *)x, x->x_id);
         if (x->x_node){
-            post("listening on port %d", aoo_node_port(x->x_node));
+            post("listening on port %d", x->x_node->port());
         }
     } else {
         // stop listening
@@ -250,7 +250,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             x->x_sources.push_back({ (t_endpoint *)e->endpoint, e->id });
 
             // output event
-            if (!aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
+            if (!static_cast<t_endpoint *>(e->endpoint)->to_atoms(e->id, msg)){
                 continue;
             }
             outlet_anything(x->x_msgout, gensym("source_add"), 3, msg);
@@ -259,7 +259,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         case AOO_SOURCE_FORMAT_EVENT:
         {
             aoo_source_event *e = (aoo_source_event *)events[i];
-            if (!aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
+            if (!static_cast<t_endpoint *>(e->endpoint)->to_atoms(e->id, msg)){
                 continue;
             }
             aoo_format_storage f;
@@ -272,7 +272,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         case AOO_SOURCE_STATE_EVENT:
         {
             aoo_source_state_event *e = (aoo_source_state_event *)events[i];
-            if (!aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
+            if (!static_cast<t_endpoint *>(e->endpoint)->to_atoms(e->id, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->state);
@@ -282,7 +282,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         case AOO_BLOCK_LOST_EVENT:
         {
             aoo_block_lost_event *e = (aoo_block_lost_event *)events[i];
-            if (!aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
+            if (!static_cast<t_endpoint *>(e->endpoint)->to_atoms(e->id, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
@@ -292,7 +292,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         case AOO_BLOCK_REORDERED_EVENT:
         {
             aoo_block_reordered_event *e = (aoo_block_reordered_event *)events[i];
-            if (!aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
+            if (!static_cast<t_endpoint *>(e->endpoint)->to_atoms(e->id, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
@@ -302,7 +302,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         case AOO_BLOCK_RESENT_EVENT:
         {
             aoo_block_resent_event *e = (aoo_block_resent_event *)events[i];
-            if (!aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
+            if (!static_cast<t_endpoint *>(e->endpoint)->to_atoms(e->id, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
@@ -312,7 +312,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         case AOO_BLOCK_GAP_EVENT:
         {
             aoo_block_gap_event *e = (aoo_block_gap_event *)events[i];
-            if (!aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
+            if (!static_cast<t_endpoint *>(e->endpoint)->to_atoms(e->id, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
@@ -322,7 +322,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         case AOO_PING_EVENT:
         {
             aoo_ping_event *e = (aoo_ping_event *)events[i];
-            if (!aoo_endpoint_to_atoms((t_endpoint *)e->endpoint, e->id, msg)){
+            if (!static_cast<t_endpoint *>(e->endpoint)->to_atoms(e->id, msg)){
                 continue;
             }
             double diff = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
@@ -395,10 +395,10 @@ static void aoo_receive_port(t_aoo_receive *x, t_floatarg f)
     }
 
     if (x->x_node){
-        aoo_node_release(x->x_node, (t_pd *)x, x->x_id);
+        x->x_node->release((t_pd *)x, x->x_id);
     }
 
-    x->x_node = port ? aoo_node_add(port, (t_pd *)x, x->x_id) : 0;
+    x->x_node = port ? i_node::get(port, (t_pd *)x, x->x_id) : 0;
     x->x_port = port;
 }
 
@@ -416,12 +416,12 @@ static void aoo_receive_id(t_aoo_receive *x, t_floatarg f)
     }
 
     if (x->x_node){
-        aoo_node_release(x->x_node, (t_pd *)x, x->x_id);
+        x->x_node->release((t_pd *)x, x->x_id);
     }
 
     x->x_sink->set_id(id);
 
-    x->x_node = x->x_port ? aoo_node_add(x->x_port, (t_pd *)x, id) : 0;
+    x->x_node = x->x_port ? i_node::get(x->x_port, (t_pd *)x, id) : 0;
     x->x_id = id;
 }
 
@@ -483,7 +483,7 @@ static void aoo_receive_free(t_aoo_receive *x)
 t_aoo_receive::~t_aoo_receive()
 {
     if (x_node){
-        aoo_node_release(x_node, (t_pd *)this, x_id);
+        x_node->release((t_pd *)this, x_id);
     }
 
     clock_free(x_clock);

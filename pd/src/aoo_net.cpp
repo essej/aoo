@@ -4,6 +4,8 @@
 
 #include "aoo_net.hpp"
 
+#include "aoo/aoo_types.h"
+
 #ifdef _WIN32
 #include <winsock2.h>
 typedef int socklen_t;
@@ -243,74 +245,74 @@ int sockaddr_to_atoms(const struct sockaddr *sa, socklen_t len, t_atom *a)
 
 /*//////////////////// endpoint ///////////////////////*/
 
-t_endpoint * endpoint_new(void *owner, const struct sockaddr_storage *sa, socklen_t len)
+t_endpoint::t_endpoint(void *owner,
+                       const struct sockaddr_storage *sa, socklen_t len)
 {
-    t_endpoint *e = (t_endpoint *)getbytes(sizeof(t_endpoint));
-    if (e){
-        e->owner = owner;
-        memcpy(&e->addr, sa, len);
-        e->addrlen = len;
-        e->next = 0;
-    }
-    return e;
+    e_owner = owner;
+    memcpy(&e_addr, sa, len);
+    e_addrlen = len;
 }
 
-void endpoint_free(t_endpoint *e)
-{
-    freebytes(e, sizeof(t_endpoint));
-}
 
-int endpoint_send(t_endpoint *e, const char *data, int size)
+int t_endpoint::send(const char *data, int size) const
 {
-    int socket = *((int *)e->owner);
-    int result = sendto(socket, data, size, 0,
-                       (const struct sockaddr *)&e->addr, e->addrlen);
+    auto socket = *((int *)e_owner);
+    auto result = sendto(socket, data, size, 0,
+                       (const struct sockaddr *)&e_addr, e_addrlen);
     if (result < 0){
         socket_error_print("sendto");
     }
     return result;
 }
 
-int endpoint_getaddress(const t_endpoint *e, t_symbol **hostname, int *port)
+bool t_endpoint::get_address(t_symbol **hostname, int *port) const
 {
-    struct sockaddr_in *addr = (struct sockaddr_in *)&e->addr;
-    const char *host = inet_ntoa(addr->sin_addr);
+    auto addr = (struct sockaddr_in *)&e_addr;
+    auto host = inet_ntoa(addr->sin_addr);
     if (!host){
         fprintf(stderr, "inet_ntoa failed!\n");
-        return 0;
+        return false;
     }
     *hostname = gensym(host);
     *port = ntohs(addr->sin_port);
-    return 1;
+    return true;
 }
 
-int endpoint_match(t_endpoint *e, const struct sockaddr_storage *sa)
+bool t_endpoint::match(const struct sockaddr_storage *sa) const
 {
-    if (sa->ss_family == e->addr.ss_family){
+    if (sa->ss_family == e_addr.ss_family){
     #if 1
         if (sa->ss_family == AF_INET){
-            const struct sockaddr_in *a = (const struct sockaddr_in *)sa;
-            const struct sockaddr_in *b = (const struct sockaddr_in *)&e->addr;
+            auto a = (const struct sockaddr_in *)sa;
+            auto b = (const struct sockaddr_in *)&e_addr;
             return (a->sin_addr.s_addr == b->sin_addr.s_addr)
                     && (a->sin_port == b->sin_port);
         } else  {
-            return 0;
+            return false;
         }
     #else
         // doesn't work reliable on BSDs if sin_len is not set
         return !memcmp(&address, &other.address, length);
     #endif
     } else {
-        return 0;
+        return false;
     }
 }
 
-t_endpoint * endpoint_find(t_endpoint *e, const struct sockaddr_storage *sa)
+bool t_endpoint::to_atoms(int32_t id, t_atom *argv) const
 {
-    for (t_endpoint *ep = e; ep; ep = ep->next){
-        if (endpoint_match(ep, sa)){
-            return ep;
+    t_symbol *host;
+    int port;
+    if (get_address(&host, &port)){
+        SETSYMBOL(argv, host);
+        SETFLOAT(argv + 1, port);
+        if (id == AOO_ID_WILDCARD){
+            SETSYMBOL(argv + 2, gensym("*"));
+        } else {
+            SETFLOAT(argv + 2, id);
         }
+        return true;
     }
-    return 0;
+    return false;
 }
+
