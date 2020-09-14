@@ -4,18 +4,22 @@
 
 #include "aoo_common.hpp"
 
-#include <string.h>
-
 using namespace aoo;
 
 static t_class *aoo_route_class;
 
+struct t_desc {
+    t_atom sel;
+    t_outlet *outlet;
+};
+
 struct t_aoo_route
 {
+    t_aoo_route(int argc, t_atom *argv);
+
     t_object x_obj;
-    int x_n;
-    t_outlet **x_outlets;
-    t_atom *x_selectors;
+    int x_n = 0;
+    std::unique_ptr<t_desc[]> x_vec;
     t_outlet *x_rejectout;
 };
 
@@ -23,76 +27,76 @@ static void aoo_route_list(t_aoo_route *x, t_symbol *s, int argc, t_atom *argv)
 {
     // copy address pattern string
     char buf[64];
-    int i = 0;
-    for (; i < argc && i < 63; ++i){
-        char c = (int)atom_getfloat(argv + i);
+    int count = 0;
+    for (; count < argc && count < 63; ++count){
+        char c = (int)atom_getfloat(argv + count);
         if (c){
-            buf[i] = c;
+            buf[count] = c;
         } else {
             break; // end of address pattern
         }
     }
-    buf[i] = 0;
+    buf[count] = 0;
+
+    bool success = false;
 
     // parse address pattern
     int32_t type, id;
-    if (aoo_parse_pattern(buf, i, &type, &id)){
-        int success = 0;
+    if (aoo_parse_pattern(buf, count, &type, &id)){
         t_symbol *sym = (type == AOO_TYPE_SOURCE) ? gensym("source") :
                         (type == AOO_TYPE_SINK) ? gensym("sink") : gensym("");
 
-        for (int j = 0; j < x->x_n; ++j){
-            t_atom *sel = &x->x_selectors[i];
-            if ((sel->a_type == A_SYMBOL && sel->a_w.w_symbol == sym) ||
-                (sel->a_type == A_FLOAT && (id == AOO_ID_WILDCARD || sel->a_w.w_float == id)))
+        for (int i = 0; i < x->x_n; ++i){
+            auto& sel = x->x_vec[i].sel;
+            if ((sel.a_type == A_SYMBOL && sel.a_w.w_symbol == sym) ||
+                (sel.a_type == A_FLOAT &&
+                 (id == AOO_ID_WILDCARD || sel.a_w.w_float == id)))
             {
-                outlet_list(x->x_outlets[j], s, argc, argv);
-                success = 1;
+                outlet_list(x->x_vec[i].outlet, s, argc, argv);
+                success = true;
             }
         }
-
-        if (success){
-            return;
-        }
     }
-    // reject
-    outlet_list(x->x_rejectout, s, argc, argv);
+    if (!success){
+        outlet_list(x->x_rejectout, s, argc, argv);
+    }
 }
 
 static void * aoo_route_new(t_symbol *s, int argc, t_atom *argv)
 {
-    t_aoo_route *x = (t_aoo_route *)pd_new(aoo_route_class);
+    void *x = pd_new(aoo_route_class);
+    new (x) t_aoo_route(argc, argv);
+    return x;
+}
 
-    x->x_n = (argc > 1) ? argc : 1;
-    x->x_outlets = (t_outlet **)getbytes(sizeof(t_outlet *) * x->x_n);
-    x->x_selectors = (t_atom *)getbytes(sizeof(t_atom) * x->x_n);
-    for (int i = 0; i < x->x_n; ++i){
-        x->x_outlets[i] = outlet_new(&x->x_obj, 0);
-        x->x_selectors[i] = argv[i];
-    }
-    if (x->x_n == 1){
-        if (argc && argv->a_type == A_SYMBOL){
-            symbolinlet_new(&x->x_obj, &x->x_selectors->a_w.w_symbol);
-            if (!argc){
-                SETSYMBOL(x->x_selectors, &s_);
-            }
+t_aoo_route::t_aoo_route(int argc, t_atom *argv)
+{
+    // no argument -> single selector
+    x_n = (argc > 1) ? argc : 1;
+    x_vec = std::make_unique<t_desc[]>(x_n);
+    for (int i = 0; i < x_n; ++i){
+        if (argc){
+            x_vec[i].sel = argv[i];
         } else {
-            floatinlet_new(&x->x_obj, &x->x_selectors->a_w.w_float);
-            if (!argc){
-                SETFLOAT(x->x_selectors, AOO_ID_NONE);
-            }
+            SETFLOAT(&x_vec[i].sel, AOO_ID_NONE);
+        }
+        x_vec[i].outlet = outlet_new(&x_obj, 0);
+    }
+    // a single selector can be set via an inlet
+    if (x_n == 1){
+        if (argc && argv->a_type == A_SYMBOL){
+            symbolinlet_new(&x_obj, &x_vec[0].sel.a_w.w_symbol);
+        } else {
+            floatinlet_new(&x_obj, &x_vec[0].sel.a_w.w_float);
         }
     }
 
-    x->x_rejectout = outlet_new(&x->x_obj, 0);
-
-    return x;
+    x_rejectout = outlet_new(&x_obj, 0);
 }
 
 static void aoo_route_free(t_aoo_route *x)
 {
-    freebytes(x->x_outlets, sizeof(t_outlet *) * x->x_n);
-    freebytes(x->x_selectors, sizeof(t_atom) * x->x_n);
+    x->~t_aoo_route();
 }
 
 void aoo_route_setup(void)
