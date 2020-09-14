@@ -11,6 +11,15 @@
 #include <windows.h>
 #endif
 
+// setup function
+#ifdef _WIN32
+#define EXPORT __declspec(dllexport)
+#elif __GNUC__ >= 4
+#define EXPORT __attribute__((visibility("default")))
+#else
+#define EXPORT
+#endif
+
 void aoo_send_tilde_setup(void);
 void aoo_receive_tilde_setup(void);
 void aoo_pack_tilde_setup(void);
@@ -182,7 +191,7 @@ static void check_ntp(void) {}
 
 #endif
 
-EXPORT void aoo_setup(void)
+extern "C" EXPORT void aoo_setup(void)
 {
     char version[64];
     int offset = 0;

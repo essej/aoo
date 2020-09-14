@@ -10,19 +10,6 @@
 
 #include "aoo_net.hpp"
 
-#ifndef _WIN32
-#include <pthread.h>
-#endif
-
-// setup function
-#ifdef _WIN32
-#define EXPORT __declspec(dllexport)
-#elif __GNUC__ >= 4
-#define EXPORT __attribute__((visibility("default")))
-#else
-#define EXPORT
-#endif
-
 #define classname(x) class_getname(*(t_pd *)x)
 
 namespace aoo {
