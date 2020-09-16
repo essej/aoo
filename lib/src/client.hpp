@@ -16,7 +16,7 @@
 #include "oscpack/osc/OscOutboundPacketStream.h"
 #include "oscpack/osc/OscReceivedElements.h"
 
-#define AOO_NET_CLIENT_PING_INTERVAL 2000
+#define AOO_NET_CLIENT_PING_INTERVAL 10000
 #define AOO_NET_CLIENT_REQUEST_INTERVAL 100
 #define AOO_NET_CLIENT_REQUEST_TIMEOUT 5000
 

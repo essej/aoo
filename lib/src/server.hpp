@@ -88,7 +88,7 @@ struct user {
 
     bool remove_group(const group& grp);
 
-    int32_t num_groups() const { return groups_.size(); }
+    int32_t num_groups() const { return (int32_t) groups_.size(); }
 
     const group_list& groups() { return groups_; }
 private:
@@ -107,7 +107,7 @@ struct group {
 
     bool remove_user(const user& usr);
 
-    int32_t num_users() const { return users_.size(); }
+    int32_t num_users() const { return (int32_t)users_.size(); }
 
     const user_list& users() { return users_; }
 private:
