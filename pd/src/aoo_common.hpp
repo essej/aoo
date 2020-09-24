@@ -17,11 +17,11 @@ namespace aoo {
 /*///////////////////////////// aoo_node /////////////////////////////*/
 
 struct i_node {
-    static i_node * get(int port, t_pd *obj, int32_t id);
+    static i_node * get(t_pd *obj, int port, int32_t id);
 
     virtual ~i_node() {}
 
-    virtual void release(t_pd *obj, int32_t id) = 0;
+    virtual void release(t_pd *obj) = 0;
 
     virtual int socket() const = 0;
 

@@ -523,10 +523,10 @@ static void aoo_send_port(t_aoo_send *x, t_floatarg f)
     }
 
     if (x->x_node){
-        x->x_node->release((t_pd *)x, x->x_id);
+        x->x_node->release((t_pd *)x);
     }
 
-    x->x_node = port ? i_node::get(port, (t_pd *)x, x->x_id) : 0;
+    x->x_node = port ? i_node::get((t_pd *)x, port, x->x_id) : 0;
     x->x_port = port;
 }
 
@@ -544,12 +544,12 @@ static void aoo_send_id(t_aoo_send *x, t_floatarg f)
     }
 
     if (x->x_node){
-        x->x_node->release((t_pd *)x, x->x_id);
+        x->x_node->release((t_pd *)x);
     }
 
     x->x_source->set_id(id);
 
-    x->x_node = x->x_port ? i_node::get(x->x_port, (t_pd *)x, id) : 0;
+    x->x_node = x->x_port ? i_node::get((t_pd *)x, x->x_port, id) : 0;
     x->x_id = id;
 }
 
@@ -616,7 +616,7 @@ t_aoo_send::~t_aoo_send()
 {
     // first stop receiving messages
     if (x_node){
-        x_node->release((t_pd *)this, x_id);
+        x_node->release((t_pd *)this);
     }
 
     clock_free(x_clock);

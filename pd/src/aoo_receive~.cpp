@@ -221,11 +221,11 @@ static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
             return;
         }
         // release old node
-        x->x_node->release((t_pd *)x, x->x_id);
+        x->x_node->release((t_pd *)x);
     }
     // add new node
     if (port){
-        x->x_node = i_node::get(port, (t_pd *)x, x->x_id);
+        x->x_node = i_node::get((t_pd *)x, port, x->x_id);
         if (x->x_node){
             post("listening on port %d", x->x_node->port());
         }
@@ -408,10 +408,10 @@ static void aoo_receive_port(t_aoo_receive *x, t_floatarg f)
     }
 
     if (x->x_node){
-        x->x_node->release((t_pd *)x, x->x_id);
+        x->x_node->release((t_pd *)x);
     }
 
-    x->x_node = port ? i_node::get(port, (t_pd *)x, x->x_id) : 0;
+    x->x_node = port ? i_node::get((t_pd *)x, port, x->x_id) : 0;
     x->x_port = port;
 }
 
@@ -429,12 +429,12 @@ static void aoo_receive_id(t_aoo_receive *x, t_floatarg f)
     }
 
     if (x->x_node){
-        x->x_node->release((t_pd *)x, x->x_id);
+        x->x_node->release((t_pd *)x);
     }
 
     x->x_sink->set_id(id);
 
-    x->x_node = x->x_port ? i_node::get(x->x_port, (t_pd *)x, id) : 0;
+    x->x_node = x->x_port ? i_node::get((t_pd *)x, x->x_port, id) : 0;
     x->x_id = id;
 }
 
@@ -496,7 +496,7 @@ static void aoo_receive_free(t_aoo_receive *x)
 t_aoo_receive::~t_aoo_receive()
 {
     if (x_node){
-        x_node->release((t_pd *)this, x_id);
+        x_node->release((t_pd *)this);
     }
 
     clock_free(x_clock);

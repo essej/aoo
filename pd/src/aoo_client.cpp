@@ -226,7 +226,7 @@ t_aoo_client::t_aoo_client(int argc, t_atom *argv)
 
     int port = argc ? atom_getfloat(argv) : 0;
 
-    x_node = port > 0 ? i_node::get(port, (t_pd *)this, 0) : nullptr;
+    x_node = port > 0 ? i_node::get((t_pd *)this, port, 0) : nullptr;
 
     if (x_node){
         x_client.reset(aoo::iclient::create(
@@ -253,7 +253,7 @@ t_aoo_client::~t_aoo_client()
     if (x_node){
         x_node->remove_all_peers();
 
-        x_node->release((t_pd *)this, 0);
+        x_node->release((t_pd *)this);
     }
 
     if (x_client){

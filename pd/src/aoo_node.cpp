@@ -134,7 +134,7 @@ struct t_node : public i_node
     std::atomic<bool> x_quit{false};
 
     // public methods
-    void release(t_pd *obj, int32_t id) override;
+    void release(t_pd *obj) override;
 
     int socket() const override { return x_socket; }
 
@@ -438,7 +438,7 @@ static void node_receive_thread(t_node *x)
 }
 #endif // AOO_NODE_POLL
 
-i_node * i_node::get(int port, t_pd *obj, int32_t id)
+i_node * i_node::get(t_pd *obj, int port, int32_t id)
 {
     t_node *x = nullptr;
     // make bind symbol for port number
@@ -498,17 +498,13 @@ t_node::t_node(t_symbol *s, int socket, int port)
     verbose(0, "new aoo node on port %d", x_port);
 }
 
-void t_node::release(t_pd *obj, int32_t id)
+void t_node::release(t_pd *obj)
 {
     if (x_clients.size() > 1){
         // just remove receiver from list
         aoo::scoped_lock l(x_clientlock);
         for (auto it = x_clients.begin(); it != x_clients.end(); ++it){
             if (obj == it->c_obj){
-                if (id != it->c_id){
-                    bug("aoo_node_remove: wrong ID!");
-                    return;
-                }
                 x_clients.erase(it);
                 return;
             }
