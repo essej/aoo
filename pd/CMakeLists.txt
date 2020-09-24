@@ -2,11 +2,13 @@ cmake_minimum_required (VERSION 2.8)
 
 set(PROJECT "pd")
 set(FILENAME "aoo")
-message(STATUS "---\n*** ${FILENAME} ***")
+message(STATUS "---\n*** Pd external ***")
 
-file(GLOB HEADERS "src/*.hpp")
+set(COMMON "../common")
 
-file(GLOB SRC ${HEADERS} "src/*.cpp")
+file(GLOB HEADERS "src/*.hpp" "${COMMON}/net_utils.hpp")
+
+file(GLOB SRC ${HEADERS} "src/*.cpp" "${COMMON}/net_utils.cpp")
 
 # Pd directories:
 if (NOT PD_DIR)
@@ -66,7 +68,6 @@ set_target_properties(${PROJECT} PROPERTIES OUTPUT_NAME ${FILENAME})
 target_compile_definitions(${PROJECT} PUBLIC "-DAOO_STATIC")
 target_link_libraries(${PROJECT} ${AOO_STATIC} ${AOONET_STATIC}
     ${MD5_LIB} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS})
-set_target_properties(${PROJECT} PROPERTIES LINK_FLAGS_RELEASE -s)
 
 # platform specific definitions and options
 if (WIN32 OR MINGW)

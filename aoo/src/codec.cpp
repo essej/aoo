@@ -63,7 +63,7 @@ std::unique_ptr<decoder> codec::create_decoder() const {
 
 static std::unordered_map<std::string, std::unique_ptr<aoo::codec>> codec_dict;
 
-const aoo::codec * find_codec(const std::string& name){
+const aoo::codec * find_codec(const char * name){
     auto it = codec_dict.find(name);
     if (it != codec_dict.end()){
         return it->second.get();

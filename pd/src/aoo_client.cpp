@@ -21,7 +21,7 @@ struct t_aoo_client
 
     t_object x_obj;
 
-    aoo::net::iclient::pointer x_client;
+    aoo::iclient::pointer x_client;
     i_node *x_node = nullptr;
     std::thread x_thread;
     t_clock *x_clock = nullptr;
@@ -37,8 +37,9 @@ void aoo_client_send(t_aoo_client *x)
 void aoo_client_handle_message(t_aoo_client *x, const char * data,
                                int32_t n, void *endpoint, aoo_replyfn fn)
 {
-    t_endpoint *e = (t_endpoint *)endpoint;
-    x->x_client->handle_message(data, n, &e->e_addr);
+    auto e = (aoo::endpoint *)endpoint;
+    x->x_client->handle_message(data, n, (void *)e->address().address(),
+                                e->address().length());
 }
 
 static int32_t aoo_client_handle_events(t_aoo_client *x,
@@ -48,7 +49,7 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
         switch (events[i]->type){
         case AOONET_CLIENT_CONNECT_EVENT:
         {
-            aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
+            auto e = (aoonet_client_group_event *)events[i];
             if (e->result > 0){
                 outlet_float(x->x_stateout, 1); // connected
             } else {
@@ -61,7 +62,7 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
         }
         case AOONET_CLIENT_DISCONNECT_EVENT:
         {
-            aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
+            auto e = (aoonet_client_group_event *)events[i];
             if (e->result == 0){
                 pd_error(x, "%s: disconnected from server - %s",
                          classname(x), e->errormsg);
@@ -74,7 +75,7 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
         }
         case AOONET_CLIENT_GROUP_JOIN_EVENT:
         {
-            aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
+            auto e = (aoonet_client_group_event *)events[i];
             if (e->result > 0){
                 t_atom msg;
                 SETSYMBOL(&msg, gensym(e->name));
@@ -87,7 +88,7 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
         }
         case AOONET_CLIENT_GROUP_LEAVE_EVENT:
         {
-            aoonet_client_group_event *e = (aoonet_client_group_event *)events[i];
+            auto e = (aoonet_client_group_event *)events[i];
             if (e->result > 0){
                 x->x_node->remove_group(gensym(e->name));
 
@@ -102,16 +103,16 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
         }
         case AOONET_CLIENT_PEER_JOIN_EVENT:
         {
-            aoonet_client_peer_event *e = (aoonet_client_peer_event *)events[i];
+            auto e = (aoonet_client_peer_event *)events[i];
 
             if (e->result > 0){
-                x->x_node->add_peer(gensym(e->group), gensym(e->user),
-                                    (const sockaddr *)e->address, e->length);
+                ip_address addr((const sockaddr *)e->address, e->length);
+                x->x_node->add_peer(gensym(e->group), gensym(e->user), addr);
 
                 t_atom msg[4];
                 SETSYMBOL(msg, gensym(e->group));
                 SETSYMBOL(msg + 1, gensym(e->user));
-                if (sockaddr_to_atoms((const sockaddr *)e->address, 2, msg + 2)){
+                if (address_to_atoms(addr, 2, msg + 2)){
                     outlet_anything(x->x_msgout, gensym("peer_join"), 4, msg);
                 }
             } else {
@@ -121,16 +122,16 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
         }
         case AOONET_CLIENT_PEER_LEAVE_EVENT:
         {
-            aoonet_client_peer_event *e = (aoonet_client_peer_event *)events[i];
+            auto e = (aoonet_client_peer_event *)events[i];
 
             if (e->result > 0){
+                ip_address addr((const sockaddr *)e->address, e->length);
                 x->x_node->remove_peer(gensym(e->group), gensym(e->user));
 
                 t_atom msg[4];
                 SETSYMBOL(msg, gensym(e->group));
                 SETSYMBOL(msg + 1, gensym(e->user));
-                if (sockaddr_to_atoms((const struct sockaddr *)e->address,
-                                      e->length, msg + 2))
+                if (address_to_atoms(addr, e->length, msg + 2))
                 {
                     outlet_anything(x->x_msgout, gensym("peer_leave"), 4, msg);
                 }
@@ -141,7 +142,7 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
         }
         case AOONET_CLIENT_ERROR_EVENT:
         {
-            aoonet_client_event *e = (aoonet_client_event *)events[i];
+            auto e = (aoonet_client_event *)events[i];
             pd_error(x, "%s: %s", classname(x), e->errormsg);
             break;
         }
@@ -212,9 +213,9 @@ static void * aoo_client_new(t_symbol *s, int argc, t_atom *argv)
 }
 
 static int32_t aoo_node_sendto(i_node *node,
-        const char *data, int32_t size, const sockaddr *addr)
+        const char *data, int32_t size, const ip_address *addr)
 {
-    return node->sendto(data, size, addr);
+    return node->sendto(data, size, *addr);
 }
 
 t_aoo_client::t_aoo_client(int argc, t_atom *argv)
@@ -228,7 +229,7 @@ t_aoo_client::t_aoo_client(int argc, t_atom *argv)
     x_node = port > 0 ? i_node::get(port, (t_pd *)this, 0) : nullptr;
 
     if (x_node){
-        x_client.reset(aoo::net::iclient::create(
+        x_client.reset(aoo::iclient::create(
                        x_node,(aoo_sendfn)aoo_node_sendto, port));
         if (x_client){
             verbose(0, "new aoo client on port %d", port);

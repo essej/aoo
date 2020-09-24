@@ -2,10 +2,14 @@ cmake_minimum_required (VERSION 2.8)
 
 set(INCLUDE "../include/aoonet")
 
-file(GLOB AOONET_HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp" "src/*.hpp")
+set(COMMON "../common")
 
-file(GLOB AOONET_SRC ${AOONET_HEADERS}
-    ${AOO_COMMON_SRC} ${OSCPACK_SRC} "src/*.cpp")
+file(GLOB AOONET_HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp" "src/*.hpp"
+    "${COMMON}/lockfree.hpp" "${COMMON}/net_utils.hpp"
+    "${COMMON}/sync.hpp" "${COMMON}/time.hpp" "${COMMON}/utils.hpp")
+
+file(GLOB AOONET_SRC ${AOONET_HEADERS} ${OSCPACK_SRC} "src/*.cpp"
+    "${COMMON}/net_utils.cpp" "${COMMON}/sync.cpp" "${COMMON}/time.cpp")
 
 # static library
 add_library(${AOONET_STATIC} STATIC ${AOONET_SRC})

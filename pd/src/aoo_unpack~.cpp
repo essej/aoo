@@ -128,14 +128,14 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
         switch (events[i]->type){
         case AOO_SOURCE_ADD_EVENT:
         {
-            aoo_source_event *e = (aoo_source_event *)events[i];
+            auto e = (aoo_source_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             outlet_anything(x->x_msgout, gensym("source_add"), 1, msg);
             break;
         }
         case AOO_SOURCE_FORMAT_EVENT:
         {
-            aoo_source_event *e = (aoo_source_event *)events[i];
+            auto e = (aoo_source_event *)events[i];
             aoo_format_storage f;
             if (x->x_sink->get_source_format(e->endpoint, e->id, f) > 0) {
                 SETFLOAT(&msg[0], e->id);
@@ -146,7 +146,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
         }
         case AOO_SOURCE_STATE_EVENT:
         {
-            aoo_source_state_event *e = (aoo_source_state_event *)events[i];
+            auto e = (aoo_source_state_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             SETFLOAT(&msg[1], e->state);
             outlet_anything(x->x_msgout, gensym("source_state"), 2, msg);
@@ -154,7 +154,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
         }
         case AOO_BLOCK_LOST_EVENT:
         {
-            aoo_block_lost_event *e = (aoo_block_lost_event *)events[i];
+            auto e = (aoo_block_lost_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             SETFLOAT(&msg[1], e->count);
             outlet_anything(x->x_msgout, gensym("block_lost"), 2, msg);
@@ -162,7 +162,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
         }
         case AOO_BLOCK_REORDERED_EVENT:
         {
-            aoo_block_reordered_event *e = (aoo_block_reordered_event *)events[i];
+            auto e = (aoo_block_reordered_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             SETFLOAT(&msg[1], e->count);
             outlet_anything(x->x_msgout, gensym("block_reordered"), 2, msg);
@@ -170,7 +170,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
         }
         case AOO_BLOCK_RESENT_EVENT:
         {
-            aoo_block_resent_event *e = (aoo_block_resent_event *)events[i];
+            auto e = (aoo_block_resent_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             SETFLOAT(&msg[1], e->count);
             outlet_anything(x->x_msgout, gensym("block_resent"), 2, msg);
@@ -178,7 +178,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
         }
         case AOO_BLOCK_GAP_EVENT:
         {
-            aoo_block_gap_event *e = (aoo_block_gap_event *)events[i];
+            auto e = (aoo_block_gap_event *)events[i];
             SETFLOAT(&msg[0], e->id);
             SETFLOAT(&msg[1], e->count);
             outlet_anything(x->x_msgout, gensym("block_gap"), 2, msg);
@@ -186,10 +186,11 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
         }
         case AOO_PING_EVENT:
         {
-            aoo_ping_event *e = (aoo_ping_event *)events[i];
+            auto e = (aoo_ping_event *)events[i];
+            auto ep = (aoo::endpoint *)e->endpoint;
             t_symbol *host;
             int port;
-            if (!static_cast<t_endpoint *>(e->endpoint)->get_address(host, port)){
+            if (!endpoint_get_address(*ep, host, port)){
                 continue;
             }
             uint64_t t1 = e->tt1;

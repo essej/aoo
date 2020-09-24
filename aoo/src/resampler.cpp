@@ -1,5 +1,7 @@
 #include "resampler.hpp"
 
+#include <algorithm>
+
 namespace aoo {
 
 // extra space for samplerate fluctuations and non-pow-of-2 blocksizes.

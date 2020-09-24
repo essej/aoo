@@ -11,7 +11,7 @@
 #include "common/time.hpp"
 #include "common/lockfree.hpp"
 
-#include "net_utils.hpp"
+#include "common/net_utils.hpp"
 #include "SLIP.hpp"
 
 #include "oscpack/osc/OscOutboundPacketStream.h"
@@ -22,7 +22,6 @@
 #define AOO_NET_CLIENT_REQUEST_TIMEOUT 5000
 
 namespace aoo {
-namespace net {
 
 class client;
 
@@ -117,7 +116,8 @@ public:
 
     int32_t group_leave(const char *group) override;
 
-    int32_t handle_message(const char *data, int32_t n, void *addr) override;
+    int32_t handle_message(const char *data, int32_t n,
+                           void *addr, int32_t len) override;
 
     int32_t send() override;
 
@@ -305,5 +305,4 @@ private:
     };
 };
 
-} // net
 } // aoo

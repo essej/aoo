@@ -8,7 +8,7 @@
 
 #include "aoo/aoo.hpp"
 
-#include "aoo_net.hpp"
+#include "common/net_utils.hpp"
 
 #define classname(x) class_getname(*(t_pd *)x)
 
@@ -28,14 +28,14 @@ struct i_node {
     virtual int port() const = 0;
 
     virtual int sendto(const char *buf, int32_t size,
-                       const sockaddr *addr) = 0;
+                       const ip_address& addr) = 0;
 
-    virtual t_endpoint *endpoint(const sockaddr *sa, socklen_t len) = 0;
+    virtual endpoint *get_endpoint(const ip_address& addr) = 0;
 
-    virtual t_endpoint * find_peer(t_symbol *group, t_symbol *user) = 0;
+    virtual endpoint *find_peer(t_symbol *group, t_symbol *user) = 0;
 
     virtual void add_peer(t_symbol *group, t_symbol *user,
-                          const sockaddr *sa, socklen_t len) = 0;
+                          const ip_address& addr) = 0;
 
     virtual void remove_peer(t_symbol *group, t_symbol *user) = 0;
 
@@ -48,11 +48,17 @@ struct i_node {
 
 /*///////////////////////////// helper functions ///////////////////////////////*/
 
+int address_to_atoms(const ip_address& addr, int argc, t_atom *argv);
+
+int endpoint_to_atoms(const endpoint& ep, int32_t id, int argc, t_atom *argv);
+
+bool endpoint_get_address(const endpoint& ep, t_symbol *& host, int& port);
+
 bool get_sinkarg(void *x, i_node *node, int argc, t_atom *argv,
-                sockaddr_storage &sa, socklen_t &len, int32_t &id);
+                 ip_address& addr, int32_t &id);
 
 bool get_sourcearg(void *x, i_node *node, int argc, t_atom *argv,
-                  sockaddr_storage &sa, socklen_t &len, int32_t &id);
+                   ip_address& addr, int32_t &id);
 
 void format_makedefault(aoo_format_storage &f, int nchannels);
 

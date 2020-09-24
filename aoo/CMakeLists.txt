@@ -33,15 +33,19 @@ set(OPTIONS
 )
 
 set(INCLUDE "../include/aoo")
+set(COMMON "../common")
 
 file(GLOB AOO_HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp"
-     "${INCLUDE}/codec/aoo_pcm.h" "src/*.hpp")
+     "${INCLUDE}/codec/aoo_pcm.h" "src/*.hpp"
+     "${COMMON}/lockfree.hpp" "${COMMON}/sync.hpp"
+     "${COMMON}/time.hpp" "${COMMON}/utils.hpp")
 if (CODEC_OPUS)
     list(APPEND AOO_HEADERS "${INCLUDE}/codec/aoo_opus.h")
 endif()
 
 file(GLOB AOO_SRC ${AOO_HEADERS} ${AOO_COMMON_SRC}
-     ${OSCPACK_SRC} "src/*.cpp" "src/codec/pcm.cpp")
+     ${OSCPACK_SRC} "src/*.cpp" "src/codec/pcm.cpp"
+     "${COMMON}/sync.cpp" "${COMMON}/time.cpp")
 if (CODEC_OPUS)
     list(APPEND AOO_SRC "src/codec/opus.cpp")
 endif()

@@ -152,11 +152,9 @@ typedef struct aoonet_client_peer_event
 
 #ifdef __cplusplus
 namespace aoo {
-namespace net {
     class iserver;
-} // net
 } // aoo
-using aoonet_server = aoo::net::iserver;
+using aoonet_server = aoo::iserver;
 #else
 typedef struct aoonet_server aoonet_server;
 #endif
@@ -188,11 +186,9 @@ AOO_API int32_t aoonet_server_handle_events(aoonet_server *server,
 
 #ifdef __cplusplus
 namespace aoo {
-namespace net {
     class iclient;
-} // net
 } // aoo
-using aoonet_client = aoo::net::iclient;
+using aoonet_client = aoo::iclient;
 #else
 typedef struct aoonet_client aoonet_client;
 #endif
@@ -224,8 +220,8 @@ AOO_API int32_t aoonet_client_group_leave(aoonet_client *client, const char *gro
 
 // handle messages from peers (threadsafe, but not reentrant)
 // 'addr' should be sockaddr *
-AOO_API int32_t aoonet_client_handle_message(aoonet_client *client,
-                                             const char *data, int32_t n, void *addr);
+AOO_API int32_t aoonet_client_handle_message(aoonet_client *client, const char *data, int32_t n,
+                                             void *addr, int32_t len);
 
 // send outgoing messages to peers (threadsafe, but not reentrant)
 AOO_API int32_t aoonet_client_send(aoonet_client *client);

@@ -9,7 +9,6 @@
 #include <memory>
 
 namespace aoo {
-namespace net {
 
 // NOTE: aoo::iserver and aoo::iclient don't define virtual destructors
 // and have to be destroyed with their respective destroy() method.
@@ -115,7 +114,8 @@ public:
 
     // handle messages from peers (threadsafe, but not reentrant)
     // 'addr' should be sockaddr *
-    virtual int32_t handle_message(const char *data, int32_t n, void *addr) = 0;
+    virtual int32_t handle_message(const char *data, int32_t n,
+                                   void *addr, int32_t len) = 0;
 
     // send outgoing messages to peers (threadsafe, but not reentrant)
     virtual int32_t send() = 0;
@@ -140,5 +140,4 @@ inline void iclient::destroy(iclient *client){
     aoonet_client_free(client);
 }
 
-} // net
 } // aoo

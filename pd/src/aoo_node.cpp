@@ -88,7 +88,7 @@ struct t_peer
 {
     t_symbol *group;
     t_symbol *user;
-    t_endpoint *endpoint;
+    aoo::endpoint *endpoint;
 };
 
 static t_class *node_proxy_class;
@@ -120,7 +120,7 @@ struct t_node : public i_node
     // socket
     int x_socket = -1;
     int x_port = 0;
-    std::list<t_endpoint> x_endpoints; // endpoints must not move in memory!
+    std::list<aoo::endpoint> x_endpoints; // endpoints must not move in memory!
     aoo::shared_mutex x_endpointlock;
     // threading
 #if AOO_NODE_POLL
@@ -141,14 +141,14 @@ struct t_node : public i_node
     int port() const override { return x_port; }
 
     int sendto(const char *buf, int32_t size,
-               const sockaddr *addr) override;
+               const ip_address& addr) override;
 
-    t_endpoint * endpoint(const sockaddr *sa, socklen_t len) override;
+    aoo::endpoint * get_endpoint(const ip_address& addr) override;
 
-    t_endpoint * find_peer(t_symbol *group, t_symbol *user) override;
+    aoo::endpoint * find_peer(t_symbol *group, t_symbol *user) override;
 
     void add_peer(t_symbol *group, t_symbol *user,
-                  const sockaddr *sa, socklen_t len) override;
+                  const ip_address& addr) override;
 
     void remove_peer(t_symbol *group, t_symbol *user) override;
 
@@ -161,7 +161,7 @@ struct t_node : public i_node
     // private methods
     bool add_client(t_pd *obj, int32_t id);
 
-    t_endpoint* find_endpoint(const sockaddr *sa);
+    aoo::endpoint* find_endpoint(const ip_address& addr);
 
     t_peer * do_find_peer(t_symbol *group, t_symbol *user);
 
@@ -173,46 +173,46 @@ struct t_node : public i_node
 // public methods
 
 int t_node::sendto(const char *buf, int32_t size,
-                       const sockaddr *addr)
+                   const ip_address& addr)
 {
     return socket_sendto(x_socket, buf, size, addr);
 }
 
-t_endpoint * t_node::endpoint(const sockaddr *sa, socklen_t len)
+aoo::endpoint * t_node::get_endpoint(const ip_address& addr)
 {
     aoo::scoped_lock lock(x_endpointlock);
-    t_endpoint *ep = find_endpoint(sa);
+    auto ep = find_endpoint(addr);
     if (ep)
         return ep;
     else {
         // add endpoint
-        x_endpoints.emplace_back(&x_socket, sa, len);
+        x_endpoints.emplace_back(x_socket, addr);
         return &x_endpoints.back();
     }
 }
 
-t_endpoint * t_node::find_peer(t_symbol *group, t_symbol *user)
+aoo::endpoint * t_node::find_peer(t_symbol *group, t_symbol *user)
 {
-    t_peer *p = do_find_peer(group, user);
+    auto p = do_find_peer(group, user);
     return p ? p->endpoint : 0;
 }
 
 void t_node::add_peer(t_symbol *group, t_symbol *user,
-                     const sockaddr *sa, socklen_t len)
+                      const ip_address& addr)
 {
     if (do_find_peer(group, user)){
         bug("aoo_node_add_peer");
         return;
     }
 
-    t_endpoint *e = t_node::endpoint(sa, len);
+    auto e = get_endpoint(addr);
 
     x_peers.push_back({ group, user, e });
 }
 
 void t_node::remove_peer(t_symbol *group, t_symbol *user)
 {
-    t_peer *p = do_find_peer(group, user);
+    auto p = do_find_peer(group, user);
     if (p){
         auto pos = x_peers.begin() + (p - x_peers.data());
         x_peers.erase(pos);
@@ -276,10 +276,10 @@ bool t_node::add_client(t_pd *obj, int32_t id)
     return true;
 }
 
-t_endpoint * t_node::find_endpoint(const sockaddr *sa)
+aoo::endpoint * t_node::find_endpoint(const ip_address& addr)
 {
     for (auto& e : x_endpoints){
-        if (e.match(sa)){
+        if (e.address() == addr){
             return &e;
         }
     }
@@ -316,18 +316,17 @@ void t_node::do_send()
 
 void t_node::do_receive()
 {
-    struct sockaddr_storage sa;
-    socklen_t len;
+    ip_address addr;
     char buf[AOO_MAXPACKETSIZE];
     int nbytes = socket_receive(x_socket, buf, AOO_MAXPACKETSIZE,
-                                &sa, &len, AOO_POLL_INTERVAL);
+                                &addr, AOO_POLL_INTERVAL);
     if (nbytes > 0){
         // try to find endpoint
         aoo::unique_lock lock(x_endpointlock);
-        t_endpoint *ep = find_endpoint((const sockaddr *)&sa);
+        auto ep = find_endpoint(addr);
         if (!ep){
             // add endpoint
-            x_endpoints.emplace_back(&x_socket, (const sockaddr *)&sa, len);
+            x_endpoints.emplace_back(x_socket, addr);
             ep = &x_endpoints.back();
         }
         lock.unlock();

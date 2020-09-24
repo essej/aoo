@@ -21,7 +21,7 @@ struct t_aoo_server
 
     t_object x_obj;
 
-    aoo::net::iserver::pointer x_server;
+    aoo::iserver::pointer x_server;
     int32_t x_numusers = 0;
     std::thread x_thread;
     t_clock *x_clock = nullptr;
@@ -121,7 +121,7 @@ t_aoo_server::t_aoo_server(int argc, t_atom *argv)
 
     if (port > 0){
         int32_t err;
-        x_server.reset(aoo::net::iserver::create(port, &err));
+        x_server.reset(aoo::iserver::create(port, &err));
         if (x_server){
             verbose(0, "aoo server listening on port %d", port);
             // start thread

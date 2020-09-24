@@ -7,6 +7,16 @@
 #include <functional>
 #include <algorithm>
 
+#ifndef _WIN32
+#include <sys/poll.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <errno.h>
+#endif
+
 #define AOONET_MSG_CLIENT_PING \
     AOO_MSG_DOMAIN AOONET_MSG_CLIENT AOONET_MSG_PING
 
@@ -35,11 +45,9 @@
     AOONET_MSG_GROUP AOONET_MSG_LEAVE
 
 namespace aoo {
-namespace net {
 
 char * copy_string(const char * s);
 
-} // net
 } // aoo
 
 /*//////////////////// AoO server /////////////////////*/
@@ -47,17 +55,10 @@ char * copy_string(const char * s);
 aoonet_server * aoonet_server_new(int port, int32_t *err) {
     int val = 0;
 
-    // make 'any' address
-    sockaddr_in sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sin_family = AF_INET;
-    sa.sin_addr.s_addr = INADDR_ANY;
-    sa.sin_port = htons(port);
-
-    // create and bind UDP socket
+    // create UDP socket
     int udpsocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (udpsocket < 0){
-        *err = aoo::net::socket_errno();
+        *err = aoo::socket_errno();
         LOG_ERROR("aoo_server: couldn't create UDP socket (" << *err << ")");
         return nullptr;
     }
@@ -65,28 +66,28 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
     // set non-blocking
     // (this is not necessary on Windows, because WSAEventSelect will do it automatically)
 #ifndef _WIN32
-    val = 1;
-    if (ioctl(udpsocket, FIONBIO, (char *)&val) < 0){
-        *err = aoo::net::socket_errno();
+    if (aoo::socket_set_nonblocking(udpsocket, true) != 0){
+        *err = aoo::socket_errno();
         LOG_ERROR("aoo_server: couldn't set socket to non-blocking (" << *err << ")");
-        aoo::net::socket_close(udpsocket);
+        aoo::socket_close(udpsocket);
         return nullptr;
     }
 #endif
 
-    if (bind(udpsocket, (sockaddr *)&sa, sizeof(sa)) < 0){
-        *err = aoo::net::socket_errno();
+    // bind UDP socket
+    if (aoo::socket_bind(udpsocket, port) < 0){
+        *err = aoo::socket_errno();
         LOG_ERROR("aoo_server: couldn't bind UDP socket (" << *err << ")");
-        aoo::net::socket_close(udpsocket);
+        aoo::socket_close(udpsocket);
         return nullptr;
     }
 
     // create TCP socket
     int tcpsocket = socket(AF_INET, SOCK_STREAM, 0);
     if (tcpsocket < 0){
-        *err = aoo::net::socket_errno();
+        *err = aoo::socket_errno();
         LOG_ERROR("aoo_server: couldn't create TCP socket (" << *err << ")");
-        aoo::net::socket_close(udpsocket);
+        aoo::socket_close(udpsocket);
         return nullptr;
     }
 
@@ -95,10 +96,10 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
     if (setsockopt(tcpsocket, SOL_SOCKET, SO_REUSEADDR,
                       (char *)&val, sizeof(val)) < 0)
     {
-        *err = aoo::net::socket_errno();
+        *err = aoo::socket_errno();
         LOG_ERROR("aoo_server: couldn't set SO_REUSEADDR (" << *err << ")");
-        aoo::net::socket_close(tcpsocket);
-        aoo::net::socket_close(udpsocket);
+        aoo::socket_close(tcpsocket);
+        aoo::socket_close(udpsocket);
         return nullptr;
     }
 
@@ -112,38 +113,37 @@ aoonet_server * aoonet_server_new(int port, int32_t *err) {
     // set non-blocking
     // (this is not necessary on Windows, because WSAEventSelect will do it automatically)
 #ifndef _WIN32
-    val = 1;
-    if (ioctl(tcpsocket, FIONBIO, (char *)&val) < 0){
-        *err = aoo::net::socket_errno();
+    if (aoo::socket_set_nonblocking(tcpsocket, true) != 0){
+        *err = aoo::socket_errno();
         LOG_ERROR("aoo_server: couldn't set socket to non-blocking (" << *err << ")");
-        aoo::net::socket_close(tcpsocket);
-        aoo::net::socket_close(udpsocket);
+        aoo::socket_close(tcpsocket);
+        aoo::socket_close(udpsocket);
         return nullptr;
     }
 #endif
 
     // bind TCP socket
-    if (bind(tcpsocket, (sockaddr *)&sa, sizeof(sa)) < 0){
-        *err = aoo::net::socket_errno();
+    if (aoo::socket_bind(tcpsocket, port) < 0){
+        *err = aoo::socket_errno();
         LOG_ERROR("aoo_server: couldn't bind TCP socket (" << *err << ")");
-        aoo::net::socket_close(tcpsocket);
-        aoo::net::socket_close(udpsocket);
+        aoo::socket_close(tcpsocket);
+        aoo::socket_close(udpsocket);
         return nullptr;
     }
 
     // listen
     if (listen(tcpsocket, 32) < 0){
-        *err = aoo::net::socket_errno();
+        *err = aoo::socket_errno();
         LOG_ERROR("aoo_server: listen() failed (" << *err << ")");
-        aoo::net::socket_close(tcpsocket);
-        aoo::net::socket_close(udpsocket);
+        aoo::socket_close(tcpsocket);
+        aoo::socket_close(udpsocket);
         return nullptr;
     }
 
-    return new aoo::net::server(tcpsocket, udpsocket);
+    return new aoo::server(tcpsocket, udpsocket);
 }
 
-aoo::net::server::server(int tcpsocket, int udpsocket)
+aoo::server::server(int tcpsocket, int udpsocket)
     : tcpsocket_(tcpsocket), udpsocket_(udpsocket)
 {
 #ifdef _WIN32
@@ -164,10 +164,10 @@ aoo::net::server::server(int tcpsocket, int udpsocket)
 void aoonet_server_free(aoonet_server *server){
     // cast to correct type because base class
     // has no virtual destructor!
-    delete static_cast<aoo::net::server *>(server);
+    delete static_cast<aoo::server *>(server);
 }
 
-aoo::net::server::~server() {
+aoo::server::~server() {
 #ifdef _WIN32
     CloseHandle(waitevent_);
     WSACloseEvent(tcpevent_);
@@ -185,7 +185,7 @@ int32_t aoonet_server_run(aoonet_server *server){
     return server->run();
 }
 
-int32_t aoo::net::server::run(){
+int32_t aoo::server::run(){
     while (!quit_.load()){
         // wait for networking or other events
         wait_for_event();
@@ -205,7 +205,7 @@ int32_t aoonet_server_quit(aoonet_server *server){
     return server->quit();
 }
 
-int32_t aoo::net::server::quit(){
+int32_t aoo::server::quit(){
     quit_.store(true);
     signal();
     return 0;
@@ -215,7 +215,7 @@ int32_t aoonet_server_events_available(aoonet_server *server){
     return server->events_available();
 }
 
-int32_t aoo::net::server::events_available(){
+int32_t aoo::server::events_available(){
     return 0;
 }
 
@@ -223,7 +223,7 @@ int32_t aoonet_server_handle_events(aoonet_server *server, aoo_eventhandler fn, 
     return server->handle_events(fn, user);
 }
 
-int32_t aoo::net::server::handle_events(aoo_eventhandler fn, void *user){
+int32_t aoo::server::handle_events(aoo_eventhandler fn, void *user){
     // always thread-safe
     auto n = events_.read_available();
     if (n > 0){
@@ -247,7 +247,6 @@ int32_t aoo::net::server::handle_events(aoo_eventhandler fn, void *user){
 }
 
 namespace aoo {
-namespace net {
 
 std::string server::error_to_string(error e){
     switch (e){
@@ -436,7 +435,7 @@ void server::wait_for_event(){
             // accept new clients
             while (true){
                 ip_address addr;
-                auto sock = accept(tcpsocket_, (struct sockaddr *)&addr.address, &addr.length);
+                auto sock = accept(tcpsocket_, addr.address_ptr(), addr.length_ptr());
                 if (sock != INVALID_SOCKET){
                     clients_.push_back(std::make_unique<client_endpoint>(*this, sock, addr));
                     LOG_VERBOSE("aoo_server: accepted client (IP: "
@@ -519,7 +518,7 @@ void server::wait_for_event(){
         // accept new clients
         while (true){
             ip_address addr;
-            int sock = accept(tcpsocket_, (struct sockaddr *)&addr.address, &addr.length);
+            auto sock = accept(tcpsocket_, addr.address_ptr(), addr.length_ptr());
             if (sock >= 0){
                 clients_.push_back(std::make_unique<client_endpoint>(*this, sock, addr));
                 LOG_VERBOSE("aoo_server: accepted client (IP: "
@@ -594,7 +593,7 @@ void server::receive_udp(){
         char buf[AOO_MAXPACKETSIZE];
         ip_address addr;
         int32_t result = recvfrom(udpsocket_, buf, sizeof(buf), 0,
-                               (struct sockaddr *)&addr.address, &addr.length);
+                                  addr.address_ptr(), addr.length_ptr());
         if (result > 0){
             try {
                 osc::ReceivedPacket packet(buf, result);
@@ -642,7 +641,7 @@ void server::send_udp_message(const char *msg, int32_t size,
                               const ip_address &addr)
 {
     int result = ::sendto(udpsocket_, msg, size, 0,
-                          (struct sockaddr *)&addr.address, addr.length);
+                          addr.address(), addr.length());
     if (result < 0){
         int err = socket_errno();
     #ifdef _WIN32
@@ -777,9 +776,8 @@ client_endpoint::client_endpoint(server &s, int sock, const ip_address &addr)
 #else
     // set non-blocking
     // (this is not necessary on Windows, because WSAEventSelect will do it automatically)
-    val = 1;
-    if (ioctl(socket, FIONBIO, (char *)&val) < 0){
-        int err = aoo::net::socket_errno();
+    if (socket_set_nonblocking(socket, true) != 0){
+        int err = aoo::socket_errno();
         LOG_ERROR("client_endpoint: couldn't set socket to non-blocking (" << err << ")");
         close();
     }
@@ -1139,5 +1137,4 @@ server::group_event::~group_event()
     delete group_event_.user;
 }
 
-} // net
 } // aoo

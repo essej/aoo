@@ -8,8 +8,8 @@
 
 #include "common/utils.hpp"
 #include "common/lockfree.hpp"
+#include "common/net_utils.hpp"
 
-#include "net_utils.hpp"
 #include "SLIP.hpp"
 
 #include "oscpack/osc/OscOutboundPacketStream.h"
@@ -20,7 +20,6 @@
 #include <vector>
 
 namespace aoo {
-namespace net {
 
 class server;
 
@@ -231,5 +230,4 @@ private:
     };
 };
 
-} // net
 } // aoo

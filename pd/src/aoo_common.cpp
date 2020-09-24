@@ -14,19 +14,54 @@
 #include <inttypes.h>
 #include <string.h>
 
-#ifdef _WIN32
-#include <synchapi.h>
-#endif
-
 #define CLAMP(x, a, b) ((x) < (a) ? (a) : (x) > (b) ? (b) : (x))
 
 namespace aoo {
 
 /*/////////////////////////// helper functions ///////////////////////////////////////*/
 
+int address_to_atoms(const ip_address& addr, int argc, t_atom *a)
+{
+    if (argc < 2){
+        return 0;
+    }
+    SETSYMBOL(a, gensym(addr.name().c_str()));
+    SETFLOAT(a + 1, addr.port());
+    return 2;
+}
+
+int endpoint_to_atoms(const endpoint& ep, int32_t id, int argc, t_atom *argv)
+{
+    t_symbol *host;
+    int port;
+    if (argc < 3){
+        return 0;
+    }
+    if (endpoint_get_address(ep, host, port)){
+        SETSYMBOL(argv, host);
+        SETFLOAT(argv + 1, port);
+        if (id == AOO_ID_WILDCARD){
+            SETSYMBOL(argv + 2, gensym("*"));
+        } else {
+            SETFLOAT(argv + 2, id);
+        }
+        return 3;
+    }
+    return 0;
+}
+
+bool endpoint_get_address(const endpoint &ep, t_symbol *&host, int &port){
+    if (ep.address().valid()){
+        host = gensym(ep.address().name().c_str());
+        port = ep.address().port();
+        return true;
+    } else {
+        return false;
+    }
+}
+
 static bool get_endpointarg(void *x, i_node *node, int argc, t_atom *argv,
-                              sockaddr_storage &sa, socklen_t &len,
-                              int32_t &id, const char *what)
+                            ip_address& addr, int32_t &id, const char *what)
 {
     if (argc < 3){
         pd_error(x, "%s: too few arguments for %s", classname(x), what);
@@ -35,27 +70,28 @@ static bool get_endpointarg(void *x, i_node *node, int argc, t_atom *argv,
 
     // first try peer (group|user)
     if (argv[1].a_type == A_SYMBOL){
-        t_endpoint *e = 0;
+        aoo::endpoint *e = 0;
         t_symbol *group = atom_getsymbol(argv);
         t_symbol *user = atom_getsymbol(argv + 1);
 
         e = node->find_peer(group, user);
 
-        if (!e){
+        if (e){
+            addr = e->address();
+        } else {
             pd_error(x, "%s: couldn't find peer %s|%s for %s",
                      classname(x), group->s_name, user->s_name, what);
             return false;
         }
-
-        // success - copy sockaddr
-        memcpy(&sa, &e->e_addr, e->e_addrlen);
-        len = e->e_addrlen;
     } else {
         // otherwise try host|port
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
+        ip_address temp(host->s_name, port);
 
-        if (!socket_getaddr(host->s_name, port, sa, len)){
+        if (temp.valid()){
+            addr = temp;
+        } else {
             pd_error(x, "%s: couldn't resolve hostname '%s' for %s",
                      classname(x), host->s_name, what);
             return false;
@@ -77,15 +113,15 @@ static bool get_endpointarg(void *x, i_node *node, int argc, t_atom *argv,
 }
 
 bool get_sinkarg(void *x, i_node *node, int argc, t_atom *argv,
-                sockaddr_storage &sa, socklen_t &len, int32_t &id)
+                 ip_address& addr, int32_t &id)
 {
-    return get_endpointarg(x, node, argc, argv, sa, len, id, "sink");
+    return get_endpointarg(x, node, argc, argv, addr, id, "sink");
 }
 
 bool get_sourcearg(void *x, i_node *node, int argc, t_atom *argv,
-                  sockaddr_storage &sa, socklen_t &len, int32_t &id)
+                   ip_address& addr, int32_t &id)
 {
-    return get_endpointarg(x, node, argc, argv, sa, len, id, "source");
+    return get_endpointarg(x, node, argc, argv, addr, id, "source");
 }
 
 static bool getarg(const char *name, void *x, int which,

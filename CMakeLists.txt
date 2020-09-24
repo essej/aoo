@@ -159,10 +159,6 @@ endif()
 include_directories(.)
 include_directories(include)
 
-# common sources
-file(GLOB AOO_COMMON_SRC "${CMAKE_SOURCE_DIR}/common/*.cpp")
-file(GLOB AOO_COMMON_HEADERS "${CMAKE_SOURCE_DIR}/common/*.hpp")
-
 # "aoo" library
 set(AOO_SHARED "aoo")
 set(AOO_STATIC "aoo_static")

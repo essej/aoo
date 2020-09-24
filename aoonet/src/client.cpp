@@ -11,6 +11,18 @@
 
 #include "md5/md5.h"
 
+#ifndef _WIN32
+#include <sys/poll.h>
+#include <sys/select.h>
+#include <sys/time.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <errno.h>
+#endif
+
 #define AOONET_MSG_SERVER_PING \
     AOO_MSG_DOMAIN AOONET_MSG_SERVER AOONET_MSG_PING
 
@@ -42,7 +54,6 @@
     AOONET_MSG_PEER AOONET_MSG_LEAVE
 
 namespace aoo {
-namespace net {
 
 std::string encrypt(const std::string& input){
     uint8_t result[16];
@@ -70,16 +81,11 @@ char * copy_string(const char * s){
     }
 }
 
-void * copy_sockaddr(const void * sa){
+void * copy_sockaddr(const void *sa, int32_t len){
     if (sa){
-        if (static_cast<const sockaddr *>(sa)->sa_family == AF_INET){
-            auto result = new char[sizeof(sockaddr_in)];
-            memcpy(result, sa, sizeof(sockaddr_in));
-            return result;
-        } else {
-            // LATER IPv6
-            return nullptr;
-        }
+        auto result = new char[len];
+        memcpy(result, sa, len);
+        return result;
     } else {
         return nullptr;
     }
@@ -89,7 +95,6 @@ void free_sockaddr(const void * sa){
     delete static_cast<const sockaddr *>(sa);
 }
 
-} // net
 } // aoo
 
 /*//////////////////// OSC ////////////////////////////*/
@@ -129,10 +134,10 @@ int32_t aoonet_parse_pattern(const char *msg, int32_t n, int32_t *type)
 /*//////////////////// AoO client /////////////////////*/
 
 aoonet_client * aoonet_client_new(void *udpsocket, aoo_sendfn fn, int port) {
-    return new aoo::net::client(udpsocket, fn, port);
+    return new aoo::client(udpsocket, fn, port);
 }
 
-aoo::net::client::client(void *udpsocket, aoo_sendfn fn, int port)
+aoo::client::client(void *udpsocket, aoo_sendfn fn, int port)
     : udpsocket_(udpsocket), sendfn_(fn), udpport_(port)
 {
 #ifdef _WIN32
@@ -152,10 +157,10 @@ aoo::net::client::client(void *udpsocket, aoo_sendfn fn, int port)
 void aoonet_client_free(aoonet_client *client){
     // cast to correct type because base class
     // has no virtual destructor!
-    delete static_cast<aoo::net::client *>(client);
+    delete static_cast<aoo::client *>(client);
 }
 
-aoo::net::client::~client() {
+aoo::client::~client() {
     do_disconnect();
 
 #ifdef _WIN32
@@ -171,7 +176,7 @@ int32_t aoonet_client_run(aoonet_client *client){
     return client->run();
 }
 
-int32_t aoo::net::client::run(){
+int32_t aoo::client::run(){
     start_time_ = time_tag::now();
 
     while (!quit_.load()){
@@ -221,7 +226,7 @@ int32_t aoonet_client_quit(aoonet_client *client){
     return client->quit();
 }
 
-int32_t aoo::net::client::quit(){
+int32_t aoo::client::quit(){
     quit_.store(true);
     signal();
     return 1;
@@ -233,7 +238,7 @@ int32_t aoonet_client_connect(aoonet_client *client, const char *host, int port,
     return client->connect(host, port, username, pwd);
 }
 
-int32_t aoo::net::client::connect(const char *host, int port,
+int32_t aoo::client::connect(const char *host, int port,
                              const char *username, const char *pwd)
 {
     auto state = state_.load();
@@ -262,7 +267,7 @@ int32_t aoonet_client_disconnect(aoonet_client *client){
     return client->disconnect();
 }
 
-int32_t aoo::net::client::disconnect(){
+int32_t aoo::client::disconnect(){
     auto state = state_.load();
     if (state != client_state::connected){
         LOG_WARNING("aoo_client: not connected");
@@ -280,7 +285,7 @@ int32_t aoonet_client_group_join(aoonet_client *client, const char *group, const
     return client->group_join(group, pwd);
 }
 
-int32_t aoo::net::client::group_join(const char *group, const char *pwd){
+int32_t aoo::client::group_join(const char *group, const char *pwd){
     push_command(std::make_unique<group_join_cmd>(group, encrypt(pwd)));
 
     signal();
@@ -292,7 +297,7 @@ int32_t aoonet_client_group_leave(aoonet_client *client, const char *group){
     return client->group_leave(group);
 }
 
-int32_t aoo::net::client::group_leave(const char *group){
+int32_t aoo::client::group_leave(const char *group){
     push_command(std::make_unique<group_leave_cmd>(group));
 
     signal();
@@ -301,15 +306,13 @@ int32_t aoo::net::client::group_leave(const char *group){
 }
 
 int32_t aoonet_client_handle_message(aoonet_client *client, const char *data,
-                                     int32_t n, void *addr)
+                                     int32_t n, void *addr, int32_t len)
 {
-    return client->handle_message(data, n, addr);
+    return client->handle_message(data, n, addr, len);
 }
 
-int32_t aoo::net::client::handle_message(const char *data, int32_t n, void *addr){
-    if (static_cast<struct sockaddr *>(addr)->sa_family != AF_INET){
-        return 0;
-    }
+int32_t aoo::client::handle_message(const char *data, int32_t n,
+                                    void *addr, int32_t len){
     try {
         osc::ReceivedPacket packet(data, n);
         osc::ReceivedMessage msg(packet);
@@ -321,7 +324,7 @@ int32_t aoo::net::client::handle_message(const char *data, int32_t n, void *addr
             return 0;
         }
 
-        ip_address address((struct sockaddr *)addr, sizeof(sockaddr_in)); // FIXME
+        ip_address address((struct sockaddr *)addr, len); // FIXME
 
         LOG_DEBUG("aoo_client: handle UDP message " << msg.AddressPattern()
             << " from " << address.name() << ":" << address.port());
@@ -376,7 +379,7 @@ int32_t aoonet_client_send(aoonet_client *client){
     return client->send();
 }
 
-int32_t aoo::net::client::send(){
+int32_t aoo::client::send(){
     auto state = state_.load();
     if (state != client_state::disconnected){
         time_tag now = time_tag::now();
@@ -435,7 +438,7 @@ int32_t aoonet_client_events_available(aoonet_server *client){
     return client->events_available();
 }
 
-int32_t aoo::net::client::events_available(){
+int32_t aoo::client::events_available(){
     return 1;
 }
 
@@ -443,7 +446,7 @@ int32_t aoonet_client_handle_events(aoonet_client *client, aoo_eventhandler fn, 
     return client->handle_events(fn, user);
 }
 
-int32_t aoo::net::client::handle_events(aoo_eventhandler fn, void *user){
+int32_t aoo::client::handle_events(aoo_eventhandler fn, void *user){
     // always thread-safe
     auto n = events_.read_available();
     if (n > 0){
@@ -467,7 +470,6 @@ int32_t aoo::net::client::handle_events(aoo_eventhandler fn, void *user){
 }
 
 namespace aoo {
-namespace net {
 
 void client::do_connect(const std::string &host, int port)
 {
@@ -576,14 +578,13 @@ int client::try_connect(const std::string &host, int port){
     }
 
     // get local network interface
-    ip_address tmp;
-    if (getsockname(tcpsocket_,
-                    (struct sockaddr *)&tmp.address, &tmp.length) < 0) {
+    ip_address temp;
+    if (getsockname(tcpsocket_, temp.address_ptr(), temp.length_ptr()) < 0) {
         int err = socket_errno();
         LOG_ERROR("aoo_client: couldn't get socket name (" << err << ")");
         return err;
     }
-    local_addr_ = ip_address(tmp.name(), udpport_);
+    local_addr_ = ip_address(temp.name(), udpport_);
 
 #ifdef _WIN32
     // register event with socket
@@ -591,8 +592,7 @@ int client::try_connect(const std::string &host, int port){
 #else
     // set non-blocking
     // (this is not necessary on Windows, since WSAEventSelect will do it automatically)
-    val = 1;
-    if (ioctl(tcpsocket_, FIONBIO, (char *)&val) < 0){
+    if (socket_set_nonblocking(tcpsocket_, true) != 0){
         int err = socket_errno();
         LOG_ERROR("aoo_client: couldn't set socket to non-blocking (" << err << ")");
         return err;
@@ -638,7 +638,7 @@ void client::do_group_leave(const std::string &group){
 
 void client::send_message_udp(const char *data, int32_t size, const ip_address& addr)
 {
-    sendfn_(udpsocket_, data, size, (void *)&addr.address);
+    sendfn_(udpsocket_, data, size, (void *)&addr);
 }
 
 void client::push_event(std::unique_ptr<ievent> e)
@@ -1069,7 +1069,7 @@ void client::handle_peer_remove(const osc::ReceivedMessage& msg){
 
     auto e = std::make_unique<peer_event>(
                 AOONET_CLIENT_PEER_LEAVE_EVENT,
-                group.c_str(), user.c_str(), &addr.address, addr.length);
+                group.c_str(), user.c_str(), addr.address(), addr.length());
     push_event(std::move(e));
 
     LOG_VERBOSE("aoo_client: peer " << group << "|" << user << " left");
@@ -1154,7 +1154,7 @@ client::peer_event::peer_event(int32_t type,
     peer_event_.errormsg = nullptr;
     peer_event_.group = copy_string(group);
     peer_event_.user = copy_string(user);
-    peer_event_.address = copy_sockaddr(address);
+    peer_event_.address = copy_sockaddr(address, length);
     peer_event_.length = length;
 }
 
@@ -1273,7 +1273,7 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
                 // push event
                 auto e = std::make_unique<client::peer_event>(
                             AOONET_CLIENT_PEER_JOIN_EVENT,
-                            group().c_str(), user().c_str(), &addr.address, addr.length);
+                            group().c_str(), user().c_str(), addr.address(), addr.length());
                 client_->push_event(std::move(e));
 
                 LOG_VERBOSE("aoo_client: successfully established connection with " << *this);
@@ -1291,5 +1291,4 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
     }
 }
 
-} // net
 } // aoo

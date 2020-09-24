@@ -73,6 +73,6 @@ private:
     const aoo_codec *codec_;
 };
 
-const codec * find_codec(const std::string& name);
+const codec * find_codec(const char * name);
 
-}
+} // aoo
