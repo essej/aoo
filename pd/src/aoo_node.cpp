@@ -141,7 +141,10 @@ struct t_node : public i_node
     int port() const override { return x_port; }
 
     int sendto(const char *buf, int32_t size,
-               const ip_address& addr) override;
+               const ip_address& addr) override
+    {
+        return socket_sendto(x_socket, buf, size, addr);
+    }
 
     aoo::endpoint * get_endpoint(const ip_address& addr) override;
 
@@ -163,20 +166,12 @@ struct t_node : public i_node
 
     aoo::endpoint* find_endpoint(const ip_address& addr);
 
-    t_peer * do_find_peer(t_symbol *group, t_symbol *user);
-
     void do_send();
 
     void do_receive();
 };
 
 // public methods
-
-int t_node::sendto(const char *buf, int32_t size,
-                   const ip_address& addr)
-{
-    return socket_sendto(x_socket, buf, size, addr);
-}
 
 aoo::endpoint * t_node::get_endpoint(const ip_address& addr)
 {
@@ -193,14 +188,18 @@ aoo::endpoint * t_node::get_endpoint(const ip_address& addr)
 
 aoo::endpoint * t_node::find_peer(t_symbol *group, t_symbol *user)
 {
-    auto p = do_find_peer(group, user);
-    return p ? p->endpoint : 0;
+    for (auto& peer : x_peers){
+        if (peer.group == group && peer.user == user){
+            return peer.endpoint;
+        }
+    }
+    return nullptr;
 }
 
 void t_node::add_peer(t_symbol *group, t_symbol *user,
                       const ip_address& addr)
 {
-    if (do_find_peer(group, user)){
+    if (find_peer(group, user)){
         bug("aoo_node_add_peer");
         return;
     }
@@ -212,13 +211,13 @@ void t_node::add_peer(t_symbol *group, t_symbol *user,
 
 void t_node::remove_peer(t_symbol *group, t_symbol *user)
 {
-    auto p = do_find_peer(group, user);
-    if (p){
-        auto pos = x_peers.begin() + (p - x_peers.data());
-        x_peers.erase(pos);
-    } else {
-        bug("aoo_node_remove_peer");
+    for (auto it = x_peers.begin(); it != x_peers.end(); ++it){
+        if (it->group == group && it->user == user){
+            x_peers.erase(it);
+            return;
+        }
     }
+    bug("aoo_node_remove_peer");
 }
 
 void t_node::remove_group(t_symbol *group)
@@ -281,16 +280,6 @@ aoo::endpoint * t_node::find_endpoint(const ip_address& addr)
     for (auto& e : x_endpoints){
         if (e.address() == addr){
             return &e;
-        }
-    }
-    return nullptr;
-}
-
-t_peer * t_node::do_find_peer(t_symbol *group, t_symbol *user)
-{
-    for (auto& peer : x_peers){
-        if (peer.group == group && peer.user == user){
-            return &peer;
         }
     }
     return nullptr;
