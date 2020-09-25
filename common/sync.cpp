@@ -35,6 +35,22 @@ void pause_cpu(){
 #endif
 }
 
+/*/////////////////////// thread priority ///////////////////*/
+
+void lower_thread_priority()
+{
+#ifdef _WIN32
+    // lower thread priority only for high priority or real time processes
+    DWORD cls = GetPriorityClass(GetCurrentProcess());
+    if (cls == HIGH_PRIORITY_CLASS || cls == REALTIME_PRIORITY_CLASS){
+        int priority = GetThreadPriority(GetCurrentThread());
+        SetThreadPriority(GetCurrentThread(), priority - 2);
+    }
+#else
+
+#endif
+}
+
 /*/////////////////////// spinlock //////////////////////////*/
 
 void spinlock::lock(){

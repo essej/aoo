@@ -62,20 +62,6 @@ void aoo_client_send(t_aoo_client *x);
 void aoo_client_handle_message(t_aoo_client *x, const char * data,
                                int32_t n, void *endpoint, aoo_replyfn fn);
 
-static void lower_thread_priority(void)
-{
-#ifdef _WIN32
-    // lower thread priority only for high priority or real time processes
-    DWORD cls = GetPriorityClass(GetCurrentProcess());
-    if (cls == HIGH_PRIORITY_CLASS || cls == REALTIME_PRIORITY_CLASS){
-        int priority = GetThreadPriority(GetCurrentThread());
-        SetThreadPriority(GetCurrentThread(), priority - 2);
-    }
-#else
-
-#endif
-}
-
 /*////////////////////// aoo node //////////////////*/
 
 struct t_client

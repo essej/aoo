@@ -12,6 +12,10 @@
 
 namespace aoo {
 
+/*////////////////// thread priority /////////////////////*/
+
+void lower_thread_priority();
+
 /*////////////////// simple spin lock ////////////////////*/
 
 class spinlock {
