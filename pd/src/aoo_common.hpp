@@ -9,6 +9,7 @@
 #include "aoo/aoo.hpp"
 
 #include "common/net_utils.hpp"
+#include "common/time.hpp"
 
 #define classname(x) class_getname(*(t_pd *)x)
 

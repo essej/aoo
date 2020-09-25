@@ -82,4 +82,8 @@ inline bool operator> (time_tag lhs, time_tag rhs){ return  operator< (rhs,lhs);
 inline bool operator<=(time_tag lhs, time_tag rhs){ return !operator> (lhs,rhs); }
 inline bool operator>=(time_tag lhs, time_tag rhs){ return !operator< (lhs,rhs); }
 
+/*//////////////////// NTP server /////////////////*/
+
+bool check_ntp_server(std::string& msg);
+
 } // aoo

@@ -6,9 +6,9 @@ message(STATUS "---\n*** Pd external ***")
 
 set(COMMON "../common")
 
-file(GLOB HEADERS "src/*.hpp" "${COMMON}/net_utils.hpp")
+file(GLOB HEADERS "src/*.hpp" "${COMMON}/net_utils.hpp" "${COMMON}/time.hpp")
 
-file(GLOB SRC ${HEADERS} "src/*.cpp" "${COMMON}/net_utils.cpp")
+file(GLOB SRC ${HEADERS} "src/*.cpp" "${COMMON}/net_utils.cpp" "${COMMON}/ntp.cpp")
 
 # Pd directories:
 if (NOT PD_DIR)
