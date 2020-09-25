@@ -4,8 +4,8 @@
 #include <string>
 
 #ifdef _WIN32
-#include <winsock2.h>
 typedef int socklen_t;
+struct sockaddr;
 #else
 #include <sys/socket.h>
 #endif
@@ -26,7 +26,7 @@ public:
 
     bool operator==(const ip_address& other) const;
 
-    std::string name() const;
+    const char * name() const;
 
     int port() const;
 
@@ -45,7 +45,17 @@ public:
         return &length_;
     }
 private:
+#ifdef _WIN32
+    // avoid including <winsock2.h>
+    struct {
+        int16_t ss_family;
+        char __ss_pad1[6];
+        int64_t __ss_align;
+        char __ss_pad2[112];
+    } address_;
+#else
     struct sockaddr_storage address_;
+#endif
     socklen_t length_;
 };
 

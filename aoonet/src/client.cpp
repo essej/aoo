@@ -611,8 +611,8 @@ void client::do_login(){
     osc::OutboundPacketStream msg(buf, sizeof(buf));
     msg << osc::BeginMessage(AOONET_MSG_SERVER_LOGIN)
         << username_.c_str() << password_.c_str()
-        << public_addr_.name().c_str() << public_addr_.port()
-        << local_addr_.name().c_str() << local_addr_.port()
+        << public_addr_.name() << public_addr_.port()
+        << local_addr_.name() << local_addr_.port()
         << osc::EndMessage;
 
     send_server_message_tcp(msg.Data(), msg.Size());

@@ -366,8 +366,8 @@ void server::on_user_joined_group(user& usr, group& grp){
                 osc::OutboundPacketStream msg(buf, sizeof(buf));
                 msg << osc::BeginMessage(AOONET_MSG_CLIENT_PEER_JOIN)
                     << grp.name.c_str() << u.name.c_str()
-                    << e->public_address.name().c_str() << e->public_address.port()
-                    << e->local_address.name().c_str() << e->local_address.port()
+                    << e->public_address.name() << e->public_address.port()
+                    << e->local_address.name() << e->local_address.port()
                     << osc::EndMessage;
 
                 dest->send_message(msg.Data(), msg.Size());
@@ -678,7 +678,7 @@ void server::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
             char buf[512];
             osc::OutboundPacketStream reply(buf, sizeof(buf));
             reply << osc::BeginMessage(AOONET_MSG_CLIENT_REPLY)
-                  << addr.name().c_str() << addr.port() << osc::EndMessage;
+                  << addr.name() << addr.port() << osc::EndMessage;
 
             send_udp_message(reply.Data(), reply.Size(), addr);
         } else {

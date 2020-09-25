@@ -15,6 +15,10 @@
 #include "oscpack/osc/OscOutboundPacketStream.h"
 #include "oscpack/osc/OscReceivedElements.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
+
 #include <memory.h>
 #include <unordered_map>
 #include <vector>

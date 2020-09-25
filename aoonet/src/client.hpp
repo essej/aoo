@@ -17,6 +17,10 @@
 #include "oscpack/osc/OscOutboundPacketStream.h"
 #include "oscpack/osc/OscReceivedElements.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
+
 #define AOO_NET_CLIENT_PING_INTERVAL 1000
 #define AOO_NET_CLIENT_REQUEST_INTERVAL 100
 #define AOO_NET_CLIENT_REQUEST_TIMEOUT 5000

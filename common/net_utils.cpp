@@ -6,7 +6,9 @@
 
 #include "aoo/aoo_types.h"
 
-#ifndef _WIN32
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <sys/select.h>
 #include <sys/poll.h>
 #include <unistd.h>
@@ -92,12 +94,12 @@ bool ip_address::operator==(const ip_address& other) const {
     }
 }
 
-std::string ip_address::name() const {
+const char * ip_address::name() const {
     if (address_.ss_family == AF_INET){
         auto sin = (const struct sockaddr_in *)&address_;
         return inet_ntoa(sin->sin_addr);
     } else {
-        return std::string {};
+        return "";
     }
 }
 

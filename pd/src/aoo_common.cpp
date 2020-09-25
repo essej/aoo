@@ -25,7 +25,7 @@ int address_to_atoms(const ip_address& addr, int argc, t_atom *a)
     if (argc < 2){
         return 0;
     }
-    SETSYMBOL(a, gensym(addr.name().c_str()));
+    SETSYMBOL(a, gensym(addr.name()));
     SETFLOAT(a + 1, addr.port());
     return 2;
 }
@@ -52,7 +52,7 @@ int endpoint_to_atoms(const endpoint& ep, int32_t id, int argc, t_atom *argv)
 
 bool endpoint_get_address(const endpoint &ep, t_symbol *&host, int &port){
     if (ep.address().valid()){
-        host = gensym(ep.address().name().c_str());
+        host = gensym(ep.address().name());
         port = ep.address().port();
         return true;
     } else {
