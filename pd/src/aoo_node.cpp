@@ -382,38 +382,6 @@ void t_node::do_receive()
     }
 }
 
-#if AOO_NODE_POLL
-static void node_thread(t_node *x)
-{
-    lower_thread_priority();
-
-    while (!x->x_quit){
-        x->do_receive();
-        x->do_send();
-    }
-}
-#else
-static void node_send_thread(t_node *x)
-{
-    lower_thread_priority();
-
-    std::unique_lock<std::mutex> lock(x->x_mutex);
-    while (!x->x_quit){
-        x->x_condition.wait(lock);
-        x->do_send();
-    }
-}
-
-static void node_receive_thread(t_node *x)
-{
-    lower_thread_priority();
-
-    while (!x->x_quit){
-        x->do_receive();
-    }
-}
-#endif // AOO_NODE_POLL
-
 i_node * i_node::get(t_pd *obj, int port, int32_t id)
 {
     t_node *x = nullptr;
@@ -465,10 +433,31 @@ t_node::t_node(t_symbol *s, int socket, int port)
 
     // start threads
 #if AOO_NODE_POLL
-    x_thread = std::thread(node_thread, this);
+    x_thread = std::thread([this](){
+        lower_thread_priority();
+
+        while (!x_quit){
+            do_receive();
+            do_send();
+        }
+    });
 #else
-    x_sendthread = std::thread(node_send_thread, this);
-    x_receivethread = std::thread(node_receive_thread, this);
+    x_sendthread = std::thread([this](){
+        lower_thread_priority();
+
+        std::unique_lock<std::mutex> lock(x_mutex);
+        while (!x_quit){
+            x_condition.wait(lock);
+            do_send();
+        }
+    });
+    x_receivethread = std::thread([this](){
+        lower_thread_priority();
+
+        while (!x_quit){
+            do_receive();
+        }
+    });
 #endif
 
     verbose(0, "new aoo node on port %d", x_port);
