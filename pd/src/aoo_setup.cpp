@@ -193,20 +193,7 @@ static void check_ntp(void) {}
 
 extern "C" EXPORT void aoo_setup(void)
 {
-    char version[64];
-    int offset = 0;
-    offset += snprintf(version, sizeof(version), "%d.%d",
-                       AOO_VERSION_MAJOR, AOO_VERSION_MINOR);
-#if AOO_VERSION_PATCH > 0
-    offset += snprintf(version + offset, sizeof(version) - offset,
-                       ".%d", AOO_VERSION_PATCH);
-#endif
-#if AOO_VERSION_PRERELEASE > 0
-    offset += snprintf(version + offset, sizeof(version) - offset,
-                       "-pre%d", AOO_VERSION_PRERELEASE);
-#endif
-
-    post("AOO (audio over OSC) %s", version);
+    post("AOO (audio over OSC) %s", aoo_version_string());
     post("  (c) 2020 Christof Ressi, Winfried Ritsch, et al.");
 
     aoo_initialize();

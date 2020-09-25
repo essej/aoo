@@ -8,6 +8,8 @@
 #include "aoo/codec/aoo_opus.h"
 #endif
 
+#include <sstream>
+
 /*//////////////////// OSC ////////////////////////////*/
 
 int32_t aoo_parse_pattern(const char *msg, int32_t n,
@@ -67,6 +69,30 @@ double aoo_osctime_duration(uint64_t t1, uint64_t t2){
 }
 
 /*/////////////// version ////////////////////*/
+
+void aoo_version(int *major, int *minor,
+                 int *patch, int *pre){
+    if (major) *major = AOO_VERSION_MAJOR;
+    if (minor) *minor = AOO_VERSION_MINOR;
+    if (patch) *patch = AOO_VERSION_PATCH;
+    if (pre) *pre = AOO_VERSION_PRERELEASE;
+}
+
+const char *aoo_version_string(){
+    static std::string version = [](){
+        std::stringstream ss;
+        ss << AOO_VERSION_MAJOR << "." << AOO_VERSION_MINOR;
+    #if AOO_VERSION_PATCH > 0
+        ss << "." << AOO_VERSION_PATCH;
+    #endif
+    #if AOO_VERSION_PRERELEASE > 0
+        ss << "-pre" << AOO_VERSION_PRERELEASE;
+    #endif
+        return ss.str();
+    }();
+
+    return version.c_str();
+}
 
 namespace aoo {
 

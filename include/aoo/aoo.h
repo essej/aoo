@@ -16,6 +16,11 @@ extern "C"
 #define AOO_VERSION_PATCH 0
 #define AOO_VERSION_PRERELEASE 3 // 0: no pre-release
 
+void aoo_version(int *major, int *minor,
+                 int *patch, int *pre);
+
+const char *aoo_version_string(void);
+
 #ifndef AOO_DEBUG_DLL
  #define AOO_DEBUG_DLL 0
 #endif
