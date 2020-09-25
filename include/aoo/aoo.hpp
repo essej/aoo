@@ -135,7 +135,7 @@ public:
         return set_option(aoo_opt_resend_buffersize, AOO_ARG(n));
     }
 
-    int32_t set_resend_buffersize(int32_t& n){
+    int32_t get_resend_buffersize(int32_t& n){
         return get_option(aoo_opt_resend_buffersize, AOO_ARG(n));
     }
 
