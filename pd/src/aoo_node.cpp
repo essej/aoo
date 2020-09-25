@@ -116,6 +116,7 @@ struct t_node : public i_node
     // dependants
     std::vector<t_client> x_clients;
     aoo::shared_mutex x_clientlock;
+    // peer list
     std::vector<t_peer> x_peers;
     // socket
     int x_socket = -1;
@@ -200,7 +201,7 @@ void t_node::add_peer(t_symbol *group, t_symbol *user,
                       const ip_address& addr)
 {
     if (find_peer(group, user)){
-        bug("aoo_node_add_peer");
+        bug("t_node::add_peer: peer already added");
         return;
     }
 
@@ -217,13 +218,13 @@ void t_node::remove_peer(t_symbol *group, t_symbol *user)
             return;
         }
     }
-    bug("aoo_node_remove_peer");
+    bug("t_node::remove_peer: couldn't find peer");
 }
 
 void t_node::remove_group(t_symbol *group)
 {
     for (auto it = x_peers.begin(); it != x_peers.end(); ) {
-        // remove all sinks matching endpoint
+        // remove all peers matching group
         if (it->group == group){
             it = x_peers.erase(it);
         } else {
@@ -248,7 +249,7 @@ void t_node::notify()
 
 bool t_node::add_client(t_pd *obj, int32_t id)
 {
-    // check receiver and add to list
+    // check client and add to list
     aoo::scoped_lock lock(x_clientlock);
 #if 1
     for (auto& client : x_clients)
@@ -257,7 +258,7 @@ bool t_node::add_client(t_pd *obj, int32_t id)
             && id == client.c_id)
         {
             if (obj == client.c_obj){
-                bug("aoo_node_add: client already added!");
+                bug("t_node::add_client: client already added!");
             } else {
                 if (pd_class(obj) == aoo_client_class){
                     pd_error(obj, "%s on port %d already exists!",
@@ -297,7 +298,7 @@ void t_node::do_send()
         } else if (pd_class(c.c_obj) == aoo_client_class){
             aoo_client_send((t_aoo_client *)c.c_obj);
         } else {
-            fprintf(stderr, "bug: aoo_node_send\n");
+            fprintf(stderr, "bug: t_node::do_send\n");
             fflush(stderr);
         }
     }
@@ -326,7 +327,7 @@ void t_node::do_receive()
         {
             aoo::shared_scoped_lock l(x_clientlock);
             if (type == AOO_TYPE_SINK){
-                // forward OSC packet to matching receiver(s)
+                // forward OSC packet to matching client(s)
                 for (auto& c : x_clients){
                     if ((pd_class(c.c_obj) == aoo_receive_class) &&
                         ((id == AOO_ID_WILDCARD) || (id == c.c_id)))
@@ -376,7 +377,7 @@ void t_node::do_receive()
             fflush(stderr);
         }
     } else if (nbytes == 0){
-        // timeout -> update receivers
+        // timeout -> update clients
         aoo::shared_scoped_lock lock(x_clientlock);
         for (auto& c : x_clients){
             if (pd_class(c.c_obj) == aoo_receive_class){
@@ -490,7 +491,7 @@ t_node::t_node(t_symbol *s, int socket, int port)
 void t_node::release(t_pd *obj)
 {
     if (x_clients.size() > 1){
-        // just remove receiver from list
+        // just remove client from list
         aoo::scoped_lock l(x_clientlock);
         for (auto it = x_clients.begin(); it != x_clients.end(); ++it){
             if (obj == it->c_obj){
@@ -498,12 +499,12 @@ void t_node::release(t_pd *obj)
                 return;
             }
         }
-        bug("aoo_node_release: %s not found!", classname(obj));
+        bug("t_node::release: %s not found!", classname(obj));
     } else if (x_clients.size() == 1){
         // last instance
         delete this;
     } else {
-        bug("aoo_node_release: negative refcount!");
+        bug("t_node::release: negative refcount!");
     }
 }
 

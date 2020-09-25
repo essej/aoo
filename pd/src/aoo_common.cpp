@@ -70,12 +70,10 @@ static bool get_endpointarg(void *x, i_node *node, int argc, t_atom *argv,
 
     // first try peer (group|user)
     if (argv[1].a_type == A_SYMBOL){
-        aoo::endpoint *e = 0;
         t_symbol *group = atom_getsymbol(argv);
         t_symbol *user = atom_getsymbol(argv + 1);
 
-        e = node->find_peer(group, user);
-
+        auto e = node->find_peer(group, user);
         if (e){
             addr = e->address();
         } else {
@@ -155,8 +153,8 @@ void format_makedefault(aoo_format_storage &f, int nchannels)
     fmt.bitdepth = AOO_PCM_FLOAT32;
 }
 
-int32_t format_getparam(void *x, int argc, t_atom *argv, int which,
-                                 const char *name, int32_t def)
+static int32_t format_getparam(void *x, int argc, t_atom *argv, int which,
+                               const char *name, int32_t def)
 {
     if (argc > which){
         if (argv[which].a_type == A_FLOAT){

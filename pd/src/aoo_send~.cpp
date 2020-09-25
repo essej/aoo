@@ -310,7 +310,7 @@ static void aoo_send_ping(t_aoo_send *x, t_floatarg f)
 
 static void aoo_send_resend(t_aoo_send *x, t_floatarg f)
 {
-    x->x_source->set_buffersize(f);
+    x->x_source->set_resend_buffersize(f);
 }
 
 static void aoo_send_redundancy(t_aoo_send *x, t_floatarg f)
