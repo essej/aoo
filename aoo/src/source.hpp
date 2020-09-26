@@ -22,9 +22,9 @@
 
 namespace aoo {
 
-struct endpoint {
-    endpoint() = default;
-    endpoint(void *_user, aoo_replyfn _fn, int32_t _id)
+struct endpoint_base {
+    endpoint_base() = default;
+    endpoint_base(void *_user, aoo_replyfn _fn, int32_t _id)
         : user(_user), fn(_fn), id(_id){}
 
     // data
@@ -45,18 +45,20 @@ struct endpoint {
     }
 };
 
-struct data_request : endpoint {
+using format_request = endpoint_base;
+
+struct data_request : endpoint_base {
     data_request() = default;
     data_request(void *_user, aoo_replyfn _fn, int32_t _id,
                  int32_t _salt, int32_t _sequence, int32_t _frame)
-        : endpoint(_user, _fn, _id),
+        : endpoint_base(_user, _fn, _id),
           salt(_salt), sequence(_sequence), frame(_frame){}
     int32_t salt = 0;
     int32_t sequence = 0;
     int32_t frame = 0;
 };
 
-struct invite_request : endpoint {
+struct invite_request : endpoint_base {
     enum type {
         INVITE,
         UNINVITE
@@ -64,15 +66,15 @@ struct invite_request : endpoint {
 
     invite_request() = default;
     invite_request(void *_user, aoo_replyfn _fn, int32_t _id, int32_t _type)
-        : endpoint(_user, _fn, _id), type(_type){}
+        : endpoint_base(_user, _fn, _id), type(_type){}
     int32_t type = 0;
 };
 
-struct sink_desc : endpoint {
+struct sink_desc : endpoint_base {
     sink_desc(void *_user, aoo_replyfn _fn, int32_t _id)
-        : endpoint(_user, _fn, _id), channel(0), format_changed(true) {}
+        : endpoint_base(_user, _fn, _id), channel(0), format_changed(true) {}
     sink_desc(const sink_desc& other)
-        : endpoint(other.user, other.fn, other.id),
+        : endpoint_base(other.user, other.fn, other.id),
           channel(other.channel.load()),
           format_changed(other.format_changed.load()){}
     sink_desc& operator=(const sink_desc& other){
@@ -154,7 +156,7 @@ class source final : public isource {
     lockfree::queue<aoo_sample> audioqueue_;
     lockfree::queue<double> srqueue_;
     lockfree::queue<event> eventqueue_;
-    lockfree::queue<endpoint> formatrequestqueue_;
+    lockfree::queue<format_request> formatrequestqueue_;
     lockfree::queue<data_request> datarequestqueue_;
     history_buffer history_;
     // sinks

@@ -620,7 +620,7 @@ namespace aoo {
 
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
-void endpoint::send_data(int32_t src, int32_t salt, const aoo::data_packet& d) const{
+void endpoint_base::send_data(int32_t src, int32_t salt, const aoo::data_packet& d) const{
     // call without lock!
 
     char buf[AOO_MAXPACKETSIZE];
@@ -653,7 +653,7 @@ void endpoint::send_data(int32_t src, int32_t salt, const aoo::data_packet& d) c
 
 uint32_t make_version();
 
-void endpoint::send_format(int32_t src, int32_t salt, const aoo_format& f,
+void endpoint_base::send_format(int32_t src, int32_t salt, const aoo_format& f,
                             const char *options, int32_t size) const {
     // call without lock!
     LOG_DEBUG("send format to " << id << " (salt = " << salt << ")");
@@ -681,7 +681,7 @@ void endpoint::send_format(int32_t src, int32_t salt, const aoo_format& f,
 
 // /aoo/sink/<id>/ping <src> <time>
 
-void endpoint::send_ping(int32_t src, time_tag t) const {
+void endpoint_base::send_ping(int32_t src, time_tag t) const {
     // call without lock!
     LOG_DEBUG("send ping to " << id);
 
@@ -846,12 +846,12 @@ bool source::send_format(){
     if (format_changed){
         // only copy sinks which require a format update!
         shared_lock sinklock(sink_mutex_);
-        auto sinks = (aoo::sink_desc *)alloca((sinks_.size() + 1) * sizeof(aoo::endpoint)); // avoid alloca(0)
+        auto sinks = (aoo::endpoint_base *)alloca(
+                        (sinks_.size() + 1) * sizeof(aoo::endpoint_base)); // avoid alloca(0)
         int numsinks = 0;
         for (auto& sink : sinks_){
             if (sink.format_changed.exchange(false)){
-                new (sinks + numsinks) aoo::endpoint (sink.user, sink.fn, sink.id);
-                numsinks++;
+                new (&sinks[numsinks++]) aoo::endpoint_base (sink.user, sink.fn, sink.id);
             }
         }
         sinklock.unlock();
@@ -864,7 +864,7 @@ bool source::send_format(){
 
     if (format_requested){
         while (formatrequestqueue_.read_available()){
-            endpoint ep;
+            format_request ep;
             formatrequestqueue_.read(ep);
             ep.send_format(id(), salt, fmt, settings, size);
         }
@@ -1131,7 +1131,7 @@ void source::handle_format_request(void *endpoint, aoo_replyfn fn,
 
     if (sink){
         if (formatrequestqueue_.write_available()){
-            formatrequestqueue_.write(aoo::endpoint { endpoint, fn, id });
+            formatrequestqueue_.write(aoo::format_request { endpoint, fn, id });
         }
     } else {
         LOG_WARNING("ignoring '" << AOO_MSG_FORMAT << "' message: sink not found");
