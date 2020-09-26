@@ -358,16 +358,16 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             }
         }
 
-        if (argc > 3){
-            x->x_source->set_sink_channelonset(e, id, atom_getfloat(argv + 3));
-        }
-
         if (id == AOO_ID_WILDCARD){
             // first remove all sinks on this endpoint
             aoo_send_doremovesink(x, e, AOO_ID_WILDCARD);
         }
 
         aoo_send_doaddsink(x, e, id);
+
+        if (argc > 3){
+            x->x_source->set_sink_channelonset(e, id, atom_getfloat(argv + 3));
+        }
 
         // print message (use actual hostname)
         if (endpoint_get_address(e, host, port)){
