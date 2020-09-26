@@ -190,7 +190,7 @@ static int32_t aoo_unpack_handle_events(t_aoo_unpack *x, const aoo_event **event
             auto ep = (aoo::endpoint *)e->endpoint;
             t_symbol *host;
             int port;
-            if (!endpoint_get_address(*ep, host, port)){
+            if (!endpoint_get_address(ep, host, port)){
                 continue;
             }
             uint64_t t1 = e->tt1;

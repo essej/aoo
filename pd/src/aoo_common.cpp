@@ -30,7 +30,7 @@ int address_to_atoms(const ip_address& addr, int argc, t_atom *a)
     return 2;
 }
 
-int endpoint_to_atoms(const endpoint& ep, int32_t id, int argc, t_atom *argv)
+int endpoint_to_atoms(const endpoint *ep, int32_t id, int argc, t_atom *argv)
 {
     t_symbol *host;
     int port;
@@ -50,10 +50,11 @@ int endpoint_to_atoms(const endpoint& ep, int32_t id, int argc, t_atom *argv)
     return 0;
 }
 
-bool endpoint_get_address(const endpoint &ep, t_symbol *&host, int &port){
-    if (ep.address().valid()){
-        host = gensym(ep.address().name());
-        port = ep.address().port();
+bool endpoint_get_address(const endpoint *ep, t_symbol *&host, int &port){
+    auto& addr = ep->address();
+    if (addr.valid()){
+        host = gensym(addr.name());
+        port = addr.port();
         return true;
     } else {
         return false;

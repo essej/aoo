@@ -51,9 +51,9 @@ struct i_node {
 
 int address_to_atoms(const ip_address& addr, int argc, t_atom *argv);
 
-int endpoint_to_atoms(const endpoint& ep, int32_t id, int argc, t_atom *argv);
+int endpoint_to_atoms(const endpoint* ep, int32_t id, int argc, t_atom *argv);
 
-bool endpoint_get_address(const endpoint& ep, t_symbol *& host, int& port);
+bool endpoint_get_address(const endpoint* ep, t_symbol *& host, int& port);
 
 bool get_sinkarg(void *x, i_node *node, int argc, t_atom *argv,
                  ip_address& addr, int32_t &id);

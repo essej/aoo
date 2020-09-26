@@ -203,7 +203,7 @@ static void aoo_receive_listsources(t_aoo_receive *x)
     {
         t_symbol *host = 0;
         int port = 0;
-        if (endpoint_get_address(*src.s_endpoint, host, port)){
+        if (endpoint_get_address(src.s_endpoint, host, port)){
             t_atom msg[3];
             SETSYMBOL(msg, host);
             SETFLOAT(msg + 1, port);
@@ -251,7 +251,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             x->x_sources.push_back({ ep, e->id });
 
             // output event
-            if (!endpoint_to_atoms(*ep, e->id, 3, msg)){
+            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
                 continue;
             }
             outlet_anything(x->x_msgout, gensym("source_add"), 3, msg);
@@ -262,7 +262,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             auto e = (aoo_source_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
-            if (!endpoint_to_atoms(*ep, e->id, 3, msg)){
+            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
                 continue;
             }
             aoo_format_storage f;
@@ -277,7 +277,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             auto e = (aoo_source_state_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
-            if (!endpoint_to_atoms(*ep, e->id, 3, msg)){
+            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->state);
@@ -289,7 +289,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             auto e = (aoo_block_lost_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
-            if (!endpoint_to_atoms(*ep, e->id, 3, msg)){
+            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
@@ -301,7 +301,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             auto e = (aoo_block_reordered_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
-            if (!endpoint_to_atoms(*ep, e->id, 3, msg)){
+            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
@@ -313,7 +313,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             auto e = (aoo_block_resent_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
-            if (!endpoint_to_atoms(*ep, e->id, 3, msg)){
+            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
@@ -325,7 +325,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             auto e = (aoo_block_gap_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
-            if (!endpoint_to_atoms(*ep, e->id, 3, msg)){
+            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
                 continue;
             }
             SETFLOAT(&msg[3], e->count);
@@ -337,7 +337,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
             auto e = (aoo_ping_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
-            if (!endpoint_to_atoms(*ep, e->id, 3, msg)){
+            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
                 continue;
             }
             double diff = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;

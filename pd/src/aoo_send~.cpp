@@ -71,7 +71,7 @@ static void aoo_send_doaddsink(t_aoo_send *x, aoo::endpoint *e, int32_t id)
 
     // output message
     t_atom msg[3];
-    if (endpoint_to_atoms(*e, id, 3, msg)){
+    if (endpoint_to_atoms(e, id, 3, msg)){
         outlet_anything(x->x_msgout, gensym("sink_add"), 3, msg);
     } else {
         bug("aoo_endpoint_to_atoms");
@@ -96,7 +96,7 @@ static void aoo_send_doremoveall(t_aoo_send *x)
     // output messages
     for (int i = 0; i < numsinks; ++i){
         t_atom msg[3];
-        if (endpoint_to_atoms(*sinks[i].s_endpoint, sinks[i].s_id, 3, msg)){
+        if (endpoint_to_atoms(sinks[i].s_endpoint, sinks[i].s_id, 3, msg)){
             outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
         } else {
             bug("aoo_endpoint_to_atoms");
@@ -127,7 +127,7 @@ static void aoo_send_doremovesink(t_aoo_send *x, aoo::endpoint *e, int32_t id)
         // output messages
         for (int i = 0; i < removed; ++i){
             t_atom msg[3];
-            if (endpoint_to_atoms(*sinks[i].s_endpoint, sinks[i].s_id, 3, msg)){
+            if (endpoint_to_atoms(sinks[i].s_endpoint, sinks[i].s_id, 3, msg)){
                 outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
             } else {
                 bug("aoo_endpoint_to_atoms");
@@ -142,7 +142,7 @@ static void aoo_send_doremovesink(t_aoo_send *x, aoo::endpoint *e, int32_t id)
 
                 // output message
                 t_atom msg[3];
-                if (endpoint_to_atoms(*e, id, 3, msg)){
+                if (endpoint_to_atoms(e, id, 3, msg)){
                     outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
                 } else {
                     bug("aoo_endpoint_to_atoms");
@@ -190,7 +190,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
             double rtt = aoo_osctime_duration(e->tt1, e->tt3) * 1000.0;
 
             t_atom msg[7];
-            if (endpoint_to_atoms(*ep, e->id, 3, msg)){
+            if (endpoint_to_atoms(ep, e->id, 3, msg)){
                 SETFLOAT(msg + 3, diff1);
                 SETFLOAT(msg + 4, diff2);
                 SETFLOAT(msg + 5, rtt);
@@ -210,7 +210,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
                 aoo_send_doaddsink(x, ep, e->id);
             } else {
                 t_atom msg[3];
-                if (endpoint_to_atoms(*ep, e->id, 3, msg)){
+                if (endpoint_to_atoms(ep, e->id, 3, msg)){
                     outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
                 } else {
                     bug("aoo_endpoint_to_atoms");
@@ -228,7 +228,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
                 aoo_send_doremovesink(x, ep, e->id);
             } else {
                 t_atom msg[3];
-                if (endpoint_to_atoms(*ep, e->id, 3, msg)){
+                if (endpoint_to_atoms(ep, e->id, 3, msg)){
                     outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
                 } else {
                     bug("aoo_endpoint_to_atoms");
@@ -370,7 +370,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         aoo_send_doaddsink(x, e, id);
 
         // print message (use actual hostname)
-        if (endpoint_get_address(*e, host, port)){
+        if (endpoint_get_address(e, host, port)){
             if (id == AOO_ID_WILDCARD){
                 verbose(0, "added all sinks on %s %d", host->s_name, port);
             } else {
@@ -430,7 +430,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         aoo_send_doremovesink(x, e, id);
 
         // print message (use actual hostname)
-        if (endpoint_get_address(*e, host, port)){
+        if (endpoint_get_address(e, host, port)){
             if (id == AOO_ID_WILDCARD){
                 verbose(0, "removed all sinks on %s %d", host->s_name, port);
             } else {
@@ -455,7 +455,7 @@ static void aoo_send_listsinks(t_aoo_send *x)
     for (auto& sink : x->x_sinks){
         t_symbol *host;
         int port;
-        if (endpoint_get_address(*sink.s_endpoint, host, port)){
+        if (endpoint_get_address(sink.s_endpoint, host, port)){
             t_atom msg[3];
             SETSYMBOL(msg, host);
             SETFLOAT(msg + 1, port);
