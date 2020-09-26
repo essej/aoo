@@ -92,15 +92,21 @@ std::string socket_strerror(int err);
 
 void socket_error_print(const char *label);
 
-/*/////////////////// t_endpoint /////////////////*/
+/*/////////////////// endpoint /////////////////*/
 
 struct endpoint {
 public:
     endpoint(int socket, const ip_address& address)
         : socket_(socket), address_(address) {}
+    endpoint(const endpoint&) = delete;
+    endpoint& operator=(const endpoint&) = delete;
 
     int send(const char *data, int size) const {
         return socket_sendto(socket_, data, size, address_);
+    }
+
+    static int32_t send(void *x, const char *data, int32_t size){
+        return static_cast<endpoint *>(x)->send(data, size);
     }
 
     const ip_address& address() const {
@@ -110,10 +116,5 @@ private:
     int socket_;
     ip_address address_;
 };
-
-static int32_t endpoint_send(void *x, const char *data, int32_t size)
-{
-    return static_cast<endpoint *>(x)->send(data, size);
-}
 
 } // aoo

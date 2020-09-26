@@ -64,7 +64,7 @@ struct t_aoo_send
 
 static void aoo_send_doaddsink(t_aoo_send *x, aoo::endpoint *e, int32_t id)
 {
-    x->x_source->add_sink(e, id, (aoo_replyfn)endpoint_send);
+    x->x_source->add_sink(e, id, endpoint::send);
 
     // add sink to list
     x->x_sinks.push_back({e, id});

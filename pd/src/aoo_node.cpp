@@ -320,7 +320,7 @@ void t_node::do_receive()
                     {
                         t_aoo_receive *rcv = (t_aoo_receive *)c.c_obj;
                         aoo_receive_handle_message(rcv, buf, nbytes,
-                                                   ep, endpoint_send);
+                                                   ep, endpoint::send);
                         if (id != AOO_ID_WILDCARD)
                             break;
                     }
@@ -333,7 +333,7 @@ void t_node::do_receive()
                     {
                         t_aoo_send *snd = (t_aoo_send *)c.c_obj;
                         aoo_send_handle_message(snd, buf, nbytes,
-                            ep, endpoint_send);
+                            ep, endpoint::send);
                         if (id != AOO_ID_WILDCARD)
                             break;
                     }
@@ -343,7 +343,7 @@ void t_node::do_receive()
                 for (auto& c :x_clients){
                     if (pd_class(c.c_obj) == aoo_client_class){
                         aoo_client_handle_message((t_aoo_client *)c.c_obj,
-                                                  buf, nbytes, ep, endpoint_send);
+                                                  buf, nbytes, ep, endpoint::send);
                         break;
                     }
                 }

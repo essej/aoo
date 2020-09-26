@@ -121,7 +121,7 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
         if (!e){
             e = x->x_node->get_endpoint(addr);
         }
-        x->x_sink->invite_source(e, id, (aoo_replyfn)endpoint_send);
+        x->x_sink->invite_source(e, id, endpoint::send);
         // notify send thread
         x->x_node->notify();
     }
@@ -146,8 +146,7 @@ static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom
 
     t_source *src = aoo_receive_findsource(x, argc, argv);
     if (src){
-        x->x_sink->uninvite_source(src->s_endpoint, src->s_id,
-                                   (aoo_replyfn)endpoint_send);
+        x->x_sink->uninvite_source(src->s_endpoint, src->s_id, endpoint::send);
         // notify send thread
         x->x_node->notify();
     }
