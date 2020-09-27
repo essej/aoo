@@ -1006,7 +1006,6 @@ bool source::send_data(){
         // unlock before sending!
         listlock.unlock();
 
-        d.sequence = sequence_++;
         srqueue_.read(d.samplerate); // always read samplerate from ringbuffer
 
         if (numsinks){
@@ -1020,6 +1019,8 @@ bool source::send_data(){
             audioqueue_.read_commit();
 
             if (d.totalsize > 0){
+                d.sequence = sequence_++;
+
                 // calculate number of frames
                 auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
                 auto dv = div(d.totalsize, maxpacketsize);
@@ -1072,8 +1073,10 @@ bool source::send_data(){
 
     // handle overflow (with 64 samples @ 44.1 kHz this happens every 36 days)
     // for now just force a reset by changing the salt, LATER think how to handle this better
-    if (d.sequence == INT32_MAX){
-        unique_lock lock2(update_mutex_); // take writer lock
+    if (sequence_ == INT32_MAX){
+        // we can safely lock the mutex because it is always unlocked
+        // before the sequence numbers is incremented.
+        unique_lock lock2(update_mutex_); // writer lock
         salt_ = make_salt();
     }
 
