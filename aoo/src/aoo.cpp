@@ -9,7 +9,31 @@
 #include "aoo/codec/aoo_opus.h"
 #endif
 
+#include <iostream>
 #include <sstream>
+
+/*//////////////////// Log ////////////////////////////*/
+
+static aoo_logfunction gLogFunction = nullptr;
+
+void aoo_set_logfunction(aoo_logfunction f){
+    gLogFunction = f;
+}
+
+namespace aoo {
+
+Log::~Log(){
+    stream_ << "\n";
+    std::string msg = stream_.str();
+    if (gLogFunction){
+        gLogFunction(msg.c_str());
+    } else {
+        std::cerr << msg;
+        std::flush(std::cerr);
+    }
+}
+
+}
 
 /*//////////////////// OSC ////////////////////////////*/
 

@@ -67,6 +67,9 @@ typedef enum aoo_type
     AOO_TYPE_PEER
 } aoo_type;
 
+// log function
+typedef void (*aoo_logfunction)(const char *);
+
 // send function
 typedef int32_t (*aoo_sendfn)(
         void *,             // user

@@ -6,7 +6,7 @@
 
 #include <stdint.h>
 #include <cstring>
-#include <iostream>
+#include <sstream>
 
 /*------------------ alloca -----------------------*/
 #ifdef _WIN32
@@ -25,7 +25,7 @@
  #define LOGLEVEL 1
 #endif
 
-#define DO_LOG(x) do { std::cerr << x << std::endl; } while (false);
+#define DO_LOG(x)(aoo::Log() << x)
 
 #if LOGLEVEL >= 0
  #define LOG_ERROR(x) DO_LOG(x)
@@ -79,6 +79,18 @@
 #endif
 
 namespace aoo {
+
+class Log {
+public:
+    ~Log();
+    template<typename T>
+    Log& operator<<(T&& t) {
+        stream_ << std::forward<T>(t);
+        return *this;
+    }
+private:
+    std::ostringstream stream_;
+};
 
 template<typename T>
 constexpr bool is_pow2(T i){

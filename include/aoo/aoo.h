@@ -16,6 +16,8 @@ void aoo_version(int *major, int *minor,
 
 const char *aoo_version_string(void);
 
+void aoo_set_logfunction(aoo_logfunction fn);
+
 #ifndef AOO_DEBUG_DLL
  #define AOO_DEBUG_DLL 0
 #endif
