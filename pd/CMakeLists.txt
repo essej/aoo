@@ -4,11 +4,13 @@ set(PROJECT "pd")
 set(FILENAME "aoo")
 message(STATUS "---\n*** Pd external ***")
 
+set(INCLUDE "../include/aoo")
 set(COMMON "../common")
 
-file(GLOB HEADERS "src/*.hpp" "${COMMON}/net_utils.hpp" "${COMMON}/time.hpp")
+file(GLOB HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp"
+    "${COMMON}/*.hpp" "src/*.hpp")
 
-file(GLOB SRC ${HEADERS} "src/*.cpp" "${COMMON}/net_utils.cpp" "${COMMON}/ntp.cpp")
+file(GLOB SRC ${HEADERS} "src/*.cpp")
 
 # Pd directories:
 if (NOT PD_DIR)

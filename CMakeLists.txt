@@ -155,7 +155,7 @@ if (APPLE)
     list(APPEND LIBS "-lpthread")
 endif()
 
-# public headers
+# headers
 include_directories(.)
 include_directories(include)
 
@@ -163,11 +163,6 @@ include_directories(include)
 set(AOO_SHARED "aoo")
 set(AOO_STATIC "aoo_static")
 add_subdirectory(aoo)
-
-# "aoonet" library
-set(AOONET_SHARED "aoonet")
-set(AOONET_STATIC "aoonet_static")
-add_subdirectory(aoonet)
 
 # Pd external
 option(BUILD_PD_EXTERNAL "build Pd external" ON)

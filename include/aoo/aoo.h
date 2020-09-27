@@ -11,11 +11,6 @@ extern "C"
 {
 #endif
 
-#define AOO_VERSION_MAJOR 2
-#define AOO_VERSION_MINOR 0
-#define AOO_VERSION_PATCH 0
-#define AOO_VERSION_PRERELEASE 3 // 0: no pre-release
-
 void aoo_version(int *major, int *minor,
                  int *patch, int *pre);
 
@@ -46,11 +41,6 @@ const char *aoo_version_string(void);
 #endif
 
 /*////////// default values ////////////*/
-
-// max. UDP packet size
-#ifndef AOO_PACKETSIZE
- #define AOO_PACKETSIZE 512
-#endif
 
 // source buffer size in ms
 #ifndef AOO_SOURCE_BUFSIZE
@@ -131,15 +121,6 @@ AOO_API void aoo_terminate(void);
 #define AOO_MSG_INVITE_LEN 7
 #define AOO_MSG_UNINVITE "/uninvite"
 #define AOO_MSG_UNINVITE_LEN 9
-
-// id: the source or sink ID
-// returns: the offset to the remaining address pattern
-
-typedef enum aoo_type
-{
-    AOO_TYPE_SOURCE = 0,
-    AOO_TYPE_SINK
-} aoo_type;
 
 // get the aoo_type and ID from an AoO OSC message, e.g. in /aoo/src/<id>/data
 // returns the offset on success, 0 on fail

@@ -109,7 +109,7 @@ bool check_ntp_server(std::string& msg)
 
     try {
         if (!service_running("W32Time")){
-            msg = "WARNING: Windows time server is not running!";
+            msg = "Windows time server is not running!";
             return false;
         }
 

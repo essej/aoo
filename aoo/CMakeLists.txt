@@ -1,5 +1,8 @@
 cmake_minimum_required (VERSION 2.8)
 
+# networking support
+option(USE_AOO_NET "build with networking support" ON)
+
 # compile time options
 set(TIMEFILTER_BANDWIDTH 0.0001 CACHE STRING "default time filter bandwidth")
 message(STATUS "default time filter bandwidth: ${TIMEFILTER_BANDWIDTH}")
@@ -43,15 +46,21 @@ if (CODEC_OPUS)
     list(APPEND AOO_HEADERS "${INCLUDE}/codec/aoo_opus.h")
 endif()
 
-file(GLOB AOO_SRC ${AOO_HEADERS} ${AOO_COMMON_SRC}
-     ${OSCPACK_SRC} "src/*.cpp" "src/codec/pcm.cpp"
-     "${COMMON}/sync.cpp" "${COMMON}/time.cpp")
+file(GLOB AOO_SRC "src/*.cpp" "src/codec/pcm.cpp"
+    "${COMMON}/ntp.cpp" "${COMMON}/sync.cpp" "${COMMON}/time.cpp")
 if (CODEC_OPUS)
     list(APPEND AOO_SRC "src/codec/opus.cpp")
 endif()
 
+if (USE_AOO_NET)
+    list(APPEND AOO_HEADERS "src/net/server.hpp" "src/net/client.hpp"
+        "src/net/SLIP.hpp" "${COMMON}/net_utils.hpp")
+    list(APPEND AOO_SRC "src/net/client.cpp" "src/net/server.cpp"
+        "${COMMON}/net_utils.cpp")
+endif()
+
 # static library
-add_library(${AOO_STATIC} STATIC ${AOO_SRC})
+add_library(${AOO_STATIC} STATIC ${AOO_HEADERS} ${AOO_SRC})
 
 target_compile_definitions(${AOO_STATIC} PUBLIC ${OPTIONS} "-DAOO_STATIC")
 
@@ -59,13 +68,17 @@ target_compile_definitions(${AOO_STATIC} PUBLIC ${OPTIONS} "-DAOO_STATIC")
 option(BUILD_AOO_SHARED "build 'aoo' as shared library" ON)
 
 if (BUILD_AOO_SHARED)
-    add_library(${AOO_SHARED} SHARED ${AOO_SRC})
+    add_library(${AOO_SHARED} SHARED ${AOO_HEADERS} ${AOO_SRC})
 
     target_compile_definitions(${AOO_SHARED} PUBLIC "-DAOO_BUILD" ${OPTIONS})
     if (WIN32 OR MINGW)
         target_compile_definitions(${AOO_SHARED} PUBLIC "-DDLL_EXPORT")
+        target_link_libraries(${AOO_SHARED} "ws2_32")
     endif()
-    target_link_libraries(${AOO_SHARED} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS})
+    if (USE_AOO_NET)
+        target_link_libraries(${AOO_SHARED} ${MD5_LIB})
+    endif()
+    target_link_libraries(${AOO_SHARED} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS})   
 
     # install shared libraries
     install(TARGETS ${AOO_SHARED}

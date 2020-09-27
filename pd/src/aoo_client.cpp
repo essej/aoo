@@ -4,7 +4,7 @@
 
 #include "aoo_common.hpp"
 
-#include "aoonet/aoonet.hpp"
+#include "aoo/aoo_net.hpp"
 
 #include <thread>
 
@@ -21,7 +21,7 @@ struct t_aoo_client
 
     t_object x_obj;
 
-    aoo::iclient::pointer x_client;
+    aoo::net::iclient::pointer x_client;
     i_node *x_node = nullptr;
     std::thread x_thread;
     t_clock *x_clock = nullptr;
@@ -47,9 +47,9 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
 {
     for (int i = 0; i < n; ++i){
         switch (events[i]->type){
-        case AOONET_CLIENT_CONNECT_EVENT:
+        case AOO_NET_CLIENT_CONNECT_EVENT:
         {
-            auto e = (aoonet_client_group_event *)events[i];
+            auto e = (aoo_net_client_group_event *)events[i];
             if (e->result > 0){
                 outlet_float(x->x_stateout, 1); // connected
             } else {
@@ -60,9 +60,9 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
             }
             break;
         }
-        case AOONET_CLIENT_DISCONNECT_EVENT:
+        case AOO_NET_CLIENT_DISCONNECT_EVENT:
         {
-            auto e = (aoonet_client_group_event *)events[i];
+            auto e = (aoo_net_client_group_event *)events[i];
             if (e->result == 0){
                 pd_error(x, "%s: disconnected from server - %s",
                          classname(x), e->errormsg);
@@ -73,9 +73,9 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
             outlet_float(x->x_stateout, 0); // disconnected
             break;
         }
-        case AOONET_CLIENT_GROUP_JOIN_EVENT:
+        case AOO_NET_CLIENT_GROUP_JOIN_EVENT:
         {
-            auto e = (aoonet_client_group_event *)events[i];
+            auto e = (aoo_net_client_group_event *)events[i];
             if (e->result > 0){
                 t_atom msg;
                 SETSYMBOL(&msg, gensym(e->name));
@@ -86,9 +86,9 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
             }
             break;
         }
-        case AOONET_CLIENT_GROUP_LEAVE_EVENT:
+        case AOO_NET_CLIENT_GROUP_LEAVE_EVENT:
         {
-            auto e = (aoonet_client_group_event *)events[i];
+            auto e = (aoo_net_client_group_event *)events[i];
             if (e->result > 0){
                 x->x_node->remove_group(gensym(e->name));
 
@@ -101,9 +101,9 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
             }
             break;
         }
-        case AOONET_CLIENT_PEER_JOIN_EVENT:
+        case AOO_NET_CLIENT_PEER_JOIN_EVENT:
         {
-            auto e = (aoonet_client_peer_event *)events[i];
+            auto e = (aoo_net_client_peer_event *)events[i];
 
             if (e->result > 0){
                 ip_address addr((const sockaddr *)e->address, e->length);
@@ -116,13 +116,13 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
                     outlet_anything(x->x_msgout, gensym("peer_join"), 4, msg);
                 }
             } else {
-                bug("%s: AOONET_CLIENT_PEER_JOIN_EVENT", classname(x));
+                bug("%s: AOO_NET_CLIENT_PEER_JOIN_EVENT", classname(x));
             }
             break;
         }
-        case AOONET_CLIENT_PEER_LEAVE_EVENT:
+        case AOO_NET_CLIENT_PEER_LEAVE_EVENT:
         {
-            auto e = (aoonet_client_peer_event *)events[i];
+            auto e = (aoo_net_client_peer_event *)events[i];
 
             if (e->result > 0){
                 ip_address addr((const sockaddr *)e->address, e->length);
@@ -136,13 +136,13 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
                     outlet_anything(x->x_msgout, gensym("peer_leave"), 4, msg);
                 }
             } else {
-                bug("%s: AOONET_CLIENT_PEER_LEAVE_EVENT", classname(x));
+                bug("%s: AOO_NET_CLIENT_PEER_LEAVE_EVENT", classname(x));
             }
             break;
         }
-        case AOONET_CLIENT_ERROR_EVENT:
+        case AOO_NET_CLIENT_ERROR_EVENT:
         {
-            auto e = (aoonet_client_event *)events[i];
+            auto e = (aoo_net_client_event *)events[i];
             pd_error(x, "%s: %s", classname(x), e->errormsg);
             break;
         }
@@ -229,7 +229,7 @@ t_aoo_client::t_aoo_client(int argc, t_atom *argv)
     x_node = port > 0 ? i_node::get((t_pd *)this, port, 0) : nullptr;
 
     if (x_node){
-        x_client.reset(aoo::iclient::create(
+        x_client.reset(aoo::net::iclient::create(
                        x_node,(aoo_sendfn)aoo_node_sendto, port));
         if (x_client){
             verbose(0, "new aoo client on port %d", port);

@@ -4,11 +4,12 @@
 
 #pragma once
 
-#include "aoonet.h"
+#include "aoo/aoo_net.h"
 
 #include <memory>
 
 namespace aoo {
+namespace net {
 
 // NOTE: aoo::iserver and aoo::iclient don't define virtual destructors
 // and have to be destroyed with their respective destroy() method.
@@ -67,11 +68,11 @@ protected:
 };
 
 inline iserver * iserver::create(int port, int32_t *err){
-    return aoonet_server_new(port, err);
+    return aoo_net_server_new(port, err);
 }
 
 inline void iserver::destroy(iserver *server){
-    aoonet_server_free(server);
+    aoo_net_server_free(server);
 }
 
 /*//////////////////////// AoO client ///////////////////////*/
@@ -133,11 +134,12 @@ protected:
 };
 
 inline iclient * iclient::create(void *socket, aoo_sendfn fn, int port){
-    return aoonet_client_new(socket, fn, port);
+    return aoo_net_client_new(socket, fn, port);
 }
 
 inline void iclient::destroy(iclient *client){
-    aoonet_client_free(client);
+    aoo_net_client_free(client);
 }
 
+} // net
 } // aoo

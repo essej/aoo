@@ -4,7 +4,7 @@
 
 #include "aoo_common.hpp"
 
-#include "aoonet/aoonet.hpp"
+#include "aoo/aoo_net.hpp"
 
 #include <thread>
 
@@ -21,7 +21,7 @@ struct t_aoo_server
 
     t_object x_obj;
 
-    aoo::iserver::pointer x_server;
+    aoo::net::iserver::pointer x_server;
     int32_t x_numusers = 0;
     std::thread x_thread;
     t_clock *x_clock = nullptr;
@@ -34,9 +34,9 @@ static int32_t aoo_server_handle_events(t_aoo_server *x,
 {
     for (int i = 0; i < n; ++i){
         switch (events[i]->type){
-        case AOONET_SERVER_USER_JOIN_EVENT:
+        case AOO_NET_SERVER_USER_JOIN_EVENT:
         {
-            aoonet_server_user_event *e = (aoonet_server_user_event *)events[i];
+            aoo_net_server_user_event *e = (aoo_net_server_user_event *)events[i];
 
             t_atom msg;
             SETSYMBOL(&msg, gensym(e->name));
@@ -48,9 +48,9 @@ static int32_t aoo_server_handle_events(t_aoo_server *x,
 
             break;
         }
-        case AOONET_SERVER_USER_LEAVE_EVENT:
+        case AOO_NET_SERVER_USER_LEAVE_EVENT:
         {
-            aoonet_server_user_event *e = (aoonet_server_user_event *)events[i];
+            aoo_net_server_user_event *e = (aoo_net_server_user_event *)events[i];
 
             t_atom msg;
             SETSYMBOL(&msg, gensym(e->name));
@@ -62,9 +62,9 @@ static int32_t aoo_server_handle_events(t_aoo_server *x,
 
             break;
         }
-        case AOONET_SERVER_GROUP_JOIN_EVENT:
+        case AOO_NET_SERVER_GROUP_JOIN_EVENT:
         {
-            aoonet_server_group_event *e = (aoonet_server_group_event *)events[i];
+            aoo_net_server_group_event *e = (aoo_net_server_group_event *)events[i];
 
             t_atom msg[2];
             SETSYMBOL(msg, gensym(e->group));
@@ -73,9 +73,9 @@ static int32_t aoo_server_handle_events(t_aoo_server *x,
 
             break;
         }
-        case AOONET_SERVER_GROUP_LEAVE_EVENT:
+        case AOO_NET_SERVER_GROUP_LEAVE_EVENT:
         {
-            aoonet_server_group_event *e = (aoonet_server_group_event *)events[i];
+            aoo_net_server_group_event *e = (aoo_net_server_group_event *)events[i];
 
             t_atom msg[2];
             SETSYMBOL(msg, gensym(e->group));
@@ -84,9 +84,9 @@ static int32_t aoo_server_handle_events(t_aoo_server *x,
 
             break;
         }
-        case AOONET_SERVER_ERROR_EVENT:
+        case AOO_NET_SERVER_ERROR_EVENT:
         {
-            aoonet_server_event *e = (aoonet_server_event *)events[i];
+            aoo_net_server_event *e = (aoo_net_server_event *)events[i];
             pd_error(x, "%s: %s", classname(x), e->errormsg);
             break;
         }
@@ -121,7 +121,7 @@ t_aoo_server::t_aoo_server(int argc, t_atom *argv)
 
     if (port > 0){
         int32_t err;
-        x_server.reset(aoo::iserver::create(port, &err));
+        x_server.reset(aoo::net::iserver::create(port, &err));
         if (x_server){
             verbose(0, "aoo server listening on port %d", port);
             // start thread

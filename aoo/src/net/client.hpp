@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "aoonet/aoonet.hpp"
+#include "aoo/aoo_net.hpp"
 
 #include "common/utils.hpp"
 #include "common/sync.hpp"
@@ -26,6 +26,7 @@
 #define AOO_NET_CLIENT_REQUEST_TIMEOUT 5000
 
 namespace aoo {
+namespace net {
 
 class client;
 
@@ -98,9 +99,9 @@ public:
 
         union {
             aoo_event event_;
-            aoonet_client_event client_event_;
-            aoonet_client_group_event group_event_;
-            aoonet_client_peer_event peer_event_;
+            aoo_net_client_event client_event_;
+            aoo_net_client_group_event group_event_;
+            aoo_net_client_peer_event peer_event_;
         };
     };
 
@@ -309,4 +310,5 @@ private:
     };
 };
 
+} // net
 } // aoo

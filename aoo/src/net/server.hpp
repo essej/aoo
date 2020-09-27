@@ -4,7 +4,8 @@
 
 #pragma once
 
-#include "aoonet/aoonet.hpp"
+#include "aoo/aoo.h"
+#include "aoo/aoo_net.hpp"
 
 #include "common/utils.hpp"
 #include "common/lockfree.hpp"
@@ -24,6 +25,7 @@
 #include <vector>
 
 namespace aoo {
+namespace net {
 
 class server;
 
@@ -137,9 +139,9 @@ public:
 
         union {
             aoo_event event_;
-            aoonet_server_event server_event_;
-            aoonet_server_user_event user_event_;
-            aoonet_server_group_event group_event_;
+            aoo_net_server_event server_event_;
+            aoo_net_server_user_event user_event_;
+            aoo_net_server_group_event group_event_;
         };
     };
 
@@ -234,4 +236,5 @@ private:
     };
 };
 
+} // net
 } // aoo

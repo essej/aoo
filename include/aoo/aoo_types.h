@@ -33,12 +33,23 @@ extern "C"
 # endif
 #endif
 
+#define AOO_VERSION_MAJOR 2
+#define AOO_VERSION_MINOR 0
+#define AOO_VERSION_PATCH 0
+#define AOO_VERSION_PRERELEASE 3 // 0: no pre-release
+
 #define AOO_MSG_DOMAIN "/aoo"
 #define AOO_MSG_DOMAIN_LEN 4
 
 #define AOO_ID_WILDCARD -1
 #define AOO_ID_NONE INT32_MIN
 
+// default UDP packet size
+#ifndef AOO_PACKETSIZE
+ #define AOO_PACKETSIZE 512
+#endif
+
+// max. UDP packet size
 #define AOO_MAXPACKETSIZE 4096 // ?
 
 #ifndef AOO_SAMPLETYPE
@@ -46,6 +57,15 @@ extern "C"
 #endif
 
 typedef AOO_SAMPLETYPE aoo_sample;
+
+typedef enum aoo_type
+{
+    AOO_TYPE_SOURCE = 0,
+    AOO_TYPE_SINK,
+    AOO_TYPE_SERVER = 1000,
+    AOO_TYPE_CLIENT,
+    AOO_TYPE_PEER
+} aoo_type;
 
 // send function
 typedef int32_t (*aoo_sendfn)(

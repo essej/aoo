@@ -4,8 +4,6 @@
 
 #include "aoo_common.hpp"
 
-#include "aoonet/aoonet.h"
-
 #include "common/sync.hpp"
 
 #include <vector>
@@ -308,8 +306,7 @@ void t_node::do_receive()
         lock.unlock();
         // get sink ID
         int32_t type, id;
-        if ((aoo_parse_pattern(buf, nbytes, &type, &id) > 0)
-            || (aoonet_parse_pattern(buf, nbytes, &type) > 0))
+        if (aoo_parse_pattern(buf, nbytes, &type, &id) > 0)
         {
             aoo::shared_scoped_lock l(x_clientlock);
             if (type == AOO_TYPE_SINK){
