@@ -169,3 +169,9 @@ option(BUILD_PD_EXTERNAL "build Pd external" ON)
 if (BUILD_PD_EXTERNAL)
     add_subdirectory(pd)
 endif()
+
+# SC extension
+option(BUILD_SC_EXTENSION "build SC extension" ON)
+if (BUILD_SC_EXTENSION)
+    add_subdirectory(sc)
+endif()

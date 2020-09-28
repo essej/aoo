@@ -1,0 +1,422 @@
+#include "Aoo.hpp"
+
+#include "common/net_utils.hpp"
+
+#include "common/sync.hpp"
+
+#include <vector>
+#include <list>
+#include <unordered_map>
+#include <cstring>
+#include <stdio.h>
+#include <errno.h>
+
+#include <thread>
+#include <condition_variable>
+#include <mutex>
+#include <atomic>
+
+using namespace aoo;
+
+#ifndef AOO_NODE_POLL
+ #define AOO_NODE_POLL 0
+#endif
+
+#define AOO_POLL_INTERVAL 1000 // microseconds
+
+struct AooPeer {
+    std::string group;
+    std::string user;
+    aoo::endpoint *endpoint;
+};
+
+struct AooClient {
+    INodeClient *obj;
+    int32_t type;
+    int32_t id;
+};
+
+class AooNode : public INode {
+    friend class INode;
+public:
+    AooNode(int socket, int port);
+    ~AooNode();
+
+    void release(INodeClient& client) override;
+
+    int socket() const override { return socket_; }
+
+    int port() const override { return port_; }
+
+    int sendto(const char *buf, int32_t size,
+               const ip_address& addr) override
+    {
+        return socket_sendto(socket_, buf, size, addr);
+    }
+
+    endpoint *get_endpoint(const ip_address& addr) override;
+
+    endpoint *find_peer(const std::string& group,
+                        const std::string& user) override;
+
+    void add_peer(const std::string& group, const std::string& user,
+                  const ip_address& addr) override;
+
+    void remove_peer(const std::string& group,
+                     const std::string& user) override;
+
+    void remove_all_peers() override;
+
+    void remove_group(const std::string& group) override;
+
+    void notify() override;
+private:
+    int socket_ = -1;
+    int port_ = 0;
+    std::list<aoo::endpoint> endpoints_; // endpoints must not move in memory!
+    aoo::shared_mutex endpointMutex_;
+    // dependants
+    std::vector<AooClient> clients_;
+    aoo::shared_mutex clientMutex_;
+    // peer list
+    std::vector<AooPeer> peers_;
+    // threading
+#if AOO_NODE_POLL
+    std::thread thread_;
+#else
+    std::thread sendThread_;
+    std::thread receiveThread_;
+    std::mutex mutex_;
+    std::condition_variable condition_;
+#endif
+    std::atomic<bool> quit_{false};
+
+    // private methods
+    bool add_client(INodeClient& client, int32_t type, int32_t id);
+
+    aoo::endpoint* find_endpoint(const ip_address& addr);
+
+    void do_send();
+
+    void do_receive();
+};
+
+// public methods
+
+AooNode::AooNode(int socket, int port)
+    : socket_(socket), port_(port)
+{
+    // start threads
+#if AOO_NODE_POLL
+    thread_ = std::thread([this](){
+        lower_thread_priority();
+
+        while (!quit_){
+            do_receive();
+            do_send();
+        }
+    });
+#else
+    sendThread_ = std::thread([this](){
+        lower_thread_priority();
+
+        std::unique_lock<std::mutex> lock(mutex_);
+        while (!quit_){
+            condition_.wait(lock);
+            do_send();
+        }
+    });
+    receiveThread_ = std::thread([this](){
+        lower_thread_priority();
+
+        while (!quit_){
+            do_receive();
+        }
+    });
+#endif
+
+    LOG_VERBOSE("aoo: new node on port " << port_);
+}
+
+AooNode::~AooNode(){
+    // tell the threads that we're done
+#if AOO_NODE_POLL
+    // don't bother waking up the thread...
+    // just set the flag and wait
+    quit_ = true;
+    thread_.join();
+
+    socket_close(socket_);
+#else
+    {
+        std::lock_guard<std::mutex> l(mutex_);
+        quit_ = true;
+    }
+
+    // notify send thread
+    condition_.notify_all();
+
+    // try to wake up receive thread
+    aoo::unique_lock lock(clientMutex_);
+    int didit = socket_signal(socket_, port_);
+    if (!didit){
+        // force wakeup by closing the socket.
+        // this is not nice and probably undefined behavior,
+        // the MSDN docs explicitly forbid it!
+        socket_close(socket_);
+    }
+    lock.unlock();
+
+    // wait for threads
+    sendThread_.join();
+    receiveThread_.join();
+
+    if (didit){
+        socket_close(socket_);
+    }
+#endif
+
+    LOG_VERBOSE("aoo: released node on port " << port_);
+}
+
+using NodeMap = std::unordered_map<int, std::weak_ptr<AooNode>>;
+
+shared_mutex gNodeMapMutex;
+static std::unordered_map<World *, NodeMap> gNodeMap;
+
+static NodeMap& getNodeMap(World *world){
+    scoped_lock lock(gNodeMapMutex);
+    return gNodeMap[world];
+}
+
+INode::ptr INode::get(World *world, INodeClient& client,
+                   int32_t type, int port, int32_t id)
+{
+    std::shared_ptr<AooNode> node;
+
+    auto& nodeMap = getNodeMap(world);
+
+    // find or create node
+    auto it = nodeMap.find(port);
+    if (it != nodeMap.end()){
+        node = it->second.lock();
+    }
+
+    if (!node){
+        // first create socket
+        int sock = socket_udp();
+        if (sock < 0){
+            socket_error_print("socket");
+            return nullptr;
+        }
+
+        // bind socket to given port
+        if (socket_bind(sock, port) < 0){
+            LOG_ERROR("aoo node: couldn't bind to port " << port);
+            socket_close(sock);
+            return nullptr;
+        }
+
+        // increase send buffer size to 65 kB
+        socket_setsendbufsize(sock, 2 << 15);
+        // increase receive buffer size to 2 MB
+        socket_setrecvbufsize(sock, 2 << 20);
+
+        // finally create aoo node instance
+        node = std::make_shared<AooNode>(sock, port);
+        nodeMap.emplace(port, node);
+    }
+
+    if (!node->add_client(client, type, id)){
+        // never fails for new t_node!
+        return nullptr;
+    }
+
+    return node;
+}
+
+void AooNode::release(INodeClient& client){
+    // remove receiver from list
+    aoo::scoped_lock l(clientMutex_);
+    for (auto it = clients_.begin(); it != clients_.end(); ++it){
+        if (&client == it->obj){
+            clients_.erase(it);
+            return;
+        }
+    }
+    LOG_ERROR("AooNode::release: client not found!");
+}
+
+endpoint * AooNode::get_endpoint(const ip_address& addr){
+    aoo::scoped_lock lock(endpointMutex_);
+    auto ep = find_endpoint(addr);
+    if (ep)
+        return ep;
+    else {
+        // add endpoint
+        endpoints_.emplace_back(socket_, addr);
+        return &endpoints_.back();
+    }
+}
+
+endpoint * AooNode::find_peer(const std::string& group,
+                             const std::string& user)
+{
+    for (auto& peer : peers_){
+        if (peer.group == group && peer.user == user){
+            return peer.endpoint;
+        }
+    }
+    return nullptr;
+}
+void AooNode::add_peer(const std::string& group,
+                       const std::string& user,
+                       const ip_address& addr)
+{
+    if (find_peer(group, user)){
+        LOG_ERROR("AooNode::add_peer: peer already added");
+        return;
+    }
+
+    auto e = get_endpoint(addr);
+
+    peers_.push_back({ group, user, e });
+}
+
+void AooNode::remove_peer(const std::string& group,
+                          const std::string& user)
+{
+    for (auto it = peers_.begin(); it != peers_.end(); ++it){
+        if (it->group == group && it->user == user){
+            peers_.erase(it);
+            return;
+        }
+    }
+    LOG_ERROR("AooNode::remove_peer: couldn't find peer");
+}
+
+void AooNode::remove_all_peers(){
+    peers_.clear();
+}
+
+void AooNode::remove_group(const std::string& group){
+    for (auto it = peers_.begin(); it != peers_.end(); ) {
+        // remove all peers matching group
+        if (it->group == group){
+            it = peers_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void AooNode::notify(){
+#if !AOO_NODE_POLL
+    condition_.notify_all();
+#endif
+}
+
+// private methods
+
+bool AooNode::add_client(INodeClient& client, int32_t type, int32_t id)
+{
+    // check client and add to list
+    aoo::scoped_lock lock(clientMutex_);
+#if 1
+    for (auto& c : clients_)
+    {
+        if (c.type == type && c.id == id) {
+            if (c.obj == &client){
+                LOG_ERROR("AooNode::add_client: client already added!");
+            } else {
+                if (type == AOO_TYPE_CLIENT){
+                    LOG_ERROR("aoo client on port " << port_ << " already exists!");
+                } else {
+                    auto which = (type == AOO_TYPE_SOURCE) ? "source" : "sink";
+                    LOG_ERROR("aoo " << which << " with ID " << id
+                              << " on port " << port_ << " already exists!");
+                }
+            }
+            return false;
+        }
+    }
+#endif
+    clients_.push_back({ &client, type, id });
+    return true;
+}
+
+aoo::endpoint * AooNode::find_endpoint(const ip_address& addr)
+{
+    for (auto& e : endpoints_){
+        if (e.address() == addr){
+            return &e;
+        }
+    }
+    return nullptr;
+}
+
+void AooNode::do_send()
+{
+    aoo::shared_scoped_lock lock(clientMutex_);
+
+    for (auto& c : clients_){
+        c.obj->send();
+    }
+}
+
+void AooNode::do_receive()
+{
+    ip_address addr;
+    char buf[AOO_MAXPACKETSIZE];
+    int nbytes = socket_receive(socket_, buf, AOO_MAXPACKETSIZE,
+                                &addr, AOO_POLL_INTERVAL);
+    if (nbytes > 0){
+        // try to find endpoint
+        aoo::unique_lock lock(endpointMutex_);
+        auto ep = find_endpoint(addr);
+        if (!ep){
+            // add endpoint
+            endpoints_.emplace_back(socket_, addr);
+            ep = &endpoints_.back();
+        }
+        lock.unlock();
+        // get sink ID
+        int32_t type, id;
+        if (aoo_parse_pattern(buf, nbytes, &type, &id))
+        {
+            // forward OSC packet to matching clients(s)
+            aoo::shared_scoped_lock l(clientMutex_);
+            for (auto& c : clients_){
+                if (c.type == type && ((id == AOO_ID_WILDCARD) || (id == c.id)))
+                {
+                    c.obj->handleMessage(buf, nbytes, ep, endpoint::send);
+                    if (id != AOO_ID_WILDCARD)
+                        break;
+                }
+            }
+        #if !AOO_NODE_POLL
+            // notify send thread
+            condition_.notify_all();
+        #endif
+        } else {
+            // not a valid AoO OSC message
+            fprintf(stderr, "aoo_node: not a valid AOO message!\n");
+            fflush(stderr);
+        }
+    } else if (nbytes == 0){
+        // timeout -> update clients
+        aoo::shared_scoped_lock lock(clientMutex_);
+        for (auto& c : clients_){
+            c.obj->update();
+        }
+    #if !AOO_NODE_POLL
+        // notify send thread
+        condition_.notify_all();
+    #endif
+    } else {
+        // ignore errors when quitting
+        if (!quit_){
+            socket_error_print("recv");
+        }
+    }
+}
