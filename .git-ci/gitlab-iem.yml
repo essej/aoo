@@ -10,10 +10,10 @@ variables:
 
 .script:deps: &script_deps
 # supercollider
-#  - git clone https://github.com/supercollider/supercollider.git "${SC_PATH}"
-#  - pushd "${SC_PATH}"
-#  - git submodule update --init
-#  - popd
+  - git clone https://github.com/supercollider/supercollider.git "${SC_PATH}"
+  - pushd "${SC_PATH}"
+  - git submodule update --init
+  - popd
 # submodules (Opus)
   - git submodule update --init
   - cmake -Hdeps/opus -Bdeps/opus/build -DOPUS_STACK_PROTECTOR=OFF
@@ -24,7 +24,7 @@ variables:
   - prefix="$(pwd)/build/${CI_JOB_NAME%_*}"
   - cmake -H. -Bbuild -DSTATIC_LIBS=${STATIC_LIBS} -DCMAKE_INSTALL_PREFIX="$prefix/aoo"
    -DPD_EXTENSION=${PD_EXTENSION} -DPD_DIR="${PD_PATH}" -DPD_INSTALLDIR="$prefix/pd"
-#   -DSUPERNOVA=${SUPERNOVA} -DSC_INCLUDEDIR="${SC_PATH}" -DSC_INSTALLDIR="$prefix/sc"
+   -DSUPERNOVA=${SUPERNOVA} -DSC_INCLUDEDIR="${SC_PATH}" -DSC_INSTALLDIR="$prefix/sc"
 
 ### build snippets
 .script:make: &script_make
@@ -44,7 +44,7 @@ variables:
     paths:
       - "build/${CI_JOB_NAME%_*}/aoo"
       - "build/${CI_JOB_NAME%_*}/pd/aoo"
-#      - "build/${CI_JOB_NAME%_*}/sc/aoo"
+      - "build/${CI_JOB_NAME%_*}/sc/aoo"
 
 .snapshot:
   except:
@@ -60,6 +60,7 @@ variables:
   extends: .build:script
   image: gcc
   variables:
+    SUPERNOVA: 1
     STATIC_LIBS: 1
   before_script:
     - apt-get update && apt-get install -y --no-install-recommends make cmake git
@@ -164,7 +165,7 @@ variables:
     - root=$(pwd)
 # Pd + SuperCollider:
     - for dir in ./build/*; do
-        for lib in pd; do
+        for lib in pd sc; do
           name=aoo_${lib}_${CI_COMMIT_REF_NAME}_$(basename "$dir").zip;
           echo create $name;
           (cd "$dir/$lib" && zip -r "${root}/${name}" ./aoo)
