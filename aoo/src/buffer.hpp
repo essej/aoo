@@ -75,11 +75,13 @@ public:
         T& operator*() { return *data_; }
         T* operator->() { return data_; }
         base_iterator& operator++() {
+            auto begin = owner_->data_.data();
+            auto end = begin + owner_->data_.size();
             auto next = data_ + 1;
-            if (next == &(*owner_->data_.end())){
-                next = &(*owner_->data_.begin());
+            if (next == end){
+                next = begin;
             }
-            if (next == &owner_->data_[owner_->head_]){
+            if (next == (begin + owner_->head_)){
                 next = nullptr; // sentinel
             }
             data_ = next;

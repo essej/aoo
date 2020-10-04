@@ -121,7 +121,7 @@ void received_block::add_frame(int32_t which, const char *data, int32_t n){
         std::copy(data, data + n, buffer_.end() - n);
     } else {
         LOG_DEBUG("copy frame " << which << " with " << n << " bytes");
-        std::copy(data, data + n, buffer_.begin() + which * n);
+        std::copy(data, data + n, buffer_.data() + (which * n));
         framesize_ = n; // LATER allow varying framesizes
     }
     frames_[which] = false;
@@ -279,14 +279,15 @@ received_block* jitter_buffer::find(int32_t seq){
         }
     };
 
+    auto begin = data_.data();
     if (head_ > tail_){
         // [tail, head]
-        return dofind(&data_[tail_], &data_[head_]);
+        return dofind(begin + tail_, begin + head_);
     } else {
         // [begin, head] + [tail, end]
-        auto result = dofind(&data_[0], &data_[head_]);
+        auto result = dofind(begin, begin + head_);
         if (!result){
-            result = dofind(&data_[tail_], &data_[capacity()]);
+            result = dofind(begin + tail_, begin + data_.capacity());
         }
         return result;
     }
