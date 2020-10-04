@@ -359,20 +359,19 @@ void aoo_send_channel(AooSendUnit *unit, sc_msg_iter* args){
 }
 
 void aoo_send_packetsize(AooSendUnit *unit, sc_msg_iter* args){
-    auto packetSize = args->geti();
-    unit->delegate().source()->set_packetsize(packetSize);
+    unit->delegate().source()->set_packetsize(args->geti());
 }
 
 void aoo_send_ping(AooSendUnit *unit, sc_msg_iter* args){
-    auto pingInverval = args->geti();
-    unit->delegate().source()->set_ping_interval(pingInverval);
+    int32_t ms = args->getf() * 1000.f;
+    unit->delegate().source()->set_ping_interval(ms);
 }
 
 void aoo_send_resend(AooSendUnit *unit, sc_msg_iter* args){
-    auto bufSize = args->geti();
+    int32_t ms = args->getf() * 1000.f;
 
     auto cmd = CmdData::create<OptionCmd>(unit->mWorld);
-    cmd->i = bufSize;
+    cmd->i = ms;
     unit->delegate().doCmd(cmd,
         [](World *world, void *cmdData){
             auto data = (OptionCmd *)cmdData;
@@ -384,13 +383,11 @@ void aoo_send_resend(AooSendUnit *unit, sc_msg_iter* args){
 }
 
 void aoo_send_redundancy(AooSendUnit *unit, sc_msg_iter* args){
-    auto redundancy = args->geti();
-    unit->delegate().source()->set_redundancy(redundancy);
+    unit->delegate().source()->set_redundancy(args->geti());
 }
 
 void aoo_send_timefilter(AooSendUnit *unit, sc_msg_iter* args){
-    auto timefilter = args->getf();
-    unit->delegate().source()->set_timefilter_bandwidth(timefilter);
+    unit->delegate().source()->set_timefilter_bandwidth(args->getf());
 }
 
 using AooSendUnitCmdFunc = void (*)(AooSendUnit*, sc_msg_iter*);

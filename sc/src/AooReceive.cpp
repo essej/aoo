@@ -271,10 +271,10 @@ void aoo_recv_uninvite(AooReceiveUnit *unit, sc_msg_iter *args){
 }
 
 void aoo_recv_bufsize(AooReceiveUnit *unit, sc_msg_iter *args){
-    auto bufSize = args->geti();
+    int32_t ms = args->getf() * 1000.f;
 
     auto cmd = CmdData::create<OptionCmd>(unit->mWorld);
-    cmd->i = bufSize;
+    cmd->i = ms;
     unit->delegate().doCmd(cmd,
         [](World *world, void *cmdData){
             auto data = (OptionCmd *)cmdData;
@@ -286,28 +286,24 @@ void aoo_recv_bufsize(AooReceiveUnit *unit, sc_msg_iter *args){
 }
 
 void aoo_recv_timefilter(AooReceiveUnit *unit, sc_msg_iter *args){
-    auto timefilter = args->getf();
-    unit->delegate().sink()->set_timefilter_bandwidth(timefilter);
+    unit->delegate().sink()->set_timefilter_bandwidth(args->getf());
 }
 
 void aoo_recv_packetsize(AooReceiveUnit *unit, sc_msg_iter *args){
-    auto packetSize = args->geti();
-    unit->delegate().sink()->set_packetsize(packetSize);
+    unit->delegate().sink()->set_packetsize(args->geti());
 }
 
 void aoo_recv_resend(AooReceiveUnit *unit, sc_msg_iter *args){
-    auto enable = args->geti();
-    unit->delegate().sink()->set_resend_enable(enable);
+    unit->delegate().sink()->set_resend_enable(args->geti());
 }
 
 void aoo_recv_resend_limit(AooReceiveUnit *unit, sc_msg_iter *args){
-    auto limit = args->geti();
-    unit->delegate().sink()->set_resend_maxnumframes(limit);
+    unit->delegate().sink()->set_resend_maxnumframes(args->geti());
 }
 
 void aoo_recv_resend_interval(AooReceiveUnit *unit, sc_msg_iter *args){
-    auto interval = args->geti();
-    unit->delegate().sink()->set_resend_interval(interval);
+    int32_t ms = args->getf() * 1000.f;
+    unit->delegate().sink()->set_resend_interval(ms);
 }
 
 void aoo_recv_reset(AooReceiveUnit *unit, sc_msg_iter *args){
