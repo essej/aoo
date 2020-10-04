@@ -733,11 +733,12 @@ int32_t source::set_format(aoo_format &f){
             return 0;
         }
     }
-    encoder_->set_format(f);
-
-    update();
-
-    return 1;
+    if (encoder_->set_format(f)){
+        update();
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 int32_t source::make_salt(){
