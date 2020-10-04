@@ -59,17 +59,17 @@ int32_t aoo_parse_pattern(const char *msg, int32_t n,
             && !memcmp(msg + offset, AOO_NET_MSG_CLIENT, AOO_NET_MSG_CLIENT_LEN))
         {
             *type = AOO_TYPE_CLIENT;
-            offset += AOO_NET_MSG_CLIENT_LEN;
+            return offset + AOO_NET_MSG_CLIENT_LEN;
         } else if (n >= (offset + AOO_NET_MSG_SERVER_LEN)
             && !memcmp(msg + offset, AOO_NET_MSG_SERVER, AOO_NET_MSG_SERVER_LEN))
         {
             *type = AOO_TYPE_SERVER;
-            offset += AOO_NET_MSG_SERVER_LEN;
+            return offset + AOO_NET_MSG_SERVER_LEN;
         } else if (n >= (offset + AOO_NET_MSG_PEER_LEN)
             && !memcmp(msg + offset, AOO_NET_MSG_PEER, AOO_NET_MSG_PEER_LEN))
         {
             *type = AOO_TYPE_PEER;
-            offset += AOO_NET_MSG_PEER_LEN;
+            return offset + AOO_NET_MSG_PEER_LEN;
         } else {
             return 0;
         }
