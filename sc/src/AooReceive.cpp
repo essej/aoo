@@ -26,7 +26,7 @@ void AooReceive::init(int32_t port, int32_t id, int32 bufsize) {
                         cmd->node = node;
 
                         sink->setup(cmd->sampleRate, cmd->blockSize,
-                                        cmd->numChannels);
+                                    cmd->numChannels);
 
                         if (cmd->bufferSize <= 0) {
                             sink->set_buffersize(DEFBUFSIZE);

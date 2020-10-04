@@ -28,14 +28,7 @@ class endpoint;
 class ip_address;
 }
 
-class INodeClient {
-public:
-    virtual ~INodeClient() {}
-    virtual void send() = 0;
-    virtual void handleMessage(const char *data, int32_t size,
-                               void *endpoint, aoo_replyfn fn) = 0;
-    virtual void update() {}
-};
+class INodeClient;
 
 class INode {
 public:
@@ -70,6 +63,57 @@ public:
     virtual void removeGroup(const std::string& group) = 0;
 
     virtual void notify() = 0;
+};
+
+class INodeClient {
+public:
+    virtual ~INodeClient() {}
+
+    bool initialized() const {
+        return initialized_.load(std::memory_order_acquire);
+    }
+
+    void setNode(INode::ptr node) {
+        node_ = std::move(node);
+        initialized_.store(true);
+    }
+
+    void releaseNode() {
+        node_->release(*this);
+        node_ = nullptr;
+    }
+
+    INode* node() {
+        return node_.get();
+    }
+
+    void send() {
+        if (initialized()) {
+            doSend();
+        }
+    }
+
+    void handleMessage(const char* data, int32_t size,
+                       void* endpoint, aoo_replyfn fn)
+    {
+        if (initialized()) {
+            doHandleMessage(data, size, endpoint, fn);
+        }
+    }
+
+    void update() {
+        if (initialized()) {
+            doUpdate();
+        }
+    }
+protected:
+    virtual void doSend() = 0;
+    virtual void doHandleMessage(const char* data, int32_t size,
+                                 void* endpoint, aoo_replyfn fn) = 0;
+    virtual void doUpdate() {}
+private:
+    INode::ptr node_;
+    std::atomic<bool> initialized_{ false };
 };
 
 /*/////////////////// Commands //////////////////////*/
@@ -166,10 +210,6 @@ public:
 
     ~AooDelegate();
 
-    bool initialized() const {
-        return initialized_.load(std::memory_order_acquire);
-    }
-
     bool alive() const {
         return owner_ != nullptr;
     }
@@ -185,20 +225,6 @@ public:
 
     AooUnit& unit() {
         return *owner_;
-    }
-
-    void setNode(INode::ptr node) {
-        node_ = std::move(node);
-        initialized_.store(true);
-    }
-
-    void releaseNode() {
-        node_->release(*this);
-        node_ = nullptr;
-    }
-
-    INode *node() {
-        return node_.get();
     }
 
     // perform sequenced command
@@ -224,8 +250,6 @@ protected:
 private:
     World *world_;
     AooUnit *owner_;
-    INode::ptr node_;
-    std::atomic<bool> initialized_{false};
 };
 
 /*//////////////////////// AooUnit /////////////////////////////*/

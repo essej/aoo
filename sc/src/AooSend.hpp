@@ -17,18 +17,14 @@ public:
 
     void onDetach() override;
 
-    void send() override {
-        if (initialized()){
-            source_->send();
-        }
+    void doSend() override {
+        source_->send();
     }
 
-    void handleMessage(const char *data, int32_t size,
-                       void *endpoint, aoo_replyfn fn) override
+    void doHandleMessage(const char *data, int32_t size,
+                         void *endpoint, aoo_replyfn fn) override
     {
-        if (initialized()){
-            source_->handle_message(data, size, endpoint, fn);
-        }
+        source_->handle_message(data, size, endpoint, fn);
     }
 
     void handleEvent(const aoo_event *event);

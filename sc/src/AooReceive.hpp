@@ -14,24 +14,18 @@ public:
 
     void onDetach() override;
 
-    void send() override {
-        if (initialized()){
-            sink_->send();
-        }
+    void doSend() override {
+        sink_->send();
     }
 
-    void handleMessage(const char *data, int32_t size,
-                       void *endpoint, aoo_replyfn fn) override
+    void doHandleMessage(const char *data, int32_t size,
+                         void *endpoint, aoo_replyfn fn) override
     {
-        if (initialized()){
-            sink_->handle_message(data, size, endpoint, fn);
-        }
+        sink_->handle_message(data, size, endpoint, fn);
     }
 
-    void update() override {
-        if (initialized()){
-            sink_->decode();
-        }
+    void doUpdate() override {
+        sink_->decode();
     }
 
     void handleEvent(const aoo_event *event);

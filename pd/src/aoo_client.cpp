@@ -230,7 +230,7 @@ t_aoo_client::t_aoo_client(int argc, t_atom *argv)
 
     if (x_node){
         x_client.reset(aoo::net::iclient::create(
-                       x_node,(aoo_sendfn)aoo_node_sendto, port));
+                       x_node, (aoo_sendfn)aoo_node_sendto, port));
         if (x_client){
             verbose(0, "new aoo client on port %d", port);
             // start thread
