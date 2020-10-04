@@ -323,7 +323,8 @@ void aoo_send_format(AooSendUnit *unit, sc_msg_iter* args){
             owner.beginReply(msg, "/aoo/format", replyID);
 
             aoo_format_storage f;
-            if (parseFormat(owner.unit(), &args, f)){
+            int nchannels = static_cast<AooSendUnit&>(owner.unit()).numChannels();
+            if (parseFormat(owner.unit(), nchannels, &args, f)){
                 if (owner.source()->set_format(f.header) > 0){
                     // only send format on success
                     serializeFormat(msg, f.header);

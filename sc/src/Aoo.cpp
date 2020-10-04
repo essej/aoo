@@ -343,7 +343,8 @@ static int32_t getFormatParam(sc_msg_iter *args, const char *name, int32_t def)
     return def;
 }
 
-bool parseFormat(const AooUnit& unit, sc_msg_iter *args, aoo_format_storage &f)
+bool parseFormat(const AooUnit& unit, int nchannels,
+                 sc_msg_iter *args, aoo_format_storage &f)
 {
     const char *codec = args->gets("");
 
@@ -352,7 +353,7 @@ bool parseFormat(const AooUnit& unit, sc_msg_iter *args, aoo_format_storage &f)
         fmt.header.codec = AOO_CODEC_PCM;
         fmt.header.blocksize = getFormatParam(args, "blocksize", unit.bufferSize());
         fmt.header.samplerate = getFormatParam(args, "samplerate", unit.sampleRate());
-        // fmt.header.nchannels
+        fmt.header.nchannels = nchannels;
 
         int bitdepth = getFormatParam(args, "bitdepth", 4);
         switch (bitdepth){
@@ -379,7 +380,7 @@ bool parseFormat(const AooUnit& unit, sc_msg_iter *args, aoo_format_storage &f)
         fmt.header.codec = AOO_CODEC_OPUS;
         fmt.header.blocksize = getFormatParam(args, "blocksize", 480); // 10ms
         fmt.header.samplerate = getFormatParam(args, "samplerate", 48000);
-        // fmt->header.nchannels
+        fmt.header.nchannels = nchannels;
 
         // bitrate ("auto", "max" or float)
         if (args->remain() > 0){
