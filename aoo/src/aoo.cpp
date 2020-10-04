@@ -121,20 +121,18 @@ void aoo_version(int *major, int *minor,
     if (pre) *pre = AOO_VERSION_PRERELEASE;
 }
 
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
 const char *aoo_version_string(){
-    static std::string version = [](){
-        std::stringstream ss;
-        ss << AOO_VERSION_MAJOR << "." << AOO_VERSION_MINOR;
+    return STR(AOO_VERSION_MAJOR) "." STR(AOO_VERSION_MINOR)
     #if AOO_VERSION_PATCH > 0
-        ss << "." << AOO_VERSION_PATCH;
+        "." STR(AOO_VERSION_PATCH)
     #endif
     #if AOO_VERSION_PRERELEASE > 0
-        ss << "-pre" << AOO_VERSION_PRERELEASE;
+       "-pre" STR(AOO_VERSION_PRERELEASE)
     #endif
-        return ss.str();
-    }();
-
-    return version.c_str();
+        ;
 }
 
 namespace aoo {
