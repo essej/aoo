@@ -8,7 +8,7 @@ set(COMMON "../common")
 
 file(GLOB HEADERS "src/*.hpp" "${COMMON}/net_utils.hpp" "${COMMON}/time.hpp")
 
-file(GLOB SRC ${HEADERS} "src/*.cpp" "${COMMON}/net_utils.cpp" "${COMMON}/ntp.cpp")
+file(GLOB SRC ${HEADERS} "src/*.cpp")
 
 # SuperCollider API:
 set(SC_INCLUDEDIR "" CACHE PATH "SuperCollider source files")

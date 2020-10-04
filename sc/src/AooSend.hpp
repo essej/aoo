@@ -13,7 +13,7 @@ class AooSend : public AooDelegate {
 public:
     using AooDelegate::AooDelegate;
 
-    void init(int32_t port, int32_t id) override;
+    void init(int32_t port, int32_t id);
 
     void onDetach() override;
 

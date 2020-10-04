@@ -4,7 +4,7 @@ static InterfaceTable* ft;
 
 /*////////////////// AooReceive ////////////////*/
 
-void AooReceive::init(int32_t port, int32_t id) {
+void AooReceive::init(int32_t port, int32_t id, int32 bufsize) {
     auto data = CmdData::create<OpenCmd>(world());
     if (data){
         data->port = port;
@@ -12,6 +12,7 @@ void AooReceive::init(int32_t port, int32_t id) {
         data->sampleRate = unit().sampleRate();
         data->blockSize = unit().bufferSize();
         data->numChannels = unit().numOutputs();
+        data->bufferSize = bufsize;
 
         doCmd(data,
             [](World *world, void *data){
@@ -27,7 +28,11 @@ void AooReceive::init(int32_t port, int32_t id) {
                         sink->setup(cmd->sampleRate, cmd->blockSize,
                                         cmd->numChannels);
 
-                        sink->set_buffersize(DEFBUFSIZE);
+                        if (cmd->bufferSize <= 0) {
+                            sink->set_buffersize(DEFBUFSIZE);
+                        } else {
+                            sink->set_buffersize(cmd->bufferSize);
+                        }
 
                         cmd->obj.reset(sink);
                         return true;
@@ -161,8 +166,10 @@ void AooReceive::handleEvent(const aoo_event *event){
 AooReceiveUnit::AooReceiveUnit() {
     int32_t port = in0(0);
     int32_t id = in0(1);
-    delegate_ = rt::make_shared<AooReceive>(mWorld, *this);
-    delegate_->init(port, id);
+    int32_t bufsize = in0(2) * 1000.f; // sec -> ms
+    auto delegate = rt::make_shared<AooReceive>(mWorld, *this);
+    delegate->init(port, id, bufsize);
+    delegate_ = std::move(delegate);
 
     set_calc_function<AooReceiveUnit, &AooReceiveUnit::next>();
 }

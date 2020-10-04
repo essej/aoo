@@ -209,8 +209,9 @@ void AooSend::setFormat(aoo_format &f){
 AooSendUnit::AooSendUnit(){
     int32_t port = in0(0);
     int32_t id = in0(1);
-    delegate_ = rt::make_shared<AooSend>(mWorld, *this);
-    delegate_->init(port, id);
+    auto delegate = rt::make_shared<AooSend>(mWorld, *this);
+    delegate->init(port, id);
+    delegate_ = std::move(delegate);
 
     set_calc_function<AooSendUnit, &AooSendUnit::next>();
 }

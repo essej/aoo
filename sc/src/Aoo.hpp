@@ -72,7 +72,7 @@ public:
 
 /*/////////////////// Commands //////////////////////*/
 
-struct AooDelegate;
+class AooDelegate;
 
 #define AooPluginCmd(x) DefinePlugInCmd("/" #x, x, 0)
 
@@ -115,6 +115,7 @@ struct _OpenCmd : CmdData {
     int32_t sampleRate;
     int32_t blockSize;
     int32_t numChannels;
+    int32_t bufferSize;
 };
 
 struct OptionCmd : CmdData {
@@ -156,8 +157,6 @@ public:
     AooDelegate(AooUnit& owner);
 
     ~AooDelegate();
-
-    virtual void init(int32_t port, int32_t id) = 0;
 
     bool initialized() const {
         return initialized_.load(std::memory_order_acquire);
