@@ -31,14 +31,14 @@ aoo::shared_mutex gClientMutex;
 using ClientList = std::vector<aoo::ip_address>;
 std::unordered_map<World *, ClientList> gClientMap;
 
-struct ClientCommand {
+struct ClientCmd {
     int id;
     int port;
     char host[1];
 };
 
 bool registerClient(World *world, void *cmdData){
-    auto data = (ClientCommand *)cmdData;
+    auto data = (ClientCmd *)cmdData;
 
     aoo::ip_address addr(data->host, data->port);
 
@@ -67,7 +67,7 @@ bool registerClient(World *world, void *cmdData){
 }
 
 bool unregisterClient(World *world, void *cmdData){
-    auto data = (ClientCommand *)cmdData;
+    auto data = (ClientCmd *)cmdData;
 
     aoo::ip_address addr(data->host, data->port);
 
@@ -95,7 +95,7 @@ void aoo_register(World* world, void* user,
 
     auto len = strlen(host) + 1;
 
-    auto cmdData = CmdData::create<ClientCommand>(world, len);
+    auto cmdData = CmdData::create<ClientCmd>(world, len);
     if (cmdData){
         cmdData->id = id;
         cmdData->port = port;
@@ -103,7 +103,7 @@ void aoo_register(World* world, void* user,
 
         DoAsynchronousCommand(world, replyAddr, "/aoo_register",
                               cmdData, registerClient, 0, 0,
-                              CmdData::free<ClientCommand>, 0, 0);
+                              CmdData::free<ClientCmd>, 0, 0);
     }
 }
 
@@ -115,14 +115,14 @@ void aoo_unregister(World* world, void* user,
 
     auto len = strlen(host) + 1;
 
-    auto cmdData = CmdData::create<ClientCommand>(world, len);
+    auto cmdData = CmdData::create<ClientCmd>(world, len);
     if (cmdData){
         cmdData->port = port;
         memcpy(cmdData->host, host, len);
 
         DoAsynchronousCommand(world, replyAddr, "/aoo_unregister",
                               cmdData, unregisterClient, 0, 0,
-                              CmdData::free<ClientCommand>, 0, 0);
+                              CmdData::free<ClientCmd>, 0, 0);
     }
 }
 
