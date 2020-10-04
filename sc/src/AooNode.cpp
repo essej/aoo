@@ -206,6 +206,7 @@ INode::ptr INode::get(World *world, INodeClient& client,
         // first create socket
         int sock = socket_udp();
         if (sock < 0){
+            LOG_ERROR("aoo node: couldn't create socket");
             socket_error_print("socket");
             return nullptr;
         }
@@ -213,6 +214,7 @@ INode::ptr INode::get(World *world, INodeClient& client,
         // bind socket to given port
         if (socket_bind(sock, port) < 0){
             LOG_ERROR("aoo node: couldn't bind to port " << port);
+            socket_error_print("bind");
             socket_close(sock);
             return nullptr;
         }
@@ -228,7 +230,7 @@ INode::ptr INode::get(World *world, INodeClient& client,
     }
 
     if (!node->addClient(client, type, id)){
-        // never fails for new t_node!
+        // never happens for new node
         return nullptr;
     }
 

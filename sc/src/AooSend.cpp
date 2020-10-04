@@ -97,7 +97,6 @@ void AooSend::handleEvent(const aoo_event *event){
             beginEvent(msg, "/invite", ep, e->id);
             sendMsgRT(msg);
         }
-
         break;
     }
     case AOO_UNINVITE_EVENT:
@@ -119,7 +118,7 @@ void AooSend::handleEvent(const aoo_event *event){
 }
 
 void AooSend::addSinkEvent(aoo::endpoint *ep, int32_t id,
-                      int channelOnset){
+                           int32_t channelOnset) {
     auto cmd = CmdData::create<OptionCmd>(world());
     if (cmd){
         cmd->ep = ep;

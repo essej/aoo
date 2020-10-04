@@ -79,8 +79,10 @@ public:
     }
 
     void releaseNode() {
-        node_->release(*this);
-        node_ = nullptr;
+        if (node_) {
+            node_->release(*this);
+            node_ = nullptr;
+        }
     }
 
     INode* node() {

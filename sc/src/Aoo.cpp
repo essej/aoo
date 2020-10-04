@@ -150,7 +150,7 @@ void sendMsgRT(World *world, const osc::OutboundPacketStream& msg){
             return false; // done
         };
 
-        DoAsynchronousCommand(world, 0, 0, 0, sendMsg, 0, 0, &RTFree, 0, 0);
+        DoAsynchronousCommand(world, 0, 0, data, sendMsg, 0, 0, &RTFree, 0, 0);
     } else {
         LOG_ERROR("RTAlloc() failed!");
     }

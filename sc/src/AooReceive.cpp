@@ -80,6 +80,7 @@ void AooReceive::handleEvent(const aoo_event *event){
 
         beginEvent(msg, "/add", ep, e->id);
         sendMsgRT(msg);
+        break;
     }
     case AOO_SOURCE_FORMAT_EVENT:
     {
