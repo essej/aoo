@@ -10,6 +10,8 @@
 
 #ifdef _WIN32
 #include <windows.h>
+// to prevent segfault in LOG_* when initializing get_system_time
+#include <iostream>
 #else
 #include <sys/time.h>
 #endif

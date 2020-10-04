@@ -94,7 +94,7 @@ void socket_error_print(const char *label);
 
 /*/////////////////// endpoint /////////////////*/
 
-struct endpoint {
+class endpoint {
 public:
     endpoint(int socket, const ip_address& address)
         : socket_(socket), address_(address) {}
