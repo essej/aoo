@@ -17,7 +17,9 @@
 
 /*//////////////////////// Reply //////////////////////////*/
 
-void sendReply(World *world, const osc::OutboundPacketStream& msg);
+void sendMsgRT(World *world, const osc::OutboundPacketStream& msg);
+
+void sendMsgNRT(World* world, const osc::OutboundPacketStream& msg);
 
 /*//////////////////////// AooNode ////////////////////////*/
 
@@ -78,8 +80,8 @@ class AooDelegate;
 
 struct CmdData {
     template<typename T>
-    static T* create(World *world, int size = 0){
-        auto data = doCreate(world, sizeof(T) + size);
+    static T* create(World *world, size_t extra = 0){
+        auto data = doCreate(world, sizeof(T) + extra);
         if (data){
             new (data) T();
         }
@@ -121,8 +123,14 @@ struct _OpenCmd : CmdData {
 struct OptionCmd : CmdData {
     static OptionCmd *create(World *world, const char *host,
                              int port, int32_t id);
-    static OptionCmd *create(World *world,
-                             const aoo::endpoint *ep, int32_t id);
+
+    static OptionCmd* create(World* world, const aoo::endpoint* ep,
+                             int32_t id)
+    {
+        return OptionCmd::create(world,
+            ep->address().name(), ep->address().port(), id);
+    }
+
     union {
         float f;
         int i;
@@ -202,27 +210,12 @@ public:
     }
 
     // reply messages
-#if 1
-    void beginReply(osc::OutboundPacketStream& msg, const char *cmd);
-    void beginReply(osc::OutboundPacketStream& msg, const char *cmd,
+    void beginReply(osc::OutboundPacketStream& msg, const char *cmd, int replyID);
+    void beginEvent(osc::OutboundPacketStream &msg, const char *event);
+    void beginEvent(osc::OutboundPacketStream& msg, const char *event,
                     aoo::endpoint *ep, int32_t id);
-    void sendReplyRT(osc::OutboundPacketStream& msg);
-    void sendReplyNRT(osc::OutboundPacketStream& msg);
-#else
-    // reply messages
-    void sendReply(const char *cmd, const float *vec, int n);
-    void sendReply(const char *cmd, float value)
-    {
-        sendReply(cmd, &value, 1);
-    }
-    void sendReply(const char *cmd, const aoo::ip_address& addr,
-                   int32_t id, const float *vec, int n);
-    void sendReply(const char *cmd, const aoo::ip_address& addr,
-                   int32_t id, float value)
-    {
-        sendReply(cmd, addr, id, &value, 1);
-    }
-#endif
+    void sendMsgRT(osc::OutboundPacketStream& msg);
+    void sendMsgNRT(osc::OutboundPacketStream& msg);
 protected:
     virtual void onDetach() = 0;
 

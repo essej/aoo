@@ -35,20 +35,16 @@ public:
 
     aoo::isource * source() { return source_.get(); }
 
-    void addSink(aoo::endpoint *ep, int32_t id, int channelOnset);
-    void doAddSink(aoo::endpoint *ep, int32_t id, int channelOnset);
+    void addSinkEvent(aoo::endpoint *ep, int32_t id, int channelOnset);
+    bool addSink(aoo::endpoint *ep, int32_t id, int channelOnset);
 
-    void removeSink(aoo::endpoint *ep, int32_t id);
-    void doRemoveSink(aoo::endpoint *ep, int32_t id);
-
+    void removeSinkEvent(aoo::endpoint *ep, int32_t id);
+    bool removeSink(aoo::endpoint *ep, int32_t id);
     void removeAll();
-    void doRemoveAll();
 
     void setAccept(bool b){
         accept_ = b;
     }
-
-    void setFormat(aoo_format& f);
 private:
     aoo::isource::pointer source_;
     bool accept_ = true;

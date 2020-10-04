@@ -81,9 +81,9 @@ void AooSend::handleEvent(const aoo_event *event){
         double diff2 = aoo_osctime_duration(e->tt2, e->tt3);
         double rtt = aoo_osctime_duration(e->tt1, e->tt3);
 
-        beginReply(msg, "/ping", ep, e->id);
+        beginEvent(msg, "/ping", ep, e->id);
         msg << diff1 << diff2 << rtt << e->lost_blocks;
-        sendReplyRT(msg);
+        sendMsgRT(msg);
         break;
     }
     case AOO_INVITE_EVENT:
@@ -92,10 +92,10 @@ void AooSend::handleEvent(const aoo_event *event){
         auto ep = (aoo::endpoint *)e->endpoint;
 
         if (accept_){
-            doAddSink(ep, e->id, 0);
+            addSinkEvent(ep, e->id, 0);
         } else {
-            beginReply(msg, "/invite", ep, e->id);
-            sendReplyRT(msg);
+            beginEvent(msg, "/invite", ep, e->id);
+            sendMsgRT(msg);
         }
 
         break;
@@ -106,10 +106,10 @@ void AooSend::handleEvent(const aoo_event *event){
         auto ep = (aoo::endpoint *)e->endpoint;
 
         if (accept_){
-            doRemoveSink(ep, e->id);
+            removeSinkEvent(ep, e->id);
         } else {
-            beginReply(msg, "/uninvite", ep, e->id);
-            sendReplyRT(msg);
+            beginEvent(msg, "/uninvite", ep, e->id);
+            sendMsgRT(msg);
         }
         break;
     }
@@ -118,7 +118,7 @@ void AooSend::handleEvent(const aoo_event *event){
     }
 }
 
-void AooSend::addSink(aoo::endpoint *ep, int32_t id,
+void AooSend::addSinkEvent(aoo::endpoint *ep, int32_t id,
                       int channelOnset){
     auto cmd = CmdData::create<OptionCmd>(world());
     if (cmd){
@@ -129,27 +129,32 @@ void AooSend::addSink(aoo::endpoint *ep, int32_t id,
         doCmd(cmd, [](World * world, void *cmdData){
             auto data = (OptionCmd *)cmdData;
             auto& owner = static_cast<AooSend &>(*data->owner);
-            owner.doAddSink(data->ep, data->id, data->i);
+
+            if (owner.addSink(data->ep, data->id, data->i)){
+                char buf[256];
+                osc::OutboundPacketStream msg(buf, sizeof(buf));
+                owner.beginEvent(msg, "/add", data->ep, data->id);
+                owner.sendMsgNRT(msg);
+            }
 
             return false; // done
         });
     }
 }
 
-void AooSend::doAddSink(aoo::endpoint *ep, int32_t id,
-                        int channelOnset){
-    source()->add_sink(ep, id, aoo::endpoint::send);
-    if (channelOnset > 0){
-        source()->set_sink_channelonset(ep, id, channelOnset);
+bool AooSend::addSink(aoo::endpoint *ep, int32_t id,
+                      int channelOnset){
+    if (source()->add_sink(ep, id, aoo::endpoint::send) > 0){
+        if (channelOnset > 0){
+            source()->set_sink_channelonset(ep, id, channelOnset);
+        }
+        return true;
+    } else {
+        return false;
     }
-
-    char buf[256];
-    osc::OutboundPacketStream msg(buf, 256);
-    beginReply(msg, "/add", ep, id);
-    sendReplyNRT(msg);
 }
 
-void AooSend::removeSink(aoo::endpoint *ep, int32_t id){
+void AooSend::removeSinkEvent(aoo::endpoint *ep, int32_t id){
     auto cmd = CmdData::create<OptionCmd>(world());
     if (cmd){
         cmd->ep = ep;
@@ -158,50 +163,25 @@ void AooSend::removeSink(aoo::endpoint *ep, int32_t id){
         doCmd(cmd, [](World * world, void *cmdData){
             auto data = (OptionCmd *)cmdData;
             auto& owner = static_cast<AooSend &>(*data->owner);
-            owner.doRemoveSink(data->ep, data->id);
+
+            if (owner.removeSink(data->ep, data->id)){
+                char buf[256];
+                osc::OutboundPacketStream msg(buf, sizeof(buf));
+                owner.beginEvent(msg, "/remove", data->ep, data->id);
+                owner.sendMsgNRT(msg);
+            }
 
             return false; // done
         });
     }
 }
 
-void AooSend::doRemoveSink(aoo::endpoint *ep, int32_t id){
-    source()->remove_sink(ep, id);
-
-    char buf[256];
-    osc::OutboundPacketStream msg(buf, 256);
-    beginReply(msg, "/remove", ep, id);
-    sendReplyNRT(msg);
+bool AooSend::removeSink(aoo::endpoint *ep, int32_t id){
+    return source()->remove_sink(ep, id) > 0;
 }
 
 void AooSend::removeAll(){
-    auto cmd = CmdData::create<CmdData>(world());
-    doCmd(cmd, [](World * world, void *cmdData){
-        auto data = (CmdData *)cmdData;
-        auto& owner = static_cast<AooSend &>(*data->owner);
-        owner.doRemoveAll();
-
-        return false; // done
-    });
-}
-
-void AooSend::doRemoveAll(){
     source()->remove_all();
-
-    char buf[256];
-    osc::OutboundPacketStream msg(buf, 256);
-    beginReply(msg, "/remove");
-    sendReplyNRT(msg);
-}
-
-void AooSend::setFormat(aoo_format &f){
-    source()->set_format(f);
-
-    char buf[256];
-    osc::OutboundPacketStream msg(buf, 256);
-    beginReply(msg, "/format");
-    serializeFormat(msg, f);
-    sendReplyNRT(msg);
 }
 
 /*////////////////// AooSendUnit ////////////////*/
@@ -263,12 +243,25 @@ void aoo_send_add(AooSendUnit *unit, sc_msg_iter* args){
             sc_msg_iter args(data->size, data->data);
             skipUnitCmd(&args);
 
+            auto replyID = args.geti();
+
+            char buf[256];
+            osc::OutboundPacketStream msg(buf, sizeof(buf));
+            owner.beginReply(msg, "/aoo/add", replyID);
+
             aoo::endpoint *ep;
             int32_t id;
             if (getSinkArg(owner.node(), &args, ep, id)){
                 auto channelOnset = args.geti();
-                owner.doAddSink(ep, id, channelOnset);
+
+                // only send IP address on success
+                if (owner.addSink(ep, id, channelOnset)){
+                    auto& addr = ep->address();
+                    msg << addr.name() << addr.port() << id;
+                }
             }
+
+            owner.sendMsgNRT(msg);
 
             return false; // done
         });
@@ -284,15 +277,27 @@ void aoo_send_remove(AooSendUnit *unit, sc_msg_iter* args){
             sc_msg_iter args(data->size, data->data);
             skipUnitCmd(&args);
 
+            auto replyID = args.geti();
+
+            char buf[256];
+            osc::OutboundPacketStream msg(buf, sizeof(buf));
+            owner.beginReply(msg, "/aoo/remove", replyID);
+
             if (args.remain() > 0){
                 aoo::endpoint *ep;
                 int32_t id;
                 if (getSinkArg(owner.node(), &args, ep, id)){
-                    owner.doRemoveSink(ep, id);
+                    if (owner.removeSink(ep, id)){
+                        // only send IP address on success
+                        auto& addr = ep->address();
+                        msg << addr.name() << addr.port() << id;
+                    }
                 }
             } else {
-                owner.doRemoveAll();
+                owner.removeAll();
             }
+
+            owner.sendMsgNRT(msg);
 
             return false; // done
         });
@@ -312,10 +317,21 @@ void aoo_send_format(AooSendUnit *unit, sc_msg_iter* args){
             sc_msg_iter args(data->size, data->data);
             skipUnitCmd(&args);
 
+            auto replyID = args.geti();
+
+            char buf[256];
+            osc::OutboundPacketStream msg(buf, sizeof(buf));
+            owner.beginReply(msg, "/aoo/format", replyID);
+
             aoo_format_storage f;
             if (parseFormat(owner.unit(), &args, f)){
-                owner.setFormat(f.header);
+                if (owner.source()->set_format(f.header) > 0){
+                    // only send format on success
+                    serializeFormat(msg, f.header);
+                }
             }
+
+            owner.sendMsgNRT(msg);
 
             return false; // done
         });

@@ -131,7 +131,9 @@ struct OscMsgCommand {
     char data[1];
 };
 
-void sendReplyRT(World *world, const osc::OutboundPacketStream& msg){
+} // namespace
+
+void sendMsgRT(World *world, const osc::OutboundPacketStream& msg){
     auto data = CmdData::create<OscMsgCommand>(world, msg.Size());
     if (data){
         data->size = msg.Size();
@@ -154,14 +156,12 @@ void sendReplyRT(World *world, const osc::OutboundPacketStream& msg){
     }
 }
 
-void sendReplyNRT(World *world, const osc::OutboundPacketStream& msg){
+void sendMsgNRT(World *world, const osc::OutboundPacketStream& msg){
     aoo::shared_lock lock(gClientMutex);
     for (auto& addr : gClientMap[world]){
         aoo::socket_sendto(gClientSocket, msg.Data(), msg.Size(), addr);
     }
 }
-
-} // namespace
 
 /*////////////////// Commands /////////////////////*/
 
@@ -206,13 +206,6 @@ OptionCmd * OptionCmd::create(World *world, const char *host,
     return data;
 }
 
-OptionCmd *OptionCmd::create(World *world,
-                             const aoo::endpoint *ep, int32_t id)
-{
-    return OptionCmd::create(world, ep->address().name(),
-                             ep->address().port(), id);
-}
-
 UnitCmd *UnitCmd::create(World *world, sc_msg_iter *args){
     auto data = (UnitCmd *)RTAlloc(world, sizeof(UnitCmd) + args->size);
     if (!data){
@@ -249,57 +242,34 @@ void AooDelegate::doCmd(CmdData *cmdData, AsyncStageFn stage2,
     }
 }
 
-#if 1
-void AooDelegate::beginReply(osc::OutboundPacketStream &msg, const char *cmd){
-    msg << osc::BeginMessage("/aoo/reply")
-        << owner_->mParent->mNode.mID << owner_->mParentIndex << cmd;
+void AooDelegate::beginReply(osc::OutboundPacketStream &msg, const char *cmd, int replyID){
+    msg << osc::BeginMessage(cmd) << owner_->mParent->mNode.mID << owner_->mParentIndex << replyID;
 }
 
-void AooDelegate::beginReply(osc::OutboundPacketStream &msg, const char *cmd,
+void AooDelegate::beginEvent(osc::OutboundPacketStream &msg, const char *event)
+{
+    msg << osc::BeginMessage("/aoo/event")
+        << owner_->mParent->mNode.mID << owner_->mParentIndex << event;
+}
+
+void AooDelegate::beginEvent(osc::OutboundPacketStream &msg, const char *event,
                              aoo::endpoint *ep, int32_t id)
 {
     auto& addr = ep->address();
-    msg << osc::BeginMessage("/aoo/reply")
+    msg << osc::BeginMessage("/aoo/event")
         << owner_->mParent->mNode.mID << owner_->mParentIndex
-        << cmd << addr.name() << addr.port() << id;
+        << event << addr.name() << addr.port() << id;
 }
 
-void AooDelegate::sendReplyRT(osc::OutboundPacketStream &msg){
+void AooDelegate::sendMsgRT(osc::OutboundPacketStream &msg){
     msg << osc::EndMessage;
-    ::sendReplyRT(world_, msg);
+    ::sendMsgRT(world_, msg);
 }
 
-void AooDelegate::sendReplyNRT(osc::OutboundPacketStream &msg){
+void AooDelegate::sendMsgNRT(osc::OutboundPacketStream &msg){
     msg << osc::EndMessage;
-    ::sendReplyNRT(world_, msg);
+    ::sendMsgNRT(world_, msg);
 }
-#else
-void AooUnit::sendReply(const char *cmd, const float *vec, int n){
-    SendNodeReply(&mParent->mNode, mParentIndex, cmd, n, vec);
-}
-
-void AooUnit::sendReply(const char *cmd, const aoo::ip_address& addr,
-                        int32_t id, const float *vec, int n)
-{
-    auto name = addr.name();
-    auto port = addr.port();
-
-    auto maxSize = 64 + n;
-    auto buf = (float *)alloca(sizeof(float) * maxSize);
-    auto onset = string_to_floatarray(name, buf, maxSize);
-    if (onset > 0 && (maxSize - onset) <= (n + 2)){
-        buf[onset++] = port;
-        buf[onset++] = id;
-
-        for (int i = 0; i < n; ++i){
-            buf[onset + i] = vec[i];
-        }
-
-        sendReply(cmd, buf, onset + n);
-    }
-}
-#endif
-
 
 /*////////////////// Helper functions ///////////////*/
 

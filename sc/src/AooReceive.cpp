@@ -70,7 +70,7 @@ void AooReceive::onDetach() {
 
 void AooReceive::handleEvent(const aoo_event *event){
     char buf[256];
-    osc::OutboundPacketStream msg(buf, 256);
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
 
     switch (event->type){
     case AOO_SOURCE_ADD_EVENT:
@@ -78,8 +78,8 @@ void AooReceive::handleEvent(const aoo_event *event){
         auto e = (aoo_source_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
-        beginReply(msg, "/add", ep, e->id);
-        sendReplyRT(msg);
+        beginEvent(msg, "/add", ep, e->id);
+        sendMsgRT(msg);
     }
     case AOO_SOURCE_FORMAT_EVENT:
     {
@@ -88,9 +88,9 @@ void AooReceive::handleEvent(const aoo_event *event){
 
         aoo_format_storage f;
         if (sink()->get_source_format(ep, e->id, f) > 0) {
-            beginReply(msg, "/format", ep, e->id);
+            beginEvent(msg, "/format", ep, e->id);
             serializeFormat(msg, f.header);
-            sendReplyRT(msg);
+            sendMsgRT(msg);
         }
         break;
     }
@@ -99,9 +99,9 @@ void AooReceive::handleEvent(const aoo_event *event){
         auto e = (aoo_source_state_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
-        beginReply(msg, "/state", ep, e->id);
+        beginEvent(msg, "/state", ep, e->id);
         msg << e->state;
-        sendReplyRT(msg);
+        sendMsgRT(msg);
         break;
     }
     case AOO_BLOCK_LOST_EVENT:
@@ -109,9 +109,9 @@ void AooReceive::handleEvent(const aoo_event *event){
         auto e = (aoo_block_lost_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
-        beginReply(msg, "/block/lost", ep, e->id);
+        beginEvent(msg, "/block/lost", ep, e->id);
         msg << e->count;
-        sendReplyRT(msg);
+        sendMsgRT(msg);
         break;
     }
     case AOO_BLOCK_REORDERED_EVENT:
@@ -119,9 +119,9 @@ void AooReceive::handleEvent(const aoo_event *event){
         auto e = (aoo_block_reordered_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
-        beginReply(msg, "/block/reordered", ep, e->id);
+        beginEvent(msg, "/block/reordered", ep, e->id);
         msg << e->count;
-        sendReplyRT(msg);
+        sendMsgRT(msg);
         break;
     }
     case AOO_BLOCK_RESENT_EVENT:
@@ -129,9 +129,9 @@ void AooReceive::handleEvent(const aoo_event *event){
         auto e = (aoo_block_resent_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
-        beginReply(msg, "/block/resent", ep, e->id);
+        beginEvent(msg, "/block/resent", ep, e->id);
         msg << e->count;
-        sendReplyRT(msg);
+        sendMsgRT(msg);
         break;
     }
     case AOO_BLOCK_GAP_EVENT:
@@ -139,9 +139,9 @@ void AooReceive::handleEvent(const aoo_event *event){
         auto e = (aoo_block_gap_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
-        beginReply(msg, "/block/gap", ep, e->id);
+        beginEvent(msg, "/block/gap", ep, e->id);
         msg << e->count;
-        sendReplyRT(msg);
+        sendMsgRT(msg);
         break;
     }
     case AOO_PING_EVENT:
@@ -151,9 +151,9 @@ void AooReceive::handleEvent(const aoo_event *event){
 
         double diff = aoo_osctime_duration(e->tt1, e->tt2);
 
-        beginReply(msg, "/ping", ep, e->id);
+        beginEvent(msg, "/ping", ep, e->id);
         msg << diff;
-        sendReplyRT(msg);
+        sendMsgRT(msg);
         break;
     }
     default:
@@ -210,11 +210,24 @@ void aoo_recv_invite(AooReceiveUnit *unit, sc_msg_iter *args){
             sc_msg_iter args(data->size, data->data);
             skipUnitCmd(&args);
 
+            auto replyID = args.geti();
+
+            char buf[256];
+            osc::OutboundPacketStream msg(buf, sizeof(buf));
+            owner.beginReply(msg, "/aoo/invite", replyID);
+
             aoo::endpoint *ep;
             int32_t id;
             if (getSourceArg(owner.node(), &args, ep, id)){
-                owner.sink()->invite_source(ep, id, aoo::endpoint::send);
+                if (owner.sink()->invite_source(
+                    ep, id, aoo::endpoint::send) > 0) {
+                    // only send IP address on success
+                    auto& addr = ep->address();
+                    msg << addr.name() << addr.port() << id;
+                }
             }
+
+            owner.sendMsgNRT(msg);
 
             return false; // done
         });
@@ -230,15 +243,28 @@ void aoo_recv_uninvite(AooReceiveUnit *unit, sc_msg_iter *args){
             sc_msg_iter args(data->size, data->data);
             skipUnitCmd(&args);
 
+            auto replyID = args.geti();
+
+            char buf[256];
+            osc::OutboundPacketStream msg(buf, sizeof(buf));
+            owner.beginReply(msg, "/aoo/uninvite", replyID);
+
             if (args.remain() > 0){
                 aoo::endpoint *ep;
                 int32_t id;
                 if (getSourceArg(owner.node(), &args, ep, id)){
-                    owner.sink()->uninvite_source(ep, id, aoo::endpoint::send);
+                    if (owner.sink()->uninvite_source(
+                        ep, id, aoo::endpoint::send) > 0) {
+                        // only send IP address on success
+                        auto& addr = ep->address();
+                        msg << addr.name() << addr.port() << id;
+                    }
                 }
             } else {
                 owner.sink()->uninvite_all();
             }
+
+            owner.sendMsgNRT(msg);
 
             return false; // done
         });
