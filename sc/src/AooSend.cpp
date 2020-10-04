@@ -60,8 +60,8 @@ void AooSend::onDetach() {
                 // release in NRT thread
                 auto cmd = (CmdData*)data;
                 auto& owner = static_cast<AooSend&>(*cmd->owner);
+                owner.releaseNode(); // first!
                 owner.source_ = nullptr;
-                owner.releaseNode();
                 return false; // done
             }
         );
