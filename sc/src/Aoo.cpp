@@ -288,7 +288,7 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
         auto group = s;
         auto user = args->gets();
 
-        auto ep = node->find_peer(group, user);
+        auto ep = node->findPeer(group, user);
         if (!ep){
             LOG_ERROR("aoo: couldn't find peer " << group << "|" << user
                 << " for " << what);
@@ -301,7 +301,7 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
         aoo::ip_address addr(host, port);
 
         if (addr.valid()){
-            ep = node->get_endpoint(addr);
+            ep = node->getEndpoint(addr);
         } else {
             LOG_ERROR("aoo: couldn't resolve hostname '"
                       << host << "' for " << what);

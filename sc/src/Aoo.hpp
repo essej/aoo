@@ -55,19 +55,19 @@ public:
     virtual int sendto(const char *buf, int32_t size,
                        const aoo::ip_address& addr) = 0;
 
-    virtual aoo::endpoint *get_endpoint(const aoo::ip_address& addr) = 0;
+    virtual aoo::endpoint *getEndpoint(const aoo::ip_address& addr) = 0;
 
-    virtual aoo::endpoint *find_peer(const std::string& group,
-                                     const std::string& user) = 0;
+    virtual aoo::endpoint *findPeer(const std::string& group,
+                                    const std::string& user) = 0;
 
-    virtual void add_peer(const std::string& group, const std::string& user,
-                          const aoo::ip_address& addr) = 0;
+    virtual void addPeer(const std::string& group, const std::string& user,
+                         const aoo::ip_address& addr) = 0;
 
-    virtual void remove_peer(const std::string& group, const std::string& user) = 0;
+    virtual void removePeer(const std::string& group, const std::string& user) = 0;
 
-    virtual void remove_all_peers() = 0;
+    virtual void removeAllPeers() = 0;
 
-    virtual void remove_group(const std::string& group) = 0;
+    virtual void removeGroup(const std::string& group) = 0;
 
     virtual void notify() = 0;
 };

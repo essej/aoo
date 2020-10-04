@@ -54,20 +54,20 @@ public:
         return socket_sendto(socket_, buf, size, addr);
     }
 
-    endpoint *get_endpoint(const ip_address& addr) override;
+    endpoint *getEndpoint(const ip_address& addr) override;
 
-    endpoint *find_peer(const std::string& group,
-                        const std::string& user) override;
+    endpoint *findPeer(const std::string& group,
+                       const std::string& user);
 
-    void add_peer(const std::string& group, const std::string& user,
+    void addPeer(const std::string& group, const std::string& user,
                   const ip_address& addr) override;
 
-    void remove_peer(const std::string& group,
-                     const std::string& user) override;
+    void removePeer(const std::string& group,
+                    const std::string& user) override;
 
-    void remove_all_peers() override;
+    void removeAllPeers() override;
 
-    void remove_group(const std::string& group) override;
+    void removeGroup(const std::string& group) override;
 
     void notify() override;
 private:
@@ -92,13 +92,13 @@ private:
     std::atomic<bool> quit_{false};
 
     // private methods
-    bool add_client(INodeClient& client, int32_t type, int32_t id);
+    bool addClient(INodeClient& client, int32_t type, int32_t id);
 
-    aoo::endpoint* find_endpoint(const ip_address& addr);
+    aoo::endpoint* findEndpoint(const ip_address& addr);
 
-    void do_send();
+    void doSend();
 
-    void do_receive();
+    void doReceive();
 };
 
 // public methods
@@ -123,14 +123,14 @@ AooNode::AooNode(int socket, int port)
         std::unique_lock<std::mutex> lock(mutex_);
         while (!quit_){
             condition_.wait(lock);
-            do_send();
+            doSend();
         }
     });
     receiveThread_ = std::thread([this](){
         lower_thread_priority();
 
         while (!quit_){
-            do_receive();
+            doReceive();
         }
     });
 #endif
@@ -227,7 +227,7 @@ INode::ptr INode::get(World *world, INodeClient& client,
         nodeMap.emplace(port, node);
     }
 
-    if (!node->add_client(client, type, id)){
+    if (!node->addClient(client, type, id)){
         // never fails for new t_node!
         return nullptr;
     }
@@ -247,9 +247,9 @@ void AooNode::release(INodeClient& client){
     LOG_ERROR("AooNode::release: client not found!");
 }
 
-endpoint * AooNode::get_endpoint(const ip_address& addr){
+endpoint * AooNode::getEndpoint(const ip_address& addr){
     aoo::scoped_lock lock(endpointMutex_);
-    auto ep = find_endpoint(addr);
+    auto ep = findEndpoint(addr);
     if (ep)
         return ep;
     else {
@@ -259,7 +259,7 @@ endpoint * AooNode::get_endpoint(const ip_address& addr){
     }
 }
 
-endpoint * AooNode::find_peer(const std::string& group,
+endpoint * AooNode::findPeer(const std::string& group,
                              const std::string& user)
 {
     for (auto& peer : peers_){
@@ -269,22 +269,23 @@ endpoint * AooNode::find_peer(const std::string& group,
     }
     return nullptr;
 }
-void AooNode::add_peer(const std::string& group,
-                       const std::string& user,
-                       const ip_address& addr)
+
+void AooNode::addPeer(const std::string& group,
+                      const std::string& user,
+                      const ip_address& addr)
 {
-    if (find_peer(group, user)){
+    if (findPeer(group, user)){
         LOG_ERROR("AooNode::add_peer: peer already added");
         return;
     }
 
-    auto e = get_endpoint(addr);
+    auto e = getEndpoint(addr);
 
     peers_.push_back({ group, user, e });
 }
 
-void AooNode::remove_peer(const std::string& group,
-                          const std::string& user)
+void AooNode::removePeer(const std::string& group,
+                         const std::string& user)
 {
     for (auto it = peers_.begin(); it != peers_.end(); ++it){
         if (it->group == group && it->user == user){
@@ -295,11 +296,11 @@ void AooNode::remove_peer(const std::string& group,
     LOG_ERROR("AooNode::remove_peer: couldn't find peer");
 }
 
-void AooNode::remove_all_peers(){
+void AooNode::removeAllPeers(){
     peers_.clear();
 }
 
-void AooNode::remove_group(const std::string& group){
+void AooNode::removeGroup(const std::string& group){
     for (auto it = peers_.begin(); it != peers_.end(); ) {
         // remove all peers matching group
         if (it->group == group){
@@ -318,7 +319,7 @@ void AooNode::notify(){
 
 // private methods
 
-bool AooNode::add_client(INodeClient& client, int32_t type, int32_t id)
+bool AooNode::addClient(INodeClient& client, int32_t type, int32_t id)
 {
     // check client and add to list
     aoo::scoped_lock lock(clientMutex_);
@@ -345,7 +346,7 @@ bool AooNode::add_client(INodeClient& client, int32_t type, int32_t id)
     return true;
 }
 
-aoo::endpoint * AooNode::find_endpoint(const ip_address& addr)
+aoo::endpoint * AooNode::findEndpoint(const ip_address& addr)
 {
     for (auto& e : endpoints_){
         if (e.address() == addr){
@@ -355,7 +356,7 @@ aoo::endpoint * AooNode::find_endpoint(const ip_address& addr)
     return nullptr;
 }
 
-void AooNode::do_send()
+void AooNode::doSend()
 {
     aoo::shared_scoped_lock lock(clientMutex_);
 
@@ -364,7 +365,7 @@ void AooNode::do_send()
     }
 }
 
-void AooNode::do_receive()
+void AooNode::doReceive()
 {
     ip_address addr;
     char buf[AOO_MAXPACKETSIZE];
@@ -373,7 +374,7 @@ void AooNode::do_receive()
     if (nbytes > 0){
         // try to find endpoint
         aoo::unique_lock lock(endpointMutex_);
-        auto ep = find_endpoint(addr);
+        auto ep = findEndpoint(addr);
         if (!ep){
             // add endpoint
             endpoints_.emplace_back(socket_, addr);
