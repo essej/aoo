@@ -251,8 +251,7 @@ static void aoo_send_tick(t_aoo_send *x)
 static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     aoo_format_storage f;
-    f.header.nchannels = x->x_nchannels;
-    if (format_parse(x, f, argc, argv)){
+    if (format_parse(x, f, x->x_nchannels, argc, argv)){
         x->x_source->set_format(f.header);
         // output actual format
         t_atom msg[16];

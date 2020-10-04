@@ -171,7 +171,8 @@ static int32_t format_getparam(void *x, int argc, t_atom *argv, int which,
     return def;
 }
 
-bool format_parse(void *x, aoo_format_storage &f, int argc, t_atom *argv)
+bool format_parse(void *x, aoo_format_storage &f, int nchannels,
+                  int argc, t_atom *argv)
 {
     t_symbol *codec = atom_getsymbolarg(0, argc, argv);
 
@@ -180,7 +181,7 @@ bool format_parse(void *x, aoo_format_storage &f, int argc, t_atom *argv)
         fmt.header.codec = AOO_CODEC_PCM;
         fmt.header.blocksize = format_getparam(x, argc, argv, 1, "blocksize", 64);
         fmt.header.samplerate = format_getparam(x, argc, argv, 2, "samplerate", sys_getsr());
-        // fmt.header.nchannels
+        fmt.header.nchannels = nchannels;
 
         int bitdepth = format_getparam(x, argc, argv, 3, "bitdepth", 4);
         switch (bitdepth){
@@ -207,7 +208,7 @@ bool format_parse(void *x, aoo_format_storage &f, int argc, t_atom *argv)
         fmt.header.codec = AOO_CODEC_OPUS;
         fmt.header.blocksize = format_getparam(x, argc, argv, 1, "blocksize", 480); // 10ms
         fmt.header.samplerate = format_getparam(x, argc, argv, 2, "samplerate", 48000);
-        // fmt->header.nchannels
+        fmt.header.nchannels = nchannels;
 
         // bitrate ("auto", "max" or float)
         if (argc > 3){

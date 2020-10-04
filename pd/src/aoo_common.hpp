@@ -63,7 +63,8 @@ bool get_sourcearg(void *x, i_node *node, int argc, t_atom *argv,
 
 void format_makedefault(aoo_format_storage &f, int nchannels);
 
-bool format_parse(void *x, aoo_format_storage &f, int argc, t_atom *argv);
+bool format_parse(void *x, aoo_format_storage &f, int nchannels,
+                  int argc, t_atom *argv);
 
 int format_to_atoms(const aoo_format &f, int argc, t_atom *argv);
 
