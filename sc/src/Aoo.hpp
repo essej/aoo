@@ -167,24 +167,13 @@ struct _OpenCmd : CmdData {
 };
 
 struct OptionCmd : CmdData {
-    static OptionCmd *create(World *world, const char *host,
-                             int port, int32_t id);
-
-    static OptionCmd* create(World* world, const aoo::endpoint* ep,
-                             int32_t id)
-    {
-        return OptionCmd::create(world,
-            ep->address().name(), ep->address().port(), id);
-    }
-
+    aoo::endpoint* ep;
+    int32_t port;
+    int32_t id;
     union {
         float f;
         int i;
-        aoo::endpoint *ep;
     };
-    int32_t id;
-    int32_t port;
-    char host[1];
 };
 
 struct UnitCmd : CmdData {

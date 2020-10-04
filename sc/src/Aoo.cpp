@@ -187,25 +187,6 @@ void CmdData::doFree(World *world, void *cmdData){
     // LOG_DEBUG("cmdRTfree!");
 }
 
-OptionCmd * OptionCmd::create(World *world, const char *host,
-                              int port, int32_t id)
-{
-    auto len = strlen(host) + 1;
-
-    auto data = (OptionCmd *)RTAlloc(world, sizeof(OptionCmd) + len);
-    if (!data){
-        LOG_ERROR("RTAlloc failed!");
-        return nullptr;
-    }
-    new (data) OptionCmd(); // !
-
-    data->id = id;
-    data->port = port;
-    memcpy(data->host, host, len);
-
-    return data;
-}
-
 UnitCmd *UnitCmd::create(World *world, sc_msg_iter *args){
     auto data = (UnitCmd *)RTAlloc(world, sizeof(UnitCmd) + args->size);
     if (!data){
