@@ -1,6 +1,8 @@
 AooSend : UGen {
 	var <>desc;
 	var <>tag;
+	var <>port;
+	var <>id;
 
 	*ar { arg port, id=0, state=0, channels, tag;
 		^this.multiNewList([\audio, tag, port, id, state] ++ channels);
@@ -9,6 +11,8 @@ AooSend : UGen {
 
 	init { arg tag ... args;
 		this.tag = tag;
+		this.port = args[0];
+		this.id = args[1];
 		inputs = args;
 		^0; // doesn't have any output
 	}
@@ -27,49 +31,119 @@ AooSend : UGen {
 AooSendCtl : AooCtl {
 	classvar <>ugenClass;
 
+	var <>sinks;
+
 	*initClass {
 		Class.initClassTree(AooSend);
 		ugenClass = AooSend;
 	}
 
-	prHandleEvent { arg event ... args;
-
+	init { arg synth, synthIndex, port, id;
+		super.init(synth, synthIndex, port, id);
+		sinks = [];
 	}
 
-	add { arg host, port, id, channelOnset;
-		this.prSendMsg('/add', host, port, id, channelOnset);
+	prHandleEvent { arg type ...args;
+		// /invite, /uninvite, /add, /remove, /ping
+		// currently, all events start with endpoint + id
+		var addr = Aoo.prResolveAddr(this.port, AooAddr(args[0], args[1]));
+		var id = args[2];
+		var sink = ( addr: addr, id: id );
+		var event = [type, addr, id] ++ args[3..];
+		// If sink doesn't exist, fake an '/add' event.
+		// This happens if the sink has been added
+		// automatically before we could create the controller.
+		(this.prFind(sink).isNil and: { type != '/add' }).if {
+			this.prAdd(sink);
+			this.eventHandler.value('/add', addr, id);
+		};
+		type.switch(
+			'/add', { this.prAdd(sink) },
+			'/remove', { this.prRemove(sink) }
+		);
+		^event;
 	}
 
-	remove { arg host, port, id;
-		this.prSendMsg('/remove', host, port, id);
+	add { arg addr, id, channelOnset, action;
+		var replyID = AooCtl.prNextReplyID;
+		addr = Aoo.prResolveAddr(this.port, addr);
+		this.prMakeOSCFunc({ arg ip, port, id;
+			var newAddr;
+			ip.notNil.if {
+				newAddr = Aoo.prResolveAddr(this.port, AooAddr(ip, port));
+				this.prAdd(( addr: newAddr, id: id ));
+				action.value(newAddr, id);
+			} { action.value }
+		}, '/aoo/add', replyID).oneShot;
+		this.prSendMsg('/add', replyID, addr.ip, addr.port, id, channelOnset);
 	}
 
-	removeAll {
-		this.prSendMsg('/remove');
+	remove { arg addr, id, action;
+		var replyID = AooCtl.prNextReplyID;
+		addr = Aoo.prResolveAddr(this.port, addr);
+		this.prMakeOSCFunc({ arg ip, port, id;
+			var newAddr;
+			ip.notNil.if {
+				newAddr = Aoo.prResolveAddr(this.port, AooAddr(ip, port));
+				this.prRemove(( addr: newAddr, id: id ));
+				action.value(newAddr, id);
+			} { action.value }
+		}, '/aoo/remove', replyID).oneShot;
+		this.prSendMsg('/remove', replyID, addr.ip, addr.port, id);
+	}
+
+	prAdd { arg sink;
+		this.sinks = this.sinks.add(sink);
+	}
+
+	prRemove { arg sink;
+		var index = this.sinks.indexOfEqual(sink);
+		index !? { this.sinks.removeAt(index) };
+	}
+
+	prFind { arg sink;
+		var index = this.sinks.indexOfEqual(sink);
+		^index !? { this.sinks[index] };
+	}
+
+	removeAll { arg action;
+		var replyID = AooCtl.prNextReplyID;
+		this.prMakeOSCFunc({
+			this.sinks = [];
+			action.value;
+		}, '/aoo/remove', replyID).oneShot;
+		this.prSendMsg('/remove', replyID);
 	}
 
 	accept { arg enable;
 		this.prSendMsg('/accept', enable);
 	}
 
-	format { arg codec, blockSize, sampleRate ... args;
-		this.prSendMsg('/format', codec, blockSize, sampleRate, *args);
+	format { arg fmt, action;
+		var replyID = AooCtl.prNextReplyID;
+		// replace 'nil' with 'auto' Symbol
+		fmt = fmt.collect { arg x; x ?? \auto };
+		this.prMakeOSCFunc({ arg ... f;
+			action.value(f);
+		}, '/aoo/format', replyID).oneShot;
+		this.prSendMsg('/format', replyID, *fmt);
 	}
 
-	channelOnset { arg host, port, id, onset;
-		this.prSendMsg('/channel', host, port, id, onset);
+	channelOnset { arg addr, id, onset;
+		addr = Aoo.prResolveAddr(this.port, addr);
+		this.prSendMsg('/channel', addr.ip, addr.port, id, onset);
 	}
 
 	packetSize_ { arg size;
 		this.prSendMsg('/packetsize', size);
 	}
 
-	pingInterval_ { arg ms;
-		this.prSendMsg('/ping', ms);
+	pingInterval_ { arg sec;
+		this.prSendMsg('/ping', sec);
 	}
 
-	resendBufsize_ { arg ms;
-		this.prSendMsg('/resend', ms);
+	resendBufsize_ { arg sec;
+		this.prSendMsg('/resend', sec);
 	}
 
 	redundancy_ { arg n;

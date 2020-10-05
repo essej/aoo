@@ -47,7 +47,7 @@ Aoo {
 			metadata = ();
 			ugen.synthDef.metadata[key] = metadata;
 		};
-		ugen.desc = ();
+		ugen.desc = ( port: ugen.port, id: ugen.id );
 		// There can only be a single AooSend without a tag. In this case, the metadata will contain
 		// a (single) item at the pseudo key 'false', see ...
 		ugen.tag.notNil.if {
@@ -84,7 +84,7 @@ Aoo {
 		^ugens;
 	}
 
-	*prFindIndex { arg class, synth, tag, synthDef;
+	*prFindMetadata { arg class, synth, tag, synthDef;
 		var ugens, desc, info;
 		ugens = Aoo.prFindUGens(class, synth, synthDef);
 		tag.notNil.if {
@@ -102,29 +102,67 @@ Aoo {
 			};
 			desc = ugens.asArray[0];
 		};
-		^desc.index;
+		^desc;
 	}
 
-	*prSync { arg server, action ... args;
-		forkIfNeeded {
-			server.sync;
-			action.value(*args);
+	*prResolveAddr { arg port, addr;
+		var peer, client = AooClient.find(port);
+		client.notNil.if {
+			peer = client.findPeer(addr);
+			peer !? { ^peer };
 		};
+		addr.ip !? { ^addr };
+		Error("Aoo: couldn't find peer %|%".format(addr.group, addr.user)).throw;
+	}
+}
+
+AooAddr {
+	var <>ip;
+	var <>port;
+	var <>group;
+	var <>user;
+
+	*new { arg ip, port;
+		var addr = super.new;
+		addr.ip = ip !? { ip.asSymbol };
+		addr.port = port !? { port.asInteger };
+		^addr;
+	}
+
+	*peer { arg group, user;
+		^this.new(nil, nil, group, user);
+	}
+
+	== { arg that;
+		^this.compareObject(that, #[\ip, \port])
+	}
+
+	hash {
+		^this.instVarHash(#[\ip, \port])
 	}
 }
 
 AooCtl {
+	classvar nextReplyID=0;
 	// public
 	var <>synth;
 	var <>synthIndex;
+	var <>port;
+	var <>id;
+	var <>replyAddr;
 	var <>eventHandler;
 
-	var oscFunc;
+	var eventOSCFunc;
 
 	*new { arg synth, tag, synthDef, action;
-		var index = Aoo.prFindIndex(this.ugenClass, synth, tag, synthDef);
-		var result = super.new.init(synth, index);
-		action !? { Aoo.prSync(synth.server, action, result); };
+		var data = Aoo.prFindMetadata(this.ugenClass, synth, tag, synthDef);
+		var result = super.new.init(synth, data.index, data.port, data.id);
+		action !? {
+			forkIfNeeded {
+				synth.server.sync;
+				action.value(result);
+			};
+		};
 		^result;
 	}
 
@@ -144,25 +182,32 @@ AooCtl {
 			// get all plugins, except those without tag (shouldn't happen)
 			ugens.pairsDo { arg key, value;
 				(key.class == Symbol).if {
-					result.put(key, this.new(synth, value.index));
+					result.put(key, this.new(synth, value.index, value.port, value.id));
 				} { "ignoring % without tag".format(this.ugenClass.name).warn; }
 			}
 		};
-		action !? { Aoo.prSync(synth.server, action, result); };
+		action !? {
+			forkIfNeeded {
+				synth.server.sync;
+				action.value(result);
+			};
+		};
 		^result;
 	}
 
-	init { arg synth, synthIndex;
+	init { arg synth, synthIndex, port, id;
 		this.synth = synth;
 		this.synthIndex = synthIndex;
+		this.port = port;
+		this.id = id;
 
 		Aoo.prGetServerAddr(synth.server, { arg addr;
 			"listen: % % %".format(addr, synth.nodeID, synthIndex).postln;
-			oscFunc = OSCFunc({ arg msg;
-				var event = msg[3..];
-				this.prHandleEvent(*event);
+			replyAddr = addr;
+			eventOSCFunc = OSCFunc({ arg msg;
+				var event = this.prHandleEvent(*msg[3..]);
 				this.eventHandler.value(*event);
-			}, '/aoo/reply', addr, argTemplate: [synth.nodeID, synthIndex]);
+			}, '/aoo/event', addr, argTemplate: [synth.nodeID, synthIndex]);
 		});
 
 		synth.onFree {
@@ -171,14 +216,25 @@ AooCtl {
 	}
 
 	free {
-		oscFunc.free;
+		eventOSCFunc.free;
+		synth = nil;
 	}
 
-	prSendMsg { arg cmd ... args;
-		synth.server.sendMsg('/u_cmd', synth.nodeID, synthIndex, cmd, *args);
+	*prNextReplyID {
+		^nextReplyID = nextReplyID + 1;
+	}
+
+	prSendMsg { arg cmd... args;
+		synth.server.listSendMsg(this.prMakeMsg(cmd, *args));
 	}
 
 	prMakeMsg { arg cmd ... args;
 		^['/u_cmd', synth.nodeID, synthIndex, cmd] ++ args;
+	}
+
+	prMakeOSCFunc { arg func, path, replyID;
+		^OSCFunc({ arg msg;
+			func.value(*msg[4..]); // pass arguments after replyID
+		}, path, replyAddr, argTemplate: [synth.nodeID, synthIndex, replyID]);
 	}
 }

@@ -1,14 +1,19 @@
 AooReceive : MultiOutUGen {
 	var <>desc;
+	var <>tag;
+	var <>port;
+	var <>id;
 
-	*ar { arg port, id=0, numChannels=1, tag;
-		^this.multiNewList([\audio, tag, port, id, numChannels]);
+	*ar { arg port, id=0, numChannels=1, bufsize, tag;
+		^this.multiNewList([\audio, tag, port, id, numChannels, bufsize]);
 	}
 	*kr { ^this.shouldNotImplement(thisMethod) }
 
-	init { arg tag, port, id, numChannels;
+	init { arg tag, port, id, numChannels, bufsize;
 		this.tag = tag;
-		inputs = [port, id];
+		this.port = port;
+		this.id = id;
+		inputs = [port, id, bufsize ?? 0];
 		^this.initOutputs(numChannels, rate)
 	}
 
@@ -26,21 +31,61 @@ AooReceive : MultiOutUGen {
 AooReceiveCtl : AooCtl {
 	classvar <>ugenClass;
 
+	var <>sources;
+
 	*initClass {
 		Class.initClassTree(AooReceive);
 		ugenClass = AooReceive;
 	}
 
-	prHandleEvent { arg event ... args;
-
+	init { arg synth, synthIndex, port, id;
+		super.init(synth, synthIndex, port, id);
+		sources = [];
 	}
 
-	invite { arg host, port, id;
-		this.prSendMsg('/invite', host, port, id);
+	prHandleEvent { arg type ... args;
+		// /format, /add, /state, /block/*, /ping
+		// currently, all events start with endpoint + id
+		var addr = Aoo.prResolveAddr(this.port, AooAddr(args[0], args[1]));
+		var id = args[2];
+		var source = ( addr: addr, id: id );
+		var event = [type, addr, id] ++ args[3..];
+		// If source doesn't exist, fake an '/add' event.
+		// This happens if the source has been added
+		// before we could create the controller.
+		(this.prFind(source).isNil and: { type != '/add' }).if {
+			this.prAdd(source);
+			this.eventHandler.value('/add', addr, id);
+		};
+		type.switch(
+			'/add', { this.prAdd(source) },
+			'/remove', { this.prRemove(source) }
+		);
+		^event;
 	}
 
-	uninvite { arg host, port, id;
-		this.prSendMsg('/uninvite', host, port, id);
+	prAdd { arg source;
+		this.sources = this.sources.add(source);
+	}
+
+	prRemove { arg source;
+		var index = this.sources.indexOfEqual(source);
+		index !? { this.sources.removeAt(index) };
+	}
+
+	prFind { arg source;
+		var index = this.sources.indexOfEqual(source);
+		^index !? { this.sources[index] };
+	}
+
+	invite { arg addr, id;
+		addr = Aoo.prResolveAddr(this.port, addr);
+		this.prSendMsg('/invite', nil, addr.ip, addr.port, id);
+	}
+
+	uninvite { arg addr, id;
+		addr = Aoo.prResolveAddr(this.port, addr);
+		this.prSendMsg('/uninvite', nil, addr.ip, addr.port, id);
 	}
 
 	uninviteAll {
@@ -48,11 +93,11 @@ AooReceiveCtl : AooCtl {
 	}
 
 	packetSize_ { arg size;
-		this.prSendMsg('/packetsize', size);
+		this.prSendMsg('/packetsize',size);
 	}
 
-	bufsize_ { arg ms;
-		this.prSendMsg('/resend', ms);
+	bufsize_ { arg sec;
+		this.prSendMsg('/bufsize', sec);
 	}
 
 	redundancy_ { arg n;
@@ -63,8 +108,9 @@ AooReceiveCtl : AooCtl {
 		this.prSendMsg('/timefilter', bw);
 	}
 
-	reset { arg host, port, id;
-		this.prSendMsg('/reset', host, port, id);
+	reset { arg addr, id;
+		addr = Aoo.prResolveAddr(this.port, addr);
+		this.prSendMsg('/reset', addr.ip, addr.port, id);
 	}
 
 	resetAll {
@@ -72,14 +118,14 @@ AooReceiveCtl : AooCtl {
 	}
 
 	resend_ { arg enable;
-		this.prSendMsg('/resend', enable);
+		this.prSendMsg('/resend', nil, enable);
 	}
 
 	resendLimit_ { arg limit;
-		this.prSendMsg('/resend_limit', limit);
+		this.prSendMsg('/resend_limit', nil, limit);
 	}
 
-	resendInterval_ { arg ms;
-		this.prSendMsg('/resend_interval', ms);
+	resendInterval_ { arg sec;
+		this.prSendMsg('/resend_interval', nil, sec);
 	}
 }
