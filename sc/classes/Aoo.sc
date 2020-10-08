@@ -121,16 +121,14 @@ AooAddr {
 	var <>port;
 	var <>group;
 	var <>user;
+	var <>id;
 
 	*new { arg ip, port;
-		var addr = super.new;
-		addr.ip = ip !? { ip.asSymbol };
-		addr.port = port !? { port.asInteger };
-		^addr;
+		^super.newCopyArgs(ip.asSymbol, port.asInteger);
 	}
 
 	*peer { arg group, user;
-		^this.new(nil, nil, group, user);
+		^this.newCopyArgs(nil, nil, group.asSymbol, user.asSymbol);
 	}
 
 	== { arg that;
@@ -139,6 +137,11 @@ AooAddr {
 
 	hash {
 		^this.instVarHash(#[\ip, \port])
+	}
+
+	printOn { arg stream;
+		stream << this.class.name << "("
+		<<* [ip, port, group, user, id] << ")";
 	}
 }
 
