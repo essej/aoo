@@ -399,13 +399,28 @@ void AooNode::doReceive()
             // forward OSC packet to matching clients(s)
             aoo::shared_scoped_lock l(clientMutex_);
             for (auto& c : clients_){
-                if (c.type == type && ((id == AOO_ID_WILDCARD) || (id == c.id)))
-                {
-                    c.obj->handleMessage(buf, nbytes, ep, endpoint::send);
-                    if (id != AOO_ID_WILDCARD)
-                        break;
+                switch (type) {
+                case AOO_TYPE_SOURCE:
+                case AOO_TYPE_SINK:
+                    if ((type == c.type) &&
+                        ((id == AOO_ID_WILDCARD) || (id == c.id)))
+                    {
+                        c.obj->handleMessage(buf, nbytes, ep, endpoint::send);
+                        if (id != AOO_ID_WILDCARD)
+                            goto parse_done;
+                    }
+                    break;
+                case AOO_TYPE_CLIENT:
+                case AOO_TYPE_PEER:
+                    if (c.type == AOO_TYPE_CLIENT) {
+                        c.obj->handleMessage(buf, nbytes, ep, endpoint::send);
+                    }
+                    break;
+                default:
+                    break; // ignore
                 }
             }
+        parse_done:
         #if !AOO_NODE_POLL
             // notify send thread
             condition_.notify_all();
