@@ -677,10 +677,17 @@ typedef struct aoo_codec
 // register an external codec plugin
 AOO_API int32_t aoo_register_codec(const char *name, const aoo_codec *codec);
 
-// The type of 'aoo_register_codec', which gets passed to codec setup functions.
-// For now, plugins are registered statically - or manually by the user.
-// Later we might want to automatically look for codec plugins.
+// The type of 'aoo_register_codec', which gets passed to codec plugins
+// to register themselves.
 typedef int32_t (*aoo_codec_registerfn)(const char *, const aoo_codec *);
+
+// NOTE: AOO doesn't support dynamic plugin loading out of the box,
+// but it is quite easy to implement on your own:
+// Usually, you would put one or more codecs in a shared library
+// and export a single function like 'void aoo_setup(aoo_codec_registerfn fn)'.
+// In your host application, you would then scan directories for shared libraries,
+// check if they export a function named 'aoo_setup', and if yes, called it with
+// 'aoo_register_codec'.
 
 #ifdef __cplusplus
 } // extern "C"

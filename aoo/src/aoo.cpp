@@ -163,6 +163,11 @@ uint32_t make_version(){
 
 /*/////////////// (de)initialize //////////////////*/
 
+void aoo_codec_pcm_setup(aoo_codec_registerfn fn);
+#if USE_CODEC_OPUS
+void aoo_codec_opus_setup(aoo_codec_registerfn fn);
+#endif
+
 void aoo_initialize(){
     static bool initialized = false;
     if (!initialized){

@@ -30,8 +30,6 @@ typedef struct aoo_format_pcm
     int32_t bitdepth;
 } aoo_format_pcm;
 
-AOO_API void aoo_codec_pcm_setup(aoo_codec_registerfn fn);
-
 #ifdef __cplusplus
 } // extern "C"
 #endif

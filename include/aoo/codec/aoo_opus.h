@@ -25,8 +25,6 @@ typedef struct aoo_format_opus
     int32_t signal_type;
 } aoo_format_opus;
 
-AOO_API void aoo_codec_opus_setup(aoo_codec_registerfn fn);
-
 #ifdef __cplusplus
 } // extern "C"
 #endif
