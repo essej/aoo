@@ -243,7 +243,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         switch (events[i]->type){
         case AOO_SOURCE_ADD_EVENT:
         {
-            auto e = (aoo_source_event *)events[i];
+            auto e = (const aoo_source_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
             // first add to source list
@@ -258,7 +258,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         }
         case AOO_SOURCE_FORMAT_EVENT:
         {
-            auto e = (aoo_source_event *)events[i];
+            auto e = (const aoo_source_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
             if (!endpoint_to_atoms(ep, e->id, 3, msg)){
@@ -273,7 +273,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         }
         case AOO_SOURCE_STATE_EVENT:
         {
-            auto e = (aoo_source_state_event *)events[i];
+            auto e = (const aoo_source_state_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
             if (!endpoint_to_atoms(ep, e->id, 3, msg)){
@@ -285,7 +285,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         }
         case AOO_BLOCK_LOST_EVENT:
         {
-            auto e = (aoo_block_lost_event *)events[i];
+            auto e = (const aoo_block_lost_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
             if (!endpoint_to_atoms(ep, e->id, 3, msg)){
@@ -297,7 +297,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         }
         case AOO_BLOCK_REORDERED_EVENT:
         {
-            auto e = (aoo_block_reordered_event *)events[i];
+            auto e = (const aoo_block_reordered_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
             if (!endpoint_to_atoms(ep, e->id, 3, msg)){
@@ -309,7 +309,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         }
         case AOO_BLOCK_RESENT_EVENT:
         {
-            auto e = (aoo_block_resent_event *)events[i];
+            auto e = (const aoo_block_resent_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
             if (!endpoint_to_atoms(ep, e->id, 3, msg)){
@@ -321,7 +321,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         }
         case AOO_BLOCK_GAP_EVENT:
         {
-            auto e = (aoo_block_gap_event *)events[i];
+            auto e = (const aoo_block_gap_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
             if (!endpoint_to_atoms(ep, e->id, 3, msg)){
@@ -333,7 +333,7 @@ static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **eve
         }
         case AOO_PING_EVENT:
         {
-            auto e = (aoo_ping_event *)events[i];
+            auto e = (const aoo_ping_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
             if (!endpoint_to_atoms(ep, e->id, 3, msg)){

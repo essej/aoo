@@ -183,7 +183,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
         switch (events[i]->type){
         case AOO_PING_EVENT:
         {
-            auto e = (aoo_ping_event *)events[i];
+            auto e = (const aoo_ping_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
             double diff1 = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
             double diff2 = aoo_osctime_duration(e->tt2, e->tt3) * 1000.0;
@@ -203,7 +203,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
         }
         case AOO_INVITE_EVENT:
         {
-            auto e = (aoo_sink_event *)events[i];
+            auto e = (const aoo_sink_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
             if (x->x_accept){
@@ -221,7 +221,7 @@ static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, i
         }
         case AOO_UNINVITE_EVENT:
         {
-            auto e = (aoo_sink_event *)events[i];
+            auto e = (const aoo_sink_event *)events[i];
             auto ep = (aoo::endpoint *)e->endpoint;
 
             if (x->x_accept){
