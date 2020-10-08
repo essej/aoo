@@ -216,15 +216,10 @@ void AooSendUnit::next(int numSamples){
             delegate().node()->notify();
         }
 
-        if (source->events_available() > 0){
-            source->handle_events(
-                [](void *user, const aoo_event **events, int32_t n){
-                    for (int i = 0; i < n; ++i){
-                        static_cast<AooSend *>(user)->handleEvent(events[i]);
-                    }
-                    return 1;
-                }, delegate_.get());
-        }
+        source->poll_events(
+            [](void *user, const aoo_event *event){
+                static_cast<AooSend *>(user)->handleEvent(event);
+            }, delegate_.get());
     }
 }
 

@@ -57,9 +57,9 @@ public:
     // get number of pending events (always thread safe)
     virtual int32_t events_available() = 0;
 
-    // handle events (threadsafe, but not reentrant)
+    // poll events (threadsafe, but not reentrant)
     // will call the event handler function one or more times
-    virtual int32_t handle_events(aoo_eventhandler fn, void *user) = 0;
+    virtual int32_t poll_events(aoo_eventhandler fn, void *user) = 0;
 
     // LATER add methods to add/remove users and groups
     // and set/get server options, group options and user options
@@ -115,11 +115,12 @@ public:
     // get number of pending events (always thread safe)
     virtual int32_t events_available() = 0;
 
-    // handle events (threadsafe, but not reentrant)
+    // poll events (threadsafe, but not reentrant)
     // will call the event handler function one or more times
-    virtual int32_t handle_events(aoo_eventhandler fn, void *user) = 0;
+    virtual int32_t poll_events(aoo_eventhandler fn, void *user) = 0;
 
-    // LATER add API functions to set options and do additional peer communication (chat, OSC messages, etc.)
+    // LATER add API functions to set options and do additional
+    // peer communication (chat, OSC messages, etc.)
 
     //------------------------------ requests ---------------------------//
 

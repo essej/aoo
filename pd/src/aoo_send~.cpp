@@ -177,75 +177,72 @@ void aoo_send_send(t_aoo_send *x)
     while (x->x_source->send()) ;
 }
 
-static int32_t aoo_send_handle_events(t_aoo_send *x, const aoo_event **events, int32_t n)
+static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event)
 {
-    for (int i = 0; i < n; ++i){
-        switch (events[i]->type){
-        case AOO_PING_EVENT:
-        {
-            auto e = (const aoo_ping_event *)events[i];
-            auto ep = (aoo::endpoint *)e->endpoint;
-            double diff1 = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
-            double diff2 = aoo_osctime_duration(e->tt2, e->tt3) * 1000.0;
-            double rtt = aoo_osctime_duration(e->tt1, e->tt3) * 1000.0;
+    switch (event->type){
+    case AOO_PING_EVENT:
+    {
+        auto e = (const aoo_ping_event *)event;
+        auto ep = (aoo::endpoint *)e->endpoint;
+        double diff1 = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
+        double diff2 = aoo_osctime_duration(e->tt2, e->tt3) * 1000.0;
+        double rtt = aoo_osctime_duration(e->tt1, e->tt3) * 1000.0;
 
-            t_atom msg[7];
+        t_atom msg[7];
+        if (endpoint_to_atoms(ep, e->id, 3, msg)){
+            SETFLOAT(msg + 3, diff1);
+            SETFLOAT(msg + 4, diff2);
+            SETFLOAT(msg + 5, rtt);
+            SETFLOAT(msg + 6, e->lost_blocks);
+            outlet_anything(x->x_msgout, gensym("ping"), 7, msg);
+        } else {
+            bug("aoo_endpoint_to_atoms");
+        }
+        break;
+    }
+    case AOO_INVITE_EVENT:
+    {
+        auto e = (const aoo_sink_event *)event;
+        auto ep = (aoo::endpoint *)e->endpoint;
+
+        if (x->x_accept){
+            aoo_send_doaddsink(x, ep, e->id);
+        } else {
+            t_atom msg[3];
             if (endpoint_to_atoms(ep, e->id, 3, msg)){
-                SETFLOAT(msg + 3, diff1);
-                SETFLOAT(msg + 4, diff2);
-                SETFLOAT(msg + 5, rtt);
-                SETFLOAT(msg + 6, e->lost_blocks);
-                outlet_anything(x->x_msgout, gensym("ping"), 7, msg);
+                outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
             } else {
                 bug("aoo_endpoint_to_atoms");
             }
-            break;
         }
-        case AOO_INVITE_EVENT:
-        {
-            auto e = (const aoo_sink_event *)events[i];
-            auto ep = (aoo::endpoint *)e->endpoint;
 
-            if (x->x_accept){
-                aoo_send_doaddsink(x, ep, e->id);
-            } else {
-                t_atom msg[3];
-                if (endpoint_to_atoms(ep, e->id, 3, msg)){
-                    outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
-                } else {
-                    bug("aoo_endpoint_to_atoms");
-                }
-            }
-
-            break;
-        }
-        case AOO_UNINVITE_EVENT:
-        {
-            auto e = (const aoo_sink_event *)events[i];
-            auto ep = (aoo::endpoint *)e->endpoint;
-
-            if (x->x_accept){
-                aoo_send_doremovesink(x, ep, e->id);
-            } else {
-                t_atom msg[3];
-                if (endpoint_to_atoms(ep, e->id, 3, msg)){
-                    outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
-                } else {
-                    bug("aoo_endpoint_to_atoms");
-                }
-            }
-            break;
-        }
-        default:
-            break;
-        }
+        break;
     }
-    return 1;
+    case AOO_UNINVITE_EVENT:
+    {
+        auto e = (const aoo_sink_event *)event;
+        auto ep = (aoo::endpoint *)e->endpoint;
+
+        if (x->x_accept){
+            aoo_send_doremovesink(x, ep, e->id);
+        } else {
+            t_atom msg[3];
+            if (endpoint_to_atoms(ep, e->id, 3, msg)){
+                outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
+            } else {
+                bug("aoo_endpoint_to_atoms");
+            }
+        }
+        break;
+    }
+    default:
+        break;
+    }
 }
 
 static void aoo_send_tick(t_aoo_send *x)
 {
-    x->x_source->handle_events((aoo_eventhandler)aoo_send_handle_events, x);
+    x->x_source->poll_events((aoo_eventhandler)aoo_send_handle_event, x);
 }
 
 static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)

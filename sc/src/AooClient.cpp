@@ -101,16 +101,11 @@ void AooClient::doHandleMessage(const char* data, int32_t size,
 }
 
 void AooClient::doUpdate() {
-    // handle events
-    if (client_->events_available() > 0) {
-        client_->handle_events([](void *user, const aoo_event **events, int32_t n) {
-            for (int i = 0; i < n; ++i) {
-                static_cast<AooClient*>(user)->handleEvent(events[i]);
-            }
-            return 1;
+    client_->poll_events(
+        [](void *user, const aoo_event *event) {
+            static_cast<AooClient*>(user)->handleEvent(event);
         }, this);
-    }
-}                                             \
+}
 
 void AooClient::connect(const char* host, int port,
                         const char* user, const char* pwd) {

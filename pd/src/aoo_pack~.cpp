@@ -54,70 +54,67 @@ static int32_t aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)
     return 1;
 }
 
-static int32_t aoo_pack_handle_events(t_aoo_pack *x, const aoo_event ** events, int32_t n)
+static void aoo_pack_handle_event(t_aoo_pack *x, const aoo_event *event)
 {
-    for (int i = 0; i < n; ++i){
-        switch (events[i]->type){
-        case AOO_PING_EVENT:
-        {
-            auto e = (const aoo_ping_event *)events[i];
-            double diff1 = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
-            double diff2 = aoo_osctime_duration(e->tt2, e->tt3) * 1000.0;
-            double rtt = aoo_osctime_duration(e->tt1, e->tt3) * 1000.0;
+    switch (event->type){
+    case AOO_PING_EVENT:
+    {
+        auto e = (const aoo_ping_event *)event;
+        double diff1 = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
+        double diff2 = aoo_osctime_duration(e->tt2, e->tt3) * 1000.0;
+        double rtt = aoo_osctime_duration(e->tt1, e->tt3) * 1000.0;
 
-            t_atom msg[5];
-            SETFLOAT(msg, e->id);
-            SETFLOAT(msg + 1, diff1);
-            SETFLOAT(msg + 2, diff2);
-            SETFLOAT(msg + 3, rtt);
-            SETFLOAT(msg + 4, e->lost_blocks);
-            outlet_anything(x->x_msgout, gensym("ping"), 5, msg);
-            break;
-        }
-        case AOO_INVITE_EVENT:
-        {
-            auto e = (const aoo_sink_event *)events[i];
-
-            t_atom msg;
-            SETFLOAT(&msg, e->id);
-
-            if (x->x_accept){
-                x->x_source->add_sink(x, e->id, (aoo_replyfn)aoo_pack_reply);
-
-                outlet_anything(x->x_msgout, gensym("sink_add"), 1, &msg);
-            } else {
-                outlet_anything(x->x_msgout, gensym("invite"), 1, &msg);
-            }
-            break;
-        }
-        case AOO_UNINVITE_EVENT:
-        {
-            auto e = (const aoo_sink_event *)events[i];
-
-            t_atom msg;
-            SETFLOAT(&msg, e->id);
-
-            if (x->x_accept){
-                x->x_source->remove_sink(x, e->id);
-
-                outlet_anything(x->x_msgout, gensym("sink_remove"), 1, &msg);
-            } else {
-                outlet_anything(x->x_msgout, gensym("uninvite"), 1, &msg);
-            }
-            break;
-        }
-        default:
-            break;
-        }
+        t_atom msg[5];
+        SETFLOAT(msg, e->id);
+        SETFLOAT(msg + 1, diff1);
+        SETFLOAT(msg + 2, diff2);
+        SETFLOAT(msg + 3, rtt);
+        SETFLOAT(msg + 4, e->lost_blocks);
+        outlet_anything(x->x_msgout, gensym("ping"), 5, msg);
+        break;
     }
-    return 1;
+    case AOO_INVITE_EVENT:
+    {
+        auto e = (const aoo_sink_event *)event;
+
+        t_atom msg;
+        SETFLOAT(&msg, e->id);
+
+        if (x->x_accept){
+            x->x_source->add_sink(x, e->id, (aoo_replyfn)aoo_pack_reply);
+
+            outlet_anything(x->x_msgout, gensym("sink_add"), 1, &msg);
+        } else {
+            outlet_anything(x->x_msgout, gensym("invite"), 1, &msg);
+        }
+        break;
+    }
+    case AOO_UNINVITE_EVENT:
+    {
+        auto e = (const aoo_sink_event *)event;
+
+        t_atom msg;
+        SETFLOAT(&msg, e->id);
+
+        if (x->x_accept){
+            x->x_source->remove_sink(x, e->id);
+
+            outlet_anything(x->x_msgout, gensym("sink_remove"), 1, &msg);
+        } else {
+            outlet_anything(x->x_msgout, gensym("uninvite"), 1, &msg);
+        }
+        break;
+    }
+    default:
+        break;
+    }
 }
 
 static void aoo_pack_tick(t_aoo_pack *x)
 {
     while (x->x_source->send()) ;
 
-    x->x_source->handle_events((aoo_eventhandler)aoo_pack_handle_events, x);
+    x->x_source->poll_events((aoo_eventhandler)aoo_pack_handle_event, x);
 }
 
 static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)

@@ -122,7 +122,7 @@ public:
 
     int32_t events_available() override;
 
-    int32_t handle_events(aoo_eventhandler fn, void *user) override;
+    int32_t poll_events(aoo_eventhandler fn, void *user) override;
 
     void do_connect(const char *host, int port,
                     const char *name, const char *pwd,

@@ -236,124 +236,121 @@ static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
     }
 }
 
-static int32_t aoo_receive_handle_events(t_aoo_receive *x, const aoo_event **events, int32_t n)
+static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
 {
     t_atom msg[32];
-    for (int i = 0; i < n; ++i){
-        switch (events[i]->type){
-        case AOO_SOURCE_ADD_EVENT:
-        {
-            auto e = (const aoo_source_event *)events[i];
-            auto ep = (aoo::endpoint *)e->endpoint;
+    switch (event->type){
+    case AOO_SOURCE_ADD_EVENT:
+    {
+        auto e = (const aoo_source_event *)event;
+        auto ep = (aoo::endpoint *)e->endpoint;
 
-            // first add to source list
-            x->x_sources.push_back({ ep, e->id });
+        // first add to source list
+        x->x_sources.push_back({ ep, e->id });
 
-            // output event
-            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
-                continue;
-            }
-            outlet_anything(x->x_msgout, gensym("source_add"), 3, msg);
-            break;
+        // output event
+        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+            return;
         }
-        case AOO_SOURCE_FORMAT_EVENT:
-        {
-            auto e = (const aoo_source_event *)events[i];
-            auto ep = (aoo::endpoint *)e->endpoint;
-
-            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
-                continue;
-            }
-            aoo_format_storage f;
-            if (x->x_sink->get_source_format(e->endpoint, e->id, f) > 0) {
-                int fsize = format_to_atoms(f.header, 29, msg + 3); // skip first three atoms
-                outlet_anything(x->x_msgout, gensym("source_format"), fsize + 3, msg);
-            }
-            break;
-        }
-        case AOO_SOURCE_STATE_EVENT:
-        {
-            auto e = (const aoo_source_state_event *)events[i];
-            auto ep = (aoo::endpoint *)e->endpoint;
-
-            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
-                continue;
-            }
-            SETFLOAT(&msg[3], e->state);
-            outlet_anything(x->x_msgout, gensym("source_state"), 4, msg);
-            break;
-        }
-        case AOO_BLOCK_LOST_EVENT:
-        {
-            auto e = (const aoo_block_lost_event *)events[i];
-            auto ep = (aoo::endpoint *)e->endpoint;
-
-            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
-                continue;
-            }
-            SETFLOAT(&msg[3], e->count);
-            outlet_anything(x->x_msgout, gensym("block_lost"), 4, msg);
-            break;
-        }
-        case AOO_BLOCK_REORDERED_EVENT:
-        {
-            auto e = (const aoo_block_reordered_event *)events[i];
-            auto ep = (aoo::endpoint *)e->endpoint;
-
-            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
-                continue;
-            }
-            SETFLOAT(&msg[3], e->count);
-            outlet_anything(x->x_msgout, gensym("block_reordered"), 4, msg);
-            break;
-        }
-        case AOO_BLOCK_RESENT_EVENT:
-        {
-            auto e = (const aoo_block_resent_event *)events[i];
-            auto ep = (aoo::endpoint *)e->endpoint;
-
-            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
-                continue;
-            }
-            SETFLOAT(&msg[3], e->count);
-            outlet_anything(x->x_msgout, gensym("block_resent"), 4, msg);
-            break;
-        }
-        case AOO_BLOCK_GAP_EVENT:
-        {
-            auto e = (const aoo_block_gap_event *)events[i];
-            auto ep = (aoo::endpoint *)e->endpoint;
-
-            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
-                continue;
-            }
-            SETFLOAT(&msg[3], e->count);
-            outlet_anything(x->x_msgout, gensym("block_gap"), 4, msg);
-            break;
-        }
-        case AOO_PING_EVENT:
-        {
-            auto e = (const aoo_ping_event *)events[i];
-            auto ep = (aoo::endpoint *)e->endpoint;
-
-            if (!endpoint_to_atoms(ep, e->id, 3, msg)){
-                continue;
-            }
-            double diff = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
-            SETFLOAT(msg + 3, diff);
-            outlet_anything(x->x_msgout, gensym("ping"), 4, msg);
-            break;
-        }
-        default:
-            break;
-        }
+        outlet_anything(x->x_msgout, gensym("source_add"), 3, msg);
+        break;
     }
-    return 1;
+    case AOO_SOURCE_FORMAT_EVENT:
+    {
+        auto e = (const aoo_source_event *)event;
+        auto ep = (aoo::endpoint *)e->endpoint;
+
+        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+            return;
+        }
+        aoo_format_storage f;
+        if (x->x_sink->get_source_format(e->endpoint, e->id, f) > 0) {
+            int fsize = format_to_atoms(f.header, 29, msg + 3); // skip first three atoms
+            outlet_anything(x->x_msgout, gensym("source_format"), fsize + 3, msg);
+        }
+        break;
+    }
+    case AOO_SOURCE_STATE_EVENT:
+    {
+        auto e = (const aoo_source_state_event *)event;
+        auto ep = (aoo::endpoint *)e->endpoint;
+
+        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+            return;
+        }
+        SETFLOAT(&msg[3], e->state);
+        outlet_anything(x->x_msgout, gensym("source_state"), 4, msg);
+        break;
+    }
+    case AOO_BLOCK_LOST_EVENT:
+    {
+        auto e = (const aoo_block_lost_event *)event;
+        auto ep = (aoo::endpoint *)e->endpoint;
+
+        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+            return;
+        }
+        SETFLOAT(&msg[3], e->count);
+        outlet_anything(x->x_msgout, gensym("block_lost"), 4, msg);
+        break;
+    }
+    case AOO_BLOCK_REORDERED_EVENT:
+    {
+        auto e = (const aoo_block_reordered_event *)event;
+        auto ep = (aoo::endpoint *)e->endpoint;
+
+        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+            return;
+        }
+        SETFLOAT(&msg[3], e->count);
+        outlet_anything(x->x_msgout, gensym("block_reordered"), 4, msg);
+        break;
+    }
+    case AOO_BLOCK_RESENT_EVENT:
+    {
+        auto e = (const aoo_block_resent_event *)event;
+        auto ep = (aoo::endpoint *)e->endpoint;
+
+        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+            return;
+        }
+        SETFLOAT(&msg[3], e->count);
+        outlet_anything(x->x_msgout, gensym("block_resent"), 4, msg);
+        break;
+    }
+    case AOO_BLOCK_GAP_EVENT:
+    {
+        auto e = (const aoo_block_gap_event *)event;
+        auto ep = (aoo::endpoint *)e->endpoint;
+
+        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+            return;
+        }
+        SETFLOAT(&msg[3], e->count);
+        outlet_anything(x->x_msgout, gensym("block_gap"), 4, msg);
+        break;
+    }
+    case AOO_PING_EVENT:
+    {
+        auto e = (const aoo_ping_event *)event;
+        auto ep = (aoo::endpoint *)e->endpoint;
+
+        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+            return;
+        }
+        double diff = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
+        SETFLOAT(msg + 3, diff);
+        outlet_anything(x->x_msgout, gensym("ping"), 4, msg);
+        break;
+    }
+    default:
+        break;
+    }
 }
 
 static void aoo_receive_tick(t_aoo_receive *x)
 {
-    x->x_sink->handle_events((aoo_eventhandler)aoo_receive_handle_events, x);
+    x->x_sink->poll_events((aoo_eventhandler)aoo_receive_handle_event, x);
 }
 
 static t_int * aoo_receive_perform(t_int *w)

@@ -123,6 +123,7 @@ public:
     typedef union event
     {
         aoo_event_type type;
+        aoo_event event_;
         aoo_source_event source;
         aoo_ping_event ping;
         aoo_source_state_event source_state;
@@ -156,7 +157,7 @@ public:
 
     int32_t handle_ping(const sink& s, time_tag tt);
 
-    int32_t handle_events(aoo_eventhandler fn, void *user);
+    int32_t poll_events(aoo_eventhandler fn, void *user);
 
     bool send(const sink& s);
 
@@ -252,7 +253,7 @@ public:
 
     int32_t events_available() override;
 
-    int32_t handle_events(aoo_eventhandler fn, void *user) override;
+    int32_t poll_events(aoo_eventhandler fn, void *user) override;
 
     int32_t set_option(int32_t opt, void *ptr, int32_t size) override;
 

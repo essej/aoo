@@ -440,14 +440,14 @@ int32_t aoo::sink::events_available(){
     return false;
 }
 
-int32_t aoo_sink_handle_events(aoo_sink *sink,
+int32_t aoo_sink_poll_events(aoo_sink *sink,
                               aoo_eventhandler fn, void *user){
-    return sink->handle_events(fn, user);
+    return sink->poll_events(fn, user);
 }
 
 #define EVENT_THROTTLE 1000
 
-int32_t aoo::sink::handle_events(aoo_eventhandler fn, void *user){
+int32_t aoo::sink::poll_events(aoo_eventhandler fn, void *user){
     if (!fn){
         return 0;
     }
@@ -455,7 +455,7 @@ int32_t aoo::sink::handle_events(aoo_eventhandler fn, void *user){
     // handle_events() and the source list itself are both lock-free!
     // NOTE: the source descs are never freed, so they are always valid
     for (auto& src : sources_){
-        total += src.handle_events(fn, user);
+        total += src.poll_events(fn, user);
         if (total > EVENT_THROTTLE){
             break;
         }
@@ -724,19 +724,23 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
               << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
 
     // check data packet
+    LOG_DEBUG("check packet");
     if (!check_packet(d)){
         return 0;
     }
 
     // add data packet
+    LOG_DEBUG("add packet");
     if (!add_packet(d)){
         return 0;
     }
 
     // process blocks and send audio
+    LOG_DEBUG("process blocks");
     process_blocks();
 
     // check and resend missing blocks
+    LOG_DEBUG("check missing blocks");
     check_missing_blocks(s);
 
 #if AOO_DEBUG_JITTER_BUFFER
@@ -917,21 +921,16 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
     }
 }
 
-int32_t source_desc::handle_events(aoo_eventhandler fn, void *user){
+int32_t source_desc::poll_events(aoo_eventhandler fn, void *user){
     // copy events - always lockfree! (the eventqueue is never resized)
-    auto n = eventqueue_.read_available();
-    if (n > 0){
-        auto events = (event *)alloca(sizeof(event) * n);
-        for (int i = 0; i < n; ++i){
-            eventqueue_.read(events[i]);
-        }
-        auto vec = (const aoo_event **)alloca(sizeof(aoo_event *) * n);
-        for (int i = 0; i < n; ++i){
-            vec[i] = (aoo_event *)&events[i];
-        }
-        fn(user, vec, n);
+    int count = 0;
+    while (eventqueue_.read_available() > 0){
+        event e;
+        eventqueue_.read(e);
+        fn(user, &e.event_);
+        count++;
     }
-    return n;
+    return count;
 }
 
 void source_desc::recover(const char *reason, int32_t n){

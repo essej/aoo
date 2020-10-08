@@ -417,31 +417,20 @@ int32_t aoo::net::client::events_available(){
     return 1;
 }
 
-int32_t aoo_net_client_handle_events(aoo_net_client *client, aoo_eventhandler fn, void *user){
-    return client->handle_events(fn, user);
+int32_t aoo_net_client_poll_events(aoo_net_client *client, aoo_eventhandler fn, void *user){
+    return client->poll_events(fn, user);
 }
 
-int32_t aoo::net::client::handle_events(aoo_eventhandler fn, void *user){
+int32_t aoo::net::client::poll_events(aoo_eventhandler fn, void *user){
     // always thread-safe
-    auto n = events_.read_available();
-    if (n > 0){
-        // copy events
-        auto events = (ievent **)alloca(sizeof(ievent *) * n);
-        auto vec = (const aoo_event **)alloca(sizeof(aoo_event *) * n); // adjusted pointers
-        for (int i = 0; i < n; ++i){
-            std::unique_ptr<ievent> ptr;
-            events_.read(ptr);
-            events[i] = ptr.release(); // get raw pointer
-            vec[i] = &events[i]->event_; // adjust pointer
-        }
-        // send events
-        fn(user, vec, n);
-        // manually free events
-        for (int i = 0; i < n; ++i){
-            delete events[i];
-        }
+    int count = 0;
+    while (events_.read_available() > 0){
+        std::unique_ptr<ievent> e;
+        events_.read(e);
+        fn(user, &e->event_);
+        count++;
     }
-    return n;
+    return count;
 }
 
 namespace aoo {

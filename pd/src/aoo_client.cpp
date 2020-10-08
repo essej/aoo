@@ -68,78 +68,74 @@ void aoo_client_handle_message(t_aoo_client *x, const char * data,
                                 e->address().length());
 }
 
-static int32_t aoo_client_handle_events(t_aoo_client *x,
-                                        const aoo_event **events, int32_t n)
+static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
 {
-    for (int i = 0; i < n; ++i){
-        switch (events[i]->type){
-        case AOO_NET_DISCONNECT_EVENT:
-        {
-            pd_error(x, "%s: disconnected from server",
-                     classname(x));
+    switch (event->type){
+    case AOO_NET_DISCONNECT_EVENT:
+    {
+        pd_error(x, "%s: disconnected from server",
+                 classname(x));
 
-            x->x_node->remove_all_peers();
+        x->x_node->remove_all_peers();
 
-            outlet_float(x->x_stateout, 0); // disconnected
-            break;
-        }
-        case AOO_NET_PEER_JOIN_EVENT:
-        {
-            auto e = (const aoo_net_peer_event *)events[i];
-
-            ip_address addr((const sockaddr *)e->address, e->length);
-            auto group = gensym(e->group_name);
-            auto user = gensym(e->user_name);
-            auto id = e->user_id;
-
-            x->x_node->add_peer(group, user, id, addr);
-
-            t_atom msg[5];
-            SETSYMBOL(msg, group);
-            SETSYMBOL(msg + 1, user);
-            SETFLOAT(msg + 2, id);
-            address_to_atoms(addr, 2, msg + 3);
-
-            outlet_anything(x->x_msgout, gensym("peer_join"), 5, msg);
-            break;
-        }
-        case AOO_NET_PEER_LEAVE_EVENT:
-        {
-            auto e = (const aoo_net_peer_event *)events[i];
-
-            ip_address addr((const sockaddr *)e->address, e->length);
-            auto group = gensym(e->group_name);
-            auto user = gensym(e->user_name);
-            auto id = e->user_id;
-
-            x->x_node->remove_peer(group, user);
-
-            t_atom msg[5];
-            SETSYMBOL(msg, group);
-            SETSYMBOL(msg + 1, user);
-            SETFLOAT(msg + 2, id);
-            address_to_atoms(addr, 2, msg + 3);
-
-            outlet_anything(x->x_msgout, gensym("peer_leave"), 5, msg);
-            break;
-        }
-        case AOO_NET_ERROR_EVENT:
-        {
-            auto e = (const aoo_net_error_event *)events[i];
-            pd_error(x, "%s: %s", classname(x), e->errormsg);
-            break;
-        }
-        default:
-            pd_error(x, "%s: got unknown event %d", classname(x), events[i]->type);
-            break;
-        }
+        outlet_float(x->x_stateout, 0); // disconnected
+        break;
     }
-    return 1;
+    case AOO_NET_PEER_JOIN_EVENT:
+    {
+        auto e = (const aoo_net_peer_event *)event;
+
+        ip_address addr((const sockaddr *)e->address, e->length);
+        auto group = gensym(e->group_name);
+        auto user = gensym(e->user_name);
+        auto id = e->user_id;
+
+        x->x_node->add_peer(group, user, id, addr);
+
+        t_atom msg[5];
+        SETSYMBOL(msg, group);
+        SETSYMBOL(msg + 1, user);
+        SETFLOAT(msg + 2, id);
+        address_to_atoms(addr, 2, msg + 3);
+
+        outlet_anything(x->x_msgout, gensym("peer_join"), 5, msg);
+        break;
+    }
+    case AOO_NET_PEER_LEAVE_EVENT:
+    {
+        auto e = (const aoo_net_peer_event *)event;
+
+        ip_address addr((const sockaddr *)e->address, e->length);
+        auto group = gensym(e->group_name);
+        auto user = gensym(e->user_name);
+        auto id = e->user_id;
+
+        x->x_node->remove_peer(group, user);
+
+        t_atom msg[5];
+        SETSYMBOL(msg, group);
+        SETSYMBOL(msg + 1, user);
+        SETFLOAT(msg + 2, id);
+        address_to_atoms(addr, 2, msg + 3);
+
+        outlet_anything(x->x_msgout, gensym("peer_leave"), 5, msg);
+        break;
+    }
+    case AOO_NET_ERROR_EVENT:
+    {
+        auto e = (const aoo_net_error_event *)event;
+        pd_error(x, "%s: %s", classname(x), e->errormsg);
+        break;
+    }
+    default:
+        pd_error(x, "%s: got unknown event %d", classname(x), event->type);
+        break;
+    }
 }
 
 static void aoo_client_tick(t_aoo_client *x)
 {
-    x->x_client->handle_events((aoo_eventhandler)aoo_client_handle_events, x);
+    x->x_client->poll_events((aoo_eventhandler)aoo_client_handle_event, x);
 
     x->x_node->notify();
 

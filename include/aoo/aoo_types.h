@@ -100,10 +100,9 @@ typedef struct aoo_event
 } aoo_event;
 
 // event handler
-typedef int32_t (*aoo_eventhandler)(
-        void *,             // user
-        const aoo_event **, // event array
-        int32_t n           // number of events
+typedef void (*aoo_eventhandler)(
+        void *user,          // user
+        const aoo_event *e   // event
 );
 
 #ifdef __cplusplus

@@ -366,7 +366,7 @@ AOO_API void aoo_source_remove_all(aoo_source *src);
 
 // handle messages from sinks (threadsafe, but not reentrant)
 AOO_API int32_t aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
-                                 void *sink, aoo_replyfn fn);
+                                          void *sink, aoo_replyfn fn);
 
 // send outgoing messages - will call the reply function (threadsafe, but not reentrant)
 AOO_API int32_t aoo_source_send(aoo_source *src);
@@ -376,14 +376,14 @@ AOO_API int32_t aoo_source_send(aoo_source *src);
 // nsamples:    number of samples per channel
 // t:           current NTP timestamp (see aoo_osctime_get)
 AOO_API int32_t aoo_source_process(aoo_source *src, const aoo_sample **data,
-                           int32_t nsamples, uint64_t t);
+                                   int32_t nsamples, uint64_t t);
 
 // get number of pending events (always thread safe)
 AOO_API int32_t aoo_source_events_available(aoo_source *src);
 
-// handle events (threadsafe, but not reentrant)
+// poll events (threadsafe, but not reentrant)
 // will call the event handler function one or more times
-AOO_API int32_t aoo_source_handle_events(aoo_source *src, aoo_eventhandler fn, void *user);
+AOO_API int32_t aoo_source_poll_events(aoo_source *src, aoo_eventhandler fn, void *user);
 
 // set/get options (always threadsafe)
 AOO_API int32_t aoo_source_set_option(aoo_source *src, int32_t opt, void *p, int32_t size);
@@ -471,11 +471,13 @@ static inline int32_t aoo_source_get_redundancy(aoo_source *src, int32_t *n) {
     return aoo_source_get_option(src, aoo_opt_redundancy, AOO_ARG(*n));
 }
 
-static inline int32_t aoo_source_set_sink_channelonset(aoo_source *src, void *endpoint, int32_t id, int32_t onset) {
+static inline int32_t aoo_source_set_sink_channelonset(aoo_source *src,
+                                                       void *endpoint, int32_t id, int32_t onset) {
     return aoo_source_set_sinkoption(src, endpoint, id, aoo_opt_channelonset, AOO_ARG(onset));
 }
 
-static inline int32_t aoo_source_get_sink_channelonset(aoo_source *src, void *endpoint, int32_t id, int32_t *onset) {
+static inline int32_t aoo_source_get_sink_channelonset(aoo_source *src,
+                                                       void *endpoint, int32_t id, int32_t *onset) {
     return aoo_source_get_sinkoption(src, endpoint, id, aoo_opt_channelonset, AOO_ARG(*onset));
 }
 
@@ -501,10 +503,12 @@ AOO_API int32_t aoo_sink_setup(aoo_sink *sink, int32_t samplerate,
                                int32_t blocksize, int32_t nchannels);
 
 // invite a source (always threadsafe)
-AOO_API int32_t aoo_sink_invite_source(aoo_sink *sink, void *endpoint, int32_t id, aoo_replyfn fn);
+AOO_API int32_t aoo_sink_invite_source(aoo_sink *sink, void *endpoint,
+                                       int32_t id, aoo_replyfn fn);
 
 // uninvite a source (always threadsafe)
-AOO_API int32_t aoo_sink_uninvite_source(aoo_sink *sink, void *endpoint, int32_t id, aoo_replyfn fn);
+AOO_API int32_t aoo_sink_uninvite_source(aoo_sink *sink, void *endpoint,
+                                         int32_t id, aoo_replyfn fn);
 
 // uninvite all sources (always threadsafe)
 AOO_API int32_t aoo_sink_uninvite_all(aoo_sink *sink);
@@ -526,9 +530,9 @@ AOO_API int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,
 // get number of pending events (always thread safe)
 AOO_API int32_t aoo_sink_events_available(aoo_sink *sink);
 
-// handle events (threadsafe, but not reentrant)
+// poll events (threadsafe, but not reentrant)
 // will call the event handler function one or more times
-AOO_API int32_t aoo_sink_handle_events(aoo_sink *sink, aoo_eventhandler fn, void *user);
+AOO_API int32_t aoo_sink_poll_events(aoo_sink *sink, aoo_eventhandler fn, void *user);
 
 // set/get options (always threadsafe)
 AOO_API int32_t aoo_sink_set_option(aoo_sink *sink, int32_t opt, void *p, int32_t size);
@@ -537,10 +541,10 @@ AOO_API int32_t aoo_sink_get_option(aoo_sink *sink, int32_t opt, void *p, int32_
 
 // set/get source options (always threadsafe)
 AOO_API int32_t aoo_sink_set_sourceoption(aoo_sink *sink, void *endpoint, int32_t id,
-                              int32_t opt, void *p, int32_t size);
+                                          int32_t opt, void *p, int32_t size);
 
 AOO_API int32_t aoo_sink_get_sourceoption(aoo_sink *sink, void *endpoint, int32_t id,
-                              int32_t opt, void *p, int32_t size);
+                                          int32_t opt, void *p, int32_t size);
 
 // wrapper functions for frequently used options
 

@@ -147,7 +147,8 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
     return 1;
 }
 
-int32_t aoo_source_get_option(aoo_source *src, int32_t opt, void *p, int32_t size)
+int32_t aoo_source_get_option(aoo_source *src, int32_t opt,
+                              void *p, int32_t size)
 {
     return src->get_option(opt, p, size);
 }
@@ -590,28 +591,21 @@ int32_t aoo::source::events_available(){
     return eventqueue_.read_available() > 0;
 }
 
-int32_t aoo_source_handle_events(aoo_source *src,
+int32_t aoo_source_poll_events(aoo_source *src,
                                 aoo_eventhandler fn, void *user){
-    return src->handle_events(fn, user);
+    return src->poll_events(fn, user);
 }
 
-int32_t aoo::source::handle_events(aoo_eventhandler fn, void *user){
+int32_t aoo::source::poll_events(aoo_eventhandler fn, void *user){
     // always thread-safe
-    auto n = eventqueue_.read_available();
-    if (n > 0){
-        // copy events
-        auto events = (event *)alloca(sizeof(event) * n);
-        for (int i = 0; i < n; ++i){
-            eventqueue_.read(events[i]);
-        }
-        auto vec = (const aoo_event **)alloca(sizeof(aoo_event *) * n);
-        for (int i = 0; i < n; ++i){
-            vec[i] = (aoo_event *)&events[i];
-        }
-        // send events
-        fn(user, vec, n);
+    int count = 0;
+    while (eventqueue_.read_available() > 0){
+        event e;
+        eventqueue_.read(e);
+        fn(user, &e.event_);
+        count++;
     }
-    return n;
+    return count;
 }
 
 namespace aoo {

@@ -166,10 +166,10 @@ AOO_API int32_t aoo_net_server_quit(aoo_net_server *server);
 // get number of pending events (always thread safe)
 AOO_API int32_t aoo_net_server_events_available(aoo_net_server *server);
 
-// handle events (threadsafe, but not reentrant)
+// poll events (threadsafe, but not reentrant)
 // will call the event handler function one or more times
-AOO_API int32_t aoo_net_server_handle_events(aoo_net_server *server,
-                                            aoo_eventhandler fn, void *user);
+AOO_API int32_t aoo_net_server_poll_events(aoo_net_server *server,
+                                           aoo_eventhandler fn, void *user);
 
 // LATER add methods to add/remove users and groups
 // and set/get server options, group options and user options
@@ -188,7 +188,8 @@ typedef struct aoo_net_client aoo_net_client;
 #endif
 
 // create a new AOO client for the given UDP socket
-AOO_API aoo_net_client * aoo_net_client_new(void *udpsocket, aoo_sendfn fn, int port);
+AOO_API aoo_net_client * aoo_net_client_new(void *udpsocket,
+                                            aoo_sendfn fn, int port);
 
 // destroy AOO client
 AOO_API void aoo_net_client_free(aoo_net_client *client);
@@ -200,12 +201,14 @@ AOO_API int32_t aoo_net_client_run(aoo_net_client *client);
 AOO_API int32_t aoo_net_client_quit(aoo_net_client *client);
 
 // send a request to the AOO server (always thread safe)
-AOO_API int32_t aoo_net_client_request(aoo_net_client *client, aoo_net_request_type request,
-                                       void *data, aoo_net_callback callback, void *user);
+AOO_API int32_t aoo_net_client_request(aoo_net_client *client,
+                                       aoo_net_request_type request, void *data,
+                                       aoo_net_callback callback, void *user);
 
 // handle messages from peers (threadsafe, but not reentrant)
 // 'addr' should be sockaddr *
-AOO_API int32_t aoo_net_client_handle_message(aoo_net_client *client, const char *data, int32_t n,
+AOO_API int32_t aoo_net_client_handle_message(aoo_net_client *client,
+                                              const char *data, int32_t n,
                                               void *addr, int32_t len);
 
 // send outgoing messages to peers (threadsafe, but not reentrant)
@@ -216,10 +219,11 @@ AOO_API int32_t aoo_net_client_events_available(aoo_net_client *client);
 
 // handle events (threadsafe, but not reentrant)
 // will call the event handler function one or more times
-AOO_API int32_t aoo_net_client_handle_events(aoo_net_client *client,
-                                             aoo_eventhandler fn, void *user);
+AOO_API int32_t aoo_net_client_poll_events(aoo_net_client *client,
+                                           aoo_eventhandler fn, void *user);
 
-// LATER add API functions to set options and do additional peer communication (chat, OSC messages, etc.)
+// LATER add API functions to set options and do additional
+// peer communication (chat, OSC messages, etc.)
 
 // wrapper functions for frequently used requests
 

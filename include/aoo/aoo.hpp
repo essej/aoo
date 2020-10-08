@@ -76,9 +76,9 @@ public:
     // get number of pending events (always thread safe)
     virtual int32_t events_available() = 0;
 
-    // handle events (threadsafe, but not reentrant)
+    // poll events (threadsafe, but not reentrant)
     // will call the event handler function one or more times
-    virtual int32_t handle_events(aoo_eventhandler fn, void *user) = 0;
+    virtual int32_t poll_events(aoo_eventhandler fn, void *user) = 0;
 
     //---------------------- options ----------------------//
     // set/get options (always threadsafe)
@@ -232,9 +232,9 @@ public:
     // get number of pending events (always thread safe)
     virtual int32_t events_available() = 0;
 
-    // handle events (threadsafe, but not reentrant)
+    // poll events (threadsafe, but not reentrant)
     // will call the event handler function one or more times
-    virtual int32_t handle_events(aoo_eventhandler fn, void *user) = 0;
+    virtual int32_t poll_events(aoo_eventhandler fn, void *user) = 0;
 
     //---------------------- options ----------------------//
     // set/get options (always threadsafe)

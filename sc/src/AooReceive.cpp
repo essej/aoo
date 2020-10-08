@@ -183,15 +183,10 @@ void AooReceiveUnit::next(int numSamples){
             ClearUnitOutputs(this, numSamples);
         }
 
-        if (sink->events_available() > 0){
-            sink->handle_events(
-                [](void *user, const aoo_event **events, int32_t n){
-                    for (int i = 0; i < n; ++i){
-                        static_cast<AooReceive *>(user)->handleEvent(events[i]);
-                    }
-                    return 1;
-                }, delegate_.get());
-        }
+        sink->poll_events(
+            [](void *user, const aoo_event *event){
+                static_cast<AooReceive *>(user)->handleEvent(event);
+            }, delegate_.get());
     } else {
         ClearUnitOutputs(this, numSamples);
     }

@@ -96,6 +96,7 @@ class source final : public isource {
     typedef union event
     {
         aoo_event_type type;
+        aoo_event event_;
         aoo_sink_event sink;
         aoo_ping_event ping;
     } event;
@@ -121,7 +122,7 @@ class source final : public isource {
 
     int32_t events_available() override;
 
-    int32_t handle_events(aoo_eventhandler fn, void *user) override;
+    int32_t poll_events(aoo_eventhandler fn, void *user) override;
 
     int32_t set_option(int32_t opt, void *ptr, int32_t size) override;
 

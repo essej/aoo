@@ -157,7 +157,7 @@ public:
 
     int32_t events_available() override;
 
-    int32_t handle_events(aoo_eventhandler fn, void *user) override;
+    int32_t poll_events(aoo_eventhandler fn, void *user) override;
 
     std::shared_ptr<user> get_user(const std::string& name,
                                    const std::string& pwd, error& e);
