@@ -143,6 +143,8 @@ struct t_node : public i_node
 
     void remove_all_peers() override;
 
+    void list_peers(t_outlet *out) override;
+
     void remove_group(t_symbol *group) override;
 
     void notify() override;
@@ -223,6 +225,18 @@ void t_node::remove_group(t_symbol *group)
 void t_node::remove_all_peers()
 {
     x_peers.clear();
+}
+
+void t_node::list_peers(_outlet *out){
+    for (auto& peer : x_peers){
+        t_atom msg[5];
+        SETSYMBOL(msg, peer.group);
+        SETSYMBOL(msg + 1, peer.user);
+        SETFLOAT(msg + 2, peer.id);
+        address_to_atoms(peer.endpoint->address(), 2, msg + 3);
+
+        outlet_anything(out, gensym("peer"), 5, msg);
+    }
 }
 
 void t_node::notify()

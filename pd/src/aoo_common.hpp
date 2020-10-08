@@ -43,6 +43,8 @@ struct i_node {
 
     virtual void remove_all_peers() = 0;
 
+    virtual void list_peers(t_outlet *out) = 0;
+
     virtual void remove_group(t_symbol *group) = 0;
 
     virtual void notify() = 0;

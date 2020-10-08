@@ -48,6 +48,13 @@ struct t_group_request {
     t_symbol *group;
 };
 
+static void aoo_client_list_peers(t_aoo_client *x)
+{
+    if (x->x_node){
+        x->x_node->list_peers(x->x_msgout);
+    }
+}
+
 void aoo_client_send(t_aoo_client *x)
 {
     x->x_client->send();
@@ -365,4 +372,6 @@ void aoo_client_setup(void)
                     gensym("group_join"), A_SYMBOL, A_SYMBOL, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_group_leave,
                     gensym("group_leave"), A_SYMBOL, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_list_peers,
+                    gensym("list_peers"), A_NULL);
 }
