@@ -34,13 +34,18 @@ static int32_t aoo_server_handle_events(t_aoo_server *x,
 {
     for (int i = 0; i < n; ++i){
         switch (events[i]->type){
-        case AOO_NET_SERVER_USER_JOIN_EVENT:
+        case AOO_NET_USER_JOIN_EVENT:
         {
-            aoo_net_server_user_event *e = (aoo_net_server_user_event *)events[i];
+            auto e = (const aoo_net_user_event *)events[i];
 
-            t_atom msg;
-            SETSYMBOL(&msg, gensym(e->name));
-            outlet_anything(x->x_msgout, gensym("user_join"), 1, &msg);
+            aoo::ip_address addr((const sockaddr *)e->address, e->length);
+
+            t_atom msg[4];
+            SETSYMBOL(msg, gensym(e->user_name));
+            SETFLOAT(msg + 1, e->user_id);
+            address_to_atoms(addr, 2, msg + 2);
+
+            outlet_anything(x->x_msgout, gensym("user_join"), 4, msg);
 
             x->x_numusers++;
 
@@ -48,13 +53,18 @@ static int32_t aoo_server_handle_events(t_aoo_server *x,
 
             break;
         }
-        case AOO_NET_SERVER_USER_LEAVE_EVENT:
+        case AOO_NET_USER_LEAVE_EVENT:
         {
-            aoo_net_server_user_event *e = (aoo_net_server_user_event *)events[i];
+            auto e = (const aoo_net_user_event *)events[i];
 
-            t_atom msg;
-            SETSYMBOL(&msg, gensym(e->name));
-            outlet_anything(x->x_msgout, gensym("user_leave"), 1, &msg);
+            aoo::ip_address addr((const sockaddr *)e->address, e->length);
+
+            t_atom msg[4];
+            SETSYMBOL(msg, gensym(e->user_name));
+            SETFLOAT(msg + 1, e->user_id);
+            address_to_atoms(addr, 2, msg + 2);
+
+            outlet_anything(x->x_msgout, gensym("user_leave"), 4, msg);
 
             x->x_numusers--;
 
@@ -62,31 +72,33 @@ static int32_t aoo_server_handle_events(t_aoo_server *x,
 
             break;
         }
-        case AOO_NET_SERVER_GROUP_JOIN_EVENT:
+        case AOO_NET_GROUP_JOIN_EVENT:
         {
-            aoo_net_server_group_event *e = (aoo_net_server_group_event *)events[i];
+            auto e = (const aoo_net_group_event *)events[i];
 
-            t_atom msg[2];
-            SETSYMBOL(msg, gensym(e->group));
-            SETSYMBOL(msg + 1, gensym(e->user));
-            outlet_anything(x->x_msgout, gensym("group_join"), 2, msg);
+            t_atom msg[3];
+            SETSYMBOL(msg, gensym(e->group_name));
+            SETSYMBOL(msg + 1, gensym(e->user_name));
+            SETFLOAT(msg + 2, e->user_id);
+            outlet_anything(x->x_msgout, gensym("group_join"), 3, msg);
 
             break;
         }
-        case AOO_NET_SERVER_GROUP_LEAVE_EVENT:
+        case AOO_NET_GROUP_LEAVE_EVENT:
         {
-            aoo_net_server_group_event *e = (aoo_net_server_group_event *)events[i];
+            auto e = (const aoo_net_group_event *)events[i];
 
-            t_atom msg[2];
-            SETSYMBOL(msg, gensym(e->group));
-            SETSYMBOL(msg + 1, gensym(e->user));
-            outlet_anything(x->x_msgout, gensym("group_leave"), 2, msg);
+            t_atom msg[3];
+            SETSYMBOL(msg, gensym(e->group_name));
+            SETSYMBOL(msg + 1, gensym(e->user_name));
+            SETFLOAT(msg + 2, e->user_id);
+            outlet_anything(x->x_msgout, gensym("group_leave"), 3, msg);
 
             break;
         }
-        case AOO_NET_SERVER_ERROR_EVENT:
+        case AOO_NET_ERROR_EVENT:
         {
-            aoo_net_server_event *e = (aoo_net_server_event *)events[i];
+            auto e = (const aoo_net_error_event *)events[i];
             pd_error(x, "%s: %s", classname(x), e->errormsg);
             break;
         }

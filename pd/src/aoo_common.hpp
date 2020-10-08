@@ -33,9 +33,10 @@ struct i_node {
 
     virtual endpoint *get_endpoint(const ip_address& addr) = 0;
 
+
     virtual endpoint *find_peer(t_symbol *group, t_symbol *user) = 0;
 
-    virtual void add_peer(t_symbol *group, t_symbol *user,
+    virtual void add_peer(t_symbol *group, t_symbol *user, int32_t id,
                           const ip_address& addr) = 0;
 
     virtual void remove_peer(t_symbol *group, t_symbol *user) = 0;

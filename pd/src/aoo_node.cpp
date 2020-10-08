@@ -73,6 +73,7 @@ struct t_peer
     t_symbol *group;
     t_symbol *user;
     aoo::endpoint *endpoint;
+    int32_t id;
 };
 
 static t_class *node_proxy_class;
@@ -135,7 +136,7 @@ struct t_node : public i_node
 
     aoo::endpoint * find_peer(t_symbol *group, t_symbol *user) override;
 
-    void add_peer(t_symbol *group, t_symbol *user,
+    void add_peer(t_symbol *group, t_symbol *user, int32_t id,
                   const ip_address& addr) override;
 
     void remove_peer(t_symbol *group, t_symbol *user) override;
@@ -182,16 +183,17 @@ aoo::endpoint * t_node::find_peer(t_symbol *group, t_symbol *user)
 }
 
 void t_node::add_peer(t_symbol *group, t_symbol *user,
-                      const ip_address& addr)
+                      int32_t id, const ip_address& addr)
 {
     if (find_peer(group, user)){
-        bug("t_node::add_peer: peer already added");
+        bug("t_node::add_peer: peer %s|%s already added",
+            group->s_name, user->s_name);
         return;
     }
 
     auto e = get_endpoint(addr);
 
-    x_peers.push_back({ group, user, e });
+    x_peers.push_back({ group, user, e, id });
 }
 
 void t_node::remove_peer(t_symbol *group, t_symbol *user)
@@ -202,7 +204,8 @@ void t_node::remove_peer(t_symbol *group, t_symbol *user)
             return;
         }
     }
-    bug("t_node::remove_peer: couldn't find peer");
+    bug("t_node::remove_peer: couldn't find peer %s|%s",
+        group->s_name, user->s_name);
 }
 
 void t_node::remove_group(t_symbol *group)

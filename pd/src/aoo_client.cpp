@@ -6,7 +6,11 @@
 
 #include "aoo/aoo_net.hpp"
 
+#include "common/sync.hpp"
+
 #include <thread>
+#include <functional>
+#include <vector>
 
 using namespace aoo;
 
@@ -24,9 +28,24 @@ struct t_aoo_client
     aoo::net::iclient::pointer x_client;
     i_node *x_node = nullptr;
     std::thread x_thread;
+
+    // replies
+    using t_reply = std::function<void()>;
+    std::vector<t_reply> replies_;
+    aoo::shared_mutex reply_mutex_;
+    void push_reply(t_reply reply){
+        aoo::scoped_lock lock(reply_mutex_);
+        replies_.push_back(std::move(reply));
+    }
+
     t_clock *x_clock = nullptr;
     t_outlet *x_stateout = nullptr;
     t_outlet *x_msgout = nullptr;
+};
+
+struct t_group_request {
+    t_aoo_client *obj;
+    t_symbol *group;
 };
 
 void aoo_client_send(t_aoo_client *x)
@@ -47,102 +66,59 @@ static int32_t aoo_client_handle_events(t_aoo_client *x,
 {
     for (int i = 0; i < n; ++i){
         switch (events[i]->type){
-        case AOO_NET_CLIENT_CONNECT_EVENT:
+        case AOO_NET_DISCONNECT_EVENT:
         {
-            auto e = (aoo_net_client_group_event *)events[i];
-            if (e->result > 0){
-                outlet_float(x->x_stateout, 1); // connected
-            } else {
-                pd_error(x, "%s: couldn't connect to server - %s",
-                         classname(x), e->errormsg);
-
-                outlet_float(x->x_stateout, 0); // disconnected
-            }
-            break;
-        }
-        case AOO_NET_CLIENT_DISCONNECT_EVENT:
-        {
-            auto e = (aoo_net_client_group_event *)events[i];
-            if (e->result == 0){
-                pd_error(x, "%s: disconnected from server - %s",
-                         classname(x), e->errormsg);
-            }
+            pd_error(x, "%s: disconnected from server",
+                     classname(x));
 
             x->x_node->remove_all_peers();
 
             outlet_float(x->x_stateout, 0); // disconnected
             break;
         }
-        case AOO_NET_CLIENT_GROUP_JOIN_EVENT:
+        case AOO_NET_PEER_JOIN_EVENT:
         {
-            auto e = (aoo_net_client_group_event *)events[i];
-            if (e->result > 0){
-                t_atom msg;
-                SETSYMBOL(&msg, gensym(e->name));
-                outlet_anything(x->x_msgout, gensym("group_join"), 1, &msg);
-            } else {
-                pd_error(x, "%s: couldn't join group %s - %s",
-                         classname(x), e->name, e->errormsg);
-            }
+            auto e = (const aoo_net_peer_event *)events[i];
+
+            ip_address addr((const sockaddr *)e->address, e->length);
+            auto group = gensym(e->group_name);
+            auto user = gensym(e->user_name);
+            auto id = e->user_id;
+
+            x->x_node->add_peer(group, user, id, addr);
+
+            t_atom msg[5];
+            SETSYMBOL(msg, group);
+            SETSYMBOL(msg + 1, user);
+            SETFLOAT(msg + 2, id);
+            address_to_atoms(addr, 2, msg + 3);
+
+            outlet_anything(x->x_msgout, gensym("peer_join"), 5, msg);
             break;
         }
-        case AOO_NET_CLIENT_GROUP_LEAVE_EVENT:
+        case AOO_NET_PEER_LEAVE_EVENT:
         {
-            auto e = (aoo_net_client_group_event *)events[i];
-            if (e->result > 0){
-                x->x_node->remove_group(gensym(e->name));
+            auto e = (const aoo_net_peer_event *)events[i];
 
-                t_atom msg;
-                SETSYMBOL(&msg, gensym(e->name));
-                outlet_anything(x->x_msgout, gensym("group_leave"), 1, &msg);
-            } else {
-                pd_error(x, "%s: couldn't leave group %s - %s",
-                         classname(x), e->name, e->errormsg);
-            }
+            ip_address addr((const sockaddr *)e->address, e->length);
+            auto group = gensym(e->group_name);
+            auto user = gensym(e->user_name);
+            auto id = e->user_id;
+
+            x->x_node->remove_peer(group, user);
+
+            t_atom msg[5];
+            SETSYMBOL(msg, group);
+            SETSYMBOL(msg + 1, user);
+            SETFLOAT(msg + 2, id);
+            address_to_atoms(addr, 2, msg + 3);
+
+            outlet_anything(x->x_msgout, gensym("peer_leave"), 5, msg);
             break;
         }
-        case AOO_NET_CLIENT_PEER_JOIN_EVENT:
+        case AOO_NET_ERROR_EVENT:
         {
-            auto e = (aoo_net_client_peer_event *)events[i];
-
-            if (e->result > 0){
-                ip_address addr((const sockaddr *)e->address, e->length);
-                x->x_node->add_peer(gensym(e->group), gensym(e->user), addr);
-
-                t_atom msg[4];
-                SETSYMBOL(msg, gensym(e->group));
-                SETSYMBOL(msg + 1, gensym(e->user));
-                if (address_to_atoms(addr, 2, msg + 2)){
-                    outlet_anything(x->x_msgout, gensym("peer_join"), 4, msg);
-                }
-            } else {
-                bug("%s: AOO_NET_CLIENT_PEER_JOIN_EVENT", classname(x));
-            }
-            break;
-        }
-        case AOO_NET_CLIENT_PEER_LEAVE_EVENT:
-        {
-            auto e = (aoo_net_client_peer_event *)events[i];
-
-            if (e->result > 0){
-                ip_address addr((const sockaddr *)e->address, e->length);
-                x->x_node->remove_peer(gensym(e->group), gensym(e->user));
-
-                t_atom msg[4];
-                SETSYMBOL(msg, gensym(e->group));
-                SETSYMBOL(msg + 1, gensym(e->user));
-                if (address_to_atoms(addr, e->length, msg + 2))
-                {
-                    outlet_anything(x->x_msgout, gensym("peer_leave"), 4, msg);
-                }
-            } else {
-                bug("%s: AOO_NET_CLIENT_PEER_LEAVE_EVENT", classname(x));
-            }
-            break;
-        }
-        case AOO_NET_CLIENT_ERROR_EVENT:
-        {
-            auto e = (aoo_net_client_event *)events[i];
+            auto e = (const aoo_net_error_event *)events[i];
             pd_error(x, "%s: %s", classname(x), e->errormsg);
             break;
         }
@@ -160,8 +136,24 @@ static void aoo_client_tick(t_aoo_client *x)
 
     x->x_node->notify();
 
+    // handle server replies
+    if (x->reply_mutex_.try_lock()){
+        for (auto& reply : x->replies_){
+            reply();
+        }
+        x->replies_.clear();
+        x->reply_mutex_.unlock();
+    } else {
+        LOG_DEBUG("aoo_client_tick: would block");
+    }
+
     clock_delay(x->x_clock, AOO_CLIENT_POLL_INTERVAL);
 }
+
+struct t_error_reply {
+    int code;
+    std::string msg;
+};
 
 static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
 {
@@ -178,30 +170,122 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
         t_symbol *username = atom_getsymbol(argv + 2);
         t_symbol *pwd = atom_getsymbol(argv + 3);
 
-        x->x_client->connect(host->s_name, port, username->s_name, pwd->s_name);
+        // LATER also send user ID
+        auto cb = [](void *y, int32_t result, const void *data){
+            auto x = (t_aoo_client *)y;
+
+            if (result == 0){
+                x->push_reply([x](){
+                    outlet_float(x->x_stateout, 1); // connected
+                });
+            } else {
+                auto reply = (const aoo_net_error_reply *)data;
+                t_error_reply error { reply->errorcode, reply->errormsg };
+
+                x->push_reply([x, error=std::move(error)](){
+                    pd_error(x, "%s: couldn't connect to server: %s",
+                             classname(x), error.msg.c_str());
+
+                    outlet_float(x->x_stateout, 0); // fail
+                });
+            }
+        };
+        x->x_client->connect(host->s_name, port,
+                             username->s_name, pwd->s_name, cb, x);
     }
 }
 
 static void aoo_client_disconnect(t_aoo_client *x)
 {
     if (x->x_client){
-        x->x_node->remove_all_peers();
+        auto cb = [](void *y, int32_t result, const void *data){
+            auto x = (t_aoo_client *)y;
+            if (result == 0){
+                x->push_reply([x](){
+                    // we have to remove the peers manually!
+                    x->x_node->remove_all_peers();
 
-        x->x_client->disconnect();
+                    outlet_float(x->x_stateout, 0); // disconnected
+                });
+            }
+        };
+        x->x_client->disconnect(cb, x);
     }
 }
 
 static void aoo_client_group_join(t_aoo_client *x, t_symbol *group, t_symbol *pwd)
 {
     if (x->x_client){
-        x->x_client->group_join(group->s_name, pwd->s_name);
+        auto cb = [](void *x, int32_t result, const void *data){
+            auto request = (t_group_request *)x;
+            auto obj = request->obj;
+            auto group = request->group;
+
+            if (result == 0){
+                obj->push_reply([obj, group](){
+                    t_atom msg[2];
+                    SETSYMBOL(msg, group);
+                    SETFLOAT(msg + 1, 1); // 1: success
+                    outlet_anything(obj->x_msgout, gensym("group_join"), 2, msg);
+                });
+            } else {
+                auto reply = (const aoo_net_error_reply *)data;
+                t_error_reply error { reply->errorcode, reply->errormsg };
+
+                obj->push_reply([obj, group, error=std::move(error)](){
+                    pd_error(obj, "%s: couldn't join group %s - %s",
+                             classname(obj), group->s_name, error.msg.c_str());
+
+                    t_atom msg[2];
+                    SETSYMBOL(msg, group);
+                    SETFLOAT(msg + 1, 0); // 0: fail
+                    outlet_anything(obj->x_msgout, gensym("group_join"), 2, msg);
+                });
+            }
+
+            delete request;
+        };
+        x->x_client->join_group(group->s_name, pwd->s_name,
+                                cb, new t_group_request { x, group });
     }
 }
 
-static void aoo_client_group_leave(t_aoo_client *x, t_symbol *s)
+static void aoo_client_group_leave(t_aoo_client *x, t_symbol *group)
 {
     if (x->x_client){
-        x->x_client->group_leave(s->s_name);
+        auto cb = [](void *x, int32_t result, const void *data){
+            auto request = (t_group_request *)x;
+            auto obj = request->obj;
+            auto group = request->group;
+
+            if (result == 0){
+                obj->push_reply([obj, group](){
+                    // we have to remove the peers manually!
+                    obj->x_node->remove_group(group);
+
+                    t_atom msg[2];
+                    SETSYMBOL(msg, group);
+                    SETFLOAT(msg + 1, 1); // 1: success
+                    outlet_anything(obj->x_msgout, gensym("group_leave"), 2, msg);
+                });
+            } else {
+                auto reply = (const aoo_net_error_reply *)data;
+                t_error_reply error { reply->errorcode, reply->errormsg };
+
+                obj->push_reply([obj, group, error=std::move(error)](){
+                    pd_error(obj, "%s: couldn't leave group %s - %s",
+                             classname(obj), group->s_name, error.msg.c_str());
+
+                    t_atom msg[2];
+                    SETSYMBOL(msg, group);
+                    SETFLOAT(msg + 1, 0); // 0: fail
+                    outlet_anything(obj->x_msgout, gensym("group_leave"), 2, msg);
+                });
+            }
+
+            delete request;
+        };
+        x->x_client->leave_group(group->s_name, cb, new t_group_request { x, group });
     }
 }
 
@@ -261,6 +345,8 @@ t_aoo_client::~t_aoo_client()
         // wait for thread to finish
         x_thread.join();
     }
+
+    // ignore pending requests (doesn't leak)
 
     clock_free(x_clock);
 }
