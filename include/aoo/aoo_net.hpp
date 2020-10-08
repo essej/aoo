@@ -107,7 +107,7 @@ public:
     // handle messages from peers (thread safe, but not reentrant)
     // 'addr' should be sockaddr *
     virtual int32_t handle_message(const char *data, int32_t n,
-                                   void *addr, int32_t len) = 0;
+                                   const void *addr, int32_t len) = 0;
 
     // send outgoing messages to peers (thread safe, but not reentrant)
     virtual int32_t send() = 0;

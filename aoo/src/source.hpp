@@ -93,13 +93,13 @@ struct sink_desc : endpoint_base {
 
 class source final : public isource {
  public:
-    typedef union event
+    union event
     {
         aoo_event_type type;
         aoo_event event_;
         aoo_sink_event sink;
         aoo_ping_event ping;
-    } event;
+    };
 
     source(int32_t id);
     ~source();

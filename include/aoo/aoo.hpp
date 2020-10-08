@@ -61,7 +61,7 @@ public:
 
     // handle messages from sinks (threadsafe, but not reentrant)
     virtual int32_t handle_message(const char *data, int32_t n,
-                                void *endpoint, aoo_replyfn fn) = 0;
+                                   void *endpoint, aoo_replyfn fn) = 0;
 
     // send outgoing messages - will call the reply function (threadsafe, but not reentrant)
     virtual int32_t send() = 0;

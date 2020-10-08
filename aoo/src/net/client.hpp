@@ -116,7 +116,7 @@ public:
                          aoo_net_callback callback, void *user) override;
 
     int32_t handle_message(const char *data, int32_t n,
-                           void *addr, int32_t len) override;
+                           const void *addr, int32_t len) override;
 
     int32_t send() override;
 
@@ -259,20 +259,20 @@ public:
 
     struct error_event : ievent
     {
-        error_event(int32_t type, int32_t code, const char *msg);
+        error_event(int32_t code, const char *msg);
         ~error_event();
     };
 
     struct ping_event : ievent
     {
-        ping_event(int32_t type, const void *addr, int32_t len,
-                   uint64_t tt1, uint64_t tt2, uint64_t tt3);
+        ping_event(const ip_address& addr, uint64_t tt1,
+                   uint64_t tt2, uint64_t tt3);
         ~ping_event();
     };
 
     struct peer_event : ievent
     {
-        peer_event(int32_t type, const void *addr, int32_t len,
+        peer_event(int32_t type, const ip_address& addr,
                    const char *group, const char *user, int32_t id);
         ~peer_event();
     };
@@ -281,34 +281,34 @@ public:
 private:
     struct request_cmd : icommand
     {
-        request_cmd(aoo_net_callback _cb, void *_user)
-            : cb(_cb), user(_user){}
-
-        aoo_net_callback cb;
-        void *user;
+        request_cmd(aoo_net_callback cb, void *user)
+            : cb_(cb), user_(user){}
+    protected:
+        aoo_net_callback cb_;
+        void *user_;
     };
 
     struct connect_cmd : request_cmd
     {
-        connect_cmd(aoo_net_callback _cb, void *_user,
-                    const std::string &_host, int _port)
-            : request_cmd(_cb, _user), host(_host), port(_port){}
+        connect_cmd(aoo_net_callback cb, void *user,
+                    const std::string &host, int port)
+            : request_cmd(cb, user), host_(host), port_(port){}
 
         void perform(client &obj) override {
-            obj.perform_connect(host, port, cb, user);
+            obj.perform_connect(host_, port_, cb_, user_);
         }
-
-        std::string host;
-        int port;
+    private:
+        std::string host_;
+        int port_;
     };
 
     struct disconnect_cmd : request_cmd
     {
-        disconnect_cmd(aoo_net_callback _cb, void *_user)
-            : request_cmd(_cb, _user) {}
+        disconnect_cmd(aoo_net_callback cb, void *user)
+            : request_cmd(cb, user) {}
 
         void perform(client &obj) override {
-            obj.perform_disconnect(cb, user);
+            obj.perform_disconnect(cb_, user_);
         }
     };
 
@@ -321,27 +321,29 @@ private:
 
     struct group_join_cmd : request_cmd
     {
-        group_join_cmd(aoo_net_callback _cb, void *_user,
-                       const std::string& _group, const std::string& _pwd)
-            : request_cmd(_cb, _user), group(_group), password(_pwd){}
+        group_join_cmd(aoo_net_callback cb, void *user,
+                       const std::string& group, const std::string& pwd)
+            : request_cmd(cb, user), group_(group), password_(pwd){}
 
         void perform(client &obj) override {
-            obj.perform_join_group(group, password, cb, user);
+            obj.perform_join_group(group_, password_, cb_, user_);
         }
-        std::string group;
-        std::string password;
+    private:
+        std::string group_;
+        std::string password_;
     };
 
     struct group_leave_cmd : request_cmd
     {
-        group_leave_cmd(aoo_net_callback _cb, void *_user,
-                        const std::string& _group)
-            : request_cmd(_cb, _user), group(_group){}
+        group_leave_cmd(aoo_net_callback cb, void *user,
+                        const std::string& group)
+            : request_cmd(cb, user), group_(group){}
 
         void perform(client &obj) override {
-            obj.perform_leave_group(group, cb, user);
+            obj.perform_leave_group(group_, cb_, user_);
         }
-        std::string group;
+    private:
+        std::string group_;
     };
 };
 

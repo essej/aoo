@@ -269,13 +269,13 @@ int32_t aoo::net::client::send_request(aoo_net_request_type request, void *data,
 }
 
 int32_t aoo_net_client_handle_message(aoo_net_client *client, const char *data,
-                                      int32_t n, void *addr, int32_t len)
+                                      int32_t n, const void *addr, int32_t len)
 {
     return client->handle_message(data, n, addr, len);
 }
 
 int32_t aoo::net::client::handle_message(const char *data, int32_t n,
-                                         void *addr, int32_t len){
+                                         const void *addr, int32_t len){
     try {
         osc::ReceivedPacket packet(data, n);
         osc::ReceivedMessage msg(packet);
@@ -1141,8 +1141,8 @@ void client::handle_peer_remove(const osc::ReceivedMessage& msg){
 
     peers_.erase(result);
 
-    auto e = std::make_unique<peer_event>(AOO_NET_PEER_LEAVE_EVENT,
-                addr.address(), addr.length(), group.c_str(), user.c_str(), id);
+    auto e = std::make_unique<peer_event>(
+                AOO_NET_PEER_LEAVE_EVENT, addr, group.c_str(), user.c_str(), id);
     push_event(std::move(e));
 
     LOG_VERBOSE("aoo_client: peer " << group << "|" << user << " left");
@@ -1229,8 +1229,7 @@ void client::close(bool manual){
 void client::on_socket_error(int err){
     std::string msg = err ? socket_strerror(err)
                           : "connection closed by server";
-    auto e = std::make_unique<error_event>(
-                AOO_NET_ERROR_EVENT, err, msg.c_str());
+    auto e = std::make_unique<error_event>(err, msg.c_str());
 
     push_event(std::move(e));
 
@@ -1248,8 +1247,7 @@ void client::on_exception(const char *what, const osc::Exception &err,
                  what, err.what());
     }
 
-    auto e = std::make_unique<error_event>(
-                AOO_NET_ERROR_EVENT, 0, msg);
+    auto e = std::make_unique<error_event>(0, msg);
 
     push_event(std::move(e));
 
@@ -1258,10 +1256,9 @@ void client::on_exception(const char *what, const osc::Exception &err,
 
 /*///////////////////// events ////////////////////////*/
 
-client::error_event::error_event(int32_t type,
-                                 int32_t code, const char *msg)
+client::error_event::error_event(int32_t code, const char *msg)
 {
-    error_event_.type = type;
+    error_event_.type = AOO_NET_ERROR_EVENT;
     error_event_.errorcode = code;
     error_event_.errormsg = copy_string(msg);
 }
@@ -1271,13 +1268,12 @@ client::error_event::~error_event()
     delete error_event_.errormsg;
 }
 
-client::ping_event::ping_event(int32_t type,
-                               const void *addr, int32_t len,
-                               uint64_t tt1, uint64_t tt2, uint64_t tt3)
+client::ping_event::ping_event(const ip_address& addr, uint64_t tt1,
+                               uint64_t tt2, uint64_t tt3)
 {
-    ping_event_.type = type;
-    ping_event_.address = copy_sockaddr(addr, len);
-    ping_event_.length = len;
+    ping_event_.type = AOO_NET_PING_EVENT;
+    ping_event_.address = copy_sockaddr(addr.address(), addr.length());
+    ping_event_.length = addr.length();
     ping_event_.tt1 = tt1;
     ping_event_.tt2 = tt2;
     ping_event_.tt3 = tt3;
@@ -1288,13 +1284,12 @@ client::ping_event::~ping_event()
     delete (const sockaddr *)ping_event_.address;
 }
 
-client::peer_event::peer_event(int32_t type,
-                               const void *address, int32_t length,
+client::peer_event::peer_event(int32_t type, const ip_address& addr,
                                const char *group, const char *user, int32_t id)
 {
     peer_event_.type = type;
-    peer_event_.address = copy_sockaddr(address, length);
-    peer_event_.length = length;
+    peer_event_.address = copy_sockaddr(addr.address(), addr.length());
+    peer_event_.length = addr.length();
     peer_event_.group_name = copy_string(group);
     peer_event_.user_name = copy_string(user);
     peer_event_.user_id = id;
@@ -1372,8 +1367,7 @@ void peer::send(time_tag now){
             std::stringstream ss;
             ss << "couldn't establish connection with peer " << *this;
 
-            auto e = std::make_unique<client::error_event>(
-                        AOO_NET_ERROR_EVENT, 0, ss.str().c_str());
+            auto e = std::make_unique<client::error_event>(0, ss.str().c_str());
             client_->push_event(std::move(e));
 
             return;
@@ -1414,7 +1408,7 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
 
                 // push event
                 auto e = std::make_unique<client::peer_event>(
-                            AOO_NET_PEER_JOIN_EVENT, addr.address(), addr.length(),
+                            AOO_NET_PEER_JOIN_EVENT, addr,
                             group().c_str(), user().c_str(), id());
                 client_->push_event(std::move(e));
 

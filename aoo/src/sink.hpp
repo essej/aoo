@@ -120,7 +120,7 @@ class sink;
 
 class source_desc {
 public:
-    typedef union event
+    union event
     {
         aoo_event_type type;
         aoo_event event_;
@@ -131,7 +131,7 @@ public:
         aoo_block_reordered_event block_reorder;
         aoo_block_resent_event block_resend;
         aoo_block_gap_event block_gap;
-    } event;
+    };
 
     source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt);
     source_desc(const source_desc& other) = delete;

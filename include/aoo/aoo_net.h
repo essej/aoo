@@ -51,6 +51,11 @@ extern "C"
 
 typedef void (*aoo_net_callback)(void *user, int32_t result, const void *reply);
 
+typedef struct aoo_net_error_reply {
+    const char *errormsg;
+    int32_t errorcode;
+} aoo_net_error_reply;
+
 typedef enum aoo_net_request_type {
     AOO_NET_CONNECT_REQUEST = 0,
     AOO_NET_DISCONNECT_REQUEST,
@@ -77,11 +82,6 @@ typedef struct aoo_net_group_request {
     const char *group_name;
     const char *group_pwd;
 } aoo_net_group_request;
-
-typedef struct aoo_net_error_reply {
-    const char *errormsg;
-    int32_t errorcode;
-} aoo_net_error_reply;
 
 /*///////////////////////// events ///////////////////////////*/
 
@@ -209,7 +209,7 @@ AOO_API int32_t aoo_net_client_request(aoo_net_client *client,
 // 'addr' should be sockaddr *
 AOO_API int32_t aoo_net_client_handle_message(aoo_net_client *client,
                                               const char *data, int32_t n,
-                                              void *addr, int32_t len);
+                                              const void *addr, int32_t len);
 
 // send outgoing messages to peers (threadsafe, but not reentrant)
 AOO_API int32_t aoo_net_client_send(aoo_net_client *client);
