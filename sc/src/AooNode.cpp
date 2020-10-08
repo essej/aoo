@@ -24,11 +24,14 @@ using namespace aoo;
 
 #define AOO_POLL_INTERVAL 1000 // microseconds
 
+#if USE_PEER_LIST
 struct AooPeer {
     std::string group;
     std::string user;
+    int32_t id;
     aoo::endpoint *endpoint;
 };
+#endif
 
 struct AooClient {
     INodeClient *obj;
@@ -56,11 +59,12 @@ public:
 
     endpoint *getEndpoint(const ip_address& addr) override;
 
+#if USE_PEER_LIST
     endpoint *findPeer(const std::string& group,
                        const std::string& user);
 
     void addPeer(const std::string& group, const std::string& user,
-                  const ip_address& addr) override;
+                 int32_t id, const ip_address& addr) override;
 
     void removePeer(const std::string& group,
                     const std::string& user) override;
@@ -68,6 +72,7 @@ public:
     void removeAllPeers() override;
 
     void removeGroup(const std::string& group) override;
+#endif
 
     void notify() override;
 private:
@@ -78,8 +83,10 @@ private:
     // dependants
     std::vector<AooClient> clients_;
     aoo::shared_mutex clientMutex_;
+#if USE_PEER_LIST
     // peer list
     std::vector<AooPeer> peers_;
+#endif
     // threading
 #if AOO_NODE_POLL
     std::thread thread_;
@@ -261,6 +268,7 @@ endpoint * AooNode::getEndpoint(const ip_address& addr){
     }
 }
 
+#if USE_PEER_LIST
 endpoint * AooNode::findPeer(const std::string& group,
                              const std::string& user)
 {
@@ -273,7 +281,7 @@ endpoint * AooNode::findPeer(const std::string& group,
 }
 
 void AooNode::addPeer(const std::string& group,
-                      const std::string& user,
+                      const std::string& user, int32_t id,
                       const ip_address& addr)
 {
     if (findPeer(group, user)){
@@ -283,7 +291,7 @@ void AooNode::addPeer(const std::string& group,
 
     auto e = getEndpoint(addr);
 
-    peers_.push_back({ group, user, e });
+    peers_.push_back({ group, user, id, e });
 }
 
 void AooNode::removePeer(const std::string& group,
@@ -312,6 +320,7 @@ void AooNode::removeGroup(const std::string& group){
         }
     }
 }
+#endif
 
 void AooNode::notify(){
 #if !AOO_NODE_POLL

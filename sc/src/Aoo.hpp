@@ -23,6 +23,8 @@ void sendMsgNRT(World* world, const osc::OutboundPacketStream& msg);
 
 /*//////////////////////// AooNode ////////////////////////*/
 
+#define USE_PEER_LIST 1
+
 namespace aoo {
 class endpoint;
 class ip_address;
@@ -50,17 +52,19 @@ public:
 
     virtual aoo::endpoint *getEndpoint(const aoo::ip_address& addr) = 0;
 
+#if USE_PEER_LIST
     virtual aoo::endpoint *findPeer(const std::string& group,
                                     const std::string& user) = 0;
 
     virtual void addPeer(const std::string& group, const std::string& user,
-                         const aoo::ip_address& addr) = 0;
+                         int32_t id, const aoo::ip_address& addr) = 0;
 
     virtual void removePeer(const std::string& group, const std::string& user) = 0;
 
     virtual void removeAllPeers() = 0;
 
     virtual void removeGroup(const std::string& group) = 0;
+#endif
 
     virtual void notify() = 0;
 };

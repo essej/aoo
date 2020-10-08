@@ -266,6 +266,7 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
 
     // first try peer (group|user)
     if (args->nextTag() == 's'){
+    #if USE_PEER_LIST
         auto group = s;
         auto user = args->gets();
 
@@ -275,6 +276,10 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
                 << " for " << what);
             return false;
         }
+    #else
+        LOG_ERROR("expected <hostname> <port>");
+        return false;
+    #endif
     } else {
         // otherwise try host|port
         auto host = s;
@@ -536,6 +541,8 @@ PluginLoad(Aoo) {
 
     AooSendLoad(ft);
     AooReceiveLoad(ft);
+    AooClientLoad(ft);
+    AooServerLoad(ft);
 
     AooPluginCmd(aoo_register);
     AooPluginCmd(aoo_unregister);
