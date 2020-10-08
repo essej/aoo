@@ -75,7 +75,7 @@ void AooReceive::handleEvent(const aoo_event *event){
     switch (event->type){
     case AOO_SOURCE_ADD_EVENT:
     {
-        auto e = (aoo_source_event *)event;
+        auto e = (const aoo_source_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
         beginEvent(msg, "/add", ep, e->id);
@@ -84,7 +84,7 @@ void AooReceive::handleEvent(const aoo_event *event){
     }
     case AOO_SOURCE_FORMAT_EVENT:
     {
-        auto e = (aoo_source_event *)event;
+        auto e = (const aoo_source_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
         aoo_format_storage f;
@@ -97,7 +97,7 @@ void AooReceive::handleEvent(const aoo_event *event){
     }
     case AOO_SOURCE_STATE_EVENT:
     {
-        auto e = (aoo_source_state_event *)event;
+        auto e = (const aoo_source_state_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
         beginEvent(msg, "/state", ep, e->id);
@@ -107,7 +107,7 @@ void AooReceive::handleEvent(const aoo_event *event){
     }
     case AOO_BLOCK_LOST_EVENT:
     {
-        auto e = (aoo_block_lost_event *)event;
+        auto e = (const aoo_block_lost_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
         beginEvent(msg, "/block/lost", ep, e->id);
@@ -117,7 +117,7 @@ void AooReceive::handleEvent(const aoo_event *event){
     }
     case AOO_BLOCK_REORDERED_EVENT:
     {
-        auto e = (aoo_block_reordered_event *)event;
+        auto e = (const aoo_block_reordered_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
         beginEvent(msg, "/block/reordered", ep, e->id);
@@ -127,7 +127,7 @@ void AooReceive::handleEvent(const aoo_event *event){
     }
     case AOO_BLOCK_RESENT_EVENT:
     {
-        auto e = (aoo_block_resent_event *)event;
+        auto e = (const aoo_block_resent_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
         beginEvent(msg, "/block/resent", ep, e->id);
@@ -137,7 +137,7 @@ void AooReceive::handleEvent(const aoo_event *event){
     }
     case AOO_BLOCK_GAP_EVENT:
     {
-        auto e = (aoo_block_gap_event *)event;
+        auto e = (const aoo_block_gap_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
         beginEvent(msg, "/block/gap", ep, e->id);
@@ -147,7 +147,7 @@ void AooReceive::handleEvent(const aoo_event *event){
     }
     case AOO_PING_EVENT:
     {
-        auto e = (aoo_ping_event *)event;
+        auto e = (const aoo_ping_event *)event;
         auto ep = (aoo::endpoint *)e->endpoint;
 
         double diff = aoo_osctime_duration(e->tt1, e->tt2);
