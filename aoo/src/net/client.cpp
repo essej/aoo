@@ -92,10 +92,6 @@ void * copy_sockaddr(const void *sa, int32_t len){
     }
 }
 
-void free_sockaddr(const void * sa){
-    delete static_cast<const sockaddr *>(sa);
-}
-
 } // net
 } // aoo
 
@@ -163,8 +159,9 @@ void aoo_net_client_free(aoo_net_client *client){
 }
 
 aoo::net::client::~client() {
-    do_disconnect();
-
+    if (tcpsocket_ >= 0){
+        socket_close(tcpsocket_);
+    }
 #ifdef _WIN32
     CloseHandle(sockevent_);
     CloseHandle(waitevent_);
@@ -234,87 +231,51 @@ int32_t aoo::net::client::quit(){
     return 1;
 }
 
-int32_t aoo_net_client_connect(aoo_net_client *client, const char *host, int port,
-                           const char *username, const char *pwd)
-{
-    return client->connect(host, port, username, pwd);
+int32_t aoo_net_client_request(aoo_net_client *client,
+                               aoo_net_request_type request, void *data,
+                               aoo_net_callback callback, void *user) {
+    return client->send_request(request, data, callback, user);
 }
 
-int32_t aoo::net::client::connect(const char *host, int port,
-                             const char *username, const char *pwd)
-{
-    auto state = state_.load();
-    if (state != client_state::disconnected){
-        if (state == client_state::connected){
-            LOG_ERROR("aoo_client: already connected!");
-        } else {
-            LOG_ERROR("aoo_client: already connecting!");
-        }
+int32_t aoo::net::client::send_request(aoo_net_request_type request, void *data,
+                                       aoo_net_callback callback, void *user){
+    switch (request){
+    case AOO_NET_CONNECT_REQUEST:
+    {
+        auto d = (aoo_net_connect_request *)data;
+        do_connect(d->host, d->port, d->user_name, d->user_pwd, callback, user);
+        break;
+    }
+    case AOO_NET_DISCONNECT_REQUEST:
+        do_disconnect(callback, user);
+        break;
+    case AOO_NET_GROUP_JOIN_REQUEST:
+    {
+        auto d = (aoo_net_group_request *)data;
+        do_join_group(d->group_name, d->group_pwd, callback, user);
+        break;
+    }
+    case AOO_NET_GROUP_LEAVE_REQUEST:
+    {
+        auto d = (aoo_net_group_request *)data;
+        do_leave_group(d->group_name, callback, user);
+        break;
+    }
+    default:
+        LOG_ERROR("aoo client: unknown request " << request);
         return 0;
     }
-
-    username_ = username;
-    password_ = encrypt(pwd);
-
-    state_ = client_state::connecting;
-
-    push_command(std::make_unique<connect_cmd>(host, port));
-
-    signal();
-
-    return 1;
-}
-
-int32_t aoo_net_client_disconnect(aoo_net_client *client){
-    return client->disconnect();
-}
-
-int32_t aoo::net::client::disconnect(){
-    auto state = state_.load();
-    if (state != client_state::connected){
-        LOG_WARNING("aoo_client: not connected");
-        return 0;
-    }
-
-    push_command(std::make_unique<disconnect_cmd>(command_reason::user));
-
-    signal();
-
-    return 1;
-}
-
-int32_t aoo_net_client_group_join(aoo_net_client *client, const char *group, const char *pwd){
-    return client->group_join(group, pwd);
-}
-
-int32_t aoo::net::client::group_join(const char *group, const char *pwd){
-    push_command(std::make_unique<group_join_cmd>(group, encrypt(pwd)));
-
-    signal();
-
-    return 1;
-}
-
-int32_t aoo_net_client_group_leave(aoo_net_client *client, const char *group){
-    return client->group_leave(group);
-}
-
-int32_t aoo::net::client::group_leave(const char *group){
-    push_command(std::make_unique<group_leave_cmd>(group));
-
-    signal();
-
     return 1;
 }
 
 int32_t aoo_net_client_handle_message(aoo_net_client *client, const char *data,
-                                     int32_t n, void *addr, int32_t len)
+                                      int32_t n, void *addr, int32_t len)
 {
     return client->handle_message(data, n, addr, len);
 }
 
 int32_t aoo::net::client::handle_message(const char *data, int32_t n,
-                                    void *addr, int32_t len){
+                                         void *addr, int32_t len){
     try {
         osc::ReceivedPacket packet(data, n);
         osc::ReceivedMessage msg(packet);
@@ -347,9 +308,9 @@ int32_t aoo::net::client::handle_message(const char *data, int32_t n,
             }
             bool success = false;
             {
-                shared_lock lock(peerlock_);
+                shared_lock lock(peer_lock_);
                 // NOTE: we have to loop over *all* peers because there can
-                // be more than 1 peer on a given IP endpoint, because a single
+                // be more than 1 peer on a given IP endpoint, since a single
                 // user can join multiple groups.
                 // LATER make this more efficient, e.g. by associating IP endpoints
                 // with peers instead of having them all in a single vector.
@@ -372,6 +333,10 @@ int32_t aoo::net::client::handle_message(const char *data, int32_t n,
         }
     } catch (const osc::Exception& e){
         LOG_ERROR("aoo_client: exception in handle_message: " << e.what());
+    #if 0
+        unique_lock lock(socket_lock_);
+        on_exception("UDP message", e);
+    #endif
     }
 
     return 0;
@@ -395,10 +360,18 @@ int32_t aoo::net::client::send(){
             } else if ((elapsed_time - first_udp_ping_time_) > request_timeout()){
                 // request has timed out!
                 first_udp_ping_time_ = 0;
+                auto cb = connect_callback_;
+                auto user = connect_userdata_;
 
-                push_command(std::make_unique<disconnect_cmd>(command_reason::timeout));
+                unique_lock lock(socket_lock_);
+                close();
+                lock.unlock();
 
-                signal();
+                aoo_net_error_reply reply;
+                reply.errorcode = 0;
+                reply.errormsg = "UDP handshake time out";
+
+                if (cb) cb(user, -1, &reply);
 
                 return 1; // ?
             }
@@ -428,7 +401,7 @@ int32_t aoo::net::client::send(){
         }
 
         // update peers
-        shared_lock lock(peerlock_);
+        shared_lock lock(peer_lock_);
         for (auto& p : peers_){
             p->send(now);
         }
@@ -474,7 +447,41 @@ int32_t aoo::net::client::handle_events(aoo_eventhandler fn, void *user){
 namespace aoo {
 namespace net {
 
-void client::do_connect(const std::string &host, int port)
+void client::do_connect(const char *host, int port,
+                        const char *name, const char *pwd,
+                        aoo_net_callback cb, void *user)
+{
+    auto state = state_.load();
+    if (state != client_state::disconnected){
+        aoo_net_error_reply reply;
+        reply.errorcode = 0;
+        if (state == client_state::connected){
+            reply.errormsg = "already connected";
+        } else {
+            reply.errormsg = "already connecting";
+        }
+
+        if (cb) cb(user, -1, &reply);
+
+        return;
+    }
+
+    username_ = name;
+    password_ = encrypt(pwd);
+    connect_callback_ = cb;
+    connect_userdata_ = user;
+
+    auto cmd = std::make_unique<connect_cmd>(cb, user, host, port);
+
+    push_command(std::move(cmd));
+
+    state_ = client_state::connecting;
+
+    signal();
+}
+
+void client::perform_connect(const std::string &host, int port,
+                             aoo_net_callback cb, void *user)
 {
     if (tcpsocket_ >= 0){
         LOG_ERROR("aoo_client: bug client::do_connect()");
@@ -486,60 +493,19 @@ void client::do_connect(const std::string &host, int port)
         // event
         std::string errmsg = socket_strerror(err);
 
-        auto e = std::make_unique<event>(
-            AOO_NET_CLIENT_CONNECT_EVENT, 0, errmsg.c_str());
-        push_event(std::move(e));
+        close();
 
-        do_disconnect();
+        aoo_net_error_reply reply;
+        reply.errorcode = err;
+        reply.errormsg = errmsg.c_str();
+
+        if (cb) cb(user, -1, &reply);
+
         return;
     }
 
     first_udp_ping_time_ = 0;
     state_ = client_state::handshake;
-
-}
-
-void client::do_disconnect(command_reason reason, int error){
-    if (tcpsocket_ >= 0){
-    #ifdef _WIN32
-        // unregister event from socket.
-        // actually, I think this happens automatically when closing the socket.
-        WSAEventSelect(tcpsocket_, sockevent_, 0);
-    #endif
-        socket_close(tcpsocket_);
-        tcpsocket_ = -1;
-        LOG_VERBOSE("aoo_client: disconnected");
-    }
-
-    {
-        unique_lock lock(peerlock_);
-        peers_.clear();
-    }
-
-    // event
-    if (reason != command_reason::none){
-        if (reason == command_reason::user){
-            auto e = std::make_unique<event>(
-                AOO_NET_CLIENT_DISCONNECT_EVENT, 1);
-            push_event(std::move(e));
-        } else {
-            std::string errmsg;
-            if (reason == command_reason::timeout) {
-                errmsg = "timed out";
-            } else {
-                if (error == 0){
-                    errmsg = "disconnected from server";
-                } else {
-                    errmsg = socket_strerror(error);
-                }
-            }
-            auto e = std::make_unique<event>(
-                AOO_NET_CLIENT_DISCONNECT_EVENT, 0, errmsg.c_str());
-            push_event(std::move(e));
-        }
-    }
-
-    state_ = client_state::disconnected;
 }
 
 int client::try_connect(const std::string &host, int port){
@@ -609,7 +575,32 @@ int client::try_connect(const std::string &host, int port){
     return 0;
 }
 
-void client::do_login(){
+void client::do_disconnect(aoo_net_callback cb, void *user){
+    auto state = state_.load();
+    if (state != client_state::connected){
+        aoo_net_error_reply reply;
+        reply.errormsg = (state == client_state::disconnected)
+                ? "not connected" : "still connecting";
+        reply.errorcode = 0;
+
+        if (cb) cb(user, -1, &reply);
+
+        return;
+    }
+
+    auto cmd = std::make_unique<disconnect_cmd>(cb, user);
+    push_command(std::move(cmd));
+
+    signal();
+}
+
+void client::perform_disconnect(aoo_net_callback cb, void *user){
+    close(true);
+
+    if (cb) cb(user, 0, nullptr); // always succeeds
+}
+
+void client::perform_login(){
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
     msg << osc::BeginMessage(AOO_NET_MSG_SERVER_LOGIN)
@@ -621,7 +612,55 @@ void client::do_login(){
     send_server_message_tcp(msg.Data(), msg.Size());
 }
 
-void client::do_group_join(const std::string &group, const std::string &pwd){
+void client::do_join_group(const char *group, const char *pwd,
+                           aoo_net_callback cb, void *user){
+    auto cmd = std::make_unique<group_join_cmd>(cb, user, group, encrypt(pwd));
+
+    push_command(std::move(cmd));
+
+    signal();
+}
+
+void client::perform_join_group(const std::string &group, const std::string &pwd,
+                                aoo_net_callback cb, void *user)
+{
+
+    auto request = [group, cb, user](
+            const char *pattern,
+            const osc::ReceivedMessage& msg)
+    {
+        if (!strcmp(pattern, AOO_NET_MSG_GROUP_JOIN)){
+            auto it = msg.ArgumentsBegin();
+            std::string g = (it++)->AsString();
+            if (g == group){
+                int32_t status = (it++)->AsInt32();
+                if (status > 0){
+                    LOG_VERBOSE("aoo_client: successfully joined group " << group);
+                    if (cb) cb(user, 0, nullptr);
+                } else {
+                    std::string errmsg;
+                    if (msg.ArgumentCount() > 2){
+                        errmsg = (it++)->AsString();
+                        LOG_WARNING("aoo_client: couldn't join group "
+                                    << group << ": " << errmsg);
+                    } else {
+                        errmsg = "unknown error";
+                    }
+                    // reply
+                    aoo_net_error_reply reply;
+                    reply.errorcode = 0;
+                    reply.errormsg = errmsg.c_str();
+
+                    if (cb) cb(user, -1, &reply);
+                }
+
+                return true;
+            }
+        }
+        return false;
+    };
+    pending_requests_.push_back(request);
+
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
     msg << osc::BeginMessage(AOO_NET_MSG_SERVER_GROUP_JOIN)
@@ -630,7 +669,66 @@ void client::do_group_join(const std::string &group, const std::string &pwd){
     send_server_message_tcp(msg.Data(), msg.Size());
 }
 
-void client::do_group_leave(const std::string &group){
+void client::do_leave_group(const char *group,
+                            aoo_net_callback cb, void *user){
+    auto cmd = std::make_unique<group_leave_cmd>(cb, user, group);
+
+    push_command(std::move(cmd));
+
+    signal();
+}
+
+void client::perform_leave_group(const std::string &group,
+                                 aoo_net_callback cb, void *user)
+{
+    auto request = [this, group, cb, user](
+            const char *pattern,
+            const osc::ReceivedMessage& msg)
+    {
+        if (!strcmp(pattern, AOO_NET_MSG_GROUP_LEAVE)){
+            auto it = msg.ArgumentsBegin();
+            std::string g = (it++)->AsString();
+            if (g == group){
+                int32_t status = (it++)->AsInt32();
+                if (status > 0){
+                    LOG_VERBOSE("aoo_client: successfully left group " << group);
+
+                    // remove all peers from this group
+                    unique_lock lock(peer_lock_); // writer lock!
+                    for (auto it = peers_.begin(); it != peers_.end(); ){
+                        if ((*it)->group() == group){
+                            it = peers_.erase(it);
+                        } else {
+                            ++it;
+                        }
+                    }
+                    lock.unlock();
+
+                    if (cb) cb(user, 0, nullptr);
+                } else {
+                    std::string errmsg;
+                    if (msg.ArgumentCount() > 2){
+                        errmsg = (it++)->AsString();
+                        LOG_WARNING("aoo_client: couldn't leave group "
+                                    << group << ": " << errmsg);
+                    } else {
+                        errmsg = "unknown error";
+                    }
+                    // reply
+                    aoo_net_error_reply reply;
+                    reply.errorcode = 0;
+                    reply.errormsg = errmsg.c_str();
+
+                    if (cb) cb(user, -1, &reply);
+                }
+
+                return true;
+            }
+        }
+        return false;
+    };
+    pending_requests_.push_back(request);
+
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
     msg << osc::BeginMessage(AOO_NET_MSG_SERVER_GROUP_LEAVE)
@@ -658,12 +756,15 @@ void client::wait_for_event(float timeout){
     HANDLE events[2];
     int numevents;
     events[0] = waitevent_;
+
+    unique_lock lock(socket_lock_);
     if (tcpsocket_ >= 0){
         events[1] = sockevent_;
         numevents = 2;
     } else {
         numevents = 1;
     }
+    lock.unlock();
 
     DWORD time = timeout < 0 ? INFINITE : (timeout * 1000 + 0.5); // round up to 1 ms!
     DWORD result = WaitForMultipleObjects(numevents, events, FALSE, time);
@@ -673,6 +774,13 @@ void client::wait_for_event(float timeout){
     }
     // only the second event is a socket
     if (result - WAIT_OBJECT_0 == 1){
+        lock.lock();
+
+        // TCP socket might have been closed in the meantime
+        if (tcpsocket_ < 0){
+            return;
+        }
+
         WSANETWORKEVENTS ne;
         memset(&ne, 0, sizeof(ne));
         WSAEnumNetworkEvents(tcpsocket_, sockevent_, &ne);
@@ -681,11 +789,8 @@ void client::wait_for_event(float timeout){
             // ready to receive data from server
             receive_data();
         } else if (ne.lNetworkEvents & FD_CLOSE){
-            // connection was closed
-            int err = ne.iErrorCode[FD_CLOSE_BIT];
-            LOG_WARNING("aoo_client: connection was closed (" << err << ")");
-
-            do_disconnect(command_reason::error, err);
+            // connection was closed by server
+            on_socket_error(ne.iErrorCode[FD_CLOSE_BIT]);
         } else {
             // ignore FD_WRITE event
         }
@@ -721,6 +826,11 @@ void client::wait_for_event(float timeout){
     }
 
     if (fds[1].revents & POLLIN){
+        scoped_lock lock(socket_lock_);
+        // TCP socket might have been closed in the meantime
+        if (tcpsocket_ < 0){
+            return;
+        }
         receive_data();
     }
 #else // select() version
@@ -754,6 +864,11 @@ void client::wait_for_event(float timeout){
     }
 
     if (FD_ISSET(tcpsocket_, &rdset)){
+        scoped_lock lock(socket_lock_);
+        // TCP socket might have been closed in the meantime
+        if (tcpsocket_ < 0){
+            return;
+        }
         receive_data();
     }
 #endif
@@ -762,7 +877,7 @@ void client::wait_for_event(float timeout){
 
 void client::receive_data(){
     // read as much data as possible until recv() would block
-    while (true){
+    while (tcpsocket_ >= 0){
         char buffer[AOO_MAXPACKETSIZE];
         auto result = recv(tcpsocket_, buffer, sizeof(buffer), 0);
         if (result > 0){
@@ -775,35 +890,18 @@ void client::receive_data(){
                 if (size > 0){
                     try {
                         osc::ReceivedPacket packet((char *)buf, size);
-
-                        std::function<void(const osc::ReceivedBundle&)> dispatchBundle
-                                = [&](const osc::ReceivedBundle& bundle){
-                            auto it = bundle.ElementsBegin();
-                            while (it != bundle.ElementsEnd()){
-                                if (it->IsMessage()){
-                                    osc::ReceivedMessage msg(*it);
-                                    handle_server_message_tcp(msg);
-                                } else if (it->IsBundle()){
-                                    osc::ReceivedBundle bundle2(*it);
-                                    dispatchBundle(bundle2);
-                                } else {
-                                    // ignore
-                                }
-                                ++it;
-                            }
-                        };
-
                         if (packet.IsMessage()){
                             osc::ReceivedMessage msg(packet);
                             handle_server_message_tcp(msg);
                         } else if (packet.IsBundle()){
                             osc::ReceivedBundle bundle(packet);
-                            dispatchBundle(bundle);
+                            handle_server_bundle_tcp(bundle);
                         } else {
                             // ignore
                         }
                     } catch (const osc::Exception& e){
                         LOG_ERROR("aoo_client: exception in receive_data: " << e.what());
+                        on_exception("server TCP message", e);
                     }
                 } else {
                     break;
@@ -811,7 +909,7 @@ void client::receive_data(){
             }
         } else if (result == 0){
             // connection closed by the remote server
-            do_disconnect(command_reason::error, 0);
+            on_socket_error(0);
         } else {
             int err = socket_errno();
         #ifdef _WIN32
@@ -821,11 +919,11 @@ void client::receive_data(){
         #endif
             {
             #if 0
-                LOG_VERBOSE("aoo_client: recv() would block");
+                LOG_DEBUG("aoo_client: recv() would block");
             #endif
             } else {
                 LOG_ERROR("aoo_client: recv() failed (" << err << ")");
-                do_disconnect(command_reason::error, err);
+                on_socket_error(err);
             }
             return;
         }
@@ -869,13 +967,11 @@ void client::send_server_message_tcp(const char *data, int32_t size){
                             // store in pending buffer
                             pending_send_data_.assign(buf + nbytes, buf + total);
                         #if 1
-                            LOG_VERBOSE("aoo_client: send() would block");
+                            LOG_DEBUG("aoo_client: send() would block");
                         #endif
-                        }
-                        else
-                        {
-                            do_disconnect(command_reason::error, err);
+                        } else {
                             LOG_ERROR("aoo_client: send() failed (" << err << ")");
+                            on_socket_error(err);
                         }
                         return;
                     }
@@ -915,22 +1011,44 @@ void client::handle_server_message_tcp(const osc::ReceivedMessage& msg){
     try {
         if (!strcmp(pattern, AOO_NET_MSG_PING)){
             LOG_DEBUG("aoo_client: got TCP ping from server");
-        } else if (!strcmp(pattern, AOO_NET_MSG_LOGIN)){
-            handle_login(msg);
-        } else if (!strcmp(pattern, AOO_NET_MSG_GROUP_JOIN)){
-            handle_group_join(msg);
-        } else if (!strcmp(pattern, AOO_NET_MSG_GROUP_LEAVE)){
-            handle_group_leave(msg);
         } else if (!strcmp(pattern, AOO_NET_MSG_PEER_JOIN)){
             handle_peer_add(msg);
         } else if (!strcmp(pattern, AOO_NET_MSG_PEER_LEAVE)){
             handle_peer_remove(msg);
+        } else if (!strcmp(pattern, AOO_NET_MSG_LOGIN)){
+            handle_login(msg);
         } else {
-            LOG_ERROR("aoo_client: unknown server message " << pattern);
+            // handle reply
+            for (auto it = pending_requests_.begin(); it != pending_requests_.end();){
+                if ((*it)(pattern, msg)){
+                    it = pending_requests_.erase(it);
+                    return;
+                } else {
+                    ++it;
+                }
+            }
+            LOG_ERROR("aoo_client: couldn't handle reply " << pattern);
         }
     } catch (const osc::Exception& e){
         LOG_ERROR("aoo_client: exception on handling " << pattern
                   << " message: " << e.what());
+        on_exception("server TCP message", e, pattern);
+    }
+}
+
+void client::handle_server_bundle_tcp(const osc::ReceivedBundle &bundle){
+    auto it = bundle.ElementsBegin();
+    while (it != bundle.ElementsEnd()){
+        if (it->IsMessage()){
+            osc::ReceivedMessage msg(*it);
+            handle_server_message_tcp(msg);
+        } else if (it->IsBundle()){
+            osc::ReceivedBundle bundle2(*it);
+            handle_server_bundle_tcp(bundle2);
+        } else {
+            // ignore
+        }
+        ++it;
     }
 }
 
@@ -938,14 +1056,27 @@ void client::handle_login(const osc::ReceivedMessage& msg){
     if (state_.load() == client_state::login){
         auto it = msg.ArgumentsBegin();
         int32_t status = (it++)->AsInt32();
+
+        // make copies just to be safe
+        auto cb = connect_callback_;
+        auto user = connect_userdata_;
+        auto local_addr = local_addr_;
+        auto public_addr = public_addr_;
+
         if (status > 0){
+            int32_t id = (it++)->AsInt32();
             // connected!
-            state_ = client_state::connected;
+            state_.store(client_state::connected);
             LOG_VERBOSE("aoo_client: successfully logged in");
-            // event
-            auto e = std::make_unique<event>(
-                AOO_NET_CLIENT_CONNECT_EVENT, 1);
-            push_event(std::move(e));
+            // notify
+            aoo_net_connect_reply reply;
+            reply.local_address = local_addr.address();
+            reply.local_addrlen = local_addr.length();
+            reply.public_address = public_addr.address();
+            reply.public_addrlen = public_addr.length();
+            reply.user_id = id;
+
+            if (cb) cb(user, 0, &reply);
         } else {
             std::string errmsg;
             if (msg.ArgumentCount() > 1){
@@ -955,70 +1086,17 @@ void client::handle_login(const osc::ReceivedMessage& msg){
             }
             LOG_WARNING("aoo_client: login failed: " << errmsg);
 
-            // event
-            auto e = std::make_unique<event>(
-                AOO_NET_CLIENT_CONNECT_EVENT, status, errmsg.c_str());
-            push_event(std::move(e));
+            unique_lock lock(socket_lock_);
+            close();
+            lock.unlock();
 
-            do_disconnect();
+            // notify
+            aoo_net_error_reply reply;
+            reply.errorcode = 0;
+            reply.errormsg = errmsg.c_str();
+
+            if (cb) cb(user, -1, &reply);
         }
-    }
-}
-
-void client::handle_group_join(const osc::ReceivedMessage& msg){
-    auto it = msg.ArgumentsBegin();
-    std::string group = (it++)->AsString();
-    int32_t status = (it++)->AsInt32();
-    if (status > 0){
-        LOG_VERBOSE("aoo_client: successfully joined group " << group);
-        auto e = std::make_unique<group_event>(
-            AOO_NET_CLIENT_GROUP_JOIN_EVENT, group.c_str(), 1);
-        push_event(std::move(e));
-    } else {
-        std::string errmsg;
-        if (msg.ArgumentCount() > 2){
-            errmsg = (it++)->AsString();
-            LOG_WARNING("aoo_client: couldn't join group "
-                        << group << ": " << errmsg);
-        } else {
-            errmsg = "unknown error";
-        }
-        // event
-        auto e = std::make_unique<group_event>(
-            AOO_NET_CLIENT_GROUP_JOIN_EVENT, group.c_str(), status, errmsg.c_str());
-        push_event(std::move(e));
-    }
-}
-
-void client::handle_group_leave(const osc::ReceivedMessage& msg){
-    auto it = msg.ArgumentsBegin();
-    std::string group = (it++)->AsString();
-    int32_t status = (it++)->AsInt32();
-    if (status > 0){
-        LOG_VERBOSE("aoo_client: successfully left group " << group);
-
-        // remove all peers from this group
-        unique_lock lock(peerlock_); // writer lock!
-        auto result = std::remove_if(peers_.begin(), peers_.end(),
-                                     [&](auto& p){ return p->group() == group; });
-        peers_.erase(result, peers_.end());
-
-        auto e = std::make_unique<group_event>(
-            AOO_NET_CLIENT_GROUP_LEAVE_EVENT, group.c_str(), 1);
-        push_event(std::move(e));
-    } else {
-        std::string errmsg;
-        if (msg.ArgumentCount() > 2){
-            errmsg = (it++)->AsString();
-            LOG_WARNING("aoo_client: couldn't leave group "
-                        << group << ": " << errmsg);
-        } else {
-            errmsg = "unknown error";
-        }
-        // event
-        auto e = std::make_unique<group_event>(
-            AOO_NET_CLIENT_GROUP_LEAVE_EVENT, group.c_str(), status, errmsg.c_str());
-        push_event(std::move(e));
     }
 }
 
@@ -1030,11 +1108,12 @@ void client::handle_peer_add(const osc::ReceivedMessage& msg){
     int32_t public_port = (it++)->AsInt32();
     std::string local_ip = (it++)->AsString();
     int32_t local_port = (it++)->AsInt32();
+    int32_t id = (it++)->AsInt32();
 
     ip_address public_addr(public_ip, public_port);
     ip_address local_addr(local_ip, local_port);
 
-    unique_lock lock(peerlock_); // writer lock!
+    unique_lock lock(peer_lock_); // writer lock!
 
     // check if peer already exists (shouldn't happen)
     for (auto& p: peers_){
@@ -1043,8 +1122,10 @@ void client::handle_peer_add(const osc::ReceivedMessage& msg){
             return;
         }
     }
-    peers_.push_back(std::make_unique<peer>(*this, group, user,
-                                            public_addr, local_addr));
+
+    auto p = std::make_unique<peer>(*this, id, group, user,
+                                    public_addr, local_addr);
+    peers_.push_back(std::move(p));
 
     // don't handle event yet, wait for ping handshake
 
@@ -1056,8 +1137,9 @@ void client::handle_peer_remove(const osc::ReceivedMessage& msg){
     auto it = msg.ArgumentsBegin();
     std::string group = (it++)->AsString();
     std::string user = (it++)->AsString();
+    int32_t id = (it++)->AsInt32();
 
-    unique_lock lock(peerlock_); // writer lock!
+    unique_lock lock(peer_lock_); // writer lock!
 
     auto result = std::find_if(peers_.begin(), peers_.end(),
                                [&](auto& p){ return p->match(group, user); });
@@ -1070,9 +1152,8 @@ void client::handle_peer_remove(const osc::ReceivedMessage& msg){
 
     peers_.erase(result);
 
-    auto e = std::make_unique<peer_event>(
-                AOO_NET_CLIENT_PEER_LEAVE_EVENT,
-                group.c_str(), user.c_str(), addr.address(), addr.length());
+    auto e = std::make_unique<peer_event>(AOO_NET_PEER_LEAVE_EVENT,
+                addr.address(), addr.length(), group.c_str(), user.c_str(), id);
     push_event(std::move(e));
 
     LOG_VERBOSE("aoo_client: peer " << group << "|" << user << " left");
@@ -1095,7 +1176,9 @@ void client::handle_server_message_udp(const osc::ReceivedMessage &msg, int onse
                             << public_addr_.name() << " " << public_addr_.port());
 
                 // now we can try to login
-                push_command(std::make_unique<login_cmd>());
+                auto cmd = std::make_unique<login_cmd>();
+
+                push_command(std::move(cmd));
 
                 signal();
             }
@@ -1106,6 +1189,7 @@ void client::handle_server_message_udp(const osc::ReceivedMessage &msg, int onse
     } catch (const osc::Exception& e){
         LOG_ERROR("aoo_client: exception on handling " << pattern
                   << " message: " << e.what());
+        on_exception("server UDP message", e, pattern);
     }
 }
 
@@ -1117,63 +1201,129 @@ void client::signal(){
 #endif
 }
 
+void client::close(bool manual){
+    if (tcpsocket_ >= 0){
+    #ifdef _WIN32
+        // unregister event from socket.
+        // actually, I think this happens automatically when closing the socket.
+        WSAEventSelect(tcpsocket_, sockevent_, 0);
+    #endif
+        socket_close(tcpsocket_);
+        tcpsocket_ = -1;
+        LOG_VERBOSE("aoo_client: connection closed");
+    }
+
+    username_.clear();
+    password_.clear();
+    connect_callback_ = nullptr;
+    connect_userdata_ = nullptr;
+
+    // remove all peers
+    unique_lock lock(peer_lock_);
+    peers_.clear();
+    lock.unlock();
+
+    // clear pending request
+    // LATER call them all with some dummy input
+    // to avoid memleak if clients pass heap
+    // allocated request data, which is supposed
+    // to be freed in the callback.
+    pending_requests_.clear();
+
+    auto oldstate = state_.exchange(client_state::disconnected);
+    if (!manual && oldstate == client_state::connected){
+        auto e = std::make_unique<event>(AOO_NET_DISCONNECT_EVENT);
+        push_event(std::move(e));
+    }
+}
+
+void client::on_socket_error(int err){
+    std::string msg = err ? socket_strerror(err)
+                          : "connection closed by server";
+    auto e = std::make_unique<error_event>(
+                AOO_NET_ERROR_EVENT, err, msg.c_str());
+
+    push_event(std::move(e));
+
+    close();
+}
+
+void client::on_exception(const char *what, const osc::Exception &err,
+                          const char *pattern){
+    char msg[256];
+    if (pattern){
+        snprintf(msg, sizeof(msg), "exception in %s (%s): %s",
+                 what, pattern, err.what());
+    } else {
+        snprintf(msg, sizeof(msg), "exception in %s: %s",
+                 what, err.what());
+    }
+
+    auto e = std::make_unique<error_event>(
+                AOO_NET_ERROR_EVENT, 0, msg);
+
+    push_event(std::move(e));
+
+    close();
+}
 
 /*///////////////////// events ////////////////////////*/
 
-client::event::event(int32_t type, int32_t result,
-                     const char * errmsg)
+client::error_event::error_event(int32_t type,
+                                 int32_t code, const char *msg)
 {
-    client_event_.type = type;
-    client_event_.result = result;
-    client_event_.errormsg = copy_string(errmsg);
+    error_event_.type = type;
+    error_event_.errorcode = code;
+    error_event_.errormsg = copy_string(msg);
 }
 
-client::event::~event()
+client::error_event::~error_event()
 {
-    delete client_event_.errormsg;
+    delete error_event_.errormsg;
 }
 
-client::group_event::group_event(int32_t type, const char *name,
-                                 int32_t result, const char *errmsg)
+client::ping_event::ping_event(int32_t type,
+                               const void *addr, int32_t len,
+                               uint64_t tt1, uint64_t tt2, uint64_t tt3)
 {
-    group_event_.type = type;
-    group_event_.result = result;
-    group_event_.errormsg = copy_string(errmsg);
-    group_event_.name = copy_string(name);
+    ping_event_.type = type;
+    ping_event_.address = copy_sockaddr(addr, len);
+    ping_event_.length = len;
+    ping_event_.tt1 = tt1;
+    ping_event_.tt2 = tt2;
+    ping_event_.tt3 = tt3;
 }
 
-client::group_event::~group_event()
+client::ping_event::~ping_event()
 {
-    delete group_event_.errormsg;
-    delete group_event_.name;
+    delete (const sockaddr *)ping_event_.address;
 }
 
 client::peer_event::peer_event(int32_t type,
-                               const char *group, const char *user,
-                               const void *address, int32_t length)
+                               const void *address, int32_t length,
+                               const char *group, const char *user, int32_t id)
 {
     peer_event_.type = type;
-    peer_event_.result = 1;
-    peer_event_.errormsg = nullptr;
-    peer_event_.group = copy_string(group);
-    peer_event_.user = copy_string(user);
     peer_event_.address = copy_sockaddr(address, length);
     peer_event_.length = length;
+    peer_event_.group_name = copy_string(group);
+    peer_event_.user_name = copy_string(user);
+    peer_event_.user_id = id;
 }
 
 client::peer_event::~peer_event()
 {
-    delete peer_event_.user;
-    delete peer_event_.group;
-    free_sockaddr(peer_event_.address);
+    delete peer_event_.user_name;
+    delete peer_event_.group_name;
+    delete (const sockaddr *)peer_event_.address;
 }
 
 /*///////////////////// peer //////////////////////////*/
 
-peer::peer(client& client,
+peer::peer(client& client, int32_t id,
            const std::string& group, const std::string& user,
            const ip_address& public_addr, const ip_address& local_addr)
-    : client_(&client), group_(group), user_(user),
+    : client_(&client), id_(id), group_(group), user_(user),
       public_address_(public_addr), local_address_(local_addr)
 {
     start_time_ = time_tag::now();
@@ -1233,8 +1383,8 @@ void peer::send(time_tag now){
             std::stringstream ss;
             ss << "couldn't establish connection with peer " << *this;
 
-            auto e = std::make_unique<client::event>(
-                        AOO_NET_CLIENT_ERROR_EVENT, 0, ss.str().c_str());
+            auto e = std::make_unique<client::error_event>(
+                        AOO_NET_ERROR_EVENT, 0, ss.str().c_str());
             client_->push_event(std::move(e));
 
             return;
@@ -1275,8 +1425,8 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
 
                 // push event
                 auto e = std::make_unique<client::peer_event>(
-                            AOO_NET_CLIENT_PEER_JOIN_EVENT,
-                            group().c_str(), user().c_str(), addr.address(), addr.length());
+                            AOO_NET_PEER_JOIN_EVENT, addr.address(), addr.length(),
+                            group().c_str(), user().c_str(), id());
                 client_->push_event(std::move(e));
 
                 LOG_VERBOSE("aoo_client: successfully established connection with " << *this);
@@ -1289,6 +1439,7 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
                         << pattern << " from " << *this);
         }
     } catch (const osc::Exception& e){
+        // peer exceptions are not fatal!
         LOG_ERROR("aoo_client: " << *this << ": exception on handling "
                   << pattern << " message: " << e.what());
     }

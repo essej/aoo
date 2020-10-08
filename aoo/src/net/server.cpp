@@ -4,6 +4,8 @@
 
 #include "server.hpp"
 
+#include "aoo/aoo.h"
+
 #include <functional>
 #include <algorithm>
 
@@ -47,7 +49,8 @@
 namespace aoo {
 namespace net {
 
-char * copy_string(const char * s);
+char * copy_string(const char *s);
+void * copy_sockaddr(const void *sa, int32_t len);
 
 } // net
 } // aoo
@@ -180,7 +183,12 @@ aoo::net::server::~server() {
 #endif
 
     socket_close(tcpsocket_);
+    tcpsocket_ = -1;
     socket_close(udpsocket_);
+    udpsocket_ = -1;
+
+    // clear explicitly to avoid crash!
+    clients_.clear();
 }
 
 int32_t aoo_net_server_run(aoo_net_server *server){
@@ -285,7 +293,7 @@ std::shared_ptr<user> server::get_user(const std::string& name,
     } else {
         // create new user (LATER add option to disallow this)
         if (true){
-            usr = std::make_shared<user>(name, pwd);
+            usr = std::make_shared<user>(name, pwd, next_user_id_++);
             users_.push_back(usr);
             e = error::none;
             return usr;
@@ -345,14 +353,16 @@ std::shared_ptr<group> server::find_group(const std::string& name)
 
 
 void server::on_user_joined(user &usr){
-    auto e = std::make_unique<user_event>(AOO_NET_SERVER_USER_JOIN_EVENT,
-                                          usr.name.c_str());
+    auto e = std::make_unique<user_event>(AOO_NET_USER_JOIN_EVENT,
+                                          usr.name.c_str(), usr.id,
+                                          usr.endpoint->public_address);
     push_event(std::move(e));
 }
 
 void server::on_user_left(user &usr){
-    auto e = std::make_unique<user_event>(AOO_NET_SERVER_USER_LEAVE_EVENT,
-                                          usr.name.c_str());
+    auto e = std::make_unique<user_event>(AOO_NET_USER_LEAVE_EVENT,
+                                          usr.name.c_str(), usr.id,
+                                          usr.endpoint->public_address);
     push_event(std::move(e));
 }
 
@@ -371,7 +381,7 @@ void server::on_user_joined_group(user& usr, group& grp){
                     << grp.name.c_str() << u.name.c_str()
                     << e->public_address.name() << e->public_address.port()
                     << e->local_address.name() << e->local_address.port()
-                    << osc::EndMessage;
+                    << u.id << osc::EndMessage;
 
                 dest->send_message(msg.Data(), msg.Size());
             };
@@ -384,27 +394,32 @@ void server::on_user_joined_group(user& usr, group& grp){
         }
     }
 
-    auto e = std::make_unique<group_event>(AOO_NET_SERVER_GROUP_JOIN_EVENT,
-                                          grp.name.c_str(), usr.name.c_str());
+    auto e = std::make_unique<group_event>(AOO_NET_GROUP_JOIN_EVENT,
+                                           grp.name.c_str(),
+                                           usr.name.c_str(), usr.id);
     push_event(std::move(e));
 }
 
 void server::on_user_left_group(user& usr, group& grp){
+    if (udpsocket_ < 0){
+        return; // prevent sending messages during shutdown
+    }
     // notify group members
     for (auto& peer : grp.users()){
         if (peer.get() != &usr){
             char buf[AOO_MAXPACKETSIZE];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
             msg << osc::BeginMessage(AOO_NET_MSG_CLIENT_PEER_LEAVE)
-                  << grp.name.c_str() << usr.name.c_str()
+                  << grp.name.c_str() << usr.name.c_str() << usr.id
                   << osc::EndMessage;
 
             peer->endpoint->send_message(msg.Data(), msg.Size());
         }
     }
 
-    auto e = std::make_unique<group_event>(AOO_NET_SERVER_GROUP_LEAVE_EVENT,
-                                           grp.name.c_str(), usr.name.c_str());
+    auto e = std::make_unique<group_event>(AOO_NET_GROUP_LEAVE_EVENT,
+                                           grp.name.c_str(),
+                                           usr.name.c_str(), usr.id);
     push_event(std::move(e));
 }
 
@@ -617,6 +632,7 @@ void server::receive_udp(){
                 handle_udp_message(msg, onset, addr);
             } catch (const osc::Exception& e){
                 LOG_ERROR("aoo_server: exception in receive_udp: " << e.what());
+                // ignore for now
             }
         } else if (result < 0){
             int err = socket_errno();
@@ -690,6 +706,7 @@ void server::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
     } catch (const osc::Exception& e){
         LOG_ERROR("aoo_server: exception on handling " << pattern
                   << " message: " << e.what());
+        // ignore for now
     }
 }
 
@@ -899,49 +916,32 @@ bool client_endpoint::receive_data(){
 
         // handle packets
         uint8_t buf[AOO_MAXPACKETSIZE];
-        while (true){
-            auto size = recvbuffer_.read_packet(buf, sizeof(buf));
-            if (size > 0){
-                try {
-                    osc::ReceivedPacket packet((char *)buf, size);
-
-                    std::function<void(const osc::ReceivedBundle&)> dispatchBundle
-                            = [&](const osc::ReceivedBundle& bundle){
-                        auto it = bundle.ElementsBegin();
-                        while (it != bundle.ElementsEnd()){
-                            if (it->IsMessage()){
-                                osc::ReceivedMessage msg(*it);
-                                handle_message(msg);
-                            } else if (it->IsBundle()){
-                                osc::ReceivedBundle bundle2(*it);
-                                dispatchBundle(bundle2);
-                            } else {
-                                // ignore
-                            }
-                            ++it;
-                        }
-                    };
-
-                    if (packet.IsMessage()){
-                        osc::ReceivedMessage msg(packet);
-                        handle_message(msg);
-                    } else if (packet.IsBundle()){
-                        osc::ReceivedBundle bundle(packet);
-                        dispatchBundle(bundle);
-                    } else {
-                        // ignore
+        int32_t size;
+        while ((size = recvbuffer_.read_packet(buf, sizeof(buf))) > 0){
+            try {
+                osc::ReceivedPacket packet((char *)buf, size);
+                if (packet.IsMessage()){
+                    osc::ReceivedMessage msg(packet);
+                    if (!handle_message(msg)){
+                        return false;
                     }
-                } catch (const osc::Exception& e){
-                    LOG_ERROR("aoo_server: exception in client_endpoint::receive_data: " << e.what());
+                } else if (packet.IsBundle()){
+                    osc::ReceivedBundle bundle(packet);
+                    if (!handle_bundle(bundle)){
+                        return false;
+                    }
+                } else {
+                    // ignore
                 }
-            } else {
-                break;
+            } catch (const osc::Exception& e){
+                LOG_ERROR("aoo_server: exception in client_endpoint::receive_data: " << e.what());
+                return false; // close
             }
         }
     }
 }
 
-void client_endpoint::handle_message(const osc::ReceivedMessage &msg){
+bool client_endpoint::handle_message(const osc::ReceivedMessage &msg){
     // first check main pattern
     int32_t len = strlen(msg.AddressPattern());
     int32_t onset = AOO_MSG_DOMAIN_LEN + AOO_NET_MSG_SERVER_LEN;
@@ -951,7 +951,7 @@ void client_endpoint::handle_message(const osc::ReceivedMessage &msg){
     {
         LOG_ERROR("aoo_server: received bad message " << msg.AddressPattern()
                   << " from client");
-        return;
+        return false;
     }
 
     // now compare subpattern
@@ -970,10 +970,33 @@ void client_endpoint::handle_message(const osc::ReceivedMessage &msg){
         } else {
             LOG_ERROR("aoo_server: unknown message " << msg.AddressPattern());
         }
+        return true;
     } catch (const osc::Exception& e){
         LOG_ERROR("aoo_server: exception on handling " << msg.AddressPattern()
                   << " message: " << e.what());
+        return false;
     }
+}
+
+bool client_endpoint::handle_bundle(const osc::ReceivedBundle &bundle){
+    auto it = bundle.ElementsBegin();
+    while (it != bundle.ElementsEnd()){
+        if (it->IsMessage()){
+            osc::ReceivedMessage msg(*it);
+            if (!handle_message(msg)){
+                return false;
+            }
+        } else if (it->IsBundle()){
+            osc::ReceivedBundle bundle2(*it);
+            if (!handle_bundle(bundle2)){
+                return false;
+            }
+        } else {
+            // ignore
+        }
+        ++it;
+    }
+    return true;
 }
 
 void client_endpoint::handle_ping(const osc::ReceivedMessage& msg){
@@ -1007,8 +1030,8 @@ void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
             local_address = ip_address(local_ip, local_port);
             user_->endpoint = this;
 
-            LOG_VERBOSE("aoo_server: login: "
-                        << "username: " << username << ", password: " << password
+            LOG_VERBOSE("aoo_server: login: id: " << user_->id
+                        << ", username: " << username << ", password: " << password
                         << ", public IP: " << public_ip << ", public port: " << public_port
                         << ", local IP: " << local_ip << ", local port: " << local_port);
 
@@ -1025,8 +1048,13 @@ void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
     // send reply
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream reply(buf, sizeof(buf));
-    reply << osc::BeginMessage(AOO_NET_MSG_CLIENT_LOGIN)
-          << result << errmsg.c_str() << osc::EndMessage;
+    reply << osc::BeginMessage(AOO_NET_MSG_CLIENT_LOGIN) << result;
+    if (result){
+        reply << user_->id;
+    } else {
+        reply << errmsg.c_str();
+    }
+    reply << osc::EndMessage;
 
     send_message(reply.Data(), reply.Size());
 }
@@ -1102,42 +1130,48 @@ void client_endpoint::handle_group_leave(const osc::ReceivedMessage& msg){
 
 /*///////////////////// events ////////////////////////*/
 
-server::event::event(int32_t type, int32_t result,
-                     const char * errmsg)
+server::error_event::error_event(int32_t type, int32_t result,
+                                 const char * errmsg)
 {
-    server_event_.type = type;
-    server_event_.result = result;
-    server_event_.errormsg = copy_string(errmsg);
+    error_event_.type = type;
+    error_event_.errorcode = result;
+    error_event_.errormsg = copy_string(errmsg);
 }
 
-server::event::~event()
+server::error_event::~error_event()
 {
-    delete server_event_.errormsg;
+    delete error_event_.errormsg;
 }
 
-server::user_event::user_event(int32_t type, const char *name)
-{
+server::user_event::user_event(int32_t type,
+                               const char *name, int32_t id,
+                               const ip_address& address){
     user_event_.type = type;
-    user_event_.name = copy_string(name);
+    user_event_.user_name = copy_string(name);
+    user_event_.user_id = id;
+    user_event_.address = copy_sockaddr(address.address(), address.length());
+    user_event_.length = address.length();
 }
 
 server::user_event::~user_event()
 {
-    delete user_event_.name;
+    delete user_event_.user_name;
+    delete (const sockaddr *)user_event_.address;
 }
 
-server::group_event::group_event(int32_t type,
-                         const char *group, const char *user)
+server::group_event::group_event(int32_t type, const char *group,
+                                 const char *user, int32_t id)
 {
     group_event_.type = type;
-    group_event_.group = copy_string(group);
-    group_event_.user = copy_string(user);
+    group_event_.group_name = copy_string(group);
+    group_event_.user_name = copy_string(user);
+    group_event_.user_id = id;
 }
 
 server::group_event::~group_event()
 {
-    delete group_event_.group;
-    delete group_event_.user;
+    delete group_event_.group_name;
+    delete group_event_.user_name;
 }
 
 } // net

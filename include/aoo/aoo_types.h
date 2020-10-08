@@ -41,6 +41,7 @@ extern "C"
 #define AOO_MSG_DOMAIN "/aoo"
 #define AOO_MSG_DOMAIN_LEN 4
 
+typedef int32_t aoo_id;
 #define AOO_ID_WILDCARD -1
 #define AOO_ID_NONE INT32_MIN
 
@@ -58,13 +59,19 @@ extern "C"
 
 typedef AOO_SAMPLETYPE aoo_sample;
 
+#ifndef USE_AOO_NET
+#define USE_AOO_NET 1
+#endif
+
 typedef enum aoo_type
 {
     AOO_TYPE_SOURCE = 0,
     AOO_TYPE_SINK,
+#if USE_AOO_NET
     AOO_TYPE_SERVER = 1000,
     AOO_TYPE_CLIENT,
     AOO_TYPE_PEER
+#endif
 } aoo_type;
 
 // log function

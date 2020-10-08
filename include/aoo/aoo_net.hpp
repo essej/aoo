@@ -100,25 +100,16 @@ public:
     // quit the AOO client from another thread
     virtual int32_t quit() = 0;
 
-    // connect AOO client to a AOO server (always thread safe)
-    virtual int32_t connect(const char *host, int port,
-                            const char *username, const char *pwd) = 0;
+    // send a request to the AOO server (always thread safe)
+    virtual int32_t send_request(aoo_net_request_type request, void *data,
+                                 aoo_net_callback callback, void *user) = 0;
 
-    // disconnect AOO client from AOO server (always thread safe)
-    virtual int32_t disconnect() = 0;
-
-    // join an AOO group
-    virtual int32_t group_join(const char *group, const char *pwd) = 0;
-
-    // leave an AOO group
-    virtual int32_t group_leave(const char *group) = 0;
-
-    // handle messages from peers (threadsafe, but not reentrant)
+    // handle messages from peers (thread safe, but not reentrant)
     // 'addr' should be sockaddr *
     virtual int32_t handle_message(const char *data, int32_t n,
                                    void *addr, int32_t len) = 0;
 
-    // send outgoing messages to peers (threadsafe, but not reentrant)
+    // send outgoing messages to peers (thread safe, but not reentrant)
     virtual int32_t send() = 0;
 
     // get number of pending events (always thread safe)
@@ -129,6 +120,38 @@ public:
     virtual int32_t handle_events(aoo_eventhandler fn, void *user) = 0;
 
     // LATER add API functions to set options and do additional peer communication (chat, OSC messages, etc.)
+
+    //------------------------------ requests ---------------------------//
+
+    // connect to AOO server (always thread safe)
+    int32_t connect(const char *host, int port,
+                    const char *name, const char *pwd,
+                    aoo_net_callback cb, void *user)
+    {
+        aoo_net_connect_request data =  { host, port, name, pwd };
+        return send_request(AOO_NET_CONNECT_REQUEST, &data, cb, user);
+    }
+
+    // disconnect from AOO server (always thread safe)
+    int32_t disconnect(aoo_net_callback cb, void *user)
+    {
+        return send_request(AOO_NET_DISCONNECT_REQUEST, NULL, cb, user);
+    }
+
+    // join an AOO group
+    int32_t join_group(const char *group, const char *pwd,
+                       aoo_net_callback cb, void *user)
+    {
+        aoo_net_group_request data = { group, pwd };
+        return send_request(AOO_NET_GROUP_JOIN_REQUEST, &data, cb, user);
+    }
+
+    // leave an AOO group
+    int32_t leave_group(const char *group, aoo_net_callback cb, void *user)
+    {
+        aoo_net_group_request data = { group, NULL };
+        return send_request(AOO_NET_GROUP_LEAVE_REQUEST, &data, cb, user);
+    }
 protected:
     ~iclient(){} // non-virtual!
 };

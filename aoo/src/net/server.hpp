@@ -4,13 +4,13 @@
 
 #pragma once
 
-#include "aoo/aoo.h"
 #include "aoo/aoo_net.hpp"
 
 #include "common/utils.hpp"
 #include "common/lockfree.hpp"
 #include "common/net_utils.hpp"
 
+#include "commands.hpp"
 #include "SLIP.hpp"
 
 #include "oscpack/osc/OscOutboundPacketStream.h"
@@ -64,7 +64,9 @@ private:
     SLIP recvbuffer_;
     std::vector<uint8_t> pending_send_data_;
 
-    void handle_message(const osc::ReceivedMessage& msg);
+    bool handle_message(const osc::ReceivedMessage& msg);
+
+    bool handle_bundle(const osc::ReceivedBundle& bundle);
 
     void handle_ping(const osc::ReceivedMessage& msg);
 
@@ -76,12 +78,13 @@ private:
 };
 
 struct user {
-    user(const std::string& _name, const std::string& _pwd)
-        : name(_name), password(_pwd){}
+    user(const std::string& _name, const std::string& _pwd, int32_t _id)
+        : name(_name), password(_pwd), id(_id){}
     ~user() { LOG_VERBOSE("removed user " << name); }
 
     const std::string name;
     const std::string password;
+    int32_t id;
     client_endpoint *endpoint = nullptr;
 
     bool is_active() const { return endpoint != nullptr; }
@@ -139,9 +142,9 @@ public:
 
         union {
             aoo_event event_;
-            aoo_net_server_event server_event_;
-            aoo_net_server_user_event user_event_;
-            aoo_net_server_group_event group_event_;
+            aoo_net_error_event error_event_;
+            aoo_net_user_event user_event_;
+            aoo_net_group_event group_event_;
         };
     };
 
@@ -181,10 +184,12 @@ private:
     HANDLE udpevent_;
 #endif
     std::vector<std::unique_ptr<client_endpoint>> clients_;
+    int32_t next_user_id_ = 0;
     user_list users_;
     group_list groups_;
-    // queues
+    // commands
     lockfree::queue<std::unique_ptr<icommand>> commands_;
+    // events
     lockfree::queue<std::unique_ptr<ievent>> events_;
     void push_event(std::unique_ptr<ievent> e){
         if (events_.write_available()){
@@ -215,23 +220,23 @@ private:
 
     /*/////////////////// events //////////////////////*/
 
-    struct event : ievent
+    struct error_event : ievent
     {
-        event(int32_t type, int32_t result,
-                     const char * errmsg = 0);
-        ~event();
+        error_event(int32_t type, int32_t code, const char * msg = 0);
+        ~error_event();
     };
 
     struct user_event : ievent
     {
-        user_event(int32_t type, const char *name);
+        user_event(int32_t type, const char *name, int32_t id,
+                   const ip_address& address);
         ~user_event();
     };
 
     struct group_event : ievent
     {
-        group_event(int32_t type,
-                    const char *group, const char *user);
+        group_event(int32_t type, const char *group,
+                    const char *user, int32_t id);
         ~group_event();
     };
 };

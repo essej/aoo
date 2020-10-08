@@ -1,5 +1,7 @@
 #include "aoo/aoo.h"
+#if USE_AOO_NET
 #include "aoo/aoo_net.h"
+#endif
 
 #include "common/time.hpp"
 #include "common/utils.hpp"
@@ -55,6 +57,7 @@ int32_t aoo_parse_pattern(const char *msg, int32_t n,
         {
             *type = AOO_TYPE_SINK;
             offset += AOO_MSG_SINK_LEN;
+    #if USE_AOO_NET
         } else if (n >= (offset + AOO_NET_MSG_CLIENT_LEN)
             && !memcmp(msg + offset, AOO_NET_MSG_CLIENT, AOO_NET_MSG_CLIENT_LEN))
         {
@@ -70,6 +73,7 @@ int32_t aoo_parse_pattern(const char *msg, int32_t n,
         {
             *type = AOO_TYPE_PEER;
             return offset + AOO_NET_MSG_PEER_LEN;
+    #endif
         } else {
             return 0;
         }

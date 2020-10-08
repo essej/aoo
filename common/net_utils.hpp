@@ -90,7 +90,7 @@ int socket_strerror(int err, char *buf, int size);
 
 std::string socket_strerror(int err);
 
-void socket_error_print(const char *label);
+void socket_error_print(const char *label = nullptr);
 
 /*/////////////////// endpoint /////////////////*/
 
