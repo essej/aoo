@@ -103,6 +103,7 @@ public:
             aoo_net_error_event error_event_;
             aoo_net_ping_event ping_event_;
             aoo_net_peer_event peer_event_;
+            aoo_net_message_event message_event_;
         };
     };
 
@@ -115,6 +116,20 @@ public:
 
     int32_t send_request(aoo_net_request_type request, void *data,
                          aoo_net_callback callback, void *user) override;
+
+    int32_t send_message(const char *data, int32_t n,
+                         const void *addr, int32_t len, int32_t flags) override;
+
+    void do_send_message(const char *data, int32_t size, int32_t flags,
+                         const ip_address * vec, int32_t n);
+
+    void perform_send_message(const char *data, int32_t n, int32_t flags);
+
+    void perform_send_message(const char *data, int32_t n,
+                              const ip_address& address, int32_t flags);
+
+    void perform_send_message(const char *data, int32_t n,
+                              const std::string& group, int32_t flags);
 
     int32_t handle_message(const char *data, int32_t n,
                            const void *addr, int32_t len) override;
@@ -197,6 +212,8 @@ private:
             commands_.write(std::move(cmd));
         }
     }
+    // peer/group messages
+    lockfree::queue<std::unique_ptr<icommand>> messages_;
     // pending request
     using request = std::function<bool(const char *pattern, const osc::ReceivedMessage& msg)>;
     std::vector<request> pending_requests_;
@@ -278,8 +295,53 @@ public:
         ~peer_event();
     };
 
+    struct message_event : ievent
+    {
+        message_event(const char *data, int32_t size,
+                      const ip_address& addr);
+        ~message_event();
+    };
+
     /*////////////////////// commands ///////////////////*/
 private:
+    struct message_cmd : icommand {
+        message_cmd(const char *data, int32_t size, int32_t flags)
+            : data_(data, size), flags_(flags) {}
+
+        void perform(client &obj) override {
+            obj.perform_send_message(data_.data(), data_.size(), flags_);
+        }
+    protected:
+        std::string data_;
+        int32_t flags_;
+    };
+
+    struct peer_message_cmd : message_cmd {
+        peer_message_cmd(const char *data, int32_t size,
+                         const sockaddr *addr, int32_t len, int32_t flags)
+            : message_cmd(data, size, flags), address_(addr, len) {}
+
+        void perform(client &obj) override {
+            obj.perform_send_message(data_.data(), data_.size(),
+                                     address_, flags_);
+        }
+    protected:
+        ip_address address_;
+    };
+
+    struct group_message_cmd : message_cmd {
+        group_message_cmd(const char *data, int32_t size,
+                         const char *group, int32_t flags)
+            : message_cmd(data, size, flags), group_(group) {}
+
+        void perform(client &obj) override {
+            obj.perform_send_message(data_.data(), data_.size(),
+                                     group_, flags_);
+        }
+    protected:
+        std::string group_;
+    };
+
     struct request_cmd : icommand
     {
         request_cmd(aoo_net_callback cb, void *user)

@@ -94,6 +94,7 @@ typedef enum aoo_net_event_type
     AOO_NET_DISCONNECT_EVENT,
     AOO_NET_PEER_JOIN_EVENT,
     AOO_NET_PEER_LEAVE_EVENT,
+    AOO_NET_MESSAGE_EVENT,
     // server events
     AOO_NET_USER_JOIN_EVENT,
     AOO_NET_USER_LEAVE_EVENT,
@@ -130,6 +131,12 @@ typedef struct aoo_net_peer_event
 } aoo_net_peer_event;
 
 typedef aoo_net_peer_event aoo_net_group_event;
+
+typedef struct aoo_net_message_event {
+    AOO_NET_ENDPOINT_EVENT
+    const char *data;
+    int32_t size;
+} aoo_net_peer_message_event;
 
 typedef struct aoo_net_user_event
 {
@@ -204,6 +211,16 @@ AOO_API int32_t aoo_net_client_quit(aoo_net_client *client);
 AOO_API int32_t aoo_net_client_request(aoo_net_client *client,
                                        aoo_net_request_type request, void *data,
                                        aoo_net_callback callback, void *user);
+
+// send a message to one or more peers
+// 'addr' + 'len' accept the following values:
+// a) 'struct sockaddr *' + 'socklen_t': send to a single peer
+// b) 'const char *' (group name) + 0: send to all peers of a specific group
+// c) 'NULL' + 0: send to all peers
+// the 'flags' parameter allows for (future) additional settings
+AOO_API int32_t aoo_net_client_send_message(aoo_net_client *client,
+                                            const char *data, int32_t n,
+                                            const void *addr, int32_t len, int32_t flags);
 
 // handle messages from peers (threadsafe, but not reentrant)
 // 'addr' should be sockaddr *

@@ -18,7 +18,8 @@ struct time_tag {
 
     static double duration(time_tag t1, time_tag t2);
 
-    time_tag() = default;
+    time_tag()
+        : high(0), low(0) {}
     time_tag(uint32_t _high, uint32_t _low)
         : high(_high), low(_low){}
     time_tag(uint64_t ui){
@@ -31,8 +32,8 @@ struct time_tag {
         low = fract * 4294967296.0;
     }
 
-    uint32_t high = 0;
-    uint32_t low = 0;
+    uint32_t high;
+    uint32_t low;
 
     void clear(){
         high = 0;

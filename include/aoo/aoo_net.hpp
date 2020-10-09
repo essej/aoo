@@ -104,6 +104,15 @@ public:
     virtual int32_t send_request(aoo_net_request_type request, void *data,
                                  aoo_net_callback callback, void *user) = 0;
 
+    // send a message to one or more peers
+    // 'addr' + 'len' accept the following values:
+    // a) 'struct sockaddr *' + 'socklen_t': send to a single peer
+    // b) 'const char *' (group name) + 0: send to all peers of a specific group
+    // c) 'NULL' + 0: send to all peers
+    // the 'flags' parameter allows for (future) additional settings
+    virtual int32_t send_message(const char *data, int32_t n,
+                                 const void *addr, int32_t len, int32_t flags) = 0;
+
     // handle messages from peers (thread safe, but not reentrant)
     // 'addr' should be sockaddr *
     virtual int32_t handle_message(const char *data, int32_t n,

@@ -32,6 +32,9 @@
 #define AOO_NET_MSG_PEER_REPLY \
     AOO_MSG_DOMAIN AOO_NET_MSG_PEER AOO_NET_MSG_REPLY
 
+#define AOO_NET_MSG_PEER_MESSAGE \
+    AOO_MSG_DOMAIN AOO_NET_MSG_PEER AOO_NET_MSG_MESSAGE
+
 #define AOO_NET_MSG_SERVER_LOGIN \
     AOO_MSG_DOMAIN AOO_NET_MSG_SERVER AOO_NET_MSG_LOGIN
 
@@ -150,6 +153,7 @@ aoo::net::client::client(void *udpsocket, aoo_sendfn fn, int port)
     }
 #endif
     commands_.resize(256, 1);
+    messages_.resize(256, 1);
     events_.resize(256, 1);
     sendbuffer_.setup(65536);
     recvbuffer_.setup(65536);
@@ -269,6 +273,37 @@ int32_t aoo::net::client::send_request(aoo_net_request_type request, void *data,
         return 0;
     }
     return 1;
+}
+
+int32_t aoo_net_client_send_message(aoo_net_client *client, const char *data, int32_t n,
+                                    const void *addr, int32_t len, int32_t flags)
+{
+    return client->send_message(data, n, addr, len, flags);
+}
+
+int32_t aoo::net::client::send_message(const char *data, int32_t n,
+                                       const void *addr, int32_t len, int32_t flags)
+{
+    std::unique_ptr<icommand> cmd;
+    if (addr){
+        if (len > 0){
+            // peer message
+            cmd = std::make_unique<peer_message_cmd>(
+                        data, n, (const sockaddr *)addr, len, flags);
+        } else {
+            // group message
+            cmd = std::make_unique<group_message_cmd>(
+                        data, n, (const char *)addr, flags);
+        }
+    } else {
+        cmd = std::make_unique<message_cmd>(data, n, flags);
+    }
+    if (messages_.write_available()){
+        messages_.write(std::move(cmd));
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 int32_t aoo_net_client_handle_message(aoo_net_client *client, const char *data,
@@ -405,6 +440,13 @@ int32_t aoo::net::client::send(){
             return 1;
         }
 
+        // send outgoing peer/group messages
+        while (messages_.read_available() > 0){
+            std::unique_ptr<icommand> cmd;
+            messages_.read(cmd);
+            cmd->perform(*this);
+        }
+
         // update peers
         shared_lock lock(peer_lock_);
         for (auto& p : peers_){
@@ -440,6 +482,75 @@ int32_t aoo::net::client::poll_events(aoo_eventhandler fn, void *user){
 
 namespace aoo {
 namespace net {
+
+void client::do_send_message(const char *data, int32_t size, int32_t flags,
+                             const ip_address* vec, int32_t n)
+{
+    // for now ignore 'flags'. LATER we might use this to distinguish
+    // between reliable and unreliable messages, and maybe other things.
+
+    // embed inside an OSC message:
+    // /aoo/peer/msg' (b)<message>
+    try {
+        char buf[AOO_MAXPACKETSIZE];
+        osc::OutboundPacketStream msg(buf, sizeof(buf));
+        msg << osc::BeginMessage(AOO_NET_MSG_PEER_MESSAGE)
+            << osc::Blob(data, size) << osc::EndMessage;
+
+        for (int i = 0; i < n; ++i){
+            auto& addr = vec[i];
+            LOG_DEBUG("aoo_client: send message " << data
+                      << " to " << addr.name() << ":" << addr.port());
+            send_message_udp(msg.Data(), msg.Size(),addr);
+        }
+    } catch (const osc::Exception& e){
+        LOG_ERROR("aoo_client: error sending OSC message: " << e.what());
+    }
+}
+
+void client::perform_send_message(const char *data, int32_t n,
+                                  int32_t flags)
+{
+    shared_lock lock(peer_lock_);
+    // make a temporary copy of peer addresses, so we can
+    // send messages without holding a lock.
+    auto count = peers_.size();
+    auto vec = (ip_address *)alloca(count * sizeof(ip_address));
+    for (int i = 0; i < count; ++i){
+        new (vec + i) ip_address(peers_[i]->address());
+    }
+    lock.unlock();
+
+    do_send_message(data, n, flags, vec, count);
+}
+
+void client::perform_send_message(const char *data, int32_t n,
+                                  const ip_address& address, int32_t flags)
+{
+    do_send_message(data, n, flags, &address, 1);
+}
+
+void client::perform_send_message(const char *data, int32_t n,
+                                  const std::string& group, int32_t flags)
+{
+    shared_lock lock(peer_lock_);
+    // make a temporary copy of matching peer addresses,
+    // so we can send messages without holding a lock.
+    // LATER we should use a group dictionary to avoid the linear search.
+    int count = 0;
+    auto numpeers = peers_.size();
+    auto vec = (ip_address *)alloca(numpeers * sizeof(ip_address));
+    for (int i = 0; i < numpeers; ++i){
+        if (peers_[i]->group() == group){
+            new (vec + count++) ip_address(peers_[i]->address());
+        }
+    }
+    lock.unlock();
+
+    LOG_DEBUG("send message to group " << group);
+
+    do_send_message(data, n, flags, vec, count);
+}
 
 void client::do_connect(const char *host, int port,
                         const char *name, const char *pwd,
@@ -1037,8 +1148,8 @@ void client::handle_server_bundle_tcp(const osc::ReceivedBundle &bundle){
             osc::ReceivedMessage msg(*it);
             handle_server_message_tcp(msg);
         } else if (it->IsBundle()){
-            osc::ReceivedBundle bundle2(*it);
-            handle_server_bundle_tcp(bundle2);
+            osc::ReceivedBundle b(*it);
+            handle_server_bundle_tcp(b);
         } else {
             // ignore
         }
@@ -1309,6 +1420,24 @@ client::peer_event::~peer_event()
     delete (const sockaddr *)peer_event_.address;
 }
 
+client::message_event::message_event(const char *data, int32_t size,
+                                     const ip_address& addr)
+{
+    message_event_.type = AOO_NET_MESSAGE_EVENT;
+    message_event_.address = copy_sockaddr(addr.address(), addr.length());
+    message_event_.length = addr.length();
+    auto msg = new char[size];
+    memcpy(msg, data, size);
+    message_event_.data = msg;
+    message_event_.size = size;
+}
+
+client::message_event::~message_event()
+{
+    delete message_event_.data;
+    delete (const sockaddr *)message_event_.address;
+}
+
 /*///////////////////// peer //////////////////////////*/
 
 peer::peer(client& client, int32_t id,
@@ -1435,6 +1564,19 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
             LOG_DEBUG("aoo_client: got ping from " << *this);
         } else if (!strcmp(pattern, AOO_NET_MSG_REPLY)){
             LOG_DEBUG("aoo_client: got reply from " << *this);
+        } else if (!strcmp(pattern, AOO_NET_MSG_MESSAGE)){
+            // get embedded OSC message
+            const void *data;
+            osc::osc_bundle_element_size_t size;
+            msg.ArgumentsBegin()->AsBlob(data, size);
+
+            LOG_DEBUG("aoo_client: got message " << (const char *)data
+                      << " from " << addr.name() << ":" << addr.port());
+
+            auto e = std::make_unique<client::message_event>(
+                        (const char *)data, size, addr);
+
+            client_->push_event(std::move(e));
         } else {
             LOG_WARNING("aoo_client: received unknown message "
                         << pattern << " from " << *this);

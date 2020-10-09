@@ -976,8 +976,8 @@ bool client_endpoint::handle_bundle(const osc::ReceivedBundle &bundle){
                 return false;
             }
         } else if (it->IsBundle()){
-            osc::ReceivedBundle bundle2(*it);
-            if (!handle_bundle(bundle2)){
+            osc::ReceivedBundle b(*it);
+            if (!handle_bundle(b)){
                 return false;
             }
         } else {
