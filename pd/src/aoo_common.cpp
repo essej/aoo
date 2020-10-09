@@ -61,10 +61,10 @@ bool endpoint_get_address(const endpoint *ep, t_symbol *&host, int &port){
     }
 }
 
-static bool get_endpointarg(void *x, i_node *node, int argc, t_atom *argv,
-                            ip_address& addr, int32_t &id, const char *what)
+static bool get_endpoint_arg(void *x, i_node *node, int argc, t_atom *argv,
+                             ip_address& addr, int32_t *id, const char *what)
 {
-    if (argc < 3){
+    if (argc < (2 + (id != nullptr))){
         pd_error(x, "%s: too few arguments for %s", classname(x), what);
         return false;
     }
@@ -78,7 +78,7 @@ static bool get_endpointarg(void *x, i_node *node, int argc, t_atom *argv,
         if (e){
             addr = e->address();
         } else {
-            pd_error(x, "%s: couldn't find peer %s|%s for %s",
+            pd_error(x, "%s: couldn't find peer %s|%s",
                      classname(x), group->s_name, user->s_name, what);
             return false;
         }
@@ -97,30 +97,39 @@ static bool get_endpointarg(void *x, i_node *node, int argc, t_atom *argv,
         }
     }
 
-    if (argv[2].a_type == A_SYMBOL){
-        if (*argv[2].a_w.w_symbol->s_name == '*'){
-            id = AOO_ID_WILDCARD;
+    if (id){
+        if (argv[2].a_type == A_SYMBOL){
+            if (*argv[2].a_w.w_symbol->s_name == '*'){
+                *id = AOO_ID_WILDCARD;
+            } else {
+                pd_error(x, "%s: bad %s ID '%s'!",
+                         classname(x), what, argv[2].a_w.w_symbol->s_name);
+                return false;
+            }
         } else {
-            pd_error(x, "%s: bad %s ID '%s'!",
-                     classname(x), what, argv[2].a_w.w_symbol->s_name);
-            return false;
+            *id = atom_getfloat(argv + 2);
         }
-    } else {
-        id = atom_getfloat(argv + 2);
     }
+
     return true;
 }
 
-bool get_sinkarg(void *x, i_node *node, int argc, t_atom *argv,
-                 ip_address& addr, int32_t &id)
+bool get_sink_arg(void *x, i_node *node, int argc, t_atom *argv,
+                  ip_address& addr, int32_t &id)
 {
-    return get_endpointarg(x, node, argc, argv, addr, id, "sink");
+    return get_endpoint_arg(x, node, argc, argv, addr, &id, "sink");
 }
 
-bool get_sourcearg(void *x, i_node *node, int argc, t_atom *argv,
-                   ip_address& addr, int32_t &id)
+bool get_source_arg(void *x, i_node *node, int argc, t_atom *argv,
+                    ip_address& addr, int32_t &id)
 {
-    return get_endpointarg(x, node, argc, argv, addr, id, "source");
+    return get_endpoint_arg(x, node, argc, argv, addr, &id, "source");
+}
+
+bool get_peer_arg(void *x, i_node *node, int argc, t_atom *argv,
+                  ip_address& addr)
+{
+    return get_endpoint_arg(x, node, argc, argv, addr, nullptr, "peer");
 }
 
 static bool getarg(const char *name, void *x, int which,

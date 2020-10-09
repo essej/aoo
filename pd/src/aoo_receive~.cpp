@@ -55,7 +55,7 @@ static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *arg
 {
     ip_address addr;
     int32_t id = 0;
-    if (get_sourcearg(x, x->x_node, argc, argv, addr, id)){
+    if (get_source_arg(x, x->x_node, argc, argv, addr, id)){
         for (auto& src : x->x_sources){
             if (src.s_endpoint->address() == addr && src.s_id == id){
                 return &src;
@@ -111,7 +111,7 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
     ip_address addr;
     int32_t id = 0;
     aoo::endpoint *e = nullptr;
-    if (get_sourcearg(x, x->x_node, argc, argv, addr, id)){
+    if (get_source_arg(x, x->x_node, argc, argv, addr, id)){
         for (auto& src : x->x_sources){
             if (src.s_id == id && src.s_endpoint->address() == addr){
                 e = src.s_endpoint;

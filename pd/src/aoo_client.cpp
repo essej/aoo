@@ -73,8 +73,7 @@ static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
     switch (event->type){
     case AOO_NET_DISCONNECT_EVENT:
     {
-        pd_error(x, "%s: disconnected from server",
-                 classname(x));
+        post("%s: disconnected from server", classname(x));
 
         x->x_node->remove_all_peers();
 

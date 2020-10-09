@@ -282,7 +282,7 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         pd_error(x, "%s: too few arguments for 'channel' message", classname(x));
         return;
     }
-    if (get_sinkarg(x, x->x_node, argc, argv, addr, id)){
+    if (get_sink_arg(x, x->x_node, argc, argv, addr, id)){
         auto sink = aoo_send_findsink(x, addr, id);
         if (!sink){
             pd_error(x, "%s: couldn't find sink!", classname(x));
@@ -333,7 +333,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
     ip_address addr;
     int32_t id;
-    if (get_sinkarg(x, x->x_node, argc, argv, addr, id)){
+    if (get_sink_arg(x, x->x_node, argc, argv, addr, id)){
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
         auto e = x->x_node->get_endpoint(addr);
@@ -395,7 +395,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
     ip_address addr;
     int32_t id;
-    if (get_sinkarg(x, x->x_node, argc, argv, addr, id)){
+    if (get_sink_arg(x, x->x_node, argc, argv, addr, id)){
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
         aoo::endpoint *e = nullptr;

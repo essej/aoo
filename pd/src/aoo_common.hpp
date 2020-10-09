@@ -58,11 +58,14 @@ int endpoint_to_atoms(const endpoint* ep, int32_t id, int argc, t_atom *argv);
 
 bool endpoint_get_address(const endpoint* ep, t_symbol *& host, int& port);
 
-bool get_sinkarg(void *x, i_node *node, int argc, t_atom *argv,
+bool get_sink_arg(void *x, i_node *node, int argc, t_atom *argv,
                  ip_address& addr, int32_t &id);
 
-bool get_sourcearg(void *x, i_node *node, int argc, t_atom *argv,
+bool get_source_arg(void *x, i_node *node, int argc, t_atom *argv,
                    ip_address& addr, int32_t &id);
+
+bool get_peer_arg(void *x, i_node *node, int argc, t_atom *argv,
+                  ip_address& addr);
 
 void format_makedefault(aoo_format_storage &f, int nchannels);
 
