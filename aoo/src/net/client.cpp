@@ -29,6 +29,9 @@
 #define AOO_NET_MSG_PEER_PING \
     AOO_MSG_DOMAIN AOO_NET_MSG_PEER AOO_NET_MSG_PING
 
+#define AOO_NET_MSG_PEER_REPLY \
+    AOO_MSG_DOMAIN AOO_NET_MSG_PEER AOO_NET_MSG_REPLY
+
 #define AOO_NET_MSG_SERVER_LOGIN \
     AOO_MSG_DOMAIN AOO_NET_MSG_SERVER AOO_NET_MSG_LOGIN
 
@@ -347,6 +350,7 @@ int32_t aoo_net_client_send(aoo_net_client *client){
 }
 
 int32_t aoo::net::client::send(){
+    // send server messages
     auto state = state_.load();
     if (state != client_state::disconnected){
         time_tag now = time_tag::now();
@@ -358,8 +362,9 @@ int32_t aoo::net::client::send(){
             if (first_udp_ping_time_ == 0){
                 first_udp_ping_time_ = elapsed_time;
             } else if ((elapsed_time - first_udp_ping_time_) > request_timeout()){
-                // request has timed out!
-                first_udp_ping_time_ = 0;
+                // handshake has timed out!
+
+                // get callback before closing!
                 auto cb = connect_callback_;
                 auto user = connect_userdata_;
 
@@ -396,7 +401,7 @@ int32_t aoo::net::client::send(){
                 last_udp_ping_time_ = elapsed_time;
             }
         } else {
-            // ignore
+            // ignore connecting and login
             return 1;
         }
 
@@ -559,7 +564,7 @@ int client::try_connect(const std::string &host, int port){
 
     LOG_VERBOSE("aoo_client: successfully connected to "
                 << remote_addr_.name() << " on port " << remote_addr_.port());
-    LOG_VERBOSE("aoo_client: local address: " << local_addr_.name());
+    LOG_DEBUG("aoo_client: local address: " << local_addr_.name());
 
     return 0;
 }
@@ -943,7 +948,7 @@ void client::send_server_message_tcp(const char *data, int32_t size){
                     if (res >= 0){
                         nbytes += res;
                     #if 0
-                        LOG_VERBOSE("aoo_client: sent " << res << " bytes");
+                        LOG_DEBUG("aoo_client: sent " << res << " bytes");
                     #endif
                     } else {
                         auto err = socket_errno();
@@ -1056,7 +1061,8 @@ void client::handle_login(const osc::ReceivedMessage& msg){
             int32_t id = (it++)->AsInt32();
             // connected!
             state_.store(client_state::connected);
-            LOG_VERBOSE("aoo_client: successfully logged in");
+            LOG_VERBOSE("aoo_client: successfully logged in (user ID: "
+                        << id << " )");
             // notify
             aoo_net_connect_reply reply;
             reply.local_address = local_addr.address();
@@ -1161,8 +1167,8 @@ void client::handle_server_message_udp(const osc::ReceivedMessage &msg, int onse
                 std::string ip = (it++)->AsString();
                 int port = (it++)->AsInt32();
                 public_addr_ = ip_address(ip, port);
-                LOG_VERBOSE("aoo_client: public endpoint is "
-                            << public_addr_.name() << " " << public_addr_.port());
+                LOG_DEBUG("aoo_client: public endpoint is "
+                          << public_addr_.name() << " " << public_addr_.port());
 
                 // now we can try to login
                 auto cmd = std::make_unique<login_cmd>();
@@ -1202,6 +1208,7 @@ void client::close(bool manual){
         LOG_VERBOSE("aoo_client: connection closed");
     }
 
+    first_udp_ping_time_ = 0;
     username_.clear();
     password_.clear();
     connect_callback_ = nullptr;
@@ -1312,11 +1319,11 @@ peer::peer(client& client, int32_t id,
 {
     start_time_ = time_tag::now();
 
-    LOG_VERBOSE("create peer " << *this);
+    LOG_DEBUG("create peer " << *this);
 }
 
 peer::~peer(){
-    LOG_VERBOSE("destroy peer " << *this);
+    LOG_DEBUG("destroy peer " << *this);
 }
 
 bool peer::match(const ip_address &addr) const {
@@ -1355,6 +1362,15 @@ void peer::send(time_tag now){
 
             last_pingtime_ = elapsed_time;
         }
+
+        // send reply
+        if (send_reply_.exchange(false)){
+            char buf[64];
+            osc::OutboundPacketStream msg(buf, sizeof(buf));
+            msg << osc::BeginMessage(AOO_NET_MSG_PEER_REPLY) << osc::EndMessage;
+
+            client_->send_message_udp(msg.Data(), msg.Size(), *real_addr);
+        }
     } else if (!timeout_) {
         // try to establish UDP connection with peer
         if (elapsed_time > client_->request_timeout()){
@@ -1382,7 +1398,7 @@ void peer::send(time_tag now){
             client_->send_message_udp(msg.Data(), msg.Size(), local_address_);
             client_->send_message_udp(msg.Data(), msg.Size(), public_address_);
 
-            LOG_DEBUG("send ping to " << *this);
+            // LOG_DEBUG("send ping to " << *this);
 
             last_pingtime_ = elapsed_time;
         }
@@ -1392,31 +1408,33 @@ void peer::send(time_tag now){
 void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
                           const ip_address& addr)
 {
+    if (!address_.load()){
+        // this is the first peer message
+        if (addr == public_address_){
+            address_.store(&public_address_);
+        } else if (addr == local_address_){
+            address_.store(&local_address_);
+        } else {
+            LOG_ERROR("aoo_client: bug in peer::handle_message");
+            return;
+        }
+
+        // push event
+        auto e = std::make_unique<client::peer_event>(
+                    AOO_NET_PEER_JOIN_EVENT, addr,
+                    group().c_str(), user().c_str(), id());
+
+        client_->push_event(std::move(e));
+
+        LOG_DEBUG("aoo_client: successfully established connection with " << *this);
+    }
     auto pattern = msg.AddressPattern() + onset;
     try {
         if (!strcmp(pattern, AOO_NET_MSG_PING)){
-            if (!address_.load()){
-                // this is the first ping!
-                if (addr == public_address_){
-                    address_.store(&public_address_);
-                } else if (addr == local_address_){
-                    address_.store(&local_address_);
-                } else {
-                    LOG_ERROR("aoo_client: bug in peer::handle_message");
-                    return;
-                }
-
-                // push event
-                auto e = std::make_unique<client::peer_event>(
-                            AOO_NET_PEER_JOIN_EVENT, addr,
-                            group().c_str(), user().c_str(), id());
-                client_->push_event(std::move(e));
-
-                LOG_VERBOSE("aoo_client: successfully established connection with " << *this);
-            } else {
-                LOG_DEBUG("aoo_client: got ping from " << *this);
-                // maybe handle ping?
-            }
+            send_reply_ = true;
+            LOG_DEBUG("aoo_client: got ping from " << *this);
+        } else if (!strcmp(pattern, AOO_NET_MSG_REPLY)){
+            LOG_DEBUG("aoo_client: got reply from " << *this);
         } else {
             LOG_WARNING("aoo_client: received unknown message "
                         << pattern << " from " << *this);

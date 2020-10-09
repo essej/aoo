@@ -5,6 +5,9 @@
 #define AOO_NET_MSG_PING "/ping"
 #define AOO_NET_MSG_PING_LEN 5
 
+#define AOO_NET_MSG_MESSAGE "/msg"
+#define AOO_NET_MSG_MESSAGE_LEN 4
+
 #define AOO_NET_MSG_LOGIN "/login"
 #define AOO_NET_MSG_LOGIN_LEN 6
 

@@ -24,7 +24,7 @@
 
 #include <functional>
 
-#define AOO_NET_CLIENT_PING_INTERVAL 1000
+#define AOO_NET_CLIENT_PING_INTERVAL 5000
 #define AOO_NET_CLIENT_REQUEST_INTERVAL 100
 #define AOO_NET_CLIENT_REQUEST_TIMEOUT 5000
 
@@ -76,6 +76,7 @@ private:
     std::atomic<ip_address *> address_{nullptr};
     time_tag start_time_;
     double last_pingtime_ = 0;
+    std::atomic<bool> send_reply_{false};
     bool timeout_ = false;
 };
 
