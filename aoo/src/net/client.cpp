@@ -60,6 +60,10 @@
     AOO_NET_MSG_PEER AOO_NET_MSG_LEAVE
 
 namespace aoo {
+
+uint32_t make_version();
+bool check_version(uint32_t version);
+
 namespace net {
 
 std::string encrypt(const std::string& input){
@@ -709,6 +713,7 @@ void client::perform_login(){
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
     msg << osc::BeginMessage(AOO_NET_MSG_SERVER_LOGIN)
+        << (int32_t)make_version()
         << username_.c_str() << password_.c_str()
         << public_addr_.name() << public_addr_.port()
         << local_addr_.name() << local_addr_.port()

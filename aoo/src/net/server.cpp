@@ -47,6 +47,10 @@
     AOO_NET_MSG_GROUP AOO_NET_MSG_LEAVE
 
 namespace aoo {
+
+uint32_t make_version();
+bool check_version(uint32_t version);
+
 namespace net {
 
 char * copy_string(const char *s);
@@ -997,39 +1001,48 @@ void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
 {
     int32_t result = 0;
     std::string errmsg;
+    uint32_t version = 0;
 
     auto it = msg.ArgumentsBegin();
-    std::string username = (it++)->AsString();
-    std::string password = (it++)->AsString();
-    std::string public_ip = (it++)->AsString();
-    int32_t public_port = (it++)->AsInt32();
-    std::string local_ip = (it++)->AsString();
-    int32_t local_port = (it++)->AsInt32();
+    if (msg.ArgumentCount() > 6){
+        version = (uint32_t)(it++)->AsInt32();
+    }
+    // for now accept login messages without version.
+    // LATER they should fail, so clients have to upgrade.
+    if (version == 0 || check_version(version)){
+        std::string username = (it++)->AsString();
+        std::string password = (it++)->AsString();
+        std::string public_ip = (it++)->AsString();
+        int32_t public_port = (it++)->AsInt32();
+        std::string local_ip = (it++)->AsString();
+        int32_t local_port = (it++)->AsInt32();
 
-    server::error err;
-    if (!user_){
-        user_ = server_->get_user(username, password, err);
-        if (user_){
-            // success
-            public_address = ip_address(public_ip, public_port);
-            local_address = ip_address(local_ip, local_port);
-            user_->endpoint = this;
+        server::error err;
+        if (!user_){
+            user_ = server_->get_user(username, password, err);
+            if (user_){
+                // success
+                public_address = ip_address(public_ip, public_port);
+                local_address = ip_address(local_ip, local_port);
+                user_->endpoint = this;
 
-            LOG_VERBOSE("aoo_server: login: id: " << user_->id
-                        << ", username: " << username << ", password: " << password
-                        << ", public IP: " << public_ip << ", public port: " << public_port
-                        << ", local IP: " << local_ip << ", local port: " << local_port);
+                LOG_VERBOSE("aoo_server: login: id: " << user_->id
+                            << ", username: " << username << ", password: " << password
+                            << ", public IP: " << public_ip << ", public port: " << public_port
+                            << ", local IP: " << local_ip << ", local port: " << local_port);
 
-            result = 1;
+                result = 1;
 
-            server_->on_user_joined(*user_);
+                server_->on_user_joined(*user_);
+            } else {
+                errmsg = server::error_to_string(err);
+            }
         } else {
-            errmsg = server::error_to_string(err);
+            errmsg = "already logged in"; // shouldn't happen
         }
     } else {
-        errmsg = "already logged in"; // shouldn't happen
+        errmsg = "version not supported";
     }
-
     // send reply
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream reply(buf, sizeof(buf));
