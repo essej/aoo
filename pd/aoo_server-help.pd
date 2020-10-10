@@ -1,16 +1,34 @@
-#N canvas 493 32 1074 733 12;
+#N canvas 408 45 611 737 12;
 #X declare -lib aoo;
-#X obj 45 222 aoo_server 8002;
-#X obj 398 299 declare -lib aoo;
-#X obj 48 464 aoo_client 1000;
-#X obj 288 458 aoo_client 1001;
-#X msg 48 358 connect localhost 8002 foo foo;
-#X msg 64 409 group_join test test;
-#X msg 304 408 group_join test test;
-#X msg 57 383 disconnect;
-#X msg 297 383 disconnect;
-#X msg 288 358 connect localhost 8002 bar bar;
-#X floatatom 45 247 5 0 0 0 - - -;
+#X obj 379 237 declare -lib aoo;
+#X obj 64 466 aoo_client 1000;
+#X obj 304 466 aoo_client 1001;
+#X msg 73 324 disconnect;
+#X msg 313 324 disconnect;
+#X text 38 25 [aoo_server] / [aoo_client]: objects for UDP hole punching
+;
+#X obj 64 490 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+1;
+#X obj 304 492 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+1;
+#X msg 85 377 group_leave test;
+#X msg 326 374 group_leave test;
+#X obj 424 677 print aoo_receive;
+#X obj 57 680 print aoo_send;
+#X obj 57 652 aoo_send~ 1000 1;
+#X obj 294 650 aoo_receive~ 1001 1;
+#X msg 57 570 add test bar 1;
+#X msg 65 595 remove;
+#X msg 304 598 uninvite;
+#X msg 294 573 invite test foo 1;
+#X msg 198 640 \; pd dsp \$1;
+#X obj 198 619 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+1;
+#X msg 72 622 start;
+#X msg 119 622 stop;
+#N canvas 54 179 501 359 server 0;
+#X obj 32 202 aoo_server 8002;
+#X floatatom 32 227 5 0 0 0 - - -;
 #N canvas 71 488 450 221 events 0;
 #X obj 37 37 inlet;
 #X obj 37 62 print aoo_server;
@@ -21,114 +39,277 @@
 #X text 30 136 [group_join <group> <user>(: a user joined a group;
 #X text 29 160 [group_leave <group> <user>(: a user left a group;
 #X connect 0 0 1 0;
-#X restore 147 247 pd events;
-#X text 43 276 outlets:;
-#X text 56 297 1) number of connected users;
-#X text 56 317 2) events;
-#X text 42 44 Clients connect to the server to obtain the mutual public
-IP address of their peers \, which they don't know in advance. This
-enables peers to send each other messages without having to enable
-port forwarding on their systems., f 70;
-#X text 42 112 For more info \, see: https://en.wikipedia.org/wiki/UDP_hole_punching
-, f 68;
-#X text 43 15 [aoo_server] / [aoo_client]: objects for UDP hole punching
-;
-#X text 41 147 [aoo_server]: the UDP punch hole server;
-#X text 564 17 [aoo_client]: the client;
-#X obj 390 484 print client B;
-#X obj 150 488 print client A;
-#X text 563 143 creation arguments:;
-#X text 224 217 creation arguments:;
-#X text 241 239 1) port number;
-#X text 42 173 The server must be publicly accessible and the port
-number must be known by all clients.;
-#X text 587 163 1) port number, f 15;
-#X text 564 47 The client connects to the server. It first has to register
-as a user and then join one or more groups. Once it has joined a group
-\, it will receive the name of all peers in the same group. Now you
-can use "group user" instead of "IP port" anywhere in any AoO objects
-which share same port number.;
-#X obj 565 540 aoo_client;
-#X msg 565 215 connect <serverIP> <serverport> <username> <password>
-;
-#X text 565 189 messages:;
-#X msg 576 330 disconnect;
-#X text 661 329 disconnect from the server;
-#X obj 48 488 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
-1;
-#X obj 288 484 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
-1;
-#X text 561 570 outlets:;
-#X text 561 592 1) connection status;
-#X text 641 611 [group_join <group>( - successfully joined a group
-;
-#X text 642 633 [group_left <group>( - successfully joined a group
-;
-#X msg 69 436 group_leave test;
-#X msg 310 433 group_leave test;
-#X obj 416 665 print aoo_receive;
-#X obj 49 668 print aoo_send;
-#X msg 584 361 group_join <group> <password>;
-#X text 734 481 leave a group;
-#X msg 582 478 group_leave <group>;
-#X text 592 437 After you have joined the group \, you will get a [peer_join(
-message for every new or existing peer in the group., f 61;
-#X text 642 654 [peer_join <group> <user>( - a peer joined the group
-;
-#X text 642 676 [peer_leave <group> <user>( - a peer left the group
-;
-#X obj 49 640 aoo_send~ 1000 1;
-#X obj 286 638 aoo_receive~ 1001 1;
-#X msg 49 558 add test bar 1;
-#X text 45 524 The following works once both clients have joined the
-group "test":, f 68;
-#X msg 57 583 remove;
-#X msg 296 586 uninvite;
-#X msg 286 561 invite test foo 1;
-#X msg 190 628 \; pd dsp \$1;
-#X obj 190 607 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
-1;
-#X text 582 288 this method is *asynchronous* and will output 1 or
-0 on success or failure.;
-#X text 582 238 connect to the server as a user. although the password
-will be hashed \, better don't use the one of your e-mail or banking
-account :-), f 61;
-#X text 562 612 2) events:;
-#X msg 589 509 list_peers;
-#X text 591 385 After you have connected as a user \, you can join
+#X restore 134 227 pd events;
+#X text 32 258 outlets:;
+#X text 45 280 1) number of connected users;
+#X text 45 300 2) events;
+#X text 25 29 [aoo_server]: the UDP punch hole server;
+#X text 28 56 creation arguments:;
+#X text 45 78 1) port number;
+#X text 28 107 Use this object to host an AOO server for your local
+network or for the public internet.;
+#X text 30 143 NOTE: If you want to connect clients over the public
+internet \, your server machine must be publicly accessible and the
+given port number must be known by all clients., f 58;
+#X connect 0 0 1 0;
+#X connect 0 1 2 0;
+#X restore 129 238 pd server;
+#N canvas 713 52 750 695 client 0;
+#X text 24 17 [aoo_client]: the client;
+#X text 26 127 creation arguments:;
+#X text 50 147 1) port number, f 15;
+#X obj 25 582 aoo_client;
+#X text 25 171 messages:;
+#X msg 35 246 disconnect;
+#X text 114 583 outlets:;
+#X msg 52 453 group_leave <group>;
+#X text 267 319 After you have connected as a user \, you can join
 a group.;
-#X text 591 403 The group password is shared by all users. If you don't
-care about too much about security \, just use the group name itself.
-, f 63;
-#X text 677 508 list all a peers. This will output a series of [peer
-<group> <user>( messages., f 44;
-#X msg 64 610 start;
-#X msg 111 610 stop;
-#X connect 0 0 10 0;
-#X connect 0 1 11 0;
-#X connect 2 0 33 0;
-#X connect 2 1 21 0;
-#X connect 3 0 34 0;
-#X connect 3 1 20 0;
-#X connect 4 0 2 0;
-#X connect 5 0 2 0;
+#X text 25 48 Clients connect to the server and join a group to obtain
+the public IP addresses of their peers \, which they don't know in
+advance. This enables peers to send each other messages over the public
+internet., f 68;
+#X text 26 100 For more info \, see: https://en.wikipedia.org/wiki/UDP_hole_punching
+, f 68;
+#X msg 25 197 connect <serverIP> <serverport> <username> [<password>]
+, f 31;
+#X text 262 194 Connect to the server as a user \, with an optional
+password. Although the password will be hashed \, better don't use
+the one of your e-mail or banking account :-), f 61;
+#X msg 44 319 group_join <group> <password>;
+#X text 264 246 Disconnect from the server.;
+#X text 263 270 Both method are *asynchronous* and will output 1 on
+success or 0 on failure.;
+#X text 49 427 Leave a group;
+#X obj 64 548 oscformat bonzo;
+#X msg 64 522 1 2 3;
+#X text 184 521 Send an OSC message as a list of bytes to all peers.
+;
+#X text 185 547 More:;
+#N canvas 627 29 893 765 osc 0;
+#X msg 36 48 disconnect;
+#X obj 566 167 oscformat bazoo;
+#X msg 566 141 1 2 3;
+#X obj 27 604 aoo_client 1002;
+#X obj 537 309 aoo_client 1003;
+#X msg 27 23 connect localhost 8002 A;
+#X msg 51 103 group_leave test2;
+#X msg 43 75 group_join test2 pwd;
+#X msg 546 56 disconnect;
+#X msg 558 111 group_leave test2;
+#X msg 553 83 group_join test2 pwd;
+#X msg 537 30 connect localhost 8002 B;
+#X msg 668 458 disconnect;
+#X msg 680 513 group_leave test2;
+#X msg 675 485 group_join test2 pwd;
+#X msg 659 432 connect localhost 8002 C;
+#X obj 659 546 aoo_client 1004;
+#X msg 59 148 broadcast <bytes>;
+#X msg 68 179 send_group <group> <bytes>;
+#X msg 88 292 send <bytes>;
+#X msg 94 327 list <bytes>;
+#X text 195 149 send an OSC message to all peers;
+#X text 268 177 send to all peers in a given group, f 19;
+#X text 312 219 send to a single peer;
+#X msg 83 245 send_peer <IP> <port> <bytes>;
+#X msg 122 442 target;
+#X msg 115 411 target <group>;
+#X msg 103 357 target <group> <user>;
+#X msg 74 217 send_peer <group> <user> <bytes>;
+#X msg 107 384 target <IP> <port>;
+#X text 189 288 send an OSC message to the current target (more efficient
+than the methods above), f 43;
+#X text 192 328 "send" selector is optional;
+#X text 265 358 target a single peer;
+#X text 226 414 target a group;
+#X text 177 442 broadcast (= default);
+#X msg 148 521 offset 0;
+#X msg 130 474 offset <f>;
+#X text 221 522 No offset (= send as regular OSC message);
+#X text 218 471 Set the timetag offset in ms. This will schedule OSC
+messages as bundles \, with a timetag based on the current NTP time
++ offset. The offset is ignored for OSC bundles!, f 59;
+#X obj 48 685 print A;
+#X text 144 656 The third outlet outputs the sender as;
+#X msg 421 656 list <IP> <port> <delay>;
+#X msg 571 198 target test2 C;
+#X msg 575 228 target;
+#X text 637 228 send to all peers;
+#X text 681 197 only send to peer "C";
+#X msg 577 280 offset \$1;
+#X obj 577 257 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+10 -262144 -1 -1 0 256;
+#X msg 636 254 0;
+#X text 654 280 timing offset;
+#X msg 157 570 schedule \$1;
+#X obj 157 549 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+1;
+#X text 254 547 1: automatically schedule OSC bundle elements according
+to their timetags (= default)., f 47;
+#X text 255 582 0: don't schedule \, instead output the required delay.
+, f 54;
+#X text 145 630 Incoming OSC messages are sent to the second outlet
+as a list of bytes., f 71;
+#X obj 48 657 oscparse;
+#X obj 48 632 route list;
+#X obj 588 361 oscparse;
+#X obj 588 336 route list;
+#X obj 710 597 oscparse;
+#X obj 710 572 route list;
+#X obj 710 625 print C;
+#X obj 588 388 print B;
+#X text 145 678 <delay> is the difference in ms between the OSC timetag
+and the current system time. It is always 0 for immediate OSC messages.
+Late messages (= timetag expired before arrival) have a negative delay.
+, f 71;
+#X obj 27 631 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+1;
+#X obj 537 335 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+1;
+#X obj 659 573 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+1;
+#X connect 0 0 3 0;
+#X connect 1 0 4 0;
+#X connect 2 0 1 0;
+#X connect 3 0 64 0;
+#X connect 3 1 56 0;
+#X connect 3 2 39 0;
+#X connect 4 0 65 0;
+#X connect 4 1 58 0;
+#X connect 4 2 62 0;
+#X connect 5 0 3 0;
 #X connect 6 0 3 0;
-#X connect 7 0 2 0;
-#X connect 8 0 3 0;
-#X connect 9 0 3 0;
+#X connect 7 0 3 0;
+#X connect 8 0 4 0;
+#X connect 9 0 4 0;
+#X connect 10 0 4 0;
+#X connect 11 0 4 0;
+#X connect 12 0 16 0;
+#X connect 13 0 16 0;
+#X connect 14 0 16 0;
+#X connect 15 0 16 0;
+#X connect 16 0 66 0;
+#X connect 16 1 60 0;
+#X connect 16 2 61 0;
+#X connect 17 0 3 0;
+#X connect 18 0 3 0;
+#X connect 19 0 3 0;
+#X connect 20 0 3 0;
+#X connect 24 0 3 0;
+#X connect 25 0 3 0;
+#X connect 26 0 3 0;
+#X connect 27 0 3 0;
+#X connect 28 0 3 0;
+#X connect 29 0 3 0;
+#X connect 35 0 3 0;
+#X connect 36 0 3 0;
+#X connect 42 0 4 0;
+#X connect 43 0 4 0;
+#X connect 46 0 4 0;
+#X connect 47 0 46 0;
+#X connect 48 0 46 0;
+#X connect 50 0 3 0;
+#X connect 51 0 50 0;
+#X connect 55 0 39 0;
+#X connect 56 0 55 0;
+#X connect 57 0 62 0;
+#X connect 58 0 57 0;
+#X connect 59 0 61 0;
+#X connect 60 0 59 0;
+#X restore 228 547 pd osc messages;
+#X text 125 608 1) connection status (1|0);
+#X text 218 129 Each peer has a group name \, user name \, user ID
+\, IP address and port number. Each user on a given server has a unique
+ID \, which might be used as a AOO source/sink ID \, for example.,
+f 67;
+#X text 123 652 3) peer address (see "osc messages");
+#X text 142 490 Get a list all a peers. This will output a series of
+[peer( messages., f 70;
+#X text 124 630 2) events/replies;
+#N canvas 936 498 593 240 events/replies 0;
+#X msg 37 40 group_join <group> <result>;
+#X msg 38 68 group_leave <group> <result>;
+#X text 252 62 <result> is 1 on success and 0 on failure, f 26;
+#X msg 38 113 peer <group> <user> <id> <IP> <port>;
+#X msg 37 150 peer_join <group> <user> <id> <IP> <port>;
+#X msg 37 187 peer_leave <group> <user> <id> <IP> <port>;
+#X text 249 38 reply to [group_join( resp. [group_leave(;
+#X text 301 112 reply to [peer_list(;
+#X text 349 187 a peer has left the group;
+#X text 340 148 a new peer has joined the group;
+#X restore 257 629 pd events/replies;
+#X text 267 417 Both methods are asynchronous and will output a [group_join(
+resp. [group_leave( message on success/failure (see "replies")., f
+63;
+#X text 268 374 You will get a [peer_join( message for every existing
+peer in the group (see "events")., f 61;
+#X msg 58 489 peer_list;
+#X text 267 340 The group password is shared by all users. If you don't
+care too much about security \, just use the group name itself., f
+63;
+#X text 266 458 NOTE: it's possible to join several groups in parallel!
+, f 62;
+#X connect 5 0 3 0;
+#X connect 7 0 3 0;
+#X connect 11 0 3 0;
+#X connect 13 0 3 0;
+#X connect 17 0 3 0;
+#X connect 18 0 17 0;
+#X connect 30 0 3 0;
+#X restore 208 238 pd client;
+#X obj 115 491 print foo;
+#X obj 355 493 print bar;
+#X obj 189 492 print from;
+#X obj 428 494 print from;
+#X obj 93 435 oscformat bazoo;
+#X msg 93 408 1 2 3;
+#X msg 337 407 1 2 3;
+#X obj 337 434 oscformat hooray;
+#X text 40 298 1);
+#X text 42 350 2);
+#X text 41 403 3);
+#X msg 64 299 connect localhost 8002 foo;
+#X msg 304 299 connect localhost 8002 bar;
+#X text 60 274 <hostname> <port> <username>;
+#X text 40 524 Peers (group|user) are also available in [aoo_send~]
+and [aoo_receive~] objects:, f 41;
+#X text 42 97 A client on a given port first connects to a public AOO
+server. Once it has joined a group \, it receives a list of all existing
+peers in that group and gets notified whenever a new peer joins the
+group., f 64;
+#X text 41 55 These objects allow peers to easily communicate with
+each other in a local network or over the public internet., f 63;
+#X text 43 237 More info:;
+#X text 42 162 A peer is referenced by its group and user name. All
+AOO objects *on the same port* share the same peer list., f 65;
+#X msg 80 350 group_join test pwd;
+#X msg 320 349 group_join test pwd;
+#X text 41 205 You can always use the AOO server of the IEM: vrr.iem.at
+7077, f 63;
+#X connect 1 0 6 0;
+#X connect 1 1 24 0;
+#X connect 1 2 26 0;
+#X connect 2 0 7 0;
+#X connect 2 1 25 0;
+#X connect 2 2 27 0;
+#X connect 3 0 1 0;
+#X connect 4 0 2 0;
+#X connect 8 0 1 0;
+#X connect 9 0 2 0;
+#X connect 12 0 11 0;
+#X connect 13 1 10 0;
+#X connect 14 0 12 0;
+#X connect 15 0 12 0;
+#X connect 16 0 13 0;
+#X connect 17 0 13 0;
+#X connect 19 0 18 0;
+#X connect 20 0 12 0;
+#X connect 21 0 12 0;
+#X connect 28 0 1 0;
 #X connect 29 0 28 0;
-#X connect 31 0 28 0;
-#X connect 39 0 2 0;
-#X connect 40 0 3 0;
-#X connect 43 0 28 0;
-#X connect 45 0 28 0;
-#X connect 49 0 42 0;
-#X connect 50 1 41 0;
-#X connect 51 0 49 0;
-#X connect 53 0 49 0;
-#X connect 54 0 50 0;
-#X connect 55 0 50 0;
-#X connect 57 0 56 0;
-#X connect 61 0 28 0;
-#X connect 65 0 49 0;
-#X connect 66 0 49 0;
+#X connect 30 0 31 0;
+#X connect 31 0 2 0;
+#X connect 35 0 1 0;
+#X connect 36 0 2 0;
+#X connect 43 0 1 0;
+#X connect 44 0 2 0;
