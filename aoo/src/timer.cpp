@@ -58,7 +58,7 @@ timer::state timer::update(time_tag t, double& error){
     std::unique_lock<spinlock> l(lock_);
     time_tag last = last_.load();
     if (!last.is_empty()){
-        last_ = t.to_uint64(); // first!
+        last_ = t; // first!
 
         auto delta = time_tag::duration(last, t);
         elapsed_ = elapsed_ + delta;
@@ -116,7 +116,7 @@ timer::state timer::update(time_tag t, double& error){
 
         return state::ok;
     } else {
-        last_ = t.to_uint64();
+        last_ = t;
         return state::reset;
     }
 }

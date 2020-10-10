@@ -130,13 +130,13 @@ AOO_API int32_t aoo_parse_pattern(const char *msg, int32_t n,
                                  int32_t *type, int32_t *id);
 
 // get the current NTP time
-AOO_API uint64_t aoo_osctime_get(void);
+AOO_API uint64_t aoo_osctime_now(void);
 
 // convert NTP time to seconds
-AOO_API double aoo_osctime_toseconds(uint64_t t);
+AOO_API double aoo_osctime_to_seconds(uint64_t t);
 
 // convert seconds to NTP time
-AOO_API uint64_t aoo_osctime_fromseconds(double s);
+AOO_API uint64_t aoo_osctime_from_seconds(double s);
 
 // get time difference in seconds between two NTP timestamps
 AOO_API double aoo_osctime_duration(uint64_t t1, uint64_t t2);

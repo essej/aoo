@@ -87,24 +87,16 @@ time_tag time_tag::now(){
     return time_tag(high, low);
 }
 
-double time_tag::duration(time_tag t1, time_tag t2){
-    if (t2 >= t1){
-        return (t2 - t1).to_double();
-    } else {
-        LOG_DEBUG("t2 is smaller than t1!");
-        return (t1 - t2).to_double() * -1.0;
-    }
-}
-
 std::ostream& operator << (std::ostream& os, time_tag t){
-    int32_t hours, minutes, seconds;
-    auto d = lldiv((int64_t)t.high, 3600);
+    double s = t;
+    int32_t hours, minutes, seconds, micros;
+
+    auto d = lldiv(s, 3600);
     hours = d.quot;
     d = lldiv(d.rem, 60);
     minutes = d.quot;
     seconds = d.rem;
-
-    int32_t micros = t.low / 4294967296.0 * 1000000.0;
+    micros = (s - (double)seconds) * 1000000.0;
 
     os << "time_tag (" << hours << ":" << minutes << ":"
        << seconds << "." << micros << ")";

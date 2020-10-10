@@ -763,7 +763,7 @@ int32_t source_desc::handle_ping(const sink &s, time_tag tt){
 #if 0
     time_tag tt2 = s.absolute_time(); // use last stream time
 #else
-    time_tag tt2 = aoo_osctime_get(); // use real system time
+    time_tag tt2 = aoo::time_tag::now(); // use real system time
 #endif
 
     streamstate_.set_ping(tt, tt2);
@@ -773,8 +773,8 @@ int32_t source_desc::handle_ping(const sink &s, time_tag tt){
     e.type = AOO_PING_EVENT;
     e.ping.endpoint = endpoint_;
     e.ping.id = id_;
-    e.ping.tt1 = tt.to_uint64();
-    e.ping.tt2 = tt2.to_uint64();
+    e.ping.tt1 = tt;
+    e.ping.tt2 = tt2;
     e.ping.tt3 = 0;
     push_event(e);
 
@@ -1318,8 +1318,8 @@ bool source_desc::send_notifications(const sink& s){
                      AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_PING);
 
             msg << osc::BeginMessage(address) << s.id()
-                << osc::TimeTag(pingtime1.to_uint64())
-                << osc::TimeTag(pingtime2.to_uint64())
+                << osc::TimeTag(pingtime1)
+                << osc::TimeTag(pingtime2)
                 << lost_blocks
                 << osc::EndMessage;
 

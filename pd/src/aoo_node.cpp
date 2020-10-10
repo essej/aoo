@@ -257,7 +257,7 @@ uint64_t t_node::get_osctime(){
         x_osctime = aoo::time_tag::now();
         x_lastsystime = now;
     }
-    return x_osctime.to_uint64();
+    return x_osctime;
 }
 
 // private methods

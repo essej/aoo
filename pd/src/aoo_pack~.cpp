@@ -230,7 +230,7 @@ static t_int * aoo_pack_perform(t_int *w)
 
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
-    uint64_t t = aoo_osctime_get();
+    uint64_t t = aoo_osctime_now();
     if (x->x_source->process((const aoo_sample **)x->x_vec.get(), n, t) > 0){
         clock_delay(x->x_clock, 0);
     }

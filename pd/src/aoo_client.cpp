@@ -138,14 +138,15 @@ void t_aoo_client::send_message(int argc, t_atom *argv,
         // schedule OSC message as bundle
 
         // make timetag relative to current time
-        auto time = aoo::time_tag::now() + ((double)x_offset * 0.001);
+        auto offset = aoo::time_tag::from_seconds((double)x_offset * 0.001);
+        auto time = aoo::time_tag::now() + offset;
 
         const int headersize = 20; //#bundle string (8), timetag (8), message size (4)
         count = argc + headersize;
         buf = (char *)alloca(count);
         // make bundle header
         memcpy(buf, "#bundle\0", 8); // string length is exactly 8 bytes
-        aoo::to_bytes(time.to_uint64(), buf + 8);
+        aoo::to_bytes((uint64_t)time, buf + 8);
         aoo::to_bytes((int32_t)argc, buf + 16);
         // add message to bundle
         for (int i = 0; i < argc; ++i){

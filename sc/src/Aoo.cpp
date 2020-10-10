@@ -264,7 +264,7 @@ uint64_t getOSCTime(World *world){
     thread_local int lastBuffer{-1};
 
     if (lastBuffer != world->mBufCounter){
-        time = aoo_osctime_get();
+        time = aoo_osctime_now();
         lastBuffer = world->mBufCounter;
     }
     return time;

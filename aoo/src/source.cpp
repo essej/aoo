@@ -694,7 +694,7 @@ void endpoint_base::send_ping(int32_t src, time_tag t) const {
         msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_PING);
     }
 
-    msg << src << osc::TimeTag(t.to_uint64()) << osc::EndMessage;
+    msg << src << osc::TimeTag(t) << osc::EndMessage;
 
     send(msg.Data(), msg.Size());
 }
@@ -1243,13 +1243,13 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn,
             e.sink.endpoint = endpoint;
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
             e.sink.id = id;
-            e.ping.tt1 = tt1.to_uint64();
-            e.ping.tt2 = tt2.to_uint64();
+            e.ping.tt1 = tt1;
+            e.ping.tt2 = tt2;
             e.ping.lost_blocks = lost_blocks;
         #if 0
-            e.ping.tt3 = timer_.get_absolute().to_uint64(); // use last stream time
+            e.ping.tt3 = timer_.get_absolute(); // use last stream time
         #else
-            e.ping.tt3 = aoo_osctime_get(); // use real system time
+            e.ping.tt3 = aoo::time_tag::now(); // use real system time
         #endif
             eventqueue_.write(e);
         }

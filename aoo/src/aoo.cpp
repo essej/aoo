@@ -99,16 +99,16 @@ int32_t aoo_parse_pattern(const char *msg, int32_t n,
 }
 
 // OSC time stamp (NTP time)
-uint64_t aoo_osctime_get(void){
-    return aoo::time_tag::now().to_uint64();
+uint64_t aoo_osctime_now(void){
+    return aoo::time_tag::now();
 }
 
-double aoo_osctime_toseconds(uint64_t t){
-    return aoo::time_tag(t).to_double();
+double aoo_osctime_to_seconds(uint64_t t){
+    return aoo::time_tag(t).to_seconds();
 }
 
-uint64_t aoo_osctime_fromseconds(double s){
-    return aoo::time_tag(s).to_uint64();
+uint64_t aoo_osctime_from_seconds(double s){
+    return aoo::time_tag::from_seconds(s);
 }
 
 double aoo_osctime_duration(uint64_t t1, uint64_t t2){
