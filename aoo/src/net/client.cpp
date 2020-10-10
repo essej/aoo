@@ -995,14 +995,12 @@ void client::receive_data(){
                 if (size > 0){
                     try {
                         osc::ReceivedPacket packet((char *)buf, size);
-                        if (packet.IsMessage()){
-                            osc::ReceivedMessage msg(packet);
-                            handle_server_message_tcp(msg);
-                        } else if (packet.IsBundle()){
+                        if (packet.IsBundle()){
                             osc::ReceivedBundle bundle(packet);
                             handle_server_bundle_tcp(bundle);
                         } else {
-                            // ignore
+                            osc::ReceivedMessage msg(packet);
+                            handle_server_message_tcp(msg);
                         }
                     } catch (const osc::Exception& e){
                         LOG_ERROR("aoo_client: exception in receive_data: " << e.what());
@@ -1144,14 +1142,12 @@ void client::handle_server_message_tcp(const osc::ReceivedMessage& msg){
 void client::handle_server_bundle_tcp(const osc::ReceivedBundle &bundle){
     auto it = bundle.ElementsBegin();
     while (it != bundle.ElementsEnd()){
-        if (it->IsMessage()){
-            osc::ReceivedMessage msg(*it);
-            handle_server_message_tcp(msg);
-        } else if (it->IsBundle()){
+        if (it->IsBundle()){
             osc::ReceivedBundle b(*it);
             handle_server_bundle_tcp(b);
         } else {
-            // ignore
+            osc::ReceivedMessage msg(*it);
+            handle_server_message_tcp(msg);
         }
         ++it;
     }

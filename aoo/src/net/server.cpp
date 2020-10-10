@@ -909,18 +909,16 @@ bool client_endpoint::receive_data(){
         while ((size = recvbuffer_.read_packet(buf, sizeof(buf))) > 0){
             try {
                 osc::ReceivedPacket packet((char *)buf, size);
-                if (packet.IsMessage()){
-                    osc::ReceivedMessage msg(packet);
-                    if (!handle_message(msg)){
-                        return false;
-                    }
-                } else if (packet.IsBundle()){
+                if (packet.IsBundle()){
                     osc::ReceivedBundle bundle(packet);
                     if (!handle_bundle(bundle)){
                         return false;
                     }
                 } else {
-                    // ignore
+                    osc::ReceivedMessage msg(packet);
+                    if (!handle_message(msg)){
+                        return false;
+                    }
                 }
             } catch (const osc::Exception& e){
                 LOG_ERROR("aoo_server: exception in client_endpoint::receive_data: " << e.what());
@@ -970,18 +968,16 @@ bool client_endpoint::handle_message(const osc::ReceivedMessage &msg){
 bool client_endpoint::handle_bundle(const osc::ReceivedBundle &bundle){
     auto it = bundle.ElementsBegin();
     while (it != bundle.ElementsEnd()){
-        if (it->IsMessage()){
-            osc::ReceivedMessage msg(*it);
-            if (!handle_message(msg)){
-                return false;
-            }
-        } else if (it->IsBundle()){
+        if (it->IsBundle()){
             osc::ReceivedBundle b(*it);
             if (!handle_bundle(b)){
                 return false;
             }
         } else {
-            // ignore
+            osc::ReceivedMessage msg(*it);
+            if (!handle_message(msg)){
+                return false;
+            }
         }
         ++it;
     }
