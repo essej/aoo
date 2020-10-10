@@ -8,15 +8,38 @@
 
 #include "common/sync.hpp"
 
+#include "oscpack/osc/OscReceivedElements.h"
+
 #include <thread>
 #include <functional>
 #include <vector>
+#include <map>
 
 using namespace aoo;
 
 #define AOO_CLIENT_POLL_INTERVAL 2
 
 t_class *aoo_client_class;
+
+enum t_target
+{
+    TARGET_BROADCAST,
+    TARGET_PEER,
+    TARGET_GROUP
+};
+
+struct t_osc_message
+{
+    t_osc_message(const char *data, int32_t size,
+                  const ip_address& address)
+        : data_(data, size), address_(address) {}
+    const char *data() const { return data_.data(); }
+    int32_t size() const { return data_.size(); }
+    const ip_address& address() const { return address_; }
+private:
+    std::string data_;
+    ip_address address_;
+};
 
 struct t_aoo_client
 {
@@ -29,6 +52,32 @@ struct t_aoo_client
     i_node *x_node = nullptr;
     std::thread x_thread;
 
+    // for OSC messages
+    aoo::time_tag x_time;
+    ip_address x_peer;
+    t_symbol *x_group;
+    t_target x_target = TARGET_BROADCAST;
+    t_float x_offset = 0;
+    bool x_connected = false;
+    bool x_schedule = true;
+    std::multimap<float, t_osc_message> x_queue;
+
+    void handle_peer_message(const char *data, int32_t size,
+                             const ip_address& address, aoo::time_tag t);
+
+    void handle_peer_bundle(const osc::ReceivedBundle& bundle,
+                            const ip_address& address, aoo::time_tag t);
+
+    void perform_message(const char *data, int32_t size,
+                         const ip_address& address, double delay);
+
+    void perform_message(const t_osc_message& msg){
+        perform_message(msg.data(), msg.size(), msg.address(), 0);
+    }
+
+    void send_message(int argc, t_atom *argv,
+                      const void *target, int32_t len);
+
     // replies
     using t_reply = std::function<void()>;
     std::vector<t_reply> replies_;
@@ -39,8 +88,10 @@ struct t_aoo_client
     }
 
     t_clock *x_clock = nullptr;
+    t_clock *x_queue_clock = nullptr;
     t_outlet *x_stateout = nullptr;
     t_outlet *x_msgout = nullptr;
+    t_outlet *x_addrout = nullptr;
 };
 
 struct t_group_request {
@@ -68,14 +119,242 @@ void aoo_client_handle_message(t_aoo_client *x, const char * data,
                                 e->address().length());
 }
 
+// send OSC messages to peers
+void t_aoo_client::send_message(int argc, t_atom *argv,
+                                const void *target, int32_t len)
+{
+    if (!argc){
+        return;
+    }
+    if (!x_connected){
+        pd_error(this, "%s: not connected", classname(this));
+        return;
+    }
+
+    char *buf;
+    int32_t count;
+
+    if (x_offset > 0 && atom_getsymbol(argv)->s_name[0] != '#') {
+        // schedule OSC message as bundle
+
+        // make timetag relative to current time
+        auto time = aoo::time_tag::now() + ((double)x_offset * 0.001);
+
+        const int headersize = 20; //#bundle string (8), timetag (8), message size (4)
+        count = argc + headersize;
+        buf = (char *)alloca(count);
+        // make bundle header
+        memcpy(buf, "#bundle\0", 8); // string length is exactly 8 bytes
+        aoo::to_bytes(time.to_uint64(), buf + 8);
+        aoo::to_bytes((int32_t)argc, buf + 16);
+        // add message to bundle
+        for (int i = 0; i < argc; ++i){
+            buf[i + headersize] = argv[i].a_type == A_FLOAT ? argv[i].a_w.w_float : 0;
+        }
+    } else {
+        // send as is
+        buf = (char *)alloca(argc);
+        for (int i = 0; i < argc; ++i){
+            buf[i] = argv[i].a_type == A_FLOAT ? argv[i].a_w.w_float : 0;
+        }
+        count = argc;
+    }
+
+    x_client->send_message(buf, count, target, len, 0);
+
+    x_node->notify();
+}
+
+static void aoo_client_broadcast(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (x->x_node){
+        x->send_message(argc, argv, 0, 0);
+    }
+}
+
+static void aoo_client_send_group(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (x->x_node){
+        if (argc > 1){
+            if (argv->a_type == A_SYMBOL){
+                auto group = argv->a_w.w_symbol;
+                x->send_message(argc - 1, argv + 1, group->s_name, 0);
+            }
+        }
+        pd_error(x, "%s: bad arguments to 'send_group' - expecting <group> <data...>",
+                 classname(x));
+    }
+}
+
+static void aoo_client_send_peer(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (x->x_node){
+        ip_address address;
+        if (get_peer_arg(x, x->x_node, argc, argv, address)){
+            x->send_message(argc - 2, argv + 2, address.address(), address.length());
+        }
+    }
+}
+
+static void aoo_client_list(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (x->x_node){
+        switch (x->x_target){
+        case TARGET_PEER:
+            x->send_message(argc, argv, x->x_peer.address(), x->x_peer.length());
+            break;
+        case TARGET_GROUP:
+            x->send_message(argc, argv, x->x_group->s_name, 0);
+            break;
+        default: // broadcast
+            x->send_message(argc, argv, 0, 0);
+            break;
+        }
+    }
+}
+
+static void aoo_client_offset(t_aoo_client *x, t_floatarg f)
+{
+    x->x_offset = f;
+}
+
+static void aoo_client_schedule(t_aoo_client *x, t_floatarg f)
+{
+    x->x_schedule = (f != 0);
+}
+
+static void aoo_client_target(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (x->x_node){
+        if (argc > 1){
+            // <ip> <port> or <group> <peer>
+            if (get_peer_arg(x, x->x_node, argc, argv, x->x_peer)){
+                x->x_target = TARGET_PEER;
+            }
+        } else if (argc == 1){
+            // <group>
+            if (argv->a_type == A_SYMBOL){
+                x->x_target = TARGET_GROUP;
+                x->x_group = argv->a_w.w_symbol;
+            } else {
+                pd_error(x, "%s: bad argument to 'target' message", classname(x));
+            }
+        } else {
+            x->x_target = TARGET_BROADCAST;
+        }
+    }
+}
+
+// handle incoming OSC message/bundle from peer
+void t_aoo_client::perform_message(const char *data, int32_t size,
+                                   const ip_address& address, double delay)
+{
+    // 1) peer + time tag
+    t_atom info[3];
+    address_to_atoms(address, 2, info);
+    SETFLOAT(info + 2, delay);
+
+    outlet_list(x_addrout, &s_list, 3, info);
+
+    // 2) OSC message
+    auto msg = (t_atom *)alloca(size * sizeof(t_atom));
+    for (int i = 0; i < size; ++i){
+        SETFLOAT(msg + i, (uint8_t)data[i]);
+    }
+
+    outlet_list(x_msgout, &s_list, size, msg);
+}
+
+static void aoo_client_queue_tick(t_aoo_client *x)
+{
+    auto& queue = x->x_queue;
+    auto now = clock_getlogicaltime();
+    for (auto it = queue.begin(); it != queue.end();){
+        auto time = it->first;
+        auto& msg = it->second;
+        if (time <= now){
+            x->perform_message(msg);
+            it = queue.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    // reset clock
+    if (!queue.empty()){
+        clock_set(x->x_queue_clock, queue.begin()->first);
+    }
+}
+
+void t_aoo_client::handle_peer_message(const char *data, int32_t size,
+                                       const ip_address& address, aoo::time_tag t)
+{
+    float delay;
+    if (!t.is_immediate()){
+        // delay can be negative (= late bundle)
+        delay = aoo::time_tag::duration(x_time, t) * 1000.0;
+    } else {
+        delay = 0;
+    }
+
+    if (x_schedule && delay > 0){
+        // put on queue and schedule on clock (using logical time)
+        t_osc_message msg(data, size, address);
+        auto abstime = clock_getsystimeafter(delay);
+        auto pos = x_queue.emplace(abstime, std::move(msg));
+        // only set clock if we're the first element in the queue
+        if (pos == x_queue.begin()){
+            clock_set(x_queue_clock, abstime);
+        }
+    } else {
+        // send immediately
+        perform_message(data, size, address, delay);
+    }
+}
+
+void t_aoo_client::handle_peer_bundle(const osc::ReceivedBundle& bundle,
+                                      const ip_address& address, aoo::time_tag t)
+{
+    auto it = bundle.ElementsBegin();
+    while (it != bundle.ElementsEnd()){
+        if (it->IsBundle()){
+            osc::ReceivedBundle b(*it);
+            handle_peer_bundle(b, address, b.TimeTag());
+        } else {
+            handle_peer_message(it->Contents(), it->Size(), address, t);
+        }
+        ++it;
+    }
+}
+
 static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
 {
     switch (event->type){
+    case AOO_NET_MESSAGE_EVENT:
+    {
+        auto e = (const aoo_net_message_event *)event;
+
+        ip_address address((const sockaddr *)e->address, e->length);
+
+        try {
+            osc::ReceivedPacket packet(e->data, e->size);
+            if (packet.IsBundle()){
+                osc::ReceivedBundle bundle(packet);
+                x->handle_peer_bundle(bundle, address, bundle.TimeTag());
+            } else {
+                x->handle_peer_message(packet.Contents(), packet.Size(),
+                                       address, aoo::time_tag::immediate());
+            }
+        } catch (const osc::Exception &err){
+            pd_error(x, "%s: bad OSC message - %s", classname(x), err.what());
+        }
+        break;
+    }
     case AOO_NET_DISCONNECT_EVENT:
     {
         post("%s: disconnected from server", classname(x));
 
         x->x_node->remove_all_peers();
+        x->x_connected = false;
 
         outlet_float(x->x_stateout, 0); // disconnected
         break;
@@ -134,6 +413,8 @@ static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
 
 static void aoo_client_tick(t_aoo_client *x)
 {
+    x->x_time = aoo::time_tag::now();
+
     x->x_client->poll_events((aoo_eventhandler)aoo_client_handle_event, x);
 
     x->x_node->notify();
@@ -178,6 +459,8 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
 
             if (result == 0){
                 x->push_reply([x](){
+                    x->x_connected = true;
+
                     outlet_float(x->x_stateout, 1); // connected
                 });
             } else {
@@ -206,6 +489,7 @@ static void aoo_client_disconnect(t_aoo_client *x)
                 x->push_reply([x](){
                     // we have to remove the peers manually!
                     x->x_node->remove_all_peers();
+                    x->x_connected = false;
 
                     outlet_float(x->x_stateout, 0); // disconnected
                 });
@@ -307,8 +591,10 @@ static int32_t aoo_node_sendto(i_node *node,
 t_aoo_client::t_aoo_client(int argc, t_atom *argv)
 {
     x_clock = clock_new(this, (t_method)aoo_client_tick);
+    x_queue_clock = clock_new(this, (t_method)aoo_client_queue_tick);
     x_stateout = outlet_new(&x_obj, 0);
     x_msgout = outlet_new(&x_obj, 0);
+    x_addrout = outlet_new(&x_obj, 0);
 
     int port = argc ? atom_getfloat(argv) : 0;
 
@@ -351,6 +637,7 @@ t_aoo_client::~t_aoo_client()
     // ignore pending requests (doesn't leak)
 
     clock_free(x_clock);
+    clock_free(x_queue_clock);
 }
 
 void aoo_client_setup(void)
@@ -369,4 +656,19 @@ void aoo_client_setup(void)
                     gensym("group_leave"), A_SYMBOL, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_peer_list,
                     gensym("peer_list"), A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_broadcast,
+                    gensym("broadcast"), A_GIMME, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_send_peer,
+                    gensym("send_peer"), A_GIMME, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_send_group,
+                    gensym("send_group"), A_GIMME, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_target,
+                    gensym("target"), A_GIMME, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_list,
+                    gensym("send"), A_GIMME, A_NULL);
+    class_addlist(aoo_client_class, aoo_client_list); // shortcut for "send"
+    class_addmethod(aoo_client_class, (t_method)aoo_client_offset,
+                    gensym("offset"), A_DEFFLOAT, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_schedule,
+                    gensym("schedule"), A_FLOAT, A_NULL);
 }
