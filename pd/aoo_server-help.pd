@@ -1,4 +1,4 @@
-#N canvas 408 45 611 737 12;
+#N canvas 418 28 611 737 12;
 #X declare -lib aoo;
 #X obj 379 237 declare -lib aoo;
 #X obj 64 466 aoo_client 1000;
@@ -7,25 +7,25 @@
 #X msg 313 324 disconnect;
 #X text 38 25 [aoo_server] / [aoo_client]: objects for UDP hole punching
 ;
-#X obj 64 490 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X obj 64 490 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
 1;
-#X obj 304 492 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X obj 304 492 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
 1;
 #X msg 85 377 group_leave test;
 #X msg 326 374 group_leave test;
-#X obj 424 677 print aoo_receive;
-#X obj 57 680 print aoo_send;
-#X obj 57 652 aoo_send~ 1000 1;
-#X obj 294 650 aoo_receive~ 1001 1;
-#X msg 57 570 add test bar 1;
-#X msg 65 595 remove;
-#X msg 304 598 uninvite;
-#X msg 294 573 invite test foo 1;
-#X msg 198 640 \; pd dsp \$1;
-#X obj 198 619 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X obj 436 693 print aoo_receive;
+#X obj 62 694 print aoo_send;
+#X obj 62 666 aoo_send~ 1000 1;
+#X obj 306 666 aoo_receive~ 1001 1;
+#X msg 62 584 add test bar 1;
+#X msg 70 609 remove;
+#X msg 316 610 uninvite;
+#X msg 306 585 invite test foo 1;
+#X msg 203 654 \; pd dsp \$1;
+#X obj 203 633 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
-#X msg 72 622 start;
-#X msg 119 622 stop;
+#X msg 77 636 start;
+#X msg 124 636 stop;
 #N canvas 54 179 501 359 server 0;
 #X obj 32 202 aoo_server 8002;
 #X floatatom 32 227 5 0 0 0 - - -;
@@ -257,10 +257,7 @@ care too much about security \, just use the group name itself., f
 #X connect 18 0 17 0;
 #X connect 30 0 3 0;
 #X restore 208 238 pd client;
-#X obj 115 491 print foo;
-#X obj 355 493 print bar;
-#X obj 189 492 print from;
-#X obj 428 494 print from;
+#X obj 115 545 print foo;
 #X obj 93 435 oscformat bazoo;
 #X msg 93 408 1 2 3;
 #X msg 337 407 1 2 3;
@@ -271,8 +268,6 @@ care too much about security \, just use the group name itself., f
 #X msg 64 299 connect localhost 8002 foo;
 #X msg 304 299 connect localhost 8002 bar;
 #X text 60 274 <hostname> <port> <username>;
-#X text 40 524 Peers (group|user) are also available in [aoo_send~]
-and [aoo_receive~] objects:, f 41;
 #X text 42 97 A client on a given port first connects to a public AOO
 server. Once it has joined a group \, it receives a list of all existing
 peers in that group and gets notified whenever a new peer joins the
@@ -286,12 +281,19 @@ AOO objects *on the same port* share the same peer list., f 65;
 #X msg 320 349 group_join test pwd;
 #X text 41 205 You can always use the AOO server of the IEM: vrr.iem.at
 7077, f 63;
+#X obj 115 492 route list;
+#X obj 115 516 oscparse;
+#X obj 355 493 route list;
+#X obj 355 519 oscparse;
+#X obj 355 548 print bar;
+#X obj 183 466 print peer;
+#X obj 424 465 print peer;
 #X connect 1 0 6 0;
-#X connect 1 1 24 0;
-#X connect 1 2 26 0;
+#X connect 1 1 42 0;
+#X connect 1 2 47 0;
 #X connect 2 0 7 0;
-#X connect 2 1 25 0;
-#X connect 2 2 27 0;
+#X connect 2 1 44 0;
+#X connect 2 2 48 0;
 #X connect 3 0 1 0;
 #X connect 4 0 2 0;
 #X connect 8 0 1 0;
@@ -305,11 +307,17 @@ AOO objects *on the same port* share the same peer list., f 65;
 #X connect 19 0 18 0;
 #X connect 20 0 12 0;
 #X connect 21 0 12 0;
-#X connect 28 0 1 0;
-#X connect 29 0 28 0;
-#X connect 30 0 31 0;
-#X connect 31 0 2 0;
-#X connect 35 0 1 0;
-#X connect 36 0 2 0;
-#X connect 43 0 1 0;
-#X connect 44 0 2 0;
+#X connect 25 0 1 0;
+#X connect 26 0 25 0;
+#X connect 27 0 28 0;
+#X connect 28 0 2 0;
+#X connect 32 0 1 0;
+#X connect 33 0 2 0;
+#X connect 39 0 1 0;
+#X connect 40 0 2 0;
+#X connect 42 0 43 0;
+#X connect 42 1 24 0;
+#X connect 43 0 24 0;
+#X connect 44 0 45 0;
+#X connect 44 1 46 0;
+#X connect 45 0 46 0;
