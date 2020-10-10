@@ -57,7 +57,7 @@ time_tag timer::get_absolute() const {
 timer::state timer::update(time_tag t, double& error){
     std::unique_lock<spinlock> l(lock_);
     time_tag last = last_.load();
-    if (!last.empty()){
+    if (!last.is_empty()){
         last_ = t.to_uint64(); // first!
 
         auto delta = time_tag::duration(last, t);

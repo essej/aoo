@@ -15,6 +15,7 @@ namespace aoo {
 
 struct time_tag {
     static time_tag now();
+    static time_tag immediate() { return time_tag { 0, 1 }; }
 
     static double duration(time_tag t1, time_tag t2);
 
@@ -40,7 +41,9 @@ struct time_tag {
         low = 0;
     }
 
-    bool empty() const { return (high + low) == 0; }
+    bool is_empty() const { return (high + low) == 0; }
+
+    bool is_immediate() const { return (high == 0) && (low == 1); }
 
     double to_double() const {
         return (double)high + (double)low / 4294967296.0;
