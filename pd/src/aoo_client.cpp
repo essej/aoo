@@ -159,7 +159,7 @@ struct t_error_reply {
 
 static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
 {
-    if (argc < 4){
+    if (argc < 3){
         pd_error(x, "%s: too few arguments for '%s' method", classname(x), s->s_name);
         return;
     }
@@ -170,7 +170,7 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
         t_symbol *username = atom_getsymbol(argv + 2);
-        t_symbol *pwd = atom_getsymbol(argv + 3);
+        t_symbol *pwd = argc > 3 ? atom_getsymbol(argv + 3) : gensym("");
 
         // LATER also send user ID
         auto cb = [](void *y, int32_t result, const void *data){
