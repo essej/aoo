@@ -178,7 +178,8 @@ AooReceiveUnit::AooReceiveUnit() {
 void AooReceiveUnit::next(int numSamples){
     auto sink = delegate().sink();
     if (sink){
-        uint64_t t = aoo_osctime_get();
+        uint64_t t = getOSCTime(mWorld);
+
         if (sink->process(mOutBuf, numSamples, t) <= 0){
             ClearUnitOutputs(this, numSamples);
         }

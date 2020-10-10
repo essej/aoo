@@ -270,6 +270,8 @@ protected:
 
 /*/////////////////////// Helper functions ////////////////*/
 
+uint64_t getOSCTime(World *world);
+
 bool getSinkArg(INode* node, sc_msg_iter *args,
                 aoo::endpoint *& ep, int32_t &id);
 

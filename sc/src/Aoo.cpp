@@ -254,6 +254,22 @@ void AooDelegate::sendMsgNRT(osc::OutboundPacketStream &msg){
 
 /*////////////////// Helper functions ///////////////*/
 
+// Try to update OSC time only once per DSP cycle.
+// We use thread local variables instead of a dictionary
+// (which we would have to protect with a mutex).
+// This is certainly fine for the case of a single World,
+// and it should be more or less ok for libscsynth.
+uint64_t getOSCTime(World *world){
+    thread_local uint64_t time;
+    thread_local int lastBuffer{-1};
+
+    if (lastBuffer != world->mBufCounter){
+        time = aoo_osctime_get();
+        lastBuffer = world->mBufCounter;
+    }
+    return time;
+}
+
 static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
                            int32_t &id, const char *what)
 {

@@ -472,16 +472,20 @@ static t_int * aoo_send_perform(t_int *w)
     t_aoo_send *x = (t_aoo_send *)(w[1]);
     int n = (int)(w[2]);
 
-    assert(sizeof(t_sample) == sizeof(aoo_sample));
+    static_assert(sizeof(t_sample) == sizeof(aoo_sample),
+                  "aoo_sample size must match t_sample");
 
-    uint64_t t = aoo_osctime_get();
-    if (x->x_source->process((const aoo_sample **)x->x_vec.get(), n, t) > 0){
-        if (x->x_node){
+    if (x->x_node){
+        auto t = x->x_node->get_osctime();
+        auto vec = (const aoo_sample **)x->x_vec.get();
+
+        if (x->x_source->process(vec, n, t) > 0){
             x->x_node->notify();
         }
-    }
-    if (x->x_source->events_available() > 0){
-        clock_delay(x->x_clock, 0);
+
+        if (x->x_source->events_available() > 0){
+            clock_delay(x->x_clock, 0);
+        }
     }
 
     return w + 3;

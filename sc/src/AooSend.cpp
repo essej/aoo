@@ -210,7 +210,7 @@ void AooSendUnit::next(int numSamples){
         }
 
         auto vec = (const float **)mInBuf + channelOnset_;
-        uint64_t t = aoo_osctime_get();
+        uint64_t t = getOSCTime(mWorld);
 
         if (source->process(vec, numSamples, t) > 0){
             delegate().node()->notify();

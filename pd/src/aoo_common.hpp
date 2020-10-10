@@ -48,6 +48,8 @@ struct i_node {
     virtual void remove_group(t_symbol *group) = 0;
 
     virtual void notify() = 0;
+
+    virtual uint64_t get_osctime() = 0;
 };
 
 /*///////////////////////////// helper functions ///////////////////////////////*/
