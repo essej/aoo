@@ -271,9 +271,9 @@ uint64_t getOSCTime(World *world){
 }
 
 static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
-                           int32_t &id, const char *what)
+                           int32_t *id, const char *what)
 {
-    if (args->remain() < 3){
+    if (args->remain() < 2){
         LOG_ERROR("aoo: too few arguments for " << what);
         return false;
     }
@@ -288,8 +288,7 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
 
         auto ep = node->findPeer(group, user);
         if (!ep){
-            LOG_ERROR("aoo: couldn't find peer " << group << "|" << user
-                << " for " << what);
+            LOG_ERROR("aoo: couldn't find peer " << group << "|" << user);
             return false;
         }
     #else
@@ -311,30 +310,46 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
         }
     }
 
-    if (args->nextTag() == 's'){
-        s = args->gets();
-        if (!strcmp(s, "*")){
-            id = AOO_ID_WILDCARD;
-        } else {
-            LOG_ERROR("aoo: bad " << what << " ID '" << s << "'!");
+    if (id){
+        if (!args->remain()){
+            LOG_ERROR("aoo: too few arguments for " << what);
             return false;
         }
-    } else {
-        id = args->geti();
+        if (args->nextTag() == 's'){
+            s = args->gets();
+            if (!strcmp(s, "*")){
+                *id = AOO_ID_WILDCARD;
+            } else {
+                LOG_ERROR("aoo: bad " << what << " ID '" << s << "'!");
+                return false;
+            }
+        } else {
+            *id = args->geti();
+        }
     }
+
     return true;
 }
 
 bool getSinkArg(INode* node, sc_msg_iter *args,
                 aoo::endpoint *& ep, int32_t &id)
 {
-    return getEndpointArg(node, args, ep, id, "sink");
+    return getEndpointArg(node, args, ep, &id, "sink");
 }
 
 bool getSourceArg(INode* node, sc_msg_iter *args,
                   aoo::endpoint *& ep, int32_t &id)
 {
-    return getEndpointArg(node, args, ep, id, "source");
+    return getEndpointArg(node, args, ep, &id, "source");
+}
+
+aoo::endpoint * getPeerArg(INode *node, sc_msg_iter *args){
+    aoo::endpoint *ep;
+    if (getEndpointArg(node, args, ep, nullptr, "peer")){
+        return ep;
+    } else {
+        return nullptr;
+    }
 }
 
 void makeDefaultFormat(aoo_format_storage& f, int sampleRate,

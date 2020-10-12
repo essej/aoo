@@ -278,6 +278,8 @@ bool getSinkArg(INode* node, sc_msg_iter *args,
 bool getSourceArg(INode* node, sc_msg_iter *args,
                   aoo::endpoint *& ep, int32_t &id);
 
+aoo::endpoint * getPeerArg(INode* node, sc_msg_iter *args);
+
 void makeDefaultFormat(aoo_format_storage& f, int sampleRate,
                        int blockSize, int numChannels);
 
