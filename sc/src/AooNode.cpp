@@ -441,6 +441,7 @@ void AooNode::doReceive()
                 LOG_ERROR("AooNode: bad OSC message - " << err.what());
             }
         }
+    parse_done:
         notify(); // !
     } else if (nbytes == 0){
         // timeout -> update clients
