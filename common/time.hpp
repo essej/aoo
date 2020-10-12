@@ -70,9 +70,7 @@ struct time_tag {
         value_ -= t.value_;
         return *this;
     }
-private:
-    uint64_t value_;
-public:
+
     friend std::ostream& operator << (std::ostream& os, time_tag t);
 
     friend time_tag operator+(time_tag lhs, time_tag rhs){
@@ -93,6 +91,8 @@ public:
     friend bool operator> (time_tag lhs, time_tag rhs){ return  operator< (rhs,lhs); }
     friend bool operator<=(time_tag lhs, time_tag rhs){ return !operator> (lhs,rhs); }
     friend bool operator>=(time_tag lhs, time_tag rhs){ return !operator< (lhs,rhs); }
+private:
+    uint64_t value_;
 };
 
 /*//////////////////// NTP server /////////////////*/

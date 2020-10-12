@@ -88,18 +88,27 @@ time_tag time_tag::now(){
 }
 
 std::ostream& operator << (std::ostream& os, time_tag t){
-    double s = t;
-    int32_t hours, minutes, seconds, micros;
+    auto s = t.to_seconds();
+    int32_t days, hours, minutes, seconds, micros;
 
-    auto d = lldiv(s, 3600);
+    auto d = lldiv(s, 86400);
+    days = d.quot;
+    d = lldiv(d.rem, 3600);
     hours = d.quot;
     d = lldiv(d.rem, 60);
     minutes = d.quot;
     seconds = d.rem;
-    micros = (s - (double)seconds) * 1000000.0;
+    micros = (s - (uint64_t)s) * 1000000.0;
 
-    os << "time_tag (" << hours << ":" << minutes << ":"
-       << seconds << "." << micros << ")";
+    if (days){
+        os << days << "-";
+    }
+
+    char buf[256];
+    snprintf(buf, sizeof(buf), "%02d:%02d:%02d.%06d",
+             hours, minutes, seconds, micros);
+
+    os << buf;
 
     return os;
 }
