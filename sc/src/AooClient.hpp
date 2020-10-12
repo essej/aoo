@@ -1,5 +1,8 @@
 #include "Aoo.hpp"
 #include "aoo/aoo_net.hpp"
+#include "common/time.hpp"
+
+#include "oscpack/osc/OscReceivedElements.h"
 
 #include <string>
 #include <thread>
@@ -24,6 +27,13 @@ public:
     void joinGroup(const char* name, const char* pwd);
 
     void leaveGroup(const char* name);
+
+    aoo::net::iclient * client() {
+        return client_.get();
+    }
+
+    void forwardMessage(const char *data, int32_t size,
+                        aoo::time_tag time);
 private:
     World* world_;
     aoo::net::iclient::pointer client_;
@@ -32,10 +42,18 @@ private:
     std::thread::id nrtThread_;
 
     void handleEvent(const aoo_event* e);
+
     void sendReply(const char *cmd, bool success,
                    const char *errmsg = nullptr);
+
     void sendGroupReply(const char* cmd, const char *group,
-        bool success, const char* errmsg = nullptr);
+                        bool success, const char* errmsg = nullptr);
+
+    void handlePeerMessage(const char *data, int32_t size,
+                           const aoo::ip_address& address, aoo::time_tag t);
+
+    void handlePeerBundle(const osc::ReceivedBundle& bundle,
+                          const aoo::ip_address& address);
 };
 
 struct AooClientCmd {

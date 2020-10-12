@@ -381,10 +381,7 @@ void t_node::do_receive()
                 fprintf(stderr, "bug: unknown aoo type\n");
                 fflush(stderr);
             }
-        #if !AOO_NODE_POLL
-            // notify send thread
-            x_condition.notify_all();
-        #endif
+            notify(); // !
         } else {
             // not a valid AoO OSC message
             fprintf(stderr, "aoo_node: not a valid AOO message!\n");
@@ -398,10 +395,7 @@ void t_node::do_receive()
                 aoo_receive_update((t_aoo_receive *)c.c_obj);
             }
         }
-    #if !AOO_NODE_POLL
-        // notify send thread
-        x_condition.notify_all();
-    #endif
+        notify(); // !
     } else {
         // ignore errors when quitting
         if (!x_quit){

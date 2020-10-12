@@ -1,8 +1,9 @@
 #include "Aoo.hpp"
+#include "AooClient.hpp"
 
 #include "common/net_utils.hpp"
-
 #include "common/sync.hpp"
+#include "common/time.hpp"
 
 #include <vector>
 #include <list>
@@ -16,13 +17,13 @@
 #include <mutex>
 #include <atomic>
 
-using namespace aoo;
-
 #ifndef AOO_NODE_POLL
  #define AOO_NODE_POLL 0
 #endif
 
 #define AOO_POLL_INTERVAL 1000 // microseconds
+
+using namespace aoo;
 
 #if USE_PEER_LIST
 struct AooPeer {
@@ -33,7 +34,7 @@ struct AooPeer {
 };
 #endif
 
-struct AooClient {
+struct AooNodeClient {
     INodeClient *obj;
     int32_t type;
     int32_t id;
@@ -42,7 +43,7 @@ struct AooClient {
 class AooNode : public INode {
     friend class INode;
 public:
-    AooNode(int socket, int port);
+    AooNode(World *world, int socket, int port);
     ~AooNode();
 
     void release(INodeClient& client) override;
@@ -76,12 +77,13 @@ public:
 
     void notify() override;
 private:
+    World *world_;
     int socket_ = -1;
     int port_ = 0;
     std::list<aoo::endpoint> endpoints_; // endpoints must not move in memory!
     aoo::shared_mutex endpointMutex_;
     // dependants
-    std::vector<AooClient> clients_;
+    std::vector<AooNodeClient> clients_;
     aoo::shared_mutex clientMutex_;
 #if USE_PEER_LIST
     // peer list
@@ -106,12 +108,17 @@ private:
     void doSend();
 
     void doReceive();
+
+    void handleClientMessage(const char *data, int32_t size,
+                             aoo::time_tag time);
+
+    void handleClientBundle(const osc::ReceivedBundle& bundle);
 };
 
 // public methods
 
-AooNode::AooNode(int socket, int port)
-    : socket_(socket), port_(port)
+AooNode::AooNode(World *world, int socket, int port)
+    : world_(world), socket_(socket), port_(port)
 {
     // start threads
 #if AOO_NODE_POLL
@@ -232,7 +239,7 @@ INode::ptr INode::get(World *world, INodeClient& client,
         socket_setrecvbufsize(sock, 2 << 20);
 
         // finally create aoo node instance
-        node = std::make_shared<AooNode>(sock, port);
+        node = std::make_shared<AooNode>(world, sock, port);
         nodeMap.emplace(port, node);
     }
 
@@ -414,36 +421,71 @@ void AooNode::doReceive()
                 case AOO_TYPE_PEER:
                     if (c.type == AOO_TYPE_CLIENT) {
                         c.obj->handleMessage(buf, nbytes, ep, endpoint::send);
+                        goto parse_done; // there's only one client
                     }
                     break;
                 default:
                     break; // ignore
                 }
             }
-        parse_done:
-        #if !AOO_NODE_POLL
-            // notify send thread
-            condition_.notify_all();
-        #endif
         } else {
-            // not a valid AoO OSC message
-            fprintf(stderr, "aoo_node: not a valid AOO message!\n");
-            fflush(stderr);
+            try {
+                osc::ReceivedPacket packet(buf, nbytes);
+                if (packet.IsBundle()){
+                    osc::ReceivedBundle bundle(packet);
+                    handleClientBundle(bundle);
+                } else {
+                    handleClientMessage(buf, nbytes, aoo::time_tag::immediate());
+                }
+            } catch (const osc::Exception &err){
+                LOG_ERROR("AooNode: bad OSC message - " << err.what());
+            }
         }
+        notify(); // !
     } else if (nbytes == 0){
         // timeout -> update clients
         aoo::shared_scoped_lock lock(clientMutex_);
         for (auto& c : clients_){
             c.obj->update();
         }
-    #if !AOO_NODE_POLL
-        // notify send thread
-        condition_.notify_all();
-    #endif
+        notify(); // !
     } else {
         // ignore errors when quitting
         if (!quit_){
             socket_error_print("recv");
         }
+        return;
+    }
+}
+
+void AooNode::handleClientMessage(const char *data, int32_t size,
+                                  aoo::time_tag time)
+{
+    if (!strncmp("/sc/msg", data, size)){
+        // LATER cache AooClient
+        aoo::shared_scoped_lock l(clientMutex_);
+        for (auto& c : clients_){
+            if (c.type == AOO_TYPE_CLIENT){
+                auto client = static_cast<AooClient *>(c.obj);
+                client->forwardMessage(data, size, time);
+                break;
+            }
+        }
+    } else {
+        LOG_WARNING("AooNode: unknown OSC message " << data);
+    }
+}
+
+void AooNode::handleClientBundle(const osc::ReceivedBundle &bundle){
+    auto time = bundle.TimeTag();
+    auto it = bundle.ElementsBegin();
+    while (it != bundle.ElementsEnd()){
+        if (it->IsBundle()){
+            osc::ReceivedBundle b(*it);
+            handleClientBundle(b);
+        } else {
+            handleClientMessage(it->Contents(), it->Size(), time);
+        }
+        ++it;
     }
 }

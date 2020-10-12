@@ -106,13 +106,16 @@ Aoo {
 	}
 
 	*prResolveAddr { arg port, addr;
-		var peer, client = AooClient.find(port);
+		var client, peer;
+		// find peer by group/user
+		client = AooClient.find(port);
 		client.notNil.if {
 			peer = client.findPeer(addr);
 			peer !? { ^peer };
 		};
+		// if we can't find peer, we need at least IP+port
 		addr.ip !? { ^addr };
-		Error("Aoo: couldn't find peer %|%".format(addr.group, addr.user)).throw;
+		MethodError("Aoo: couldn't find peer %|%".format(addr.group, addr.user), this).throw;
 	}
 }
 

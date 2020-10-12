@@ -5,6 +5,7 @@ AooClient {
 	var <>port;
 	var <>state;
 	var <>replyAddr;
+	var <>nodeAddr;
 	var <>eventHandler;
 	var <>oscMsgReceived;
 	var <>peers;
@@ -31,16 +32,17 @@ AooClient {
 
 		Aoo.prGetServerAddr(this.server, { arg addr;
 			this.replyAddr = addr;
+			this.nodeAddr = NetAddr("localhost", port);
 			// handle events
 			eventOSCFunc = OSCFunc({ arg msg;
 				var event = this.prHandleEvent(*msg[2..]);
 				this.eventHandler.value(*event);
 			}, '/aoo/client/event', addr, argTemplate: [port]);
 			// handle OSC messages from peers
-			msgOSCFunc = OSCFunc({ arg msg;
+			msgOSCFunc = OSCFunc({ arg msg, time;
 				var peer = this.findPeer(AooAddr(msg[2], msg[3]));
 				peer.notNil.if {
-					this.oscMsgReceived(msg[4..], peer);
+					this.oscMsgReceived.value(msg[4..], time, peer);
 				} {
 					"%: got message from unknown peer".format(this.class).warn;
 				}
@@ -220,5 +222,43 @@ AooClient {
 			};
 		}}
 		^nil;
+	}
+
+	send { arg msg, target;
+		var raw, args, newMsg;
+		target.notNil.if {
+			target.isKindOf(AooAddr).if {
+				// peer
+				target = this.prResolveAddr(target);
+				args = [target.ip, target.port];
+			} {
+				// group
+				args = target.asSymbol;
+			};
+		}; // else: broadcast
+		raw = msg.asRawOSC;
+		newMsg = ['/sc/msg', raw, 0] ++ args;
+		// newMsg.postln;
+		// OSC bundles begin with '#' (ASCII code 35)
+		(raw[0] == 35).if {
+			// Schedule on the current system time.
+			// On the Server, we add the relative
+			// timestamp contained in the bundle
+			nodeAddr.sendBundle(0, newMsg);
+		} {
+			// send immediately
+			nodeAddr.sendMsg(*newMsg);
+		}
+	}
+
+    prResolveAddr { arg addr;
+		var peer;
+		// If IP address is given, we don't search peer list
+		// as an optimization.
+		addr.ip !? { ^addr };
+		// find peer by group/user
+		peer = this.findPeer(addr);
+		peer !? { ^peer };
+		MethodError("AooClient: couldn't find peer %|%".format(addr.group, addr.user), this).throw;
 	}
 }

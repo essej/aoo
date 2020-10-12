@@ -208,6 +208,27 @@ void AooClient::handleEvent(const aoo_event* event) {
     NRTLock(world_);
 
     switch (event->type) {
+    case AOO_NET_MESSAGE_EVENT:
+    {
+        auto e = (const aoo_net_message_event *)event;
+
+        aoo::ip_address address((const sockaddr *)e->address, e->length);
+
+        try {
+            osc::ReceivedPacket packet(e->data, e->size);
+            if (packet.IsBundle()){
+                osc::ReceivedBundle bundle(packet);
+                handlePeerBundle(bundle, address);
+            } else {
+                handlePeerMessage(packet.Contents(), packet.Size(),
+                                  address, aoo::time_tag::immediate());
+            }
+        } catch (const osc::Exception &err){
+            LOG_ERROR("AooClient: bad OSC message - " << err.what());
+        }
+        NRTUnlock(world_);
+        return; // don't send event
+    }
     case AOO_NET_DISCONNECT_EVENT:
     {
         msg << "/disconnect";
@@ -290,6 +311,204 @@ void AooClient::sendGroupReply(const char* cmd, const char* group,
     if (lock) NRTLock(world_);
     ::sendMsgNRT(world_, msg);
     if (lock) NRTUnlock(world_);
+}
+
+void AooClient::forwardMessage(const char *data, int32_t size,
+                               aoo::time_tag time)
+{
+    // We use sc_msg_iter because we need it for getPeerArg().
+    // Also, it is a bit easier to use in this case.
+
+    // skip '/sc/msg' (8 bytes)
+    sc_msg_iter args(size - 8, data + 8);
+
+    // get message
+    if (args.nextTag() != 'b'){
+        return;
+    }
+    auto msgSize = args.getbsize();
+    if (msgSize <= 0){
+        return;
+    }
+
+    auto msg = args.rdpos + 4;
+    args.skipb();
+
+    // rewrite OSC bundle timetag
+    // NOTE: we know that SCLang can't send nested bundles
+    if (!time.is_immediate() && msgSize > 16 && !memcmp("#bundle", msg, 8)){
+        aoo::time_tag relTime(OSCtime(msg + 8));
+        // don't rewrite immediate bundles!
+        if (!relTime.is_immediate()){
+            auto absTime = time + relTime;
+        #if 0
+            LOG_DEBUG("time: " << time << ", rel: " << relTime
+                      << ", abs: " << absTime);
+        #endif
+            // we know that the original buffer is not really constant
+            aoo::to_bytes((uint64_t)absTime, (char *)msg + 8);
+        }
+    }
+
+    uint32_t flags = args.geti();
+
+    // get target
+    if (args.remain() > 0){
+        auto count = args.count;
+        if (args.tags[count] && args.tags[count + 1]) {
+            // peer: host|port or group|user
+            // usually, the peer list is only accessed/modified
+            // in the NRT thread!
+            NRTLock(world_);
+            auto ep = getPeerArg(node(), &args);
+            NRTUnlock(world_);
+            if (ep) {
+                auto& addr = ep->address();
+                client()->send_message(msg, msgSize, addr.address(),
+                    addr.length(), flags);
+            }
+        } else {
+            // group name
+            auto group = args.gets("");
+            client()->send_message(msg, msgSize, group, 0, flags);
+        }
+    } else {
+        // broadcast
+        client()->send_message(msg, msgSize, 0, 0, flags);
+    }
+}
+
+constexpr int32_t round4(int32_t n){
+    return (n + 3) & ~3;
+}
+
+// Called with NRT lock (see handleEvent()), although probably
+// necessary...
+#if 0
+void AooClient::handlePeerMessage(const char *msg, int32_t size,
+                                  const aoo::ip_address& address, aoo::time_tag time)
+{
+    // wrap message in bundle
+    char buf[64];
+    osc::OutboundPacketStream info(buf, sizeof(buf));
+    info << osc::BeginMessage("/aoo/addr")
+        << address.name() << address.port() << osc::EndMessage;
+
+    const int headerSize = 16;
+
+    auto bundleSize = headerSize + 4 + info.Size() + 4 + size;
+    auto bundleData = (char *)alloca(bundleSize);
+    auto ptr = bundleData;
+    memcpy(ptr, "#bundle\0", 8);
+    aoo::to_bytes<uint64_t>(time, ptr + 8);
+    ptr += headerSize;
+
+    aoo::to_bytes<int32_t>(info.Size(), ptr);
+    memcpy(ptr + 4, info.Data(), info.Size());
+    ptr += info.Size() + 4;
+
+    aoo::to_bytes<int32_t>(size, ptr);
+    memcpy(ptr + 4, msg, size);
+
+    ::sendMsgNRT(world_, bundleData, bundleSize);
+}
+#else
+void AooClient::handlePeerMessage(const char *data, int32_t size,
+                                  const aoo::ip_address& address, aoo::time_tag time)
+{
+    LOG_DEBUG("handlePeerMessage: " << data);
+    bool isBundle = !time.is_immediate();
+
+    auto typeTags = OSCstrskip(data);
+
+    auto oldPattern = data;
+    auto oldPatternSize = typeTags - data;
+
+    auto argumentData = OSCstrskip(typeTags);
+    auto argumentDataSize = (data + size) - argumentData;
+
+    // IPv6 address strings can be up to 45 characters!
+    auto buf = (char *)alloca(size + 128);
+    auto ptr = buf;
+    char * msgPtr = nullptr;
+
+    // SCLang can't handle immediate bundles,
+    // so we have to send OSC messages instead
+    if (isBundle){
+        // write bundle + time tag
+        memcpy(ptr, "#bundle\0", 8);
+        aoo::to_bytes<uint64_t>(time, ptr + 8);
+        ptr += 16;
+
+        // skip message size
+        ptr += 4;
+        msgPtr = ptr;
+    }
+
+    // write message
+    memcpy(ptr, "/aoo/msg\0\0\0\0", 12);
+    ptr += 12;
+
+    // write type tags
+    // prepend port, source host, source port, original address pattern
+    auto count = sprintf(ptr, ",%s%s", "isis", typeTags + 1);
+    auto typeTagSize = round4(count + 1);
+    memset(ptr + count, 0, typeTagSize - count);
+    ptr += typeTagSize;
+
+    // prepend new arguments
+    // 1) local port
+    aoo::to_bytes<int32_t>(port_, ptr);
+    ptr += 4;
+    // 2) remote address (needs padding!)
+    auto addressSize = round4(strlen(address.name()) + 1);
+    strncpy(ptr, address.name(), addressSize);
+    ptr += addressSize;
+    // 3) remote port
+    aoo::to_bytes<int32_t>(address.port(), ptr);
+    ptr += 4;
+    // 4) original address pattern (OSC string)
+    memcpy(ptr, oldPattern, oldPatternSize);
+    ptr += oldPatternSize;
+
+    // original argument data
+    memcpy(ptr, argumentData, argumentDataSize);
+    ptr += argumentDataSize;
+
+    if (isBundle){
+        // finally write OSC message size:
+        auto msgSize = ptr - msgPtr;
+        aoo::to_bytes<int32_t>(msgSize, msgPtr - 4);
+    }
+
+    auto newSize = ptr - buf;
+#if 0
+    std::stringstream ss;
+    for (int i = 0; i < newSize; ++i){
+        ss << (int32_t)(uint8_t)buf[i] << " ";
+    }
+    LOG_DEBUG("size: " << newSize << ", data: " << ss.str());
+#endif
+
+    ::sendMsgNRT(world_, buf, newSize);
+}
+#endif
+
+void AooClient::handlePeerBundle(const osc::ReceivedBundle& bundle,
+                                 const aoo::ip_address& address)
+{
+    auto time = bundle.TimeTag();
+    auto it = bundle.ElementsBegin();
+    while (it != bundle.ElementsEnd()){
+        if (it->IsBundle()){
+            osc::ReceivedBundle b(*it);
+            handlePeerBundle(b, address);
+        } else {
+            handlePeerMessage(it->Contents(), it->Size(),
+                              address, time);
+        }
+        ++it;
+    }
 }
 
 namespace {
