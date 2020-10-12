@@ -17,9 +17,17 @@
 
 /*//////////////////////// Reply //////////////////////////*/
 
-void sendMsgRT(World *world, const osc::OutboundPacketStream& msg);
+void sendMsgRT(World *world, const char *data, int32_t size);
 
-void sendMsgNRT(World* world, const osc::OutboundPacketStream& msg);
+inline void sendMsgRT(World *world, const osc::OutboundPacketStream& msg){
+    sendMsgRT(world, msg.Data(), msg.Size());
+}
+
+void sendMsgNRT(World *world, const char *data, int32_t size);
+
+inline void sendMsgNRT(World *world, const osc::OutboundPacketStream& msg){
+    sendMsgNRT(world, msg.Data(), msg.Size());
+}
 
 /*//////////////////////// AooNode ////////////////////////*/
 

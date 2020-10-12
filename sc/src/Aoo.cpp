@@ -133,33 +133,33 @@ struct OscMsgCommand {
 
 } // namespace
 
-void sendMsgRT(World *world, const osc::OutboundPacketStream& msg){
-    auto data = CmdData::create<OscMsgCommand>(world, msg.Size());
-    if (data){
-        data->size = msg.Size();
-        memcpy(data->data, msg.Data(), msg.Size());
+void sendMsgRT(World *world, const char *data, int32_t size){
+    auto cmd = CmdData::create<OscMsgCommand>(world, size);
+    if (cmd){
+        cmd->size = size;
+        memcpy(cmd->data, data, size);
 
         auto sendMsg = [](World *world, void *cmdData){
-            auto data = (OscMsgCommand *)cmdData;
+            auto cmd = (OscMsgCommand *)cmdData;
 
             aoo::shared_lock lock(gClientMutex);
             for (auto& addr : gClientMap[world]){
-                aoo::socket_sendto(gClientSocket, data->data, data->size, addr);
+                aoo::socket_sendto(gClientSocket, cmd->data, cmd->size, addr);
             }
 
             return false; // done
         };
 
-        DoAsynchronousCommand(world, 0, 0, data, sendMsg, 0, 0, &RTFree, 0, 0);
+        DoAsynchronousCommand(world, 0, 0, cmd, sendMsg, 0, 0, &RTFree, 0, 0);
     } else {
         LOG_ERROR("RTAlloc() failed!");
     }
 }
 
-void sendMsgNRT(World *world, const osc::OutboundPacketStream& msg){
+void sendMsgNRT(World *world, const char *data, int32_t size){
     aoo::shared_lock lock(gClientMutex);
     for (auto& addr : gClientMap[world]){
-        aoo::socket_sendto(gClientSocket, msg.Data(), msg.Size(), addr);
+        aoo::socket_sendto(gClientSocket, data, size, addr);
     }
 }
 
