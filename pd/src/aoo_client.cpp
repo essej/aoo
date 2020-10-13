@@ -61,6 +61,7 @@ struct t_aoo_client
     t_float x_offset = -1; // immediately
     bool x_connected = false;
     bool x_schedule = true;
+    bool x_discard = false;
     std::multimap<float, t_osc_message> x_queue;
 
     void handle_peer_message(const char *data, int32_t size,
@@ -227,6 +228,11 @@ static void aoo_client_schedule(t_aoo_client *x, t_floatarg f)
     x->x_schedule = (f != 0);
 }
 
+static void aoo_client_discard_late(t_aoo_client *x, t_floatarg f)
+{
+    x->x_discard = (f != 0);
+}
+
 static void aoo_client_target(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (x->x_node){
@@ -296,26 +302,29 @@ static void aoo_client_queue_tick(t_aoo_client *x)
 void t_aoo_client::handle_peer_message(const char *data, int32_t size,
                                        const ip_address& address, aoo::time_tag t)
 {
-    float delay;
     if (!t.is_immediate()){
-        // delay can be negative (= late bundle)
-        delay = aoo::time_tag::duration(x_time, t) * 1000.0;
-    } else {
-        delay = 0;
-    }
-
-    if (x_schedule && delay > 0){
-        // put on queue and schedule on clock (using logical time)
-        t_osc_message msg(data, size, address);
-        auto abstime = clock_getsystimeafter(delay);
-        auto pos = x_queue.emplace(abstime, std::move(msg));
-        // only set clock if we're the first element in the queue
-        if (pos == x_queue.begin()){
-            clock_set(x_queue_clock, abstime);
+        auto delay = aoo::time_tag::duration(x_time, t) * 1000.0;
+        if (x_schedule){
+            if (delay > 0){
+                // put on queue and schedule on clock (using logical time)
+                t_osc_message msg(data, size, address);
+                auto abstime = clock_getsystimeafter(delay);
+                auto pos = x_queue.emplace(abstime, std::move(msg));
+                // only set clock if we're the first element in the queue
+                if (pos == x_queue.begin()){
+                    clock_set(x_queue_clock, abstime);
+                }
+            } else if (!x_discard){
+                // treat like immediate message
+                perform_message(data, size, address, 0);
+            }
+        } else {
+            // output immediately with delay
+            perform_message(data, size, address, delay);
         }
     } else {
         // send immediately
-        perform_message(data, size, address, delay);
+        perform_message(data, size, address, 0);
     }
 }
 
@@ -679,4 +688,6 @@ void aoo_client_setup(void)
                     gensym("offset"), A_DEFFLOAT, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_schedule,
                     gensym("schedule"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_discard_late,
+                    gensym("discard_late"), A_FLOAT, A_NULL);
 }
