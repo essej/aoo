@@ -103,7 +103,7 @@ AooClient {
 		peers = nil;
 	}
 
-	connect { arg serverName, serverPort, user, pwd, action, timeout=10;
+	connect { arg serverName, serverPort, user, userPwd, group, groupPwd, action, timeout=10;
 		var resp;
 
 		port ?? { MethodError("AooClient: not initialized", this).throw };
@@ -120,11 +120,16 @@ AooClient {
 			success.if {
 				"AooClient: connected to % %".format(serverName, serverPort).postln;
 				state = \connected;
+				group.notNil.if {
+					this.joinGroup(group, groupPwd, { arg success, errmsg;
+						action.value(success, errmsg);
+					});
+				} { action.value(true, errmsg); }
 			} {
 				"AooClient: couldn't connect to % %: %".format(serverName, serverPort, errmsg).error;
 				state = \disconnected;
+				action.value(false, errmsg);
 			};
-			action.value(success, errmsg);
 		}, '/aoo/client/connect', replyAddr, argTemplate: [port]).oneShot;
 
 		// NOTE: the default timeout should be larger than the default
@@ -141,7 +146,7 @@ AooClient {
 		});
 
 		server.sendMsg('/cmd', '/aoo_client_connect', port,
-			serverName, serverPort, user, pwd);
+			serverName, serverPort, user, userPwd);
 	}
 
 	disconnect { arg action;
@@ -166,37 +171,37 @@ AooClient {
 		server.sendMsg('/cmd', '/aoo_client_disconnect', port);
 	}
 
-	joinGroup { arg group, pwd, action;
+	joinGroup { arg name, pwd, action;
 		port ?? { MethodError("AooClient not initialized", this).throw };
 
 		OSCFunc({ arg msg;
 			var success = msg[3].asBoolean;
 			var errmsg = msg[4];
 			success.if {
-				"AooClient: joined group '%'".format(group).postln;
+				"AooClient: joined group '%'".format(name).postln;
 			} {
-				"AooClient: couldn't join group '%': %".format(group, errmsg).error;
+				"AooClient: couldn't join group '%': %".format(name, errmsg).error;
 			};
 			action.value(success, errmsg);
-		}, '/aoo/client/group/join', replyAddr, argTemplate: [port, group.asSymbol]).oneShot;
-		server.sendMsg('/cmd', '/aoo_client_group_join', port, group, pwd);
+		}, '/aoo/client/group/join', replyAddr, argTemplate: [port, name.asSymbol]).oneShot;
+		server.sendMsg('/cmd', '/aoo_client_group_join', port, name, pwd);
 	}
 
-	leaveGroup { arg group, action;
+	leaveGroup { arg name, action;
 		port ?? { MethodError("AooClient not initialized", this).throw };
 
 		OSCFunc({ arg msg;
 			var success = msg[3].asBoolean;
 			var errmsg = msg[4];
 			success.if {
-				"AooClient: left group '%'".format(group).postln;
-				this.prRemoveGroup(group);
+				"AooClient: left group '%'".format(name).postln;
+				this.prRemoveGroup(name);
 			} {
-				"AooClient: couldn't leave group '%': %".format(group, errmsg).error;
+				"AooClient: couldn't leave group '%': %".format(name, errmsg).error;
 			};
 			action.value(success, errmsg);
-		}, '/aoo/client/group/leave', replyAddr, argTemplate: [port, group.asSymbol]).oneShot;
-		server.sendMsg('/cmd', '/aoo_client_group_leave', port, group);
+		}, '/aoo/client/group/leave', replyAddr, argTemplate: [port, name.asSymbol]).oneShot;
+		server.sendMsg('/cmd', '/aoo_client_group_leave', port, name);
 	}
 
 	findPeer { arg addr;
