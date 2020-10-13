@@ -99,6 +99,7 @@ struct t_aoo_client
 struct t_group_request {
     t_aoo_client *obj;
     t_symbol *group;
+    t_symbol *pwd;
 };
 
 static void aoo_client_peer_list(t_aoo_client *x)
@@ -455,6 +456,8 @@ struct t_error_reply {
     std::string msg;
 };
 
+static void aoo_client_group_join(t_aoo_client *x, t_symbol *group, t_symbol *pwd);
+
 static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (argc < 3){
@@ -467,33 +470,45 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
 
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
-        t_symbol *username = atom_getsymbol(argv + 2);
-        t_symbol *pwd = argc > 3 ? atom_getsymbol(argv + 3) : gensym("");
+        t_symbol *userName = atom_getsymbol(argv + 2);
+        t_symbol *userPwd = argc > 3 ? atom_getsymbol(argv + 3) : gensym("");
+        t_symbol *group = argc > 4 ? atom_getsymbol(argv + 4) : nullptr;
+        t_symbol *groupPwd = argc > 5 ? atom_getsymbol(argv + 5) : nullptr;
 
         // LATER also send user ID
-        auto cb = [](void *y, int32_t result, const void *data){
-            auto x = (t_aoo_client *)y;
+        auto cb = [](void *x, int32_t result, const void *data){
+            auto request = (t_group_request *)x;
+            auto obj = request->obj;
+            auto group = request->group;
+            auto pwd = request->pwd;
 
             if (result == 0){
-                x->push_reply([x](){
-                    x->x_connected = true;
+                obj->push_reply([obj, group, pwd](){
+                    obj->x_connected = true;
 
-                    outlet_float(x->x_stateout, 1); // connected
+                    outlet_float(obj->x_stateout, 1); // connected
+
+                    if (group && pwd){
+                        aoo_client_group_join(obj, group, pwd);
+                    }
                 });
             } else {
                 auto reply = (const aoo_net_error_reply *)data;
                 t_error_reply error { reply->errorcode, reply->errormsg };
 
-                x->push_reply([x, error=std::move(error)](){
-                    pd_error(x, "%s: couldn't connect to server: %s",
-                             classname(x), error.msg.c_str());
+                obj->push_reply([obj, error=std::move(error)](){
+                    pd_error(obj, "%s: couldn't connect to server: %s",
+                             classname(obj), error.msg.c_str());
 
-                    outlet_float(x->x_stateout, 0); // fail
+                    outlet_float(obj->x_stateout, 0); // fail
                 });
             }
+
+            delete request;
         };
         x->x_client->connect(host->s_name, port,
-                             username->s_name, pwd->s_name, cb, x);
+                             userName->s_name, userPwd->s_name, cb,
+                             new t_group_request { x, group, groupPwd });
     }
 }
 
@@ -549,7 +564,7 @@ static void aoo_client_group_join(t_aoo_client *x, t_symbol *group, t_symbol *pw
             delete request;
         };
         x->x_client->join_group(group->s_name, pwd->s_name,
-                                cb, new t_group_request { x, group });
+                                cb, new t_group_request { x, group, nullptr });
     }
 }
 
@@ -588,7 +603,8 @@ static void aoo_client_group_leave(t_aoo_client *x, t_symbol *group)
 
             delete request;
         };
-        x->x_client->leave_group(group->s_name, cb, new t_group_request { x, group });
+        x->x_client->leave_group(group->s_name, cb,
+                                 new t_group_request { x, group, nullptr });
     }
 }
 
