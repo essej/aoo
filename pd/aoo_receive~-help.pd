@@ -4,37 +4,37 @@
 #X msg 78 230 bufsize \$1;
 #X obj 78 206 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X obj 38 324 env~;
-#X floatatom 38 348 5 0 0 0 - - -;
-#X obj 109 325 env~;
-#X floatatom 109 349 5 0 0 0 - - -;
-#N canvas 764 124 557 627 events 0;
+#N canvas 764 124 580 633 events 0;
 #X obj 37 32 inlet;
-#X obj 37 56 print aoo_receive~;
-#X text 69 209 the source format has changed;
-#X text 71 264 blocks have been lost;
-#X text 71 319 blocks arrived out of order;
-#X text 71 374 blocks have been resent;
-#X text 33 404 [block_gap <host> <port> <ID> <count>(;
-#X text 70 431 large gap between blocks;
-#X text 34 130 [source_state <host> <port> <ID> <state>(;
-#X text 34 183 [source_format <host> <port> <ID> <codec> <blocksize>
-<samplerate> ...(, f 74;
-#X text 72 108 a source has been added;
-#X text 33 86 [source_add <host> <port> <ID>(, f 33;
-#X text 69 153 the source has change its state (0: stop \, 1: play)
+#X obj 104 82 print aoo_receive~;
+#X text 69 240 the source format has changed;
+#X text 71 295 blocks have been lost;
+#X text 71 350 blocks arrived out of order;
+#X text 71 405 blocks have been resent;
+#X text 33 435 [block_gap <host> <port> <ID> <count>(;
+#X text 70 462 large gap between blocks;
+#X text 34 161 [source_state <host> <port> <ID> <state>(;
+#X text 34 214 [source_format <host> <port> <ID> <codec> <blocksize>
+<samplerate> ...(, f 72;
+#X text 72 139 a source has been added;
+#X text 33 117 [source_add <host> <port> <ID>(, f 33;
+#X text 69 184 the source has change its state (0: stop \, 1: play)
 ;
-#X text 33 236 [block_lost <host> <port> <ID> <count>(, f 40;
-#X text 34 291 [block_reordered <host> <port> <ID> <count>(;
-#X text 34 347 [block_resent <host> <port> <ID> <count>(;
-#X text 33 463 [ping <host> <port> <ID> <delta>(;
-#X text 61 538 <delta> is the approx. delay between source and sink
+#X text 33 267 [block_lost <host> <port> <ID> <count>(, f 40;
+#X text 34 322 [block_reordered <host> <port> <ID> <count>(;
+#X text 34 378 [block_resent <host> <port> <ID> <count>(;
+#X text 33 494 [ping <host> <port> <ID> <delta>(;
+#X text 61 569 <delta> is the approx. delay between source and sink
 (in ms), f 62;
-#X text 62 487 a periodic message coming from the source. The sink
+#X text 62 518 a periodic message coming from the source. The sink
 automatically replies with another ping message to tell the source
 that it is receiving its messages., f 54;
-#X connect 0 0 1 0;
-#X restore 182 326 pd events;
+#X obj 37 56 route ping;
+#X obj 37 80 outlet;
+#X connect 0 0 19 0;
+#X connect 19 0 20 0;
+#X connect 19 1 1 0;
+#X restore 182 324 pd events;
 #X text 35 24 aoo_receive~: receive one or more AoO audio streams;
 #X msg 521 468 \; pd dsp \$1;
 #X obj 521 445 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
@@ -127,22 +127,55 @@ default), f 40;
 #X obj 107 509 aoo_send~;
 #X obj 184 509 aoo_server;
 #X text 277 402 4) buffer size (default: 25 ms);
-#X text 163 229 increase for jittery \, unreliable networks!;
 #X text 165 208 buffer size in ms (default: 25 ms);
+#X text 163 229 increase for jittery \, unreliable networks!;
+#X obj 182 350 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144
+-1 -1;
+#N canvas 0 50 450 387 output 0;
+#X obj 105 188 inlet~;
+#X obj 173 191 inlet~;
+#X obj 238 100 loadbang;
+#X msg 238 124 -100;
+#X obj 238 148 s /\$0/master;
+#X obj 143 108 nbx 5 14 -100 0 0 0 /\$0/master /\$0/master empty 0
+-8 0 10 -262144 -1 -1 -100 256;
+#X obj 201 105 cnv 15 1 1 empty empty dB 0 12 0 14 -262144 -1 0;
+#X obj 105 105 cnv 15 1 1 empty empty Vol: 0 12 0 14 -262144 -1 0;
+#X obj 227 191 r /\$0/master;
+#X obj 227 215 + 100;
+#X obj 227 239 dbtorms;
+#X msg 227 263 \$1 50;
+#X obj 227 288 line~;
+#X obj 105 322 *~;
+#X obj 174 323 *~;
+#X obj 104 352 dac~;
+#X connect 0 0 13 0;
 #X connect 1 0 14 0;
-#X connect 2 0 1 0;
+#X connect 2 0 3 0;
 #X connect 3 0 4 0;
-#X connect 5 0 6 0;
-#X connect 10 0 9 0;
-#X connect 11 0 14 0;
-#X connect 14 0 3 0;
-#X connect 14 1 5 0;
-#X connect 14 2 7 0;
-#X connect 15 0 14 0;
-#X connect 17 0 14 0;
-#X connect 19 0 26 0;
-#X connect 19 1 28 0;
-#X connect 26 0 27 0;
-#X connect 28 0 29 0;
-#X connect 31 0 14 0;
-#X connect 33 0 14 0;
+#X connect 8 0 9 0;
+#X connect 9 0 10 0;
+#X connect 10 0 11 0;
+#X connect 11 0 12 0;
+#X connect 12 0 13 1;
+#X connect 12 0 14 1;
+#X connect 13 0 15 0;
+#X connect 14 0 15 1;
+#X coords 0 -1 1 1 120 30 2 100 100;
+#X restore 37 323 pd output;
+#X connect 1 0 10 0;
+#X connect 2 0 1 0;
+#X connect 3 0 36 0;
+#X connect 6 0 5 0;
+#X connect 7 0 10 0;
+#X connect 10 0 37 0;
+#X connect 10 1 37 1;
+#X connect 10 2 3 0;
+#X connect 11 0 10 0;
+#X connect 13 0 10 0;
+#X connect 15 0 22 0;
+#X connect 15 1 24 0;
+#X connect 22 0 23 0;
+#X connect 24 0 25 0;
+#X connect 27 0 10 0;
+#X connect 29 0 10 0;
