@@ -105,6 +105,7 @@ Aoo {
 		^desc;
 	}
 
+	// Try to find peer, even if IP/port is given.
 	*prResolveAddr { arg port, addr;
 		var client, peer;
 		// find peer by group/user
@@ -145,6 +146,70 @@ AooAddr {
 	printOn { arg stream;
 		stream << this.class.name << "("
 		<<* [ip, port, group, user, id] << ")";
+	}
+}
+
+// if you need to test for address, func gets wrapped in this
+AooAddrMessageMatcher : AbstractMessageMatcher {
+	var addr;
+
+	*new { arg addr, func;
+		^super.newCopyArgs(func, addr);
+	}
+
+	value { arg msg, time, testAddr, recvPort;
+		addr.group.notNil.if {
+			// compare by group/user.
+			// this even works if IP address has changed!
+			((testAddr.group != addr.group) or:
+				{ testAddr.user != addr.user }).if { ^this; }
+		} {
+			// compare by IP/port
+			(testAddr != addr).if { ^this; }
+		};
+		func.value(msg, time, testAddr, recvPort);
+	}
+}
+
+// NOTE: We can't pass the port number to OSCFunc,
+// as it would try to open the port and throw an exception.
+// Instead, we make the dispatcher per client.
+// I think few people will use multiple AooClient instances
+// simultaneously, and even fewer will complain that they
+// can't have a single OSCFunc that matches all clients.
+AooDispatcher : OSCMessageDispatcher {
+	var <>client;
+
+	*new { arg client;
+		^super.new.init.client_(client);
+	}
+
+	wrapFunc {|funcProxy|
+		var func, srcID, argTemplate;
+		func = funcProxy.func;
+		srcID = funcProxy.srcID;
+		// ignore recvPort
+		argTemplate = funcProxy.argTemplate;
+		argTemplate.notNil.if {
+			func = OSCArgsMatcher(argTemplate, func)
+		};
+		srcID.notNil.if {
+			func = AooAddrMessageMatcher(srcID, func);
+		}
+		^func;
+	}
+
+	value { arg msg, time, addr, recvPort;
+		var peer, realMsg, port = msg[1];
+		((msg[0] == '/aoo/msg') and: { port == client.port }).if {
+			peer = client.findPeer(AooAddr(msg[2], msg[3]));
+			peer.notNil.if {
+				realMsg = msg[4..];
+				active[realMsg[0]].value(realMsg, time, peer, port);
+			} {
+				"%: got message from unknown peer".format(this.class.name).warn;
+			}
+		}
 	}
 }
 

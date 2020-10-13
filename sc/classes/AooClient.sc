@@ -7,11 +7,10 @@ AooClient {
 	var <>replyAddr;
 	var <>nodeAddr;
 	var <>eventHandler;
-	var <>oscMsgReceived;
+	var <>dispatcher;
 	var <>peers;
 
 	var eventOSCFunc;
-	var msgOSCFunc;
 
 	*initClass {
 		clients = IdentityDictionary.new;
@@ -29,6 +28,7 @@ AooClient {
 		this.server = server ?? Server.default;
 		this.peers = [];
 		this.state = \disconnected;
+		this.dispatcher = AooDispatcher(this);
 
 		Aoo.prGetServerAddr(this.server, { arg addr;
 			this.replyAddr = addr;
@@ -38,15 +38,6 @@ AooClient {
 				var event = this.prHandleEvent(*msg[2..]);
 				this.eventHandler.value(*event);
 			}, '/aoo/client/event', addr, argTemplate: [port]);
-			// handle OSC messages from peers
-			msgOSCFunc = OSCFunc({ arg msg, time;
-				var peer = this.findPeer(AooAddr(msg[2], msg[3]));
-				peer.notNil.if {
-					this.oscMsgReceived.value(msg[4..], time, peer);
-				} {
-					"%: got message from unknown peer".format(this.class).warn;
-				}
-			}, '/aoo/msg', addr, argTemplate: [port]);
 			// open client on the server
 			OSCFunc({ arg msg;
 				var success = msg[2].asBoolean;
@@ -104,7 +95,6 @@ AooClient {
 
 	free {
 		eventOSCFunc.free;
-		msgOSCFunc.free;
 		port.notNil.if {
 			server.sendMsg('/cmd', '/aoo_client_free', port);
 		};
@@ -251,14 +241,13 @@ AooClient {
 		}
 	}
 
-    prResolveAddr { arg addr;
+	// Try to find peer, but only if no IP/port is given.
+	// So far only called by send().
+	prResolveAddr { arg addr;
 		var peer;
-		// If IP address is given, we don't search peer list
-		// as an optimization.
-		addr.ip !? { ^addr };
-		// find peer by group/user
+		addr.ip !? { ^addr; };
 		peer = this.findPeer(addr);
-		peer !? { ^peer };
-		MethodError("AooClient: couldn't find peer %|%".format(addr.group, addr.user), this).throw;
+		peer !? { ^peer; };
+		MethodError("%: couldn't find peer %|%".format(this.class.name, addr.group, addr.user), this).throw;
 	}
 }
