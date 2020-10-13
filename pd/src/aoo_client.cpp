@@ -25,7 +25,8 @@ enum t_target
 {
     TARGET_BROADCAST,
     TARGET_PEER,
-    TARGET_GROUP
+    TARGET_GROUP,
+    TARGET_NONE
 };
 
 struct t_osc_message
@@ -207,8 +208,10 @@ static void aoo_client_list(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv
         case TARGET_GROUP:
             x->send_message(argc, argv, x->x_group->s_name, 0);
             break;
-        default: // broadcast
+        case TARGET_BROADCAST:
             x->send_message(argc, argv, 0, 0);
+            break;
+        default: // TARGET_NONE
             break;
         }
     }
@@ -231,6 +234,9 @@ static void aoo_client_target(t_aoo_client *x, t_symbol *s, int argc, t_atom *ar
             // <ip> <port> or <group> <peer>
             if (get_peer_arg(x, x->x_node, argc, argv, x->x_peer)){
                 x->x_target = TARGET_PEER;
+            } else {
+                // this is important, so that we don't accidentally broadcast!
+                x->x_target = TARGET_NONE;
             }
         } else if (argc == 1){
             // <group>
@@ -239,6 +245,7 @@ static void aoo_client_target(t_aoo_client *x, t_symbol *s, int argc, t_atom *ar
                 x->x_group = argv->a_w.w_symbol;
             } else {
                 pd_error(x, "%s: bad argument to 'target' message", classname(x));
+                x->x_target = TARGET_NONE;
             }
         } else {
             x->x_target = TARGET_BROADCAST;
