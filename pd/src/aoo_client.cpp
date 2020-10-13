@@ -58,7 +58,7 @@ struct t_aoo_client
     ip_address x_peer;
     t_symbol *x_group;
     t_target x_target = TARGET_BROADCAST;
-    t_float x_offset = 0;
+    t_float x_offset = -1; // immediately
     bool x_connected = false;
     bool x_schedule = true;
     std::multimap<float, t_osc_message> x_queue;
@@ -135,7 +135,7 @@ void t_aoo_client::send_message(int argc, t_atom *argv,
     char *buf;
     int32_t count;
 
-    if (x_offset > 0 && atom_getsymbol(argv)->s_name[0] != '#') {
+    if (x_offset >= 0 && atom_getsymbol(argv)->s_name[0] != '#') {
         // schedule OSC message as bundle
 
         // make timetag relative to current time
