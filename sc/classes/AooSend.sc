@@ -46,7 +46,7 @@ AooSendCtl : AooCtl {
 	prHandleEvent { arg type ...args;
 		// /invite, /uninvite, /add, /remove, /ping
 		// currently, all events start with endpoint + id
-		var addr = Aoo.prResolveAddr(this.port, AooAddr(args[0], args[1]));
+		var addr = Aoo.prResolveAddr(this.port, AooAddr(*args[0..1]));
 		var id = args[2];
 		var sink = ( addr: addr, id: id );
 		var event = [type, addr, id] ++ args[3..];

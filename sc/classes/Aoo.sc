@@ -108,35 +108,39 @@ Aoo {
 	// Try to find peer, even if IP/port is given.
 	*prResolveAddr { arg port, addr;
 		var client, peer;
-		// find peer by group/user
+		// find peer by group+user
 		client = AooClient.find(port);
 		client.notNil.if {
 			peer = client.findPeer(addr);
 			peer !? { ^peer };
 		};
-		// if we can't find peer, we need at least IP+port
+		// we need at least IP+port
 		addr.ip !? { ^addr };
-		MethodError("Aoo: couldn't find peer %|%".format(addr.group, addr.user), this).throw;
+		addr.isKindOf(AooPeer).if {
+			MethodError("Aoo: couldn't find peer %".format(addr), this).throw;
+		} {
+			MethodError("Aoo: bad address %".format(addr), this).throw;
+		}
 	}
 }
 
 AooAddr {
 	var <>ip;
 	var <>port;
-	var <>group;
-	var <>user;
-	var <>id;
 
 	*new { arg ip, port;
 		^super.newCopyArgs(ip.asSymbol, port.asInteger);
 	}
 
-	*peer { arg group, user;
-		^this.newCopyArgs(nil, nil, group.asSymbol, user.asSymbol);
+	== { arg that;
+		that.isKindOf(AooAddr).if {
+			^((that.ip == ip) and: { that.port == port });
+		}
+		^false;
 	}
 
-	== { arg that;
-		^this.compareObject(that, #[\ip, \port])
+	matchItem { arg item;
+		^(item == this);
 	}
 
 	hash {
@@ -145,11 +149,26 @@ AooAddr {
 
 	printOn { arg stream;
 		stream << this.class.name << "("
-		<<* [ip, port, group, user, id] << ")";
+		<<* [ip, port] << ")";
 	}
 }
 
-// if you need to test for address, func gets wrapped in this
+AooPeer : AooAddr {
+	var <>group;
+	var <>user;
+	var <>id;
+
+	*new { arg group, user;
+		^super.newCopyArgs(nil, nil, group.asSymbol, user.asSymbol);
+	}
+
+	printOn { arg stream;
+		stream << this.class.name << "("
+		<<* [group, user, id, ip, port] << ")";
+	}
+}
+
+// if you need to test for address/peer, func gets wrapped in this
 AooAddrMessageMatcher : AbstractMessageMatcher {
 	var addr;
 
@@ -157,23 +176,34 @@ AooAddrMessageMatcher : AbstractMessageMatcher {
 		^super.newCopyArgs(func, addr);
 	}
 
-	value { arg msg, time, testAddr, recvPort;
-		addr.group.notNil.if {
-			// compare by group/user.
-			// this even works if IP address has changed!
-			((testAddr.group != addr.group) or:
-				{ testAddr.user != addr.user }).if { ^this; }
-		} {
-			// compare by IP/port
-			(testAddr != addr).if { ^this; }
-		};
-		func.value(msg, time, testAddr, recvPort);
+	value { arg msg, time, testPeer, recvPort;
+		// compare by IP+port
+		(testPeer == addr).if {
+			func.value(msg, time, testPeer, recvPort);
+		}
+	}
+}
+
+AooPeerMessageMatcher : AbstractMessageMatcher {
+	var peer;
+
+	*new { arg peer, func;
+		^super.newCopyArgs(func, peer);
+	}
+
+	value { arg msg, time, testPeer, recvPort;
+		// compare by group+user.
+		// this even works if IP address has changed!
+		((testPeer.group == peer.group) and:
+			{ testPeer.user == peer.user }).if {
+			func.value(msg, time, testPeer, recvPort);
+		}
 	}
 }
 
 // NOTE: We can't pass the port number to OSCFunc,
 // as it would try to open the port and throw an exception.
-// Instead, we make the dispatcher per client.
+// Instead, every client has its own dispatcher instance.
 // I think few people will use multiple AooClient instances
 // simultaneously, and even fewer will complain that they
 // can't have a single OSCFunc that matches all clients.
@@ -193,9 +223,10 @@ AooDispatcher : OSCMessageDispatcher {
 		argTemplate.notNil.if {
 			func = OSCArgsMatcher(argTemplate, func)
 		};
-		srcID.notNil.if {
-			func = AooAddrMessageMatcher(srcID, func);
-		}
+		srcID.class.switch(
+			AooPeer, { func = AooPeerMessageMatcher(srcID, func) },
+			AooAddr, { func = AooAddrMessageMatcher(srcID, func) }
+		);
 		^func;
 	}
 

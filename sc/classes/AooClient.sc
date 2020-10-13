@@ -58,7 +58,7 @@ AooClient {
 
 	prHandleEvent { arg type ...args;
 		// /disconnect, /peer/join, /peer/leave, /error
-		var addr;
+		var peer;
 
 		type.switch(
 			'/disconnect', {
@@ -68,12 +68,12 @@ AooClient {
 				"AooClient: % (%)".format(args[1], args[0]).error;
 			},
 			{
-				addr = AooAddr.newCopyArgs(*args);
+				peer = AooPeer.newCopyArgs(*args);
 				type.switch(
-					'/peer/join', { this.prAdd(addr) },
-					'/peer/leave', { this.prRemove(addr) }
+					'/peer/join', { this.prAdd(peer) },
+					'/peer/leave', { this.prRemove(peer) }
 				);
-				^[type, addr] // return modified event
+				^[type, peer] // return modified event
 			}
 		);
 		^[type] ++ args; // return original event
@@ -205,17 +205,17 @@ AooClient {
 	}
 
 	findPeer { arg addr;
-		addr.ip.notNil.if {
-			// find by IP/port
-			peers.do { arg peer;
-				((peer.ip == addr.ip) && (peer.port == addr.port)).if { ^peer };
-			};
-		} { addr.group.notNil.if {
-			// find by group/user
+		addr.isKindOf(AooPeer).if {
+			// find by group+user
 			peers.do { arg peer;
 				((peer.group == addr.group) && (peer.user == addr.user)).if { ^peer };
-			};
-		}}
+			}
+		} {
+			// AooAddr, find by IP+port
+			peers.do { arg peer;
+				(addr == peer).if { ^peer }
+			}
+		};
 		^nil;
 	}
 
@@ -253,6 +253,10 @@ AooClient {
 		addr.ip !? { ^addr; };
 		peer = this.findPeer(addr);
 		peer !? { ^peer; };
-		MethodError("%: couldn't find peer %|%".format(this.class.name, addr.group, addr.user), this).throw;
+		addr.isKindOf(AooPeer).if {
+			MethodError("%: couldn't find peer %".format(this.class.name, addr), this).throw;
+		} {
+			MethodError("%: bad address %".format(this.class.name, addr), this).throw;
+		}
 	}
 }
