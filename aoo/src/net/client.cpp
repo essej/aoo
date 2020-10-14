@@ -1224,7 +1224,7 @@ void client::handle_peer_add(const osc::ReceivedMessage& msg){
 
     // check if peer already exists (shouldn't happen)
     for (auto& p: peers_){
-        if (p->match(group, user)){
+        if (p->match(group, user, id)){
             LOG_ERROR("aoo_client: peer " << *p << " already added");
             return;
         }
@@ -1249,7 +1249,7 @@ void client::handle_peer_remove(const osc::ReceivedMessage& msg){
     unique_lock lock(peer_lock_); // writer lock!
 
     auto result = std::find_if(peers_.begin(), peers_.end(),
-                               [&](auto& p){ return p->match(group, user); });
+        [&](auto& p){ return p->match(group, user, id); });
     if (result == peers_.end()){
         LOG_ERROR("aoo_client: couldn't remove " << group << "|" << user);
         return;
@@ -1461,13 +1461,14 @@ bool peer::match(const ip_address &addr) const {
     if (real_addr){
         return *real_addr == addr;
     } else {
-        return public_address_ == addr || local_address_ == addr;
+        return true; // match all messages!
     }
 }
 
-bool peer::match(const std::string& group, const std::string& user)
+bool peer::match(const std::string& group, const std::string& user,
+                 int32_t id)
 {
-    return group_ == group && user_ == user;
+    return id_ == id && group_ == group && user_ == user;
 }
 
 std::ostream& operator << (std::ostream& os, const peer& p)
@@ -1523,7 +1524,14 @@ void peer::send(time_tag now){
         if (delta >= client_->request_interval()){
             char buf[64];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
-            msg << osc::BeginMessage(AOO_NET_MSG_PEER_PING) << osc::EndMessage;
+            // Include group+name+id, so peers can identify us even
+            // if we're behind a symmetric NAT.
+            // NOTE: This trick doesn't work if both parties are
+            // behind a symmetrict NAT; in that case, UDP hole punching
+            // simply doesn't work.
+            msg << osc::BeginMessage(AOO_NET_MSG_PEER_PING)
+                << group_.c_str() << user_.c_str() << (int32_t)id_
+                << osc::EndMessage;
 
             client_->send_message_udp(msg.Data(), msg.Size(), local_address_);
             client_->send_message_udp(msg.Data(), msg.Size(), public_address_);
@@ -1535,17 +1543,55 @@ void peer::send(time_tag now){
     }
 }
 
+bool peer::handle_first_message(const osc::ReceivedMessage &msg, int onset,
+                                const ip_address &addr)
+{
+    // this is the first peer message
+    if (addr == public_address_){
+        address_.store(&public_address_);
+        return true;
+    } else if (addr == local_address_){
+        address_.store(&local_address_);
+        return true;
+    } else {
+        // We might get a message from a peer behind a symmetric NAT.
+        // To be sure, check group, user and ID, but only if
+        // provided (for backwards compatibility with older AOO clients)
+        auto pattern = msg.AddressPattern() + onset;
+        if (!strcmp(pattern, AOO_NET_MSG_PING)){
+            if (msg.ArgumentCount() >= 3){
+                try {
+                    auto it = msg.ArgumentsBegin();
+                    std::string group = (it++)->AsString();
+                    std::string user = (it++)->AsString();
+                    int32_t id = (it++)->AsInt32();
+                    if (group == group_ && user == user_ && id == id_){
+                        other_address_ = addr;
+                        address_.store(&other_address_);
+                        LOG_WARNING("aoo_client: peer " << *this
+                                    << " is located behind a symmetric NAT!");
+                        return true;
+                    }
+                } catch (const osc::Exception& e){
+                    LOG_ERROR("aoo_client: got bad " << pattern
+                              << " message from peer: " << e.what());
+                }
+            } else {
+                // ignore silently!
+            }
+        } else {
+            LOG_ERROR("aoo_client: got " << pattern
+                      << " message from unknown peer");
+        }
+        return false;
+    }
+}
+
 void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
                           const ip_address& addr)
 {
     if (!address_.load()){
-        // this is the first peer message
-        if (addr == public_address_){
-            address_.store(&public_address_);
-        } else if (addr == local_address_){
-            address_.store(&local_address_);
-        } else {
-            LOG_ERROR("aoo_client: bug in peer::handle_message");
+        if (!handle_first_message(msg, onset, addr)){
             return;
         }
 
@@ -1558,6 +1604,7 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
 
         LOG_DEBUG("aoo_client: successfully established connection with " << *this);
     }
+
     auto pattern = msg.AddressPattern() + onset;
     try {
         if (!strcmp(pattern, AOO_NET_MSG_PING)){

@@ -43,7 +43,8 @@ public:
 
     bool match(const ip_address& addr) const;
 
-    bool match(const std::string& group, const std::string& user);
+    bool match(const std::string& group, const std::string& user,
+               int32_t id);
 
     int32_t id() const { return id_; }
 
@@ -65,6 +66,9 @@ public:
     void handle_message(const osc::ReceivedMessage& msg, int onset,
                         const ip_address& addr);
 
+    bool handle_first_message(const osc::ReceivedMessage& msg, int onset,
+                              const ip_address& addr);
+
     friend std::ostream& operator << (std::ostream& os, const peer& p);
 private:
     client *client_;
@@ -73,6 +77,7 @@ private:
     std::string user_;
     ip_address public_address_;
     ip_address local_address_;
+    ip_address other_address_;
     std::atomic<ip_address *> address_{nullptr};
     time_tag start_time_;
     double last_pingtime_ = 0;
