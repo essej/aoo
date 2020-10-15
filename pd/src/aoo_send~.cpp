@@ -476,7 +476,7 @@ static t_int * aoo_send_perform(t_int *w)
                   "aoo_sample size must match t_sample");
 
     if (x->x_node){
-        auto t = x->x_node->get_osctime();
+        auto t = aoo::get_osctime();
         auto vec = (const aoo_sample **)x->x_vec.get();
 
         if (x->x_source->process(vec, n, t) > 0){

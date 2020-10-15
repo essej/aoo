@@ -98,9 +98,6 @@ struct t_node : public i_node
 
     t_node_proxy x_proxy; // we can't directly bind t_node because of vtable
     t_symbol *x_bindsym;
-    // time
-    aoo::time_tag x_osctime;
-    double x_lastclocktime = -1;
     // dependants
     std::vector<t_client> x_clients;
     aoo::shared_mutex x_clientlock;
@@ -151,8 +148,6 @@ struct t_node : public i_node
     void remove_group(t_symbol *group) override;
 
     void notify() override;
-
-    uint64_t get_osctime() override;
 
     // private methods
     bool add_client(t_pd *obj, int32_t id);
@@ -249,15 +244,6 @@ void t_node::notify()
 #if !AOO_NODE_POLL
     x_condition.notify_all();
 #endif
-}
-
-uint64_t t_node::get_osctime(){
-    auto now = clock_getlogicaltime();
-    if (now != x_lastclocktime){
-        x_osctime = aoo::time_tag::now();
-        x_lastclocktime = now;
-    }
-    return x_osctime;
 }
 
 // private methods
@@ -551,5 +537,5 @@ t_node::~t_node()
 void aoo_node_setup(void)
 {
     node_proxy_class = class_new(gensym("aoo node proxy"), 0, 0,
-                               sizeof(t_node_proxy), CLASS_PD, A_NULL);
+                                 sizeof(t_node_proxy), CLASS_PD, A_NULL);
 }

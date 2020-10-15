@@ -15,6 +15,16 @@
 
 namespace aoo {
 
+/*///////////////////////////// OSC time ///////////////////////////////*/
+
+uint64_t get_osctime();
+
+struct t_dejitter;
+
+t_dejitter *get_dejitter();
+
+uint64_t get_osctime_dejitter(t_dejitter *context);
+
 /*///////////////////////////// aoo_node /////////////////////////////*/
 
 struct i_node {
@@ -48,8 +58,6 @@ struct i_node {
     virtual void remove_group(t_symbol *group) = 0;
 
     virtual void notify() = 0;
-
-    virtual uint64_t get_osctime() = 0;
 };
 
 /*///////////////////////////// helper functions ///////////////////////////////*/

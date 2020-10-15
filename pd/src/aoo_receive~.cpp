@@ -365,7 +365,7 @@ static t_int * aoo_receive_perform(t_int *w)
     };
 
     if (x->x_node){
-        auto t = x->x_node->get_osctime();
+        auto t = aoo::get_osctime();
         auto vec = x->x_vec.get();
 
         if (x->x_sink->process(vec, n, t) <= 0){

@@ -31,8 +31,6 @@ enum t_target
 
 #define DEJITTER 1
 
-#define DEJITTER_THRESHOLD 0.75
-
 struct t_osc_message
 {
     t_osc_message(const char *data, int32_t size,
@@ -59,15 +57,10 @@ struct t_aoo_client
 
     // for OSC messages
     ip_address x_peer;
-    t_symbol *x_group;
-    t_target x_target = TARGET_BROADCAST;
+    t_symbol *x_group = nullptr;
+    t_dejitter *x_dejitter = nullptr;
     t_float x_offset = -1; // immediately
-#if DEJITTER
-    aoo::time_tag x_lastosctime;
-    double x_lastclocktime = -1;
-    double x_jitter_offset = 0;
-    aoo::time_tag x_osctime_adjusted;
-#endif
+    t_target x_target = TARGET_BROADCAST;
     bool x_connected = false;
     bool x_schedule = true;
     bool x_discard = false;
@@ -88,12 +81,6 @@ struct t_aoo_client
 
     void send_message(int argc, t_atom *argv,
                       const void *target, int32_t len);
-
-#if DEJITTER
-    void update_jitter_offset();
-
-    aoo::time_tag get_osctime_adjusted();
-#endif
 
     // replies
     using t_reply = std::function<void()>;
@@ -156,9 +143,9 @@ void t_aoo_client::send_message(int argc, t_atom *argv,
     if (x_offset >= 0 && atom_getsymbol(argv)->s_name[0] != '#') {
         // make timetag relative to current OSC time
     #if DEJITTER
-        aoo::time_tag now = get_osctime_adjusted();
+        aoo::time_tag now = get_osctime_dejitter(x_dejitter);
     #else
-        aoo::time_tag now = x_node->get_osctime();
+        aoo::time_tag now = get_osctime();
     #endif
         auto time = now + aoo::time_tag::from_seconds(x_offset * 0.001);
 
@@ -303,10 +290,6 @@ static void aoo_client_queue_tick(t_aoo_client *x)
     auto& queue = x->x_queue;
     auto now = clock_getlogicaltime();
 
-#if DEJITTER
-    x->update_jitter_offset();
-#endif
-
     for (auto it = queue.begin(); it != queue.end();){
         auto time = it->first;
         auto& msg = it->second;
@@ -318,61 +301,19 @@ static void aoo_client_queue_tick(t_aoo_client *x)
         }
     }
     // reset clock
-#if DEJITTER
-    clock_delay(x->x_queue_clock, 1);
-#else
     if (!queue.empty()){
         // make sure update_jitter_offset() is called once per DSP tick!
         clock_set(x->x_queue_clock, queue.begin()->first);
     }
-#endif
 }
 
-#if DEJITTER
-// This is called either in queue_tick() or send_message(),
-// but only once per DSP tick!
-void t_aoo_client::update_jitter_offset(){
-    auto now = clock_getlogicaltime();
-    if (now != x_lastclocktime){
-        aoo::time_tag osctime = x_node->get_osctime();
-        if (x_lastosctime.value()){
-            auto oldtime = x_osctime_adjusted;
-            auto elapsed = aoo::time_tag::duration(x_lastosctime, osctime);
-            auto ticktime = (double)sys_getblksize() / (double)sys_getsr();
-            if ((elapsed / ticktime) < DEJITTER_THRESHOLD){
-                auto diff = ticktime - elapsed;
-                x_jitter_offset += diff;
-                x_osctime_adjusted = osctime
-                        + aoo::time_tag::from_seconds(x_jitter_offset);
-            } else {
-                x_jitter_offset = 0;
-                x_osctime_adjusted = osctime;
-            }
-            // never let time go backwards!
-            if (x_osctime_adjusted < oldtime){
-                x_osctime_adjusted = oldtime;
-            }
 
-            LOG_VERBOSE("time difference: " << (elapsed * 1000.0) << " ms");
-            LOG_VERBOSE("jitter offset: " << (x_jitter_offset * 1000.0) << " ms");
-            LOG_VERBOSE("adjusted OSC time: " << x_osctime_adjusted);
-        }
-        x_lastosctime = osctime;
-        x_lastclocktime = now;
-    }
-}
-
-aoo::time_tag t_aoo_client::get_osctime_adjusted(){
-    update_jitter_offset();
-    return x_osctime_adjusted;
-}
-#endif
 
 void t_aoo_client::handle_peer_message(const char *data, int32_t size,
                                        const ip_address& address, aoo::time_tag t)
 {
     if (!t.is_immediate()){
-        auto now = x_node->get_osctime();
+        auto now = aoo::get_osctime();
         auto delay = aoo::time_tag::duration(now, t) * 1000.0;
         if (x_schedule){
             if (delay > 0){
@@ -705,16 +646,14 @@ t_aoo_client::t_aoo_client(int argc, t_atom *argv)
                        x_node, (aoo_sendfn)aoo_node_sendto, port));
         if (x_client){
             verbose(0, "new aoo client on port %d", port);
+            // get dejitter context
+            x_dejitter = get_dejitter();
             // start thread
             x_thread = std::thread([this](){
                x_client->run();
             });
             // start clock
             clock_delay(x_clock, AOO_CLIENT_POLL_INTERVAL);
-
-        #if DEJITTER
-            clock_delay(x_queue_clock, 0);
-        #endif
         }
     }
 }
