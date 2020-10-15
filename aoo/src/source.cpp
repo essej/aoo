@@ -542,11 +542,20 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     }
 
     // non-interleaved -> interleaved
-    auto nsamples = blocksize_ * nchannels_;
-    auto *buf = (aoo_sample *)alloca(nsamples * sizeof(aoo_sample));
-    for (int i = 0; i < nchannels_; ++i){
+    // only as many channels as current format needs
+    auto nfchannels = encoder_->nchannels();
+    auto nsamples = blocksize_ * nfchannels;
+    auto buf = (aoo_sample *)alloca(nsamples * sizeof(aoo_sample));
+    auto maxnchannels = std::min(nfchannels, nchannels_);
+    for (int i = 0; i < maxnchannels; ++i){
         for (int j = 0; j < n; ++j){
-            buf[j * nchannels_ + i] = data[i][j];
+            buf[j * nfchannels + i] = data[i][j];
+        }
+    }
+    // zero remaining channels
+    for (int i = maxnchannels; i < nfchannels; ++i){
+        for (int j = 0; j < n; ++j){
+            buf[j * nfchannels + i] = 0;
         }
     }
 
@@ -763,15 +772,16 @@ void source::update(){
                   << ", samples: " << bufsize << ", nbuffers = " << nbuffers);
 
         // resize audio buffer
-        auto nsamples = encoder_->blocksize() * nchannels_;
+        auto nsamples = encoder_->blocksize() * encoder_->nchannels();
         audioqueue_.resize(nbuffers * nsamples, nsamples);
         srqueue_.resize(nbuffers, 1);
 
         // resampler
         if (blocksize_ != encoder_->blocksize() || samplerate_ != encoder_->samplerate()){
             resampler_.setup(blocksize_, encoder_->blocksize(),
-                             samplerate_, encoder_->samplerate(), nchannels_);
+                             samplerate_, encoder_->samplerate(), encoder_->nchannels());
         } else {
+            // don't need to resample
             resampler_.clear();
         }
 
