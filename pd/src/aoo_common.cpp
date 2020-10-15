@@ -180,8 +180,8 @@ static int32_t format_getparam(void *x, int argc, t_atom *argv, int which,
     return def;
 }
 
-bool format_parse(void *x, aoo_format_storage &f, int nchannels,
-                  int argc, t_atom *argv)
+bool format_parse(void *x, aoo_format_storage &f, int argc, t_atom *argv,
+                  int defnumchannels)
 {
     t_symbol *codec = atom_getsymbolarg(0, argc, argv);
 
@@ -190,9 +190,9 @@ bool format_parse(void *x, aoo_format_storage &f, int nchannels,
         fmt.header.codec = AOO_CODEC_PCM;
         fmt.header.blocksize = format_getparam(x, argc, argv, 1, "blocksize", 64);
         fmt.header.samplerate = format_getparam(x, argc, argv, 2, "samplerate", sys_getsr());
-        fmt.header.nchannels = nchannels;
+        fmt.header.nchannels = format_getparam(x, argc, argv, 3, "channels", defnumchannels);
 
-        int bitdepth = format_getparam(x, argc, argv, 3, "bitdepth", 4);
+        int bitdepth = format_getparam(x, argc, argv, 4, "bitdepth", 4);
         switch (bitdepth){
         case 2:
             fmt.bitdepth = AOO_PCM_INT16;
@@ -217,12 +217,12 @@ bool format_parse(void *x, aoo_format_storage &f, int nchannels,
         fmt.header.codec = AOO_CODEC_OPUS;
         fmt.header.blocksize = format_getparam(x, argc, argv, 1, "blocksize", 480); // 10ms
         fmt.header.samplerate = format_getparam(x, argc, argv, 2, "samplerate", 48000);
-        fmt.header.nchannels = nchannels;
+        fmt.header.nchannels = format_getparam(x, argc, argv, 3, "channels", defnumchannels);
 
         // bitrate ("auto", "max" or float)
-        if (argc > 3){
-            if (argv[3].a_type == A_SYMBOL){
-                t_symbol *sym = argv[3].a_w.w_symbol;
+        if (argc > 4){
+            if (argv[4].a_type == A_SYMBOL){
+                t_symbol *sym = argv[4].a_w.w_symbol;
                 if (sym == gensym("auto")){
                     fmt.bitrate = OPUS_AUTO;
                 } else if (sym == gensym("max")){
@@ -232,7 +232,7 @@ bool format_parse(void *x, aoo_format_storage &f, int nchannels,
                     return false;
                 }
             } else {
-                int bitrate = atom_getfloat(argv + 3);
+                int bitrate = atom_getfloat(argv + 4);
                 if (bitrate > 0){
                     fmt.bitrate = bitrate;
                 } else {
@@ -244,15 +244,15 @@ bool format_parse(void *x, aoo_format_storage &f, int nchannels,
             fmt.bitrate = OPUS_AUTO;
         }
         // complexity ("auto" or 0-10)
-        int complexity = format_getparam(x, argc, argv, 4, "complexity", OPUS_AUTO);
+        int complexity = format_getparam(x, argc, argv, 5, "complexity", OPUS_AUTO);
         if ((complexity < 0 || complexity > 10) && complexity != OPUS_AUTO){
             pd_error(x, "%s: complexity value %d out of range", classname(x), complexity);
             return false;
         }
         fmt.complexity = complexity;
         // signal type ("auto", "music", "voice")
-        if (argc > 5){
-            t_symbol *type = atom_getsymbol(argv + 5);
+        if (argc > 6){
+            t_symbol *type = atom_getsymbol(argv + 6);
             if (type == gensym("auto")){
                 fmt.signal_type = OPUS_AUTO;
             } else if (type == gensym("music")){
@@ -286,11 +286,11 @@ int format_to_atoms(const aoo_format &f, int argc, t_atom *argv)
     SETSYMBOL(argv, codec);
     SETFLOAT(argv + 1, f.blocksize);
     SETFLOAT(argv + 2, f.samplerate);
-    // omit nchannels
+    SETFLOAT(argv + 3, f.nchannels);
 
     if (codec == gensym(AOO_CODEC_PCM)){
-        // pcm <blocksize> <samplerate> <bitdepth>
-        if (argc < 4){
+        // pcm <blocksize> <samplerate> <channels> <bitdepth>
+        if (argc < 5){
             error("format_to_atoms: too few atoms for pcm format!");
             return 0;
         }
@@ -312,19 +312,19 @@ int format_to_atoms(const aoo_format &f, int argc, t_atom *argv)
         default:
             nbits = 0;
         }
-        SETFLOAT(argv + 3, nbits);
-        return 4;
+        SETFLOAT(argv + 4, nbits);
+        return 5;
     }
 #if USE_CODEC_OPUS
     else if (codec == gensym(AOO_CODEC_OPUS)){
-        // opus <blocksize> <samplerate> <bitrate> <complexity> <signaltype>
-        if (argc < 6){
+        // opus <blocksize> <samplerate> <channels> <bitrate> <complexity> <signaltype>
+        if (argc < 7){
             error("format_to_atoms: too few atoms for opus format!");
             return 0;
         }
         auto& fmt = (aoo_format_opus &)f;
     #if 0
-        SETFLOAT(argv + 3, fmt.bitrate);
+        SETFLOAT(argv + 4, fmt.bitrate);
     #else
         // workaround for bug in opus_multistream_encoder (as of opus v1.3.2)
         // where OPUS_GET_BITRATE would always return OPUS_AUTO.
@@ -332,17 +332,17 @@ int format_to_atoms(const aoo_format &f, int argc, t_atom *argv)
         // so we return the symbols instead.
         switch (fmt.bitrate){
         case OPUS_AUTO:
-            SETSYMBOL(argv + 3, gensym("auto"));
+            SETSYMBOL(argv + 4, gensym("auto"));
             break;
         case OPUS_BITRATE_MAX:
-            SETSYMBOL(argv + 3, gensym("max"));
+            SETSYMBOL(argv + 4, gensym("max"));
             break;
         default:
-            SETFLOAT(argv + 3, fmt.bitrate);
+            SETFLOAT(argv + 4, fmt.bitrate);
             break;
         }
     #endif
-        SETFLOAT(argv + 4, fmt.complexity);
+        SETFLOAT(argv + 5, fmt.complexity);
         t_symbol *signaltype;
         switch (fmt.signal_type){
         case OPUS_SIGNAL_MUSIC:
@@ -355,8 +355,8 @@ int format_to_atoms(const aoo_format &f, int argc, t_atom *argv)
             signaltype = gensym("auto");
             break;
         }
-        SETSYMBOL(argv + 5, signaltype);
-        return 6;
+        SETSYMBOL(argv + 6, signaltype);
+        return 7;
     }
 #endif
     else {
