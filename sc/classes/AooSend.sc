@@ -121,12 +121,18 @@ AooSendCtl : AooCtl {
 
 	format { arg fmt, action;
 		var replyID = AooCtl.prNextReplyID;
-		// replace 'nil' with 'auto' Symbol
-		fmt = fmt.collect { arg x; x ?? \auto };
-		this.prMakeOSCFunc({ arg ... f;
+		fmt.isKindOf(AooFormat).not.if {
+			MethodError("aoo: bad type for 'fmt' parameter", this).throw;
+		};
+		this.prMakeOSCFunc({ arg codec ...args;
+			var f = codec.switch(
+				\pcm, { AooFormatPCM(*args) },
+				\opus, { AooFormatOpus(*args) },
+				{ "%: unknown format '%'".format(this.class.name, codec).error; nil }
+			);
 			action.value(f);
 		}, '/aoo/format', replyID).oneShot;
-		this.prSendMsg('/format', replyID, *fmt);
+		this.prSendMsg('/format', replyID, *fmt.asOSCArgArray);
 	}
 
 	channelOnset { arg addr, id, onset;

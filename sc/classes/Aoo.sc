@@ -124,6 +124,49 @@ Aoo {
 	}
 }
 
+AooFormat {
+	classvar <>codec = \unknown;
+
+	var <>blockSize;
+	var <>sampleRate;
+	var <>channels;
+
+	asOSCArgArray {
+		// replace 'nil' with 'auto' Symbol
+		arg array = this.instVarSize.collect { arg i;
+			this.instVarAt(i) ?? { \auto };
+		};
+		^[ this.class.codec ] ++ array;
+	}
+
+	printOn { arg stream;
+		stream << this.class.name << "("
+		<<* this.asOSCArgArray[1..] << ")";
+	}
+}
+
+AooFormatPCM : AooFormat {
+	classvar <>codec = \pcm;
+
+	var <>bitDepth;
+
+	*new { arg blockSize, sampleRate, channels, bitDepth;
+		^super.newCopyArgs(blockSize, sampleRate, channels, bitDepth);
+	}
+}
+
+AooFormatOpus : AooFormat {
+	classvar <>codec = \opus;
+
+	var <>bitRate;
+	var <>complexity;
+	var <>type;
+
+	*new { arg blockSize, sampleRate, channels, bitRate, complexity, type;
+		^super.newCopyArgs(blockSize, sampleRate, channels, bitRate, complexity, type);
+	}
+}
+
 AooAddr {
 	var <>ip;
 	var <>port;

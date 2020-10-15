@@ -49,7 +49,20 @@ AooReceiveCtl : AooCtl {
 		var addr = Aoo.prResolveAddr(this.port, AooAddr(*args[0..1]));
 		var id = args[2];
 		var source = ( addr: addr, id: id );
-		var event = [type, addr, id] ++ args[3..];
+		var codec, fmt;
+		var event = (type == '/format').if {
+			// make AooFormat object from OSC args
+			codec = args[3];
+			fmt = codec.switch(
+				\pcm, { AooFormatPCM(*args[4..]) },
+				\opus, { AooFormatOpus(*args[4..]) },
+				{ "%: unknown format '%'".format(this.class.name, codec).error; nil }
+			);
+			[type, addr, id] ++ fmt;
+		} {
+			// pass OSC args unchanged
+			[type, addr, id] ++ args[3..]
+		};
 		// If source doesn't exist, fake an '/add' event.
 		// This happens if the source has been added
 		// before we could create the controller.

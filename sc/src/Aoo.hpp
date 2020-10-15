@@ -291,7 +291,7 @@ aoo::endpoint * getPeerArg(INode* node, sc_msg_iter *args);
 void makeDefaultFormat(aoo_format_storage& f, int sampleRate,
                        int blockSize, int numChannels);
 
-bool parseFormat(const AooUnit& unit, int nchannels,
+bool parseFormat(const AooUnit& unit, int defNumChannels,
                  sc_msg_iter *args, aoo_format_storage &f);
 
 void serializeFormat(osc::OutboundPacketStream& msg, const aoo_format& f);
