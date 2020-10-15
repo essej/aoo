@@ -100,7 +100,7 @@ struct t_node : public i_node
     t_symbol *x_bindsym;
     // time
     aoo::time_tag x_osctime;
-    double x_lastsystime = -1;
+    double x_lastclocktime = -1;
     // dependants
     std::vector<t_client> x_clients;
     aoo::shared_mutex x_clientlock;
@@ -253,9 +253,9 @@ void t_node::notify()
 
 uint64_t t_node::get_osctime(){
     auto now = clock_getlogicaltime();
-    if (now != x_lastsystime){
+    if (now != x_lastclocktime){
         x_osctime = aoo::time_tag::now();
-        x_lastsystime = now;
+        x_lastclocktime = now;
     }
     return x_osctime;
 }

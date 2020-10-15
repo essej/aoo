@@ -54,7 +54,6 @@ struct t_aoo_client
     std::thread x_thread;
 
     // for OSC messages
-    aoo::time_tag x_time;
     ip_address x_peer;
     t_symbol *x_group;
     t_target x_target = TARGET_BROADCAST;
@@ -137,12 +136,11 @@ void t_aoo_client::send_message(int argc, t_atom *argv,
     char *buf;
     int32_t count;
 
+    // schedule OSC message as bundle (not needed for OSC bundles!)
     if (x_offset >= 0 && atom_getsymbol(argv)->s_name[0] != '#') {
-        // schedule OSC message as bundle
-
-        // make timetag relative to current time
-        auto offset = aoo::time_tag::from_seconds((double)x_offset * 0.001);
-        auto time = aoo::time_tag::now() + offset;
+        // make timetag relative to current OSC time
+        aoo::time_tag now = x_node->get_osctime();
+        auto time = now + aoo::time_tag::from_seconds(x_offset * 0.001);
 
         const int headersize = 20; //#bundle string (8), timetag (8), message size (4)
         count = argc + headersize;
@@ -304,7 +302,8 @@ void t_aoo_client::handle_peer_message(const char *data, int32_t size,
                                        const ip_address& address, aoo::time_tag t)
 {
     if (!t.is_immediate()){
-        auto delay = aoo::time_tag::duration(x_time, t) * 1000.0;
+        auto now = x_node->get_osctime();
+        auto delay = aoo::time_tag::duration(now, t) * 1000.0;
         if (x_schedule){
             if (delay > 0){
                 // put on queue and schedule on clock (using logical time)
@@ -431,8 +430,6 @@ static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
 
 static void aoo_client_tick(t_aoo_client *x)
 {
-    x->x_time = aoo::time_tag::now();
-
     x->x_client->poll_events((aoo_eventhandler)aoo_client_handle_event, x);
 
     x->x_node->notify();
