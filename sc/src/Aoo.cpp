@@ -387,9 +387,9 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
     if (!strcmp(codec, AOO_CODEC_PCM)){
         auto& fmt = (aoo_format_pcm &)f;
         fmt.header.codec = AOO_CODEC_PCM;
+        fmt.header.nchannels = getFormatParam(args, "channels", defNumChannels);
         fmt.header.blocksize = getFormatParam(args, "blocksize", unit.bufferSize());
         fmt.header.samplerate = getFormatParam(args, "samplerate", unit.sampleRate());
-        fmt.header.nchannels = getFormatParam(args, "channels", defNumChannels);
 
         int bitdepth = getFormatParam(args, "bitdepth", 4);
         switch (bitdepth){
@@ -414,9 +414,9 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
     else if (!strcmp(codec, AOO_CODEC_OPUS)){
         auto &fmt = (aoo_format_opus &)f;
         fmt.header.codec = AOO_CODEC_OPUS;
+        fmt.header.nchannels = getFormatParam(args, "channels", defNumChannels);
         fmt.header.blocksize = getFormatParam(args, "blocksize", 480); // 10ms
         fmt.header.samplerate = getFormatParam(args, "samplerate", 48000);
-        fmt.header.nchannels = getFormatParam(args, "channels", defNumChannels);
 
         // bitrate ("auto", "max" or float)
         if (args->remain() > 0){
@@ -477,7 +477,7 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
 
 void serializeFormat(osc::OutboundPacketStream& msg, const aoo_format& f)
 {
-    msg << f.codec << f.blocksize << f.samplerate << f.nchannels;
+    msg << f.codec << f.nchannels << f.blocksize << f.samplerate;
 
     if (!strcmp(f.codec, AOO_CODEC_PCM)){
         // pcm <blocksize> <samplerate> <bitdepth>

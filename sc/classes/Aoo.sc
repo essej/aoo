@@ -127,9 +127,9 @@ Aoo {
 AooFormat {
 	classvar <>codec = \unknown;
 
+	var <>channels;
 	var <>blockSize;
 	var <>sampleRate;
-	var <>channels;
 
 	asOSCArgArray {
 		// replace 'nil' with 'auto' Symbol
@@ -150,8 +150,8 @@ AooFormatPCM : AooFormat {
 
 	var <>bitDepth;
 
-	*new { arg blockSize, sampleRate, channels, bitDepth;
-		^super.newCopyArgs(blockSize, sampleRate, channels, bitDepth);
+	*new { arg channels, blockSize, sampleRate, bitDepth;
+		^super.newCopyArgs(channels, blockSize, sampleRate, bitDepth);
 	}
 }
 
@@ -160,10 +160,10 @@ AooFormatOpus : AooFormat {
 
 	var <>bitRate;
 	var <>complexity;
-	var <>type;
+	var <>signalType;
 
-	*new { arg blockSize, sampleRate, channels, bitRate, complexity, type;
-		^super.newCopyArgs(blockSize, sampleRate, channels, bitRate, complexity, type);
+	*new { arg channels, blockSize, sampleRate, bitRate, complexity, signalType;
+		^super.newCopyArgs(channels, blockSize, sampleRate, bitRate, complexity, signalType);
 	}
 }
 
