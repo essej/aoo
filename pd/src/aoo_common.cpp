@@ -181,16 +181,16 @@ static int32_t format_getparam(void *x, int argc, t_atom *argv, int which,
 }
 
 bool format_parse(void *x, aoo_format_storage &f, int argc, t_atom *argv,
-                  int defnumchannels)
+                  int maxnumchannels)
 {
     t_symbol *codec = atom_getsymbolarg(0, argc, argv);
 
     if (codec == gensym(AOO_CODEC_PCM)){
         auto& fmt = (aoo_format_pcm &)f;
         fmt.header.codec = AOO_CODEC_PCM;
-        fmt.header.blocksize = format_getparam(x, argc, argv, 1, "blocksize", 64);
-        fmt.header.samplerate = format_getparam(x, argc, argv, 2, "samplerate", sys_getsr());
-        fmt.header.nchannels = format_getparam(x, argc, argv, 3, "channels", defnumchannels);
+        fmt.header.nchannels = format_getparam(x, argc, argv, 1, "channels", maxnumchannels);
+        fmt.header.blocksize = format_getparam(x, argc, argv, 2, "blocksize", 64);
+        fmt.header.samplerate = format_getparam(x, argc, argv, 3, "samplerate", sys_getsr());
 
         int bitdepth = format_getparam(x, argc, argv, 4, "bitdepth", 4);
         switch (bitdepth){
@@ -215,9 +215,9 @@ bool format_parse(void *x, aoo_format_storage &f, int argc, t_atom *argv,
     else if (codec == gensym(AOO_CODEC_OPUS)){
         auto &fmt = (aoo_format_opus &)f;
         fmt.header.codec = AOO_CODEC_OPUS;
-        fmt.header.blocksize = format_getparam(x, argc, argv, 1, "blocksize", 480); // 10ms
-        fmt.header.samplerate = format_getparam(x, argc, argv, 2, "samplerate", 48000);
-        fmt.header.nchannels = format_getparam(x, argc, argv, 3, "channels", defnumchannels);
+        fmt.header.nchannels = format_getparam(x, argc, argv, 1, "channels", maxnumchannels);
+        fmt.header.blocksize = format_getparam(x, argc, argv, 2, "blocksize", 480); // 10ms
+        fmt.header.samplerate = format_getparam(x, argc, argv, 3, "samplerate", 48000);
 
         // bitrate ("auto", "max" or float)
         if (argc > 4){
@@ -284,9 +284,9 @@ int format_to_atoms(const aoo_format &f, int argc, t_atom *argv)
     }
     t_symbol *codec = gensym(f.codec);
     SETSYMBOL(argv, codec);
-    SETFLOAT(argv + 1, f.blocksize);
-    SETFLOAT(argv + 2, f.samplerate);
-    SETFLOAT(argv + 3, f.nchannels);
+    SETFLOAT(argv + 1, f.nchannels);
+    SETFLOAT(argv + 2, f.blocksize);
+    SETFLOAT(argv + 3, f.samplerate);
 
     if (codec == gensym(AOO_CODEC_PCM)){
         // pcm <blocksize> <samplerate> <channels> <bitdepth>

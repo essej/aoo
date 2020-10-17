@@ -249,6 +249,16 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     aoo_format_storage f;
     if (format_parse(x, f, argc, argv, x->x_nchannels)){
+        // Prevent user from accidentally creating huge number of channels.
+        // This also helps to catch an issue with old patches (before 2.0-pre3),
+        // which would pass the block size as the channel count, because the
+        // "channel" argument hasn't been added yet.
+        if (f.header.nchannels > x->x_nchannels){
+            pd_error(x, "%s: 'channel' argument (%d) in 'format' message out of range!",
+                     classname(x), f.header.nchannels);
+            f.header.nchannels = x->x_nchannels;
+        }
+
         x->x_source->set_format(f.header);
         // output actual format
         t_atom msg[16];
