@@ -320,6 +320,11 @@ void aoo_send_format(AooSendUnit *unit, sc_msg_iter* args){
             aoo_format_storage f;
             int nchannels = static_cast<AooSendUnit&>(owner.unit()).numChannels();
             if (parseFormat(owner.unit(), nchannels, &args, f)){
+                if (f.header.nchannels > nchannels){
+                    LOG_ERROR("AooSend: 'channel' argument (" << f.header.nchannels
+                              << ") out of range");
+                    f.header.nchannels = nchannels;
+                }
                 if (owner.source()->set_format(f.header) > 0){
                     // only send format on success
                     serializeFormat(msg, f.header);
