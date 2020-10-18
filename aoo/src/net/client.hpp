@@ -41,6 +41,10 @@ public:
 
     ~peer();
 
+    bool connected() const {
+        return address_.load() != nullptr;
+    }
+
     bool match(const ip_address& addr) const;
 
     bool match(const std::string& group, const std::string& user,

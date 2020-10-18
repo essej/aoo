@@ -1237,7 +1237,8 @@ void client::handle_peer_add(const osc::ReceivedMessage& msg){
     // don't handle event yet, wait for ping handshake
 
     LOG_VERBOSE("aoo_client: new peer " << *peers_.back()
-                << " (" << public_ip << ":" << public_port << ")");
+                << " (public address: " << public_ip << ":" << public_port
+                << ", local address: " << local_ip << ":" << local_port << ")");
 }
 
 void client::handle_peer_remove(const osc::ReceivedMessage& msg){
@@ -1255,13 +1256,18 @@ void client::handle_peer_remove(const osc::ReceivedMessage& msg){
         return;
     }
 
+    bool connected = (*result)->connected();
     ip_address addr = (*result)->address();
 
     peers_.erase(result);
 
-    auto e = std::make_unique<peer_event>(
-                AOO_NET_PEER_LEAVE_EVENT, addr, group.c_str(), user.c_str(), id);
-    push_event(std::move(e));
+    // only send event if we're connected, which means
+    // that an AOO_NET_PEER_JOIN_EVENT has been sent.
+    if (connected){
+        auto e = std::make_unique<peer_event>(
+                    AOO_NET_PEER_LEAVE_EVENT, addr, group.c_str(), user.c_str(), id);
+        push_event(std::move(e));
+    }
 
     LOG_VERBOSE("aoo_client: peer " << group << "|" << user << " left");
 }
@@ -1602,7 +1608,8 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
 
         client_->push_event(std::move(e));
 
-        LOG_DEBUG("aoo_client: successfully established connection with " << *this);
+        LOG_VERBOSE("aoo_client: successfully established connection with "
+                  << *this << " (" << addr.name() << ":" << addr.port() << ")");
     }
 
     auto pattern = msg.AddressPattern() + onset;
