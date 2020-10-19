@@ -49,7 +49,7 @@ struct t_aoo_send
     int32_t x_blocksize = 0;
     int32_t x_nchannels = 0;
     int32_t x_port = 0;
-    int32_t x_id = 0;
+    aoo_id x_id = 0;
     std::unique_ptr<t_float *[]> x_vec;
     // sinks
     std::vector<t_sink> x_sinks;
@@ -62,7 +62,7 @@ struct t_aoo_send
     bool x_accept = true;
 };
 
-static void aoo_send_doaddsink(t_aoo_send *x, aoo::endpoint *e, int32_t id)
+static void aoo_send_doaddsink(t_aoo_send *x, aoo::endpoint *e, aoo_id id)
 {
     x->x_source->add_sink(e, id, endpoint::send);
 
@@ -104,7 +104,7 @@ static void aoo_send_doremoveall(t_aoo_send *x)
     }
 }
 
-static void aoo_send_doremovesink(t_aoo_send *x, aoo::endpoint *e, int32_t id)
+static void aoo_send_doremovesink(t_aoo_send *x, aoo::endpoint *e, aoo_id id)
 {
     x->x_source->remove_sink(e, id);
 
@@ -269,7 +269,7 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     }
 }
 
-static t_sink *aoo_send_findsink(t_aoo_send *x, const ip_address& addr, int32_t id)
+static t_sink *aoo_send_findsink(t_aoo_send *x, const ip_address& addr, aoo_id id)
 {
     for (auto& sink : x->x_sinks){
         if (sink.s_id == id && sink.s_endpoint->address() == addr){
@@ -287,7 +287,7 @@ static void aoo_send_accept(t_aoo_send *x, t_floatarg f)
 static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     ip_address addr;
-    int32_t id;
+    aoo_id id;
     if (argc < 4){
         pd_error(x, "%s: too few arguments for 'channel' message", classname(x));
         return;
@@ -342,7 +342,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     }
 
     ip_address addr;
-    int32_t id;
+    aoo_id id;
     if (get_sink_arg(x, x->x_node, argc, argv, addr, id)){
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
@@ -404,7 +404,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     }
 
     ip_address addr;
-    int32_t id;
+    aoo_id id;
     if (get_sink_arg(x, x->x_node, argc, argv, addr, id)){
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
@@ -542,7 +542,7 @@ static void aoo_send_port(t_aoo_send *x, t_floatarg f)
 
 static void aoo_send_id(t_aoo_send *x, t_floatarg f)
 {
-    int id = f;
+    aoo_id id = f;
 
     if (id == x->x_id){
         return;
@@ -578,7 +578,7 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
     x_port = atom_getfloatarg(0, argc, argv);
 
     // arg #2: ID
-    int id = atom_getfloatarg(1, argc, argv);
+    aoo_id id = atom_getfloatarg(1, argc, argv);
     if (id < 0){
         pd_error(this, "%s: bad id % d, setting to 0", classname(this), id);
         id = 0;

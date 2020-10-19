@@ -45,7 +45,7 @@ public:
     using ptr = std::shared_ptr<INode>;
 
     static INode::ptr get(World *world, INodeClient& client,
-                          int32_t type, int port, int32_t id);
+                          aoo_type type, int port, aoo_id id);
 
     virtual ~INode() {}
 
@@ -65,7 +65,7 @@ public:
                                     const std::string& user) = 0;
 
     virtual void addPeer(const std::string& group, const std::string& user,
-                         int32_t id, const aoo::ip_address& addr) = 0;
+                         aoo_id id, const aoo::ip_address& addr) = 0;
 
     virtual void removePeer(const std::string& group, const std::string& user) = 0;
 
@@ -169,7 +169,7 @@ private:
 template<typename T>
 struct _OpenCmd : CmdData {
     int32_t port;
-    int32_t id;
+    aoo_id id;
     INode::ptr node;
     typename T::pointer obj;
     int32_t sampleRate;
@@ -181,7 +181,7 @@ struct _OpenCmd : CmdData {
 struct OptionCmd : CmdData {
     aoo::endpoint* ep;
     int32_t port;
-    int32_t id;
+    aoo_id id;
     union {
         float f;
         int i;
@@ -242,7 +242,7 @@ public:
     void beginReply(osc::OutboundPacketStream& msg, const char *cmd, int replyID);
     void beginEvent(osc::OutboundPacketStream &msg, const char *event);
     void beginEvent(osc::OutboundPacketStream& msg, const char *event,
-                    aoo::endpoint *ep, int32_t id);
+                    aoo::endpoint *ep, aoo_id id);
     void sendMsgRT(osc::OutboundPacketStream& msg);
     void sendMsgNRT(osc::OutboundPacketStream& msg);
 protected:
@@ -281,10 +281,10 @@ protected:
 uint64_t getOSCTime(World *world);
 
 bool getSinkArg(INode* node, sc_msg_iter *args,
-                aoo::endpoint *& ep, int32_t &id);
+                aoo::endpoint *& ep, aoo_id &id);
 
 bool getSourceArg(INode* node, sc_msg_iter *args,
-                  aoo::endpoint *& ep, int32_t &id);
+                  aoo::endpoint *& ep, aoo_id &id);
 
 aoo::endpoint * getPeerArg(INode* node, sc_msg_iter *args);
 

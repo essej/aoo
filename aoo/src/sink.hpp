@@ -133,12 +133,12 @@ public:
         aoo_block_gap_event block_gap;
     };
 
-    source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt);
+    source_desc(void *endpoint, aoo_replyfn fn, aoo_id id, int32_t salt);
     source_desc(const source_desc& other) = delete;
     source_desc& operator=(const source_desc& other) = delete;
 
     // getters
-    int32_t id() const { return id_; }
+    aoo_id id() const { return id_; }
 
     void *endpoint() const { return endpoint_; }
 
@@ -201,7 +201,7 @@ private:
     // data
     void *const endpoint_;
     const aoo_replyfn fn_;
-    const int32_t id_;
+    const aoo_id id_;
     int32_t salt_;
     // audio decoder
     std::unique_ptr<aoo::decoder> decoder_;
@@ -229,16 +229,16 @@ private:
 
 class sink final : public isink {
 public:
-    sink(int32_t id)
+    sink(aoo_id id)
         : id_(id) {}
 
     ~sink(){}
 
     int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
-    int32_t invite_source(void *endpoint, int32_t id, aoo_replyfn fn) override;
+    int32_t invite_source(void *endpoint, aoo_id id, aoo_replyfn fn) override;
 
-    int32_t uninvite_source(void *endpoint, int32_t id, aoo_replyfn fn) override;
+    int32_t uninvite_source(void *endpoint, aoo_id id, aoo_replyfn fn) override;
 
     int32_t uninvite_all() override;
 
@@ -259,13 +259,13 @@ public:
 
     int32_t get_option(int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t set_sourceoption(void *endpoint, int32_t id,
+    int32_t set_sourceoption(void *endpoint, aoo_id id,
                              int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t get_sourceoption(void *endpoint, int32_t id,
+    int32_t get_sourceoption(void *endpoint, aoo_id id,
                              int32_t opt, void *ptr, int32_t size) override;
     // getters
-    int32_t id() const { return id_.load(std::memory_order_relaxed); }
+    aoo_id id() const { return id_.load(std::memory_order_relaxed); }
 
     int32_t nchannels() const { return nchannels_; }
 
@@ -290,7 +290,7 @@ public:
     time_tag absolute_time() const { return timer_.get_absolute(); }
 private:
     // settings
-    std::atomic<int32_t> id_;
+    std::atomic<aoo_id> id_;
     int32_t nchannels_ = 0;
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
@@ -310,7 +310,7 @@ private:
     timer timer_;
 
     // helper methods
-    source_desc *find_source(void *endpoint, int32_t id);
+    source_desc *find_source(void *endpoint, aoo_id id);
 
     void update_sources();
 

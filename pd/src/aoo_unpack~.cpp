@@ -258,7 +258,7 @@ t_aoo_unpack::t_aoo_unpack(int argc, t_atom *argv)
     x_clock = clock_new(this, (t_method)aoo_unpack_tick);
 
     // arg #1: ID
-    int id = atom_getfloatarg(0, argc, argv);
+    aoo_id id = atom_getfloatarg(0, argc, argv);
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);

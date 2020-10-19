@@ -4,7 +4,7 @@ static InterfaceTable* ft;
 
 /*////////////////// AooReceive ////////////////*/
 
-void AooReceive::init(int32_t port, int32_t id, int32 bufsize) {
+void AooReceive::init(int32_t port, aoo_id id, int32 bufsize) {
     auto data = CmdData::create<OpenCmd>(world());
     if (data){
         data->port = port;
@@ -166,7 +166,7 @@ void AooReceive::handleEvent(const aoo_event *event){
 
 AooReceiveUnit::AooReceiveUnit() {
     int32_t port = in0(0);
-    int32_t id = in0(1);
+    aoo_id id = in0(1);
     int32_t bufsize = in0(2) * 1000.f; // sec -> ms
     auto delegate = rt::make_shared<AooReceive>(mWorld, *this);
     delegate->init(port, id, bufsize);
@@ -214,7 +214,7 @@ void aoo_recv_invite(AooReceiveUnit *unit, sc_msg_iter *args){
             owner.beginReply(msg, "/aoo/invite", replyID);
 
             aoo::endpoint *ep;
-            int32_t id;
+            aoo_id id;
             if (getSourceArg(owner.node(), &args, ep, id)){
                 if (owner.sink()->invite_source(
                     ep, id, aoo::endpoint::send) > 0) {
@@ -248,7 +248,7 @@ void aoo_recv_uninvite(AooReceiveUnit *unit, sc_msg_iter *args){
 
             if (args.remain() > 0){
                 aoo::endpoint *ep;
-                int32_t id;
+                aoo_id id;
                 if (getSourceArg(owner.node(), &args, ep, id)){
                     if (owner.sink()->uninvite_source(
                         ep, id, aoo::endpoint::send) > 0) {
@@ -315,7 +315,7 @@ void aoo_recv_reset(AooReceiveUnit *unit, sc_msg_iter *args){
 
             if (args.remain() > 0){
                 aoo::endpoint *ep;
-                int32_t id;
+                aoo_id id;
                 if (getSourceArg(owner.node(), &args, ep, id)){
                     owner.sink()->reset_source(ep, id);
                 }

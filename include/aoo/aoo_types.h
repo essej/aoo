@@ -64,7 +64,8 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #define USE_AOO_NET 1
 #endif
 
-typedef enum aoo_type
+typedef int32_t aoo_type;
+typedef enum aoo_type_code
 {
     AOO_TYPE_SOURCE = 0,
     AOO_TYPE_SINK,
@@ -73,7 +74,7 @@ typedef enum aoo_type
     AOO_TYPE_CLIENT,
     AOO_TYPE_PEER
 #endif
-} aoo_type;
+} aoo_type_code;
 
 // log function
 typedef void (*aoo_logfunction)(const char *);

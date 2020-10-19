@@ -39,7 +39,7 @@ struct t_aoo_receive
     int32_t x_blocksize = 0;
     int32_t x_nchannels = 0;
     int32_t x_port = 0;
-    int32_t x_id = 0;
+    aoo_id x_id = 0;
     std::unique_ptr<t_sample *[]> x_vec;
     // sinks
     std::vector<t_source> x_sources;
@@ -54,7 +54,7 @@ struct t_aoo_receive
 static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *argv)
 {
     ip_address addr;
-    int32_t id = 0;
+    aoo_id id = 0;
     if (get_source_arg(x, x->x_node, argc, argv, addr, id)){
         for (auto& src : x->x_sources){
             if (src.s_endpoint->address() == addr && src.s_id == id){
@@ -109,7 +109,7 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
     }
 
     ip_address addr;
-    int32_t id = 0;
+    aoo_id id = 0;
     aoo::endpoint *e = nullptr;
     if (get_source_arg(x, x->x_node, argc, argv, addr, id)){
         for (auto& src : x->x_sources){
@@ -424,7 +424,7 @@ static void aoo_receive_port(t_aoo_receive *x, t_floatarg f)
 
 static void aoo_receive_id(t_aoo_receive *x, t_floatarg f)
 {
-    int id = f;
+    aoo_id id = f;
 
     if (id == x->x_id){
         return;
@@ -460,7 +460,7 @@ t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
     x_port = atom_getfloatarg(0, argc, argv);
 
     // arg #2: ID
-    int id = atom_getfloatarg(1, argc, argv);
+    aoo_id id = atom_getfloatarg(1, argc, argv);
     if (id < 0){
         pd_error(this, "%s: bad id % d, setting to 0", classname(this), id);
         id = 0;

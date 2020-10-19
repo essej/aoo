@@ -30,7 +30,7 @@ int address_to_atoms(const ip_address& addr, int argc, t_atom *a)
     return 2;
 }
 
-int endpoint_to_atoms(const endpoint *ep, int32_t id, int argc, t_atom *argv)
+int endpoint_to_atoms(const endpoint *ep, aoo_id id, int argc, t_atom *argv)
 {
     t_symbol *host;
     int port;
@@ -115,13 +115,13 @@ static bool get_endpoint_arg(void *x, i_node *node, int argc, t_atom *argv,
 }
 
 bool get_sink_arg(void *x, i_node *node, int argc, t_atom *argv,
-                  ip_address& addr, int32_t &id)
+                  ip_address& addr, aoo_id &id)
 {
     return get_endpoint_arg(x, node, argc, argv, addr, &id, "sink");
 }
 
 bool get_source_arg(void *x, i_node *node, int argc, t_atom *argv,
-                    ip_address& addr, int32_t &id)
+                    ip_address& addr, aoo_id &id)
 {
     return get_endpoint_arg(x, node, argc, argv, addr, &id, "source");
 }

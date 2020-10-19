@@ -28,7 +28,7 @@ uint64_t get_osctime_dejitter(t_dejitter *context);
 /*///////////////////////////// aoo_node /////////////////////////////*/
 
 struct i_node {
-    static i_node * get(t_pd *obj, int port, int32_t id);
+    static i_node * get(t_pd *obj, int port, aoo_id id);
 
     virtual ~i_node() {}
 
@@ -46,7 +46,7 @@ struct i_node {
 
     virtual endpoint *find_peer(t_symbol *group, t_symbol *user) = 0;
 
-    virtual void add_peer(t_symbol *group, t_symbol *user, int32_t id,
+    virtual void add_peer(t_symbol *group, t_symbol *user, aoo_id id,
                           const ip_address& addr) = 0;
 
     virtual void remove_peer(t_symbol *group, t_symbol *user) = 0;
@@ -64,15 +64,15 @@ struct i_node {
 
 int address_to_atoms(const ip_address& addr, int argc, t_atom *argv);
 
-int endpoint_to_atoms(const endpoint* ep, int32_t id, int argc, t_atom *argv);
+int endpoint_to_atoms(const endpoint* ep, aoo_id id, int argc, t_atom *argv);
 
 bool endpoint_get_address(const endpoint* ep, t_symbol *& host, int& port);
 
 bool get_sink_arg(void *x, i_node *node, int argc, t_atom *argv,
-                 ip_address& addr, int32_t &id);
+                 ip_address& addr, aoo_id &id);
 
 bool get_source_arg(void *x, i_node *node, int argc, t_atom *argv,
-                   ip_address& addr, int32_t &id);
+                   ip_address& addr, aoo_id &id);
 
 bool get_peer_arg(void *x, i_node *node, int argc, t_atom *argv,
                   ip_address& addr);

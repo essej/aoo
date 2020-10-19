@@ -39,7 +39,7 @@ struct t_aoo_pack
     t_clock *x_clock = nullptr;
     t_outlet *x_out = nullptr;
     t_outlet *x_msgout = nullptr;
-    int32_t x_sink_id = 0;
+    aoo_id x_sink_id = 0;
     int32_t x_sink_chn = 0;
     bool x_accept = false;
 };
@@ -204,7 +204,7 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
             }
             x->x_sink_id = AOO_ID_WILDCARD;
         } else {
-            int32_t id = atom_getfloat(argv);
+            aoo_id id = atom_getfloat(argv);
             x->x_source->add_sink(x, id, (aoo_replyfn)aoo_pack_reply);
             x->x_sink_id = id;
         }

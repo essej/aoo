@@ -9,7 +9,7 @@
 
 /*//////////////////// aoo_sink /////////////////////*/
 
-aoo_sink * aoo_sink_new(int32_t id) {
+aoo_sink * aoo_sink_new(aoo_id id) {
     return new aoo::sink(id);
 }
 
@@ -46,12 +46,12 @@ int32_t aoo::sink::setup(int32_t samplerate,
 }
 
 int32_t aoo_sink_invite_source(aoo_sink *sink, void *endpoint,
-                              int32_t id, aoo_replyfn fn)
+                              aoo_id id, aoo_replyfn fn)
 {
     return sink->invite_source(endpoint, id, fn);
 }
 
-int32_t aoo::sink::invite_source(void *endpoint, int32_t id, aoo_replyfn fn){
+int32_t aoo::sink::invite_source(void *endpoint, aoo_id id, aoo_replyfn fn){
     // try to find existing source
     auto src = find_source(endpoint, id);
     if (!src){
@@ -64,12 +64,12 @@ int32_t aoo::sink::invite_source(void *endpoint, int32_t id, aoo_replyfn fn){
 }
 
 int32_t aoo_sink_uninvite_source(aoo_sink *sink, void *endpoint,
-                                int32_t id, aoo_replyfn fn)
+                                aoo_id id, aoo_replyfn fn)
 {
     return sink->uninvite_source(endpoint, id, fn);
 }
 
-int32_t aoo::sink::uninvite_source(void *endpoint, int32_t id, aoo_replyfn fn){
+int32_t aoo::sink::uninvite_source(void *endpoint, aoo_id id, aoo_replyfn fn){
     // try to find existing source
     auto src = find_source(endpoint, id);
     if (src){
@@ -195,7 +195,7 @@ int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
     switch (opt){
     // id
     case aoo_opt_id:
-        as<int32_t>(ptr) = id();
+        as<aoo_id>(ptr) = id();
         break;
     // buffer size
     case aoo_opt_buffersize:
@@ -235,13 +235,13 @@ int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
     return 1;
 }
 
-int32_t aoo_sink_set_sourceoption(aoo_sink *sink, void *endpoint, int32_t id,
+int32_t aoo_sink_set_sourceoption(aoo_sink *sink, void *endpoint, aoo_id id,
                               int32_t opt, void *p, int32_t size)
 {
     return sink->set_sourceoption(endpoint, id, opt, p, size);
 }
 
-int32_t aoo::sink::set_sourceoption(void *endpoint, int32_t id,
+int32_t aoo::sink::set_sourceoption(void *endpoint, aoo_id id,
                                    int32_t opt, void *ptr, int32_t size)
 {
     auto src = find_source(endpoint, id);
@@ -262,13 +262,13 @@ int32_t aoo::sink::set_sourceoption(void *endpoint, int32_t id,
     }
 }
 
-int32_t aoo_sink_get_sourceoption(aoo_sink *sink, void *endpoint, int32_t id,
+int32_t aoo_sink_get_sourceoption(aoo_sink *sink, void *endpoint, aoo_id id,
                               int32_t opt, void *p, int32_t size)
 {
     return sink->get_sourceoption(endpoint, id, opt, p, size);
 }
 
-int32_t aoo::sink::get_sourceoption(void *endpoint, int32_t id,
+int32_t aoo::sink::get_sourceoption(void *endpoint, aoo_id id,
                               int32_t opt, void *p, int32_t size)
 {
     auto src = find_source(endpoint, id);
@@ -304,7 +304,8 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n,
             return 0; // not setup yet
         }
 
-        int32_t type, sinkid;
+        aoo_type type;
+        aoo_id sinkid;
         auto onset = aoo_parse_pattern(data, n, &type, &sinkid);
         if (!onset){
             LOG_WARNING("not an AoO message!");
@@ -465,7 +466,7 @@ int32_t aoo::sink::poll_events(aoo_eventhandler fn, void *user){
 
 namespace aoo {
 
-aoo::source_desc * sink::find_source(void *endpoint, int32_t id){
+aoo::source_desc * sink::find_source(void *endpoint, aoo_id id){
     for (auto& src : sources_){
         if ((src.endpoint() == endpoint) && (src.id() == id)){
             return &src;
@@ -487,7 +488,7 @@ int32_t sink::handle_format_message(void *endpoint, aoo_replyfn fn,
 {
     auto it = msg.ArgumentsBegin();
 
-    int32_t id = (it++)->AsInt32();
+    aoo_id id = (it++)->AsInt32();
     int32_t version = (it++)->AsInt32();
 
     // LATER handle this in the source_desc (e.g. ignoring further messages)
@@ -584,7 +585,7 @@ int32_t sink::handle_ping_message(void *endpoint, aoo_replyfn fn,
 
 /*////////////////////////// source_desc /////////////////////////////*/
 
-source_desc::source_desc(void *endpoint, aoo_replyfn fn, int32_t id, int32_t salt)
+source_desc::source_desc(void *endpoint, aoo_replyfn fn, aoo_id id, int32_t salt)
     : endpoint_(endpoint), fn_(fn), id_(id), salt_(salt)
 {
     eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);

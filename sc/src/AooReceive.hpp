@@ -10,7 +10,7 @@ class AooReceive : public AooDelegate {
 public:
     using AooDelegate::AooDelegate;
 
-    void init(int32_t port, int32_t id, int32_t bufsize);
+    void init(int32_t port, aoo_id id, int32_t bufsize);
 
     void onDetach() override;
 

@@ -4,7 +4,7 @@ static InterfaceTable *ft;
 
 /*////////////////// AooSend ////////////////*/
 
-void AooSend::init(int32_t port, int32_t id) {
+void AooSend::init(int32_t port, aoo_id id) {
     auto data = CmdData::create<OpenCmd>(world());
     if (data){
         data->port = port;
@@ -117,7 +117,7 @@ void AooSend::handleEvent(const aoo_event *event){
     }
 }
 
-void AooSend::addSinkEvent(aoo::endpoint *ep, int32_t id,
+void AooSend::addSinkEvent(aoo::endpoint *ep, aoo_id id,
                            int32_t channelOnset) {
     auto cmd = CmdData::create<OptionCmd>(world());
     if (cmd){
@@ -141,7 +141,7 @@ void AooSend::addSinkEvent(aoo::endpoint *ep, int32_t id,
     }
 }
 
-bool AooSend::addSink(aoo::endpoint *ep, int32_t id,
+bool AooSend::addSink(aoo::endpoint *ep, aoo_id id,
                       int channelOnset){
     if (source()->add_sink(ep, id, aoo::endpoint::send) > 0){
         if (channelOnset > 0){
@@ -153,7 +153,7 @@ bool AooSend::addSink(aoo::endpoint *ep, int32_t id,
     }
 }
 
-void AooSend::removeSinkEvent(aoo::endpoint *ep, int32_t id){
+void AooSend::removeSinkEvent(aoo::endpoint *ep, aoo_id id){
     auto cmd = CmdData::create<OptionCmd>(world());
     if (cmd){
         cmd->ep = ep;
@@ -175,7 +175,7 @@ void AooSend::removeSinkEvent(aoo::endpoint *ep, int32_t id){
     }
 }
 
-bool AooSend::removeSink(aoo::endpoint *ep, int32_t id){
+bool AooSend::removeSink(aoo::endpoint *ep, aoo_id id){
     return source()->remove_sink(ep, id) > 0;
 }
 
@@ -187,7 +187,7 @@ void AooSend::removeAll(){
 
 AooSendUnit::AooSendUnit(){
     int32_t port = in0(0);
-    int32_t id = in0(1);
+    aoo_id id = in0(1);
     auto delegate = rt::make_shared<AooSend>(mWorld, *this);
     delegate->init(port, id);
     delegate_ = std::move(delegate);
@@ -244,7 +244,7 @@ void aoo_send_add(AooSendUnit *unit, sc_msg_iter* args){
             owner.beginReply(msg, "/aoo/add", replyID);
 
             aoo::endpoint *ep;
-            int32_t id;
+            aoo_id id;
             if (getSinkArg(owner.node(), &args, ep, id)){
                 auto channelOnset = args.geti();
 
@@ -279,7 +279,7 @@ void aoo_send_remove(AooSendUnit *unit, sc_msg_iter* args){
 
             if (args.remain() > 0){
                 aoo::endpoint *ep;
-                int32_t id;
+                aoo_id id;
                 if (getSinkArg(owner.node(), &args, ep, id)){
                     if (owner.removeSink(ep, id)){
                         // only send IP address on success
@@ -348,7 +348,7 @@ void aoo_send_channel(AooSendUnit *unit, sc_msg_iter* args){
             skipUnitCmd(&args);
 
             aoo::endpoint *ep;
-            int32_t id;
+            aoo_id id;
             if (getSinkArg(owner.node(), &args, ep, id)){
                 auto channelOnset = args.geti();
                 owner.source()->set_sink_channelonset(ep, id, channelOnset);

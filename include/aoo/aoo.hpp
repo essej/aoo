@@ -42,7 +42,7 @@ public:
     using pointer = std::unique_ptr<isource, deleter>;
 
     // create a new AoO source instance
-    static isource * create(int32_t id);
+    static isource * create(aoo_id id);
 
     // destroy the AoO source instance
     static void destroy(isource *src);
@@ -51,10 +51,10 @@ public:
     virtual int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) = 0;
 
     // add a new sink (always threadsafe)
-    virtual int32_t add_sink(void *sink, int32_t id, aoo_replyfn fn) = 0;
+    virtual int32_t add_sink(void *sink, aoo_id id, aoo_replyfn fn) = 0;
 
     // remova a sink (always threadsafe)
-    virtual int32_t remove_sink(void *sink, int32_t id) = 0;
+    virtual int32_t remove_sink(void *sink, aoo_id id) = 0;
 
     // remove all sinks (always threadsafe)
     virtual void remove_all() = 0;
@@ -91,11 +91,11 @@ public:
         return set_option(aoo_opt_stop, AOO_ARG_NULL);
     }
 
-    int32_t set_id(int32_t id){
+    int32_t set_id(aoo_id id){
         return set_option(aoo_opt_id, AOO_ARG(id));
     }
 
-    int32_t get_id(int32_t &id){
+    int32_t get_id(aoo_id &id){
         return get_option(aoo_opt_id, AOO_ARG(id));
     }
 
@@ -161,23 +161,23 @@ public:
     //--------------------- sink options --------------------------//
     // set/get sink options (always threadsafe)
 
-    int32_t set_sink_channelonset(void *endpoint, int32_t id, int32_t onset){
+    int32_t set_sink_channelonset(void *endpoint, aoo_id id, int32_t onset){
         return set_sinkoption(endpoint, id, aoo_opt_channelonset, AOO_ARG(onset));
     }
 
-    int32_t get_sink_channelonset(void *endpoint, int32_t id, int32_t& onset){
+    int32_t get_sink_channelonset(void *endpoint, aoo_id id, int32_t& onset){
         return get_sinkoption(endpoint, id, aoo_opt_channelonset, AOO_ARG(onset));
     }
 
-    virtual int32_t set_sinkoption(void *endpoint, int32_t id,
+    virtual int32_t set_sinkoption(void *endpoint, aoo_id id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
-    virtual int32_t get_sinkoption(void *endpoint, int32_t id,
+    virtual int32_t get_sinkoption(void *endpoint, aoo_id id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
 protected:
     ~isource(){} // non-virtual!
 };
 
-inline isource * isource::create(int32_t id){
+inline isource * isource::create(aoo_id id){
     return aoo_source_new(id);
 }
 
@@ -199,7 +199,7 @@ public:
     using pointer = std::unique_ptr<isink, deleter>;
 
     // create a new AoO sink instance
-    static isink * create(int32_t id);
+    static isink * create(aoo_id id);
 
     // destroy the AoO sink instance
     static void destroy(isink *sink);
@@ -208,10 +208,10 @@ public:
     virtual int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) = 0;
 
     // invite a source (always thread safe)
-    virtual int32_t invite_source(void *endpoint, int32_t id, aoo_replyfn fn) = 0;
+    virtual int32_t invite_source(void *endpoint, aoo_id id, aoo_replyfn fn) = 0;
 
     // uninvite a source (always thread safe)
-    virtual int32_t uninvite_source(void *endpoint, int32_t id, aoo_replyfn fn) = 0;
+    virtual int32_t uninvite_source(void *endpoint, aoo_id id, aoo_replyfn fn) = 0;
 
     // uninvite all sources (always thread safe)
     virtual int32_t uninvite_all() = 0;
@@ -243,11 +243,11 @@ public:
         return set_option(aoo_opt_reset, AOO_ARG_NULL);
     }
 
-    int32_t set_id(int32_t id){
+    int32_t set_id(aoo_id id){
         return set_option(aoo_opt_id, AOO_ARG(id));
     }
 
-    int32_t get_id(int32_t &id){
+    int32_t get_id(aoo_id &id){
         return get_option(aoo_opt_id, AOO_ARG(id));
     }
 
@@ -313,23 +313,23 @@ public:
     //----------------- source options -------------------//
     // set/get source options (always threadsafe)
 
-    int32_t reset_source(void *endpoint, int32_t id){
+    int32_t reset_source(void *endpoint, aoo_id id){
         return set_sourceoption(endpoint, id, aoo_opt_reset, AOO_ARG_NULL);
     }
 
-    int32_t get_source_format(void *endpoint, int32_t id, aoo_format_storage& f){
+    int32_t get_source_format(void *endpoint, aoo_id id, aoo_format_storage& f){
         return get_sourceoption(endpoint, id, aoo_opt_format, AOO_ARG(f));
     }
 
-    virtual int32_t set_sourceoption(void *endpoint, int32_t id,
+    virtual int32_t set_sourceoption(void *endpoint, aoo_id id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
-    virtual int32_t get_sourceoption(void *endpoint, int32_t id,
+    virtual int32_t get_sourceoption(void *endpoint, aoo_id id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
 protected:
     ~isink(){} // non-virtual!
 };
 
-inline isink * isink::create(int32_t id){
+inline isink * isink::create(aoo_id id){
     return aoo_sink_new(id);
 }
 

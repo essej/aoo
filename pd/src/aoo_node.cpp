@@ -73,7 +73,7 @@ struct t_peer
     t_symbol *group;
     t_symbol *user;
     aoo::endpoint *endpoint;
-    int32_t id;
+    aoo_id id;
 };
 
 static t_class *node_proxy_class;
@@ -136,7 +136,7 @@ struct t_node : public i_node
 
     aoo::endpoint * find_peer(t_symbol *group, t_symbol *user) override;
 
-    void add_peer(t_symbol *group, t_symbol *user, int32_t id,
+    void add_peer(t_symbol *group, t_symbol *user, aoo_id id,
                   const ip_address& addr) override;
 
     void remove_peer(t_symbol *group, t_symbol *user) override;
@@ -150,7 +150,7 @@ struct t_node : public i_node
     void notify() override;
 
     // private methods
-    bool add_client(t_pd *obj, int32_t id);
+    bool add_client(t_pd *obj, aoo_id id);
 
     aoo::endpoint* find_endpoint(const ip_address& addr);
 
@@ -185,7 +185,7 @@ aoo::endpoint * t_node::find_peer(t_symbol *group, t_symbol *user)
 }
 
 void t_node::add_peer(t_symbol *group, t_symbol *user,
-                      int32_t id, const ip_address& addr)
+                      aoo_id id, const ip_address& addr)
 {
     if (find_peer(group, user)){
         bug("t_node::add_peer: peer %s|%s already added",
@@ -248,7 +248,7 @@ void t_node::notify()
 
 // private methods
 
-bool t_node::add_client(t_pd *obj, int32_t id)
+bool t_node::add_client(t_pd *obj, aoo_id id)
 {
     // check client and add to list
     aoo::scoped_lock lock(x_clientlock);
@@ -322,7 +322,8 @@ void t_node::do_receive()
         }
         lock.unlock();
         // get sink ID
-        int32_t type, id;
+        aoo_type type;
+        aoo_id id;
         if (aoo_parse_pattern(buf, nbytes, &type, &id) > 0)
         {
             aoo::shared_scoped_lock l(x_clientlock);
@@ -390,7 +391,7 @@ void t_node::do_receive()
     }
 }
 
-i_node * i_node::get(t_pd *obj, int port, int32_t id)
+i_node * i_node::get(t_pd *obj, int port, aoo_id id)
 {
     t_node *x = nullptr;
     // make bind symbol for port number

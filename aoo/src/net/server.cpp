@@ -610,7 +610,7 @@ void server::receive_udp(){
                 osc::ReceivedPacket packet(buf, result);
                 osc::ReceivedMessage msg(packet);
 
-                int32_t type;
+                aoo_type type;
                 auto onset = aoo_parse_pattern(buf, result, &type, nullptr);
                 if (!onset){
                     LOG_WARNING("aoo_server: not an AOO NET message!");

@@ -16,11 +16,11 @@
 // typetag string: max. 12 bytes
 // args (without blob data): 36 bytes
 
-aoo_source * aoo_source_new(int32_t id) {
+aoo_source * aoo_source_new(aoo_id id) {
     return new aoo::source(id);
 }
 
-aoo::source::source(int32_t id)
+aoo::source::source(aoo_id id)
     : id_(id)
 {
     // event queue
@@ -159,7 +159,7 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
     // id
     case aoo_opt_id:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = id();
+        as<aoo_id>(ptr) = id();
         break;
     // format
     case aoo_opt_format:
@@ -209,13 +209,13 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
     return 1;
 }
 
-int32_t aoo_source_set_sinkoption(aoo_source *src, void *endpoint, int32_t id,
+int32_t aoo_source_set_sinkoption(aoo_source *src, void *endpoint, aoo_id id,
                               int32_t opt, void *p, int32_t size)
 {
     return src->set_sinkoption(endpoint, id, opt, p, size);
 }
 
-int32_t aoo::source::set_sinkoption(void *endpoint, int32_t id,
+int32_t aoo::source::set_sinkoption(void *endpoint, aoo_id id,
                                    int32_t opt, void *ptr, int32_t size)
 {
     if (id == AOO_ID_WILDCARD){
@@ -276,13 +276,13 @@ int32_t aoo::source::set_sinkoption(void *endpoint, int32_t id,
     }
 }
 
-int32_t aoo_source_get_sinkoption(aoo_source *src, void *endpoint, int32_t id,
+int32_t aoo_source_get_sinkoption(aoo_source *src, void *endpoint, aoo_id id,
                               int32_t opt, void *p, int32_t size)
 {
     return src->get_sinkoption(endpoint, id, opt, p, size);
 }
 
-int32_t aoo::source::get_sinkoption(void *endpoint, int32_t id,
+int32_t aoo::source::get_sinkoption(void *endpoint, aoo_id id,
                               int32_t opt, void *p, int32_t size)
 {
     if (id == AOO_ID_WILDCARD){
@@ -337,11 +337,11 @@ int32_t aoo::source::setup(int32_t samplerate,
     return 0;
 }
 
-int32_t aoo_source_add_sink(aoo_source *src, void *sink, int32_t id, aoo_replyfn fn) {
+int32_t aoo_source_add_sink(aoo_source *src, void *sink, aoo_id id, aoo_replyfn fn) {
     return src->add_sink(sink, id, fn);
 }
 
-int32_t aoo::source::add_sink(void *endpoint, int32_t id, aoo_replyfn fn){
+int32_t aoo::source::add_sink(void *endpoint, aoo_id id, aoo_replyfn fn){
     unique_lock lock(sink_mutex_); // writer lock!
     if (id == AOO_ID_WILDCARD){
         // first remove all sinks on the given endpoint!
@@ -370,11 +370,11 @@ int32_t aoo::source::add_sink(void *endpoint, int32_t id, aoo_replyfn fn){
     return 1;
 }
 
-int32_t aoo_source_remove_sink(aoo_source *src, void *sink, int32_t id) {
+int32_t aoo_source_remove_sink(aoo_source *src, void *sink, aoo_id id) {
     return src->remove_sink(sink, id);
 }
 
-int32_t aoo::source::remove_sink(void *endpoint, int32_t id){
+int32_t aoo::source::remove_sink(void *endpoint, aoo_id id){
     unique_lock lock(sink_mutex_); // writer lock!
     if (id == AOO_ID_WILDCARD){
         // remove all sinks on the given endpoint
@@ -421,7 +421,8 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
         osc::ReceivedPacket packet(data, n);
         osc::ReceivedMessage msg(packet);
 
-        int32_t type, src;
+        aoo_type type;
+        aoo_id src;
         auto onset = aoo_parse_pattern(data, n, &type, &src);
         if (!onset){
             LOG_WARNING("aoo_source: not an AoO message!");
@@ -623,7 +624,7 @@ namespace aoo {
 
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
-void endpoint_base::send_data(int32_t src, int32_t salt, const aoo::data_packet& d) const{
+void endpoint_base::send_data(aoo_id src, int32_t salt, const aoo::data_packet& d) const{
     // call without lock!
 
     char buf[AOO_MAXPACKETSIZE];
@@ -656,8 +657,8 @@ void endpoint_base::send_data(int32_t src, int32_t salt, const aoo::data_packet&
 
 uint32_t make_version();
 
-void endpoint_base::send_format(int32_t src, int32_t salt, const aoo_format& f,
-                            const char *options, int32_t size) const {
+void endpoint_base::send_format(aoo_id src, int32_t salt, const aoo_format& f,
+                                const char *options, int32_t size) const {
     // call without lock!
     LOG_DEBUG("send format to " << id << " (salt = " << salt << ")");
 
@@ -684,7 +685,7 @@ void endpoint_base::send_format(int32_t src, int32_t salt, const aoo_format& f,
 
 // /aoo/sink/<id>/ping <src> <time>
 
-void endpoint_base::send_ping(int32_t src, time_tag t) const {
+void endpoint_base::send_ping(aoo_id src, time_tag t) const {
     // call without lock!
     LOG_DEBUG("send ping to " << id);
 
@@ -710,7 +711,7 @@ void endpoint_base::send_ping(int32_t src, time_tag t) const {
 
 /*///////////////////////// source ////////////////////////////////*/
 
-sink_desc * source::find_sink(void *endpoint, int32_t id){
+sink_desc * source::find_sink(void *endpoint, aoo_id id){
     for (auto& sink : sinks_){
         if ((sink.user == endpoint) &&
             (sink.id == AOO_ID_WILDCARD || sink.id == id))
@@ -1233,7 +1234,7 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn,
                          const osc::ReceivedMessage& msg)
 {
     auto it = msg.ArgumentsBegin();
-    auto id = (it++)->AsInt32();
+    aoo_id id = (it++)->AsInt32();
     time_tag tt1 = (it++)->AsTimeTag();
     time_tag tt2 = (it++)->AsTimeTag();
     int32_t lost_blocks = (it++)->AsInt32();

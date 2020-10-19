@@ -30,15 +30,15 @@ struct endpoint_base {
     // data
     void *user = nullptr;
     aoo_replyfn fn = nullptr;
-    int32_t id = 0;
+    aoo_id id = 0;
 
     // methods
-    void send_data(int32_t src, int32_t salt, const data_packet& data) const;
+    void send_data(aoo_id src, int32_t salt, const data_packet& data) const;
 
-    void send_format(int32_t src, int32_t salt, const aoo_format& f,
+    void send_format(aoo_id src, int32_t salt, const aoo_format& f,
                      const char *options, int32_t size) const;
 
-    void send_ping(int32_t src, time_tag t) const;
+    void send_ping(aoo_id src, time_tag t) const;
 
     void send(const char *data, int32_t n) const {
         fn(user, data, n);
@@ -101,16 +101,16 @@ class source final : public isource {
         aoo_ping_event ping;
     };
 
-    source(int32_t id);
+    source(aoo_id id);
     ~source();
 
-    int32_t id() const { return id_.load(std::memory_order_relaxed); }
+    aoo_id id() const { return id_.load(std::memory_order_relaxed); }
 
     int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
-    int32_t add_sink(void *sink, int32_t id, aoo_replyfn fn) override;
+    int32_t add_sink(void *sink, aoo_id id, aoo_replyfn fn) override;
 
-    int32_t remove_sink(void *sink, int32_t id) override;
+    int32_t remove_sink(void *sink, aoo_id id) override;
 
     void remove_all() override;
 
@@ -128,14 +128,14 @@ class source final : public isource {
 
     int32_t get_option(int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t set_sinkoption(void *endpoint, int32_t id,
+    int32_t set_sinkoption(void *endpoint, aoo_id id,
                            int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t get_sinkoption(void *endpoint, int32_t id,
+    int32_t get_sinkoption(void *endpoint, aoo_id id,
                            int32_t opt, void *ptr, int32_t size) override;
  private:
     // settings
-    std::atomic<int32_t> id_;
+    std::atomic<aoo_id> id_;
     int32_t salt_ = 0;
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
@@ -174,7 +174,7 @@ class source final : public isource {
     std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };
 
     // helper methods
-    sink_desc * find_sink(void *endpoint, int32_t id);
+    sink_desc * find_sink(void *endpoint, aoo_id id);
 
     int32_t set_format(aoo_format& f);
 

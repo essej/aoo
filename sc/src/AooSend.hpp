@@ -13,7 +13,7 @@ class AooSend : public AooDelegate {
 public:
     using AooDelegate::AooDelegate;
 
-    void init(int32_t port, int32_t id);
+    void init(int32_t port, aoo_id id);
 
     void onDetach() override;
 
@@ -31,11 +31,11 @@ public:
 
     aoo::isource * source() { return source_.get(); }
 
-    void addSinkEvent(aoo::endpoint *ep, int32_t id, int channelOnset);
-    bool addSink(aoo::endpoint *ep, int32_t id, int channelOnset);
+    void addSinkEvent(aoo::endpoint *ep, aoo_id id, int channelOnset);
+    bool addSink(aoo::endpoint *ep, aoo_id id, int channelOnset);
 
-    void removeSinkEvent(aoo::endpoint *ep, int32_t id);
-    bool removeSink(aoo::endpoint *ep, int32_t id);
+    void removeSinkEvent(aoo::endpoint *ep, aoo_id id);
+    bool removeSink(aoo::endpoint *ep, aoo_id id);
     void removeAll();
 
     void setAccept(bool b){

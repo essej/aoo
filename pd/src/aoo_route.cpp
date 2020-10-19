@@ -41,7 +41,8 @@ static void aoo_route_list(t_aoo_route *x, t_symbol *s, int argc, t_atom *argv)
     bool success = false;
 
     // parse address pattern
-    int32_t type, id;
+    aoo_type type;
+    aoo_id id;
     if (aoo_parse_pattern(buf, count, &type, &id)){
         t_symbol *sym = (type == AOO_TYPE_SOURCE) ? gensym("source") :
                         (type == AOO_TYPE_SINK) ? gensym("sink") : gensym("");

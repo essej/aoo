@@ -29,15 +29,15 @@ using namespace aoo;
 struct AooPeer {
     std::string group;
     std::string user;
-    int32_t id;
+    aoo_id id;
     aoo::endpoint *endpoint;
 };
 #endif
 
 struct AooNodeClient {
     INodeClient *obj;
-    int32_t type;
-    int32_t id;
+    aoo_type type;
+    aoo_id id;
 };
 
 class AooNode : public INode {
@@ -65,7 +65,7 @@ public:
                        const std::string& user);
 
     void addPeer(const std::string& group, const std::string& user,
-                 int32_t id, const ip_address& addr) override;
+                 aoo_id id, const ip_address& addr) override;
 
     void removePeer(const std::string& group,
                     const std::string& user) override;
@@ -101,7 +101,7 @@ private:
     std::atomic<bool> quit_{false};
 
     // private methods
-    bool addClient(INodeClient& client, int32_t type, int32_t id);
+    bool addClient(INodeClient& client, aoo_type type, aoo_id id);
 
     aoo::endpoint* findEndpoint(const ip_address& addr);
 
@@ -204,7 +204,7 @@ static NodeMap& getNodeMap(World *world){
 }
 
 INode::ptr INode::get(World *world, INodeClient& client,
-                   int32_t type, int port, int32_t id)
+                      aoo_type type, int port, aoo_id id)
 {
     std::shared_ptr<AooNode> node;
 
@@ -288,7 +288,7 @@ endpoint * AooNode::findPeer(const std::string& group,
 }
 
 void AooNode::addPeer(const std::string& group,
-                      const std::string& user, int32_t id,
+                      const std::string& user, aoo_id id,
                       const ip_address& addr)
 {
     if (findPeer(group, user)){
@@ -337,7 +337,7 @@ void AooNode::notify(){
 
 // private methods
 
-bool AooNode::addClient(INodeClient& client, int32_t type, int32_t id)
+bool AooNode::addClient(INodeClient& client, aoo_type type, aoo_id id)
 {
     // check client and add to list
     aoo::scoped_lock lock(clientMutex_);
@@ -400,7 +400,8 @@ void AooNode::doReceive()
         }
         lock.unlock();
         // get sink ID
-        int32_t type, id;
+        aoo_type type;
+        aoo_id id;
         if (aoo_parse_pattern(buf, nbytes, &type, &id))
         {
             // forward OSC packet to matching clients(s)

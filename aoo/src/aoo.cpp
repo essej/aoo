@@ -40,7 +40,7 @@ Log::~Log(){
 /*//////////////////// OSC ////////////////////////////*/
 
 int32_t aoo_parse_pattern(const char *msg, int32_t n,
-                          int32_t *type, int32_t *id)
+                          aoo_type *type, aoo_id *id)
 {
     int32_t offset = 0;
     if (n >= AOO_MSG_DOMAIN_LEN

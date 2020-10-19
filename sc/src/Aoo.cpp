@@ -234,7 +234,7 @@ void AooDelegate::beginEvent(osc::OutboundPacketStream &msg, const char *event)
 }
 
 void AooDelegate::beginEvent(osc::OutboundPacketStream &msg, const char *event,
-                             aoo::endpoint *ep, int32_t id)
+                             aoo::endpoint *ep, aoo_id id)
 {
     auto& addr = ep->address();
     msg << osc::BeginMessage("/aoo/event")
@@ -332,13 +332,13 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
 }
 
 bool getSinkArg(INode* node, sc_msg_iter *args,
-                aoo::endpoint *& ep, int32_t &id)
+                aoo::endpoint *& ep, aoo_id &id)
 {
     return getEndpointArg(node, args, ep, &id, "sink");
 }
 
 bool getSourceArg(INode* node, sc_msg_iter *args,
-                  aoo::endpoint *& ep, int32_t &id)
+                  aoo::endpoint *& ep, aoo_id &id)
 {
     return getEndpointArg(node, args, ep, &id, "source");
 }
