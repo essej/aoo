@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <string>
+#include <vector>
 
 #ifdef _WIN32
 typedef int socklen_t;
@@ -10,15 +11,27 @@ struct sockaddr;
 #include <sys/socket.h>
 #endif
 
+#ifndef AOO_NET_USE_IPv4
+#define AOO_NET_USE_IPv4 1
+#endif
+
+#ifndef AOO_NET_USE_IPv6
+#define AOO_NET_USE_IPv6 1
+#endif
+
 namespace aoo {
 
 /*///////////// IP address ////////*/
 
 class ip_address {
 public:
+    static std::vector<ip_address> get_address_list(const std::string& host, int port);
+
     ip_address();
     ip_address(const struct sockaddr *sa, socklen_t len);
+#if AOO_NET_USE_IPv4
     ip_address(uint32_t ipv4, int port);
+#endif
     ip_address(const std::string& host, int port);
 
     ip_address(const ip_address& other);
@@ -26,11 +39,22 @@ public:
 
     bool operator==(const ip_address& other) const;
 
-    const char * name() const;
+    const char* name() const;
+
+    const char* name_unmapped() const;
 
     int port() const;
 
     bool valid() const;
+
+    enum ip_type {
+        Unspec,
+        IPv4,
+        IPv6
+    };
+    ip_type type() const;
+
+    bool is_ipv4_mapped() const;
 
     const struct sockaddr *address() const {
         return (const struct sockaddr *)&address_;
@@ -45,13 +69,16 @@ public:
         return &length_;
     }
 private:
+    static const char *get_name(const struct sockaddr *addr);
 #ifdef _WIN32
     // avoid including <winsock2.h>
+    // large enough to hold both sockaddr_in
+    // and sockaddr_in6 (max. 32 bytes)
     struct {
-        int16_t ss_family;
+        int16_t __ss_family;
         char __ss_pad1[6];
         int64_t __ss_align;
-        char __ss_pad2[112];
+        char __ss_pad2[16];
     } address_;
 #else
     struct sockaddr_storage address_;
@@ -62,7 +89,11 @@ private:
 
 /*///////////// socket //////////////////*/
 
-int socket_udp(void);
+int socket_init();
+
+int socket_udp();
+
+int socket_tcp();
 
 int socket_close(int socket);
 

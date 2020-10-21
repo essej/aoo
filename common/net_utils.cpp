@@ -7,7 +7,7 @@
 #include "aoo/aoo_types.h"
 
 #ifdef _WIN32
-#include <winsock2.h>
+#include <ws2tcpip.h>
 #else
 #include <sys/select.h>
 #include <sys/poll.h>
@@ -23,11 +23,25 @@
 #include <stdio.h>
 #include <cstring>
 
+#define DEBUG_ADDRINFO 0
+
 namespace aoo {
+
+bool gIPv4Supported = false;
+bool gIPv6Supported = false;
 
 /*///////////////////////// ip_address /////////////////////////////*/
 
 ip_address::ip_address(){
+#if AOO_NET_USE_IPv4
+    static_assert(sizeof(address_) >= sizeof(sockaddr_in),
+                  "ip_address can't hold IPv6 sockaddr");
+#endif
+#if AOO_NET_USE_IPv6
+    static_assert(sizeof(address_) >= sizeof(sockaddr_in6),
+                  "ip_address can't hold IPv6 sockaddr");
+#endif
+
     memset(&address_, 0, sizeof(address_));
     length_ = sizeof(address_); // e.g. for recvfrom()
 }
@@ -37,6 +51,7 @@ ip_address::ip_address(const struct sockaddr *sa, socklen_t len){
     length_ = len;
 }
 
+#if AOO_NET_USE_IPv4
 ip_address::ip_address(uint32_t ipv4, int port){
     struct sockaddr_in sa;
     memset(&sa, 0, sizeof(sa));
@@ -46,19 +61,77 @@ ip_address::ip_address(uint32_t ipv4, int port){
     memcpy(&address_, &sa, sizeof(sa));
     length_ = sizeof(sa);
 }
+#endif
+
+std::vector<ip_address> ip_address::get_address_list(const std::string &host, int port){
+    std::vector<ip_address> result;
+
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+
+    // if we have IPv6 support, only get IPv6 addresses
+    // (IPv4 addresses will be mapped to IPv6 addresses)
+    if (gIPv6Supported){
+    #if AOO_NET_USE_IPv6
+        hints.ai_family = AF_INET6;
+    #endif
+    } else if (gIPv4Supported){
+    #if AOO_NET_USE_IPv4
+        hints.ai_family = AF_INET;
+    #endif
+    } else {
+        return result; // empty (shouldn't happen)
+    }
+
+    hints.ai_flags =
+#if AOO_NET_USE_IPv4 && AOO_NET_USE_IPv6
+    #ifdef AI_ALL
+        AI_ALL |       // both IPv4 and IPv6 addresses
+    #endif
+    #ifdef AI_V4MAPPED
+        AI_V4MAPPED |  // fallback to IPv4-mapped IPv6 addresses
+    #endif
+#endif
+        AI_PASSIVE;    // listen to any addr if hostname is NULL
+
+    char portstr[10]; // largest port is 65535
+    portstr[0] = '\0';
+    sprintf(portstr, "%d", port);
+
+    struct addrinfo *ailist;
+    int err = getaddrinfo(!host.empty() ? host.c_str() : nullptr,
+                          portstr, &hints, &ailist);
+    if (err == 0){
+    #if DEBUG_ADDRINFO
+        fprintf(stderr, "resolved '%s' to:\n", host.empty() ? "any" : host.c_str());
+    #endif
+        for (auto ai = ailist; ai; ai = ai->ai_next){
+        #if DEBUG_ADDRINFO
+            fprintf(stderr, "\t%s\n", get_name(ai->ai_addr));
+        #endif
+            result.emplace_back(ai->ai_addr, ai->ai_addrlen);
+        }
+    #if DEBUG_ADDRINFO
+        fflush(stderr);
+    #endif
+    } else {
+        // LATER think about how to correctly handle error. Throw exception?
+    #ifdef _WIN32
+        WSASetLastError(WSAHOST_NOT_FOUND);
+    #else
+        errno = HOST_NOT_FOUND;
+    #endif
+    }
+    return result;
+}
 
 ip_address::ip_address(const std::string& host, int port){
-    memset(&address_, 0, sizeof(address_));
-
-    auto he = gethostbyname(host.c_str());
-    if (he){
-        auto addr = (struct sockaddr_in *)&address_;
-        addr->sin_family = AF_INET;
-        addr->sin_port = htons(port);
-        memcpy(&addr->sin_addr, he->h_addr_list[0], he->h_length);
-        length_ = sizeof(sockaddr_in);
+    auto result = get_address_list(host, port);
+    if (!result.empty()){
+        // just pick the first result
+        *this = result.front();
     } else {
-        length_ = sizeof(address_);
+        *this = ip_address {};
     }
 }
 
@@ -74,54 +147,161 @@ ip_address& ip_address::operator=(const ip_address& other){
 }
 
 bool ip_address::operator==(const ip_address& other) const {
-    if (address_.ss_family == other.address_.ss_family){
-    #if 1
-        if (address_.ss_family == AF_INET){
+    if (address()->sa_family == other.address()->sa_family){
+        switch (address()->sa_family){
+    #if AOO_NET_USE_IPv4
+        case AF_INET:
+        {
             auto a = (const struct sockaddr_in *)&address_;
             auto b = (const struct sockaddr_in *)&other.address_;
             return (a->sin_addr.s_addr == b->sin_addr.s_addr)
                     && (a->sin_port == b->sin_port);
-        } else  {
-            // IPv6 not supported yet
-            return false;
         }
-    #else
-        // doesn't work reliable on BSDs if sin_len is not set
-        return !memcmp(&address_, &other.address_, length_);
     #endif
-    } else {
-        return false;
+    #if AOO_NET_USE_IPv6
+        case AF_INET6:
+        {
+            auto a = (const struct sockaddr_in6 *)&address_;
+            auto b = (const struct sockaddr_in6 *)&other.address_;
+            return !memcmp(a->sin6_addr.s6_addr, b->sin6_addr.s6_addr,
+                           sizeof(struct in6_addr))
+                    && (a->sin6_port == b->sin6_port);
+        }
+    #endif
+        default:
+            break;
+        }
     }
+    return false;
 }
 
-const char * ip_address::name() const {
-    if (address_.ss_family == AF_INET){
-        auto sin = (const struct sockaddr_in *)&address_;
-        return inet_ntoa(sin->sin_addr);
+const char * ip_address::get_name(const sockaddr *addr){
+#if AOO_NET_USE_IPv6
+    thread_local char buf[INET6_ADDRSTRLEN];
+#else
+    thread_local char buf[INET_ADDRSTRLEN];
+#endif
+    const void *na;
+    auto family = addr->sa_family;
+    switch (family){
+#if AOO_NET_USE_IPv6
+    case AF_INET6:
+        na = &reinterpret_cast<const sockaddr_in6 *>(addr)->sin6_addr;
+        break;
+#endif
+#if AOO_NET_USE_IPv4
+    case AF_INET:
+        na = &reinterpret_cast<const sockaddr_in *>(addr)->sin_addr;
+        break;
+#endif
+    default:
+        return "";
+    }
+
+    if (inet_ntop(family, na, buf, sizeof(buf)) != nullptr) {
+        return buf;
     } else {
         return "";
     }
 }
 
-int ip_address::port() const {
-    if (address_.ss_family == AF_INET){
-        auto sin = (const struct sockaddr_in *)&address_;
-        return ntohs(sin->sin_port);
+const char* ip_address::name() const {
+    return get_name((const sockaddr *)&address_);
+}
+
+// for backwards compatibility with IPv4 only servers
+const char* ip_address::name_unmapped() const {
+    auto str = name();
+    // strip leading "::ffff:" for mapped IPv4 addresses
+    if (!strncmp(str, "::ffff:", 7) ||
+        !strncmp(str, "::FFFF:", 7)) {
+        return str + 7;
     } else {
+        return str;
+    }
+}
+
+int ip_address::port() const {
+    switch (address()->sa_family){
+#if AOO_NET_USE_IPv4
+    case AF_INET:
+        return ntohs(reinterpret_cast<const sockaddr_in *>(address())->sin_port);
+#endif
+#if AOO_NET_USE_IPv6
+    case AF_INET6:
+        return ntohs(reinterpret_cast<const sockaddr_in6 *>(address())->sin6_port);
+#endif
+    default:
         return -1;
     }
 }
 
 bool ip_address::valid() const {
-    if (address_.ss_family == AF_INET){
-        auto sin = (const struct sockaddr_in *)&address_;
-        return sin->sin_addr.s_addr != 0;
-    } else {
-        return false;
+    return port() > 0;
+}
+
+ip_address::ip_type ip_address::type() const {
+    switch(address()->sa_family){
+#if AOO_NET_USE_IPv4
+    case AF_INET:
+        return IPv4;
+#endif
+#if AOO_NET_USE_IPv6
+    case AF_INET6:
+        return IPv6;
+#endif
+    default:
+        return Unspec;
     }
 }
 
+bool ip_address::is_ipv4_mapped() const {
+#if AOO_NET_USE_IPv6
+    if (address()->sa_family == AF_INET6){
+        auto a = &reinterpret_cast<const sockaddr_in6 *>(address())->sin6_addr;
+        return (a->s6_words[0] == 0) && (a->s6_words[1] == 0)
+                && (a->s6_words[2] == 0) && (a->s6_words[3] ==0 )
+                && (a->s6_words[4] == 0) && (a->s6_words[5] == 0xffff);
+    }
+#endif
+    return false;
+}
+
 /*///////////////////////// socket /////////////////////////////////*/
+
+int socket_init()
+{
+    static bool initialized = false;
+    if (!initialized)
+    {
+    #ifdef _WIN32
+        short version = MAKEWORD(2, 0);
+        WSADATA wsadata;
+        if (WSAStartup(version, &wsadata))
+            return -1;
+    #endif
+
+        // check IPv4 / IPv6 availability
+        int sock;
+    #if AOO_NET_USE_IPv4
+        sock = socket(AF_INET, SOCK_DGRAM, 0);
+        if (sock >= 0){
+            gIPv4Supported = true;
+            socket_close(sock);
+        }
+    #endif
+    #if AOO_NET_USE_IPv6
+        sock = socket(AF_INET6, SOCK_DGRAM, 0);
+        if (sock >= 0){
+            gIPv6Supported = true;
+            socket_close(sock);
+        }
+    #endif
+
+        initialized = true;
+    }
+    return 0;
+}
 
 int socket_errno()
 {
@@ -176,17 +356,59 @@ void socket_error_print(const char *label)
     fflush(stderr);
 }
 
-int socket_udp(void)
+int socket_udp()
 {
+#if AOO_NET_USE_IPv6
+    // prefer IPv6, but fall back to IPv4 if disabled
+    int sock = socket(gIPv6Supported ? AF_INET6 : AF_INET, SOCK_DGRAM, 0);
+#else
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
+#endif
     if (sock >= 0){
         int val = 1;
         if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char *)&val, sizeof(val))){
             fprintf(stderr, "socket_udp: couldn't set SO_BROADCAST");
             fflush(stderr);
         }
+    #if AOO_NET_USE_IPv4 && AOO_NET_USE_IPv6
+        // make dual stack socket by listening to both IPv4 and IPv6 packets
+        val = 0;
+        if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&val, sizeof(val))){
+            fprintf(stderr, "socket_udp: couldn't set IPV6_V6ONLY");
+            fflush(stderr);
+        }
+    #endif
     } else {
         socket_error_print("socket_udp");
+    }
+    return sock;
+}
+
+int socket_tcp()
+{
+#if AOO_NET_USE_IPv6
+    // prefer IPv6, but fall back to IPv4 if disabled
+    int sock = socket(gIPv6Supported ? AF_INET6 : AF_INET, SOCK_STREAM, 0);
+#else
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+#endif
+    if (sock >= 0){
+        // disable Nagle's algorithm
+        int val = 1;
+        if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val)) < 0){
+            fprintf(stderr, "aoo_client: couldn't set TCP_NODELAY");
+            fflush(stderr);
+        }
+    #if AOO_NET_USE_IPv4 && AOO_NET_USE_IPv6
+        // make dual stack socket by listening to both IPv4 and IPv6 packets
+        val = 0;
+        if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&val, sizeof(val))){
+            fprintf(stderr, "socket_tcp: couldn't set IPV6_V6ONLY");
+            fflush(stderr);
+        }
+    #endif
+    } else {
+        socket_error_print("socket_tcp");
     }
     return sock;
 }
@@ -194,12 +416,8 @@ int socket_udp(void)
 int socket_bind(int socket, int port)
 {
     // bind to 'any' address
-    struct sockaddr_in sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sin_family = AF_INET;
-    sa.sin_addr.s_addr = INADDR_ANY;
-    sa.sin_port = htons(port);
-    return bind(socket, (const struct sockaddr *)&sa, sizeof(sa));
+    ip_address addr("", port);
+    return bind(socket, addr.address(), addr.length());
 }
 
 int socket_close(int socket)
@@ -301,12 +519,12 @@ int socket_setrecvbufsize(int socket, int bufsize)
 bool socket_signal(int socket, int port)
 {
     // wake up blocking recv() by sending an empty packet
-    struct sockaddr_in sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sin_family = AF_INET;
-    sa.sin_addr.s_addr = htonl(0x7f000001); // localhost
-    sa.sin_port = htons(port);
-    if (sendto(socket, 0, 0, 0, (struct sockaddr *)&sa, sizeof(sa)) < 0){
+#if AOO_NET_USE_IPv6
+    ip_address addr("::1", port);
+#else
+    ip_address addr("127.0.0.1", port);
+#endif
+    if (sendto(socket, 0, 0, 0, addr.address(), addr.length()) < 0){
         socket_error_print("sendto");
         return false;
     } else {
@@ -390,24 +608,6 @@ int socket_connect(int socket, const ip_address& addr, float timeout)
     // done, set blocking again
     socket_set_nonblocking(socket, false);
     return 0;
-}
-
-bool socket_getaddr(const char *hostname, int port,
-                   struct sockaddr_storage &sa, socklen_t &len)
-{
-    auto he = gethostbyname(hostname);
-    if (he){
-        auto addr = (sockaddr_in *)&sa;
-        // zero out to make sure that memcmp() works! see socket_match()
-        memset(addr, 0, sizeof(*addr));
-        addr->sin_family = AF_INET;
-        addr->sin_port = htons(port);
-        memcpy(&addr->sin_addr, he->h_addr_list[0], he->h_length);
-        len = sizeof(sockaddr_in);
-        return true;
-    } else {
-        return false;
-    }
 }
 
 } // aoo

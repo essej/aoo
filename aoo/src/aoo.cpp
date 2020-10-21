@@ -1,6 +1,7 @@
 #include "aoo/aoo.h"
 #if USE_AOO_NET
 #include "aoo/aoo_net.h"
+#include "common/net_utils.hpp"
 #endif
 
 #include "common/time.hpp"
@@ -171,6 +172,10 @@ void aoo_codec_opus_setup(aoo_codec_registerfn fn);
 void aoo_initialize(){
     static bool initialized = false;
     if (!initialized){
+    #if USE_AOO_NET
+        aoo::socket_init();
+    #endif
+
         // register codecs
         aoo_codec_pcm_setup(aoo_register_codec);
 
