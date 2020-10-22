@@ -711,17 +711,13 @@ void client::perform_login(){
     osc::OutboundPacketStream msg(buf, sizeof(buf));
     msg << osc::BeginMessage(AOO_NET_MSG_SERVER_LOGIN)
         << (int32_t)make_version()
-        << username_.c_str() << password_.c_str();
-    // for now prefer IPv4 (mapped). LATER pass both addresses.
+        << username_.c_str() << password_.c_str()
+        // unmap IPv4 addresses for IPv4 only servers
+        << local_addr_.name_unmapped() << local_addr_.port();
     for (auto& addr : public_addr_){
-        if ((addr.type() == ip_address::IPv4) ||
-            (addr.type() == ip_address::IPv6 && addr.is_ipv4_mapped())){
-            msg << addr.name_unmapped() << addr.port();
-            break;
-        }
+        msg << addr.name_unmapped() << addr.port();
     }
-    msg << local_addr_.name_unmapped() << local_addr_.port()
-        << osc::EndMessage;
+    msg << osc::EndMessage;
 
     send_server_message_tcp(msg.Data(), msg.Size());
 }
@@ -1216,17 +1212,20 @@ void client::handle_login(const osc::ReceivedMessage& msg){
 }
 
 void client::handle_peer_add(const osc::ReceivedMessage& msg){
+    auto count = msg.ArgumentCount();
     auto it = msg.ArgumentsBegin();
     std::string group = (it++)->AsString();
     std::string user = (it++)->AsString();
-    std::string public_ip = (it++)->AsString();
-    int32_t public_port = (it++)->AsInt32();
-    std::string local_ip = (it++)->AsString();
-    int32_t local_port = (it++)->AsInt32();
     int32_t id = (it++)->AsInt32();
+    count -= 3;
 
-    ip_address public_addr(public_ip, public_port);
-    ip_address local_addr(local_ip, local_port);
+    std::vector<ip_address> addrlist;
+    while (count >= 2){
+        std::string ip = (it++)->AsString();
+        int32_t port = (it++)->AsInt32();
+        addrlist.emplace_back(ip, port);
+        count -= 2;
+    }
 
     unique_lock lock(peer_lock_); // writer lock!
 
@@ -1238,15 +1237,13 @@ void client::handle_peer_add(const osc::ReceivedMessage& msg){
         }
     }
 
-    auto p = std::make_unique<peer>(*this, id, group, user,
-                                    public_addr, local_addr);
+    auto p = std::make_unique<peer>(*this, id, group, user, std::move(addrlist));
+
     peers_.push_back(std::move(p));
 
     // don't handle event yet, wait for ping handshake
 
-    LOG_VERBOSE("aoo_client: new peer " << *peers_.back()
-                << " (public address: " << public_ip << ":" << public_port
-                << ", local address: " << local_ip << ":" << local_port << ")");
+    LOG_VERBOSE("aoo_client: new peer " << *peers_.back());
 }
 
 void client::handle_peer_remove(const osc::ReceivedMessage& msg){
@@ -1470,11 +1467,10 @@ client::message_event::~message_event()
 
 peer::peer(client& client, int32_t id,
            const std::string& group, const std::string& user,
-           const ip_address& public_addr, const ip_address& local_addr)
-    : client_(&client), id_(id), group_(group), user_(user)
+           std::vector<ip_address>&& addrlist)
+    : client_(&client), id_(id), group_(group), user_(user),
+      addresses_(std::move(addrlist))
 {
-    addresses_.push_back(public_addr);
-    addresses_.push_back(local_addr);
     start_time_ = time_tag::now();
 
     LOG_DEBUG("create peer " << *this);

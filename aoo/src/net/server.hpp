@@ -54,8 +54,7 @@ public:
 #ifdef _WIN32
     HANDLE event;
 #endif
-    ip_address public_address;
-    ip_address local_address;
+    std::vector<ip_address> addresses;
 private:
     std::shared_ptr<user> user_;
     ip_address addr_;
@@ -78,13 +77,15 @@ private:
 };
 
 struct user {
-    user(const std::string& _name, const std::string& _pwd, int32_t _id)
-        : name(_name), password(_pwd), id(_id){}
+    user(const std::string& _name, const std::string& _pwd,
+         int32_t _id, uint32_t _version)
+        : name(_name), password(_pwd), id(_id), version(_version) {}
     ~user() { LOG_VERBOSE("removed user " << name); }
 
     const std::string name;
     const std::string password;
     int32_t id;
+    uint32_t version;
     client_endpoint *endpoint = nullptr;
 
     bool is_active() const { return endpoint != nullptr; }
@@ -160,7 +161,8 @@ public:
     int32_t poll_events(aoo_eventhandler fn, void *user) override;
 
     std::shared_ptr<user> get_user(const std::string& name,
-                                   const std::string& pwd, error& e);
+                                   const std::string& pwd,
+                                   uint32_t version, error& e);
 
     std::shared_ptr<user> find_user(const std::string& name);
 

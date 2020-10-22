@@ -38,7 +38,7 @@ class peer {
 public:
     peer(client& client, int32_t id,
          const std::string& group, const std::string& user,
-         const ip_address& public_addr, const ip_address& local_addr);
+         std::vector<ip_address>&& addrlist);
 
     ~peer();
 

@@ -266,7 +266,8 @@ std::string server::error_to_string(error e){
 }
 
 std::shared_ptr<user> server::get_user(const std::string& name,
-                                       const std::string& pwd, error& e)
+                                       const std::string& pwd,
+                                       uint32_t version, error& e)
 {
     auto usr = find_user(name);
     if (usr){
@@ -286,7 +287,7 @@ std::shared_ptr<user> server::get_user(const std::string& name,
     } else {
         // create new user (LATER add option to disallow this)
         if (true){
-            usr = std::make_shared<user>(name, pwd, next_user_id_++);
+            usr = std::make_shared<user>(name, pwd, next_user_id_++, version);
             users_.push_back(usr);
             e = error::none;
             return usr;
@@ -348,14 +349,14 @@ std::shared_ptr<group> server::find_group(const std::string& name)
 void server::on_user_joined(user &usr){
     auto e = std::make_unique<user_event>(AOO_NET_USER_JOIN_EVENT,
                                           usr.name.c_str(), usr.id,
-                                          usr.endpoint->public_address);
+                                          usr.endpoint->addresses.front()); // FIXME
     push_event(std::move(e));
 }
 
 void server::on_user_left(user &usr){
     auto e = std::make_unique<user_event>(AOO_NET_USER_LEAVE_EVENT,
                                           usr.name.c_str(), usr.id,
-                                          usr.endpoint->public_address);
+                                          usr.endpoint->addresses.front()); // FIXME
     push_event(std::move(e));
 }
 
@@ -367,15 +368,18 @@ void server::on_user_joined_group(user& usr, group& grp){
             char buf[AOO_MAXPACKETSIZE];
 
             auto notify = [&](client_endpoint* dest, user& u){
-                auto e = u.endpoint;
-
-                // send *unmapped* addresses in case the client is IPv4 only
                 osc::OutboundPacketStream msg(buf, sizeof(buf));
                 msg << osc::BeginMessage(AOO_NET_MSG_CLIENT_PEER_JOIN)
-                    << grp.name.c_str() << u.name.c_str()
-                    << e->public_address.name_unmapped() << e->public_address.port()
-                    << e->local_address.name_unmapped() << e->local_address.port()
-                    << u.id << osc::EndMessage;
+                    << grp.name.c_str() << u.name.c_str();
+                // only v0.2-pre3 and abvoe
+                if (usr.version > 0){
+                    msg << u.id;
+                }
+                // send *unmapped* addresses in case the client is IPv4 only
+                for (auto& addr : u.endpoint->addresses){
+                    msg << addr.name_unmapped() << addr.port();
+                }
+                msg << osc::EndMessage;
 
                 dest->send_message(msg.Data(), msg.Size());
             };
@@ -1003,36 +1007,37 @@ void client_endpoint::handle_ping(const osc::ReceivedMessage& msg){
 void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
 {
     int32_t result = 0;
-    std::string errmsg;
     uint32_t version = 0;
+    std::string errmsg;
 
     auto it = msg.ArgumentsBegin();
-    if (msg.ArgumentCount() > 6){
+    auto count = msg.ArgumentCount();
+    if (count > 6){
         version = (uint32_t)(it++)->AsInt32();
+        count--;
     }
     // for now accept login messages without version.
     // LATER they should fail, so clients have to upgrade.
     if (version == 0 || check_version(version)){
         std::string username = (it++)->AsString();
         std::string password = (it++)->AsString();
-        std::string public_ip = (it++)->AsString();
-        int32_t public_port = (it++)->AsInt32();
-        std::string local_ip = (it++)->AsString();
-        int32_t local_port = (it++)->AsInt32();
+        count -= 2;
 
         server::error err;
         if (!user_){
-            user_ = server_->get_user(username, password, err);
+            user_ = server_->get_user(username, password, version, err);
             if (user_){
-                // success
-                public_address = ip_address(public_ip, public_port);
-                local_address = ip_address(local_ip, local_port);
+                // success - collect addresses
+                while (count >= 2){
+                    std::string ip = (it++)->AsString();
+                    int32_t port = (it++)->AsInt32();
+                    addresses.emplace_back(ip, port);
+                    count -= 2;
+                }
                 user_->endpoint = this;
 
                 LOG_VERBOSE("aoo_server: login: id: " << user_->id
-                            << ", username: " << username << ", password: " << password
-                            << ", public IP: " << public_ip << ", public port: " << public_port
-                            << ", local IP: " << local_ip << ", local port: " << local_port);
+                            << ", username: " << username << ", password: " << password);
 
                 result = 1;
 
