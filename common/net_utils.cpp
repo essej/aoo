@@ -16,6 +16,7 @@
 #include <sys/time.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <errno.h>
 #endif
@@ -258,10 +259,10 @@ ip_address::ip_type ip_address::type() const {
 bool ip_address::is_ipv4_mapped() const {
 #if AOO_NET_USE_IPv6
     if (address()->sa_family == AF_INET6){
-        auto a = &reinterpret_cast<const sockaddr_in6 *>(address())->sin6_addr;
-        return (a->s6_words[0] == 0) && (a->s6_words[1] == 0)
-                && (a->s6_words[2] == 0) && (a->s6_words[3] ==0 )
-                && (a->s6_words[4] == 0) && (a->s6_words[5] == 0xffff);
+        auto addr = reinterpret_cast<const sockaddr_in6 *>(address());
+        auto a = (uint16_t *)addr->sin6_addr.s6_addr;
+        return (a[0] == 0) && (a[1] == 0) && (a[2] == 0) && (a[3] == 0) &&
+               (a[4] == 0) && (a[5] == 0xffff);
     }
 #endif
     return false;
