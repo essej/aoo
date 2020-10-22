@@ -65,7 +65,7 @@ aoo_net_server * aoo_net_server_new(int port, int32_t *err) {
     int val = 0;
 
     // create UDP socket
-    int udpsocket = socket(AF_INET, SOCK_DGRAM, 0);
+    int udpsocket = aoo::socket_udp();
     if (udpsocket < 0){
         *err = aoo::socket_errno();
         LOG_ERROR("aoo_server: couldn't create UDP socket (" << *err << ")");
@@ -92,7 +92,7 @@ aoo_net_server * aoo_net_server_new(int port, int32_t *err) {
     }
 
     // create TCP socket
-    int tcpsocket = socket(AF_INET, SOCK_STREAM, 0);
+    int tcpsocket = aoo::socket_tcp();
     if (tcpsocket < 0){
         *err = aoo::socket_errno();
         LOG_ERROR("aoo_server: couldn't create TCP socket (" << *err << ")");
@@ -369,11 +369,12 @@ void server::on_user_joined_group(user& usr, group& grp){
             auto notify = [&](client_endpoint* dest, user& u){
                 auto e = u.endpoint;
 
+                // send *unmapped* addresses in case the client is IPv4 only
                 osc::OutboundPacketStream msg(buf, sizeof(buf));
                 msg << osc::BeginMessage(AOO_NET_MSG_CLIENT_PEER_JOIN)
                     << grp.name.c_str() << u.name.c_str()
-                    << e->public_address.name() << e->public_address.port()
-                    << e->local_address.name() << e->local_address.port()
+                    << e->public_address.name_unmapped() << e->public_address.port()
+                    << e->local_address.name_unmapped() << e->local_address.port()
                     << u.id << osc::EndMessage;
 
                 dest->send_message(msg.Data(), msg.Size());
@@ -687,10 +688,12 @@ void server::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
             send_udp_message(reply.Data(), reply.Size(), addr);
         } else if (!strcmp(pattern, AOO_NET_MSG_REQUEST)){
             // reply with /reply message
+            // send *unmapped* address in case the client is IPv4 only
             char buf[512];
             osc::OutboundPacketStream reply(buf, sizeof(buf));
             reply << osc::BeginMessage(AOO_NET_MSG_CLIENT_REPLY)
-                  << addr.name() << addr.port() << osc::EndMessage;
+                  << addr.name_unmapped() << addr.port()
+                  << osc::EndMessage;
 
             send_udp_message(reply.Data(), reply.Size(), addr);
         } else {
@@ -796,7 +799,7 @@ client_endpoint::client_endpoint(server &s, int sock, const ip_address &addr)
     }
 #endif
 
-    // set TCP_NODELAY
+    // set TCP_NODELAY - do we need this?
     val = 1;
     if (setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val)) < 0){
         LOG_WARNING("client_endpoint: couldn't set TCP_NODELAY");

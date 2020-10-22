@@ -22,6 +22,7 @@
 #include <winsock2.h>
 #endif
 
+#include <vector>
 #include <functional>
 
 #define AOO_NET_CLIENT_PING_INTERVAL 5000
@@ -61,7 +62,7 @@ public:
         if (addr){
             return *addr;
         } else {
-            return public_address_;
+            return real_address_;
         }
     }
 
@@ -79,9 +80,8 @@ private:
     int32_t id_;
     std::string group_;
     std::string user_;
-    ip_address public_address_;
-    ip_address local_address_;
-    ip_address other_address_;
+    std::vector<ip_address> addresses_;
+    ip_address real_address_;
     std::atomic<ip_address *> address_{nullptr};
     time_tag start_time_;
     double last_pingtime_ = 0;
@@ -190,9 +190,11 @@ private:
     int udpport_;
     int tcpsocket_ = -1;
     shared_mutex socket_lock_;
-    ip_address remote_addr_;
-    ip_address public_addr_;
+
+    std::vector<ip_address> remote_addr_;
+    std::vector<ip_address> public_addr_;
     ip_address local_addr_;
+
     SLIP sendbuffer_;
     std::vector<uint8_t> pending_send_data_;
     SLIP recvbuffer_;
