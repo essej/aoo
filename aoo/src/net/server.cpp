@@ -62,10 +62,8 @@ void * copy_sockaddr(const void *sa, int32_t len);
 /*//////////////////// AoO server /////////////////////*/
 
 aoo_net_server * aoo_net_server_new(int port, int32_t *err) {
-    int val = 0;
-
     // create UDP socket
-    int udpsocket = aoo::socket_udp();
+    int udpsocket = aoo::socket_udp(port);
     if (udpsocket < 0){
         *err = aoo::socket_errno();
         LOG_ERROR("aoo_server: couldn't create UDP socket (" << *err << ")");
@@ -83,40 +81,13 @@ aoo_net_server * aoo_net_server_new(int port, int32_t *err) {
     }
 #endif
 
-    // bind UDP socket
-    if (aoo::socket_bind(udpsocket, port) < 0){
-        *err = aoo::socket_errno();
-        LOG_ERROR("aoo_server: couldn't bind UDP socket (" << *err << ")");
-        aoo::socket_close(udpsocket);
-        return nullptr;
-    }
-
     // create TCP socket
-    int tcpsocket = aoo::socket_tcp();
+    int tcpsocket = aoo::socket_tcp(port);
     if (tcpsocket < 0){
         *err = aoo::socket_errno();
         LOG_ERROR("aoo_server: couldn't create TCP socket (" << *err << ")");
         aoo::socket_close(udpsocket);
         return nullptr;
-    }
-
-    // set SO_REUSEADDR
-    val = 1;
-    if (setsockopt(tcpsocket, SOL_SOCKET, SO_REUSEADDR,
-                      (char *)&val, sizeof(val)) < 0)
-    {
-        *err = aoo::socket_errno();
-        LOG_ERROR("aoo_server: couldn't set SO_REUSEADDR (" << *err << ")");
-        aoo::socket_close(tcpsocket);
-        aoo::socket_close(udpsocket);
-        return nullptr;
-    }
-
-    // set TCP_NODELAY
-    val = 1;
-    if (setsockopt(tcpsocket, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val)) < 0){
-        LOG_WARNING("aoo_server: couldn't set TCP_NODELAY");
-        // ignore
     }
 
     // set non-blocking
@@ -130,15 +101,6 @@ aoo_net_server * aoo_net_server_new(int port, int32_t *err) {
         return nullptr;
     }
 #endif
-
-    // bind TCP socket
-    if (aoo::socket_bind(tcpsocket, port) < 0){
-        *err = aoo::socket_errno();
-        LOG_ERROR("aoo_server: couldn't bind TCP socket (" << *err << ")");
-        aoo::socket_close(tcpsocket);
-        aoo::socket_close(udpsocket);
-        return nullptr;
-    }
 
     // listen
     if (listen(tcpsocket, 32) < 0){

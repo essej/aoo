@@ -406,17 +406,10 @@ i_node * i_node::get(t_pd *obj, int port, aoo_id id)
     if (y){
         x = y->x_node;
     } else {
-        // first create socket
-        int sock = socket_udp();
+        // first create socket and bind to given port
+        int sock = socket_udp(port);
         if (sock < 0){
-            socket_error_print("socket");
-            return 0;
-        }
-
-        // bind socket to given port
-        if (socket_bind(sock, port) < 0){
             pd_error(obj, "%s: couldn't bind to port %d", classname(obj), port);
-            socket_close(sock);
             return 0;
         }
 

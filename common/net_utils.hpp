@@ -87,15 +87,15 @@ private:
 
 int socket_init();
 
-int socket_udp();
+int socket_udp(int port);
 
-int socket_tcp();
+int socket_tcp(int port);
 
 int socket_close(int socket);
 
 int socket_connect(int socket, const ip_address& addr, float timeout);
 
-int socket_bind(int socket, int port);
+ip_address socket_address(int socket);
 
 int socket_sendto(int socket, const char *buf, int size,
                   const ip_address& address);

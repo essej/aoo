@@ -628,7 +628,7 @@ void client::perform_connect(const std::string &host, int port,
 }
 
 int client::try_connect(const std::string &host, int port){
-    tcpsocket_ = socket_tcp();
+    tcpsocket_ = socket_tcp(0);
     if (tcpsocket_ < 0){
         int err = socket_errno();
         LOG_ERROR("aoo_client: couldn't create socket (" << err << ")");

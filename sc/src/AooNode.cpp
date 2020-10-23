@@ -222,18 +222,9 @@ INode::ptr INode::get(World *world, INodeClient& client,
 
     if (!node){
         // first create socket
-        int sock = socket_udp();
+        int sock = socket_udp(port);
         if (sock < 0){
-            LOG_ERROR("aoo node: couldn't create socket");
-            socket_error_print("socket");
-            return nullptr;
-        }
-
-        // bind socket to given port
-        if (socket_bind(sock, port) < 0){
             LOG_ERROR("aoo node: couldn't bind to port " << port);
-            socket_error_print("bind");
-            socket_close(sock);
             return nullptr;
         }
 

@@ -327,68 +327,107 @@ void socket_error_print(const char *label)
     fflush(stderr);
 }
 
-int socket_udp()
+int socket_udp(int port)
 {
 #if AOO_NET_USE_IPv6
     // prefer IPv6, but fall back to IPv4 if disabled
-    int sock = socket(gIPv6Supported ? AF_INET6 : AF_INET, SOCK_DGRAM, 0);
-#else
-    int sock = socket(AF_INET, SOCK_DGRAM, 0);
-#endif
+    ip_address bindaddr;
+    int sock = socket(AF_INET6, SOCK_DGRAM, 0);
     if (sock >= 0){
-        int val = 1;
-        if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (const char *)&val, sizeof(val))){
-            fprintf(stderr, "socket_udp: couldn't set SO_BROADCAST");
-            fflush(stderr);
-        }
-    #if AOO_NET_USE_IPv4 && AOO_NET_USE_IPv6
+        bindaddr = ip_address("", port, ip_address::IPv6);
         // make dual stack socket by listening to both IPv4 and IPv6 packets
-        val = 0;
+        int val = 0;
         if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&val, sizeof(val))){
             fprintf(stderr, "socket_udp: couldn't set IPV6_V6ONLY");
             fflush(stderr);
         }
-    #endif
+    } else {
+        sock = socket(AF_INET, SOCK_DGRAM, 0);
+        bindaddr = ip_address("", port, ip_address::IPv4);
+    }
+#else
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    ip_address bindaddr("", port, ip_address::IPv4);
+#endif
+    if (sock >= 0){
+        // finally bind the socket
+        auto result = bind(sock, bindaddr.address(), bindaddr.length());
+        if (result == 0){
+            return sock; // success
+        } else {
+            socket_error_print("bind");
+        }
+        socket_close(sock);
     } else {
         socket_error_print("socket_udp");
     }
-    return sock;
+    return -1;
 }
 
-int socket_tcp()
+int socket_tcp(int port)
 {
 #if AOO_NET_USE_IPv6
     // prefer IPv6, but fall back to IPv4 if disabled
-    int sock = socket(gIPv6Supported ? AF_INET6 : AF_INET, SOCK_STREAM, 0);
+    ip_address bindaddr;
+    int sock = socket(AF_INET6, SOCK_STREAM, 0);
+    if (sock >= 0) {
+        bindaddr = ip_address("", port, ip_address::IPv6);
+        // make dual stack socket by listening to both IPv4 and IPv6 packets
+        int val = 0;
+        if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&val, sizeof(val))){
+            fprintf(stderr, "socket_udp: couldn't set IPV6_V6ONLY");
+            fflush(stderr);
+        }
+    } else {
+        sock = socket(AF_INET, SOCK_STREAM, 0);
+        bindaddr = ip_address("", port, ip_address::IPv4);
+    }
 #else
     int sock = socket(AF_INET, SOCK_STREAM, 0);
+    bindaddr = ip_address("", port, ip_address::IPv4);
 #endif
     if (sock >= 0){
-        // disable Nagle's algorithm
+        // set SO_REUSEADDR
         int val = 1;
-        if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val)) < 0){
+        if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
+                       (char *)&val, sizeof(val)) < 0)
+        {
+            fprintf(stderr, "aoo_client: couldn't set SO_REUSEADDR");
+            fflush(stderr);
+        }
+        // disable Nagle's algorithm
+        val = 1;
+        if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
+                       (char *)&val, sizeof(val)) < 0)
+        {
             fprintf(stderr, "aoo_client: couldn't set TCP_NODELAY");
             fflush(stderr);
         }
-    #if AOO_NET_USE_IPv4 && AOO_NET_USE_IPv6
-        // make dual stack socket by listening to both IPv4 and IPv6 packets
-        val = 0;
-        if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&val, sizeof(val))){
-            fprintf(stderr, "socket_tcp: couldn't set IPV6_V6ONLY");
-            fflush(stderr);
+        // finally bind the socket
+        auto result = bind(sock, bindaddr.address(), bindaddr.length());
+        if (result == 0){
+            return sock; // success
+        } else {
+            socket_error_print("bind");
         }
-    #endif
+        socket_close(sock);
     } else {
         socket_error_print("socket_tcp");
     }
-    return sock;
+    return -1;
 }
 
-int socket_bind(int socket, int port)
+
+ip_address socket_address(int socket)
 {
-    // bind to 'any' address
-    ip_address addr("", port);
-    return bind(socket, addr.address(), addr.length());
+    sockaddr_storage ss;
+    socklen_t len = sizeof(ss);
+    if (getsockname(socket, (sockaddr *)&ss, &len) < 0){
+        socket_error_print("getsockname");
+        return ip_address{};
+    } else {
+        return ip_address((sockaddr *)&ss, len);
+    }
 }
 
 int socket_close(int socket)
