@@ -42,12 +42,6 @@ AooClient* findClient(World* world, int port) {
     return nullptr;
 }
 
-int32_t sendToNode(INode* node,
-    const char* data, int32_t size, const aoo::ip_address* addr)
-{
-    return node->sendto(data, size, *addr);
-}
-
 } // namespace
 
 // called in NRT thread
@@ -55,8 +49,7 @@ AooClient::AooClient(World *world, int32_t port)
     : world_(world), port_(port) {
     auto node = INode::get(world, *this, AOO_TYPE_CLIENT, port, 0);
     if (node) {
-        auto client = aoo::net::iclient::create(
-                    node.get(), (aoo_sendfn)sendToNode, port);
+        auto client = aoo::net::iclient::create(node->socket());
         client_.reset(client);
         if (client_) {
             LOG_VERBOSE("new AooClient on port " << port);

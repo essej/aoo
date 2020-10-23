@@ -116,7 +116,7 @@ public:
         };
     };
 
-    client(void *udpsocket, aoo_sendfn fn, int port);
+    client(int udpsocket);
     ~client();
 
     int32_t run() override;
@@ -185,8 +185,7 @@ public:
 
     void push_event(std::unique_ptr<ievent> e);
 private:
-    void *udpsocket_;
-    aoo_sendfn sendfn_;
+    int udpsocket_;
     int udpport_;
     ip_address::ip_type type_;
     int tcpsocket_ = -1;

@@ -195,8 +195,7 @@ typedef struct aoo_net_client aoo_net_client;
 #endif
 
 // create a new AOO client for the given UDP socket
-AOO_API aoo_net_client * aoo_net_client_new(void *udpsocket,
-                                            aoo_sendfn fn, int port);
+AOO_API aoo_net_client * aoo_net_client_new(int socket);
 
 // destroy AOO client
 AOO_API void aoo_net_client_free(aoo_net_client *client);

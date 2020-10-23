@@ -141,14 +141,15 @@ int32_t aoo_net_parse_pattern(const char *msg, int32_t n, int32_t *type)
 
 /*//////////////////// AoO client /////////////////////*/
 
-aoo_net_client * aoo_net_client_new(void *udpsocket, aoo_sendfn fn, int port) {
-    return new aoo::net::client(udpsocket, fn, port);
+aoo_net_client * aoo_net_client_new(int socket) {
+    return new aoo::net::client(socket);
 }
 
-aoo::net::client::client(void *udpsocket, aoo_sendfn fn, int port)
-    : udpsocket_(udpsocket), sendfn_(fn), udpport_(port)
+aoo::net::client::client(int socket)
+    : udpsocket_(socket)
 {
     auto addr = socket_address(socket);
+    udpport_ = addr.port();
     type_ = addr.type();
 #ifdef _WIN32
     sockevent_ = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -851,7 +852,7 @@ void client::perform_leave_group(const std::string &group,
 
 void client::send_message_udp(const char *data, int32_t size, const ip_address& addr)
 {
-    sendfn_(udpsocket_, data, size, (void *)&addr);
+    sendto(udpsocket_, data, size, 0, addr.address(), addr.length());
 }
 
 void client::push_event(std::unique_ptr<ievent> e)

@@ -79,14 +79,6 @@ typedef enum aoo_type_code
 // log function
 typedef void (*aoo_logfunction)(const char *);
 
-// send function
-typedef int32_t (*aoo_sendfn)(
-        void *,         // user
-        const char *,   // data
-        int32_t,        // numbytes
-        void *          // addr
-);
-
 // reply function
 typedef int32_t (*aoo_replyfn)(
         void *,         // user

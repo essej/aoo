@@ -89,7 +89,7 @@ public:
     using pointer = std::unique_ptr<iclient, deleter>;
 
     // create a new AoO sink instance
-    static iclient * create(void *socket, aoo_sendfn fn, int port);
+    static iclient * create(int socket);
 
     // destroy the AoO sink instance
     static void destroy(iclient *client);
@@ -166,8 +166,8 @@ protected:
     ~iclient(){} // non-virtual!
 };
 
-inline iclient * iclient::create(void *socket, aoo_sendfn fn, int port){
-    return aoo_net_client_new(socket, fn, port);
+inline iclient * iclient::create(int socket){
+    return aoo_net_client_new(socket);
 }
 
 inline void iclient::destroy(iclient *client){

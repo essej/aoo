@@ -623,12 +623,6 @@ static void * aoo_client_new(t_symbol *s, int argc, t_atom *argv)
     return x;
 }
 
-static int32_t aoo_node_sendto(i_node *node,
-        const char *data, int32_t size, const ip_address *addr)
-{
-    return node->sendto(data, size, *addr);
-}
-
 t_aoo_client::t_aoo_client(int argc, t_atom *argv)
 {
     x_clock = clock_new(this, (t_method)aoo_client_tick);
@@ -642,8 +636,7 @@ t_aoo_client::t_aoo_client(int argc, t_atom *argv)
     x_node = port > 0 ? i_node::get((t_pd *)this, port, 0) : nullptr;
 
     if (x_node){
-        x_client.reset(aoo::net::iclient::create(
-                       x_node, (aoo_sendfn)aoo_node_sendto, port));
+        x_client.reset(aoo::net::iclient::create(x_node->socket()));
         if (x_client){
             verbose(0, "new aoo client on port %d", port);
             // get dejitter context
