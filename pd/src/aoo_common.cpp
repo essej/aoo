@@ -86,7 +86,7 @@ static bool get_endpoint_arg(void *x, i_node *node, int argc, t_atom *argv,
         // otherwise try host|port
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
-        ip_address temp(host->s_name, port);
+        ip_address temp(host->s_name, port, node->type());
 
         if (temp.valid()){
             addr = temp;

@@ -25,6 +25,7 @@ static void SCLog(const char *s){
 namespace {
 
 int gClientSocket;
+aoo::ip_address::ip_type gClientSocketType;
 
 aoo::shared_mutex gClientMutex;
 
@@ -40,7 +41,7 @@ struct ClientCmd {
 bool registerClient(World *world, void *cmdData){
     auto data = (ClientCmd *)cmdData;
 
-    aoo::ip_address addr(data->host, data->port);
+    aoo::ip_address addr(data->host, data->port, gClientSocketType);
 
     aoo::unique_lock lock(gClientMutex);
 
@@ -69,7 +70,8 @@ bool registerClient(World *world, void *cmdData){
 bool unregisterClient(World *world, void *cmdData){
     auto data = (ClientCmd *)cmdData;
 
-    aoo::ip_address addr(data->host, data->port);
+    // sclang is IPv4 only
+    aoo::ip_address addr(data->host, data->port, gClientSocketType);
 
     aoo::unique_lock lock(gClientMutex);
 
@@ -299,7 +301,7 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
         // otherwise try host|port
         auto host = s;
         int port = args->geti();
-        aoo::ip_address addr(host, port);
+        aoo::ip_address addr(host, port, node->type());
 
         if (addr.valid()){
             ep = node->getEndpoint(addr);
@@ -578,5 +580,5 @@ PluginLoad(Aoo) {
     AooPluginCmd(aoo_register);
     AooPluginCmd(aoo_unregister);
 
-    gClientSocket = aoo::socket_udp();
+    gClientSocket = aoo::socket_udp(0);
 }

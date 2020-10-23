@@ -155,6 +155,7 @@ aoo_net_server * aoo_net_server_new(int port, int32_t *err) {
 aoo::net::server::server(int tcpsocket, int udpsocket)
     : tcpsocket_(tcpsocket), udpsocket_(udpsocket)
 {
+    type_ = socket_address(udpsocket).type();
 #ifdef _WIN32
     waitevent_ = CreateEvent(NULL, FALSE, FALSE, NULL);
     tcpevent_ = WSACreateEvent();
@@ -1031,7 +1032,10 @@ void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
                 while (count >= 2){
                     std::string ip = (it++)->AsString();
                     int32_t port = (it++)->AsInt32();
-                    addresses.emplace_back(ip, port);
+                    ip_address addr(ip, port, server_->type());
+                    if (addr.valid()){
+                        addresses.push_back(addr);
+                    }
                     count -= 2;
                 }
                 user_->endpoint = this;

@@ -188,6 +188,7 @@ private:
     void *udpsocket_;
     aoo_sendfn sendfn_;
     int udpport_;
+    ip_address::ip_type type_;
     int tcpsocket_ = -1;
     shared_mutex socket_lock_;
 

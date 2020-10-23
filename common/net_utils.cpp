@@ -28,16 +28,9 @@
 
 namespace aoo {
 
-bool gIPv4Supported = false;
-bool gIPv6Supported = false;
-
 /*///////////////////////// ip_address /////////////////////////////*/
 
 ip_address::ip_address(){
-#if AOO_NET_USE_IPv4
-    static_assert(sizeof(address_) >= sizeof(sockaddr_in),
-                  "ip_address can't hold IPv6 sockaddr");
-#endif
 #if AOO_NET_USE_IPv6
     static_assert(sizeof(address_) >= sizeof(sockaddr_in6),
                   "ip_address can't hold IPv6 sockaddr");
@@ -52,7 +45,6 @@ ip_address::ip_address(const struct sockaddr *sa, socklen_t len){
     length_ = len;
 }
 
-#if AOO_NET_USE_IPv4
 ip_address::ip_address(uint32_t ipv4, int port){
     struct sockaddr_in sa;
     memset(&sa, 0, sizeof(sa));
@@ -62,9 +54,9 @@ ip_address::ip_address(uint32_t ipv4, int port){
     memcpy(&address_, &sa, sizeof(sa));
     length_ = sizeof(sa);
 }
-#endif
 
-std::vector<ip_address> ip_address::get_address_list(const std::string &host, int port){
+std::vector<ip_address> ip_address::get_list(const std::string &host,
+                                             int port, ip_type type){
     std::vector<ip_address> result;
 
     struct addrinfo hints;
@@ -72,20 +64,22 @@ std::vector<ip_address> ip_address::get_address_list(const std::string &host, in
 
     // if we have IPv6 support, only get IPv6 addresses
     // (IPv4 addresses will be mapped to IPv6 addresses)
-    if (gIPv6Supported){
-    #if AOO_NET_USE_IPv6
+    switch (type){
+#if AOO_NET_USE_IPv6
+    case IPv6:
         hints.ai_family = AF_INET6;
-    #endif
-    } else if (gIPv4Supported){
-    #if AOO_NET_USE_IPv4
+        break;
+#endif
+    case IPv4:
         hints.ai_family = AF_INET;
-    #endif
-    } else {
-        return result; // empty (shouldn't happen)
+        break;
+    default:
+        hints.ai_family = AF_UNSPEC;
+        break;
     }
 
     hints.ai_flags =
-#if AOO_NET_USE_IPv4 && AOO_NET_USE_IPv6
+#if AOO_NET_USE_IPv6
     #ifdef AI_ALL
         AI_ALL |       // both IPv4 and IPv6 addresses
     #endif
@@ -123,11 +117,12 @@ std::vector<ip_address> ip_address::get_address_list(const std::string &host, in
         errno = HOST_NOT_FOUND;
     #endif
     }
+    freeaddrinfo(ailist);
     return result;
 }
 
-ip_address::ip_address(const std::string& host, int port){
-    auto result = get_address_list(host, port);
+ip_address::ip_address(const std::string& host, int port, ip_type type){
+    auto result = get_list(host, port, type);
     if (!result.empty()){
         // just pick the first result
         *this = result.front();
@@ -150,7 +145,6 @@ ip_address& ip_address::operator=(const ip_address& other){
 bool ip_address::operator==(const ip_address& other) const {
     if (address()->sa_family == other.address()->sa_family){
         switch (address()->sa_family){
-    #if AOO_NET_USE_IPv4
         case AF_INET:
         {
             auto a = (const struct sockaddr_in *)&address_;
@@ -158,7 +152,6 @@ bool ip_address::operator==(const ip_address& other) const {
             return (a->sin_addr.s_addr == b->sin_addr.s_addr)
                     && (a->sin_port == b->sin_port);
         }
-    #endif
     #if AOO_NET_USE_IPv6
         case AF_INET6:
         {
@@ -190,11 +183,9 @@ const char * ip_address::get_name(const sockaddr *addr){
         na = &reinterpret_cast<const sockaddr_in6 *>(addr)->sin6_addr;
         break;
 #endif
-#if AOO_NET_USE_IPv4
     case AF_INET:
         na = &reinterpret_cast<const sockaddr_in *>(addr)->sin_addr;
         break;
-#endif
     default:
         return "";
     }
@@ -224,10 +215,8 @@ const char* ip_address::name_unmapped() const {
 
 int ip_address::port() const {
     switch (address()->sa_family){
-#if AOO_NET_USE_IPv4
     case AF_INET:
         return ntohs(reinterpret_cast<const sockaddr_in *>(address())->sin_port);
-#endif
 #if AOO_NET_USE_IPv6
     case AF_INET6:
         return ntohs(reinterpret_cast<const sockaddr_in6 *>(address())->sin6_port);
@@ -243,10 +232,8 @@ bool ip_address::valid() const {
 
 ip_address::ip_type ip_address::type() const {
     switch(address()->sa_family){
-#if AOO_NET_USE_IPv4
     case AF_INET:
         return IPv4;
-#endif
 #if AOO_NET_USE_IPv6
     case AF_INET6:
         return IPv6;
@@ -280,23 +267,6 @@ int socket_init()
         WSADATA wsadata;
         if (WSAStartup(version, &wsadata))
             return -1;
-    #endif
-
-        // check IPv4 / IPv6 availability
-        int sock;
-    #if AOO_NET_USE_IPv4
-        sock = socket(AF_INET, SOCK_DGRAM, 0);
-        if (sock >= 0){
-            gIPv4Supported = true;
-            socket_close(sock);
-        }
-    #endif
-    #if AOO_NET_USE_IPv6
-        sock = socket(AF_INET6, SOCK_DGRAM, 0);
-        if (sock >= 0){
-            gIPv6Supported = true;
-            socket_close(sock);
-        }
     #endif
 
         initialized = true;
@@ -521,9 +491,10 @@ bool socket_signal(int socket, int port)
 {
     // wake up blocking recv() by sending an empty packet
 #if AOO_NET_USE_IPv6
-    ip_address addr("::1", port);
+    auto type = socket_address(socket).type();
+    ip_address addr("localhost", port, type);
 #else
-    ip_address addr("127.0.0.1", port);
+    ip_address addr("localhost", port, ip_address::IPv4);
 #endif
     if (sendto(socket, 0, 0, 0, addr.address(), addr.length()) < 0){
         socket_error_print("sendto");

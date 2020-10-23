@@ -106,6 +106,7 @@ struct t_node : public i_node
     // socket
     int x_socket = -1;
     int x_port = 0;
+    ip_address::ip_type x_type;
     std::list<aoo::endpoint> x_endpoints; // endpoints must not move in memory!
     aoo::shared_mutex x_endpointlock;
     // threading
@@ -123,6 +124,8 @@ struct t_node : public i_node
     void release(t_pd *obj) override;
 
     int socket() const override { return x_socket; }
+
+    ip_address::ip_type type() const override { return x_type; }
 
     int port() const override { return x_port; }
 
@@ -438,6 +441,8 @@ t_node::t_node(t_symbol *s, int socket, int port)
     : x_proxy(this), x_bindsym(s),
       x_socket(socket), x_port(port)
 {
+    x_type = socket_address(socket).type();
+
     pd_bind(&x_proxy.x_pd, x_bindsym);
 
     // start threads

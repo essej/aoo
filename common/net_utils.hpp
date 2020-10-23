@@ -11,10 +11,6 @@ struct sockaddr;
 #include <sys/socket.h>
 #endif
 
-#ifndef AOO_NET_USE_IPv4
-#define AOO_NET_USE_IPv4 1
-#endif
-
 #ifndef AOO_NET_USE_IPv6
 #define AOO_NET_USE_IPv6 1
 #endif
@@ -25,14 +21,19 @@ namespace aoo {
 
 class ip_address {
 public:
-    static std::vector<ip_address> get_address_list(const std::string& host, int port);
+    enum ip_type {
+        Unspec,
+        IPv4,
+        IPv6
+    };
+
+    static std::vector<ip_address> get_list(const std::string& host, int port,
+                                            ip_type type);
 
     ip_address();
     ip_address(const struct sockaddr *sa, socklen_t len);
-#if AOO_NET_USE_IPv4
     ip_address(uint32_t ipv4, int port);
-#endif
-    ip_address(const std::string& host, int port);
+    ip_address(const std::string& host, int port, ip_type type);
 
     ip_address(const ip_address& other);
     ip_address& operator=(const ip_address& other);
@@ -47,11 +48,6 @@ public:
 
     bool valid() const;
 
-    enum ip_type {
-        Unspec,
-        IPv4,
-        IPv6
-    };
     ip_type type() const;
 
     bool is_ipv4_mapped() const;

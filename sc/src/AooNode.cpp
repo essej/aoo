@@ -48,6 +48,8 @@ public:
 
     void release(INodeClient& client) override;
 
+    aoo::ip_address::ip_type type() const { return type_; }
+
     int socket() const override { return socket_; }
 
     int port() const override { return port_; }
@@ -80,6 +82,7 @@ private:
     World *world_;
     int socket_ = -1;
     int port_ = 0;
+    aoo::ip_address::ip_type type_;
     std::list<aoo::endpoint> endpoints_; // endpoints must not move in memory!
     aoo::shared_mutex endpointMutex_;
     // dependants
@@ -120,6 +123,7 @@ private:
 AooNode::AooNode(World *world, int socket, int port)
     : world_(world), socket_(socket), port_(port)
 {
+    type_ = socket_address(socket).type();
     // start threads
 #if AOO_NODE_POLL
     thread_ = std::thread([this](){

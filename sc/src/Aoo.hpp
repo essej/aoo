@@ -33,11 +33,6 @@ inline void sendMsgNRT(World *world, const osc::OutboundPacketStream& msg){
 
 #define USE_PEER_LIST 1
 
-namespace aoo {
-class endpoint;
-class ip_address;
-}
-
 class INodeClient;
 
 class INode {
@@ -52,6 +47,8 @@ public:
     virtual void release(INodeClient& client) = 0;
 
     virtual int socket() const = 0;
+
+    virtual aoo::ip_address::ip_type type() const = 0;
 
     virtual int port() const = 0;
 

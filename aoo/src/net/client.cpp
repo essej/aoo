@@ -148,6 +148,8 @@ aoo_net_client * aoo_net_client_new(void *udpsocket, aoo_sendfn fn, int port) {
 aoo::net::client::client(void *udpsocket, aoo_sendfn fn, int port)
     : udpsocket_(udpsocket), sendfn_(fn), udpport_(port)
 {
+    auto addr = socket_address(socket);
+    type_ = addr.type();
 #ifdef _WIN32
     sockevent_ = CreateEvent(NULL, FALSE, FALSE, NULL);
     waitevent_ = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -633,7 +635,7 @@ int client::try_connect(const std::string &host, int port){
         return err;
     }
     // resolve host name
-    auto result = ip_address::get_address_list(host, port);
+    auto result = ip_address::get_list(host, port, type_);
     if (result.empty()){
         int err = socket_errno();
         // LATER think about best way for error handling. Maybe exception?
@@ -653,13 +655,13 @@ int client::try_connect(const std::string &host, int port){
     }
 
     // get local network interface
-    ip_address temp;
-    if (getsockname(tcpsocket_, temp.address_ptr(), temp.length_ptr()) < 0) {
+    auto temp = socket_address(tcpsocket_);
+    if (!temp.valid()){
         int err = socket_errno();
         LOG_ERROR("aoo_client: couldn't get socket name (" << err << ")");
         return err;
     }
-    local_addr_ = ip_address(temp.name(), udpport_);
+    local_addr_ = ip_address(temp.name(), udpport_, type_);
 
 #ifdef _WIN32
     // register event with socket
@@ -1223,7 +1225,10 @@ void client::handle_peer_add(const osc::ReceivedMessage& msg){
     while (count >= 2){
         std::string ip = (it++)->AsString();
         int32_t port = (it++)->AsInt32();
-        addrlist.emplace_back(ip, port);
+        ip_address addr(ip, port, type_);
+        if (addr.valid()){
+            addrlist.push_back(addr);
+        }
         count -= 2;
     }
 
@@ -1289,7 +1294,7 @@ void client::handle_server_message_udp(const osc::ReceivedMessage &msg, int onse
                 std::string ip = (it++)->AsString();
                 int port = (it++)->AsInt32();
 
-                ip_address addr(ip, port);
+                ip_address addr(ip, port, type_);
                 for (auto& a : public_addr_){
                     if (a == addr){
                         return;

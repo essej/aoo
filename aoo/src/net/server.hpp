@@ -152,6 +152,8 @@ public:
     server(int tcpsocket, int udpsocket);
     ~server();
 
+    ip_address::ip_type type() const { return type_; }
+
     int32_t run() override;
 
     int32_t quit() override;
@@ -181,6 +183,7 @@ public:
 private:
     int tcpsocket_;
     int udpsocket_;
+    ip_address::ip_type type_;
 #ifdef _WIN32
     HANDLE tcpevent_;
     HANDLE udpevent_;
