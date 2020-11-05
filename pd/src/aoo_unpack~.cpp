@@ -33,6 +33,7 @@ struct t_aoo_unpack
 
     t_float x_f = 0;
     aoo::isink::pointer x_sink;
+    aoo::ip_address x_addr; // fake address
     int32_t x_samplerate = 0;
     int32_t x_blocksize = 0;
     int32_t x_nchannels = 0;
@@ -42,7 +43,8 @@ struct t_aoo_unpack
     t_clock *x_clock = nullptr;
 };
 
-static int32_t aoo_pack_reply(t_aoo_unpack *x, const char *data, int32_t n)
+static int32_t aoo_unpack_reply(t_aoo_unpack *x, const char *data, int32_t n,
+                                const void *address, int32_t addrlen)
 {
     t_atom *a = (t_atom *)alloca(n * sizeof(t_atom));
     for (int i = 0; i < n; ++i){
@@ -59,21 +61,21 @@ static void aoo_unpack_list(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv
         msg[i] = (int)(argv[i].a_type == A_FLOAT ? argv[i].a_w.w_float : 0.f);
     }
     // handle incoming message
-    x->x_sink->handle_message(msg, argc, x, (aoo_replyfn)aoo_pack_reply);
+    x->x_sink->handle_message(msg, argc, x->x_addr.address(), x->x_addr.length());
     // send outgoing messages
     while (x->x_sink->send()) ;
 }
 
 static void aoo_unpack_invite(t_aoo_unpack *x, t_floatarg f)
 {
-    x->x_sink->invite_source(x, (int32_t)f, (aoo_replyfn)aoo_pack_reply);
+    x->x_sink->invite_source(x->x_addr.address(), x->x_addr.length(), f);
     // send outgoing messages
     while (x->x_sink->send()) ;
 }
 
 static void aoo_unpack_uninvite(t_aoo_unpack *x, t_floatarg f)
 {
-    x->x_sink->uninvite_source(x, (int32_t)f, (aoo_replyfn)aoo_pack_reply);
+    x->x_sink->uninvite_source(x->x_addr.address(), x->x_addr.length(), f);
     // send outgoing messages
     while (x->x_sink->send()) ;
 }
@@ -93,7 +95,7 @@ static void aoo_unpack_reset(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *arg
     if (argc){
         // reset specific source
         int32_t id = atom_getfloat(argv);
-        x->x_sink->reset_source(x, id);
+        x->x_sink->reset_source(x->x_addr.address(), x->x_addr.length(), id);
     } else {
         // reset all sources
         x->x_sink->reset();
@@ -136,7 +138,7 @@ static void aoo_unpack_handle_event(t_aoo_unpack *x, const aoo_event *event)
     {
         auto e = (const aoo_source_event *)event;
         aoo_format_storage f;
-        if (x->x_sink->get_source_format(e->endpoint, e->id, f) > 0) {
+        if (x->x_sink->get_source_format(e->address, e->addrlen, e->id, f) > 0) {
             SETFLOAT(&msg[0], e->id);
             int fsize = format_to_atoms(f.header, 31, msg + 1); // skip first atom
             outlet_anything(x->x_msgout, gensym("source_format"), fsize + 1, msg);
@@ -281,7 +283,9 @@ t_aoo_unpack::t_aoo_unpack(int argc, t_atom *argv)
     x_msgout = outlet_new(&x_obj, 0);
 
     // create and initialize aoo_sink object
-    x_sink.reset(aoo::isink::create(id >= 0 ? id : 0));
+    auto sink = aoo::isink::create(id >= 0 ? id : 0,
+                                   (aoo_replyfn)aoo_unpack_reply, this);
+    x_sink.reset(sink);
 
     x_sink->set_buffersize(buffersize);
 }

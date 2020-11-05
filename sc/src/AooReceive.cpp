@@ -21,7 +21,9 @@ void AooReceive::init(int32_t port, aoo_id id, int32 bufsize) {
                 auto node = INode::get(world, *cmd->owner, AOO_TYPE_SINK,
                                        cmd->port, cmd->id);
                 if (node){
-                    auto sink = aoo::isink::create(cmd->id);
+                    auto sink = aoo::isink::create(cmd->id,
+                        (aoo_replyfn)INodeClient::reply,
+                        static_cast<INodeClient *>(cmd->owner.get()));
                     if (sink){
                         cmd->node = node;
 
@@ -76,20 +78,21 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_SOURCE_ADD_EVENT:
     {
         auto e = (const aoo_source_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        beginEvent(msg, "/add", ep, e->id);
+        beginEvent(msg, "/add", addr, e->id);
         sendMsgRT(msg);
         break;
     }
     case AOO_SOURCE_FORMAT_EVENT:
     {
         auto e = (const aoo_source_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         aoo_format_storage f;
-        if (sink()->get_source_format(ep, e->id, f) > 0) {
-            beginEvent(msg, "/format", ep, e->id);
+        if (sink()->get_source_format(addr.address(), addr.length(),
+                                      e->id, f) > 0) {
+            beginEvent(msg, "/format", addr, e->id);
             serializeFormat(msg, f.header);
             sendMsgRT(msg);
         }
@@ -98,9 +101,9 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_SOURCE_STATE_EVENT:
     {
         auto e = (const aoo_source_state_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        beginEvent(msg, "/state", ep, e->id);
+        beginEvent(msg, "/state", addr, e->id);
         msg << e->state;
         sendMsgRT(msg);
         break;
@@ -108,9 +111,9 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_BLOCK_LOST_EVENT:
     {
         auto e = (const aoo_block_lost_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        beginEvent(msg, "/block/lost", ep, e->id);
+        beginEvent(msg, "/block/lost", addr, e->id);
         msg << e->count;
         sendMsgRT(msg);
         break;
@@ -118,9 +121,9 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_BLOCK_REORDERED_EVENT:
     {
         auto e = (const aoo_block_reordered_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        beginEvent(msg, "/block/reordered", ep, e->id);
+        beginEvent(msg, "/block/reordered", addr, e->id);
         msg << e->count;
         sendMsgRT(msg);
         break;
@@ -128,9 +131,9 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_BLOCK_RESENT_EVENT:
     {
         auto e = (const aoo_block_resent_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        beginEvent(msg, "/block/resent", ep, e->id);
+        beginEvent(msg, "/block/resent", addr, e->id);
         msg << e->count;
         sendMsgRT(msg);
         break;
@@ -138,9 +141,9 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_BLOCK_GAP_EVENT:
     {
         auto e = (const aoo_block_gap_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        beginEvent(msg, "/block/gap", ep, e->id);
+        beginEvent(msg, "/block/gap", addr, e->id);
         msg << e->count;
         sendMsgRT(msg);
         break;
@@ -148,11 +151,11 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_PING_EVENT:
     {
         auto e = (const aoo_ping_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         double diff = aoo_osctime_duration(e->tt1, e->tt2);
 
-        beginEvent(msg, "/ping", ep, e->id);
+        beginEvent(msg, "/ping", addr, e->id);
         msg << diff;
         sendMsgRT(msg);
         break;
@@ -213,13 +216,12 @@ void aoo_recv_invite(AooReceiveUnit *unit, sc_msg_iter *args){
             osc::OutboundPacketStream msg(buf, sizeof(buf));
             owner.beginReply(msg, "/aoo/invite", replyID);
 
-            aoo::endpoint *ep;
+            aoo::ip_address addr;
             aoo_id id;
-            if (getSourceArg(owner.node(), &args, ep, id)){
+            if (getSourceArg(owner.node(), &args, addr, id)){
                 if (owner.sink()->invite_source(
-                    ep, id, aoo::endpoint::send) > 0) {
+                    addr.address(), addr.length(), id) > 0) {
                     // only send IP address on success
-                    auto& addr = ep->address();
                     msg << addr.name() << addr.port() << id;
                 }
             }
@@ -247,13 +249,12 @@ void aoo_recv_uninvite(AooReceiveUnit *unit, sc_msg_iter *args){
             owner.beginReply(msg, "/aoo/uninvite", replyID);
 
             if (args.remain() > 0){
-                aoo::endpoint *ep;
+                aoo::ip_address addr;
                 aoo_id id;
-                if (getSourceArg(owner.node(), &args, ep, id)){
+                if (getSourceArg(owner.node(), &args, addr, id)){
                     if (owner.sink()->uninvite_source(
-                        ep, id, aoo::endpoint::send) > 0) {
+                        addr.address(), addr.length(), id) > 0) {
                         // only send IP address on success
-                        auto& addr = ep->address();
                         msg << addr.name() << addr.port() << id;
                     }
                 }
@@ -314,10 +315,10 @@ void aoo_recv_reset(AooReceiveUnit *unit, sc_msg_iter *args){
             skipUnitCmd(&args);
 
             if (args.remain() > 0){
-                aoo::endpoint *ep;
+                aoo::ip_address addr;
                 aoo_id id;
-                if (getSourceArg(owner.node(), &args, ep, id)){
-                    owner.sink()->reset_source(ep, id);
+                if (getSourceArg(owner.node(), &args, addr, id)){
+                    owner.sink()->reset_source(addr.address(), addr.length(), id);
                 }
             } else {
                 owner.sink()->reset();

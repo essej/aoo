@@ -30,35 +30,19 @@ int address_to_atoms(const ip_address& addr, int argc, t_atom *a)
     return 2;
 }
 
-int endpoint_to_atoms(const endpoint *ep, aoo_id id, int argc, t_atom *argv)
+int endpoint_to_atoms(const ip_address& addr, aoo_id id, int argc, t_atom *argv)
 {
-    t_symbol *host;
-    int port;
-    if (argc < 3){
+    if (argc < 3 || !addr.valid()){
         return 0;
     }
-    if (endpoint_get_address(ep, host, port)){
-        SETSYMBOL(argv, host);
-        SETFLOAT(argv + 1, port);
-        if (id == AOO_ID_WILDCARD){
-            SETSYMBOL(argv + 2, gensym("*"));
-        } else {
-            SETFLOAT(argv + 2, id);
-        }
-        return 3;
-    }
-    return 0;
-}
-
-bool endpoint_get_address(const endpoint *ep, t_symbol *&host, int &port){
-    auto& addr = ep->address();
-    if (addr.valid()){
-        host = gensym(addr.name());
-        port = addr.port();
-        return true;
+    SETSYMBOL(argv, gensym(addr.name()));
+    SETFLOAT(argv + 1, addr.port());
+    if (id == AOO_ID_WILDCARD){
+        SETSYMBOL(argv + 2, gensym("*"));
     } else {
-        return false;
+        SETFLOAT(argv + 2, id);
     }
+    return 3;
 }
 
 static bool get_endpoint_arg(void *x, i_node *node, int argc, t_atom *argv,
@@ -74,10 +58,7 @@ static bool get_endpoint_arg(void *x, i_node *node, int argc, t_atom *argv,
         t_symbol *group = atom_getsymbol(argv);
         t_symbol *user = atom_getsymbol(argv + 1);
 
-        auto e = node->find_peer(group, user);
-        if (e){
-            addr = e->address();
-        } else {
+        if (!node->find_peer(group, user, addr)) {
             pd_error(x, "%s: couldn't find peer %s|%s",
                      classname(x), group->s_name, user->s_name, what);
             return false;

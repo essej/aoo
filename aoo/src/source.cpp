@@ -16,12 +16,12 @@
 // typetag string: max. 12 bytes
 // args (without blob data): 36 bytes
 
-aoo_source * aoo_source_new(aoo_id id) {
-    return new aoo::source(id);
+aoo_source * aoo_source_new(aoo_id id, aoo_replyfn fn, void *user) {
+    return new aoo::source(id, fn, user);
 }
 
-aoo::source::source(aoo_id id)
-    : id_(id)
+aoo::source::source(aoo_id id, aoo_replyfn replyfn, void *user)
+    : id_(id), replyfn_(replyfn), user_(user)
 {
     // event queue
     eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);
@@ -209,15 +209,17 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
     return 1;
 }
 
-int32_t aoo_source_set_sinkoption(aoo_source *src, void *endpoint, aoo_id id,
-                              int32_t opt, void *p, int32_t size)
+int32_t aoo_source_set_sinkoption(aoo_source *src, const void *address, int32_t addrlen,
+                                  aoo_id id, int32_t opt, void *p, int32_t size)
 {
-    return src->set_sinkoption(endpoint, id, opt, p, size);
+    return src->set_sinkoption(address, addrlen, id, opt, p, size);
 }
 
-int32_t aoo::source::set_sinkoption(void *endpoint, aoo_id id,
-                                   int32_t opt, void *ptr, int32_t size)
+int32_t aoo::source::set_sinkoption(const void *address, int32_t addrlen, aoo_id id,
+                                    int32_t opt, void *ptr, int32_t size)
 {
+    ip_address addr((const sockaddr *)address, addrlen);
+
     if (id == AOO_ID_WILDCARD){
         // set option on all sinks on the given endpoint
         switch (opt){
@@ -228,7 +230,7 @@ int32_t aoo::source::set_sinkoption(void *endpoint, aoo_id id,
             auto chn = as<int32_t>(ptr);
             shared_lock lock(sink_mutex_); // reader lock!
             for (auto& sink : sinks_){
-                if (sink.user == endpoint){
+                if (sink.address == addr){
                     sink.channel = chn;
                 }
             }
@@ -243,7 +245,7 @@ int32_t aoo::source::set_sinkoption(void *endpoint, aoo_id id,
         return 1;
     } else {
         shared_lock lock(sink_mutex_); // reader lock!
-        auto sink = find_sink(endpoint, id);
+        auto sink = find_sink(addr, id);
         if (sink){
             if (sink->id == AOO_ID_WILDCARD){
                 LOG_WARNING("aoo_source: can't set individual sink option "
@@ -276,22 +278,24 @@ int32_t aoo::source::set_sinkoption(void *endpoint, aoo_id id,
     }
 }
 
-int32_t aoo_source_get_sinkoption(aoo_source *src, void *endpoint, aoo_id id,
-                              int32_t opt, void *p, int32_t size)
+int32_t aoo_source_get_sinkoption(aoo_source *src, const void *address, int32_t addrlen,
+                                  aoo_id id, int32_t opt, void *p, int32_t size)
 {
-    return src->get_sinkoption(endpoint, id, opt, p, size);
+    return src->get_sinkoption(address, addrlen, id, opt, p, size);
 }
 
-int32_t aoo::source::get_sinkoption(void *endpoint, aoo_id id,
-                              int32_t opt, void *p, int32_t size)
+int32_t aoo::source::get_sinkoption(const void *address, int32_t addrlen, aoo_id id,
+                                    int32_t opt, void *p, int32_t size)
 {
+    ip_address addr((const sockaddr *)address, addrlen);
+
     if (id == AOO_ID_WILDCARD){
         LOG_ERROR("aoo_source: can't use wildcard to get sink option");
         return 0;
     }
 
     shared_lock lock(sink_mutex_); // reader lock!
-    auto sink = find_sink(endpoint, id);
+    auto sink = find_sink(addr, id);
     if (sink){
         switch (opt){
         // channel onset
@@ -337,21 +341,24 @@ int32_t aoo::source::setup(int32_t samplerate,
     return 0;
 }
 
-int32_t aoo_source_add_sink(aoo_source *src, void *sink, aoo_id id, aoo_replyfn fn) {
-    return src->add_sink(sink, id, fn);
+int32_t aoo_source_add_sink(aoo_source *src, const void *address,
+                            int32_t addrlen, aoo_id id) {
+    return src->add_sink(address, addrlen, id);
 }
 
-int32_t aoo::source::add_sink(void *endpoint, aoo_id id, aoo_replyfn fn){
+int32_t aoo::source::add_sink(const void *address, int32_t addrlen, aoo_id id){
+    ip_address addr((const sockaddr *)address, addrlen);
+
     unique_lock lock(sink_mutex_); // writer lock!
     if (id == AOO_ID_WILDCARD){
         // first remove all sinks on the given endpoint!
         auto it = std::remove_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-            return s.user == endpoint;
+            return s.address == addr;
         });
         sinks_.erase(it, sinks_.end());
     } else {
         // check if sink exists!
-        auto result = find_sink(endpoint, id);
+        auto result = find_sink(addr, id);
         if (result){
             if (result->id == AOO_ID_WILDCARD){
                 LOG_WARNING("aoo_source: can't add individual sink "
@@ -363,29 +370,32 @@ int32_t aoo::source::add_sink(void *endpoint, aoo_id id, aoo_replyfn fn){
         }
     }
     // add sink descriptor
-    sinks_.emplace_back(endpoint, fn, id);
+    sinks_.emplace_back(*this, addr, id);
     // notify send_format()
     format_changed_ = true;
 
     return 1;
 }
 
-int32_t aoo_source_remove_sink(aoo_source *src, void *sink, aoo_id id) {
-    return src->remove_sink(sink, id);
+int32_t aoo_source_remove_sink(aoo_source *src, const void *address,
+                               int32_t addrlen, aoo_id id) {
+    return src->remove_sink(address, addrlen, id);
 }
 
-int32_t aoo::source::remove_sink(void *endpoint, aoo_id id){
+int32_t aoo::source::remove_sink(const void *address, int32_t addrlen, aoo_id id){
+    ip_address addr((const sockaddr *)address, addrlen);
+
     unique_lock lock(sink_mutex_); // writer lock!
     if (id == AOO_ID_WILDCARD){
         // remove all sinks on the given endpoint
         auto it = std::remove_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-            return s.user == endpoint;
+            return s.address == addr;
         });
         sinks_.erase(it, sinks_.end());
         return 1;
     } else {
         for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
-            if (it->user == endpoint){
+            if (it->address == addr){
                 if (it->id == AOO_ID_WILDCARD){
                     LOG_WARNING("aoo_source: can't remove individual sink "
                                 << id << " because of wildcard!");
@@ -411,13 +421,16 @@ void aoo::source::remove_all(){
 }
 
 int32_t aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
-                              void *sink, aoo_replyfn fn) {
-    return src->handle_message(data, n, sink, fn);
+                                  const void *address, int32_t addrlen) {
+    return src->handle_message(data, n, address, addrlen);
 }
 
 // /aoo/src/<id>/format <sink>
-int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn){
+int32_t aoo::source::handle_message(const char *data, int32_t n,
+                                    const void *address, int32_t addrlen){
     try {
+        ip_address addr((const sockaddr *)address, addrlen);
+
         osc::ReceivedPacket packet(data, n);
         osc::ReceivedMessage msg(packet);
 
@@ -443,19 +456,19 @@ int32_t aoo::source::handle_message(const char *data, int32_t n, void *endpoint,
 
         auto pattern = msg.AddressPattern() + onset;
         if (!strcmp(pattern, AOO_MSG_FORMAT)){
-            handle_format_request(endpoint, fn, msg);
+            handle_format_request(msg, addr);
             return 1;
         } else if (!strcmp(pattern, AOO_MSG_DATA)){
-            handle_data_request(endpoint, fn, msg);
+            handle_data_request(msg, addr);
             return 1;
         } else if (!strcmp(pattern, AOO_MSG_INVITE)){
-            handle_invite(endpoint, fn, msg);
+            handle_invite(msg, addr);
             return 1;
         } else if (!strcmp(pattern, AOO_MSG_UNINVITE)){
-            handle_uninvite(endpoint, fn, msg);
+            handle_uninvite(msg, addr);
             return 1;
         } else if (!strcmp(pattern, AOO_MSG_PING)){
-            handle_ping(endpoint, fn, msg);
+            handle_ping(msg, addr);
             return 1;
         } else {
             LOG_WARNING("unknown message " << pattern);
@@ -624,7 +637,7 @@ namespace aoo {
 
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
-void endpoint_base::send_data(aoo_id src, int32_t salt, const aoo::data_packet& d) const{
+void endpoint::send_data(aoo_id src, int32_t salt, const aoo::data_packet& d) const{
     // call without lock!
 
     char buf[AOO_MAXPACKETSIZE];
@@ -657,7 +670,7 @@ void endpoint_base::send_data(aoo_id src, int32_t salt, const aoo::data_packet& 
 
 uint32_t make_version();
 
-void endpoint_base::send_format(aoo_id src, int32_t salt, const aoo_format& f,
+void endpoint::send_format(aoo_id src, int32_t salt, const aoo_format& f,
                                 const char *options, int32_t size) const {
     // call without lock!
     LOG_DEBUG("send format to " << id << " (salt = " << salt << ")");
@@ -685,7 +698,7 @@ void endpoint_base::send_format(aoo_id src, int32_t salt, const aoo_format& f,
 
 // /aoo/sink/<id>/ping <src> <time>
 
-void endpoint_base::send_ping(aoo_id src, time_tag t) const {
+void endpoint::send_ping(aoo_id src, time_tag t) const {
     // call without lock!
     LOG_DEBUG("send ping to " << id);
 
@@ -709,11 +722,15 @@ void endpoint_base::send_ping(aoo_id src, time_tag t) const {
     send(msg.Data(), msg.Size());
 }
 
+void endpoint::send(const char *data, int32_t n) const {
+    owner->do_send(data, n, address);
+}
+
 /*///////////////////////// source ////////////////////////////////*/
 
-sink_desc * source::find_sink(void *endpoint, aoo_id id){
+sink_desc * source::find_sink(const ip_address& addr, aoo_id id){
     for (auto& sink : sinks_){
-        if ((sink.user == endpoint) &&
+        if ((sink.address == addr) &&
             (sink.id == AOO_ID_WILDCARD || sink.id == id))
         {
             return &sink;
@@ -852,12 +869,12 @@ bool source::send_format(){
     if (format_changed){
         // only copy sinks which require a format update!
         shared_lock sinklock(sink_mutex_);
-        auto sinks = (aoo::endpoint_base *)alloca(
-                        (sinks_.size() + 1) * sizeof(aoo::endpoint_base)); // avoid alloca(0)
+        auto sinks = (aoo::endpoint *)alloca(
+                        (sinks_.size() + 1) * sizeof(aoo::endpoint)); // avoid alloca(0)
         int numsinks = 0;
         for (auto& sink : sinks_){
             if (sink.format_changed.exchange(false)){
-                new (&sinks[numsinks++]) aoo::endpoint_base (sink.user, sink.fn, sink.id);
+                new (&sinks[numsinks++]) aoo::endpoint (*this, sink.address, sink.id);
             }
         }
         sinklock.unlock();
@@ -1117,8 +1134,8 @@ bool source::send_ping(){
 
 bool check_version(uint32_t);
 
-void source::handle_format_request(void *endpoint, aoo_replyfn fn,
-                                   const osc::ReceivedMessage& msg)
+void source::handle_format_request(const osc::ReceivedMessage& msg,
+                                   const ip_address& addr)
 {
     LOG_DEBUG("handle format request");
 
@@ -1135,20 +1152,20 @@ void source::handle_format_request(void *endpoint, aoo_replyfn fn,
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     shared_lock lock(sink_mutex_); // reader lock!
-    auto sink = find_sink(endpoint, id);
+    auto sink = find_sink(addr, id);
     lock.unlock();
 
     if (sink){
         if (formatrequestqueue_.write_available()){
-            formatrequestqueue_.write(aoo::format_request { endpoint, fn, id });
+            formatrequestqueue_.write(aoo::format_request { *this, addr, id });
         }
     } else {
         LOG_WARNING("ignoring '" << AOO_MSG_FORMAT << "' message: sink not found");
     }
 }
 
-void source::handle_data_request(void *endpoint, aoo_replyfn fn,
-                                 const osc::ReceivedMessage& msg)
+void source::handle_data_request(const osc::ReceivedMessage& msg,
+                                 const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
     auto id = (it++)->AsInt32();
@@ -1158,7 +1175,7 @@ void source::handle_data_request(void *endpoint, aoo_replyfn fn,
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     shared_lock lock(sink_mutex_); // reader lock!
-    auto sink = find_sink(endpoint, id);
+    auto sink = find_sink(addr, id);
     lock.unlock();
 
     if (sink){
@@ -1168,7 +1185,7 @@ void source::handle_data_request(void *endpoint, aoo_replyfn fn,
             auto seq = (it++)->AsInt32();
             auto frame = (it++)->AsInt32();
             if (datarequestqueue_.write_available()){
-                datarequestqueue_.write(data_request{ endpoint, fn, id, salt, seq, frame });
+                datarequestqueue_.write(data_request{ *this, addr, id, salt, seq, frame });
             }
         }
     } else {
@@ -1176,8 +1193,8 @@ void source::handle_data_request(void *endpoint, aoo_replyfn fn,
     }
 }
 
-void source::handle_invite(void *endpoint, aoo_replyfn fn,
-                           const osc::ReceivedMessage& msg)
+void source::handle_invite(const osc::ReceivedMessage& msg,
+                           const ip_address& addr)
 {
     auto id = msg.ArgumentsBegin()->AsInt32();
 
@@ -1185,7 +1202,7 @@ void source::handle_invite(void *endpoint, aoo_replyfn fn,
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     shared_lock lock(sink_mutex_); // reader lock!
-    auto sink = find_sink(endpoint, id);
+    auto sink = find_sink(addr, id);
     lock.unlock();
 
     if (!sink){
@@ -1193,7 +1210,8 @@ void source::handle_invite(void *endpoint, aoo_replyfn fn,
         if (eventqueue_.write_available()){
             event e;
             e.type = AOO_INVITE_EVENT;
-            e.sink.endpoint = endpoint;
+            e.sink.address = sink->address.address();
+            e.sink.addrlen = sink->address.length();
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
             e.sink.id = id;
             eventqueue_.write(e);
@@ -1203,8 +1221,8 @@ void source::handle_invite(void *endpoint, aoo_replyfn fn,
     }
 }
 
-void source::handle_uninvite(void *endpoint, aoo_replyfn fn,
-                             const osc::ReceivedMessage& msg)
+void source::handle_uninvite(const osc::ReceivedMessage& msg,
+                             const ip_address& addr)
 {
     auto id = msg.ArgumentsBegin()->AsInt32();
 
@@ -1212,7 +1230,7 @@ void source::handle_uninvite(void *endpoint, aoo_replyfn fn,
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     shared_lock lock(sink_mutex_); // reader lock!
-    auto sink = find_sink(endpoint, id);
+    auto sink = find_sink(addr, id);
     lock.unlock();
 
     if (sink){
@@ -1220,7 +1238,8 @@ void source::handle_uninvite(void *endpoint, aoo_replyfn fn,
         if (eventqueue_.write_available()){
             event e;
             e.type = AOO_UNINVITE_EVENT;
-            e.sink.endpoint = endpoint;
+            e.sink.address = sink->address.address();
+            e.sink.addrlen = sink->address.length();
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
             e.sink.id = id;
             eventqueue_.write(e);
@@ -1230,8 +1249,8 @@ void source::handle_uninvite(void *endpoint, aoo_replyfn fn,
     }
 }
 
-void source::handle_ping(void *endpoint, aoo_replyfn fn,
-                         const osc::ReceivedMessage& msg)
+void source::handle_ping(const osc::ReceivedMessage& msg,
+                         const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
     aoo_id id = (it++)->AsInt32();
@@ -1243,7 +1262,7 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn,
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     shared_lock lock(sink_mutex_); // reader lock!
-    auto sink = find_sink(endpoint, id);
+    auto sink = find_sink(addr, id);
     lock.unlock();
 
     if (sink){
@@ -1251,7 +1270,8 @@ void source::handle_ping(void *endpoint, aoo_replyfn fn,
         if (eventqueue_.write_available()){
             event e;
             e.type = AOO_PING_EVENT;
-            e.sink.endpoint = endpoint;
+            e.sink.address = sink->address.address();
+            e.sink.addrlen = sink->address.length();
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
             e.sink.id = id;
             e.ping.tt1 = tt1;

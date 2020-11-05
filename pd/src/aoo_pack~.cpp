@@ -32,6 +32,7 @@ struct t_aoo_pack
 
     t_float x_f;
     aoo::isource::pointer x_source;
+    ip_address x_address; // fake IP address
     int32_t x_samplerate = 0;
     int32_t x_blocksize = 0;
     int32_t x_nchannels = 0;
@@ -44,7 +45,8 @@ struct t_aoo_pack
     bool x_accept = false;
 };
 
-static int32_t aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n)
+static int32_t aoo_pack_reply(t_aoo_pack *x, const char *data, int32_t n,
+                              const void *address, int32_t addrlen)
 {
     t_atom *a = (t_atom *)alloca(n * sizeof(t_atom));
     for (int i = 0; i < n; ++i){
@@ -81,7 +83,7 @@ static void aoo_pack_handle_event(t_aoo_pack *x, const aoo_event *event)
         SETFLOAT(&msg, e->id);
 
         if (x->x_accept){
-            x->x_source->add_sink(x, e->id, (aoo_replyfn)aoo_pack_reply);
+            x->x_source->add_sink(e->address, e->addrlen, e->id);
 
             outlet_anything(x->x_msgout, gensym("sink_add"), 1, &msg);
         } else {
@@ -97,7 +99,7 @@ static void aoo_pack_handle_event(t_aoo_pack *x, const aoo_event *event)
         SETFLOAT(&msg, e->id);
 
         if (x->x_accept){
-            x->x_source->remove_sink(x, e->id);
+            x->x_source->remove_sink(e->address, e->addrlen, e->id);
 
             outlet_anything(x->x_msgout, gensym("sink_remove"), 1, &msg);
         } else {
@@ -123,7 +125,7 @@ static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
     for (int i = 0; i < argc; ++i){
         msg[i] = (int)(argv[i].a_type == A_FLOAT ? argv[i].a_w.w_float : 0.f);
     }
-    x->x_source->handle_message(msg, argc, x, (aoo_replyfn)aoo_pack_reply);
+    x->x_source->handle_message(msg, argc, x->x_address.address(), x->x_address.length());
 }
 
 static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -159,7 +161,8 @@ static void aoo_pack_channel(t_aoo_pack *x, t_floatarg f)
 {
     x->x_sink_chn = f > 0 ? f : 0;
     if (x->x_sink_id != AOO_ID_NONE){
-        x->x_source->set_sink_channelonset(x, x->x_sink_id, x->x_sink_chn);
+        x->x_source->set_sink_channelonset(x->x_address.address(), x->x_address.length(),
+                                           x->x_sink_id, x->x_sink_chn);
     }
 }
 
@@ -196,7 +199,8 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
         // add new sink
         if (argv->a_type == A_SYMBOL){
             if (*argv->a_w.w_symbol->s_name == '*'){
-                x->x_source->add_sink(x, AOO_ID_WILDCARD, (aoo_replyfn)aoo_pack_reply);
+                x->x_source->add_sink(x->x_address.address(), x->x_address.length(),
+                                      AOO_ID_WILDCARD);
             } else {
                 pd_error(x, "%s: bad argument '%s' to 'set' message!",
                          classname(x), argv->a_w.w_symbol->s_name);
@@ -205,7 +209,7 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
             x->x_sink_id = AOO_ID_WILDCARD;
         } else {
             aoo_id id = atom_getfloat(argv);
-            x->x_source->add_sink(x, id, (aoo_replyfn)aoo_pack_reply);
+            x->x_source->add_sink(x->x_address.address(), x->x_address.length(), id);
             x->x_sink_id = id;
         }
         // set channel (if provided)
@@ -295,7 +299,7 @@ t_aoo_pack::t_aoo_pack(int argc, t_atom *argv)
     x_accept = 1;
 
     // arg #1: ID
-    int src = atom_getfloatarg(0, argc, argv);
+    int id = atom_getfloatarg(0, argc, argv);
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
@@ -328,7 +332,9 @@ t_aoo_pack::t_aoo_pack(int argc, t_atom *argv)
     x_msgout = outlet_new(&x_obj, 0);
 
     // create and initialize aoo_sink object
-    x_source.reset(aoo::isource::create(src >= 0 ? src : 0));
+    auto src = aoo::isource::create(id >= 0 ? id : 0,
+                                    (aoo_replyfn)aoo_pack_reply, this);
+    x_source.reset(src);
 
     // default format
     aoo_format_storage fmt;

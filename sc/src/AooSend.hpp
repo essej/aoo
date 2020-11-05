@@ -9,7 +9,7 @@ using OpenCmd = _OpenCmd<aoo::isource>;
 
 class AooSendUnit;
 
-class AooSend : public AooDelegate {
+class AooSend final : public AooDelegate {
 public:
     using AooDelegate::AooDelegate;
 
@@ -22,20 +22,20 @@ public:
     }
 
     void doHandleMessage(const char *data, int32_t size,
-                         void *endpoint, aoo_replyfn fn) override
+                         const aoo::ip_address& addr) override
     {
-        source_->handle_message(data, size, endpoint, fn);
+        source_->handle_message(data, size, addr.address(), addr.length());
     }
 
     void handleEvent(const aoo_event *event);
 
     aoo::isource * source() { return source_.get(); }
 
-    void addSinkEvent(aoo::endpoint *ep, aoo_id id, int channelOnset);
-    bool addSink(aoo::endpoint *ep, aoo_id id, int channelOnset);
+    void addSinkEvent(const aoo::ip_address& addr, aoo_id id, int channelOnset);
+    bool addSink(const aoo::ip_address& addr, aoo_id id, int channelOnset);
 
-    void removeSinkEvent(aoo::endpoint *ep, aoo_id id);
-    bool removeSink(aoo::endpoint *ep, aoo_id id);
+    void removeSinkEvent(const aoo::ip_address& addr, aoo_id id);
+    bool removeSink(const aoo::ip_address& addr, aoo_id id);
     void removeAll();
 
     void setAccept(bool b){
@@ -48,7 +48,7 @@ private:
 
 /*////////////////// AooSendUnit ////////////////*/
 
-class AooSendUnit : public AooUnit {
+class AooSendUnit final : public AooUnit {
 public:
     AooSendUnit();
 

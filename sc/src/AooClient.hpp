@@ -7,7 +7,7 @@
 #include <string>
 #include <thread>
 
-class AooClient : public INodeClient {
+class AooClient final : public INodeClient {
 public:
     AooClient(World *world, int32_t port);
     ~AooClient();
@@ -15,7 +15,7 @@ public:
     void doSend() override;
 
     void doHandleMessage(const char* data, int32_t size,
-                         void* endpoint, aoo_replyfn fn) override;
+                         const aoo::ip_address& addr) override;
 
     void doUpdate() override;
 

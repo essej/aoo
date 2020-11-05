@@ -6,7 +6,7 @@ using OpenCmd = _OpenCmd<aoo::isink>;
 
 /*////////////////// AooReceive ////////////////*/
 
-class AooReceive : public AooDelegate {
+class AooReceive final : public AooDelegate {
 public:
     using AooDelegate::AooDelegate;
 
@@ -19,9 +19,9 @@ public:
     }
 
     void doHandleMessage(const char *data, int32_t size,
-                         void *endpoint, aoo_replyfn fn) override
+                         const aoo::ip_address& addr) override
     {
-        sink_->handle_message(data, size, endpoint, fn);
+        sink_->handle_message(data, size, addr.address(), addr.length());
     }
 
     void doUpdate() override {
@@ -37,7 +37,7 @@ private:
 
 /*////////////////// AooReceiveUnit ////////////////*/
 
-class AooReceiveUnit : public AooUnit {
+class AooReceiveUnit final : public AooUnit {
 public:
     AooReceiveUnit();
 

@@ -34,7 +34,7 @@ struct t_aoo_receive;
 void aoo_receive_send(t_aoo_receive *x);
 
 void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
-                                int32_t n, void *endpoint, aoo_replyfn fn);
+                                int32_t n, const ip_address& addr);
 
 void aoo_receive_update(t_aoo_receive *x);
 
@@ -47,7 +47,7 @@ struct t_aoo_send;
 void aoo_send_send(t_aoo_send *x);
 
 void aoo_send_handle_message(t_aoo_send *x, const char * data,
-                             int32_t n, void *endpoint, aoo_replyfn fn);
+                             int32_t n, const ip_address& addr);
 
 // aoo_client
 
@@ -58,7 +58,7 @@ struct t_aoo_client;
 void aoo_client_send(t_aoo_client *x);
 
 void aoo_client_handle_message(t_aoo_client *x, const char * data,
-                               int32_t n, void *endpoint, aoo_replyfn fn);
+                               int32_t n, const ip_address& addr);
 
 /*////////////////////// aoo node //////////////////*/
 
@@ -72,7 +72,7 @@ struct t_peer
 {
     t_symbol *group;
     t_symbol *user;
-    aoo::endpoint *endpoint;
+    aoo::ip_address address;
     aoo_id id;
 };
 
@@ -91,7 +91,7 @@ struct t_node_proxy
     t_node *x_node;
 };
 
-struct t_node : public i_node
+struct t_node final : public i_node
 {
     t_node(t_symbol *s, int socket, int port);
     ~t_node();
@@ -107,8 +107,6 @@ struct t_node : public i_node
     int x_socket = -1;
     int x_port = 0;
     ip_address::ip_type x_type;
-    std::list<aoo::endpoint> x_endpoints; // endpoints must not move in memory!
-    aoo::shared_mutex x_endpointlock;
     // threading
 #if AOO_NODE_POLL
     std::thread x_thread;
@@ -129,15 +127,12 @@ struct t_node : public i_node
 
     int port() const override { return x_port; }
 
-    int sendto(const char *buf, int32_t size,
-               const ip_address& addr) override
+    int sendto(const char *buf, int32_t size, const ip_address& addr) override
     {
         return socket_sendto(x_socket, buf, size, addr);
     }
 
-    aoo::endpoint * get_endpoint(const ip_address& addr) override;
-
-    aoo::endpoint * find_peer(t_symbol *group, t_symbol *user) override;
+    bool find_peer(t_symbol *group, t_symbol *user, ip_address& addr) override;
 
     void add_peer(t_symbol *group, t_symbol *user, aoo_id id,
                   const ip_address& addr) override;
@@ -155,8 +150,6 @@ struct t_node : public i_node
     // private methods
     bool add_client(t_pd *obj, aoo_id id);
 
-    aoo::endpoint* find_endpoint(const ip_address& addr);
-
     void do_send();
 
     void do_receive();
@@ -164,41 +157,28 @@ struct t_node : public i_node
 
 // public methods
 
-aoo::endpoint * t_node::get_endpoint(const ip_address& addr)
-{
-    aoo::scoped_lock lock(x_endpointlock);
-    auto ep = find_endpoint(addr);
-    if (ep)
-        return ep;
-    else {
-        // add endpoint
-        x_endpoints.emplace_back(x_socket, addr);
-        return &x_endpoints.back();
-    }
-}
-
-aoo::endpoint * t_node::find_peer(t_symbol *group, t_symbol *user)
+bool t_node::find_peer(t_symbol *group, t_symbol *user, ip_address& addr)
 {
     for (auto& peer : x_peers){
         if (peer.group == group && peer.user == user){
-            return peer.endpoint;
+            addr = peer.address;
+            return true;
         }
     }
-    return nullptr;
+    return false;
 }
 
 void t_node::add_peer(t_symbol *group, t_symbol *user,
                       aoo_id id, const ip_address& addr)
 {
-    if (find_peer(group, user)){
+    ip_address dummy;
+    if (find_peer(group, user, dummy)){
         bug("t_node::add_peer: peer %s|%s already added",
             group->s_name, user->s_name);
         return;
     }
 
-    auto e = get_endpoint(addr);
-
-    x_peers.push_back({ group, user, e, id });
+    x_peers.push_back({ group, user, addr, id });
 }
 
 void t_node::remove_peer(t_symbol *group, t_symbol *user)
@@ -236,7 +216,7 @@ void t_node::list_peers(_outlet *out){
         SETSYMBOL(msg, peer.group);
         SETSYMBOL(msg + 1, peer.user);
         SETFLOAT(msg + 2, peer.id);
-        address_to_atoms(peer.endpoint->address(), 2, msg + 3);
+        address_to_atoms(peer.address, 2, msg + 3);
 
         outlet_anything(out, gensym("peer"), 5, msg);
     }
@@ -280,16 +260,6 @@ bool t_node::add_client(t_pd *obj, aoo_id id)
     return true;
 }
 
-aoo::endpoint * t_node::find_endpoint(const ip_address& addr)
-{
-    for (auto& e : x_endpoints){
-        if (e.address() == addr){
-            return &e;
-        }
-    }
-    return nullptr;
-}
-
 void t_node::do_send()
 {
     aoo::shared_scoped_lock lock(x_clientlock);
@@ -315,15 +285,6 @@ void t_node::do_receive()
     int nbytes = socket_receive(x_socket, buf, AOO_MAXPACKETSIZE,
                                 &addr, AOO_POLL_INTERVAL);
     if (nbytes > 0){
-        // try to find endpoint
-        aoo::unique_lock lock(x_endpointlock);
-        auto ep = find_endpoint(addr);
-        if (!ep){
-            // add endpoint
-            x_endpoints.emplace_back(x_socket, addr);
-            ep = &x_endpoints.back();
-        }
-        lock.unlock();
         // get sink ID
         aoo_type type;
         aoo_id id;
@@ -336,9 +297,8 @@ void t_node::do_receive()
                     if ((pd_class(c.c_obj) == aoo_receive_class) &&
                         ((id == AOO_ID_WILDCARD) || (id == c.c_id)))
                     {
-                        t_aoo_receive *rcv = (t_aoo_receive *)c.c_obj;
-                        aoo_receive_handle_message(rcv, buf, nbytes,
-                                                   ep, endpoint::send);
+                        aoo_receive_handle_message((t_aoo_receive *)c.c_obj,
+                                                   buf, nbytes, addr);
                         if (id != AOO_ID_WILDCARD)
                             break;
                     }
@@ -349,9 +309,8 @@ void t_node::do_receive()
                     if ((pd_class(c.c_obj) == aoo_send_class) &&
                         ((id == AOO_ID_WILDCARD) || (id == c.c_id)))
                     {
-                        t_aoo_send *snd = (t_aoo_send *)c.c_obj;
-                        aoo_send_handle_message(snd, buf, nbytes,
-                            ep, endpoint::send);
+                        aoo_send_handle_message((t_aoo_send *)c.c_obj,
+                                                buf, nbytes, addr);
                         if (id != AOO_ID_WILDCARD)
                             break;
                     }
@@ -361,7 +320,7 @@ void t_node::do_receive()
                 for (auto& c :x_clients){
                     if (pd_class(c.c_obj) == aoo_client_class){
                         aoo_client_handle_message((t_aoo_client *)c.c_obj,
-                                                  buf, nbytes, ep, endpoint::send);
+                                                  buf, nbytes, addr);
                         break;
                     }
                 }

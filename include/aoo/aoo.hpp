@@ -42,7 +42,7 @@ public:
     using pointer = std::unique_ptr<isource, deleter>;
 
     // create a new AoO source instance
-    static isource * create(aoo_id id);
+    static isource * create(aoo_id id, aoo_replyfn replyfn, void *user);
 
     // destroy the AoO source instance
     static void destroy(isource *src);
@@ -51,17 +51,17 @@ public:
     virtual int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) = 0;
 
     // add a new sink (always threadsafe)
-    virtual int32_t add_sink(void *sink, aoo_id id, aoo_replyfn fn) = 0;
+    virtual int32_t add_sink(const void *address, int32_t addrlen, aoo_id id) = 0;
 
-    // remova a sink (always threadsafe)
-    virtual int32_t remove_sink(void *sink, aoo_id id) = 0;
+    // remove a sink (always threadsafe)
+    virtual int32_t remove_sink(const void *address, int32_t addrlen, aoo_id id) = 0;
 
     // remove all sinks (always threadsafe)
     virtual void remove_all() = 0;
 
     // handle messages from sinks (threadsafe, but not reentrant)
     virtual int32_t handle_message(const char *data, int32_t n,
-                                   void *endpoint, aoo_replyfn fn) = 0;
+                                   const void *address, int32_t addrlen) = 0;
 
     // send outgoing messages - will call the reply function (threadsafe, but not reentrant)
     virtual int32_t send() = 0;
@@ -161,24 +161,26 @@ public:
     //--------------------- sink options --------------------------//
     // set/get sink options (always threadsafe)
 
-    int32_t set_sink_channelonset(void *endpoint, aoo_id id, int32_t onset){
-        return set_sinkoption(endpoint, id, aoo_opt_channelonset, AOO_ARG(onset));
+    int32_t set_sink_channelonset(const void *address, int32_t addrlen,
+                                  aoo_id id, int32_t onset){
+        return set_sinkoption(address, addrlen, id, aoo_opt_channelonset, AOO_ARG(onset));
     }
 
-    int32_t get_sink_channelonset(void *endpoint, aoo_id id, int32_t& onset){
-        return get_sinkoption(endpoint, id, aoo_opt_channelonset, AOO_ARG(onset));
+    int32_t get_sink_channelonset(const void *address, int32_t addrlen, aoo_id id, int32_t& onset){
+        return get_sinkoption(address, addrlen, id, aoo_opt_channelonset, AOO_ARG(onset));
     }
 
-    virtual int32_t set_sinkoption(void *endpoint, aoo_id id,
+    virtual int32_t set_sinkoption(const void *address, int32_t addrlen, aoo_id id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
-    virtual int32_t get_sinkoption(void *endpoint, aoo_id id,
+
+    virtual int32_t get_sinkoption(const void *address, int32_t addrlen, aoo_id id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
 protected:
     ~isource(){} // non-virtual!
 };
 
-inline isource * isource::create(aoo_id id){
-    return aoo_source_new(id);
+inline isource * isource::create(aoo_id id, aoo_replyfn replyfn, void *user){
+    return aoo_source_new(id, replyfn, user);
 }
 
 inline void isource::destroy(isource *src){
@@ -199,7 +201,7 @@ public:
     using pointer = std::unique_ptr<isink, deleter>;
 
     // create a new AoO sink instance
-    static isink * create(aoo_id id);
+    static isink * create(aoo_id id, aoo_replyfn replyfn, void *user);
 
     // destroy the AoO sink instance
     static void destroy(isink *sink);
@@ -208,17 +210,17 @@ public:
     virtual int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) = 0;
 
     // invite a source (always thread safe)
-    virtual int32_t invite_source(void *endpoint, aoo_id id, aoo_replyfn fn) = 0;
+    virtual int32_t invite_source(const void *address, int32_t addrlen, aoo_id id) = 0;
 
     // uninvite a source (always thread safe)
-    virtual int32_t uninvite_source(void *endpoint, aoo_id id, aoo_replyfn fn) = 0;
+    virtual int32_t uninvite_source(const void *address, int32_t addrlen, aoo_id id) = 0;
 
     // uninvite all sources (always thread safe)
     virtual int32_t uninvite_all() = 0;
 
     // handle messages from sources (threadsafe, but not reentrant)
     virtual int32_t handle_message(const char *data, int32_t n,
-                                   void *endpoint, aoo_replyfn fn) = 0;
+                                   const void *address, int32_t addrlen) = 0;
 
     // send outgoing messages - will call the reply function (threadsafe, but not reentrant)
     virtual int32_t send() = 0;
@@ -313,24 +315,27 @@ public:
     //----------------- source options -------------------//
     // set/get source options (always threadsafe)
 
-    int32_t reset_source(void *endpoint, aoo_id id){
-        return set_sourceoption(endpoint, id, aoo_opt_reset, AOO_ARG_NULL);
+    int32_t reset_source(const void *address, int32_t addrlen, aoo_id id) {
+        return set_sourceoption(address, addrlen, id, aoo_opt_reset, AOO_ARG_NULL);
     }
 
-    int32_t get_source_format(void *endpoint, aoo_id id, aoo_format_storage& f){
-        return get_sourceoption(endpoint, id, aoo_opt_format, AOO_ARG(f));
+    int32_t get_source_format(const void *address, int32_t addrlen, aoo_id id,
+                              aoo_format_storage& f)
+    {
+        return get_sourceoption(address, addrlen, id, aoo_opt_format, AOO_ARG(f));
     }
 
-    virtual int32_t set_sourceoption(void *endpoint, aoo_id id,
-                                   int32_t opt, void *ptr, int32_t size) = 0;
-    virtual int32_t get_sourceoption(void *endpoint, aoo_id id,
-                                   int32_t opt, void *ptr, int32_t size) = 0;
+    virtual int32_t set_sourceoption(const void *address, int32_t addrlen, aoo_id id,
+                                     int32_t opt, void *ptr, int32_t size) = 0;
+
+    virtual int32_t get_sourceoption(const void *address, int32_t addrlen, aoo_id id,
+                                     int32_t opt, void *ptr, int32_t size) = 0;
 protected:
     ~isink(){} // non-virtual!
 };
 
-inline isink * isink::create(aoo_id id){
-    return aoo_sink_new(id);
+inline isink * isink::create(aoo_id id, aoo_replyfn replyfn, void *user){
+    return aoo_sink_new(id, replyfn, user);
 }
 
 inline void isink::destroy(isink *sink){

@@ -55,14 +55,12 @@ public:
     virtual int sendto(const char *buf, int32_t size,
                        const aoo::ip_address& addr) = 0;
 
-    virtual aoo::endpoint *getEndpoint(const aoo::ip_address& addr) = 0;
-
 #if USE_PEER_LIST
-    virtual aoo::endpoint *findPeer(const std::string& group,
-                                    const std::string& user) = 0;
+    virtual bool findPeer(const std::string& group, const std::string& user,
+                          aoo::ip_address& addr) = 0;
 
     virtual void addPeer(const std::string& group, const std::string& user,
-                         aoo_id id, const aoo::ip_address& addr) = 0;
+                         const aoo::ip_address& addr, aoo_id id) = 0;
 
     virtual void removePeer(const std::string& group, const std::string& user) = 0;
 
@@ -105,10 +103,10 @@ public:
     }
 
     void handleMessage(const char* data, int32_t size,
-                       void* endpoint, aoo_replyfn fn)
+                       const aoo::ip_address& addr)
     {
         if (initialized()) {
-            doHandleMessage(data, size, endpoint, fn);
+            doHandleMessage(data, size, addr);
         }
     }
 
@@ -117,10 +115,17 @@ public:
             doUpdate();
         }
     }
+
+    static int32_t reply(INodeClient *user, const char *buf, int32_t size,
+                         const void *address, int32_t addrlen)
+    {
+        aoo::ip_address addr((const sockaddr *)address, addrlen);
+        return user->node()->sendto(buf, size, addr);
+    }
 protected:
     virtual void doSend() = 0;
     virtual void doHandleMessage(const char* data, int32_t size,
-                                 void* endpoint, aoo_replyfn fn) = 0;
+                                 const aoo::ip_address& addr) = 0;
     virtual void doUpdate() {}
 private:
     INode::ptr node_;
@@ -176,7 +181,7 @@ struct _OpenCmd : CmdData {
 };
 
 struct OptionCmd : CmdData {
-    aoo::endpoint* ep;
+    aoo::ip_address address;
     int32_t port;
     aoo_id id;
     union {
@@ -239,7 +244,7 @@ public:
     void beginReply(osc::OutboundPacketStream& msg, const char *cmd, int replyID);
     void beginEvent(osc::OutboundPacketStream &msg, const char *event);
     void beginEvent(osc::OutboundPacketStream& msg, const char *event,
-                    aoo::endpoint *ep, aoo_id id);
+                    const aoo::ip_address& addr, aoo_id id);
     void sendMsgRT(osc::OutboundPacketStream& msg);
     void sendMsgNRT(osc::OutboundPacketStream& msg);
 protected:
@@ -278,12 +283,12 @@ protected:
 uint64_t getOSCTime(World *world);
 
 bool getSinkArg(INode* node, sc_msg_iter *args,
-                aoo::endpoint *& ep, aoo_id &id);
+                aoo::ip_address& addr, aoo_id &id);
 
 bool getSourceArg(INode* node, sc_msg_iter *args,
-                  aoo::endpoint *& ep, aoo_id &id);
+                  aoo::ip_address& addr, aoo_id &id);
 
-aoo::endpoint * getPeerArg(INode* node, sc_msg_iter *args);
+bool getPeerArg(INode* node, sc_msg_iter *args, aoo::ip_address& addr);
 
 void makeDefaultFormat(aoo_format_storage& f, int sampleRate,
                        int blockSize, int numChannels);

@@ -116,12 +116,10 @@ void aoo_client_send(t_aoo_client *x)
     x->x_client->send();
 }
 
-void aoo_client_handle_message(t_aoo_client *x, const char * data,
-                               int32_t n, void *endpoint, aoo_replyfn fn)
+void aoo_client_handle_message(t_aoo_client *x, const char * data, int32_t n,
+                               const ip_address& addr)
 {
-    auto e = (aoo::endpoint *)endpoint;
-    x->x_client->handle_message(data, n, (void *)e->address().address(),
-                                e->address().length());
+    x->x_client->handle_message(data, n, addr.address(), addr.length());
 }
 
 // send OSC messages to peers

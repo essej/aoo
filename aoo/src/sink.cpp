@@ -9,8 +9,8 @@
 
 /*//////////////////// aoo_sink /////////////////////*/
 
-aoo_sink * aoo_sink_new(aoo_id id) {
-    return new aoo::sink(id);
+aoo_sink * aoo_sink_new(aoo_id id, aoo_replyfn replyfn, void *user) {
+    return new aoo::sink(id, replyfn, user);
 }
 
 void aoo_sink_free(aoo_sink *sink) {
@@ -45,33 +45,36 @@ int32_t aoo::sink::setup(int32_t samplerate,
     return 0;
 }
 
-int32_t aoo_sink_invite_source(aoo_sink *sink, void *endpoint,
-                              aoo_id id, aoo_replyfn fn)
+int32_t aoo_sink_invite_source(aoo_sink *sink, const void *address,
+                               int32_t addrlen, aoo_id id)
 {
-    return sink->invite_source(endpoint, id, fn);
+    return sink->invite_source(address, addrlen, id);
 }
 
-int32_t aoo::sink::invite_source(void *endpoint, aoo_id id, aoo_replyfn fn){
+int32_t aoo::sink::invite_source(const void *address, int32_t addrlen, aoo_id id){
+    ip_address addr((const sockaddr *)address, addrlen);
+
     // try to find existing source
-    auto src = find_source(endpoint, id);
+    auto src = find_source(addr, id);
     if (!src){
         // discard data message, add source and request format!
-        sources_.emplace_front(endpoint, fn, id, 0);
+        sources_.emplace_front(addr, id, 0);
         src = &sources_.front();
     }
     src->request_invite();
     return 1;
 }
 
-int32_t aoo_sink_uninvite_source(aoo_sink *sink, void *endpoint,
-                                aoo_id id, aoo_replyfn fn)
+int32_t aoo_sink_uninvite_source(aoo_sink *sink, const void *address,
+                                 int32_t addrlen, aoo_id id)
 {
-    return sink->uninvite_source(endpoint, id, fn);
+    return sink->uninvite_source(address, addrlen, id);
 }
 
-int32_t aoo::sink::uninvite_source(void *endpoint, aoo_id id, aoo_replyfn fn){
+int32_t aoo::sink::uninvite_source(const void *address, int32_t addrlen, aoo_id id){
+     ip_address addr((const sockaddr *)address, addrlen);
     // try to find existing source
-    auto src = find_source(endpoint, id);
+    auto src = find_source(addr, id);
     if (src){
         src->request_uninvite();
         return 1;
@@ -235,16 +238,18 @@ int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
     return 1;
 }
 
-int32_t aoo_sink_set_sourceoption(aoo_sink *sink, void *endpoint, aoo_id id,
-                              int32_t opt, void *p, int32_t size)
+int32_t aoo_sink_set_sourceoption(aoo_sink *sink, const void *address, int32_t addrlen,
+                                  aoo_id id, int32_t opt, void *p, int32_t size)
 {
-    return sink->set_sourceoption(endpoint, id, opt, p, size);
+    return sink->set_sourceoption(address, addrlen, id, opt, p, size);
 }
 
-int32_t aoo::sink::set_sourceoption(void *endpoint, aoo_id id,
-                                   int32_t opt, void *ptr, int32_t size)
+int32_t aoo::sink::set_sourceoption(const void *address, int32_t addrlen, aoo_id id,
+                                    int32_t opt, void *ptr, int32_t size)
 {
-    auto src = find_source(endpoint, id);
+    ip_address addr((const sockaddr *)address, addrlen);
+
+    auto src = find_source(addr, id);
     if (src){
         switch (opt){
         // reset
@@ -262,16 +267,17 @@ int32_t aoo::sink::set_sourceoption(void *endpoint, aoo_id id,
     }
 }
 
-int32_t aoo_sink_get_sourceoption(aoo_sink *sink, void *endpoint, aoo_id id,
-                              int32_t opt, void *p, int32_t size)
+int32_t aoo_sink_get_sourceoption(aoo_sink *sink, const void *address, int32_t addrlen,
+                                  aoo_id id, int32_t opt, void *p, int32_t size)
 {
-    return sink->get_sourceoption(endpoint, id, opt, p, size);
+    return sink->get_sourceoption(address, addrlen, id, opt, p, size);
 }
 
-int32_t aoo::sink::get_sourceoption(void *endpoint, aoo_id id,
-                              int32_t opt, void *p, int32_t size)
+int32_t aoo::sink::get_sourceoption(const void *address, int32_t addrlen, aoo_id id,
+                                    int32_t opt, void *p, int32_t size)
 {
-    auto src = find_source(endpoint, id);
+    ip_address addr((const sockaddr *)address, addrlen);
+    auto src = find_source(addr, id);
     if (src){
         switch (opt){
         // format
@@ -290,13 +296,15 @@ int32_t aoo::sink::get_sourceoption(void *endpoint, aoo_id id,
 }
 
 int32_t aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_t n,
-                                void *src, aoo_replyfn fn) {
-    return sink->handle_message(data, n, src, fn);
+                                const void *address, int32_t addrlen) {
+    return sink->handle_message(data, n, address, addrlen);
 }
 
 int32_t aoo::sink::handle_message(const char *data, int32_t n,
-                                  void *endpoint, aoo_replyfn fn) {
+                                  const void *address, int32_t addrlen) {
     try {
+        ip_address addr((const sockaddr *)address, addrlen);
+
         osc::ReceivedPacket packet(data, n);
         osc::ReceivedMessage msg(packet);
 
@@ -322,11 +330,11 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n,
 
         auto pattern = msg.AddressPattern() + onset;
         if (!strcmp(pattern, AOO_MSG_FORMAT)){
-            return handle_format_message(endpoint, fn, msg);
+            return handle_format_message(msg, addr);
         } else if (!strcmp(pattern, AOO_MSG_DATA)){
-            return handle_data_message(endpoint, fn, msg);
+            return handle_data_message(msg, addr);
         } else if (!strcmp(pattern, AOO_MSG_PING)){
-            return handle_ping_message(endpoint, fn, msg);
+            return handle_ping_message(msg, addr);
         } else {
             LOG_WARNING("unknown message " << pattern);
         }
@@ -466,9 +474,9 @@ int32_t aoo::sink::poll_events(aoo_eventhandler fn, void *user){
 
 namespace aoo {
 
-aoo::source_desc * sink::find_source(void *endpoint, aoo_id id){
+aoo::source_desc * sink::find_source(const ip_address& addr, aoo_id id){
     for (auto& src : sources_){
-        if ((src.endpoint() == endpoint) && (src.id() == id)){
+        if ((src.address() == addr) && (src.id() == id)){
             return &src;
         }
     }
@@ -483,8 +491,8 @@ void sink::update_sources(){
 
 bool check_version(uint32_t);
 
-int32_t sink::handle_format_message(void *endpoint, aoo_replyfn fn,
-                                    const osc::ReceivedMessage& msg)
+int32_t sink::handle_format_message(const osc::ReceivedMessage& msg,
+                                    const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
 
@@ -513,19 +521,19 @@ int32_t sink::handle_format_message(void *endpoint, aoo_replyfn fn,
         return 0;
     }
     // try to find existing source
-    auto src = find_source(endpoint, id);
+    auto src = find_source(addr, id);
 
     if (!src){
         // not found - add new source
-        sources_.emplace_front(endpoint, fn, id, salt);
+        sources_.emplace_front(addr, id, salt);
         src = &sources_.front();
     }
 
     return src->handle_format(*this, salt, f, (const char *)settings, size);
 }
 
-int32_t sink::handle_data_message(void *endpoint, aoo_replyfn fn,
-                                  const osc::ReceivedMessage& msg)
+int32_t sink::handle_data_message(const osc::ReceivedMessage& msg,
+                                  const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
 
@@ -549,20 +557,20 @@ int32_t sink::handle_data_message(void *endpoint, aoo_replyfn fn,
         return 0;
     }
     // try to find existing source
-    auto src = find_source(endpoint, id);
+    auto src = find_source(addr, id);
     if (src){
         return src->handle_data(*this, salt, d);
     } else {
         // discard data message, add source and request format!
-        sources_.emplace_front(endpoint, fn, id, salt);
+        sources_.emplace_front(addr, id, salt);
         src = &sources_.front();
         src->request_format();
         return 0;
     }
 }
 
-int32_t sink::handle_ping_message(void *endpoint, aoo_replyfn fn,
-                                  const osc::ReceivedMessage& msg)
+int32_t sink::handle_ping_message(const osc::ReceivedMessage& msg,
+                                  const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
 
@@ -574,7 +582,7 @@ int32_t sink::handle_ping_message(void *endpoint, aoo_replyfn fn,
         return 0;
     }
     // try to find existing source
-    auto src = find_source(endpoint, id);
+    auto src = find_source(addr, id);
     if (src){
         return src->handle_ping(*this, tt);
     } else {
@@ -585,14 +593,15 @@ int32_t sink::handle_ping_message(void *endpoint, aoo_replyfn fn,
 
 /*////////////////////////// source_desc /////////////////////////////*/
 
-source_desc::source_desc(void *endpoint, aoo_replyfn fn, aoo_id id, int32_t salt)
-    : endpoint_(endpoint), fn_(fn), id_(id), salt_(salt)
+source_desc::source_desc(const ip_address& addr, aoo_id id, int32_t salt)
+    : addr_(addr), id_(id), salt_(salt)
 {
     eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);
     // push "add" event
     event e;
     e.source.type = AOO_SOURCE_ADD_EVENT;
-    e.source.endpoint = endpoint;
+    e.source.address = addr_.address();
+    e.source.addrlen = addr_.length();
     e.source.id = id;
     eventqueue_.write(e); // no need to lock
     LOG_DEBUG("add new source with id " << id);
@@ -692,7 +701,8 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
     // push event
     event e;
     e.type = AOO_SOURCE_FORMAT_EVENT;
-    e.source.endpoint = endpoint_;
+    e.source.address = addr_.address();
+    e.source.addrlen = addr_.length();
     e.source.id = id_;
     push_event(e);
 
@@ -772,7 +782,8 @@ int32_t source_desc::handle_ping(const sink &s, time_tag tt){
     // push "ping" event
     event e;
     e.type = AOO_PING_EVENT;
-    e.ping.endpoint = endpoint_;
+    e.ping.address = addr_.address();
+    e.ping.addrlen = addr_.length();
     e.ping.id = id_;
     e.ping.tt1 = tt;
     e.ping.tt2 = tt2;
@@ -845,7 +856,8 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         int32_t gap = streamstate_.get_gap();
 
         event e;
-        e.source.endpoint = endpoint_;
+        e.source.address = addr_.address();
+        e.source.addrlen = addr_.length();
         e.source.id = id_;
         if (lost > 0){
             // push packet loss event
@@ -899,7 +911,8 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
             // push "start" event
             event e;
             e.type = AOO_SOURCE_STATE_EVENT;
-            e.source_state.endpoint = endpoint_;
+            e.source.address = addr_.address();
+            e.source.addrlen = addr_.length();
             e.source_state.id = id_;
             e.source_state.state = AOO_SOURCE_STATE_PLAY;
             push_event(e);
@@ -911,7 +924,8 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         if (streamstate_.update_state(AOO_SOURCE_STATE_STOP)){
             event e;
             e.type = AOO_SOURCE_STATE_EVENT;
-            e.source_state.endpoint = endpoint_;
+            e.source_state.address = addr_.address();
+            e.source_state.addrlen = addr_.length();
             e.source_state.id = id_;
             e.source_state.state = AOO_SOURCE_STATE_STOP;
             push_event(e);
@@ -1033,9 +1047,10 @@ bool source_desc::add_packet(const data_packet& d){
             // dropped block
             block->init(d.sequence, true);
             return true;
+        } else {
+            block->init(d.sequence, d.samplerate,
+                        d.channel, d.totalsize, d.nframes);
         }
-        block->init(d.sequence, d.samplerate,
-                    d.channel, d.totalsize, d.nframes);
     } else {
         if (d.totalsize == 0){
             if (!block->dropped()){
@@ -1086,7 +1101,7 @@ void source_desc::process_blocks(){
     int32_t limit = MAXHARDWAREBLOCKSIZE * resampler_.ratio()
             / (float)audioqueue_.blocksize() + 0.5;
     int32_t capacity = audioqueue_.capacity() / audioqueue_.blocksize();
-    if (limit >= capacity){
+    if (capacity < limit){
         limit = -1; // don't use limit!
     }
 
@@ -1231,7 +1246,7 @@ bool source_desc::send_format_request(const sink& s) {
         msg << osc::BeginMessage(address) << s.id() << (int32_t)make_version()
             << osc::EndMessage;
 
-        dosend(msg.Data(), msg.Size());
+        s.do_send(msg.Data(), msg.Size(), addr_);
 
         return true;
     } else {
@@ -1278,7 +1293,7 @@ int32_t source_desc::send_data_request(const sink &s){
             }
             msg << osc::EndMessage;
 
-            dosend(msg.Data(), msg.Size());
+            s.do_send(msg.Data(), msg.Size(), addr_);
         };
 
         for (int i = 0; i < d.quot; ++i){
@@ -1324,7 +1339,7 @@ bool source_desc::send_notifications(const sink& s){
                 << lost_blocks
                 << osc::EndMessage;
 
-            dosend(msg.Data(), msg.Size());
+            s.do_send(msg.Data(), msg.Size(), addr_);
 
             LOG_DEBUG("send /ping to source " << id_);
             didsomething = true;
@@ -1345,7 +1360,7 @@ bool source_desc::send_notifications(const sink& s){
 
         msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
 
-        dosend(msg.Data(), msg.Size());
+        s.do_send(msg.Data(), msg.Size(), addr_);
 
         LOG_DEBUG("send /invite to source " << id_);
 
@@ -1363,7 +1378,7 @@ bool source_desc::send_notifications(const sink& s){
 
         msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
 
-        dosend(msg.Data(), msg.Size());
+        s.do_send(msg.Data(), msg.Size(), addr_);
 
         LOG_DEBUG("send /uninvite source " << id_);
 

@@ -7,6 +7,7 @@
 #include "aoo/aoo.hpp"
 
 #include "common/lockfree.hpp"
+#include "common/net_utils.hpp"
 #include "common/sync.hpp"
 #include "common/time.hpp"
 #include "common/utils.hpp"
@@ -20,16 +21,20 @@
 #include "oscpack/osc/OscOutboundPacketStream.h"
 #include "oscpack/osc/OscReceivedElements.h"
 
+#include <list>
+
 namespace aoo {
 
-struct endpoint_base {
-    endpoint_base() = default;
-    endpoint_base(void *_user, aoo_replyfn _fn, int32_t _id)
-        : user(_user), fn(_fn), id(_id){}
+class source;
+
+struct endpoint {
+    endpoint() = default;
+    endpoint(const source& _owner, const ip_address& _address, int32_t _id)
+        : owner(&_owner), address(_address), id(_id){}
 
     // data
-    void *user = nullptr;
-    aoo_replyfn fn = nullptr;
+    const source *owner = nullptr;
+    ip_address address;
     aoo_id id = 0;
 
     // methods
@@ -40,46 +45,44 @@ struct endpoint_base {
 
     void send_ping(aoo_id src, time_tag t) const;
 
-    void send(const char *data, int32_t n) const {
-        fn(user, data, n);
-    }
+    void send(const char *data, int32_t n) const;
 };
 
-using format_request = endpoint_base;
+using format_request = endpoint;
 
-struct data_request : endpoint_base {
+struct data_request : endpoint {
     data_request() = default;
-    data_request(void *_user, aoo_replyfn _fn, int32_t _id,
+    data_request(const source& _owner, const ip_address& _addr, int32_t _id,
                  int32_t _salt, int32_t _sequence, int32_t _frame)
-        : endpoint_base(_user, _fn, _id),
+        : endpoint(_owner, _addr, _id),
           salt(_salt), sequence(_sequence), frame(_frame){}
     int32_t salt = 0;
     int32_t sequence = 0;
     int32_t frame = 0;
 };
 
-struct invite_request : endpoint_base {
+struct invite_request : endpoint {
     enum type {
         INVITE,
         UNINVITE
     };
 
     invite_request() = default;
-    invite_request(void *_user, aoo_replyfn _fn, int32_t _id, int32_t _type)
-        : endpoint_base(_user, _fn, _id), type(_type){}
+    invite_request(const source& _owner, const ip_address& _addr, int32_t _id, int32_t _type)
+        : endpoint(_owner, _addr, _id), type(_type){}
     int32_t type = 0;
 };
 
-struct sink_desc : endpoint_base {
-    sink_desc(void *_user, aoo_replyfn _fn, int32_t _id)
-        : endpoint_base(_user, _fn, _id), channel(0), format_changed(true) {}
+struct sink_desc : endpoint {
+    sink_desc(const source& _owner, const ip_address& _addr, int32_t _id)
+        : endpoint(_owner, _addr, _id), channel(0), format_changed(true) {}
     sink_desc(const sink_desc& other)
-        : endpoint_base(other.user, other.fn, other.id),
+        : endpoint(*other.owner, other.address, other.id),
           channel(other.channel.load()),
           format_changed(other.format_changed.load()){}
     sink_desc& operator=(const sink_desc& other){
-        user = other.user;
-        fn = other.fn;
+        owner = other.owner;
+        address = other.address;
         id = other.id;
         channel = other.channel.load();
         format_changed = other.format_changed.load();
@@ -101,20 +104,21 @@ class source final : public isource {
         aoo_ping_event ping;
     };
 
-    source(aoo_id id);
+    source(aoo_id id, aoo_replyfn replyfn, void *user);
     ~source();
 
     aoo_id id() const { return id_.load(std::memory_order_relaxed); }
 
     int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
-    int32_t add_sink(void *sink, aoo_id id, aoo_replyfn fn) override;
+    int32_t add_sink(const void *address, int32_t addrlen, aoo_id id) override;
 
-    int32_t remove_sink(void *sink, aoo_id id) override;
+    int32_t remove_sink(const void *address, int32_t addrlen, aoo_id id) override;
 
     void remove_all() override;
 
-    int32_t handle_message(const char *data, int32_t n, void *endpoint, aoo_replyfn fn) override;
+    int32_t handle_message(const char *data, int32_t n,
+                           const void *address, int32_t addrlen) override;
 
     int32_t send() override;
 
@@ -128,14 +132,20 @@ class source final : public isource {
 
     int32_t get_option(int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t set_sinkoption(void *endpoint, aoo_id id,
+    int32_t set_sinkoption(const void *address, int32_t addrlen, aoo_id id,
                            int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t get_sinkoption(void *endpoint, aoo_id id,
+    int32_t get_sinkoption(const void *address, int32_t addrlen, aoo_id id,
                            int32_t opt, void *ptr, int32_t size) override;
+
+    int32_t do_send(const char *data, int32_t size, const ip_address& addr) const {
+        return replyfn_(user_, data, size, addr.address(), addr.length());
+    }
  private:
     // settings
     std::atomic<aoo_id> id_;
+    aoo_replyfn replyfn_;
+    void *user_;
     int32_t salt_ = 0;
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
@@ -161,7 +171,7 @@ class source final : public isource {
     lockfree::queue<data_request> datarequestqueue_;
     history_buffer history_;
     // sinks
-    std::vector<sink_desc> sinks_;
+    std::list<sink_desc> sinks_; // don't move in memory!
     // thread synchronization
     aoo::shared_mutex update_mutex_;
     aoo::shared_mutex sink_mutex_;
@@ -174,7 +184,7 @@ class source final : public isource {
     std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };
 
     // helper methods
-    sink_desc * find_sink(void *endpoint, aoo_id id);
+    sink_desc * find_sink(const ip_address& addr, aoo_id id);
 
     int32_t set_format(aoo_format& f);
 
@@ -192,20 +202,20 @@ class source final : public isource {
 
     bool send_ping();
 
-    void handle_format_request(void *endpoint, aoo_replyfn fn,
-                               const osc::ReceivedMessage& msg);
+    void handle_format_request(const osc::ReceivedMessage& msg,
+                               const ip_address& addr);
 
-    void handle_data_request(void *endpoint, aoo_replyfn fn,
-                             const osc::ReceivedMessage& msg);
+    void handle_data_request(const osc::ReceivedMessage& msg,
+                             const ip_address& addr);
 
-    void handle_ping(void *endpoint, aoo_replyfn fn,
-                     const osc::ReceivedMessage& msg);
+    void handle_ping(const osc::ReceivedMessage& msg,
+                     const ip_address& addr);
 
-    void handle_invite(void *endpoint, aoo_replyfn fn,
-                       const osc::ReceivedMessage& msg);
+    void handle_invite(const osc::ReceivedMessage& msg,
+                       const ip_address& addr);
 
-    void handle_uninvite(void *endpoint, aoo_replyfn fn,
-                         const osc::ReceivedMessage& msg);
+    void handle_uninvite(const osc::ReceivedMessage& msg,
+                         const ip_address& addr);
 };
 
 } // aoo

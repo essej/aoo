@@ -29,8 +29,8 @@ using namespace aoo;
 struct AooPeer {
     std::string group;
     std::string user;
+    aoo::ip_address address;
     aoo_id id;
-    aoo::endpoint *endpoint;
 };
 #endif
 
@@ -40,7 +40,7 @@ struct AooNodeClient {
     aoo_id id;
 };
 
-class AooNode : public INode {
+class AooNode final : public INode {
     friend class INode;
 public:
     AooNode(World *world, int socket, int port);
@@ -60,14 +60,12 @@ public:
         return socket_sendto(socket_, buf, size, addr);
     }
 
-    endpoint *getEndpoint(const ip_address& addr) override;
-
 #if USE_PEER_LIST
-    endpoint *findPeer(const std::string& group,
-                       const std::string& user);
+    bool findPeer(const std::string& group, const std::string& user,
+                  aoo::ip_address& addr);
 
     void addPeer(const std::string& group, const std::string& user,
-                 aoo_id id, const ip_address& addr) override;
+                 const ip_address& addr, aoo_id id) override;
 
     void removePeer(const std::string& group,
                     const std::string& user) override;
@@ -83,8 +81,6 @@ private:
     int socket_ = -1;
     int port_ = 0;
     aoo::ip_address::ip_type type_;
-    std::list<aoo::endpoint> endpoints_; // endpoints must not move in memory!
-    aoo::shared_mutex endpointMutex_;
     // dependants
     std::vector<AooNodeClient> clients_;
     aoo::shared_mutex clientMutex_;
@@ -105,8 +101,6 @@ private:
 
     // private methods
     bool addClient(INodeClient& client, aoo_type type, aoo_id id);
-
-    aoo::endpoint* findEndpoint(const ip_address& addr);
 
     void doSend();
 
@@ -258,42 +252,30 @@ void AooNode::release(INodeClient& client){
     LOG_ERROR("AooNode::release: client not found!");
 }
 
-endpoint * AooNode::getEndpoint(const ip_address& addr){
-    aoo::scoped_lock lock(endpointMutex_);
-    auto ep = findEndpoint(addr);
-    if (ep)
-        return ep;
-    else {
-        // add endpoint
-        endpoints_.emplace_back(socket_, addr);
-        return &endpoints_.back();
-    }
-}
-
 #if USE_PEER_LIST
-endpoint * AooNode::findPeer(const std::string& group,
-                             const std::string& user)
+bool AooNode::findPeer(const std::string& group, const std::string& user,
+                       aoo::ip_address& addr)
 {
     for (auto& peer : peers_){
         if (peer.group == group && peer.user == user){
-            return peer.endpoint;
+            addr = peer.address;
+            return true;
         }
     }
-    return nullptr;
+    return false;
 }
 
 void AooNode::addPeer(const std::string& group,
-                      const std::string& user, aoo_id id,
-                      const ip_address& addr)
+                      const std::string& user,
+                      const ip_address& addr, aoo_id id)
 {
-    if (findPeer(group, user)){
+    aoo::ip_address dummy;
+    if (findPeer(group, user, dummy)){
         LOG_ERROR("AooNode::add_peer: peer already added");
         return;
     }
 
-    auto e = getEndpoint(addr);
-
-    peers_.push_back({ group, user, id, e });
+    peers_.push_back({ group, user, addr, id });
 }
 
 void AooNode::removePeer(const std::string& group,
@@ -359,16 +341,6 @@ bool AooNode::addClient(INodeClient& client, aoo_type type, aoo_id id)
     return true;
 }
 
-aoo::endpoint * AooNode::findEndpoint(const ip_address& addr)
-{
-    for (auto& e : endpoints_){
-        if (e.address() == addr){
-            return &e;
-        }
-    }
-    return nullptr;
-}
-
 void AooNode::doSend()
 {
     aoo::shared_scoped_lock lock(clientMutex_);
@@ -385,15 +357,6 @@ void AooNode::doReceive()
     int nbytes = socket_receive(socket_, buf, AOO_MAXPACKETSIZE,
                                 &addr, AOO_POLL_INTERVAL);
     if (nbytes > 0){
-        // try to find endpoint
-        aoo::unique_lock lock(endpointMutex_);
-        auto ep = findEndpoint(addr);
-        if (!ep){
-            // add endpoint
-            endpoints_.emplace_back(socket_, addr);
-            ep = &endpoints_.back();
-        }
-        lock.unlock();
         // get sink ID
         aoo_type type;
         aoo_id id;
@@ -408,7 +371,7 @@ void AooNode::doReceive()
                     if ((type == c.type) &&
                         ((id == AOO_ID_WILDCARD) || (id == c.id)))
                     {
-                        c.obj->handleMessage(buf, nbytes, ep, endpoint::send);
+                        c.obj->handleMessage(buf, nbytes, addr);
                         if (id != AOO_ID_WILDCARD)
                             goto parse_done;
                     }
@@ -416,7 +379,7 @@ void AooNode::doReceive()
                 case AOO_TYPE_CLIENT:
                 case AOO_TYPE_PEER:
                     if (c.type == AOO_TYPE_CLIENT) {
-                        c.obj->handleMessage(buf, nbytes, ep, endpoint::send);
+                        c.obj->handleMessage(buf, nbytes, addr);
                         goto parse_done; // there's only one client
                     }
                     break;

@@ -83,7 +83,9 @@ typedef void (*aoo_logfunction)(const char *);
 typedef int32_t (*aoo_replyfn)(
         void *,         // user
         const char *,   // data
-        int32_t         // number of bytes
+        int32_t,        // number of bytes
+        const void *,   // address
+        int32_t         // address size
 );
 
 // base event

@@ -32,7 +32,7 @@ t_class *aoo_send_class;
 
 struct t_sink
 {
-    aoo::endpoint *s_endpoint;
+    aoo::ip_address s_address;
     int32_t s_id;
 };
 
@@ -62,19 +62,26 @@ struct t_aoo_send
     bool x_accept = true;
 };
 
-static void aoo_send_doaddsink(t_aoo_send *x, aoo::endpoint *e, aoo_id id)
+static int32_t aoo_send_reply(t_aoo_send *x, const char *data, int32_t size,
+                              const void *address, int32_t addrlen)
 {
-    x->x_source->add_sink(e, id, endpoint::send);
+    aoo::ip_address addr((const sockaddr *)address, addrlen);
+    return x->x_node->sendto(data, size, addr);
+}
+
+static void aoo_send_doaddsink(t_aoo_send *x, const aoo::ip_address& addr, aoo_id id)
+{
+    x->x_source->add_sink(addr.address(), addr.length(), id);
 
     // add sink to list
-    x->x_sinks.push_back({e, id});
+    x->x_sinks.push_back({addr, id});
 
     // output message
     t_atom msg[3];
-    if (endpoint_to_atoms(e, id, 3, msg)){
+    if (endpoint_to_atoms(addr, id, 3, msg)){
         outlet_anything(x->x_msgout, gensym("sink_add"), 3, msg);
     } else {
-        bug("aoo_endpoint_to_atoms");
+        bug("aoo::endpoint_to_atoms");
     }
 }
 
@@ -96,17 +103,17 @@ static void aoo_send_doremoveall(t_aoo_send *x)
     // output messages
     for (int i = 0; i < numsinks; ++i){
         t_atom msg[3];
-        if (endpoint_to_atoms(sinks[i].s_endpoint, sinks[i].s_id, 3, msg)){
+        if (endpoint_to_atoms(sinks[i].s_address, sinks[i].s_id, 3, msg)){
             outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
         } else {
-            bug("aoo_endpoint_to_atoms");
+            bug("aoo::endpoint_to_atoms");
         }
     }
 }
 
-static void aoo_send_doremovesink(t_aoo_send *x, aoo::endpoint *e, aoo_id id)
+static void aoo_send_doremovesink(t_aoo_send *x, const ip_address& addr, aoo_id id)
 {
-    x->x_source->remove_sink(e, id);
+    x->x_source->remove_sink(addr.address(), addr.length(), id);
 
     // remove from list
     if (id == AOO_ID_WILDCARD){
@@ -116,7 +123,7 @@ static void aoo_send_doremovesink(t_aoo_send *x, aoo::endpoint *e, aoo_id id)
 
         // remove all sinks matching endpoint
         for (auto it = x->x_sinks.begin(); it != x->x_sinks.end();){
-            if (it->s_endpoint == e){
+            if (it->s_address == addr){
                 sinks[removed++] = *it;
                 it = x->x_sinks.erase(it);
             } else {
@@ -127,25 +134,25 @@ static void aoo_send_doremovesink(t_aoo_send *x, aoo::endpoint *e, aoo_id id)
         // output messages
         for (int i = 0; i < removed; ++i){
             t_atom msg[3];
-            if (endpoint_to_atoms(sinks[i].s_endpoint, sinks[i].s_id, 3, msg)){
+            if (endpoint_to_atoms(sinks[i].s_address, sinks[i].s_id, 3, msg)){
                 outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
             } else {
-                bug("aoo_endpoint_to_atoms");
+                bug("aoo::endpoint_to_atoms");
             }
         }
         return;
     } else {
         // remove the sink matching endpoint and id
         for (auto it = x->x_sinks.begin(); it != x->x_sinks.end(); ++it){
-            if (it->s_endpoint == e && it->s_id == id){
+            if (it->s_address == addr && it->s_id == id){
                 x->x_sinks.erase(it);
 
                 // output message
                 t_atom msg[3];
-                if (endpoint_to_atoms(e, id, 3, msg)){
+                if (endpoint_to_atoms(addr, id, 3, msg)){
                     outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
                 } else {
-                    bug("aoo_endpoint_to_atoms");
+                    bug("aoo::endpoint_to_atoms");
                 }
                 return;
             }
@@ -160,12 +167,12 @@ static void aoo_send_doremovesink(t_aoo_send *x, aoo::endpoint *e, aoo_id id)
 
 // called from the network receive thread
 void aoo_send_handle_message(t_aoo_send *x, const char * data,
-                                int32_t n, void *endpoint, aoo_replyfn fn)
+                             int32_t n, const ip_address& addr)
 {
     // synchronize with aoo_receive_dsp()
     aoo::shared_scoped_lock lock(x->x_lock);
     // handle incoming message
-    x->x_source->handle_message(data, n, endpoint, fn);
+    x->x_source->handle_message(data, n, addr.address(), addr.length());
 }
 
 // called from the network send thread
@@ -183,36 +190,36 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event)
     case AOO_PING_EVENT:
     {
         auto e = (const aoo_ping_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
         double diff1 = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
         double diff2 = aoo_osctime_duration(e->tt2, e->tt3) * 1000.0;
         double rtt = aoo_osctime_duration(e->tt1, e->tt3) * 1000.0;
 
         t_atom msg[7];
-        if (endpoint_to_atoms(ep, e->id, 3, msg)){
+        if (endpoint_to_atoms(addr, e->id, 3, msg)){
             SETFLOAT(msg + 3, diff1);
             SETFLOAT(msg + 4, diff2);
             SETFLOAT(msg + 5, rtt);
             SETFLOAT(msg + 6, e->lost_blocks);
             outlet_anything(x->x_msgout, gensym("ping"), 7, msg);
         } else {
-            bug("aoo_endpoint_to_atoms");
+            bug("aoo::endpoint_to_atoms");
         }
         break;
     }
     case AOO_INVITE_EVENT:
     {
         auto e = (const aoo_sink_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         if (x->x_accept){
-            aoo_send_doaddsink(x, ep, e->id);
+            aoo_send_doaddsink(x, addr, e->id);
         } else {
             t_atom msg[3];
-            if (endpoint_to_atoms(ep, e->id, 3, msg)){
+            if (endpoint_to_atoms(addr, e->id, 3, msg)){
                 outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
             } else {
-                bug("aoo_endpoint_to_atoms");
+                bug("aoo::endpoint_to_atoms");
             }
         }
 
@@ -221,16 +228,16 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event)
     case AOO_UNINVITE_EVENT:
     {
         auto e = (const aoo_sink_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         if (x->x_accept){
-            aoo_send_doremovesink(x, ep, e->id);
+            aoo_send_doremovesink(x, addr, e->id);
         } else {
             t_atom msg[3];
-            if (endpoint_to_atoms(ep, e->id, 3, msg)){
+            if (endpoint_to_atoms(addr, e->id, 3, msg)){
                 outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
             } else {
-                bug("aoo_endpoint_to_atoms");
+                bug("aoo::endpoint_to_atoms");
             }
         }
         break;
@@ -272,7 +279,7 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 static t_sink *aoo_send_findsink(t_aoo_send *x, const ip_address& addr, aoo_id id)
 {
     for (auto& sink : x->x_sinks){
-        if (sink.s_id == id && sink.s_endpoint->address() == addr){
+        if (sink.s_id == id && sink.s_address == addr){
             return &sink;
         }
     }
@@ -300,7 +307,8 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         }
         int32_t chn = atom_getfloat(argv + 3);
 
-        x->x_source->set_sink_channelonset(sink->s_endpoint, sink->s_id, chn);
+        auto& addr = sink->s_address;
+        x->x_source->set_sink_channelonset(addr.address(), addr.length(), sink->s_id, chn);
     }
 }
 
@@ -346,11 +354,10 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     if (get_sink_arg(x, x->x_node, argc, argv, addr, id)){
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
-        auto e = x->x_node->get_endpoint(addr);
         // check if sink exists
         if (id != AOO_ID_WILDCARD){
             for (auto& sink : x->x_sinks){
-                if (sink.s_endpoint == e){
+                if (sink.s_address == addr){
                     if (sink.s_id == AOO_ID_WILDCARD){
                         pd_error(x, "%s: sink %s %d %d already added via wildcard!",
                                  classname(x), host->s_name, port, id);
@@ -366,22 +373,21 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
         if (id == AOO_ID_WILDCARD){
             // first remove all sinks on this endpoint
-            aoo_send_doremovesink(x, e, AOO_ID_WILDCARD);
+            aoo_send_doremovesink(x, addr, AOO_ID_WILDCARD);
         }
 
-        aoo_send_doaddsink(x, e, id);
+        aoo_send_doaddsink(x, addr, id);
 
         if (argc > 3){
-            x->x_source->set_sink_channelonset(e, id, atom_getfloat(argv + 3));
+            x->x_source->set_sink_channelonset(addr.address(), addr.length(),
+                                               id, atom_getfloat(argv + 3));
         }
 
         // print message (use actual hostname)
-        if (endpoint_get_address(e, host, port)){
-            if (id == AOO_ID_WILDCARD){
-                verbose(0, "added all sinks on %s %d", host->s_name, port);
-            } else {
-                verbose(0, "added sink %s %d %d", host->s_name, port, id);
-            }
+        if (id == AOO_ID_WILDCARD){
+            verbose(0, "added all sinks on %s %d", addr.name(), port);
+        } else {
+            verbose(0, "added sink %s %d %d", addr.name(), port, id);
         }
     }
 }
@@ -406,43 +412,35 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     ip_address addr;
     aoo_id id;
     if (get_sink_arg(x, x->x_node, argc, argv, addr, id)){
-        t_symbol *host = atom_getsymbol(argv);
-        int port = atom_getfloat(argv + 1);
-        aoo::endpoint *e = nullptr;
         if (id != AOO_ID_WILDCARD){
             // check if sink exists
             for (auto& sink : x->x_sinks){
-                if (sink.s_endpoint->address() == addr){
+                if (sink.s_address == addr){
                     if (sink.s_id == AOO_ID_WILDCARD){
                         pd_error(x, "%s: can't remove sink %s %d %d because of wildcard!",
-                                 classname(x), host->s_name, port, id);
+                                 classname(x), addr.name(), addr.port(), id);
                         return;
                     } else if (sink.s_id == id) {
-                        e = sink.s_endpoint;
-                        break;
+                        aoo_send_doremovesink(x, addr, id);
+
+                        // print message (use actual hostname)
+                        if (id == AOO_ID_WILDCARD){
+                            verbose(0, "removed all sinks on %s %d", addr.name(), addr.port());
+                        } else {
+                            verbose(0, "removed sink %s %d %d", addr.name(), addr.port(), id);
+                        }
+
+                        return; // success
                     }
                 }
             }
         } else {
-            e = x->x_node->get_endpoint(addr);
+            aoo_send_doremovesink(x, addr, id); // remove all sinks on endpoint
+            return; // success
         }
 
-        if (!e){
-            pd_error(x, "%s: couldn't find sink %s %d %d!",
-                     classname(x), host->s_name, port, id);
-            return;
-        }
-
-        aoo_send_doremovesink(x, e, id);
-
-        // print message (use actual hostname)
-        if (endpoint_get_address(e, host, port)){
-            if (id == AOO_ID_WILDCARD){
-                verbose(0, "removed all sinks on %s %d", host->s_name, port);
-            } else {
-                verbose(0, "removed sink %s %d %d", host->s_name, port, id);
-            }
-        }
+        pd_error(x, "%s: couldn't find sink %s %d %d!",
+                 classname(x), addr.name(), addr.port(), id);
     }
 }
 
@@ -459,20 +457,11 @@ static void aoo_send_stop(t_aoo_send *x)
 static void aoo_send_listsinks(t_aoo_send *x)
 {
     for (auto& sink : x->x_sinks){
-        t_symbol *host;
-        int port;
-        if (endpoint_get_address(sink.s_endpoint, host, port)){
-            t_atom msg[3];
-            SETSYMBOL(msg, host);
-            SETFLOAT(msg + 1, port);
-            if (sink.s_id == AOO_ID_WILDCARD){
-                SETSYMBOL(msg + 2, gensym("*"));
-            } else {
-                SETFLOAT(msg + 2, sink.s_id);
-            }
+        t_atom msg[3];
+        if (endpoint_to_atoms(sink.s_address, sink.s_id, 3, msg)){
             outlet_anything(x->x_msgout, gensym("sink"), 3, msg);
         } else {
-            pd_error(x, "%s: couldn't get endpoint address for sink", classname(x));
+            bug("aoo::endpoint_to_atoms");
         }
     }
 }
@@ -605,7 +594,8 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
     x_msgout = outlet_new(&x_obj, 0);
 
     // create and initialize aoo_source object
-    x_source.reset(aoo::isource::create(x_id));
+    auto src = aoo::isource::create(x_id, (aoo_replyfn)aoo_send_reply, this);
+    x_source.reset(src);
 
     aoo_format_storage fmt;
     format_makedefault(fmt, nchannels);

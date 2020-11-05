@@ -87,10 +87,8 @@ void AooClient::doSend() {
 }
 
 void AooClient::doHandleMessage(const char* data, int32_t size,
-                                void* endpoint, aoo_replyfn fn) {
-    auto e = (aoo::endpoint*)endpoint;
-    client_->handle_message(data, size, (void*)e->address().address(),
-                            e->address().length());
+                                const aoo::ip_address& addr) {
+    client_->handle_message(data, size, addr.address(), addr.length());
 }
 
 void AooClient::doUpdate() {
@@ -237,7 +235,7 @@ void AooClient::handleEvent(const aoo_event* event) {
         msg << "/peer/join" << addr.name() << addr.port()
             << e->group_name << e->user_name << e->user_id;
     #if USE_PEER_LIST
-        node()->addPeer(e->group_name, e->user_name, e->user_id, addr);
+        node()->addPeer(e->group_name, e->user_name, addr, e->user_id);
     #endif
         break;
     }
@@ -353,12 +351,12 @@ void AooClient::forwardMessage(const char *data, int32_t size,
             // usually, the peer list is only accessed/modified
             // in the NRT thread!
             NRTLock(world_);
-            auto ep = getPeerArg(node(), &args);
+            aoo::ip_address addr;
+            auto success = getPeerArg(node(), &args, addr);
             NRTUnlock(world_);
-            if (ep) {
-                auto& addr = ep->address();
-                client()->send_message(msg, msgSize, addr.address(),
-                    addr.length(), flags);
+            if (success) {
+                client()->send_message(msg, msgSize,
+                    addr.address(), addr.length(), flags);
             }
         } else {
             // group name

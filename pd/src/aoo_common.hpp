@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
@@ -43,10 +43,7 @@ struct i_node {
     virtual int sendto(const char *buf, int32_t size,
                        const ip_address& addr) = 0;
 
-    virtual endpoint *get_endpoint(const ip_address& addr) = 0;
-
-
-    virtual endpoint *find_peer(t_symbol *group, t_symbol *user) = 0;
+    virtual bool find_peer(t_symbol *group, t_symbol *user, ip_address& addr) = 0;
 
     virtual void add_peer(t_symbol *group, t_symbol *user, aoo_id id,
                           const ip_address& addr) = 0;
@@ -66,9 +63,7 @@ struct i_node {
 
 int address_to_atoms(const ip_address& addr, int argc, t_atom *argv);
 
-int endpoint_to_atoms(const endpoint* ep, aoo_id id, int argc, t_atom *argv);
-
-bool endpoint_get_address(const endpoint* ep, t_symbol *& host, int& port);
+int endpoint_to_atoms(const ip_address& addr, aoo_id id, int argc, t_atom *argv);
 
 bool get_sink_arg(void *x, i_node *node, int argc, t_atom *argv,
                  ip_address& addr, aoo_id &id);

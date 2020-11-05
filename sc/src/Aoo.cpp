@@ -236,9 +236,8 @@ void AooDelegate::beginEvent(osc::OutboundPacketStream &msg, const char *event)
 }
 
 void AooDelegate::beginEvent(osc::OutboundPacketStream &msg, const char *event,
-                             aoo::endpoint *ep, aoo_id id)
+                             const aoo::ip_address& addr, aoo_id id)
 {
-    auto& addr = ep->address();
     msg << osc::BeginMessage("/aoo/event")
         << owner_->mParent->mNode.mID << owner_->mParentIndex
         << event << addr.name() << addr.port() << id;
@@ -272,7 +271,7 @@ uint64_t getOSCTime(World *world){
     return time;
 }
 
-static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
+static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::ip_address& addr,
                            int32_t *id, const char *what)
 {
     if (args->remain() < 2){
@@ -288,8 +287,7 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
         auto group = s;
         auto user = args->gets();
 
-        auto ep = node->findPeer(group, user);
-        if (!ep){
+        if (!node->findPeer(group, user, addr)){
             LOG_ERROR("aoo: couldn't find peer " << group << "|" << user);
             return false;
         }
@@ -301,10 +299,10 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
         // otherwise try host|port
         auto host = s;
         int port = args->geti();
-        aoo::ip_address addr(host, port, node->type());
+        aoo::ip_address temp(host, port, node->type());
 
-        if (addr.valid()){
-            ep = node->getEndpoint(addr);
+        if (temp.valid()){
+            addr = temp;
         } else {
             LOG_ERROR("aoo: couldn't resolve hostname '"
                       << host << "' for " << what);
@@ -334,24 +332,19 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::endpoint *& ep,
 }
 
 bool getSinkArg(INode* node, sc_msg_iter *args,
-                aoo::endpoint *& ep, aoo_id &id)
+                aoo::ip_address& addr, aoo_id &id)
 {
-    return getEndpointArg(node, args, ep, &id, "sink");
+    return getEndpointArg(node, args, addr, &id, "sink");
 }
 
 bool getSourceArg(INode* node, sc_msg_iter *args,
-                  aoo::endpoint *& ep, aoo_id &id)
+                  aoo::ip_address& addr, aoo_id &id)
 {
-    return getEndpointArg(node, args, ep, &id, "source");
+    return getEndpointArg(node, args, addr, &id, "source");
 }
 
-aoo::endpoint * getPeerArg(INode *node, sc_msg_iter *args){
-    aoo::endpoint *ep;
-    if (getEndpointArg(node, args, ep, nullptr, "peer")){
-        return ep;
-    } else {
-        return nullptr;
-    }
+bool getPeerArg(INode *node, sc_msg_iter *args, aoo::ip_address& addr){
+    return getEndpointArg(node, args, addr, nullptr, "peer");
 }
 
 void makeDefaultFormat(aoo_format_storage& f, int sampleRate,

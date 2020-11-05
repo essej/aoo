@@ -22,7 +22,7 @@ t_class *aoo_receive_class;
 
 struct t_source
 {
-    aoo::endpoint *s_endpoint;
+    aoo::ip_address& s_address;
     int32_t s_id;
 };
 
@@ -51,13 +51,20 @@ struct t_aoo_receive
     t_clock *x_clock = nullptr;
 };
 
+static int32_t aoo_receive_reply(t_aoo_receive *x, const char *data, int32_t size,
+                                 const void *address, int32_t addrlen)
+{
+    aoo::ip_address addr((const sockaddr *)address, addrlen);
+    return x->x_node->sendto(data, size, addr);
+}
+
 static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *argv)
 {
     ip_address addr;
     aoo_id id = 0;
     if (get_source_arg(x, x->x_node, argc, argv, addr, id)){
         for (auto& src : x->x_sources){
-            if (src.s_endpoint->address() == addr && src.s_id == id){
+            if (src.s_address == addr && src.s_id == id){
                 return &src;
             }
         }
@@ -71,12 +78,12 @@ static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *arg
 
 // called from the network receive thread
 void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
-                                int32_t n, void *endpoint, aoo_replyfn fn)
+                                int32_t n, const ip_address& addr)
 {
     // synchronize with aoo_receive_dsp()
     aoo::shared_scoped_lock lock(x->x_lock);
     // handle incoming message
-    x->x_sink->handle_message(data, n, endpoint, fn);
+    x->x_sink->handle_message(data, n, addr.address(), addr.length());
 }
 
 // called from the network receive thread
@@ -110,18 +117,8 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
 
     ip_address addr;
     aoo_id id = 0;
-    aoo::endpoint *e = nullptr;
     if (get_source_arg(x, x->x_node, argc, argv, addr, id)){
-        for (auto& src : x->x_sources){
-            if (src.s_id == id && src.s_endpoint->address() == addr){
-                e = src.s_endpoint;
-                break;
-            }
-        }
-        if (!e){
-            e = x->x_node->get_endpoint(addr);
-        }
-        x->x_sink->invite_source(e, id, endpoint::send);
+        x->x_sink->invite_source(addr.address(), addr.length(), id);
         // notify send thread
         x->x_node->notify();
     }
@@ -146,7 +143,8 @@ static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom
 
     t_source *src = aoo_receive_findsource(x, argc, argv);
     if (src){
-        x->x_sink->uninvite_source(src->s_endpoint, src->s_id, endpoint::send);
+        auto& addr = src->s_address;
+        x->x_sink->uninvite_source(addr.address(), addr.length(), src->s_id);
         // notify send thread
         x->x_node->notify();
     }
@@ -173,7 +171,8 @@ static void aoo_receive_reset(t_aoo_receive *x, t_symbol *s, int argc, t_atom *a
         // reset specific source
         t_source *source = aoo_receive_findsource(x, argc, argv);
         if (source){
-            x->x_sink->reset_source(source->s_endpoint, source->s_id);
+            auto& addr = source->s_address;
+            x->x_sink->reset_source(addr.address(), addr.length(), source->s_id);
         }
     } else {
         // reset all sources
@@ -200,12 +199,8 @@ static void aoo_receive_listsources(t_aoo_receive *x)
 {
     for (auto& src : x->x_sources)
     {
-        t_symbol *host = 0;
-        int port = 0;
-        if (endpoint_get_address(src.s_endpoint, host, port)){
-            t_atom msg[3];
-            SETSYMBOL(msg, host);
-            SETFLOAT(msg + 1, port);
+        t_atom msg[3];
+        if (address_to_atoms(src.s_address, 3, msg) > 0){
             SETFLOAT(msg + 2, src.s_id);
             outlet_anything(x->x_msgout, gensym("source"), 3, msg);
         } else {
@@ -243,13 +238,13 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
     case AOO_SOURCE_ADD_EVENT:
     {
         auto e = (const aoo_source_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         // first add to source list
-        x->x_sources.push_back({ ep, e->id });
+        x->x_sources.push_back({ addr, e->id });
 
         // output event
-        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
             return;
         }
         outlet_anything(x->x_msgout, gensym("source_add"), 3, msg);
@@ -258,13 +253,13 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
     case AOO_SOURCE_FORMAT_EVENT:
     {
         auto e = (const aoo_source_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
             return;
         }
         aoo_format_storage f;
-        if (x->x_sink->get_source_format(e->endpoint, e->id, f) > 0) {
+        if (x->x_sink->get_source_format(addr.address(), addr.length(), e->id, f) > 0) {
             int fsize = format_to_atoms(f.header, 29, msg + 3); // skip first three atoms
             outlet_anything(x->x_msgout, gensym("source_format"), fsize + 3, msg);
         }
@@ -273,9 +268,9 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
     case AOO_SOURCE_STATE_EVENT:
     {
         auto e = (const aoo_source_state_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
             return;
         }
         SETFLOAT(&msg[3], e->state);
@@ -285,9 +280,9 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
     case AOO_BLOCK_LOST_EVENT:
     {
         auto e = (const aoo_block_lost_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
             return;
         }
         SETFLOAT(&msg[3], e->count);
@@ -297,9 +292,9 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
     case AOO_BLOCK_REORDERED_EVENT:
     {
         auto e = (const aoo_block_reordered_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
             return;
         }
         SETFLOAT(&msg[3], e->count);
@@ -309,9 +304,9 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
     case AOO_BLOCK_RESENT_EVENT:
     {
         auto e = (const aoo_block_resent_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
             return;
         }
         SETFLOAT(&msg[3], e->count);
@@ -321,9 +316,9 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
     case AOO_BLOCK_GAP_EVENT:
     {
         auto e = (const aoo_block_gap_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
             return;
         }
         SETFLOAT(&msg[3], e->count);
@@ -333,9 +328,9 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
     case AOO_PING_EVENT:
     {
         auto e = (const aoo_ping_event *)event;
-        auto ep = (aoo::endpoint *)e->endpoint;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(ep, e->id, 3, msg)){
+        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
             return;
         }
         double diff = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
@@ -487,7 +482,8 @@ t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
     x_msgout = outlet_new(&x_obj, 0);
 
     // create and initialize aoo_sink object
-    x_sink.reset(aoo::isink::create(x_id));
+    auto sink = aoo::isink::create(x_id, (aoo_replyfn)aoo_receive_reply, this);
+    x_sink.reset(sink);
 
     x_sink->set_buffersize(buffersize);
 

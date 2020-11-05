@@ -7,6 +7,7 @@
 #include "aoo/aoo.hpp"
 
 #include "common/lockfree.hpp"
+#include "common/net_utils.hpp"
 #include "common/sync.hpp"
 #include "common/time.hpp"
 #include "common/utils.hpp"
@@ -133,14 +134,14 @@ public:
         aoo_block_gap_event block_gap;
     };
 
-    source_desc(void *endpoint, aoo_replyfn fn, aoo_id id, int32_t salt);
+    source_desc(const ip_address& addr, aoo_id id, int32_t salt);
     source_desc(const source_desc& other) = delete;
     source_desc& operator=(const source_desc& other) = delete;
 
     // getters
     aoo_id id() const { return id_; }
 
-    void *endpoint() const { return endpoint_; }
+    const ip_address& address() const { return addr_; }
 
     bool has_events() const { return  eventqueue_.read_available() > 0; }
 
@@ -178,6 +179,7 @@ private:
         int32_t frame;
     };
     void do_update(const sink& s);
+
     // handle messages
     void recover(const char *reason, int32_t n = 0);
 
@@ -188,6 +190,7 @@ private:
     void process_blocks();
 
     void check_missing_blocks(const sink& s);
+
     // send messages
     bool send_format_request(const sink& s);
 
@@ -195,13 +198,9 @@ private:
 
     bool send_notifications(const sink& s);
 
-    void dosend(const char *data, int32_t n){
-        fn_(endpoint_, data, n);
-    }
     // data
-    void *const endpoint_;
-    const aoo_replyfn fn_;
-    const aoo_id id_;
+    ip_address addr_;
+    aoo_id id_;
     int32_t salt_;
     // audio decoder
     std::unique_ptr<aoo::decoder> decoder_;
@@ -229,21 +228,21 @@ private:
 
 class sink final : public isink {
 public:
-    sink(aoo_id id)
-        : id_(id) {}
+    sink(aoo_id id, aoo_replyfn replyfn, void *user)
+        : id_(id), replyfn_(replyfn), user_(user) {}
 
     ~sink(){}
 
     int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
-    int32_t invite_source(void *endpoint, aoo_id id, aoo_replyfn fn) override;
+    int32_t invite_source(const void *address, int32_t addrlen, aoo_id id) override;
 
-    int32_t uninvite_source(void *endpoint, aoo_id id, aoo_replyfn fn) override;
+    int32_t uninvite_source(const void *address, int32_t addrlen, aoo_id id) override;
 
     int32_t uninvite_all() override;
 
     int32_t handle_message(const char *data, int32_t n,
-                           void *endpoint, aoo_replyfn fn) override;
+                           const void *address, int32_t addrlen) override;
 
     int32_t send() override;
 
@@ -259,10 +258,10 @@ public:
 
     int32_t get_option(int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t set_sourceoption(void *endpoint, aoo_id id,
+    int32_t set_sourceoption(const void *address, int32_t addrlen, aoo_id id,
                              int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t get_sourceoption(void *endpoint, aoo_id id,
+    int32_t get_sourceoption(const void *address, int32_t addrlen, aoo_id id,
                              int32_t opt, void *ptr, int32_t size) override;
     // getters
     aoo_id id() const { return id_.load(std::memory_order_relaxed); }
@@ -288,9 +287,15 @@ public:
     double elapsed_time() const { return timer_.get_elapsed(); }
 
     time_tag absolute_time() const { return timer_.get_absolute(); }
+
+    int32_t do_send(const char *data, int32_t size, const ip_address& addr) const {
+        return replyfn_(user_, data, size, addr.address(), addr.length());
+    }
 private:
     // settings
     std::atomic<aoo_id> id_;
+    aoo_replyfn replyfn_;
+    void *user_;
     int32_t nchannels_ = 0;
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
@@ -310,18 +315,18 @@ private:
     timer timer_;
 
     // helper methods
-    source_desc *find_source(void *endpoint, aoo_id id);
+    source_desc *find_source(const ip_address& addr, aoo_id id);
 
     void update_sources();
 
-    int32_t handle_format_message(void *endpoint, aoo_replyfn fn,
-                                  const osc::ReceivedMessage& msg);
+    int32_t handle_format_message(const osc::ReceivedMessage& msg,
+                                  const ip_address& addr);
 
-    int32_t handle_data_message(void *endpoint, aoo_replyfn fn,
-                                const osc::ReceivedMessage& msg);
+    int32_t handle_data_message(const osc::ReceivedMessage& msg,
+                                const ip_address& addr);
 
-    int32_t handle_ping_message(void *endpoint, aoo_replyfn fn,
-                                const osc::ReceivedMessage& msg);
+    int32_t handle_ping_message(const osc::ReceivedMessage& msg,
+                                const ip_address& addr);
 };
 
 } // aoo

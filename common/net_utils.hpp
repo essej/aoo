@@ -119,29 +119,4 @@ std::string socket_strerror(int err);
 
 void socket_error_print(const char *label = nullptr);
 
-/*/////////////////// endpoint /////////////////*/
-
-class endpoint {
-public:
-    endpoint(int socket, const ip_address& address)
-        : socket_(socket), address_(address) {}
-    endpoint(const endpoint&) = delete;
-    endpoint& operator=(const endpoint&) = delete;
-
-    int send(const char *data, int size) const {
-        return socket_sendto(socket_, data, size, address_);
-    }
-
-    static int32_t send(void *x, const char *data, int32_t size){
-        return static_cast<endpoint *>(x)->send(data, size);
-    }
-
-    const ip_address& address() const {
-        return address_;
-    }
-private:
-    int socket_;
-    ip_address address_;
-};
-
 } // aoo
