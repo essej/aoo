@@ -680,7 +680,7 @@ void aoo_client_setup(void)
 {
     aoo_client_class = class_new(gensym("aoo_client"), (t_newmethod)(void *)aoo_client_new,
         (t_method)aoo_client_free, sizeof(t_aoo_client), 0, A_GIMME, A_NULL);
-    class_sethelpsymbol(aoo_client_class, gensym("aoo_server"));
+    class_sethelpsymbol(aoo_client_class, gensym("aoo_net"));
 
     class_addmethod(aoo_client_class, (t_method)aoo_client_connect,
                     gensym("connect"), A_GIMME, A_NULL);
