@@ -148,17 +148,19 @@ aoo_net_client * aoo_net_client_new(int socket) {
 aoo::net::client::client(int socket)
     : udpsocket_(socket)
 {
-    auto addr = socket_address(socket);
-    udpport_ = addr.port();
-    type_ = addr.type();
-#ifdef _WIN32
-    sockevent_ = CreateEvent(NULL, FALSE, FALSE, NULL);
-    waitevent_ = CreateEvent(NULL, FALSE, FALSE, NULL);
-#else
-    if (pipe(waitpipe_) != 0){
+    ip_address addr;
+    if (socket_address(socket, addr) < 0){
         // TODO handle error
+        socket_error_print("socket_address");
+    } else {
+        udpport_ = addr.port();
+        type_ = addr.type();
     }
-#endif
+    eventsocket_ = socket_udp(0);
+    if (eventsocket_ < 0){
+        // TODO handle error
+        socket_error_print("socket_udp");
+    }
     commands_.resize(256, 1);
     messages_.resize(256, 1);
     events_.resize(256, 1);
@@ -176,13 +178,6 @@ aoo::net::client::~client() {
     if (tcpsocket_ >= 0){
         socket_close(tcpsocket_);
     }
-#ifdef _WIN32
-    CloseHandle(sockevent_);
-    CloseHandle(waitevent_);
-#else
-    close(waitpipe_[0]);
-    close(waitpipe_[1]);
-#endif
 }
 
 int32_t aoo_net_client_run(aoo_net_client *client){
@@ -223,7 +218,9 @@ int32_t aoo::net::client::run(){
             timeout = -1;
         }
 
-        wait_for_event(timeout);
+        if (!wait_for_event(timeout)){
+            break;
+        }
 
         // handle commands
         while (commands_.read_available()){
@@ -241,7 +238,12 @@ int32_t aoo_net_client_quit(aoo_net_client *client){
 
 int32_t aoo::net::client::quit(){
     quit_.store(true);
-    signal();
+    if (!signal()){
+        // force wakeup by closing the socket.
+        // this is not nice and probably undefined behavior,
+        // the MSDN docs explicitly forbid it!
+        socket_close(udpsocket_);
+    }
     return 1;
 }
 
@@ -382,7 +384,7 @@ int32_t aoo::net::client::handle_message(const char *data, int32_t n,
     } catch (const osc::Exception& e){
         LOG_ERROR("aoo_client: exception in handle_message: " << e.what());
     #if 0
-        unique_lock lock(socket_lock_);
+        scoped_lock lock(socket_lock_);
         on_exception("UDP message", e);
     #endif
     }
@@ -656,26 +658,13 @@ int client::try_connect(const std::string &host, int port){
     }
 
     // get local network interface
-    auto temp = socket_address(tcpsocket_);
-    if (!temp.valid()){
+    ip_address temp;
+    if (socket_address(tcpsocket_, temp) < 0){
         int err = socket_errno();
         LOG_ERROR("aoo_client: couldn't get socket name (" << err << ")");
         return err;
     }
     local_addr_ = ip_address(temp.name(), udpport_, type_);
-
-#ifdef _WIN32
-    // register event with socket
-    WSAEventSelect(tcpsocket_, sockevent_, FD_READ | FD_WRITE | FD_CLOSE);
-#else
-    // set non-blocking
-    // (this is not necessary on Windows, since WSAEventSelect will do it automatically)
-    if (socket_set_nonblocking(tcpsocket_, true) != 0){
-        int err = socket_errno();
-        LOG_ERROR("aoo_client: couldn't set socket to non-blocking (" << err << ")");
-        return err;
-    }
-#endif
 
     LOG_VERBOSE("aoo_client: successfully connected to "
                 << remote.name() << " on port " << remote.port());
@@ -863,55 +852,11 @@ void client::push_event(std::unique_ptr<ievent> e)
     }
 }
 
-void client::wait_for_event(float timeout){
+bool client::wait_for_event(float timeout){
     LOG_DEBUG("aoo_client: wait " << timeout << " seconds");
-#ifdef _WIN32
-    HANDLE events[2];
-    int numevents;
-    events[0] = waitevent_;
 
-    unique_lock lock(socket_lock_);
-    if (tcpsocket_ >= 0){
-        events[1] = sockevent_;
-        numevents = 2;
-    } else {
-        numevents = 1;
-    }
-    lock.unlock();
-
-    DWORD time = timeout < 0 ? INFINITE : (timeout * 1000 + 0.5); // round up to 1 ms!
-    DWORD result = WaitForMultipleObjects(numevents, events, FALSE, time);
-    if (result == WAIT_TIMEOUT){
-        LOG_DEBUG("aoo_server: timed out");
-        return;
-    }
-    // only the second event is a socket
-    if (result - WAIT_OBJECT_0 == 1){
-        lock.lock();
-
-        // TCP socket might have been closed in the meantime
-        if (tcpsocket_ < 0){
-            return;
-        }
-
-        WSANETWORKEVENTS ne;
-        memset(&ne, 0, sizeof(ne));
-        WSAEnumNetworkEvents(tcpsocket_, sockevent_, &ne);
-
-        if (ne.lNetworkEvents & FD_READ){
-            // ready to receive data from server
-            receive_data();
-        } else if (ne.lNetworkEvents & FD_CLOSE){
-            // connection was closed by server
-            on_socket_error(ne.iErrorCode[FD_CLOSE_BIT]);
-        } else {
-            // ignore FD_WRITE event
-        }
-    }
-#else
-#if 1 // poll() version
     struct pollfd fds[2];
-    fds[0].fd = waitpipe_[0];
+    fds[0].fd = eventsocket_;
     fds[0].events = POLLIN;
     fds[0].revents = 0;
     fds[1].fd = tcpsocket_;
@@ -920,144 +865,83 @@ void client::wait_for_event(float timeout){
 
     // round up to 1 ms! -1: block indefinitely
     // NOTE: macOS requires the negative timeout to exactly -1!
+#ifdef _WIN32
+    int result = WSAPoll(fds, 2, timeout < 0 ? -1 : timeout * 1000.0 + 0.5);
+#else
     int result = poll(fds, 2, timeout < 0 ? -1 : timeout * 1000.0 + 0.5);
+#endif
     if (result < 0){
-        int err = errno;
+        int err = socket_errno();
         if (err == EINTR){
-            // ?
+            return true; // ?
         } else {
             LOG_ERROR("aoo_client: poll failed (" << err << ")");
-            // what to do?
+            socket_error_print("poll");
+            return false;
         }
-        return;
     }
 
-    if (fds[0].revents & POLLIN){
-        // clear pipe
-        char c;
-        read(waitpipe_[0], &c, 1);
+    if (fds[0].revents){
+        // read from socket (empty packet)
+        char buf[64];
+        recv(eventsocket_, buf, sizeof(buf), 0);
+        // LOG_DEBUG("aoo_client: got signalled");
     }
 
-    if (fds[1].revents & POLLIN){
-        scoped_lock lock(socket_lock_);
-        // TCP socket might have been closed in the meantime
-        if (tcpsocket_ < 0){
-            return;
-        }
+    if (fds[1].revents){
         receive_data();
     }
-#else // select() version
-    fd_set rdset;
-    FD_ZERO(&rdset);
-    int fdmax = std::max<int>(waitpipe_[0], tcpsocket_); // tcpsocket might be -1
-    FD_SET(waitpipe_[0], &rdset);
-    if (tcpsocket_ >= 0){
-        FD_SET(tcpsocket_, &rdset);
-    }
-
-    struct timeval time;
-    time.tv_sec = (time_t)timeout;
-    time.tv_usec = (timeout - (double)time.tv_sec) * 1000000;
-
-    if (select(fdmax + 1, &rdset, 0, 0, timeout < 0 ? nullptr : &time) < 0){
-        int err = errno;
-        if (err == EINTR){
-            // ?
-        } else {
-            LOG_ERROR("aoo_client: select failed (" << err << ")");
-            // what to do?
-        }
-        return;
-    }
-
-    if (FD_ISSET(waitpipe_[0], &rdset)){
-        // clear pipe
-        char c;
-        read(waitpipe_[0], &c, 1);
-    }
-
-    if (FD_ISSET(tcpsocket_, &rdset)){
-        scoped_lock lock(socket_lock_);
-        // TCP socket might have been closed in the meantime
-        if (tcpsocket_ < 0){
-            return;
-        }
-        receive_data();
-    }
-#endif
-#endif
+    return true;
 }
 
 void client::receive_data(){
-    // read as much data as possible until recv() would block
-    while (tcpsocket_ >= 0){
-        char buffer[AOO_MAXPACKETSIZE];
-        auto result = recv(tcpsocket_, buffer, sizeof(buffer), 0);
-        if (result > 0){
-            recvbuffer_.write_bytes((uint8_t *)buffer, result);
+    scoped_lock lock(socket_lock_);
+    if (tcpsocket_ < 0){
+        return;
+    }
+    char buffer[AOO_MAXPACKETSIZE];
+    auto result = recv(tcpsocket_, buffer, sizeof(buffer), 0);
+    if (result > 0){
+        recvbuffer_.write_bytes((uint8_t *)buffer, result);
 
-            // handle packets
-            uint8_t buf[AOO_MAXPACKETSIZE];
-            while (true){
-                auto size = recvbuffer_.read_packet(buf, sizeof(buf));
-                if (size > 0){
-                    try {
-                        osc::ReceivedPacket packet((char *)buf, size);
-                        if (packet.IsBundle()){
-                            osc::ReceivedBundle bundle(packet);
-                            handle_server_bundle_tcp(bundle);
-                        } else {
-                            osc::ReceivedMessage msg(packet);
-                            handle_server_message_tcp(msg);
-                        }
-                    } catch (const osc::Exception& e){
-                        LOG_ERROR("aoo_client: exception in receive_data: " << e.what());
-                        on_exception("server TCP message", e);
+        // handle packets
+        uint8_t buf[AOO_MAXPACKETSIZE];
+        while (true){
+            auto size = recvbuffer_.read_packet(buf, sizeof(buf));
+            if (size > 0){
+                try {
+                    osc::ReceivedPacket packet((char *)buf, size);
+                    if (packet.IsBundle()){
+                        osc::ReceivedBundle bundle(packet);
+                        handle_server_bundle_tcp(bundle);
+                    } else {
+                        osc::ReceivedMessage msg(packet);
+                        handle_server_message_tcp(msg);
                     }
-                } else {
-                    break;
+                } catch (const osc::Exception& e){
+                    LOG_ERROR("aoo_client: exception in receive_data: " << e.what());
+                    on_exception("server TCP message", e);
                 }
-            }
-        } else if (result == 0){
-            // connection closed by the remote server
-            on_socket_error(0);
-        } else {
-            int err = socket_errno();
-        #ifdef _WIN32
-            if (err == WSAEWOULDBLOCK)
-        #else
-            if (err == EWOULDBLOCK)
-        #endif
-            {
-            #if 0
-                LOG_DEBUG("aoo_client: recv() would block");
-            #endif
             } else {
-                LOG_ERROR("aoo_client: recv() failed (" << err << ")");
-                on_socket_error(err);
+                break;
             }
-            return;
         }
+    } else if (result == 0){
+        // connection closed by the remote server
+        on_socket_error(0);
+    } else {
+        int err = socket_errno();
+        LOG_ERROR("aoo_client: recv() failed (" << err << ")");
+        on_socket_error(err);
     }
 }
 
 void client::send_server_message_tcp(const char *data, int32_t size){
     if (tcpsocket_ >= 0){
         if (sendbuffer_.write_packet((const uint8_t *)data, size)){
-            // try to send as much as possible until send() would block
-            while (true){
+            while (sendbuffer_.read_available()){
                 uint8_t buf[1024];
-                int32_t total = 0;
-                // first try to send pending data
-                if (!pending_send_data_.empty()){
-                     std::copy(pending_send_data_.begin(), pending_send_data_.end(), buf);
-                     total = pending_send_data_.size();
-                     pending_send_data_.clear();
-                } else if (sendbuffer_.read_available()){
-                     total = sendbuffer_.read_bytes(buf, sizeof(buf));
-                } else {
-                    break;
-                }
+                int32_t total = sendbuffer_.read_bytes(buf, sizeof(buf));
 
                 int32_t nbytes = 0;
                 while (nbytes < total){
@@ -1069,21 +953,8 @@ void client::send_server_message_tcp(const char *data, int32_t size){
                     #endif
                     } else {
                         auto err = socket_errno();
-                    #ifdef _WIN32
-                        if (err == WSAEWOULDBLOCK)
-                    #else
-                        if (err == EWOULDBLOCK)
-                    #endif
-                        {
-                            // store in pending buffer
-                            pending_send_data_.assign(buf + nbytes, buf + total);
-                        #if 1
-                            LOG_DEBUG("aoo_client: send() would block");
-                        #endif
-                        } else {
-                            LOG_ERROR("aoo_client: send() failed (" << err << ")");
-                            on_socket_error(err);
-                        }
+                        LOG_ERROR("aoo_client: send() failed (" << err << ")");
+                        on_socket_error(err);
                         return;
                     }
                 }
@@ -1330,21 +1201,13 @@ void client::handle_server_message_udp(const osc::ReceivedMessage &msg, int onse
     }
 }
 
-void client::signal(){
-#ifdef _WIN32
-    SetEvent(waitevent_);
-#else
-    write(waitpipe_[1], "\0", 1);
-#endif
+bool client::signal(){
+    // LOG_DEBUG("aoo_client signal");
+    return socket_signal(eventsocket_);
 }
 
 void client::close(bool manual){
     if (tcpsocket_ >= 0){
-    #ifdef _WIN32
-        // unregister event from socket.
-        // actually, I think this happens automatically when closing the socket.
-        WSAEventSelect(tcpsocket_, sockevent_, 0);
-    #endif
         socket_close(tcpsocket_);
         tcpsocket_ = -1;
         LOG_VERBOSE("aoo_client: connection closed");

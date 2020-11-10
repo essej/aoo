@@ -186,8 +186,8 @@ public:
     void push_event(std::unique_ptr<ievent> e);
 private:
     int udpsocket_;
-    int udpport_;
-    ip_address::ip_type type_;
+    int udpport_ = 0;
+    ip_address::ip_type type_ = ip_address::Unspec;
     int tcpsocket_ = -1;
     shared_mutex socket_lock_;
 
@@ -196,7 +196,6 @@ private:
     ip_address local_addr_;
 
     SLIP sendbuffer_;
-    std::vector<uint8_t> pending_send_data_;
     SLIP recvbuffer_;
     shared_mutex clientlock_;
     // peers
@@ -233,12 +232,7 @@ private:
     spinlock event_lock_;
     // signal
     std::atomic<bool> quit_{false};
-#ifdef _WIN32
-    HANDLE waitevent_ = 0;
-    HANDLE sockevent_ = 0;
-#else
-    int waitpipe_[2];
-#endif
+    int eventsocket_;
     // options
     std::atomic<float> ping_interval_{AOO_NET_CLIENT_PING_INTERVAL * 0.001};
     std::atomic<float> request_interval_{AOO_NET_CLIENT_REQUEST_INTERVAL * 0.001};
@@ -248,7 +242,7 @@ private:
 
     void send_ping_udp();
 
-    void wait_for_event(float timeout);
+    bool wait_for_event(float timeout);
 
     void receive_data();
 
@@ -268,7 +262,7 @@ private:
 
     void handle_peer_remove(const osc::ReceivedMessage& msg);
 
-    void signal();
+    bool signal();
 
     void close(bool manual = false);
 

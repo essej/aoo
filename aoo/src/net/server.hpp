@@ -61,7 +61,6 @@ private:
 
     SLIP sendbuffer_;
     SLIP recvbuffer_;
-    std::vector<uint8_t> pending_send_data_;
 
     bool handle_message(const osc::ReceivedMessage& msg);
 
@@ -184,10 +183,6 @@ private:
     int tcpsocket_;
     int udpsocket_;
     ip_address::ip_type type_;
-#ifdef _WIN32
-    HANDLE tcpevent_;
-    HANDLE udpevent_;
-#endif
     std::vector<std::unique_ptr<client_endpoint>> clients_;
     int32_t next_user_id_ = 0;
     user_list users_;
@@ -203,13 +198,8 @@ private:
     }
     // signal
     std::atomic<bool> quit_{false};
-#ifdef _WIN32
-    HANDLE waitevent_ = 0;
-#else
-    int waitpipe_[2];
-#endif
 
-    void wait_for_event();
+    bool wait_for_event();
 
     void update();
 
@@ -221,7 +211,7 @@ private:
     void handle_udp_message(const osc::ReceivedMessage& msg, int onset,
                             const ip_address& addr);
 
-    void signal();
+    bool signal();
 
     /*/////////////////// events //////////////////////*/
 
