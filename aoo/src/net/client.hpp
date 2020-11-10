@@ -43,7 +43,7 @@ public:
     ~peer();
 
     bool connected() const {
-        return address_.load() != nullptr;
+        return connected_.load();
     }
 
     bool match(const ip_address& addr) const;
@@ -58,12 +58,7 @@ public:
     const std::string& user() const { return user_; }
 
     const ip_address& address() const {
-        auto addr = address_.load();
-        if (addr){
-            return *addr;
-        } else {
-            return real_address_;
-        }
+        return real_address_;
     }
 
     void send(time_tag now);
@@ -82,9 +77,9 @@ private:
     std::string user_;
     std::vector<ip_address> addresses_;
     ip_address real_address_;
-    std::atomic<ip_address *> address_{nullptr};
     time_tag start_time_;
     double last_pingtime_ = 0;
+    std::atomic<bool> connected_{false};
     std::atomic<bool> send_reply_{false};
     bool timeout_ = false;
 };

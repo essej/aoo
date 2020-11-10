@@ -1349,10 +1349,9 @@ peer::~peer(){
     LOG_DEBUG("destroy peer " << *this);
 }
 
-bool peer::match(const ip_address &addr) const {
-    auto real_addr = address_.load();
-    if (real_addr){
-        return *real_addr == addr;
+bool peer::match(const ip_address& addr) const {
+    if (connected()){
+        return real_address_ == addr;
     } else {
         return true; // match all messages!
     }
@@ -1374,15 +1373,14 @@ void peer::send(time_tag now){
     auto elapsed_time = time_tag::duration(start_time_, now);
     auto delta = elapsed_time - last_pingtime_;
 
-    auto real_addr = address_.load();
-    if (real_addr){
+    if (connected()){
         // send regular ping
         if (delta >= client_->ping_interval()){
             char buf[64];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
             msg << osc::BeginMessage(AOO_NET_MSG_PEER_PING) << osc::EndMessage;
 
-            client_->send_message_udp(msg.Data(), msg.Size(), *real_addr);
+            client_->send_message_udp(msg.Data(), msg.Size(), real_address_);
 
             last_pingtime_ = elapsed_time;
         }
@@ -1393,7 +1391,7 @@ void peer::send(time_tag now){
             osc::OutboundPacketStream msg(buf, sizeof(buf));
             msg << osc::BeginMessage(AOO_NET_MSG_PEER_REPLY) << osc::EndMessage;
 
-            client_->send_message_udp(msg.Data(), msg.Size(), *real_addr);
+            client_->send_message_udp(msg.Data(), msg.Size(), real_address_);
         }
     } else if (!timeout_) {
         // try to establish UDP connection with peer
@@ -1444,7 +1442,7 @@ bool peer::handle_first_message(const osc::ReceivedMessage &msg, int onset,
     for (auto& a : addresses_){
         if (a == addr){
             real_address_ = addr;
-            address_.store(&real_address_);
+            connected_.store(true);
             return true;
         }
     }
@@ -1462,7 +1460,7 @@ bool peer::handle_first_message(const osc::ReceivedMessage &msg, int onset,
                 int32_t id = (it++)->AsInt32();
                 if (group == group_ && user == user_ && id == id_){
                     real_address_ = addr;
-                    address_.store(&real_address_);
+                    connected_.store(true);
                     LOG_WARNING("aoo_client: peer " << *this
                                 << " is located behind a symmetric NAT!");
                     return true;
@@ -1484,7 +1482,7 @@ bool peer::handle_first_message(const osc::ReceivedMessage &msg, int onset,
 void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
                           const ip_address& addr)
 {
-    if (!address_.load()){
+    if (!connected()){
         if (!handle_first_message(msg, onset, addr)){
             return;
         }
@@ -1503,7 +1501,7 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
     auto pattern = msg.AddressPattern() + onset;
     try {
         if (!strcmp(pattern, AOO_NET_MSG_PING)){
-            send_reply_ = true;
+            send_reply_.store(true);
             LOG_DEBUG("aoo_client: got ping from " << *this);
         } else if (!strcmp(pattern, AOO_NET_MSG_REPLY)){
             LOG_DEBUG("aoo_client: got reply from " << *this);
