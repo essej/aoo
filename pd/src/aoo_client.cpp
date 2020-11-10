@@ -506,7 +506,9 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
                     pd_error(obj, "%s: couldn't connect to server: %s",
                              classname(obj), error.msg.c_str());
 
-                    outlet_float(obj->x_stateout, 0); // fail
+                    if (!obj->x_connected){
+                        outlet_float(obj->x_stateout, 0);
+                    }
                 });
             }
 
@@ -530,6 +532,14 @@ static void aoo_client_disconnect(t_aoo_client *x)
                     x->x_connected = false;
 
                     outlet_float(x->x_stateout, 0); // disconnected
+                });
+            } else {
+                auto reply = (const aoo_net_error_reply *)data;
+                t_error_reply error { reply->errorcode, reply->errormsg };
+
+                x->push_reply([x, error=std::move(error)](){
+                    pd_error(x, "%s: couldn't disconnect from server: %s",
+                             classname(x), error.msg.c_str());
                 });
             }
         };
