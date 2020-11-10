@@ -95,7 +95,11 @@ int socket_close(int socket);
 
 int socket_connect(int socket, const ip_address& addr, float timeout);
 
-ip_address socket_address(int socket);
+int socket_address(int socket, ip_address& addr);
+
+int socket_port(int socket);
+
+ip_address::ip_type socket_family(int socket);
 
 int socket_sendto(int socket, const char *buf, int size,
                   const ip_address& address);

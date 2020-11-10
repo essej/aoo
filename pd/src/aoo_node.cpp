@@ -393,7 +393,7 @@ t_node::t_node(t_symbol *s, int socket, int port)
     : x_proxy(this), x_bindsym(s),
       x_socket(socket), x_port(port)
 {
-    x_type = socket_address(socket).type();
+    x_type = socket_family(socket);
 
     pd_bind(&x_proxy.x_pd, x_bindsym);
 

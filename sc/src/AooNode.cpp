@@ -117,7 +117,7 @@ private:
 AooNode::AooNode(World *world, int socket, int port)
     : world_(world), socket_(socket), port_(port)
 {
-    type_ = socket_address(socket).type();
+    type_ = socket_family(socket);
     // start threads
 #if AOO_NODE_POLL
     thread_ = std::thread([this](){

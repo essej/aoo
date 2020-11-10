@@ -418,15 +418,35 @@ int socket_tcp(int port)
 }
 
 
-ip_address socket_address(int socket)
+int socket_address(int socket, ip_address& addr)
 {
     sockaddr_storage ss;
     socklen_t len = sizeof(ss);
     if (getsockname(socket, (sockaddr *)&ss, &len) < 0){
-        socket_error_print("getsockname");
-        return ip_address{};
+        return -1;
     } else {
-        return ip_address((sockaddr *)&ss, len);
+        addr = ip_address((sockaddr *)&ss, len);
+        return 0;
+    }
+}
+
+int socket_port(int socket){
+    ip_address addr;
+    if (socket_address(socket, addr) < 0){
+        socket_error_print("socket_port");
+        return -1;
+    } else {
+        return addr.port();
+    }
+}
+
+ip_address::ip_type socket_family(int socket){
+    ip_address addr;
+    if (socket_address(socket, addr) < 0){
+        socket_error_print("socket_family");
+        return ip_address::Unspec;
+    } else {
+        return addr.type();
     }
 }
 
