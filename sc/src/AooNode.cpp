@@ -170,7 +170,7 @@ AooNode::~AooNode(){
 
     // try to wake up receive thread
     aoo::unique_lock lock(clientMutex_);
-    int didit = socket_signal(socket_, port_);
+    int didit = socket_signal(socket_);
     if (!didit){
         // force wakeup by closing the socket.
         // this is not nice and probably undefined behavior,

@@ -351,8 +351,7 @@ int socket_udp(int port)
 #endif
     if (sock >= 0){
         // finally bind the socket
-        auto result = bind(sock, bindaddr.address(), bindaddr.length());
-        if (result == 0){
+        if (bind(sock, bindaddr.address(), bindaddr.length()) == 0){
             return sock; // success
         } else {
             socket_error_print("bind");
@@ -546,15 +545,16 @@ int socket_setrecvbufsize(int socket, int bufsize)
     return result;
 }
 
-bool socket_signal(int socket, int port)
+bool socket_signal(int socket)
 {
-    // wake up blocking recv() by sending an empty packet
-#if AOO_NET_USE_IPv6
-    auto type = socket_address(socket).type();
-    ip_address addr("localhost", port, type);
-#else
-    ip_address addr("localhost", port, ip_address::IPv4);
-#endif
+    // wake up blocking recv() by sending an empty packet to itself
+    ip_address addr;
+    if (socket_address(socket, addr) < 0){
+        socket_error_print("getsockname");
+        return false;
+    }
+    addr = ip_address("localhost", addr.port(), addr.type());
+
     if (sendto(socket, 0, 0, 0, addr.address(), addr.length()) < 0){
         socket_error_print("sendto");
         return false;

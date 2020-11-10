@@ -113,7 +113,7 @@ int socket_setrecvbufsize(int socket, int bufsize);
 
 int socket_set_nonblocking(int socket, bool nonblocking);
 
-bool socket_signal(int socket, int port);
+bool socket_signal(int socket);
 
 int socket_errno();
 

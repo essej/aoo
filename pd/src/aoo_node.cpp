@@ -471,7 +471,7 @@ t_node::~t_node()
 
     // try to wake up receive thread
     aoo::unique_lock lock(x_clientlock);
-    int didit = socket_signal(x_socket, x_port);
+    int didit = socket_signal(x_socket);
     if (!didit){
         // force wakeup by closing the socket.
         // this is not nice and probably undefined behavior,
