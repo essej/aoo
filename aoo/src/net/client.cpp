@@ -550,6 +550,12 @@ int client::try_connect(const std::string &host, int port){
         LOG_ERROR("aoo_client: couldn't resolve hostname (" << socket_errno() << ")");
         return err;
     }
+
+    LOG_DEBUG("aoo_client: server address list:");
+    for (auto& addr : result){
+        LOG_DEBUG("\t" << addr.name() << " " << addr.port());
+    }
+
     // for actual TCP connection, just pick the first result
     auto& remote = result.front();
     LOG_VERBOSE("try to connect to " << remote.name() << ":" << port);
@@ -778,7 +784,7 @@ void client::send_udp_message(const char *data, int32_t size,
 }
 
 bool client::wait_for_event(float timeout){
-    LOG_DEBUG("aoo_client: wait " << timeout << " seconds");
+    // LOG_DEBUG("aoo_client: wait " << timeout << " seconds");
 
     struct pollfd fds[2];
     fds[0].fd = eventsocket_;
@@ -1268,6 +1274,8 @@ int32_t udp_client::handle_message(const char *data, int32_t n, const ip_address
             // server message
             if (is_server_address(addr)){
                 handle_server_message(msg, onset);
+            } else {
+                LOG_WARNING("aoo_client: got message from unknown server " << addr.name());
             }
         } else {
             LOG_WARNING("aoo_client: got unexpected message!");
@@ -1325,11 +1333,13 @@ void udp_client::handle_server_message(const osc::ReceivedMessage& msg, int onse
                 scoped_lock lock(mutex_);
                 for (auto& a : public_addrlist_){
                     if (a == addr){
+                        LOG_DEBUG("aoo_client: public address " << addr.name()
+                                  << " already received");
                         return; // already received
                     }
                 }
                 public_addrlist_.push_back(addr);
-                LOG_VERBOSE("aoo_client: public address is "
+                LOG_VERBOSE("aoo_client: got public address "
                             << addr.name() << " " << addr.port());
 
                 // check if we got all public addresses

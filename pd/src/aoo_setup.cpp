@@ -18,6 +18,8 @@
 
 #define DEJITTER_THRESHOLD 0.75
 
+#define DEJITTER_DEBUG 0
+
 namespace aoo {
 
 t_class *dejitter_class;
@@ -82,10 +84,11 @@ void t_dejitter::update()
             if (d_osctime_adjusted < oldtime){
                 d_osctime_adjusted = oldtime;
             }
-
-            LOG_DEBUG("time difference: " << (elapsed * 1000.0) << " ms");
-            LOG_DEBUG("jitter offset: " << (d_jitter_offset * 1000.0) << " ms");
-            LOG_DEBUG("adjusted OSC time: " << d_osctime_adjusted);
+        #if DEJITTER_DEBUG
+            DO_LOG("time difference: " << (elapsed * 1000.0) << " ms");
+            DO_LOG("jitter offset: " << (d_jitter_offset * 1000.0) << " ms");
+            DO_LOG("adjusted OSC time: " << d_osctime_adjusted);
+        #endif
         }
         d_last_osctime = osctime;
         d_last_clocktime = now;
