@@ -66,8 +66,6 @@ public:
     }
 private:
     static const char *get_name(const struct sockaddr *addr);
-#ifdef _WIN32
-    // avoid including <winsock2.h>
     // large enough to hold both sockaddr_in
     // and sockaddr_in6 (max. 32 bytes)
     struct {
@@ -76,9 +74,6 @@ private:
         int64_t __ss_align;
         char __ss_pad2[16];
     } address_;
-#else
-    struct sockaddr_storage address_;
-#endif
     socklen_t length_;
 };
 
