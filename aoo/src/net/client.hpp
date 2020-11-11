@@ -92,7 +92,43 @@ enum class client_state {
     connected
 };
 
-class client final : public iclient {
+class udp_client {
+public:
+    udp_client(client& c, int socket, int port)
+        : client_(&c), socket_(socket), port_(port) {}
+
+    int port() const { return port_; }
+
+    void send(time_tag now);
+
+    int32_t handle_message(const char *data, int32_t n, const ip_address& addr);
+
+    void send_message(const char *data, int32_t size, const ip_address& addr);
+
+    void start_handshake(const ip_address& local, std::vector<ip_address>&& remote);
+private:
+    client *client_;
+    int socket_;
+    int port_;
+    ip_address local_address_;
+    std::vector<ip_address> server_addrlist_;
+    std::vector<ip_address> public_addrlist_;
+    shared_mutex mutex_;
+
+    double last_ping_time_ = 0;
+    std::atomic<double> first_ping_time_{0};
+
+    void send_ping();
+
+    void send_server_message(const char *data, int32_t size);
+
+    void handle_server_message(const osc::ReceivedMessage& msg, int onset);
+
+    bool is_server_address(const ip_address& addr);
+};
+
+class client final : public iclient
+{
 public:
     struct icommand {
         virtual ~icommand(){}
@@ -125,7 +161,7 @@ public:
                          const void *addr, int32_t len, int32_t flags) override;
 
     void do_send_message(const char *data, int32_t size, int32_t flags,
-                         const ip_address * vec, int32_t n);
+                         const ip_address* vec, int32_t n);
 
     void perform_send_message(const char *data, int32_t n, int32_t flags);
 
@@ -138,6 +174,9 @@ public:
     int32_t handle_message(const char *data, int32_t n,
                            const void *addr, int32_t len) override;
 
+    bool handle_peer_message(const osc::ReceivedMessage& msg, int onset,
+                             const ip_address& addr);
+
     int32_t send() override;
 
     int32_t events_available() override;
@@ -149,11 +188,14 @@ public:
                     aoo_net_callback cb, void *user);
 
     void perform_connect(const std::string& host, int port,
+                         const std::string& name, const std::string& pwd,
                          aoo_net_callback cb, void *user);
 
     int try_connect(const std::string& host, int port);
 
-    void perform_login();
+    void perform_login(const std::vector<ip_address>& addrlist);
+
+    void perform_timeout();
 
     void do_disconnect(aoo_net_callback cb, void *user);
 
@@ -170,53 +212,53 @@ public:
     void perform_leave_group(const std::string& group,
                              aoo_net_callback cb, void *user);
 
-    double ping_interval() const { return ping_interval_.load(); }
+    double ping_interval() const { return ping_interval_.load(std::memory_order_relaxed); }
 
-    double request_interval() const { return request_interval_.load(); }
+    double request_interval() const { return request_interval_.load(std::memory_order_relaxed); }
 
-    double request_timeout() const { return request_timeout_.load(); }
-
-    void send_message_udp(const char *data, int32_t size, const ip_address& addr);
+    double request_timeout() const { return request_timeout_.load(std::memory_order_relaxed); }
 
     void push_event(std::unique_ptr<ievent> e);
+
+    void push_command(std::unique_ptr<icommand>&& cmd);
+
+    void send_udp_message(const char *data, int32_t size, const ip_address& addr);
+
+    ip_address::ip_type type() const { return type_; }
+
+    double elapsed_time_since(time_tag now) const {
+        return time_tag::duration(start_time_, now);
+    }
+
+    client_state current_state() const { return state_.load(); }
 private:
-    int udpsocket_;
-    int udpport_ = 0;
+    std::unique_ptr<udp_client> udp_client_;
+    int socket_ = -1;
     ip_address::ip_type type_ = ip_address::Unspec;
-    int tcpsocket_ = -1;
-    shared_mutex socket_lock_;
 
-    std::vector<ip_address> remote_addr_;
-    std::vector<ip_address> public_addr_;
-    ip_address local_addr_;
-
+    // ip_address remote_addr_;
+    // ip_address local_addr_;
+    // SLIP buffers
     SLIP sendbuffer_;
     SLIP recvbuffer_;
-    shared_mutex clientlock_;
+    // event
+    std::atomic<bool> quit_{false};
+    int eventsocket_;
     // peers
     std::vector<std::shared_ptr<peer>> peers_;
     aoo::shared_mutex peer_lock_;
-    // user
-    std::string username_;
-    std::string password_;
     // time
     time_tag start_time_;
-    double last_tcp_ping_time_ = 0;
+    double last_ping_time_ = 0;
     // handshake
     std::atomic<client_state> state_{client_state::disconnected};
-    aoo_net_callback connect_callback_ = nullptr;
-    void *connect_userdata_ = nullptr;
-    double last_udp_ping_time_ = 0;
-    double first_udp_ping_time_ = 0;
+    std::string username_;
+    std::string password_;
+    aoo_net_callback callback_;
+    void *userdata_;
     // commands
     lockfree::queue<std::unique_ptr<icommand>> commands_;
     spinlock command_lock_;
-    void push_command(std::unique_ptr<icommand>&& cmd){
-        _scoped_lock<spinlock> lock(command_lock_);
-        if (commands_.write_available()){
-            commands_.write(std::move(cmd));
-        }
-    }
     // peer/group messages
     lockfree::queue<std::unique_ptr<icommand>> messages_;
     // pending request
@@ -225,31 +267,25 @@ private:
     // events
     lockfree::queue<std::unique_ptr<ievent>> events_;
     spinlock event_lock_;
-    // signal
-    std::atomic<bool> quit_{false};
-    int eventsocket_;
     // options
     std::atomic<float> ping_interval_{AOO_NET_CLIENT_PING_INTERVAL * 0.001};
     std::atomic<float> request_interval_{AOO_NET_CLIENT_REQUEST_INTERVAL * 0.001};
     std::atomic<float> request_timeout_{AOO_NET_CLIENT_REQUEST_TIMEOUT * 0.001};
 
-    void send_ping_tcp();
-
-    void send_ping_udp();
-
+    // methods
     bool wait_for_event(float timeout);
 
     void receive_data();
 
-    void send_server_message_tcp(const char *data, int32_t size);
+    bool signal();
 
-    void send_server_message_udp(const char *data, int32_t size);
+    void send_ping();
 
-    void handle_server_message_tcp(const osc::ReceivedMessage& msg);
+    void send_server_message(const char *data, int32_t size);
 
-    void handle_server_bundle_tcp(const osc::ReceivedBundle& bundle);
+    void handle_server_bundle(const osc::ReceivedBundle& bundle);
 
-    void handle_server_message_udp(const osc::ReceivedMessage& msg, int onset);
+    void handle_server_message(const osc::ReceivedMessage& msg);
 
     void handle_login(const osc::ReceivedMessage& msg);
 
@@ -257,14 +293,12 @@ private:
 
     void handle_peer_remove(const osc::ReceivedMessage& msg);
 
-    bool signal();
-
-    void close(bool manual = false);
-
     void on_socket_error(int err);
 
     void on_exception(const char *what, const osc::Exception& err,
                       const char *pattern = nullptr);
+
+    void close(bool manual = false);
 
     /*////////////////////// events /////////////////////*/
 public:
@@ -303,7 +337,6 @@ public:
     };
 
     /*////////////////////// commands ///////////////////*/
-private:
     struct message_cmd : icommand {
         message_cmd(const char *data, int32_t size, int32_t flags)
             : data_(data, size), flags_(flags) {}
@@ -354,15 +387,19 @@ private:
     struct connect_cmd : request_cmd
     {
         connect_cmd(aoo_net_callback cb, void *user,
-                    const std::string &host, int port)
-            : request_cmd(cb, user), host_(host), port_(port){}
+                    const std::string &host, int port,
+                    const std::string& name, const std::string& pwd)
+            : request_cmd(cb, user), host_(host), port_(port),
+              name_(name), pwd_(pwd) {}
 
         void perform(client &obj) override {
-            obj.perform_connect(host_, port_, cb_, user_);
+            obj.perform_connect(host_, port_, name_, pwd_, cb_, user_);
         }
     private:
         std::string host_;
         int port_;
+        std::string name_;
+        std::string pwd_;
     };
 
     struct disconnect_cmd : request_cmd
@@ -377,8 +414,20 @@ private:
 
     struct login_cmd : icommand
     {
+        login_cmd(std::vector<ip_address>&& addrlist)
+            : addrlist_(std::move(addrlist)) {}
+
         void perform(client& obj) override {
-            obj.perform_login();
+            obj.perform_login(addrlist_);
+        }
+    private:
+        std::vector<ip_address> addrlist_;
+    };
+
+    struct timeout_cmd : icommand
+    {
+        void perform(client &obj) override {
+            obj.perform_timeout();
         }
     };
 
