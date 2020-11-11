@@ -71,10 +71,6 @@ typedef struct aoo_net_connect_request {
 } aoo_net_connect_request;
 
 typedef struct aoo_net_connect_reply {
-    const void *public_address;
-    const void *local_address;
-    int32_t public_addrlen;
-    int32_t local_addrlen;
     int32_t user_id;
 } aoo_net_connect_reply;
 
