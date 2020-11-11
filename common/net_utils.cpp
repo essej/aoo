@@ -23,6 +23,7 @@
 
 #include <stdio.h>
 #include <cstring>
+#include <algorithm>
 
 #define DEBUG_ADDRINFO 0
 
@@ -104,7 +105,11 @@ std::vector<ip_address> ip_address::get_list(const std::string &host,
         #if DEBUG_ADDRINFO
             fprintf(stderr, "\t%s\n", get_name(ai->ai_addr));
         #endif
-            result.emplace_back(ai->ai_addr, ai->ai_addrlen);
+            // avoid duplicate entries
+            ip_address addr(ai->ai_addr, ai->ai_addrlen);
+            if (std::find(result.begin(), result.end(), addr) == result.end()){
+                result.push_back(addr);
+            }
         }
     #if DEBUG_ADDRINFO
         fflush(stderr);
