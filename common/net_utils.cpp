@@ -553,7 +553,11 @@ bool socket_signal(int socket)
         socket_error_print("getsockname");
         return false;
     }
-    addr = ip_address("localhost", addr.port(), addr.type());
+    if (addr.type() == ip_address::ip_type::IPv6){
+        addr = ip_address("::1", addr.port(), addr.type());
+    } else {
+        addr = ip_address("127.0.0.1", addr.port(), addr.type());
+    }
 
     if (sendto(socket, 0, 0, 0, addr.address(), addr.length()) < 0){
         socket_error_print("sendto");
