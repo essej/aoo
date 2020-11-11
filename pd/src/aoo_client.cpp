@@ -113,7 +113,10 @@ static void aoo_client_peer_list(t_aoo_client *x)
 
 void aoo_client_send(t_aoo_client *x)
 {
-    x->x_client->send();
+    // avoid potential segfault at startup
+    if (x->x_client){
+        x->x_client->send();
+    }
 }
 
 void aoo_client_handle_message(t_aoo_client *x, const char * data, int32_t n,
