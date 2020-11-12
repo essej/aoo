@@ -140,6 +140,7 @@ private:
 class history_buffer {
 public:
     void clear();
+    bool is_empty() const { return oldest_ < 0; }
     int32_t capacity() const;
     void resize(int32_t n);
     block * find(int32_t seq);
