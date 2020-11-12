@@ -836,6 +836,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
     shared_lock lock(mutex_, std::try_to_lock_t{});
     if (!lock.owns_lock()){
         dropped_ += 1.0;
+        LOG_WARNING("aoo::sink: source_desc::process() would block");
         return false;
     }
 

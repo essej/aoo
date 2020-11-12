@@ -58,23 +58,20 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
     {
         auto newid = as<int32_t>(ptr);
         if (id_.exchange(newid) != newid){
-            unique_lock lock(update_mutex_); // writer lock!
-            update();
+            // if playing, restart
+            auto expected = stream_state::play;
+            state_.compare_exchange_strong(expected, stream_state::start);
         }
         break;
     }
     // stop
     case aoo_opt_stop:
-        play_ = false;
+        state_.store(stream_state::stop);
         break;
     // resume
     case aoo_opt_start:
-    {
-        unique_lock lock(update_mutex_); // writer lock!
-        update();
-        play_ = true;
+        state_.store(stream_state::start);
         break;
-    }
     // format
     case aoo_opt_format:
         CHECKARG(aoo_format);
@@ -512,7 +509,7 @@ int32_t aoo_source_send(aoo_source *src) {
 // We have to make a local copy of the sink list, but this should be
 // rather cheap in comparison to encoding and sending the audio data.
 int32_t aoo::source::send(){
-    if (!play_.load()){
+    if (state_.load() != stream_state::play){
         return false;
     }
 
@@ -542,17 +539,56 @@ int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, 
 }
 
 int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
-    if (!play_){
+    auto state = state_.load();
+    if (state == stream_state::stop){
         return 0; // pausing
+    } else if (state == stream_state::start){
+        // start -> play
+        // the mutex should be uncontended most of the time.
+        // although it is repeatedly locked in send(), the latter
+        // returns early if we're not already playing.
+        unique_lock lock(update_mutex_, std::try_to_lock_t{}); // writer lock!
+        if (!lock.owns_lock()){
+            dropped_++;
+            LOG_WARNING("aoo::source::process() would block");
+            return 0; // ?
+        }
+
+        resampler_.reset();
+
+        audioqueue_.reset();
+        srqueue_.reset();
+
+        start_new_stream();
+
+        // check if we have been stopped in the meantime
+        auto expected = stream_state::start;
+        if (!state_.compare_exchange_strong(expected, stream_state::play)){
+            return 0; // pausing
+        }
+    }
+
+    // the mutex should be available most of the time.
+    // it is only locked exclusively when setting certain options,
+    // e.g. changing the buffer size.
+    shared_lock lock(update_mutex_, std::try_to_lock_t{}); // reader lock!
+    if (!lock.owns_lock()){
+        dropped_++;
+        LOG_WARNING("aoo::source::process() would block");
+        return 0; // ?
+    }
+
+    if (!encoder_){
+        return 0;
     }
 
     // update time DLL filter
     double error;
-    auto state = timer_.update(t, error);
-    if (state == timer::state::reset){
+    auto timerstate = timer_.update(t, error);
+    if (timerstate == timer::state::reset){
         LOG_DEBUG("setup time DLL filter for source");
         dll_.setup(samplerate_, blocksize_, bandwidth_, 0);
-    } else if (state == timer::state::error){
+    } else if (timerstate == timer::state::error){
         // skip blocks
         double period = (double)blocksize_ / (double)samplerate_;
         int nblocks = error / period + 0.5;
@@ -566,14 +602,6 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
         DO_LOG("time elapsed: " << elapsed << ", period: " << dll_.period()
                << ", samplerate: " << dll_.samplerate());
     #endif
-    }
-
-    // the mutex should be uncontended most of the time.
-    // NOTE: We could use try_lock() and skip the block if we couldn't aquire the lock.
-    shared_lock lock(update_mutex_);
-
-    if (!encoder_){
-        return 0;
     }
 
     // non-interleaved -> interleaved

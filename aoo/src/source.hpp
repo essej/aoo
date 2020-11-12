@@ -157,7 +157,12 @@ class source final : public isource {
     std::atomic<int32_t> dropped_{0};
     std::atomic<float> lastpingtime_{0};
     std::atomic<bool> format_changed_{false};
-    std::atomic<bool> play_{false};
+    enum class stream_state {
+        stop,
+        start,
+        play
+    };
+    std::atomic<stream_state> state_{stream_state::stop};
     // timing
     time_dll dll_;
     timer timer_;
