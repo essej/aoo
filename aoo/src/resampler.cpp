@@ -9,7 +9,7 @@ namespace aoo {
 #define AOO_RESAMPLER_SPACE 2.5
 
 void dynamic_resampler::setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_t srto, int32_t nchannels){
-    clear();
+    reset();
     nchannels_ = nchannels;
     ideal_ratio_ = (double)srto / (double)srfrom;
     int32_t blocksize;
@@ -28,7 +28,7 @@ void dynamic_resampler::setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_
     update(srfrom, srto);
 }
 
-void dynamic_resampler::clear(){
+void dynamic_resampler::reset(){
     ratio_ = 1;
     rdpos_ = 0;
     wrpos_ = 0;

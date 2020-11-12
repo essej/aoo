@@ -9,7 +9,7 @@ namespace aoo {
 class dynamic_resampler {
 public:
     void setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_t srto, int32_t nchannels);
-    void clear();
+    void reset();
     void update(double srfrom, double srto);
     bool write(const aoo_sample* data, int32_t n);
     bool read(aoo_sample* data, int32_t n);
