@@ -747,20 +747,30 @@ sink_desc * source::find_sink(const ip_address& addr, aoo_id id){
 }
 
 int32_t source::set_format(aoo_format &f){
-    unique_lock lock(update_mutex_); // writer lock!
-    if (!encoder_ || strcmp(encoder_->name(), f.codec)){
-        auto codec = aoo::find_codec(f.codec);
-        if (codec){
-            encoder_ = codec->create_encoder();
-        } else {
-            LOG_ERROR("codec '" << f.codec << "' not supported!");
-            return 0;
-        }
-        if (!encoder_){
-            LOG_ERROR("couldn't create encoder!");
-            return 0;
+    std::unique_ptr<encoder> new_encoder;
+    {
+        // create a new encoder if necessary
+        shared_scoped_lock lock(update_mutex_); // reader lock!
+        if (!encoder_ || strcmp(encoder_->name(), f.codec)){
+            auto codec = aoo::find_codec(f.codec);
+            if (codec){
+                new_encoder = codec->create_encoder();
+                if (!new_encoder){
+                    LOG_ERROR("couldn't create encoder!");
+                    return 0;
+                }
+            } else {
+                LOG_ERROR("codec '" << f.codec << "' not supported!");
+                return 0;
+            }
         }
     }
+
+    scoped_lock lock(update_mutex_); // writer lock!
+    if (new_encoder){
+        encoder_ = std::move(new_encoder);
+    }
+
     if (encoder_->set_format(f)){
         update();
         return 1;
