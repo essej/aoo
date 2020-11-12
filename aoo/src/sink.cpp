@@ -666,6 +666,8 @@ void source_desc::do_update(const sink &s){
         jitterbuffer_.resize(nbuffers + 4); // extra capacity for network jitter (allows lower buffersizes)
 
         streamstate_.reset();
+
+        dropped_ = 0;
     }
 }
 
@@ -824,8 +826,11 @@ bool source_desc::decode(const sink& s){
 bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
     // synchronize with handle_format() and update()!
     // the mutex should be uncontended most of the time.
-    // NOTE: We could use try_lock() and skip the block if we couldn't aquire the lock.
-    shared_lock lock(mutex_);
+    shared_lock lock(mutex_, std::try_to_lock_t{});
+    if (!lock.owns_lock()){
+        dropped_ += 1.0;
+        return false;
+    }
 
     if (!decoder_){
         return false;
@@ -837,10 +842,16 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
 #endif
 
     while (audioqueue_.read_available() && infoqueue_.read_available()){
-        // write audio into resampler
-        if (!resampler_.write(audioqueue_.read_data(), audioqueue_.blocksize())){
-            break;
+        if (dropped_ > 0.1){
+            // skip audio and decrement block counter proportionally
+            dropped_ -= s.real_samplerate() / samplerate_;
+        } else {
+            // write audio into resampler
+            if (!resampler_.write(audioqueue_.read_data(), audioqueue_.blocksize())){
+                break;
+            }
         }
+
         audioqueue_.read_commit();
 
         // get block info and set current channel + samplerate

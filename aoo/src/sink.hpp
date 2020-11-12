@@ -208,6 +208,7 @@ private:
     int32_t channel_ = 0; // recent channel onset
     double samplerate_ = 0; // recent samplerate
     stream_state streamstate_;
+    double dropped_ = 0;
     // queues and buffers
     jitter_buffer jitterbuffer_;
     lockfree::queue<aoo_sample> audioqueue_;
