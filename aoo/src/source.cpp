@@ -84,10 +84,9 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
     {
         CHECKARG(int32_t);
         auto bufsize = std::max<int32_t>(as<int32_t>(ptr), 0);
-        if (bufsize != buffersize_){
-            buffersize_ = bufsize;
-            unique_lock lock(update_mutex_); // writer lock!
-            update();
+        if (buffersize_.exchange(bufsize) != bufsize){
+            scoped_lock lock(update_mutex_); // writer lock!
+            update_audioqueue();
         }
         break;
     }
@@ -330,22 +329,37 @@ int32_t aoo_source_setup(aoo_source *src, int32_t samplerate,
 
 int32_t aoo::source::setup(int32_t samplerate,
                            int32_t blocksize, int32_t nchannels){
-    unique_lock lock(update_mutex_); // writer lock!
+    scoped_lock lock(update_mutex_); // writer lock!
     if (samplerate > 0 && blocksize > 0 && nchannels > 0)
     {
-        nchannels_ = nchannels;
-        samplerate_ = samplerate;
-        blocksize_ = blocksize;
+        if (samplerate != samplerate_ || blocksize != blocksize_ ||
+            nchannels != nchannels_)
+        {
+            nchannels_ = nchannels;
+            samplerate_ = samplerate;
+            blocksize_ = blocksize;
 
-        // reset timer + time DLL filter
-        timer_.setup(samplerate_, blocksize_);
+            if (encoder_){
+                update_audioqueue();
 
-        update();
+                if (need_resampling()){
+                    update_resampler();
+                }
+
+                update_historybuffer();
+            }
+
+            // this will also implicitly reset the time DLL filter (see process())
+            timer_.setup(samplerate_, blocksize_);
+
+            // always start new stream
+            start_new_stream();
+        }
 
         return 1;
+    } else {
+        return 0;
     }
-
-    return 0;
 }
 
 int32_t aoo_source_add_sink(aoo_source *src, const void *address,
@@ -580,7 +594,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
         }
     }
 
-    if (encoder_->blocksize() != blocksize_ || encoder_->samplerate() != samplerate_){
+    if (need_resampling()){
         // go through resampler
         if (!resampler_.write(buf, nsamples)){
             // LOG_DEBUG("couldn't process");
@@ -772,7 +786,16 @@ int32_t source::set_format(aoo_format &f){
     }
 
     if (encoder_->set_format(f)){
-        update();
+        update_audioqueue();
+
+        if (need_resampling()){
+            update_resampler();
+        }
+
+        update_historybuffer();
+
+        start_new_stream();
+
         return 1;
     } else {
         return 0;
@@ -786,72 +809,69 @@ int32_t source::make_salt(){
     return dist(mt);
 }
 
-// always called with update_mutex_ locked!
-void source::update(){
-    if (!encoder_){
-        return;
+bool source::need_resampling() const {
+    return blocksize_ != encoder_->blocksize() || samplerate_ != encoder_->samplerate();
+}
+
+void source::start_new_stream(){
+    // reset time DLL to be on the safe side
+    timer_.reset();
+    lastpingtime_.store(-1000); // force first ping
+
+    // Start new sequence and resend format.
+    // We naturally want to do this when setting the format,
+    // but it's good to also do it in setup() to eliminate
+    // any timing gaps.
+    salt_ = make_salt();
+    sequence_ = 0;
+    dropped_ = 0;
+
+    if (!history_.is_empty()){
+        history_.clear(); // !
     }
-    assert(encoder_->blocksize() > 0 && encoder_->samplerate() > 0);
 
-    if (blocksize_ > 0){
-        assert(samplerate_ > 0 && nchannels_ > 0);
+    shared_lock lock2(sink_mutex_);
+    for (auto& sink : sinks_){
+        sink.format_changed.store(true);
+    }
+    // notify send_format()
+    format_changed_.store(true);
+}
 
+void source::update_audioqueue(){
+    if (encoder_){
         // recalculate buffersize from ms to samples
-        int32_t bufsize = (double)buffersize_ * 0.001 * encoder_->samplerate();
+        int32_t bufsize = (double)buffersize_.load() * 0.001 * encoder_->samplerate();
         auto d = div(bufsize, encoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         // minimum buffer size increases when upsampling!
         int32_t minbuffers = std::ceil((double)encoder_->samplerate() / (double)samplerate_);
         nbuffers = std::max<int32_t>(nbuffers, minbuffers);
-        LOG_DEBUG("aoo_source: buffersize (ms): " << buffersize_
+        LOG_DEBUG("aoo_source: buffersize (ms): " << buffersize_.load()
                   << ", samples: " << bufsize << ", nbuffers = " << nbuffers);
 
         // resize audio buffer
         auto nsamples = encoder_->blocksize() * encoder_->nchannels();
         audioqueue_.resize(nbuffers * nsamples, nsamples);
+
         srqueue_.resize(nbuffers, 1);
+    }
+}
 
-        // resampler
-        if (blocksize_ != encoder_->blocksize() || samplerate_ != encoder_->samplerate()){
-            resampler_.setup(blocksize_, encoder_->blocksize(),
-                             samplerate_, encoder_->samplerate(), encoder_->nchannels());
-        } else {
-            // don't need to resample
-            resampler_.clear();
-        }
-
-        // history buffer
-        update_historybuffer();
-
-        // reset time DLL to be on the safe side
-        timer_.reset();
-        lastpingtime_ = -1000; // force first ping
-
-        // Start new sequence and resend format.
-        // We naturally want to do this when setting the format,
-        // but it's good to also do it in setup() to eliminate
-        // any timing gaps.
-        salt_ = make_salt();
-        sequence_ = 0;
-        dropped_ = 0;
-        {
-            shared_lock lock2(sink_mutex_);
-            for (auto& sink : sinks_){
-                sink.format_changed = true;
-            }
-            // notify send_format()
-            format_changed_ = true;
-        }
+void source::update_resampler(){
+    if (encoder_){
+        resampler_.setup(blocksize_, encoder_->blocksize(),
+                         samplerate_, encoder_->samplerate(), encoder_->nchannels());
     }
 }
 
 void source::update_historybuffer(){
-    if (samplerate_ > 0 && encoder_){
-        int32_t bufsize = (double)resend_buffersize_ * 0.001 * encoder_->samplerate();
+    if (encoder_){
+        int32_t bufsize = (double)resend_buffersize_.load() * 0.001 * encoder_->samplerate();
         auto d = div(bufsize, encoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         history_.resize(nbuffers);
-        LOG_DEBUG("aoo_source: history buffersize (ms): " << resend_buffersize_
+        LOG_DEBUG("aoo_source: history buffersize (ms): " << resend_buffersize_.load()
                   << ", samples: " << bufsize << ", nbuffers = " << nbuffers);
 
     }

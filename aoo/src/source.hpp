@@ -184,13 +184,21 @@ class source final : public isource {
     std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };
 
     // helper methods
-    sink_desc * find_sink(const ip_address& addr, aoo_id id);
-
     int32_t set_format(aoo_format& f);
+
+    sink_desc * find_sink(const ip_address& addr, aoo_id id);
 
     int32_t make_salt();
 
-    void update();
+    bool need_resampling() const;
+
+    void start_new_stream();
+
+    void update_timer();
+
+    void update_audioqueue();
+
+    void update_resampler();
 
     void update_historybuffer();
 
