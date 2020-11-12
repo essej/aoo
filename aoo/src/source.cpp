@@ -99,12 +99,12 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
         auto packetsize = as<int32_t>(ptr);
         if (packetsize < minpacketsize){
             LOG_WARNING("packet size too small! setting to " << minpacketsize);
-            packetsize_ = minpacketsize;
+            packetsize_.store(minpacketsize);
         } else if (packetsize > AOO_MAXPACKETSIZE){
             LOG_WARNING("packet size too large! setting to " << AOO_MAXPACKETSIZE);
-            packetsize_ = AOO_MAXPACKETSIZE;
+            packetsize_.store(AOO_MAXPACKETSIZE);
         } else {
-            packetsize_ = packetsize;
+            packetsize_.store(packetsize);
         }
         break;
     }
@@ -112,33 +112,38 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
     case aoo_opt_timefilter_bandwidth:
         CHECKARG(float);
         // time filter
-        bandwidth_ = as<float>(ptr);
+        bandwidth_.store(as<float>(ptr));
         timer_.reset(); // will update
         break;
     // ping interval
     case aoo_opt_ping_interval:
+    {
         CHECKARG(int32_t);
-        ping_interval_ = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
+        auto interval = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
+        ping_interval_.store(interval);
         break;
+    }
     // resend buffer size
     case aoo_opt_resend_buffersize:
     {
         CHECKARG(int32_t);
         // empty buffer is allowed! (no resending)
         auto bufsize = std::max<int32_t>(as<int32_t>(ptr), 0);
-        if (bufsize != resend_buffersize_){
-            resend_buffersize_ = bufsize;
-            unique_lock lock(update_mutex_); // writer lock!
+        if (resend_buffersize_.exchange(bufsize) != bufsize){
+            scoped_lock lock(update_mutex_); // writer lock!
             update_historybuffer();
         }
         break;
     }
     // ping interval
     case aoo_opt_redundancy:
+    {
         CHECKARG(int32_t);
         // limit it somehow, 16 times is already very high
-        redundancy_ = std::max<int32_t>(1, std::min<int32_t>(16, as<int32_t>(ptr)));
+        auto redundancy = std::max<int32_t>(1, std::min<int32_t>(16, as<int32_t>(ptr)));
+        redundancy_.store(redundancy);
         break;
+    }
     // unknown
     default:
         LOG_WARNING("aoo_source: unsupported option " << opt);
@@ -174,32 +179,32 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
     // buffer size
     case aoo_opt_buffersize:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = buffersize_;
+        as<int32_t>(ptr) = buffersize_.load();
         break;
     // time filter bandwidth
     case aoo_opt_timefilter_bandwidth:
         CHECKARG(float);
-        as<float>(ptr) = bandwidth_;
+        as<float>(ptr) = bandwidth_.load();
         break;
     // resend buffer size
     case aoo_opt_resend_buffersize:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = resend_buffersize_;
+        as<int32_t>(ptr) = resend_buffersize_.load();
         break;
     // packetsize
     case aoo_opt_packetsize:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = packetsize_;
+        as<int32_t>(ptr) = packetsize_.load();
         break;
     // ping interval
     case aoo_opt_ping_interval:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = ping_interval_ * 1000;
+        as<int32_t>(ptr) = ping_interval_.load() * 1000.0;
         break;
     // ping interval
     case aoo_opt_redundancy:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = redundancy_;
+        as<int32_t>(ptr) = redundancy_.load();
         break;
     // unknown
     default:
@@ -231,7 +236,7 @@ int32_t aoo::source::set_sinkoption(const void *address, int32_t addrlen, aoo_id
             shared_lock lock(sink_mutex_); // reader lock!
             for (auto& sink : sinks_){
                 if (sink.address == addr){
-                    sink.channel = chn;
+                    sink.channel.store(chn);
                 }
             }
             LOG_VERBOSE("aoo_source: send to all sinks on channel " << chn);
@@ -259,7 +264,7 @@ int32_t aoo::source::set_sinkoption(const void *address, int32_t addrlen, aoo_id
             {
                 CHECKARG(int32_t);
                 auto chn = as<int32_t>(ptr);
-                sink->channel = chn;
+                sink->channel.store(chn);
                 LOG_VERBOSE("aoo_source: send to sink " << sink->id
                             << " on channel " << chn);
                 break;
@@ -301,7 +306,7 @@ int32_t aoo::source::get_sinkoption(const void *address, int32_t addrlen, aoo_id
         // channel onset
         case aoo_opt_channelonset:
             CHECKARG(int32_t);
-            as<int32_t>(p) = sink->channel;
+            as<int32_t>(p) = sink->channel.load();
             break;
         // unknown
         default:
