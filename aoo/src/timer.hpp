@@ -38,8 +38,6 @@ private:
     std::array<double, buffersize_> buffer_;
     int32_t head_ = 0;
 #endif
-
-    spinlock lock_;
 };
 
 }

@@ -3,8 +3,8 @@
 namespace aoo {
 
 timer::timer(const timer& other){
-    last_ = other.last_.load();
-    elapsed_ = other.elapsed_.load();
+    last_ = other.last_.load(std::memory_order_relaxed);
+    elapsed_ = other.elapsed_.load(std::memory_order_relaxed);
 #if AOO_TIMEFILTER_CHECK
     static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
     delta_ = other.delta_;
@@ -15,8 +15,8 @@ timer::timer(const timer& other){
 }
 
 timer& timer::operator=(const timer& other){
-    last_ = other.last_.load();
-    elapsed_ = other.elapsed_.load();
+    last_ = other.last_.load(std::memory_order_relaxed);
+    elapsed_ = other.elapsed_.load(std::memory_order_relaxed);
 #if AOO_TIMEFILTER_CHECK
     static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
     delta_ = other.delta_;
@@ -29,39 +29,30 @@ timer& timer::operator=(const timer& other){
 
 void timer::setup(int32_t sr, int32_t blocksize){
 #if AOO_TIMEFILTER_CHECK
-    delta_ = (double)blocksize / (double)sr; // shouldn't tear
+    delta_ = (double)blocksize / (double)sr; // shouldn't tear...
 #endif
     reset();
 }
 
 void timer::reset(){
-    _scoped_lock<spinlock> l(lock_);
-    last_ = 0;
-    elapsed_ = 0;
-#if AOO_TIMEFILTER_CHECK
-    // fill ringbuffer with nominal delta
-    std::fill(buffer_.begin(), buffer_.end(), delta_);
-    sum_ = delta_ * buffer_.size(); // initial sum
-    head_ = 0;
-#endif
+    last_.store(0, std::memory_order_relaxed);
 }
 
 double timer::get_elapsed() const {
-    return elapsed_.load();
+    return elapsed_.load(std::memory_order_relaxed);
 }
 
 time_tag timer::get_absolute() const {
-    return last_.load();
+    return last_.load(std::memory_order_relaxed);
 }
 
 timer::state timer::update(time_tag t, double& error){
-    std::unique_lock<spinlock> l(lock_);
-    time_tag last = last_.load();
+    time_tag last = last_.exchange(t, std::memory_order_relaxed);
     if (!last.is_empty()){
-        last_ = t; // first!
-
         auto delta = time_tag::duration(last, t);
-        elapsed_ = elapsed_ + delta;
+
+        auto elapsed = elapsed_.load(std::memory_order_relaxed) + delta;
+        elapsed_.store(elapsed, std::memory_order_relaxed);
 
     #if AOO_TIMEFILTER_CHECK
         // check delta and return error
@@ -94,8 +85,6 @@ timer::state timer::update(time_tag t, double& error){
         auto average_error = average - delta_;
         auto last_error = delta - delta_;
 
-        l.unlock();
-
         if (average_error > delta_ * AOO_TIMEFILTER_TOLERANCE){
             LOG_WARNING("DSP tick(s) took too long!");
             LOG_VERBOSE("last period: " << (delta * 1000.0)
@@ -116,7 +105,15 @@ timer::state timer::update(time_tag t, double& error){
 
         return state::ok;
     } else {
-        last_ = t;
+        // reset
+        elapsed_.store(0, std::memory_order_relaxed);
+    #if AOO_TIMEFILTER_CHECK
+        // fill ringbuffer with nominal delta
+        std::fill(buffer_.begin(), buffer_.end(), delta_);
+        sum_ = delta_ * buffer_.size(); // initial sum
+        head_ = 0;
+    #endif
+
         return state::reset;
     }
 }
