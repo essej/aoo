@@ -168,6 +168,7 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
         break;
     // format
     case aoo_opt_format:
+    {
         CHECKARG(aoo_format_storage);
         if (encoder_){
             shared_lock lock(update_mutex_); // read lock!
@@ -176,6 +177,7 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
             return 0;
         }
         break;
+    }
     // buffer size
     case aoo_opt_buffersize:
         CHECKARG(int32_t);
