@@ -675,25 +675,32 @@ void source_desc::do_update(const sink &s){
 
 int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format& f,
                                    const char *settings, int32_t size){
-    // take writer lock!
-    unique_lock lock(mutex_);
-
-    salt_ = salt;
-
-    // create/change decoder if needed
-    if (!decoder_ || strcmp(decoder_->name(), f.codec)){
-        auto c = aoo::find_codec(f.codec);
-        if (c){
-            decoder_ = c->create_decoder();
-        } else {
-            LOG_ERROR("codec '" << f.codec << "' not supported!");
-            return 0;
-        }
-        if (!decoder_){
-            LOG_ERROR("couldn't create decoder!");
-            return 0;
+    std::unique_ptr<decoder> new_decoder;
+    {
+        // create a new decoder if necessary
+        shared_scoped_lock rdlock(mutex_); // reader lock!
+        // create/change decoder if needed
+        if (!decoder_ || strcmp(decoder_->name(), f.codec)){
+            auto c = aoo::find_codec(f.codec);
+            if (c){
+                new_decoder = c->create_decoder();
+                if (!new_decoder){
+                    LOG_ERROR("couldn't create decoder!");
+                    return 0;
+                }
+            } else {
+                LOG_ERROR("codec '" << f.codec << "' not supported!");
+                return 0;
+            }
         }
     }
+
+    scoped_lock lock(mutex_); // writer lock!
+    if (new_decoder){
+        decoder_ = std::move(new_decoder);
+    }
+
+    salt_ = salt;
 
     // read format
     decoder_->read_format(f, settings, size);
