@@ -148,7 +148,7 @@ public:
     int32_t get_format(aoo_format_storage& format);
 
     // methods
-    void update(const sink& s);
+    void reset(const sink& s);
 
     int32_t handle_format(const sink& s, int32_t salt, const aoo_format& f,
                           const char *settings, int32_t size);
@@ -178,7 +178,7 @@ private:
         int32_t sequence;
         int32_t frame;
     };
-    void do_update(const sink& s);
+    void update(const sink& s);
 
     // handle messages
     void recover(const char *reason, int32_t n = 0);
@@ -318,7 +318,7 @@ private:
     // helper methods
     source_desc *find_source(const ip_address& addr, aoo_id id);
 
-    void update_sources();
+    void reset_sources();
 
     int32_t handle_format_message(const osc::ReceivedMessage& msg,
                                   const ip_address& addr);

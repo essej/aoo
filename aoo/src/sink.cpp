@@ -127,7 +127,7 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
     }
     // reset
     case aoo_opt_reset:
-        update_sources();
+        reset_sources();
         // reset time DLL
         timer_.reset();
         break;
@@ -138,7 +138,7 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         auto bufsize = std::max<int32_t>(0, as<int32_t>(ptr));
         if (bufsize != buffersize_){
             buffersize_ = bufsize;
-            update_sources();
+            reset_sources();
         }
         break;
     }
@@ -254,7 +254,7 @@ int32_t aoo::sink::set_sourceoption(const void *address, int32_t addrlen, aoo_id
         switch (opt){
         // reset
         case aoo_opt_reset:
-            src->update(*this);
+            src->reset(*this);
             break;
         // unsupported
         default:
@@ -483,9 +483,9 @@ aoo::source_desc * sink::find_source(const ip_address& addr, aoo_id id){
     return nullptr;
 }
 
-void sink::update_sources(){
+void sink::reset_sources(){
     for (auto& src : sources_){
-        src.update(*this);
+        src.reset(*this);
     }
 }
 
@@ -618,13 +618,13 @@ int32_t source_desc::get_format(aoo_format_storage &format){
     }
 }
 
-void source_desc::update(const sink &s){
+void source_desc::reset(const sink &s){
     // take writer lock!
     unique_lock lock(mutex_);
-    do_update(s);
+    update(s);
 }
 
-void source_desc::do_update(const sink &s){
+void source_desc::update(const sink &s){
     // resize audio ring buffer
     if (decoder_ && decoder_->blocksize() > 0 && decoder_->samplerate() > 0){
         // recalculate buffersize from ms to samples
@@ -695,7 +695,7 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
         }
     }
 
-    scoped_lock lock(mutex_); // writer lock!
+    unique_lock lock(mutex_); // writer lock!
     if (new_decoder){
         decoder_ = std::move(new_decoder);
     }
@@ -705,7 +705,9 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
     // read format
     decoder_->read_format(f, settings, size);
 
-    do_update(s);
+    update(s);
+
+    lock.unlock();
 
     // push event
     event e;
@@ -831,7 +833,7 @@ bool source_desc::decode(const sink& s){
 }
 
 bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
-    // synchronize with handle_format() and update()!
+    // synchronize with update()!
     // the mutex should be uncontended most of the time.
     shared_lock lock(mutex_, std::try_to_lock_t{});
     if (!lock.owns_lock()){
