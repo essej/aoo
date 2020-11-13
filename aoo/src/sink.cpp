@@ -28,18 +28,20 @@ int32_t aoo::sink::setup(int32_t samplerate,
                          int32_t blocksize, int32_t nchannels){
     if (samplerate > 0 && blocksize > 0 && nchannels > 0)
     {
-        nchannels_ = nchannels;
-        samplerate_ = samplerate;
-        blocksize_ = blocksize;
+        if (samplerate != samplerate_ || blocksize != blocksize_ ||
+            nchannels != nchannels_)
+        {
+            nchannels_ = nchannels;
+            samplerate_ = samplerate;
+            blocksize_ = blocksize;
 
-        buffer_.resize(blocksize_ * nchannels_);
+            buffer_.resize(blocksize_ * nchannels_);
 
-        // reset timer + time DLL filter
-        timer_.setup(samplerate_, blocksize_);
+            // reset timer + time DLL filter
+            timer_.setup(samplerate_, blocksize_);
 
-        // don't need to lock
-        update_sources();
-
+            reset_sources();
+        }
         return 1;
     }
     return 0;
