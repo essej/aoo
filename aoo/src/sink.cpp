@@ -856,11 +856,47 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         return false;
     }
 
+    // record stream state
+    int32_t lost = streamstate_.get_lost();
+    int32_t reordered = streamstate_.get_reordered();
+    int32_t resent = streamstate_.get_resent();
+    int32_t gap = streamstate_.get_gap();
+
+    event e;
+    e.source.address = addr_.address();
+    e.source.addrlen = addr_.length();
+    e.source.id = id_;
+    if (lost > 0){
+        // push packet loss event
+        e.type = AOO_BLOCK_LOST_EVENT;
+        e.block_loss.count = lost;
+        push_event(e);
+    }
+    if (reordered > 0){
+        // push packet reorder event
+        e.type = AOO_BLOCK_REORDERED_EVENT;
+        e.block_reorder.count = reordered;
+        push_event(e);
+    }
+    if (resent > 0){
+        // push packet resend event
+        e.type = AOO_BLOCK_RESENT_EVENT;
+        e.block_resend.count = resent;
+        push_event(e);
+    }
+    if (gap > 0){
+        // push packet gap event
+        e.type = AOO_BLOCK_GAP_EVENT;
+        e.block_gap.count = gap;
+        push_event(e);
+    }
+
 #if AOO_DEBUG_AUDIO_BUFFER
     auto capacity = audioqueue_.capacity() / audioqueue_.blocksize();
     DO_LOG("audioqueue: " << audioqueue_.read_available() << " / " << capacity);
 #endif
 
+    // read audio queue
     while (audioqueue_.read_available() && infoqueue_.read_available()){
         if (dropped_ > 0.1){
             // skip audio and decrement block counter proportionally
@@ -879,42 +915,8 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         infoqueue_.read(info);
         channel_ = info.channel;
         samplerate_ = info.sr;
-
-        // record stream state
-        int32_t lost = streamstate_.get_lost();
-        int32_t reordered = streamstate_.get_reordered();
-        int32_t resent = streamstate_.get_resent();
-        int32_t gap = streamstate_.get_gap();
-
-        event e;
-        e.source.address = addr_.address();
-        e.source.addrlen = addr_.length();
-        e.source.id = id_;
-        if (lost > 0){
-            // push packet loss event
-            e.type = AOO_BLOCK_LOST_EVENT;
-            e.block_loss.count = lost;
-            push_event(e);
-        }
-        if (reordered > 0){
-            // push packet reorder event
-            e.type = AOO_BLOCK_REORDERED_EVENT;
-            e.block_reorder.count = reordered;
-            push_event(e);
-        }
-        if (resent > 0){
-            // push packet resend event
-            e.type = AOO_BLOCK_RESENT_EVENT;
-            e.block_resend.count = resent;
-            push_event(e);
-        }
-        if (gap > 0){
-            // push packet gap event
-            e.type = AOO_BLOCK_GAP_EVENT;
-            e.block_gap.count = gap;
-            push_event(e);
-        }
     }
+
     // update resampler
     resampler_.update(samplerate_, s.real_samplerate());
     // read samples from resampler
