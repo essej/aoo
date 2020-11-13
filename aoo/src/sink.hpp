@@ -103,7 +103,7 @@ private:
     std::atomic<int32_t> reordered_{0};
     std::atomic<int32_t> resent_{0};
     std::atomic<int32_t> gap_{0};
-    std::atomic<int32_t> xrun_{false};
+    std::atomic<int32_t> xrun_{0};
     std::atomic<aoo_source_state> state_{AOO_SOURCE_STATE_STOP};
     std::atomic<invitation_state> invite_{NONE};
     std::atomic<bool> underrun_{false};

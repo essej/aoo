@@ -137,17 +137,20 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         CHECKARG(int32_t);
         auto bufsize = std::max<int32_t>(0, as<int32_t>(ptr));
         if (bufsize != buffersize_){
-            buffersize_ = bufsize;
+            buffersize_.store(bufsize);
             reset_sources();
         }
         break;
     }
     // timefilter bandwidth
     case aoo_opt_timefilter_bandwidth:
+    {
         CHECKARG(float);
-        bandwidth_ = std::max<double>(0, std::min<double>(1, as<float>(ptr)));
+        auto bw = std::max<double>(0, std::min<double>(1, as<float>(ptr)));
+        bandwidth_.store(bw);
         timer_.reset(); // will update time DLL and reset timer
         break;
+    }
     // packetsize
     case aoo_opt_packetsize:
     {
@@ -156,30 +159,36 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         auto packetsize = as<int32_t>(ptr);
         if (packetsize < minpacketsize){
             LOG_WARNING("packet size too small! setting to " << minpacketsize);
-            packetsize_ = minpacketsize;
+            packetsize_.store(minpacketsize);
         } else if (packetsize > AOO_MAXPACKETSIZE){
             LOG_WARNING("packet size too large! setting to " << AOO_MAXPACKETSIZE);
-            packetsize_ = AOO_MAXPACKETSIZE;
+            packetsize_.store(AOO_MAXPACKETSIZE);
         } else {
-            packetsize_ = packetsize;
+            packetsize_.store(packetsize);
         }
         break;
     }
     // resend limit
     case aoo_opt_resend_enable:
         CHECKARG(int32_t);
-        resend_enabled_ = as<int32_t>(ptr);
+        resend_enabled_.store(as<int32_t>(ptr));
         break;
     // resend interval
     case aoo_opt_resend_interval:
+    {
         CHECKARG(int32_t);
-        resend_interval_ = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
+        auto interval = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
+        resend_interval_.store(interval);
         break;
+    }
     // resend maxnumframes
     case aoo_opt_resend_maxnumframes:
+    {
         CHECKARG(int32_t);
-        resend_maxnumframes_ = std::max<int32_t>(1, as<int32_t>(ptr));
+        auto maxnumframes = std::max<int32_t>(1, as<int32_t>(ptr));
+        resend_maxnumframes_.store(maxnumframes);
         break;
+    }
     // unknown
     default:
         LOG_WARNING("aoo_sink: unsupported option " << opt);
@@ -203,32 +212,32 @@ int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
     // buffer size
     case aoo_opt_buffersize:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = buffersize_;
+        as<int32_t>(ptr) = buffersize_.load();
         break;
     // timefilter bandwidth
     case aoo_opt_timefilter_bandwidth:
         CHECKARG(float);
-        as<float>(ptr) = bandwidth_;
+        as<float>(ptr) = bandwidth_.load();
         break;
     // resend packetsize
     case aoo_opt_packetsize:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = packetsize_;
+        as<int32_t>(ptr) = packetsize_.load();
         break;
     // resend limit
     case aoo_opt_resend_enable:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = resend_enabled_;
+        as<int32_t>(ptr) = resend_enabled_.load();
         break;
     // resend interval
     case aoo_opt_resend_interval:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = resend_interval_ * 1000;
+        as<int32_t>(ptr) = resend_interval_.load() * 1000;
         break;
     // resend maxnumframes
     case aoo_opt_resend_maxnumframes:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = resend_maxnumframes_;
+        as<int32_t>(ptr) = resend_maxnumframes_.load();
         break;
     // unknown
     default:
