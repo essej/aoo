@@ -119,9 +119,7 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         CHECKARG(int32_t);
         auto newid = as<int32_t>(ptr);
         if (id_.exchange(newid) != newid){
-            // LATER think of a way to safely clear source list
-            update_sources();
-            timer_.reset();
+            // LATER clear source list here
         }
         break;
     }
@@ -662,6 +660,7 @@ void source_desc::update(const sink &s){
         // setup resampler
         resampler_.setup(decoder_->blocksize(), s.blocksize(),
                          decoder_->samplerate(), s.samplerate(), decoder_->nchannels());
+
         // resize block queue
         jitterbuffer_.resize(nbuffers + 4); // extra capacity for network jitter (allows lower buffersizes)
 
