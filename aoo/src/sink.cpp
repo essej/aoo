@@ -483,7 +483,7 @@ namespace aoo {
 
 aoo::source_desc * sink::find_source(const ip_address& addr, aoo_id id){
     for (auto& src : sources_){
-        if ((src.address() == addr) && (src.id() == id)){
+        if (src.match(addr, id)){
             return &src;
         }
     }
