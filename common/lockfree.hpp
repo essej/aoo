@@ -135,6 +135,7 @@ public:
 
     template<typename U>
     class base_iterator {
+        friend class list;
         U *node_;
     public:
         base_iterator()
@@ -144,7 +145,7 @@ public:
         base_iterator(const base_iterator&) = default;
         base_iterator& operator=(const base_iterator&) = default;
         T& operator*() { return node_->data_; }
-        T* operator->() { return &node_->data; }
+        T* operator->() { return &node_->data_; }
         base_iterator& operator++() {
             node_ = node_->next_;
             return *this;
@@ -199,7 +200,7 @@ public:
     }
 
     // not thread-safe!
-    node* take(iterator it){
+    std::pair<node*, iterator> take(iterator it){
         node* prev = nullptr;
         auto n = head_.load(std::memory_order_relaxed);
         while (n){
@@ -209,12 +210,12 @@ public:
                 } else {
                     head_.store(n->next_);
                 }
-                return n;
+                return { n, n->next_ };
             }
             prev = n;
             n = n->next_;
         }
-        return nullptr;
+        return { nullptr, iterator{} };
     }
 
     T& front() { return *begin(); }
