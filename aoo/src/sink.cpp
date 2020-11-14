@@ -59,9 +59,7 @@ int32_t aoo::sink::invite_source(const void *address, int32_t addrlen, aoo_id id
     // try to find existing source
     auto src = find_source(addr, id);
     if (!src){
-        // discard data message, add source and request format!
-        sources_.emplace_front(addr, id, 0);
-        src = &sources_.front();
+        src = add_source(addr, id, 0);
     }
     src->request_invite();
     return 1;
@@ -492,6 +490,12 @@ aoo::source_desc * sink::find_source(const ip_address& addr, aoo_id id){
     return nullptr;
 }
 
+source_desc * sink::add_source(const ip_address& addr, aoo_id id, int32_t salt){
+    // add new source
+    sources_.emplace_front(addr, id, salt);
+    return &sources_.front();
+}
+
 void sink::reset_sources(){
     for (auto& src : sources_){
         src.reset(*this);
@@ -531,13 +535,9 @@ int32_t sink::handle_format_message(const osc::ReceivedMessage& msg,
     }
     // try to find existing source
     auto src = find_source(addr, id);
-
     if (!src){
-        // not found - add new source
-        sources_.emplace_front(addr, id, salt);
-        src = &sources_.front();
+        src = add_source(addr, id, salt);
     }
-
     return src->handle_format(*this, salt, f, (const char *)settings, size);
 }
 
@@ -571,9 +571,7 @@ int32_t sink::handle_data_message(const osc::ReceivedMessage& msg,
         return src->handle_data(*this, salt, d);
     } else {
         // discard data message, add source and request format!
-        sources_.emplace_front(addr, id, salt);
-        src = &sources_.front();
-        src->request_format();
+        add_source(addr, id, salt)->request_format();
         return 0;
     }
 }

@@ -318,6 +318,8 @@ private:
     // helper methods
     source_desc *find_source(const ip_address& addr, aoo_id id);
 
+    source_desc *add_source(const ip_address& addr, aoo_id id, int32_t salt);
+
     void reset_sources();
 
     int32_t handle_format_message(const osc::ReceivedMessage& msg,
