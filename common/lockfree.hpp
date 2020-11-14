@@ -166,12 +166,19 @@ public:
 
     list()
         : head_(nullptr){}
+
     list(const list&) = delete;
+
     list(list&& other){
         // not sure...
         auto head = other.head_.exchange(nullptr);
         head_.store(head);
     }
+
+    ~list(){
+        clear();
+    }
+
     list& operator=(list&& other){
         // not sure...
         auto head = other.head_.exchange(nullptr);
@@ -182,15 +189,32 @@ public:
     template<typename... U>
     void emplace_front(U&&... args){
         auto n = new node(std::forward<U>(args)...);
-        while (true){
-            auto head = head_.load(std::memory_order_acquire);
-            n->next_ = head;
-            // check if the head has changed and update it atomically
-            if (head_.compare_exchange_strong(head, n)){
-                break;
+        push_front(n);
+    }
+
+    void push_front(node* n){
+        n->next_ = head_.load(std::memory_order_relaxed);
+        // check if the head has changed and update it atomically
+        while (!head_.compare_exchange_weak(n->next_, n)) ;
+    }
+
+    // not thread-safe!
+    node* take(iterator it){
+        node* prev = nullptr;
+        auto n = head_.load(std::memory_order_relaxed);
+        while (n){
+            if (it.node_ == n){
+                if (prev){
+                    prev->next_ = n->next_;
+                } else {
+                    head_.store(n->next_);
+                }
+                return n;
             }
+            prev = n;
+            n = n->next_;
         }
-        size_++;
+        return nullptr;
     }
 
     T& front() { return *begin(); }
@@ -198,11 +222,11 @@ public:
     T& front() const { return *begin(); }
 
     iterator begin(){
-        return iterator(head_.load(std::memory_order_acquire));
+        return iterator(head_.load(std::memory_order_relaxed));
     }
 
     const_iterator begin() const {
-        return const_iterator(head_.load(std::memory_order_acquire));
+        return const_iterator(head_.load(std::memory_order_relaxed));
     }
 
     iterator end(){
@@ -213,11 +237,12 @@ public:
         return const_iterator();
     }
 
-    int32_t size() const { return size_.load(std::memory_order_acquire); }
+    int32_t empty() const {
+        return head_.load(std::memory_order_relaxed) != nullptr;
+    }
 
     // the deletion of nodes itself is not thread-safe!!!
     void clear(){
-        size_ = 0;
         auto it = head_.exchange(nullptr);
         while (it){
             auto next = it->next_;
@@ -225,12 +250,8 @@ public:
             it = next;
         }
     }
-    ~list(){
-        clear();
-    }
 private:
     std::atomic<node *> head_{nullptr};
-    std::atomic<int32_t> size_{0};
 };
 
 } // lockfree
