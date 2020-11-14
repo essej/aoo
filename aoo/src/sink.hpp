@@ -147,7 +147,11 @@ public:
         return (addr_ == addr) && (id_ == id);
     }
 
-    bool has_events() const { return  eventqueue_.read_available() > 0; }
+    bool is_active() const { return true; }
+
+    bool has_events() const {
+        return  eventqueue_.read_available() > 0;
+    }
 
     int32_t get_format(aoo_format_storage& format);
 
@@ -314,6 +318,7 @@ private:
     std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
     // the sources
     lockfree::list<source_desc> sources_;
+    lockfree::list<source_desc> free_sources_;
     shared_mutex source_mutex_;
     // timing
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
