@@ -309,6 +309,14 @@ public:
         return get_option(aoo_opt_resend_maxnumframes, AOO_ARG(n));
     }
 
+    int32_t set_source_timeout(int32_t n){
+        return set_option(aoo_opt_source_timeout, AOO_ARG(n));
+    }
+
+    int32_t get_source_timeout(int32_t& n){
+        return get_option(aoo_opt_source_timeout, AOO_ARG(n));
+    }
+
     virtual int32_t set_option(int32_t opt, void *ptr, int32_t size) = 0;
     virtual int32_t get_option(int32_t opt, void *ptr, int32_t size) = 0;
 

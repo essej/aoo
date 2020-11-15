@@ -99,6 +99,11 @@ void aoo_set_logfunction(aoo_logfunction fn);
  #define AOO_RESEND_MAXNUMFRAMES 16
 #endif
 
+// max. number of ms to wait before removing source
+#ifndef AOO_SOURCE_TIMEOUT
+ #define AOO_SOURCE_TIMEOUT 1000
+#endif
+
 // initialize AoO library - call only once!
 AOO_API void aoo_initialize(void);
 
@@ -315,7 +320,11 @@ typedef enum aoo_option
     // Redundancy (int32_t)
     // ---
     // The number of times each frames is sent (default = 1)
-    aoo_opt_redundancy
+    aoo_opt_redundancy,
+    // Source timeout ins ms (int32_t)
+    // ---
+    // Time to wait before removing inactive source.
+    aoo_opt_source_timeout
 } aoo_option;
 
 #define AOO_ARG(x) &x, sizeof(x)
@@ -607,6 +616,14 @@ static inline int32_t aoo_sink_set_resend_maxnumframes(aoo_sink *sink, int32_t n
 
 static inline int32_t aoo_sink_get_resend_maxnumframes(aoo_sink *sink, int32_t *n) {
     return aoo_sink_get_option(sink, aoo_opt_resend_maxnumframes, AOO_ARG(*n));
+}
+
+static inline int32_t aoo_sink_set_source_timeout(aoo_sink *sink, int32_t n) {
+    return aoo_sink_set_option(sink, aoo_opt_source_timeout, AOO_ARG(n));
+}
+
+static inline int32_t aoo_sink_get_source_timeout(aoo_sink *sink, int32_t *n) {
+    return aoo_sink_get_option(sink, aoo_opt_source_timeout, AOO_ARG(*n));
 }
 
 static inline int32_t aoo_sink_reset_source(aoo_sink *sink, const void *address,
