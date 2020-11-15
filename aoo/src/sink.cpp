@@ -193,6 +193,14 @@ int32_t aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         resend_maxnumframes_.store(maxnumframes);
         break;
     }
+    // source timeout
+    case aoo_opt_source_timeout:
+    {
+        CHECKARG(int32_t);
+        auto timeout = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
+        source_timeout_.store(timeout);
+        break;
+    }
     // unknown
     default:
         LOG_WARNING("aoo_sink: unsupported option " << opt);
@@ -236,12 +244,16 @@ int32_t aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
     // resend interval
     case aoo_opt_resend_interval:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = resend_interval_.load() * 1000;
+        as<int32_t>(ptr) = resend_interval_.load() * 1000.0;
         break;
     // resend maxnumframes
     case aoo_opt_resend_maxnumframes:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = resend_maxnumframes_.load();
+        break;
+    case aoo_opt_source_timeout:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = source_timeout_.load() * 1000.0;
         break;
     // unknown
     default:
@@ -436,13 +448,15 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
 
     // no lock needed - sources are only removed in this thread!
     for (auto it = sources_.begin(); it != sources_.end();){
-        if (it->process(*this, buffer_.data(), buffer_.size())){
+        if (it->process(*this, buffer_.data(), blocksize_, t)){
             didsomething = true;
-        } else if (!it->is_active()){
+        } else if (!it->is_active(*this)){
             // move source to garbage list (will be freed in decode()),
             // but only if we can grab the lock!
             unique_lock lock(source_mutex_, std::try_to_lock_t {}); // writer lock!
             if (lock.owns_lock()){
+                LOG_VERBOSE("aoo::sink: removed inactive source " << it->address().name()
+                            << " " << it->address().port());
                 auto result = sources_.take(it);
                 free_sources_.push_front(result.first);
                 it = result.second;
@@ -651,6 +665,16 @@ source_desc::source_desc(const ip_address& addr, aoo_id id, int32_t salt)
     eventqueue_.write(e); // no need to lock
     LOG_DEBUG("add new source with id " << id);
     resendqueue_.resize(256, 1);
+}
+
+bool source_desc::is_active(const sink& s) const {
+    if (lastprocesstime_.is_empty()){
+        // initialize
+        lastprocesstime_ = s.absolute_time();
+        return true;
+    }
+    auto delta = time_tag::duration(lastprocesstime_, s.absolute_time());
+    return delta < s.source_timeout();
 }
 
 int32_t source_desc::get_format(aoo_format_storage &format){
@@ -878,7 +902,9 @@ bool source_desc::decode(const sink& s){
     return true;
 }
 
-bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
+bool source_desc::process(const sink& s, aoo_sample *buffer,
+                          int32_t nsamples, time_tag tt)
+{
     // synchronize with update()!
     // the mutex should be uncontended most of the time.
     shared_lock lock(mutex_, std::try_to_lock_t{});
@@ -966,9 +992,8 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
         for (int i = 0; i < nchannels; ++i){
             auto chn = i + channel_;
             if (chn < s.nchannels()){
-                auto n = s.blocksize();
-                auto out = buffer + n * chn;
-                for (int j = 0; j < n; ++j){
+                auto out = buffer + nsamples * chn;
+                for (int j = 0; j < nsamples; ++j){
                     out[j] += readbuf[j * nchannels + i];
                 }
             }
@@ -986,6 +1011,8 @@ bool source_desc::process(const sink& s, aoo_sample *buffer, int32_t size){
             e.source_state.state = AOO_SOURCE_STATE_PLAY;
             push_event(e);
         }
+
+        lastprocesstime_ = tt;
 
         return true;
     } else {

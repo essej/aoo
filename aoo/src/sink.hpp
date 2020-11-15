@@ -147,7 +147,7 @@ public:
         return (addr_ == addr) && (id_ == id);
     }
 
-    bool is_active() const { return true; }
+    bool is_active(const sink& s) const;
 
     bool has_events() const {
         return  eventqueue_.read_available() > 0;
@@ -172,7 +172,7 @@ public:
 
     bool decode(const sink& s);
 
-    bool process(const sink& s, aoo_sample *buffer, int32_t size);
+    bool process(const sink& s, aoo_sample *buffer, int32_t nsamples, time_tag tt);
 
     void add_xrun(int32_t n){ streamstate_.add_xrun(n); }
 
@@ -217,6 +217,7 @@ private:
     double samplerate_ = 0; // recent samplerate
     stream_state streamstate_;
     double dropped_ = 0;
+    mutable time_tag lastprocesstime_;
     // queues and buffers
     jitter_buffer jitterbuffer_;
     lockfree::queue<aoo_sample> audioqueue_;
@@ -292,6 +293,7 @@ public:
     float resend_interval() const { return resend_interval_; }
 
     int32_t resend_maxnumframes() const { return resend_maxnumframes_; }
+    float source_timeout() const { return source_timeout_.load(std::memory_order_relaxed); }
 
     double elapsed_time() const { return timer_.get_elapsed(); }
 
@@ -316,6 +318,7 @@ private:
     std::atomic<bool> resend_enabled_{AOO_RESEND_ENABLE};
     std::atomic<float> resend_interval_{ AOO_RESEND_INTERVAL * 0.001 };
     std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
+    std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT * 0.001 };
     // the sources
     lockfree::list<source_desc> sources_;
     lockfree::list<source_desc> free_sources_;
