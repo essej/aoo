@@ -29,32 +29,31 @@ class source;
 
 struct endpoint {
     endpoint() = default;
-    endpoint(const source& _owner, const ip_address& _address, int32_t _id)
-        : owner(&_owner), address(_address), id(_id){}
+    endpoint(const ip_address& _address, int32_t _id)
+        : address(_address), id(_id){}
 
     // data
-    const source *owner = nullptr;
     ip_address address;
     aoo_id id = 0;
 
     // methods
-    void send_data(aoo_id src, int32_t salt, const data_packet& data) const;
+    void send_data(const source& s, aoo_id src, int32_t salt, const data_packet& data) const;
 
-    void send_format(aoo_id src, int32_t salt, const aoo_format& f,
+    void send_format(const source& s, aoo_id src, int32_t salt, const aoo_format& f,
                      const char *options, int32_t size) const;
 
-    void send_ping(aoo_id src, time_tag t) const;
+    void send_ping(const source& s, aoo_id src, time_tag t) const;
 
-    void send(const char *data, int32_t n) const;
+    void send(const source& s, const char *data, int32_t n) const;
 };
 
 using format_request = endpoint;
 
 struct data_request : endpoint {
     data_request() = default;
-    data_request(const source& _owner, const ip_address& _addr, int32_t _id,
+    data_request(const ip_address& _addr, int32_t _id,
                  int32_t _salt, int32_t _sequence, int32_t _frame)
-        : endpoint(_owner, _addr, _id),
+        : endpoint(_addr, _id),
           salt(_salt), sequence(_sequence), frame(_frame){}
     int32_t salt = 0;
     int32_t sequence = 0;
@@ -68,20 +67,19 @@ struct invite_request : endpoint {
     };
 
     invite_request() = default;
-    invite_request(const source& _owner, const ip_address& _addr, int32_t _id, int32_t _type)
-        : endpoint(_owner, _addr, _id), type(_type){}
+    invite_request(const ip_address& _addr, int32_t _id, int32_t _type)
+        : endpoint(_addr, _id), type(_type){}
     int32_t type = 0;
 };
 
 struct sink_desc : endpoint {
-    sink_desc(const source& _owner, const ip_address& _addr, int32_t _id)
-        : endpoint(_owner, _addr, _id), channel(0), format_changed(true) {}
+    sink_desc(const ip_address& _addr, int32_t _id)
+        : endpoint(_addr, _id), channel(0), format_changed(true) {}
     sink_desc(const sink_desc& other)
-        : endpoint(*other.owner, other.address, other.id),
+        : endpoint(other.address, other.id),
           channel(other.channel.load()),
           format_changed(other.format_changed.load()){}
     sink_desc& operator=(const sink_desc& other){
-        owner = other.owner;
         address = other.address;
         id = other.id;
         channel = other.channel.load();

@@ -388,7 +388,7 @@ int32_t aoo::source::add_sink(const void *address, int32_t addrlen, aoo_id id){
         }
     }
     // add sink descriptor
-    sinks_.emplace_back(*this, addr, id);
+    sinks_.emplace_back(addr, id);
     // notify send_format()
     format_changed_ = true;
 
@@ -686,7 +686,7 @@ namespace aoo {
 
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
-void endpoint::send_data(aoo_id src, int32_t salt, const aoo::data_packet& d) const{
+void endpoint::send_data(const source& s, aoo_id src, int32_t salt, const aoo::data_packet& d) const {
     // call without lock!
 
     char buf[AOO_MAXPACKETSIZE];
@@ -712,15 +712,15 @@ void endpoint::send_data(aoo_id src, int32_t salt, const aoo::data_packet& d) co
         << d.totalsize << d.nframes << d.framenum
         << osc::Blob(d.data, d.size) << osc::EndMessage;
 
-    send(msg.Data(), msg.Size());
+    send(s, msg.Data(), msg.Size());
 }
 
 // /aoo/sink/<id>/format <src> <version> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
 
 uint32_t make_version();
 
-void endpoint::send_format(aoo_id src, int32_t salt, const aoo_format& f,
-                                const char *options, int32_t size) const {
+void endpoint::send_format(const source& s, aoo_id src, int32_t salt, const aoo_format& f,
+                           const char *options, int32_t size) const {
     // call without lock!
     LOG_DEBUG("send format to " << id << " (salt = " << salt << ")");
 
@@ -742,12 +742,12 @@ void endpoint::send_format(aoo_id src, int32_t salt, const aoo_format& f,
     msg << src << (int32_t)make_version() << salt << f.nchannels << f.samplerate << f.blocksize
         << f.codec << osc::Blob(options, size) << osc::EndMessage;
 
-    send(msg.Data(), msg.Size());
+    send(s, msg.Data(), msg.Size());
 }
 
 // /aoo/sink/<id>/ping <src> <time>
 
-void endpoint::send_ping(aoo_id src, time_tag t) const {
+void endpoint::send_ping(const source& s, aoo_id src, time_tag t) const {
     // call without lock!
     LOG_DEBUG("send ping to " << id);
 
@@ -768,11 +768,11 @@ void endpoint::send_ping(aoo_id src, time_tag t) const {
 
     msg << src << osc::TimeTag(t) << osc::EndMessage;
 
-    send(msg.Data(), msg.Size());
+    send(s, msg.Data(), msg.Size());
 }
 
-void endpoint::send(const char *data, int32_t n) const {
-    owner->do_send(data, n, address);
+void endpoint::send(const source& s, const char *data, int32_t n) const {
+    s.do_send(data, n, address);
 }
 
 /*///////////////////////// source ////////////////////////////////*/
@@ -858,7 +858,7 @@ void source::start_new_stream(){
         history_.clear(); // !
     }
 
-    shared_lock lock2(sink_mutex_);
+    shared_lock lock(sink_mutex_);
     for (auto& sink : sinks_){
         sink.format_changed.store(true);
     }
@@ -939,14 +939,14 @@ bool source::send_format(){
         int numsinks = 0;
         for (auto& sink : sinks_){
             if (sink.format_changed.exchange(false)){
-                new (&sinks[numsinks++]) aoo::endpoint (*this, sink.address, sink.id);
+                new (&sinks[numsinks++]) aoo::endpoint (sink.address, sink.id);
             }
         }
         sinklock.unlock();
         // now we don't hold any lock!
 
         for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_format(id(), salt, fmt, settings, size);
+            sinks[i].send_format(*this, id(), salt, fmt, settings, size);
         }
     }
 
@@ -954,7 +954,7 @@ bool source::send_format(){
         while (formatrequestqueue_.read_available()){
             format_request ep;
             formatrequestqueue_.read(ep);
-            ep.send_format(id(), salt, fmt, settings, size);
+            ep.send_format(*this, id(), salt, fmt, settings, size);
         }
     }
 
@@ -1015,7 +1015,7 @@ bool source::resend_data(){
                     d.framenum = i;
                     d.data = frameptr[i];
                     d.size = framesize[i];
-                    request.send_data(id(), salt, d);
+                    request.send_data(*this, id(), salt, d);
                 }
             } else {
                 // Copy a single frame
@@ -1030,7 +1030,7 @@ bool source::resend_data(){
                     d.framenum = request.frame;
                     d.data = sendbuffer_.data();
                     d.size = size;
-                    request.send_data(id(), salt, d);
+                    request.send_data(*this, id(), salt, d);
                 } else {
                     LOG_ERROR("frame number " << request.frame << " out of range!");
                 }
@@ -1081,7 +1081,7 @@ bool source::send_data(){
 
         // send block to sinks
         for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_data(id(), salt, d);
+            sinks[i].send_data(*this, id(), salt, d);
         }
         --dropped_;
     } else if (audioqueue_.read_available() && srqueue_.read_available()){
@@ -1131,7 +1131,7 @@ bool source::send_data(){
                     d.size = n;
                     for (int i = 0; i < numsinks; ++i){
                         d.channel = sinks[i].channel;
-                        sinks[i].send_data(id(), salt, d);
+                        sinks[i].send_data(*this, id(), salt, d);
                     }
                 };
 
@@ -1187,7 +1187,7 @@ bool source::send_ping(){
         auto tt = timer_.get_absolute();
 
         for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_ping(id(), tt);
+            sinks[i].send_ping(*this, id(), tt);
         }
 
         lastpingtime_ = elapsed;
@@ -1222,7 +1222,7 @@ void source::handle_format_request(const osc::ReceivedMessage& msg,
 
     if (sink){
         if (formatrequestqueue_.write_available()){
-            formatrequestqueue_.write(aoo::format_request { *this, addr, id });
+            formatrequestqueue_.write(aoo::format_request { addr, id });
         }
     } else {
         LOG_WARNING("ignoring '" << AOO_MSG_FORMAT << "' message: sink not found");
@@ -1250,7 +1250,7 @@ void source::handle_data_request(const osc::ReceivedMessage& msg,
             auto seq = (it++)->AsInt32();
             auto frame = (it++)->AsInt32();
             if (datarequestqueue_.write_available()){
-                datarequestqueue_.write(data_request{ *this, addr, id, salt, seq, frame });
+                datarequestqueue_.write(data_request{ addr, id, salt, seq, frame });
             }
         }
     } else {
