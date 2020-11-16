@@ -284,15 +284,16 @@ public:
 
     int32_t blocksize() const { return blocksize_; }
 
-    int32_t buffersize() const { return buffersize_; }
+    int32_t buffersize() const { return buffersize_.load(std::memory_order_relaxed); }
 
-    int32_t packetsize() const { return packetsize_; }
+    int32_t packetsize() const { return packetsize_.load(std::memory_order_relaxed); }
 
-    bool resend_enabled() const { return resend_enabled_; }
+    bool resend_enabled() const { return resend_enabled_.load(std::memory_order_relaxed); }
 
-    float resend_interval() const { return resend_interval_; }
+    float resend_interval() const { return resend_interval_.load(std::memory_order_relaxed); }
 
-    int32_t resend_maxnumframes() const { return resend_maxnumframes_; }
+    int32_t resend_maxnumframes() const { return resend_maxnumframes_.load(std::memory_order_relaxed); }
+
     float source_timeout() const { return source_timeout_.load(std::memory_order_relaxed); }
 
     double elapsed_time() const { return timer_.get_elapsed(); }
