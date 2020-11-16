@@ -117,13 +117,31 @@ struct block_info {
     int32_t channel;
 };
 
-class sink;
+struct event
+{
+    event() = default;
 
-class source_desc {
-public:
-    union event
-    {
-        aoo_event_type type;
+    event(aoo_event_type type, const ip_address& addr, aoo_id id){
+        memcpy(addr_, addr.address(), addr.length());
+        source.type = type;
+        source.address = addr_;
+        source.addrlen = addr.length();
+        source.id = id;
+    }
+
+    event(const event& other){
+        memcpy(this, &other, sizeof(event)); // ugh
+        source.address = addr_;
+    }
+
+    event& operator=(const event& other){
+        memcpy(this, &other, sizeof(event)); // ugh
+        source.address = addr_;
+        return *this;
+    }
+
+    union {
+        aoo_event_type type_;
         aoo_event event_;
         aoo_source_event source;
         aoo_ping_event ping;
@@ -133,7 +151,14 @@ public:
         aoo_block_resent_event block_resend;
         aoo_block_gap_event block_gap;
     };
+private:
+    char addr_[ip_address::max_length];
+};
 
+class sink;
+
+class source_desc {
+public:
     source_desc(const ip_address& addr, aoo_id id, int32_t salt);
     source_desc(const source_desc& other) = delete;
     source_desc& operator=(const source_desc& other) = delete;

@@ -657,11 +657,7 @@ source_desc::source_desc(const ip_address& addr, aoo_id id, int32_t salt)
 {
     eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);
     // push "add" event
-    event e;
-    e.source.type = AOO_SOURCE_ADD_EVENT;
-    e.source.address = addr_.address();
-    e.source.addrlen = addr_.length();
-    e.source.id = id;
+    event e(AOO_SOURCE_ADD_EVENT, addr, id);
     eventqueue_.write(e); // no need to lock
     LOG_DEBUG("add new source with id " << id);
     resendqueue_.resize(256, 1);
@@ -780,11 +776,7 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
     lock.unlock();
 
     // push event
-    event e;
-    e.type = AOO_SOURCE_FORMAT_EVENT;
-    e.source.address = addr_.address();
-    e.source.addrlen = addr_.length();
-    e.source.id = id_;
+    event e(AOO_SOURCE_FORMAT_EVENT, addr_, id_);
     push_event(e);
 
     return 1;
@@ -861,11 +853,7 @@ int32_t source_desc::handle_ping(const sink &s, time_tag tt){
     streamstate_.set_ping(tt, tt2);
 
     // push "ping" event
-    event e;
-    e.type = AOO_PING_EVENT;
-    e.ping.address = addr_.address();
-    e.ping.addrlen = addr_.length();
-    e.ping.id = id_;
+    event e(AOO_PING_EVENT, addr_, id_);
     e.ping.tt1 = tt;
     e.ping.tt2 = tt2;
     e.ping.tt3 = 0;
@@ -924,31 +912,27 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
     int32_t resent = streamstate_.get_resent();
     int32_t gap = streamstate_.get_gap();
 
-    event e;
-    e.source.address = addr_.address();
-    e.source.addrlen = addr_.length();
-    e.source.id = id_;
     if (lost > 0){
         // push packet loss event
-        e.type = AOO_BLOCK_LOST_EVENT;
+        event e(AOO_BLOCK_LOST_EVENT, addr_, id_);
         e.block_loss.count = lost;
         push_event(e);
     }
     if (reordered > 0){
         // push packet reorder event
-        e.type = AOO_BLOCK_REORDERED_EVENT;
+        event e(AOO_BLOCK_REORDERED_EVENT, addr_, id_);
         e.block_reorder.count = reordered;
         push_event(e);
     }
     if (resent > 0){
         // push packet resend event
-        e.type = AOO_BLOCK_RESENT_EVENT;
+        event e(AOO_BLOCK_RESENT_EVENT, addr_, id_);
         e.block_resend.count = resent;
         push_event(e);
     }
     if (gap > 0){
         // push packet gap event
-        e.type = AOO_BLOCK_GAP_EVENT;
+        event e(AOO_BLOCK_GAP_EVENT, addr_, id_);
         e.block_gap.count = gap;
         push_event(e);
     }
@@ -1003,11 +987,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
 
         if (streamstate_.update_state(AOO_SOURCE_STATE_PLAY)){
             // push "start" event
-            event e;
-            e.type = AOO_SOURCE_STATE_EVENT;
-            e.source.address = addr_.address();
-            e.source.addrlen = addr_.length();
-            e.source_state.id = id_;
+            event e(AOO_SOURCE_STATE_EVENT, addr_, id_);
             e.source_state.state = AOO_SOURCE_STATE_PLAY;
             push_event(e);
         }
@@ -1018,11 +998,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
     } else {
         // buffer ran out -> push "stop" event
         if (streamstate_.update_state(AOO_SOURCE_STATE_STOP)){
-            event e;
-            e.type = AOO_SOURCE_STATE_EVENT;
-            e.source_state.address = addr_.address();
-            e.source_state.addrlen = addr_.length();
-            e.source_state.id = id_;
+            event e(AOO_SOURCE_STATE_EVENT, addr_, id_);
             e.source_state.state = AOO_SOURCE_STATE_STOP;
             push_event(e);
         }

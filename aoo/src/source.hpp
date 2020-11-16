@@ -94,12 +94,37 @@ struct sink_desc : endpoint {
 
 class source final : public isource {
  public:
-    union event
-    {
-        aoo_event_type type;
-        aoo_event event_;
-        aoo_sink_event sink;
-        aoo_ping_event ping;
+    struct event {
+        event() = default;
+
+        event(aoo_event_type type, const ip_address& addr, aoo_id id){
+            memcpy(&addr_, addr.address(), addr.length());
+            sink.type = type;
+            sink.address = &addr_;
+            sink.addrlen = addr.length();
+            sink.id = id;
+        }
+
+        event(const event& other){
+            memcpy(this, &other, sizeof(event)); // ugh
+            sink.address = addr_;
+        }
+
+        event& operator=(const event& other){
+            memcpy(this, &other, sizeof(event)); // ugh
+            sink.address = addr_;
+            return *this;
+        }
+
+        union
+        {
+            aoo_event_type type_;
+            aoo_event event_;
+            aoo_sink_event sink;
+            aoo_ping_event ping;
+        };
+    private:
+        char addr_[ip_address::max_length];
     };
 
     source(aoo_id id, aoo_replyfn replyfn, void *user);

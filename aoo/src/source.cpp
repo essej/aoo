@@ -1271,12 +1271,8 @@ void source::handle_invite(const osc::ReceivedMessage& msg,
     if (!sink){
         // push "invite" event
         if (eventqueue_.write_available()){
-            event e;
-            e.type = AOO_INVITE_EVENT;
-            e.sink.address = sink->address.address();
-            e.sink.addrlen = sink->address.length();
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
-            e.sink.id = id;
+            event e(AOO_INVITE_EVENT, addr, id);
             eventqueue_.write(e);
         }
     } else {
@@ -1297,12 +1293,8 @@ void source::handle_uninvite(const osc::ReceivedMessage& msg,
     if (sink){
         // push "uninvite" event
         if (eventqueue_.write_available()){
-            event e;
-            e.type = AOO_UNINVITE_EVENT;
-            e.sink.address = sink->address.address();
-            e.sink.addrlen = sink->address.length();
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
-            e.sink.id = id;
+            event e(AOO_UNINVITE_EVENT, addr, id);
             eventqueue_.write(e);
         }
     } else {
@@ -1327,12 +1319,8 @@ void source::handle_ping(const osc::ReceivedMessage& msg,
     if (sink){
         // push "ping" event
         if (eventqueue_.write_available()){
-            event e;
-            e.type = AOO_PING_EVENT;
-            e.sink.address = sink->address.address();
-            e.sink.addrlen = sink->address.length();
             // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
-            e.sink.id = id;
+            event e(AOO_PING_EVENT, addr, id);
             e.ping.tt1 = tt1;
             e.ping.tt2 = tt2;
             e.ping.lost_blocks = lost_blocks;

@@ -124,7 +124,6 @@ class queue {
 
 template<typename T>
 class list {
-public:
     struct node {
         node* next_;
         T data_;
@@ -132,7 +131,7 @@ public:
         node(U&&... args)
             : next_(nullptr), data_(std::forward<U>(args)...) {}
     };
-
+public:
     template<typename U>
     class base_iterator {
         friend class list;
