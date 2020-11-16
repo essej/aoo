@@ -64,6 +64,7 @@ public:
     socklen_t *length_ptr() {
         return &length_;
     }
+    static const socklen_t max_length = 32;
 private:
     static const char *get_name(const struct sockaddr *addr);
     // large enough to hold both sockaddr_in

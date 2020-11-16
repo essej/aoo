@@ -32,6 +32,8 @@ namespace aoo {
 /*///////////////////////// ip_address /////////////////////////////*/
 
 ip_address::ip_address(){
+    static_assert(sizeof(address_) == max_length,
+                  "wrong max_length value");
 #if AOO_NET_USE_IPv6
     static_assert(sizeof(address_) >= sizeof(sockaddr_in6),
                   "ip_address can't hold IPv6 sockaddr");
