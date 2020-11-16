@@ -13,6 +13,11 @@ aoo_sink * aoo_sink_new(aoo_id id, aoo_replyfn replyfn, void *user) {
     return new aoo::sink(id, replyfn, user);
 }
 
+aoo::sink::sink(aoo_id id, aoo_replyfn replyfn, void *user)
+    : id_(id), replyfn_(replyfn), user_(user) {
+    eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);
+}
+
 void aoo_sink_free(aoo_sink *sink) {
     // cast to correct type because base class
     // has no virtual destructor!
@@ -457,9 +462,15 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
             if (lock.owns_lock()){
                 LOG_VERBOSE("aoo::sink: removed inactive source " << it->address().name()
                             << " " << it->address().port());
+                event e(AOO_SOURCE_REMOVE_EVENT, it->address(), it->id());
+                if (eventqueue_.write_available() > 0){
+                    eventqueue_.write(e);
+                }
+
                 auto result = sources_.take(it);
                 free_sources_.push_front(result.first);
                 it = result.second;
+
                 continue;
             } else {
                 LOG_WARNING("aoo::sink: removing inactive source would block");
@@ -493,17 +504,22 @@ int32_t aoo_sink_events_available(aoo_sink *sink){
 }
 
 int32_t aoo::sink::events_available(){
+    if (eventqueue_.read_available() > 0){
+        return true;
+    }
+
     shared_scoped_lock lock(source_mutex_);
     for (auto& src : sources_){
         if (src.has_events()){
             return true;
         }
     }
+
     return false;
 }
 
 int32_t aoo_sink_poll_events(aoo_sink *sink,
-                              aoo_eventhandler fn, void *user){
+                             aoo_eventhandler fn, void *user){
     return sink->poll_events(fn, user);
 }
 
@@ -514,8 +530,13 @@ int32_t aoo::sink::poll_events(aoo_eventhandler fn, void *user){
         return 0;
     }
     int total = 0;
-    // handle_events() and the source list itself are both lock-free!
-    // NOTE: the source descs are never freed, so they are always valid
+    while (eventqueue_.read_available() > 0){
+        event e;
+        eventqueue_.read(e);
+        fn(user, &e.event_);
+        total++;
+    }
+    // we only need to protect against source removal
     shared_scoped_lock lock(source_mutex_);
     for (auto& src : sources_){
         total += src.poll_events(fn, user);

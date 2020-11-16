@@ -263,8 +263,7 @@ private:
 
 class sink final : public isink {
 public:
-    sink(aoo_id id, aoo_replyfn replyfn, void *user)
-        : id_(id), replyfn_(replyfn), user_(user) {}
+    sink(aoo_id id, aoo_replyfn replyfn, void *user);
 
     ~sink(){}
 
@@ -353,6 +352,8 @@ private:
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
     time_dll dll_;
     timer timer_;
+    // events
+    lockfree::queue<event> eventqueue_;
 
     // helper methods
     source_desc *find_source(const ip_address& addr, aoo_id id);

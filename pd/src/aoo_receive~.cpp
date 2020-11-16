@@ -250,6 +250,27 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
         outlet_anything(x->x_msgout, gensym("source_add"), 3, msg);
         break;
     }
+    case AOO_SOURCE_REMOVE_EVENT:
+    {
+        auto e = (const aoo_source_event *)event;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+
+        // first remove from source list
+        auto& sources = x->x_sources;
+        for (auto it = sources.begin(); it != sources.end(); ++it){
+            if ((it->s_address == addr) && (it->s_id == e->id)){
+                x->x_sources.erase(it);
+                break;
+            }
+        }
+
+        // output event
+        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
+            return;
+        }
+        outlet_anything(x->x_msgout, gensym("source_remove"), 3, msg);
+        break;
+    }
     case AOO_SOURCE_FORMAT_EVENT:
     {
         auto e = (const aoo_source_event *)event;
