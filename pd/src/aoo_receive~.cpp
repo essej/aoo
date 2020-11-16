@@ -22,7 +22,7 @@ t_class *aoo_receive_class;
 
 struct t_source
 {
-    aoo::ip_address& s_address;
+    ip_address s_address;
     int32_t s_id;
 };
 
