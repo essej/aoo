@@ -15,7 +15,7 @@ aoo_sink * aoo_sink_new(aoo_id id, aoo_replyfn replyfn, void *user) {
 
 aoo::sink::sink(aoo_id id, aoo_replyfn replyfn, void *user)
     : id_(id), replyfn_(replyfn), user_(user) {
-    eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);
+    eventqueue_.resize(AOO_EVENTQUEUESIZE);
 }
 
 void aoo_sink_free(aoo_sink *sink) {
@@ -676,12 +676,12 @@ int32_t sink::handle_ping_message(const osc::ReceivedMessage& msg,
 source_desc::source_desc(const ip_address& addr, aoo_id id, int32_t salt)
     : addr_(addr), id_(id), salt_(salt)
 {
-    eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);
+    eventqueue_.resize(AOO_EVENTQUEUESIZE);
     // push "add" event
     event e(AOO_SOURCE_ADD_EVENT, addr, id);
     eventqueue_.write(e); // no need to lock
     LOG_DEBUG("add new source with id " << id);
-    resendqueue_.resize(256, 1);
+    resendqueue_.resize(256);
 }
 
 bool source_desc::is_active(const sink& s) const {
@@ -725,8 +725,8 @@ void source_desc::update(const sink &s){
 
         // resize audio buffer and initially fill with zeros.
         auto nsamples = decoder_->nchannels() * decoder_->blocksize();
-        audioqueue_.resize(nbuffers * nsamples, nsamples);
-        infoqueue_.resize(nbuffers, 1);
+        audioqueue_.resize(nsamples, nbuffers);
+        infoqueue_.resize(nbuffers);
         channel_ = 0;
         samplerate_ = decoder_->samplerate();
         int count = 0;
@@ -959,8 +959,8 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
     }
 
 #if AOO_DEBUG_AUDIO_BUFFER
-    auto capacity = audioqueue_.capacity() / audioqueue_.blocksize();
-    DO_LOG("audioqueue: " << audioqueue_.read_available() << " / " << capacity);
+    DO_LOG("audioqueue: " << audioqueue_.read_available() << " / "
+           << audioqueue_.capacity());
 #endif
 
     // read audio queue
@@ -1059,13 +1059,13 @@ void source_desc::recover(const char *reason, int32_t n){
 
     // push empty blocks to keep the buffer full, but leave room for one block!
     int count = 0;
-    auto nsamples = audioqueue_.blocksize();
     for (int i = 0; i < n && audioqueue_.write_available() > 1
            && infoqueue_.write_available() > 1; ++i)
     {
-        auto ptr = audioqueue_.write_data();
-        decoder_->decode(nullptr, 0, ptr, nsamples);
+        decoder_->decode(nullptr, 0, audioqueue_.write_data(),
+                         audioqueue_.blocksize());
         audioqueue_.write_commit();
+
         // push nominal samplerate + current channel
         block_info bi;
         bi.sr = decoder_->samplerate();
@@ -1193,28 +1193,24 @@ void source_desc::process_blocks(){
     // Transfer all consecutive complete blocks
     int32_t limit = MAXHARDWAREBLOCKSIZE * resampler_.ratio()
             / (float)audioqueue_.blocksize() + 0.5;
-    int32_t capacity = audioqueue_.capacity() / audioqueue_.blocksize();
-    if (capacity < limit){
+    if (audioqueue_.capacity() < limit){
         limit = -1; // don't use limit!
     }
 
-    while (!jitterbuffer_.empty()){
-        const char *data;
-        int32_t size;
-        block_info i;
-        auto available = audioqueue_.write_available();
-        if (!available || !infoqueue_.write_available()){
-            break;
-        }
-
+    while (!jitterbuffer_.empty() && audioqueue_.write_available()
+           && infoqueue_.write_available()){
         // check for buffer underrun
         if (streamstate_.have_underrun()){
             recover("audio buffer underrun");
             return;
         }
 
-        auto& b = jitterbuffer_.front();
+        const char *data;
+        int32_t size;
+        block_info i;
+        auto remaining = audioqueue_.read_available();
 
+        auto& b = jitterbuffer_.front();
         if (b.complete()){
             if (b.dropped()){
                 data = nullptr;
@@ -1230,8 +1226,8 @@ void source_desc::process_blocks(){
                 i.channel = b.channel;
                 LOG_DEBUG("write samples (" << b.sequence << ")");
             }
-        } else if (jitterbuffer_.size() > 1 && (capacity - available) <= limit){
-            LOG_VERBOSE("remaining: " << (capacity - available) << " / " << capacity
+        } else if (jitterbuffer_.size() > 1 && remaining <= limit){
+            LOG_VERBOSE("remaining: " << remaining << " / " << audioqueue_.capacity()
                         << ", limit: " << limit);
             // we need audio, drop block - but only if it is not
             // the last one (which is expected to be incomplete)
@@ -1356,7 +1352,7 @@ int32_t source_desc::send_data_request(const sink &s){
     int32_t salt = salt_;
     lock.unlock();
 
-    int32_t numrequests = 0;
+    int32_t numrequests;
     while ((numrequests = resendqueue_.read_available()) > 0){
         // send request messages
         char buf[AOO_MAXPACKETSIZE];

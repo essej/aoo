@@ -245,10 +245,10 @@ private:
     mutable time_tag lastprocesstime_;
     // queues and buffers
     jitter_buffer jitterbuffer_;
-    lockfree::queue<aoo_sample> audioqueue_;
-    lockfree::queue<block_info> infoqueue_;
-    lockfree::queue<data_request> resendqueue_;
-    lockfree::queue<event> eventqueue_;
+    lockfree::spsc_queue<aoo_sample> audioqueue_;
+    lockfree::spsc_queue<block_info> infoqueue_;
+    lockfree::spsc_queue<data_request> resendqueue_;
+    lockfree::spsc_queue<event> eventqueue_;
     spinlock eventqueuelock_;
     void push_event(const event& e){
         _scoped_lock<spinlock> l(eventqueuelock_);
@@ -353,7 +353,7 @@ private:
     time_dll dll_;
     timer timer_;
     // events
-    lockfree::queue<event> eventqueue_;
+    lockfree::spsc_queue<event> eventqueue_;
 
     // helper methods
     source_desc *find_source(const ip_address& addr, aoo_id id);

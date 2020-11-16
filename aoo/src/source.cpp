@@ -24,10 +24,10 @@ aoo::source::source(aoo_id id, aoo_replyfn replyfn, void *user)
     : id_(id), replyfn_(replyfn), user_(user)
 {
     // event queue
-    eventqueue_.resize(AOO_EVENTQUEUESIZE, 1);
+    eventqueue_.resize(AOO_EVENTQUEUESIZE);
     // request queues
-    formatrequestqueue_.resize(64, 1);
-    datarequestqueue_.resize(1024, 1);
+    formatrequestqueue_.resize(64);
+    datarequestqueue_.resize(1024);
 }
 
 void aoo_source_free(aoo_source *src){
@@ -880,9 +880,9 @@ void source::update_audioqueue(){
 
         // resize audio buffer
         auto nsamples = encoder_->blocksize() * encoder_->nchannels();
-        audioqueue_.resize(nbuffers * nsamples, nsamples);
+        audioqueue_.resize(nsamples, nbuffers);
 
-        srqueue_.resize(nbuffers, 1);
+        srqueue_.resize(nbuffers);
     }
 }
 

@@ -95,8 +95,8 @@ aoo::net::server::server(int tcpsocket, int udpsocket)
     : tcpsocket_(tcpsocket), udpsocket_(udpsocket)
 {
     type_ = socket_family(udpsocket);
-    commands_.resize(256, 1);
-    events_.resize(256, 1);
+    commands_.resize(256);
+    events_.resize(256);
 }
 
 void aoo_net_server_free(aoo_net_server *server){

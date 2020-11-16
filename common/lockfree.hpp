@@ -14,45 +14,50 @@ namespace lockfree {
 
 /*////////////////////// queue /////////////////////////*/
 
-// a lock-free queue which supports reading/writing data
-// in fixed-sized blocks.
+// a lock-free single-producer/single-consumer queue which
+// supports reading/writing data in fixed-sized blocks.
 template<typename T>
-class queue {
+class spsc_queue {
  public:
-    queue() = default;
+    spsc_queue() = default;
     // we need a move constructor so we can
     // put it in STL containers
-    queue(queue&& other)
+    spsc_queue(spsc_queue&& other)
         : balance_(other.balance_.load()),
           rdhead_(other.rdhead_),
           wrhead_(other.wrhead_),
-          stride_(other.stride_),
-          data_(std::move(other.data_))
-    {}
-    queue& operator=(queue&& other){
+          blocksize_(other.blocksize_),
+          data_(std::move(other.data_)) {}
+
+    spsc_queue& operator=(spsc_queue&& other){
         balance_ = other.balance_.load();
         rdhead_ = other.rdhead_;
         wrhead_ = other.wrhead_;
-        stride_ = other.stride_;
+        blocksize_ = other.blocksize_;
         data_ = std::move(other.data_);
         return *this;
     }
 
-    void resize(int32_t size, int32_t blocksize) {
-        // check if size is divisible by both rdsize and wrsize
-        assert(size >= blocksize);
-        assert((size % blocksize) == 0);
+    void resize(int32_t blocksize, int32_t capacity) {
     #if 1
         data_.clear(); // force zero
     #endif
-        data_.resize(size);
-        stride_ = blocksize;
+        data_.resize(blocksize * capacity);
+        capacity_ = capacity;
+        blocksize_ = blocksize;
         reset();
     }
 
-    int32_t blocksize() const { return stride_; }
+    void resize(int32_t capacity){
+        resize(1, capacity);
+    }
 
-    int32_t capacity() const { return data_.size(); }
+    int32_t blocksize() const { return blocksize_; }
+
+    // max. number of *blocks*
+    int32_t capacity() const {
+        return capacity_;
+    }
 
     void reset() {
         rdhead_ = wrhead_ = 0;
@@ -60,18 +65,12 @@ class queue {
     }
     // returns: the number of available *blocks* for reading
     int32_t read_available() const {
-        if (stride_){
-            return balance_.load(std::memory_order_acquire) / stride_;
-        } else {
-            return 0;
-        }
+        return balance_.load(std::memory_order_relaxed);
     }
 
     void read(T& out) {
         out = std::move(data_[rdhead_]);
-        rdhead_ = (rdhead_ + 1) % capacity();
-        --balance_;
-        assert(balance_ >= 0);
+        read_commit(1);
     }
 
     const T* read_data() const {
@@ -79,25 +78,17 @@ class queue {
     }
 
     void read_commit() {
-        rdhead_ = (rdhead_ + stride_) % capacity();
-        balance_ -= stride_;
-        assert(balance_ >= 0);
+        read_commit(blocksize_);
     }
     // returns: the number of available *blocks* for writing
     int32_t write_available() const {
-        if (stride_){
-            return (capacity() - balance_.load(std::memory_order_acquire)) / stride_;
-        } else {
-            return 0;
-        }
+        return capacity_ - balance_.load(std::memory_order_relaxed);
     }
 
     template<typename U>
     void write(U&& value) {
         data_[wrhead_] = std::forward<U>(value);
-        wrhead_ = (wrhead_ + 1) % capacity();
-        ++balance_;
-        assert(balance_ <= capacity());
+        write_commit(1);
     }
 
     T* write_data() {
@@ -105,16 +96,33 @@ class queue {
     }
 
     void write_commit() {
-        wrhead_ = (wrhead_ + stride_) % capacity();
-        balance_ += stride_;
-        assert(balance_ <= capacity());
+        write_commit(blocksize_);
     }
  private:
     std::atomic<int32_t> balance_{0};
     int32_t rdhead_{0};
     int32_t wrhead_{0};
-    int32_t stride_{0};
+    int32_t blocksize_{0};
+    int32_t capacity_{0};
     std::vector<T> data_;
+
+    void read_commit(int32_t n){
+        rdhead_ += n;
+        if (rdhead_ == data_.size()){
+            rdhead_ = 0;
+        }
+        auto b = balance_.fetch_sub(1, std::memory_order_release);
+        assert(b > 0);
+    }
+
+    void write_commit(int32_t n){
+        wrhead_ += n;
+        if (wrhead_ == data_.size()){
+            wrhead_ = 0;
+        }
+        auto b = balance_.fetch_add(1, std::memory_order_release);
+        assert(b < capacity_);
+    }
 };
 
 /*///////////////////////// list ////////////////////////*/

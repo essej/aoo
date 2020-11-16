@@ -257,15 +257,15 @@ private:
     aoo_net_callback callback_;
     void *userdata_;
     // commands
-    lockfree::queue<std::unique_ptr<icommand>> commands_;
+    lockfree::spsc_queue<std::unique_ptr<icommand>> commands_;
     spinlock command_lock_;
     // peer/group messages
-    lockfree::queue<std::unique_ptr<icommand>> messages_;
+    lockfree::spsc_queue<std::unique_ptr<icommand>> messages_;
     // pending request
     using request = std::function<bool(const char *pattern, const osc::ReceivedMessage& msg)>;
     std::vector<request> pending_requests_;
     // events
-    lockfree::queue<std::unique_ptr<ievent>> events_;
+    lockfree::spsc_queue<std::unique_ptr<ievent>> events_;
     spinlock event_lock_;
     // options
     std::atomic<float> ping_interval_{AOO_NET_CLIENT_PING_INTERVAL * 0.001};

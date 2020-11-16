@@ -192,11 +192,11 @@ class source final : public isource {
     // buffers and queues
     std::vector<char> sendbuffer_;
     dynamic_resampler resampler_;
-    lockfree::queue<aoo_sample> audioqueue_;
-    lockfree::queue<double> srqueue_;
-    lockfree::queue<event> eventqueue_;
-    lockfree::queue<format_request> formatrequestqueue_;
-    lockfree::queue<data_request> datarequestqueue_;
+    lockfree::spsc_queue<aoo_sample> audioqueue_;
+    lockfree::spsc_queue<double> srqueue_;
+    lockfree::spsc_queue<event> eventqueue_;
+    lockfree::spsc_queue<format_request> formatrequestqueue_;
+    lockfree::spsc_queue<data_request> datarequestqueue_;
     history_buffer history_;
     // sinks
     std::list<sink_desc> sinks_; // don't move in memory!
