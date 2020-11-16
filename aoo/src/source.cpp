@@ -1268,8 +1268,6 @@ void source::handle_invite(const osc::ReceivedMessage& msg,
     // check if sink exists (not strictly necessary, but might help catch errors)
     shared_lock lock(sink_mutex_); // reader lock!
     auto sink = find_sink(addr, id);
-    lock.unlock();
-
     if (!sink){
         // push "invite" event
         if (eventqueue_.write_available()){
@@ -1296,8 +1294,6 @@ void source::handle_uninvite(const osc::ReceivedMessage& msg,
     // check if sink exists (not strictly necessary, but might help catch errors)
     shared_lock lock(sink_mutex_); // reader lock!
     auto sink = find_sink(addr, id);
-    lock.unlock();
-
     if (sink){
         // push "uninvite" event
         if (eventqueue_.write_available()){
@@ -1328,8 +1324,6 @@ void source::handle_ping(const osc::ReceivedMessage& msg,
     // check if sink exists (not strictly necessary, but might help catch errors)
     shared_lock lock(sink_mutex_); // reader lock!
     auto sink = find_sink(addr, id);
-    lock.unlock();
-
     if (sink){
         // push "ping" event
         if (eventqueue_.write_available()){
