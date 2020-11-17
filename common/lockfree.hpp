@@ -131,7 +131,7 @@ class spsc_queue {
 // clearing the list is *not* thread-safe
 
 template<typename T>
-class list {
+class simple_list {
     struct node {
         node* next_;
         T data_;
@@ -142,7 +142,7 @@ class list {
 public:
     template<typename U>
     class base_iterator {
-        friend class list;
+        friend class simple_list;
         U *node_;
     public:
         base_iterator()
@@ -172,22 +172,22 @@ public:
     using iterator = base_iterator<node>;
     using const_iterator = base_iterator<const node>;
 
-    list()
+    simple_list()
         : head_(nullptr){}
 
-    list(const list&) = delete;
+    simple_list(const simple_list&) = delete;
 
-    list(list&& other){
+    simple_list(simple_list&& other){
         // not sure...
         auto head = other.head_.exchange(nullptr);
         head_.store(head);
     }
 
-    ~list(){
+    ~simple_list(){
         clear();
     }
 
-    list& operator=(list&& other){
+    simple_list& operator=(simple_list&& other){
         // not sure...
         auto head = other.head_.exchange(nullptr);
         head_.store(head);
@@ -204,6 +204,14 @@ public:
         n->next_ = head_.load(std::memory_order_relaxed);
         // check if the head has changed and update it atomically
         while (!head_.compare_exchange_weak(n->next_, n)) ;
+    }
+
+    // be careful with concurrent iteration!
+    node* take_front(){
+        auto head = head_.load(std::memory_order_relaxed);
+        // check if the head has changed and update it atomically
+        while (!head_.compare_exchange_weak(head, head->next_)) ;
+        return head;
     }
 
     // not thread-safe!

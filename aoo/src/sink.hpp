@@ -345,8 +345,8 @@ private:
     std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
     std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT * 0.001 };
     // the sources
-    lockfree::list<source_desc> sources_;
-    lockfree::list<source_desc> free_sources_;
+    lockfree::simple_list<source_desc> sources_;
+    lockfree::simple_list<source_desc> free_sources_;
     shared_mutex source_mutex_;
     // timing
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
