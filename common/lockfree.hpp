@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
@@ -12,7 +12,7 @@
 namespace aoo {
 namespace lockfree {
 
-/*////////////////////// queue /////////////////////////*/
+/*////////////////////// spsc_queue /////////////////////////*/
 
 // a lock-free single-producer/single-consumer queue which
 // supports reading/writing data in fixed-sized blocks.
@@ -126,6 +126,129 @@ class spsc_queue {
 };
 
 /*///////////////////////// unbounded_mpsc_queue ///////////////*/
+
+// based on https://www.drdobbs.com/parallel/writing-lock-free-code-a-corrected-queue/210604448
+
+template<typename T>
+class unbounded_mpsc_queue {
+ public:
+    unbounded_mpsc_queue(){
+        // add dummy node
+        first_ = devider_ = last_ = new node();
+    }
+
+    unbounded_mpsc_queue(unbounded_mpsc_queue&& other){
+        first_ = other.first_;
+        devider_ = other.devider_;
+        last_ = other.last_;
+        other.first_ = nullptr;
+        other.devider_ = nullptr;
+        other.last_ = nullptr;
+    }
+
+    unbounded_mpsc_queue& operator=(unbounded_mpsc_queue&& other){
+        first_ = other.first_;
+        devider_ = other.devider_;
+        last_ = other.last_;
+        other.first_ = nullptr;
+        other.devider_ = nullptr;
+        other.last_ = nullptr;
+        return *this;
+    }
+
+    ~unbounded_mpsc_queue(){
+        auto it = first_.load();
+        while (it){
+            auto tmp = it;
+            it = it->next_;
+            delete tmp;
+        }
+    }
+
+    // not thread-safe!
+    void reserve(size_t n){
+        // check for existing empty nodes
+        auto it = first_.load();
+        auto end = devider_.load();
+        while (it != end){
+            n--;
+            it = it->next_;
+        }
+        // add empty nodes
+        while (n--){
+            auto tmp = new node();
+            tmp->next_ = first_;
+            first_.store(tmp);
+        }
+    }
+
+    // can be called by several threads
+    template<typename... U>
+    void push(U&&... args){
+        node *tmp;
+        while (true){
+            auto first = first_.load(std::memory_order_relaxed);
+            if (first != devider_.load(std::memory_order_relaxed)){
+                // try to reuse existing node
+                if (first_.compare_exchange_weak(first, first->next_,
+                                                 std::memory_order_acq_rel))
+                {
+                    *first = node(std::forward<U>(args)...);
+                    tmp = first;
+                    break; // success
+                }
+            } else {
+                // make new node
+                tmp = new node(std::forward<U>(args)...);
+                break;
+            }
+        }
+        while (lock_.exchange(1, std::memory_order_acquire)) ; // lock
+        auto last = last_.load(std::memory_order_relaxed);
+        last->next_ = tmp;
+        last_.store(tmp, std::memory_order_release); // publish
+        lock_.store(0, std::memory_order_release); // unlock
+    }
+
+    // must be called from a single thread!
+    void pop(T& result){
+        // use node *after* devider, because devider is always a dummy!
+        auto next = devider_.load(std::memory_order_relaxed)->next_;
+        result = std::move(next->data_);
+        devider_.store(next, std::memory_order_release); // publish
+    }
+
+    bool try_pop(T& result){
+        if (!empty()){
+            pop(result);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    bool empty() const {
+        return devider_.load(std::memory_order_relaxed)
+                == last_.load(std::memory_order_relaxed);
+    }
+
+    // not thread-safe (?)
+    void clear(){
+        devider_ = last_;
+    }
+ private:
+    struct node {
+        template<typename... U>
+        node(U&&... args)
+            : data_(std::forward<U>(args)...), next_(nullptr) {}
+        T data_;
+        node * next_;
+    };
+    std::atomic<node *> first_;
+    std::atomic<node *> devider_;
+    std::atomic<node *> last_;
+    std::atomic<int32_t> lock_{0};
+};
 
 /*///////////////////////// simple_list ////////////////////////*/
 
