@@ -79,22 +79,33 @@ void spinlock::unlock(){
 void shared_spinlock::lock(){
     // only try to modify the shared state if the lock seems to be available.
     // this should prevent unnecessary cache invalidation.
-    do {
-        while (state_.load(std::memory_order_relaxed) != UNLOCKED){
+    for (;;) {
+        if (state_.load(std::memory_order_relaxed) == UNLOCKED){
+            // check if state is UNLOCKED and set LOCKED bit on success.
+            uint32_t expected = UNLOCKED;
+            if (state_.compare_exchange_weak(expected, LOCKED,
+                                             std::memory_order_acquire,
+                                             std::memory_order_relaxed))
+            {
+                return;
+            }
+        } else {
             pause_cpu();
         }
-    } while (!try_lock());
+    }
 }
 
 bool shared_spinlock::try_lock(){
-    // check if state is UNLOCKED and set to LOCKED on success.
+    // check if state is UNLOCKED and set LOCKED bit on success.
     uint32_t expected = UNLOCKED;
-    return state_.compare_exchange_strong(expected, LOCKED, std::memory_order_acq_rel);
+    return state_.compare_exchange_strong(expected, LOCKED,
+                                          std::memory_order_acquire,
+                                          std::memory_order_relaxed);
 }
 
 void shared_spinlock::unlock(){
-    // set to UNLOCKED
-    state_.store(UNLOCKED, std::memory_order_release);
+    // clear LOCKED bit
+    state_.fetch_and(~LOCKED, std::memory_order_release);
 }
 
 // shared
