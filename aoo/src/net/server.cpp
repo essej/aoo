@@ -95,8 +95,8 @@ aoo::net::server::server(int tcpsocket, int udpsocket)
     : tcpsocket_(tcpsocket), udpsocket_(udpsocket)
 {
     type_ = socket_family(udpsocket);
-    commands_.resize(256);
-    events_.resize(256);
+    // commands_.reserve(256);
+    // events_.reserve(256);
 }
 
 void aoo_net_server_free(aoo_net_server *server){
@@ -127,9 +127,8 @@ int32_t aoo::net::server::run(){
         }
 
         // handle commands
-        while (commands_.read_available()){
-            std::unique_ptr<icommand> cmd;
-            commands_.read(cmd);
+        std::unique_ptr<icommand> cmd;
+        while (commands_.try_pop(cmd)){
             cmd->perform(*this);
         }
     }
@@ -157,7 +156,7 @@ int32_t aoo_net_server_events_available(aoo_net_server *server){
 }
 
 int32_t aoo::net::server::events_available(){
-    return 0;
+    return !events_.empty();
 }
 
 int32_t aoo_net_server_poll_events(aoo_net_server *server, aoo_eventhandler fn, void *user){
@@ -167,9 +166,8 @@ int32_t aoo_net_server_poll_events(aoo_net_server *server, aoo_eventhandler fn, 
 int32_t aoo::net::server::poll_events(aoo_eventhandler fn, void *user){
     // always thread-safe
     int count = 0;
-    while (events_.read_available() > 0){
-        std::unique_ptr<ievent> e;
-        events_.read(e);
+    std::unique_ptr<ievent> e;
+    while (events_.try_pop(e)){
         fn(user, &e->event_);
         count++;
     }

@@ -194,9 +194,9 @@ class source final : public isource {
     dynamic_resampler resampler_;
     lockfree::spsc_queue<aoo_sample> audioqueue_;
     lockfree::spsc_queue<double> srqueue_;
-    lockfree::spsc_queue<event> eventqueue_;
-    lockfree::spsc_queue<format_request> formatrequestqueue_;
-    lockfree::spsc_queue<data_request> datarequestqueue_;
+    lockfree::unbounded_mpsc_queue<event> eventqueue_;
+    lockfree::unbounded_mpsc_queue<format_request> formatrequestqueue_;
+    lockfree::unbounded_mpsc_queue<data_request> datarequestqueue_;
     history_buffer history_;
     // sinks
     std::list<sink_desc> sinks_; // don't move in memory!

@@ -148,7 +148,7 @@ AOO_API double aoo_osctime_duration(uint64_t t1, uint64_t t2);
 
 /*//////////////////// AoO events /////////////////////*/
 
-#define AOO_EVENTQUEUESIZE 64
+#define AOO_EVENTQUEUESIZE 8
 
 // event types
 typedef enum aoo_event_type

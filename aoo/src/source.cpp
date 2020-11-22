@@ -24,10 +24,10 @@ aoo::source::source(aoo_id id, aoo_replyfn replyfn, void *user)
     : id_(id), replyfn_(replyfn), user_(user)
 {
     // event queue
-    eventqueue_.resize(AOO_EVENTQUEUESIZE);
+    eventqueue_.reserve(AOO_EVENTQUEUESIZE);
     // request queues
-    formatrequestqueue_.resize(64);
-    datarequestqueue_.resize(1024);
+    // formatrequestqueue_.resize(64);
+    // datarequestqueue_.resize(1024);
 }
 
 void aoo_source_free(aoo_source *src){
@@ -660,7 +660,7 @@ int32_t aoo_source_events_available(aoo_source *src){
 }
 
 int32_t aoo::source::events_available(){
-    return eventqueue_.read_available() > 0;
+    return !eventqueue_.empty();
 }
 
 int32_t aoo_source_poll_events(aoo_source *src,
@@ -671,9 +671,8 @@ int32_t aoo_source_poll_events(aoo_source *src,
 int32_t aoo::source::poll_events(aoo_eventhandler fn, void *user){
     // always thread-safe
     int count = 0;
-    while (eventqueue_.read_available() > 0){
-        event e;
-        eventqueue_.read(e);
+    event e;
+    while (eventqueue_.try_pop(e) > 0){
         fn(user, &e.event_);
         count++;
     }
@@ -907,7 +906,7 @@ void source::update_historybuffer(){
 
 bool source::send_format(){
     bool format_changed = format_changed_.exchange(false);
-    bool format_requested = formatrequestqueue_.read_available();
+    bool format_requested = !formatrequestqueue_.empty();
 
     if (!format_changed && !format_requested){
         return false;
@@ -951,9 +950,8 @@ bool source::send_format(){
     }
 
     if (format_requested){
-        while (formatrequestqueue_.read_available()){
-            format_request ep;
-            formatrequestqueue_.read(ep);
+        format_request ep;
+        while (formatrequestqueue_.try_pop(ep)){
             ep.send_format(*this, id(), salt, fmt, settings, size);
         }
     }
@@ -969,10 +967,8 @@ bool source::resend_data(){
 
     bool didsomething = false;
 
-    while (datarequestqueue_.read_available()){
-        data_request request;
-        datarequestqueue_.read(request);
-
+    data_request request;
+    while (datarequestqueue_.try_pop(request)){
         auto salt = salt_;
         if (salt != request.salt){
             // outdated request
@@ -1221,9 +1217,7 @@ void source::handle_format_request(const osc::ReceivedMessage& msg,
     lock.unlock();
 
     if (sink){
-        if (formatrequestqueue_.write_available()){
-            formatrequestqueue_.write(aoo::format_request { addr, id });
-        }
+        formatrequestqueue_.push(aoo::format_request { addr, id });
     } else {
         LOG_WARNING("ignoring '" << AOO_MSG_FORMAT << "' message: sink not found");
     }
@@ -1249,9 +1243,7 @@ void source::handle_data_request(const osc::ReceivedMessage& msg,
         while (npairs--){
             auto seq = (it++)->AsInt32();
             auto frame = (it++)->AsInt32();
-            if (datarequestqueue_.write_available()){
-                datarequestqueue_.write(data_request{ addr, id, salt, seq, frame });
-            }
+            datarequestqueue_.push(data_request{ addr, id, salt, seq, frame });
         }
     } else {
         LOG_WARNING("ignoring '" << AOO_MSG_DATA << "' message: sink not found");
@@ -1270,11 +1262,9 @@ void source::handle_invite(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
     if (!sink){
         // push "invite" event
-        if (eventqueue_.write_available()){
-            // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
-            event e(AOO_INVITE_EVENT, addr, id);
-            eventqueue_.write(e);
-        }
+        // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
+        event e(AOO_INVITE_EVENT, addr, id);
+        eventqueue_.push(e);
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_INVITE << "' message: sink already added");
     }
@@ -1292,11 +1282,9 @@ void source::handle_uninvite(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
     if (sink){
         // push "uninvite" event
-        if (eventqueue_.write_available()){
-            // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
-            event e(AOO_UNINVITE_EVENT, addr, id);
-            eventqueue_.write(e);
-        }
+        // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
+        event e(AOO_UNINVITE_EVENT, addr, id);
+        eventqueue_.push(e);
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_UNINVITE << "' message: sink not found");
     }
@@ -1318,19 +1306,17 @@ void source::handle_ping(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
     if (sink){
         // push "ping" event
-        if (eventqueue_.write_available()){
-            // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
-            event e(AOO_PING_EVENT, addr, id);
-            e.ping.tt1 = tt1;
-            e.ping.tt2 = tt2;
-            e.ping.lost_blocks = lost_blocks;
-        #if 0
-            e.ping.tt3 = timer_.get_absolute(); // use last stream time
-        #else
-            e.ping.tt3 = aoo::time_tag::now(); // use real system time
-        #endif
-            eventqueue_.write(e);
-        }
+        // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
+        event e(AOO_PING_EVENT, addr, id);
+        e.ping.tt1 = tt1;
+        e.ping.tt2 = tt2;
+        e.ping.lost_blocks = lost_blocks;
+    #if 0
+        e.ping.tt3 = timer_.get_absolute(); // use last stream time
+    #else
+        e.ping.tt3 = aoo::time_tag::now(); // use real system time
+    #endif
+        eventqueue_.push(e);
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_PING << "' message: sink not found");
     }

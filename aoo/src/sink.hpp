@@ -175,7 +175,7 @@ public:
     bool is_active(const sink& s) const;
 
     bool has_events() const {
-        return  eventqueue_.read_available() > 0;
+        return !eventqueue_.empty();
     }
 
     int32_t get_format(aoo_format_storage& format);
@@ -247,15 +247,12 @@ private:
     jitter_buffer jitterbuffer_;
     lockfree::spsc_queue<aoo_sample> audioqueue_;
     lockfree::spsc_queue<block_info> infoqueue_;
-    lockfree::spsc_queue<data_request> resendqueue_;
-    lockfree::spsc_queue<event> eventqueue_;
-    spinlock eventqueuelock_;
+    lockfree::unbounded_mpsc_queue<data_request> resendqueue_;
+    lockfree::unbounded_mpsc_queue<event> eventqueue_;
     void push_event(const event& e){
-        _scoped_lock<spinlock> l(eventqueuelock_);
-        if (eventqueue_.write_available()){
-            eventqueue_.write(e);
-        }
+        eventqueue_.push(e);
     }
+    // resampler
     dynamic_resampler resampler_;
     // thread synchronization
     aoo::shared_mutex mutex_; // LATER replace with a spinlock?

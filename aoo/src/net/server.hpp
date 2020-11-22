@@ -188,13 +188,11 @@ private:
     user_list users_;
     group_list groups_;
     // commands
-    lockfree::spsc_queue<std::unique_ptr<icommand>> commands_;
+    lockfree::unbounded_mpsc_queue<std::unique_ptr<icommand>> commands_;
     // events
-    lockfree::spsc_queue<std::unique_ptr<ievent>> events_;
+    lockfree::unbounded_mpsc_queue<std::unique_ptr<ievent>> events_;
     void push_event(std::unique_ptr<ievent> e){
-        if (events_.write_available()){
-            events_.write(std::move(e));
-        }
+        events_.push(std::move(e));
     }
     // signal
     std::atomic<bool> quit_{false};

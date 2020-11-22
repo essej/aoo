@@ -165,9 +165,9 @@ aoo::net::client::client(int socket)
     sendbuffer_.setup(65536);
     recvbuffer_.setup(65536);
 
-    commands_.resize(256);
-    messages_.resize(256);
-    events_.resize(256);
+    // commands_.reserve(256);
+    // messages_.reserve(256);
+    // events_.reserve(256);
 }
 
 void aoo_net_client_free(aoo_net_client *client){
@@ -225,9 +225,8 @@ int32_t aoo::net::client::run(){
         }
 
         // handle commands
-        while (commands_.read_available()){
-            std::unique_ptr<icommand> cmd;
-            commands_.read(cmd);
+        std::unique_ptr<icommand> cmd;
+        while (commands_.try_pop(cmd)){
             cmd->perform(*this);
         }
     }
@@ -309,12 +308,8 @@ int32_t aoo::net::client::send_message(const char *data, int32_t n,
     } else {
         cmd = std::make_unique<message_cmd>(data, n, flags);
     }
-    if (messages_.write_available()){
-        messages_.write(std::move(cmd));
-        return 1;
-    } else {
-        return 0;
-    }
+    messages_.push(std::move(cmd));
+    return 1;
 }
 
 int32_t aoo_net_client_handle_message(aoo_net_client *client, const char *data,
@@ -347,9 +342,8 @@ int32_t aoo::net::client::send(){
         }
 
         // send outgoing peer/group messages
-        while (messages_.read_available() > 0){
-            std::unique_ptr<icommand> cmd;
-            messages_.read(cmd);
+        std::unique_ptr<icommand> cmd;
+        while (messages_.try_pop(cmd)){
             cmd->perform(*this);
         }
 
@@ -377,9 +371,8 @@ int32_t aoo_net_client_poll_events(aoo_net_client *client, aoo_eventhandler fn, 
 int32_t aoo::net::client::poll_events(aoo_eventhandler fn, void *user){
     // always thread-safe
     int count = 0;
-    while (events_.read_available() > 0){
-        std::unique_ptr<ievent> e;
-        events_.read(e);
+    std::unique_ptr<ievent> e;
+    while (events_.try_pop(e)){
         fn(user, &e->event_);
         count++;
     }
@@ -761,19 +754,13 @@ void client::perform_leave_group(const std::string &group,
 
 void client::push_event(std::unique_ptr<ievent> e)
 {
-    _scoped_lock<spinlock> lock(event_lock_);
-    if (events_.write_available()){
-        events_.write(std::move(e));
-    }
+    events_.push(std::move(e));
 }
 
 void client::push_command(std::unique_ptr<icommand>&& cmd){
-    _scoped_lock<spinlock> lock(command_lock_);
-    if (commands_.write_available()){
-        commands_.write(std::move(cmd));
+    commands_.push(std::move(cmd));
 
-        signal();
-    }
+    signal();
 }
 
 void client::send_udp_message(const char *data, int32_t size,

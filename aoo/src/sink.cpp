@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
@@ -671,12 +671,14 @@ int32_t sink::handle_ping_message(const osc::ReceivedMessage& msg,
 source_desc::source_desc(const ip_address& addr, aoo_id id, int32_t salt)
     : addr_(addr), id_(id), salt_(salt)
 {
-    eventqueue_.resize(AOO_EVENTQUEUESIZE);
+    // reserve some memory, so we don't have to allocate memory
+    // when pushing events in the audio thread.
+    eventqueue_.reserve(AOO_EVENTQUEUESIZE);
     // push "add" event
     event e(AOO_SOURCE_ADD_EVENT, addr, id);
-    eventqueue_.write(e); // no need to lock
+    eventqueue_.push(e); // no need to lock
     LOG_DEBUG("add new source with id " << id);
-    resendqueue_.resize(256);
+    // resendqueue_.reserve(256);
 }
 
 bool source_desc::is_active(const sink& s) const {
@@ -1025,11 +1027,10 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
 }
 
 int32_t source_desc::poll_events(aoo_eventhandler fn, void *user){
-    // copy events - always lockfree! (the eventqueue is never resized)
+    // always lockfree!
     int count = 0;
-    while (eventqueue_.read_available() > 0){
-        event e;
-        eventqueue_.read(e);
+    event e;
+    while (eventqueue_.try_pop(e)){
         fn(user, &e.event_);
         count++;
     }
@@ -1275,9 +1276,8 @@ void source_desc::check_missing_blocks(const sink& s){
                 // only some frames missing
                 for (int i = 0; i < nframes; ++i){
                     if (!b->has_frame(i)){
-                        if (resent < maxnumframes
-                                && resendqueue_.write_available()){
-                            resendqueue_.write(data_request { b->sequence, i });
+                        if (resent < maxnumframes){
+                            resendqueue_.push(data_request { b->sequence, i });
                         #if 0
                             DO_LOG("request " << b->sequence << " (" << i << ")");
                         #endif
@@ -1289,9 +1289,8 @@ void source_desc::check_missing_blocks(const sink& s){
                 }
             } else {
                 // all frames missing
-                if (resent + nframes <= maxnumframes
-                        && resendqueue_.write_available()){
-                    resendqueue_.write(data_request { b->sequence, -1 }); // whole block
+                if (resent + nframes <= maxnumframes){
+                    resendqueue_.push(data_request { b->sequence, -1 }); // whole block
                 #if 0
                     DO_LOG("request " << b->sequence << " (all)");
                 #endif
@@ -1342,13 +1341,12 @@ bool source_desc::send_format_request(const sink& s) {
 // /aoo/src/<id>/data <sink> <salt> <seq0> <frame0> <seq1> <frame1> ...
 
 int32_t source_desc::send_data_request(const sink &s){
-    // called without lock!
-    shared_lock lock(mutex_);
-    int32_t salt = salt_;
-    lock.unlock();
+    if (!resendqueue_.empty()){
+        // called without lock!
+        shared_lock lock(mutex_);
+        int32_t salt = salt_;
+        lock.unlock();
 
-    int32_t numrequests;
-    while ((numrequests = resendqueue_.read_available()) > 0){
         // send request messages
         char buf[AOO_MAXPACKETSIZE];
         osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -1362,32 +1360,28 @@ int32_t source_desc::send_data_request(const sink &s){
 
         const int32_t maxdatasize = s.packetsize() - maxaddrsize - 16; // id + salt + padding
         const int32_t maxrequests = maxdatasize / 10; // 2 * (int32_t + typetag)
-        auto d = div(numrequests, maxrequests);
+        int32_t numrequests = 0;
 
-        auto dorequest = [&](int32_t n){
+        while (!resendqueue_.empty() && numrequests < maxrequests){
             msg << osc::BeginMessage(address) << s.id() << salt;
-            while (n--){
+
+            for (int i = 0; i < maxrequests; ++i, ++numrequests){
                 data_request request;
-                resendqueue_.read(request);
-                msg << request.sequence << request.frame;
-            #if 0
-                DO_LOG("resend block " << request.sequence
-                        << ", frame " << request.frame);
-            #endif
+                if (resendqueue_.try_pop(request)){
+                    msg << request.sequence << request.frame;
+                } else {
+                    break;
+                }
             }
+
             msg << osc::EndMessage;
 
             s.do_send(msg.Data(), msg.Size(), addr_);
-        };
-
-        for (int i = 0; i < d.quot; ++i){
-            dorequest(maxrequests);
         }
-        if (d.rem > 0){
-            dorequest(d.rem);
-        }
+        return numrequests;
+    } else {
+        return 0;
     }
-    return numrequests;
 }
 
 // AoO/<id>/ping <sink>
