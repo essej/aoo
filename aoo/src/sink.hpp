@@ -346,7 +346,6 @@ private:
     std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT * 0.001 };
     // the sources
     lockfree::simple_list<source_desc> sources_;
-    lockfree::simple_list<source_desc> free_sources_;
     shared_mutex source_mutex_;
     // timing
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };

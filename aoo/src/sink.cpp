@@ -400,17 +400,16 @@ int32_t aoo_sink_decode(aoo_sink *sink) {
 int32_t aoo::sink::decode() {
     bool result = false;
 
-    shared_scoped_lock lock(source_mutex_);
+    shared_lock lock(source_mutex_);
     for (auto& s : sources_){
         if (s.decode(*this)){
             result = true;
         }
     }
+    lock.unlock();
 
     // free unused source_descs
-    if (!free_sources_.empty()){
-        free_sources_.clear();
-    }
+    sources_.free();
 
     return result;
 }
@@ -466,11 +465,7 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
                 if (eventqueue_.write_available() > 0){
                     eventqueue_.write(e);
                 }
-
-                auto result = sources_.take(it);
-                free_sources_.push_front(result.first);
-                it = result.second;
-
+                it =  sources_.erase(it);
                 continue;
             } else {
                 LOG_WARNING("aoo::sink: removing inactive source would block");
