@@ -588,6 +588,10 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     if (timerstate == timer::state::reset){
         LOG_DEBUG("setup time DLL filter for source");
         dll_.setup(samplerate_, blocksize_, bandwidth_, 0);
+        // it is safe to set 'lastpingtime' after updating
+        // the timer, because in the worst case the ping
+        // is simply sent the next time.
+        lastpingtime_.store(-1e007); // force first ping
     } else if (timerstate == timer::state::error){
         // skip blocks
         double period = (double)blocksize_ / (double)samplerate_;
@@ -841,9 +845,8 @@ bool source::need_resampling() const {
 }
 
 void source::start_new_stream(){
-    // reset time DLL to be on the safe side
+    // implicitly reset time DLL to be on the safe side
     timer_.reset();
-    lastpingtime_.store(-1000); // force first ping
 
     // Start new sequence and resend format.
     // We naturally want to do this when setting the format,
@@ -1186,7 +1189,7 @@ bool source::send_ping(){
             sinks[i].send_ping(*this, id(), tt);
         }
 
-        lastpingtime_ = elapsed;
+        lastpingtime_.store(elapsed);
         return true;
     } else {
         return false;

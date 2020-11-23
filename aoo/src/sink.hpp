@@ -64,8 +64,8 @@ struct stream_state {
     }
 
     void set_ping(time_tag t1, time_tag t2){
-        pingtime1_ = t1;
-        pingtime2_ = t2;
+        pingtime1_.store(t1);
+        pingtime2_.store(t2);
     }
 
     bool need_ping(time_tag& t1, time_tag& t2){

@@ -3,8 +3,8 @@
 namespace aoo {
 
 timer::timer(const timer& other){
-    last_ = other.last_.load(std::memory_order_relaxed);
-    elapsed_ = other.elapsed_.load(std::memory_order_relaxed);
+    last_ = other.last_.load();
+    elapsed_ = other.elapsed_.load();
 #if AOO_TIMEFILTER_CHECK
     static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
     delta_ = other.delta_;
@@ -15,8 +15,8 @@ timer::timer(const timer& other){
 }
 
 timer& timer::operator=(const timer& other){
-    last_ = other.last_.load(std::memory_order_relaxed);
-    elapsed_ = other.elapsed_.load(std::memory_order_relaxed);
+    last_ = other.last_.load();
+    elapsed_ = other.elapsed_.load();
 #if AOO_TIMEFILTER_CHECK
     static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
     delta_ = other.delta_;
@@ -51,6 +51,8 @@ timer::state timer::update(time_tag t, double& error){
     if (!last.is_empty()){
         auto delta = time_tag::duration(last, t);
 
+        // 'elapsed' is only ever modified in this function
+        // (which is not reentrant!)
         auto elapsed = elapsed_.load(std::memory_order_relaxed) + delta;
         elapsed_.store(elapsed, std::memory_order_relaxed);
 

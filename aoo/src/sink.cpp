@@ -1393,11 +1393,11 @@ bool source_desc::send_notifications(const sink& s){
     time_tag pingtime1;
     time_tag pingtime2;
     if (streamstate_.need_ping(pingtime1, pingtime2)){
-    #if 1
+    #if 0
         // only send ping if source is active
         if (streamstate_.get_state() == AOO_SOURCE_STATE_PLAY){
     #else
-        {
+        {   // always reply to ping!
     #endif
             auto lost_blocks = streamstate_.get_lost_since_ping();
 
