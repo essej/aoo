@@ -349,8 +349,10 @@ private:
     time_dll dll_;
     timer timer_;
     // events
-    lockfree::spsc_queue<event> eventqueue_;
-
+    lockfree::unbounded_mpsc_queue<event> eventqueue_;
+    void push_event(const event& e){
+        eventqueue_.push(e);
+    }
     // helper methods
     source_desc *find_source(const ip_address& addr, aoo_id id);
 

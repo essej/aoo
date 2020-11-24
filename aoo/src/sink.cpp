@@ -15,7 +15,7 @@ aoo_sink * aoo_sink_new(aoo_id id, aoo_replyfn replyfn, void *user) {
 
 aoo::sink::sink(aoo_id id, aoo_replyfn replyfn, void *user)
     : id_(id), replyfn_(replyfn), user_(user) {
-    eventqueue_.resize(AOO_EVENTQUEUESIZE);
+    eventqueue_.reserve(AOO_EVENTQUEUESIZE);
 }
 
 void aoo_sink_free(aoo_sink *sink) {
@@ -462,9 +462,7 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
                 LOG_VERBOSE("aoo::sink: removed inactive source " << it->address().name()
                             << " " << it->address().port());
                 event e(AOO_SOURCE_REMOVE_EVENT, it->address(), it->id());
-                if (eventqueue_.write_available() > 0){
-                    eventqueue_.write(e);
-                }
+                push_event(e);
                 it =  sources_.erase(it);
                 continue;
             } else {
@@ -499,7 +497,7 @@ int32_t aoo_sink_events_available(aoo_sink *sink){
 }
 
 int32_t aoo::sink::events_available(){
-    if (eventqueue_.read_available() > 0){
+    if (!eventqueue_.empty()){
         return true;
     }
 
@@ -525,9 +523,8 @@ int32_t aoo::sink::poll_events(aoo_eventhandler fn, void *user){
         return 0;
     }
     int total = 0;
-    while (eventqueue_.read_available() > 0){
-        event e;
-        eventqueue_.read(e);
+    event e;
+    while (eventqueue_.try_pop(e)){
         fn(user, &e.event_);
         total++;
     }
