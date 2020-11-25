@@ -155,6 +155,26 @@ private:
     char addr_[ip_address::max_length];
 };
 
+enum class request_type {
+    invite,
+    uninvite,
+    uninvite_all
+};
+
+struct request {
+    request() = default;
+
+    request(request_type _type)
+        : type(_type) {}
+
+    request(request_type _type, const ip_address& _addr, aoo_id _id)
+        : type(_type), address(_addr), id(_id) {}
+
+    request_type type;
+    ip_address address;
+    aoo_id id = -1;
+};
+
 class sink;
 
 class source_desc {
@@ -352,6 +372,11 @@ private:
     lockfree::unbounded_mpsc_queue<event> eventqueue_;
     void push_event(const event& e){
         eventqueue_.push(e);
+    }
+    // requests
+    lockfree::unbounded_mpsc_queue<request> requestqueue_;
+    void push_request(const request& r){
+        requestqueue_.push(r);
     }
     // helper methods
     source_desc *find_source(const ip_address& addr, aoo_id id);

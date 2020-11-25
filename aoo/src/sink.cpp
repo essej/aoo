@@ -62,13 +62,7 @@ int32_t aoo_sink_invite_source(aoo_sink *sink, const void *address,
 int32_t aoo::sink::invite_source(const void *address, int32_t addrlen, aoo_id id){
     ip_address addr((const sockaddr *)address, addrlen);
 
-    // try to find existing source
-    shared_lock lock(source_mutex_);
-    auto src = find_source(addr, id);
-    if (!src){
-        src = add_source(addr, id, 0);
-    }
-    src->request_invite();
+    push_request(request { request_type::invite, addr, id });
 
     return 1;
 }
@@ -81,16 +75,11 @@ int32_t aoo_sink_uninvite_source(aoo_sink *sink, const void *address,
 
 // LATER put uninvitations on a queue
 int32_t aoo::sink::uninvite_source(const void *address, int32_t addrlen, aoo_id id){
-     ip_address addr((const sockaddr *)address, addrlen);
-    // try to find existing source
-    shared_scoped_lock lock(source_mutex_);
-    auto src = find_source(addr, id);
-    if (src){
-        src->request_uninvite();
-        return 1;
-    } else {
-        return 0;
-    }
+    ip_address addr((const sockaddr *)address, addrlen);
+
+    push_request(request { request_type::uninvite, addr, id });
+
+    return 1;
 }
 
 int32_t aoo_sink_uninvite_all(aoo_sink *sink){
@@ -98,10 +87,8 @@ int32_t aoo_sink_uninvite_all(aoo_sink *sink){
 }
 
 int32_t aoo::sink::uninvite_all(){
-    shared_scoped_lock lock(source_mutex_);
-    for (auto& src : sources_){
-        src.request_uninvite();
-    }
+    push_request(request { request_type::uninvite_all });
+
     return 1;
 }
 
@@ -410,6 +397,47 @@ int32_t aoo::sink::decode() {
 
     // free unused source_descs
     sources_.free();
+
+    // handle requests
+    // NOTE: we invite/uninvite sources in the same thread
+    // where we add sources, so we can get away with holding
+    // a reader lock without any ABA problem.
+    request r;
+    while (requestqueue_.try_pop(r)){
+        switch (r.type) {
+        case request_type::invite:
+        {
+            // try to find existing source
+            shared_scoped_lock lock(source_mutex_);
+            auto src = find_source(r.address, r.id);
+            if (!src){
+                src = add_source(r.address, r.id, 0);
+            }
+            src->request_invite();
+            break;
+        }
+        case request_type::uninvite:
+        {
+            // try to find existing source
+            shared_scoped_lock lock(source_mutex_);
+            auto src = find_source(r.address, r.id);
+            if (src){
+                src->request_uninvite();
+            }
+            break;
+        }
+        case request_type::uninvite_all:
+        {
+            shared_scoped_lock lock(source_mutex_);
+            for (auto& src : sources_){
+                src.request_uninvite();
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
 
     return result;
 }
