@@ -74,22 +74,19 @@ struct invite_request : endpoint {
 
 struct sink_desc : endpoint {
     sink_desc(const ip_address& _addr, int32_t _id)
-        : endpoint(_addr, _id), channel(0), format_changed(true) {}
+        : endpoint(_addr, _id), channel(0) {}
     sink_desc(const sink_desc& other)
         : endpoint(other.address, other.id),
-          channel(other.channel.load()),
-          format_changed(other.format_changed.load()){}
+          channel(other.channel.load()) {}
     sink_desc& operator=(const sink_desc& other){
         address = other.address;
         id = other.id;
         channel = other.channel.load();
-        format_changed = other.format_changed.load();
         return *this;
     }
 
     // data
     std::atomic<int16_t> channel;
-    std::atomic<bool> format_changed;
 };
 
 class source final : public isource {
@@ -179,7 +176,6 @@ class source final : public isource {
     int32_t sequence_ = 0;
     std::atomic<int32_t> dropped_{0};
     std::atomic<float> lastpingtime_{0};
-    std::atomic<bool> format_changed_{false};
     enum class stream_state {
         stop,
         start,

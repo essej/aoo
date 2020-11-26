@@ -389,8 +389,8 @@ int32_t aoo::source::add_sink(const void *address, int32_t addrlen, aoo_id id){
     }
     // add sink descriptor
     sinks_.emplace_back(addr, id);
-    // notify send_format()
-    format_changed_ = true;
+    // push format request
+    formatrequestqueue_.push(format_request { addr, id });
 
     return 1;
 }
@@ -862,10 +862,8 @@ void source::start_new_stream(){
 
     shared_lock lock(sink_mutex_);
     for (auto& sink : sinks_){
-        sink.format_changed.store(true);
+        formatrequestqueue_.push(format_request { sink });
     }
-    // notify send_format()
-    format_changed_.store(true);
 }
 
 void source::update_audioqueue(){
@@ -908,10 +906,7 @@ void source::update_historybuffer(){
 }
 
 bool source::send_format(){
-    bool format_changed = format_changed_.exchange(false);
-    bool format_requested = !formatrequestqueue_.empty();
-
-    if (!format_changed && !format_requested){
+    if (formatrequestqueue_.empty()){
         return false;
     }
 
@@ -926,37 +921,15 @@ bool source::send_format(){
     aoo_format fmt;
     char settings[AOO_CODEC_MAXSETTINGSIZE];
     auto size = encoder_->write_format(fmt, settings, sizeof(settings));
-
-    updatelock.unlock();
-
     if (size < 0){
         return false;
     }
 
-    if (format_changed){
-        // only copy sinks which require a format update!
-        shared_lock sinklock(sink_mutex_);
-        auto sinks = (aoo::endpoint *)alloca(
-                        (sinks_.size() + 1) * sizeof(aoo::endpoint)); // avoid alloca(0)
-        int numsinks = 0;
-        for (auto& sink : sinks_){
-            if (sink.format_changed.exchange(false)){
-                new (&sinks[numsinks++]) aoo::endpoint (sink.address, sink.id);
-            }
-        }
-        sinklock.unlock();
-        // now we don't hold any lock!
+    updatelock.unlock();
 
-        for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_format(*this, id(), salt, fmt, settings, size);
-        }
-    }
-
-    if (format_requested){
-        format_request ep;
-        while (formatrequestqueue_.try_pop(ep)){
-            ep.send_format(*this, id(), salt, fmt, settings, size);
-        }
+    format_request r;
+    while (formatrequestqueue_.try_pop(r)){
+        r.send_format(*this, id(), salt, fmt, settings, size);
     }
 
     return true;
@@ -1176,7 +1149,7 @@ bool source::send_ping(){
     auto pingtime = lastpingtime_.load();
     auto interval = ping_interval_.load(); // 0: no ping
     if (interval > 0 && (elapsed - pingtime) >= interval){
-        // only copy sinks which require a format update!
+        // make local copy of sink descriptors
         shared_lock sinklock(sink_mutex_);
         int32_t numsinks = sinks_.size();
         auto sinks = (aoo::sink_desc *)alloca((numsinks + 1) * sizeof(aoo::sink_desc)); // avoid alloca(0)
