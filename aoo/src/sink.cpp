@@ -856,7 +856,7 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
     // the source format might have changed and we haven't noticed,
     // e.g. because of dropped UDP packets.
     if (salt != salt_){
-        streamstate_.request_format();
+        push_request(request { request_type::format });
         return 0;
     }
 
@@ -915,7 +915,11 @@ int32_t source_desc::handle_ping(const sink &s, time_tag tt){
     time_tag tt2 = aoo::time_tag::now(); // use real system time
 #endif
 
-    streamstate_.set_ping(tt, tt2);
+    // push "ping" request
+    request r(request_type::ping);
+    r.ping.tt1 = tt;
+    r.ping.tt2 = tt2;
+    push_request(r);
 
     // push "ping" event
     event e(AOO_PING_EVENT, *this);
@@ -930,12 +934,27 @@ int32_t source_desc::handle_ping(const sink &s, time_tag tt){
 bool source_desc::send(const sink& s){
     bool didsomething = false;
 
-    if (send_format_request(s)){
+    // handle requests
+    request r;
+    while (requestqueue_.try_pop(r)){
+        switch (r.type){
+        case request_type::format:
+            send_format_request(s);
+            break;
+        case request_type::ping:
+            send_ping(s, r.ping);
+            break;
+        default:
+            break;
+        }
         didsomething = true;
     }
+
+    // data requests are handled specially
     if (send_data_request(s)){
         didsomething = true;
     }
+
     if (send_notifications(s)){
         didsomething = true;
     }
@@ -1360,28 +1379,52 @@ resend_done:
 
 uint32_t make_version();
 
-bool source_desc::send_format_request(const sink& s) {
-    if (streamstate_.need_format()){
-        LOG_VERBOSE("request format for source " << id_);
-        char buf[AOO_MAXPACKETSIZE];
-        osc::OutboundPacketStream msg(buf, sizeof(buf));
+void source_desc::send_format_request(const sink& s) {
+    LOG_VERBOSE("request format for source " << id_);
+    char buf[AOO_MAXPACKETSIZE];
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-        // make OSC address pattern
-        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN +
-                AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_FORMAT_LEN;
-        char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s%s/%d%s",
-                 AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_FORMAT);
+    // make OSC address pattern
+    const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN +
+            AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_FORMAT_LEN;
+    char address[max_addr_size];
+    snprintf(address, sizeof(address), "%s%s/%d%s",
+             AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_FORMAT);
 
-        msg << osc::BeginMessage(address) << s.id() << (int32_t)make_version()
-            << osc::EndMessage;
+    msg << osc::BeginMessage(address) << s.id() << (int32_t)make_version()
+        << osc::EndMessage;
 
-        s.do_send(msg.Data(), msg.Size(), addr_);
+    s.do_send(msg.Data(), msg.Size(), addr_);
+}
 
-        return true;
-    } else {
-        return false;
+void source_desc::send_ping(const sink &s, const ping_request &ping){
+#if 0
+    // only send ping reply if source is active
+    if (streamstate_.get_state() != AOO_SOURCE_STATE_PLAY){
+        return;
     }
+#endif
+    auto lost_blocks = streamstate_.get_lost_since_ping();
+
+    char buffer[AOO_MAXPACKETSIZE];
+    osc::OutboundPacketStream msg(buffer, sizeof(buffer));
+
+    // make OSC address pattern
+    const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+            + AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_PING_LEN;
+    char address[max_addr_size];
+    snprintf(address, sizeof(address), "%s%s/%d%s",
+             AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_PING);
+
+    msg << osc::BeginMessage(address) << s.id()
+        << osc::TimeTag(ping.tt1)
+        << osc::TimeTag(ping.tt2)
+        << lost_blocks
+        << osc::EndMessage;
+
+    s.do_send(msg.Data(), msg.Size(), addr_);
+
+    LOG_DEBUG("send /ping to source " << id_);
 }
 
 
@@ -1436,40 +1479,6 @@ int32_t source_desc::send_data_request(const sink &s){
 bool source_desc::send_notifications(const sink& s){
     // called without lock!
     bool didsomething = false;
-
-    time_tag pingtime1;
-    time_tag pingtime2;
-    if (streamstate_.need_ping(pingtime1, pingtime2)){
-    #if 0
-        // only send ping if source is active
-        if (streamstate_.get_state() == AOO_SOURCE_STATE_PLAY){
-    #else
-        {   // always reply to ping!
-    #endif
-            auto lost_blocks = streamstate_.get_lost_since_ping();
-
-            char buffer[AOO_MAXPACKETSIZE];
-            osc::OutboundPacketStream msg(buffer, sizeof(buffer));
-
-            // make OSC address pattern
-            const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                    + AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_PING_LEN;
-            char address[max_addr_size];
-            snprintf(address, sizeof(address), "%s%s/%d%s",
-                     AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_PING);
-
-            msg << osc::BeginMessage(address) << s.id()
-                << osc::TimeTag(pingtime1)
-                << osc::TimeTag(pingtime2)
-                << lost_blocks
-                << osc::EndMessage;
-
-            s.do_send(msg.Data(), msg.Size(), addr_);
-
-            LOG_DEBUG("send /ping to source " << id_);
-            didsomething = true;
-        }
-    }
 
     auto invitation = streamstate_.get_invitation_state();
     if (invitation == stream_state::INVITE){

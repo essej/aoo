@@ -36,10 +36,7 @@ struct stream_state {
         state_ = AOO_SOURCE_STATE_STOP;
         underrun_ = false;
         xrun_ = 0;
-        format_ = false;
         invite_ = NONE;
-        pingtime1_ = 0;
-        pingtime2_ = 0;
     }
 
     void add_lost(int32_t n) { lost_ += n; lost_since_ping_ += n; }
@@ -63,31 +60,11 @@ struct stream_state {
         return state_;
     }
 
-    void set_ping(time_tag t1, time_tag t2){
-        pingtime1_.store(t1);
-        pingtime2_.store(t2);
-    }
-
-    bool need_ping(time_tag& t1, time_tag& t2){
-        // check pingtime2 because it ensures that pingtime1 has been set
-        auto pingtime2 = pingtime2_.exchange(0);
-        if (pingtime2){
-            t1 = pingtime1_.load();
-            t2 = pingtime2;
-            return true;
-        } else {
-            return false;
-        }
-    }
-
     void add_xrun(int32_t nblocks) { xrun_ += nblocks; }
     int32_t get_xrun() { return xrun_.exchange(0); }
 
     void set_underrun() { underrun_.store(true); }
     bool have_underrun() { return underrun_.exchange(false); }
-
-    void request_format() { format_ = true; }
-    bool need_format() { return format_.exchange(false); }
 
     enum invitation_state {
         NONE = 0,
@@ -107,9 +84,6 @@ private:
     std::atomic<aoo_source_state> state_{AOO_SOURCE_STATE_STOP};
     std::atomic<invitation_state> invite_{NONE};
     std::atomic<bool> underrun_{false};
-    std::atomic<bool> format_{false};
-    std::atomic<uint64_t> pingtime1_;
-    std::atomic<uint64_t> pingtime2_;
 };
 
 struct block_info {
@@ -149,9 +123,12 @@ struct source_event {
 };
 
 enum class request_type {
+    unknown,
     invite,
     uninvite,
-    uninvite_all
+    uninvite_all,
+    format,
+    ping
 };
 
 // used in 'sink'
@@ -215,8 +192,6 @@ public:
 
     void add_xrun(int32_t n){ streamstate_.add_xrun(n); }
 
-    void request_format(){ streamstate_.request_format(); }
-
     void request_invite(){ streamstate_.request_invitation(stream_state::INVITE); }
 
     void request_uninvite(){ streamstate_.request_invitation(stream_state::UNINVITE); }
@@ -225,6 +200,22 @@ private:
         int32_t sequence;
         int32_t frame;
     };
+
+    struct ping_request {
+        uint64_t tt1;
+        uint64_t tt2;
+    };
+
+    struct request {
+        request(request_type _type = request_type::unknown)
+            : type(_type) {}
+
+        request_type type;
+        union {
+            ping_request ping;
+        };
+    };
+
     void update(const sink& s);
 
     // handle messages
@@ -239,7 +230,9 @@ private:
     void check_missing_blocks(const sink& s);
 
     // send messages
-    bool send_format_request(const sink& s);
+    void send_format_request(const sink& s);
+
+    void send_ping(const sink& s, const ping_request& ping);
 
     int32_t send_data_request(const sink& s);
 
@@ -262,6 +255,10 @@ private:
     lockfree::spsc_queue<aoo_sample> audioqueue_;
     lockfree::spsc_queue<block_info> infoqueue_;
     lockfree::unbounded_mpsc_queue<data_request> resendqueue_;
+    lockfree::unbounded_mpsc_queue<request> requestqueue_;
+    void push_request(const request& r){
+        requestqueue_.push(r);
+    }
     lockfree::unbounded_mpsc_queue<event> eventqueue_;
     void push_event(const event& e){
         eventqueue_.push(e);
