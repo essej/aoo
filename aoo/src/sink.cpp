@@ -62,7 +62,7 @@ int32_t aoo_sink_invite_source(aoo_sink *sink, const void *address,
 int32_t aoo::sink::invite_source(const void *address, int32_t addrlen, aoo_id id){
     ip_address addr((const sockaddr *)address, addrlen);
 
-    push_request(request { request_type::invite, addr, id });
+    push_request(source_request { request_type::invite, addr, id });
 
     return 1;
 }
@@ -77,7 +77,7 @@ int32_t aoo_sink_uninvite_source(aoo_sink *sink, const void *address,
 int32_t aoo::sink::uninvite_source(const void *address, int32_t addrlen, aoo_id id){
     ip_address addr((const sockaddr *)address, addrlen);
 
-    push_request(request { request_type::uninvite, addr, id });
+    push_request(source_request { request_type::uninvite, addr, id });
 
     return 1;
 }
@@ -87,7 +87,7 @@ int32_t aoo_sink_uninvite_all(aoo_sink *sink){
 }
 
 int32_t aoo::sink::uninvite_all(){
-    push_request(request { request_type::uninvite_all });
+    push_request(source_request { request_type::uninvite_all });
 
     return 1;
 }
@@ -402,7 +402,7 @@ int32_t aoo::sink::decode() {
     // NOTE: we invite/uninvite sources in the same thread
     // where we add sources, so we can get away with holding
     // a reader lock without any ABA problem.
-    request r;
+    source_request r;
     while (requestqueue_.try_pop(r)){
         switch (r.type) {
         case request_type::invite:

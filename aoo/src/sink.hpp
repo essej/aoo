@@ -154,13 +154,14 @@ enum class request_type {
     uninvite_all
 };
 
-struct request {
-    request() = default;
+// used in 'sink'
+struct source_request {
+    source_request() = default;
 
-    request(request_type _type)
+    source_request(request_type _type)
         : type(_type) {}
 
-    request(request_type _type, const ip_address& _addr, aoo_id _id)
+    source_request(request_type _type, const ip_address& _addr, aoo_id _id)
         : type(_type), address(_addr), id(_id) {}
 
     request_type type;
@@ -367,8 +368,8 @@ private:
         eventqueue_.push(e);
     }
     // requests
-    lockfree::unbounded_mpsc_queue<request> requestqueue_;
-    void push_request(const request& r){
+    lockfree::unbounded_mpsc_queue<source_request> requestqueue_;
+    void push_request(const source_request& r){
         requestqueue_.push(r);
     }
     // helper methods
