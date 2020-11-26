@@ -411,7 +411,7 @@ int32_t aoo::sink::decode() {
             shared_scoped_lock lock(source_mutex_);
             auto src = find_source(r.address, r.id);
             if (!src){
-                src = add_source(r.address, r.id, 0);
+                src = add_source(r.address, r.id);
             }
             src->request_invite();
             break;
@@ -584,9 +584,9 @@ aoo::source_desc * sink::find_source(const ip_address& addr, aoo_id id){
     return nullptr;
 }
 
-source_desc * sink::add_source(const ip_address& addr, aoo_id id, int32_t salt){
+source_desc * sink::add_source(const ip_address& addr, aoo_id id){
     // add new source
-    sources_.emplace_front(addr, id, salt);
+    sources_.emplace_front(addr, id);
     return &sources_.front();
 }
 
@@ -632,7 +632,7 @@ int32_t sink::handle_format_message(const osc::ReceivedMessage& msg,
     shared_scoped_lock lock(source_mutex_);
     auto src = find_source(addr, id);
     if (!src){
-        src = add_source(addr, id, salt);
+        src = add_source(addr, id);
     }
     return src->handle_format(*this, salt, f, (const char *)settings, size);
 }
@@ -664,13 +664,10 @@ int32_t sink::handle_data_message(const osc::ReceivedMessage& msg,
     // try to find existing source
     shared_scoped_lock lock(source_mutex_);
     auto src = find_source(addr, id);
-    if (src){
-        return src->handle_data(*this, salt, d);
-    } else {
-        // discard data message, add source and request format!
-        add_source(addr, id, salt)->request_format();
-        return 0;
+    if (!src){
+        src = add_source(addr, id);
     }
+    return src->handle_data(*this, salt, d);
 }
 
 int32_t sink::handle_ping_message(const osc::ReceivedMessage& msg,
@@ -715,8 +712,8 @@ source_event::source_event(aoo_event_type _type, const source_desc &desc)
 
 /*////////////////////////// source_desc /////////////////////////////*/
 
-source_desc::source_desc(const ip_address& addr, aoo_id id, int32_t salt)
-    : addr_(addr), id_(id), salt_(salt)
+source_desc::source_desc(const ip_address& addr, aoo_id id)
+    : addr_(addr), id_(id)
 {
     // reserve some memory, so we don't have to allocate memory
     // when pushing events in the audio thread.
@@ -958,6 +955,7 @@ bool source_desc::send(const sink& s){
     if (send_notifications(s)){
         didsomething = true;
     }
+
     return didsomething;
 }
 

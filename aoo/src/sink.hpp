@@ -150,7 +150,7 @@ class sink;
 
 class source_desc {
 public:
-    source_desc(const ip_address& addr, aoo_id id, int32_t salt);
+    source_desc(const ip_address& addr, aoo_id id);
     source_desc(const source_desc& other) = delete;
     source_desc& operator=(const source_desc& other) = delete;
 
@@ -241,7 +241,7 @@ private:
     // data
     const ip_address addr_;
     const aoo_id id_;
-    int32_t salt_;
+    int32_t salt_ = -1;
     // audio decoder
     std::unique_ptr<aoo::decoder> decoder_;
     // state
@@ -372,7 +372,7 @@ private:
     // helper methods
     source_desc *find_source(const ip_address& addr, aoo_id id);
 
-    source_desc *add_source(const ip_address& addr, aoo_id id, int32_t salt);
+    source_desc *add_source(const ip_address& addr, aoo_id id);
 
     void reset_sources();
 
