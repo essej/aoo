@@ -117,28 +117,13 @@ struct block_info {
     int32_t channel;
 };
 
+class source_desc;
+
 struct event
 {
     event() = default;
 
-    event(aoo_event_type type, const ip_address& addr, aoo_id id){
-        memcpy(addr_, addr.address(), addr.length());
-        source.type = type;
-        source.address = addr_;
-        source.addrlen = addr.length();
-        source.id = id;
-    }
-
-    event(const event& other){
-        memcpy(this, &other, sizeof(event)); // ugh
-        source.address = addr_;
-    }
-
-    event& operator=(const event& other){
-        memcpy(this, &other, sizeof(event)); // ugh
-        source.address = addr_;
-        return *this;
-    }
+    event(aoo_event_type type, const source_desc& desc);
 
     union {
         aoo_event_type type_;
@@ -151,8 +136,16 @@ struct event
         aoo_block_resent_event block_resend;
         aoo_block_gap_event block_gap;
     };
-private:
-    char addr_[ip_address::max_length];
+};
+
+struct source_event {
+    source_event() = default;
+
+    source_event(aoo_event_type _type, const source_desc& desc);
+
+    aoo_event_type type;
+    ip_address address;
+    aoo_id id;
 };
 
 enum class request_type {
@@ -198,6 +191,8 @@ public:
         return !eventqueue_.empty();
     }
 
+    int32_t poll_events(aoo_eventhandler fn, void *user);
+
     int32_t get_format(aoo_format_storage& format);
 
     // methods
@@ -210,8 +205,6 @@ public:
                                      const aoo::data_packet& d);
 
     int32_t handle_ping(const sink& s, time_tag tt);
-
-    int32_t poll_events(aoo_eventhandler fn, void *user);
 
     bool send(const sink& s);
 
@@ -252,8 +245,8 @@ private:
     bool send_notifications(const sink& s);
 
     // data
-    ip_address addr_;
-    aoo_id id_;
+    const ip_address addr_;
+    const aoo_id id_;
     int32_t salt_;
     // audio decoder
     std::unique_ptr<aoo::decoder> decoder_;
@@ -369,8 +362,8 @@ private:
     time_dll dll_;
     timer timer_;
     // events
-    lockfree::unbounded_mpsc_queue<event> eventqueue_;
-    void push_event(const event& e){
+    lockfree::unbounded_mpsc_queue<source_event> eventqueue_;
+    void push_event(const source_event& e){
         eventqueue_.push(e);
     }
     // requests

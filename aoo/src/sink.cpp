@@ -489,7 +489,7 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
             if (lock.owns_lock()){
                 LOG_VERBOSE("aoo::sink: removed inactive source " << it->address().name()
                             << " " << it->address().port());
-                event e(AOO_SOURCE_REMOVE_EVENT, it->address(), it->id());
+                source_event e(AOO_SOURCE_REMOVE_EVENT, *it);
                 push_event(e);
                 it =  sources_.erase(it);
                 continue;
@@ -551,9 +551,14 @@ int32_t aoo::sink::poll_events(aoo_eventhandler fn, void *user){
         return 0;
     }
     int total = 0;
-    event e;
+    source_event e;
     while (eventqueue_.try_pop(e)){
-        fn(user, &e.event_);
+        aoo_source_event se;
+        se.type = e.type;
+        se.address = e.address.address();
+        se.addrlen = e.address.length();
+        se.id = e.id;
+        fn(user, (const aoo_event *)&se);
         total++;
     }
     // we only need to protect against source removal
@@ -691,6 +696,23 @@ int32_t sink::handle_ping_message(const osc::ReceivedMessage& msg,
     }
 }
 
+/*////////////////////////// event ///////////////////////////////////*/
+
+// 'event' is always used inside 'source_desc', so we can safely
+// store a pointer to the sockaddr. the ip_address itself
+// never changes during lifetime of the 'source_desc'!
+event::event(aoo_event_type type, const source_desc& desc){
+    source.type = type;
+    source.address = desc.address().address();
+    source.addrlen = desc.address().length();
+    source.id = desc.id();
+}
+
+// 'source_event' is used in 'sink' for source events that can outlive
+// its corresponding 'source_desc'. therefore the ip_address is copied!
+source_event::source_event(aoo_event_type _type, const source_desc &desc)
+    : type(_type), address(desc.address()), id(desc.id()) {}
+
 /*////////////////////////// source_desc /////////////////////////////*/
 
 source_desc::source_desc(const ip_address& addr, aoo_id id, int32_t salt)
@@ -700,7 +722,7 @@ source_desc::source_desc(const ip_address& addr, aoo_id id, int32_t salt)
     // when pushing events in the audio thread.
     eventqueue_.reserve(AOO_EVENTQUEUESIZE);
     // push "add" event
-    event e(AOO_SOURCE_ADD_EVENT, addr, id);
+    event e(AOO_SOURCE_ADD_EVENT, *this);
     eventqueue_.push(e); // no need to lock
     LOG_DEBUG("add new source with id " << id);
     // resendqueue_.reserve(256);
@@ -819,7 +841,7 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
     lock.unlock();
 
     // push event
-    event e(AOO_SOURCE_FORMAT_EVENT, addr_, id_);
+    event e(AOO_SOURCE_FORMAT_EVENT, *this);
     push_event(e);
 
     return 1;
@@ -896,7 +918,7 @@ int32_t source_desc::handle_ping(const sink &s, time_tag tt){
     streamstate_.set_ping(tt, tt2);
 
     // push "ping" event
-    event e(AOO_PING_EVENT, addr_, id_);
+    event e(AOO_PING_EVENT, *this);
     e.ping.tt1 = tt;
     e.ping.tt2 = tt2;
     e.ping.tt3 = 0;
@@ -957,25 +979,25 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
 
     if (lost > 0){
         // push packet loss event
-        event e(AOO_BLOCK_LOST_EVENT, addr_, id_);
+        event e(AOO_BLOCK_LOST_EVENT, *this);
         e.block_loss.count = lost;
         push_event(e);
     }
     if (reordered > 0){
         // push packet reorder event
-        event e(AOO_BLOCK_REORDERED_EVENT, addr_, id_);
+        event e(AOO_BLOCK_REORDERED_EVENT, *this);
         e.block_reorder.count = reordered;
         push_event(e);
     }
     if (resent > 0){
         // push packet resend event
-        event e(AOO_BLOCK_RESENT_EVENT, addr_, id_);
+        event e(AOO_BLOCK_RESENT_EVENT, *this);
         e.block_resend.count = resent;
         push_event(e);
     }
     if (gap > 0){
         // push packet gap event
-        event e(AOO_BLOCK_GAP_EVENT, addr_, id_);
+        event e(AOO_BLOCK_GAP_EVENT, *this);
         e.block_gap.count = gap;
         push_event(e);
     }
@@ -1030,7 +1052,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
 
         if (streamstate_.update_state(AOO_SOURCE_STATE_PLAY)){
             // push "start" event
-            event e(AOO_SOURCE_STATE_EVENT, addr_, id_);
+            event e(AOO_SOURCE_STATE_EVENT, *this);
             e.source_state.state = AOO_SOURCE_STATE_PLAY;
             push_event(e);
         }
@@ -1041,7 +1063,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
     } else {
         // buffer ran out -> push "stop" event
         if (streamstate_.update_state(AOO_SOURCE_STATE_STOP)){
-            event e(AOO_SOURCE_STATE_EVENT, addr_, id_);
+            event e(AOO_SOURCE_STATE_EVENT, *this);
             e.source_state.state = AOO_SOURCE_STATE_STOP;
             push_event(e);
         }
