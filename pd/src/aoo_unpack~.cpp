@@ -136,13 +136,11 @@ static void aoo_unpack_handle_event(t_aoo_unpack *x, const aoo_event *event)
     }
     case AOO_SOURCE_FORMAT_EVENT:
     {
-        auto e = (const aoo_source_event *)event;
+        auto e = (const aoo_format_event *)event;
         aoo_format_storage f;
-        if (x->x_sink->get_source_format(e->address, e->addrlen, e->id, f) > 0) {
-            SETFLOAT(&msg[0], e->id);
-            int fsize = format_to_atoms(f.header, 31, msg + 1); // skip first atom
-            outlet_anything(x->x_msgout, gensym("source_format"), fsize + 1, msg);
-        }
+        SETFLOAT(&msg[0], e->id);
+        int fsize = format_to_atoms(*e->format, 31, msg + 1); // skip first atom
+        outlet_anything(x->x_msgout, gensym("source_format"), fsize + 1, msg);
         break;
     }
     case AOO_SOURCE_STATE_EVENT:

@@ -95,16 +95,12 @@ void AooReceive::handleEvent(const aoo_event *event){
     }
     case AOO_SOURCE_FORMAT_EVENT:
     {
-        auto e = (const aoo_source_event *)event;
+        auto e = (const aoo_format_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        aoo_format_storage f;
-        if (sink()->get_source_format(addr.address(), addr.length(),
-                                      e->id, f) > 0) {
-            beginEvent(msg, "/format", addr, e->id);
-            serializeFormat(msg, f.header);
-            sendMsgRT(msg);
-        }
+        beginEvent(msg, "/format", addr, e->id);
+        serializeFormat(msg, *e->format);
+        sendMsgRT(msg);
         break;
     }
     case AOO_SOURCE_STATE_EVENT:

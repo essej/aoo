@@ -103,6 +103,7 @@ struct event
         aoo_event_type type_;
         aoo_event event_;
         aoo_source_event source;
+        aoo_format_event format;
         aoo_ping_event ping;
         aoo_source_state_event source_state;
         aoo_block_lost_event block_loss;
@@ -153,6 +154,8 @@ public:
     source_desc(const ip_address& addr, aoo_id id);
     source_desc(const source_desc& other) = delete;
     source_desc& operator=(const source_desc& other) = delete;
+
+    ~source_desc();
 
     // getters
     aoo_id id() const { return id_; }

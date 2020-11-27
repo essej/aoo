@@ -273,17 +273,14 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
     }
     case AOO_SOURCE_FORMAT_EVENT:
     {
-        auto e = (const aoo_source_event *)event;
+        auto e = (const aoo_format_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         if (!endpoint_to_atoms(addr, e->id, 3, msg)){
             return;
         }
-        aoo_format_storage f;
-        if (x->x_sink->get_source_format(addr.address(), addr.length(), e->id, f) > 0) {
-            int fsize = format_to_atoms(f.header, 29, msg + 3); // skip first three atoms
-            outlet_anything(x->x_msgout, gensym("source_format"), fsize + 3, msg);
-        }
+        int fsize = format_to_atoms(*e->format, 29, msg + 3); // skip first three atoms
+        outlet_anything(x->x_msgout, gensym("source_format"), fsize + 3, msg);
         break;
     }
     case AOO_SOURCE_STATE_EVENT:

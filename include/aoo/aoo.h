@@ -229,6 +229,12 @@ typedef struct aoo_ping_event {
     int32_t lost_blocks; // only for source
 } aoo_ping_event;
 
+// format event
+typedef struct aoo_format_event {
+    AOO_ENDPOINT_EVENT
+    const struct aoo_format *format;
+} aoo_format_event;
+
 /*//////////////////// AoO options ////////////////////*/
 
 typedef enum aoo_option

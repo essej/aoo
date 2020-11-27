@@ -725,6 +725,16 @@ source_desc::source_desc(const ip_address& addr, aoo_id id)
     // resendqueue_.reserve(256);
 }
 
+source_desc::~source_desc(){
+    // some events use dynamic memory
+    event e;
+    while (eventqueue_.try_pop(e)){
+        if (e.type_ == AOO_SOURCE_FORMAT_EVENT){
+            delete e.format.format;
+        }
+    }
+}
+
 bool source_desc::is_active(const sink& s) const {
     if (lastprocesstime_.is_empty()){
         // initialize
@@ -837,8 +847,15 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
 
     lock.unlock();
 
+    // this thread is the only place where the format can change,
+    // so don't have to hold the lock to read it.
+    auto fmt = new aoo_format_storage;
+    decoder_->get_format(*fmt);
+
     // push event
     event e(AOO_SOURCE_FORMAT_EVENT, *this);
+    e.format.format = (const aoo_format *)fmt;
+
     push_event(e);
 
     return 1;
@@ -1096,6 +1113,13 @@ int32_t source_desc::poll_events(aoo_eventhandler fn, void *user){
     event e;
     while (eventqueue_.try_pop(e)){
         fn(user, &e.event_);
+        // some events use dynamic memory
+        if (e.type_ == AOO_SOURCE_FORMAT_EVENT){
+            // freeing memory is not really RT safe,
+            // but it is the easiest solution.
+            // LATER think about better ways.
+            delete e.format.format;
+        }
         count++;
     }
     return count;
