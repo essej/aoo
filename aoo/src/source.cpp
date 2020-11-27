@@ -685,99 +685,6 @@ int32_t aoo::source::poll_events(aoo_eventhandler fn, void *user){
 
 namespace aoo {
 
-/*//////////////////////////////// endpoint /////////////////////////////////////*/
-
-// /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
-
-void endpoint::send_data(const source& s, aoo_id src, int32_t salt, const aoo::data_packet& d) const {
-    // call without lock!
-
-    char buf[AOO_MAXPACKETSIZE];
-    osc::OutboundPacketStream msg(buf, sizeof(buf));
-
-    if (id != AOO_ID_WILDCARD){
-        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                + AOO_MSG_SINK_LEN + 16 + AOO_MSG_DATA_LEN;
-        char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s%s/%d%s",
-                 AOO_MSG_DOMAIN, AOO_MSG_SINK, id, AOO_MSG_DATA);
-
-        msg << osc::BeginMessage(address);
-    } else {
-        msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_DATA);
-    }
-
-    LOG_DEBUG("send block: seq = " << d.sequence << ", sr = " << d.samplerate
-              << ", chn = " << d.channel << ", totalsize = " << d.totalsize
-              << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
-
-    msg << src << salt << d.sequence << d.samplerate << d.channel
-        << d.totalsize << d.nframes << d.framenum
-        << osc::Blob(d.data, d.size) << osc::EndMessage;
-
-    send(s, msg.Data(), msg.Size());
-}
-
-// /aoo/sink/<id>/format <src> <version> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
-
-uint32_t make_version();
-
-void endpoint::send_format(const source& s, aoo_id src, int32_t salt, const aoo_format& f,
-                           const char *options, int32_t size) const {
-    // call without lock!
-    LOG_DEBUG("send format to " << id << " (salt = " << salt << ")");
-
-    char buf[AOO_MAXPACKETSIZE];
-    osc::OutboundPacketStream msg(buf, sizeof(buf));
-
-    if (id != AOO_ID_WILDCARD){
-        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                + AOO_MSG_SINK_LEN + 16 + AOO_MSG_FORMAT_LEN;
-        char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s%s/%d%s",
-                 AOO_MSG_DOMAIN, AOO_MSG_SINK, id, AOO_MSG_FORMAT);
-
-        msg << osc::BeginMessage(address);
-    } else {
-        msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_FORMAT);
-    }
-
-    msg << src << (int32_t)make_version() << salt << f.nchannels << f.samplerate << f.blocksize
-        << f.codec << osc::Blob(options, size) << osc::EndMessage;
-
-    send(s, msg.Data(), msg.Size());
-}
-
-// /aoo/sink/<id>/ping <src> <time>
-
-void endpoint::send_ping(const source& s, aoo_id src, time_tag t) const {
-    // call without lock!
-    LOG_DEBUG("send ping to " << id);
-
-    char buf[AOO_MAXPACKETSIZE];
-    osc::OutboundPacketStream msg(buf, sizeof(buf));
-
-    if (id != AOO_ID_WILDCARD){
-        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                + AOO_MSG_SINK_LEN + 16 + AOO_MSG_PING_LEN;
-        char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s%s/%d%s",
-                 AOO_MSG_DOMAIN, AOO_MSG_SINK, id, AOO_MSG_PING);
-
-        msg << osc::BeginMessage(address);
-    } else {
-        msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_PING);
-    }
-
-    msg << src << osc::TimeTag(t) << osc::EndMessage;
-
-    send(s, msg.Data(), msg.Size());
-}
-
-void endpoint::send(const source& s, const char *data, int32_t n) const {
-    s.do_send(data, n, address);
-}
-
 /*///////////////////////// source ////////////////////////////////*/
 
 sink_desc * source::find_sink(const ip_address& addr, aoo_id id){
@@ -905,6 +812,8 @@ void source::update_historybuffer(){
     }
 }
 
+uint32_t make_version();
+
 bool source::send_format(){
     if (formatrequestqueue_.empty()){
         return false;
@@ -918,9 +827,9 @@ bool source::send_format(){
 
     int32_t salt = salt_;
 
-    aoo_format fmt;
-    char settings[AOO_CODEC_MAXSETTINGSIZE];
-    auto size = encoder_->write_format(fmt, settings, sizeof(settings));
+    aoo_format f;
+    char options[AOO_CODEC_MAXSETTINGSIZE];
+    auto size = encoder_->write_format(f, options, sizeof(options));
     if (size < 0){
         return false;
     }
@@ -929,7 +838,29 @@ bool source::send_format(){
 
     format_request r;
     while (formatrequestqueue_.try_pop(r)){
-        r.send_format(*this, id(), salt, fmt, settings, size);
+        // /aoo/sink/<id>/format <src> <version> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
+
+        LOG_DEBUG("send format to " << r.id << " (salt = " << salt << ")");
+
+        char buf[AOO_MAXPACKETSIZE];
+        osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+        if (r.id != AOO_ID_WILDCARD){
+            const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+                    + AOO_MSG_SINK_LEN + 16 + AOO_MSG_FORMAT_LEN;
+            char address[max_addr_size];
+            snprintf(address, sizeof(address), "%s%s/%d%s",
+                     AOO_MSG_DOMAIN, AOO_MSG_SINK, r.id, AOO_MSG_FORMAT);
+
+            msg << osc::BeginMessage(address);
+        } else {
+            msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_FORMAT);
+        }
+
+        msg << id() << (int32_t)make_version() << salt << f.nchannels << f.samplerate << f.blocksize
+            << f.codec << osc::Blob(options, size) << osc::EndMessage;
+
+        do_send(msg.Data(), msg.Size(), r.address);
     }
 
     return true;
@@ -943,15 +874,15 @@ bool source::resend_data(){
 
     bool didsomething = false;
 
-    data_request request;
-    while (datarequestqueue_.try_pop(request)){
+    data_request r;
+    while (datarequestqueue_.try_pop(r)){
         auto salt = salt_;
-        if (salt != request.salt){
+        if (salt != r.salt){
             // outdated request
             continue;
         }
 
-        auto block = history_.find(request.sequence);
+        auto block = history_.find(r.sequence);
         if (block){
             aoo::data_packet d;
             d.sequence = block->sequence;
@@ -961,7 +892,7 @@ bool source::resend_data(){
             d.nframes = block->num_frames();
             // We use a buffer on the heap because blocks and even frames
             // can be quite large and we don't want them to sit on the stack.
-            if (request.frame < 0){
+            if (r.frame < 0){
                 // Copy whole block and save frame pointers.
                 sendbuffer_.resize(d.totalsize);
                 char *buf = sendbuffer_.data();
@@ -987,32 +918,36 @@ bool source::resend_data(){
                     d.framenum = i;
                     d.data = frameptr[i];
                     d.size = framesize[i];
-                    request.send_data(*this, id(), salt, d);
+                    send_data(r, salt, d);
                 }
+
+                // lock again
+                updatelock.lock();
             } else {
                 // Copy a single frame
-                if (request.frame >= 0 && request.frame < d.nframes){
-                    int32_t size = block->frame_size(request.frame);
+                if (r.frame >= 0 && r.frame < d.nframes){
+                    int32_t size = block->frame_size(r.frame);
                     sendbuffer_.resize(size);
-                    block->get_frame(request.frame, sendbuffer_.data(), size);
+                    block->get_frame(r.frame, sendbuffer_.data(), size);
                     // unlock before sending
                     updatelock.unlock();
 
                     // send frame to sink
-                    d.framenum = request.frame;
+                    d.framenum = r.frame;
                     d.data = sendbuffer_.data();
                     d.size = size;
-                    request.send_data(*this, id(), salt, d);
+                    send_data(r, salt, d);
+
+                    // lock again
+                    updatelock.lock();
                 } else {
-                    LOG_ERROR("frame number " << request.frame << " out of range!");
+                    LOG_ERROR("frame number " << r.frame << " out of range!");
                 }
             }
-            // lock again
-            updatelock.lock();
 
             didsomething = true;
         } else {
-            LOG_VERBOSE("couldn't find block " << request.sequence);
+            LOG_VERBOSE("couldn't find block " << r.sequence);
         }
     }
 
@@ -1053,7 +988,7 @@ bool source::send_data(){
 
         // send block to sinks
         for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_data(*this, id(), salt, d);
+            send_data(sinks[i], salt, d);
         }
         --dropped_;
     } else if (audioqueue_.read_available() && srqueue_.read_available()){
@@ -1103,7 +1038,7 @@ bool source::send_data(){
                     d.size = n;
                     for (int i = 0; i < numsinks; ++i){
                         d.channel = sinks[i].channel;
-                        sinks[i].send_data(*this, id(), salt, d);
+                        send_data(sinks[i], salt, d);
                     }
                 };
 
@@ -1143,6 +1078,35 @@ bool source::send_data(){
     return 1;
 }
 
+// /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
+
+void source::send_data(const endpoint& ep, int32_t salt, const aoo::data_packet& d) const {
+    char buf[AOO_MAXPACKETSIZE];
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+    if (ep.id != AOO_ID_WILDCARD){
+        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+                + AOO_MSG_SINK_LEN + 16 + AOO_MSG_DATA_LEN;
+        char address[max_addr_size];
+        snprintf(address, sizeof(address), "%s%s/%d%s",
+                 AOO_MSG_DOMAIN, AOO_MSG_SINK, ep.id, AOO_MSG_DATA);
+
+        msg << osc::BeginMessage(address);
+    } else {
+        msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_DATA);
+    }
+
+    LOG_DEBUG("send block: seq = " << d.sequence << ", sr = " << d.samplerate
+              << ", chn = " << d.channel << ", totalsize = " << d.totalsize
+              << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
+
+    msg << id() << salt << d.sequence << d.samplerate << d.channel
+        << d.totalsize << d.nframes << d.framenum
+        << osc::Blob(d.data, d.size) << osc::EndMessage;
+
+    do_send(msg.Data(), msg.Size(), ep.address);
+}
+
 bool source::send_ping(){
     // if stream is stopped, the timer won't increment anyway
     auto elapsed = timer_.get_elapsed();
@@ -1159,7 +1123,29 @@ bool source::send_ping(){
         auto tt = timer_.get_absolute();
 
         for (int i = 0; i < numsinks; ++i){
-            sinks[i].send_ping(*this, id(), tt);
+            // /aoo/sink/<id>/ping <src> <time>
+            auto& s = sinks[i];
+
+            LOG_DEBUG("send ping to " << s.id);
+
+            char buf[AOO_MAXPACKETSIZE];
+            osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+            if (s.id != AOO_ID_WILDCARD){
+                const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+                        + AOO_MSG_SINK_LEN + 16 + AOO_MSG_PING_LEN;
+                char address[max_addr_size];
+                snprintf(address, sizeof(address), "%s%s/%d%s",
+                         AOO_MSG_DOMAIN, AOO_MSG_SINK, s.id, AOO_MSG_PING);
+
+                msg << osc::BeginMessage(address);
+            } else {
+                msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_PING);
+            }
+
+            msg << id() << osc::TimeTag(tt) << osc::EndMessage;
+
+            do_send(msg.Data(), msg.Size(), s.address);
         }
 
         lastpingtime_.store(elapsed);

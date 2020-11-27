@@ -35,16 +35,6 @@ struct endpoint {
     // data
     ip_address address;
     aoo_id id = 0;
-
-    // methods
-    void send_data(const source& s, aoo_id src, int32_t salt, const data_packet& data) const;
-
-    void send_format(const source& s, aoo_id src, int32_t salt, const aoo_format& f,
-                     const char *options, int32_t size) const;
-
-    void send_ping(const source& s, aoo_id src, time_tag t) const;
-
-    void send(const source& s, const char *data, int32_t n) const;
 };
 
 using format_request = endpoint;
@@ -229,6 +219,8 @@ class source final : public isource {
     bool send_format();
 
     bool send_data();
+
+    void send_data(const endpoint& ep, int32_t salt, const aoo::data_packet& d) const;
 
     bool resend_data();
 
