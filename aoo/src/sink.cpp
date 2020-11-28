@@ -747,7 +747,7 @@ bool source_desc::is_active(const sink& s) const {
 
 int32_t source_desc::get_format(aoo_format_storage &format){
     // synchronize with handle_format() and update()!
-    shared_lock lock(mutex_);
+    shared_scoped_lock lock(mutex_);
     if (decoder_){
         return decoder_->get_format(format);
     } else {
@@ -757,7 +757,7 @@ int32_t source_desc::get_format(aoo_format_storage &format){
 
 void source_desc::reset(const sink &s){
     // take writer lock!
-    unique_lock lock(mutex_);
+    scoped_lock lock(mutex_);
     update(s);
 }
 
@@ -813,23 +813,29 @@ void source_desc::update(const sink &s){
 
 int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format& f,
                                    const char *settings, int32_t size){
+    // ignore redundant format messages!
+    // NOTE: salt_ can only change in this thread,
+    // so we don't need a lock to safely *read* it!
+    if (salt == salt_){
+        return 0;
+    }
+
     std::unique_ptr<decoder> new_decoder;
-    {
-        // create a new decoder if necessary
-        shared_scoped_lock rdlock(mutex_); // reader lock!
-        // create/change decoder if needed
-        if (!decoder_ || strcmp(decoder_->name(), f.codec)){
-            auto c = aoo::find_codec(f.codec);
-            if (c){
-                new_decoder = c->create_decoder();
-                if (!new_decoder){
-                    LOG_ERROR("couldn't create decoder!");
-                    return 0;
-                }
-            } else {
-                LOG_ERROR("codec '" << f.codec << "' not supported!");
+
+    // Create a new decoder if necessary.
+    // This is the only thread where the decoder can possibly
+    // change, so we don't need a lock to safely *read* it!
+    if (!decoder_ || strcmp(decoder_->name(), f.codec)){
+        auto c = aoo::find_codec(f.codec);
+        if (c){
+            new_decoder = c->create_decoder();
+            if (!new_decoder){
+                LOG_ERROR("couldn't create decoder!");
                 return 0;
             }
+        } else {
+            LOG_ERROR("codec '" << f.codec << "' not supported!");
+            return 0;
         }
     }
 
@@ -847,8 +853,8 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
 
     lock.unlock();
 
-    // this thread is the only place where the format can change,
-    // so don't have to hold the lock to read it.
+    // This is the only thread where the format can possibly change,
+    // so we don't need a lock to *read* it!
     auto fmt = new aoo_format_storage;
     decoder_->get_format(*fmt);
 
@@ -864,8 +870,9 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
 
 int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_packet& d){
+
     // synchronize with update()!
-    shared_lock lock(mutex_);
+    shared_scoped_lock lock(mutex_);
 
     // the source format might have changed and we haven't noticed,
     // e.g. because of dropped UDP packets.
@@ -873,7 +880,6 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
         push_request(request { request_type::format });
         return 0;
     }
-
 #if 1
     if (!decoder_){
         LOG_DEBUG("ignore data message");

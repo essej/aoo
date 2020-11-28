@@ -1179,7 +1179,7 @@ void source::handle_format_request(const osc::ReceivedMessage& msg,
     lock.unlock();
 
     if (sink){
-        formatrequestqueue_.push(aoo::format_request { addr, id });
+        formatrequestqueue_.push(format_request { addr, id });
     } else {
         LOG_WARNING("ignoring '" << AOO_MSG_FORMAT << "' message: sink not found");
     }
