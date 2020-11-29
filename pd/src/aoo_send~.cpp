@@ -165,6 +165,17 @@ static void aoo_send_doremovesink(t_aoo_send *x, const ip_address& addr, aoo_id 
     }
 }
 
+static t_sink *aoo_send_findsink(t_aoo_send *x, const ip_address& addr, aoo_id id)
+{
+    for (auto& sink : x->x_sinks){
+        // wildcard sinks match any ID
+        if (sink.s_address == addr && (sink.s_id == AOO_ID_WILDCARD || sink.s_id == id)){
+            return &sink;
+        }
+    }
+    return nullptr;
+}
+
 // called from the network receive thread
 void aoo_send_handle_message(t_aoo_send *x, const char * data,
                              int32_t n, const ip_address& addr)
@@ -276,16 +287,6 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     }
 }
 
-static t_sink *aoo_send_findsink(t_aoo_send *x, const ip_address& addr, aoo_id id)
-{
-    for (auto& sink : x->x_sinks){
-        if (sink.s_id == id && sink.s_address == addr){
-            return &sink;
-        }
-    }
-    return nullptr;
-}
-
 static void aoo_send_accept(t_aoo_send *x, t_floatarg f)
 {
     x->x_accept = f != 0;
@@ -300,15 +301,14 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         return;
     }
     if (get_sink_arg(x, x->x_node, argc, argv, addr, id)){
-        auto sink = aoo_send_findsink(x, addr, id);
-        if (!sink){
+        int32_t chn = atom_getfloat(argv + 3);
+    #if 1
+        if (!aoo_send_findsink(x, addr, id)){
             pd_error(x, "%s: couldn't find sink!", classname(x));
             return;
         }
-        int32_t chn = atom_getfloat(argv + 3);
-
-        auto& addr = sink->s_address;
-        x->x_source->set_sink_channelonset(addr.address(), addr.length(), sink->s_id, chn);
+    #endif
+        x->x_source->set_sink_channelonset(addr.address(), addr.length(), id, chn);
     }
 }
 
