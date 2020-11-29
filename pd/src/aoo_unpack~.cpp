@@ -134,6 +134,20 @@ static void aoo_unpack_handle_event(t_aoo_unpack *x, const aoo_event *event)
         outlet_anything(x->x_msgout, gensym("source_add"), 1, msg);
         break;
     }
+    case AOO_SOURCE_REMOVE_EVENT:
+    {
+        auto e = (const aoo_source_event *)event;
+        SETFLOAT(&msg[0], e->id);
+        outlet_anything(x->x_msgout, gensym("source_remove"), 1, msg);
+        break;
+    }
+    case AOO_INVITE_TIMEOUT_EVENT:
+    {
+        auto e = (const aoo_source_event *)event;
+        SETFLOAT(&msg[0], e->id);
+        outlet_anything(x->x_msgout, gensym("invite_timeout"), 1, msg);
+        break;
+    }
     case AOO_SOURCE_FORMAT_EVENT:
     {
         auto e = (const aoo_format_event *)event;

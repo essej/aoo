@@ -1181,7 +1181,7 @@ void source::handle_format_request(const osc::ReceivedMessage& msg,
     if (sink){
         formatrequestqueue_.push(format_request { addr, id });
     } else {
-        LOG_WARNING("ignoring '" << AOO_MSG_FORMAT << "' message: sink not found");
+        LOG_VERBOSE("ignoring '" << AOO_MSG_FORMAT << "' message: sink not found");
     }
 }
 
@@ -1208,7 +1208,7 @@ void source::handle_data_request(const osc::ReceivedMessage& msg,
             datarequestqueue_.push(data_request{ addr, id, salt, seq, frame });
         }
     } else {
-        LOG_WARNING("ignoring '" << AOO_MSG_DATA << "' message: sink not found");
+        LOG_VERBOSE("ignoring '" << AOO_MSG_DATA << "' message: sink not found");
     }
 }
 

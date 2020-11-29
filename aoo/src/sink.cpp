@@ -408,12 +408,14 @@ int32_t aoo::sink::decode() {
         case request_type::invite:
         {
             // try to find existing source
+            // we might want to invite an existing source,
+            // e.g. when it is currently uninviting
             shared_scoped_lock lock(source_mutex_);
             auto src = find_source(r.address, r.id);
             if (!src){
                 src = add_source(r.address, r.id);
             }
-            src->request_invite();
+            src->invite();
             break;
         }
         case request_type::uninvite:
@@ -422,7 +424,9 @@ int32_t aoo::sink::decode() {
             shared_scoped_lock lock(source_mutex_);
             auto src = find_source(r.address, r.id);
             if (src){
-                src->request_uninvite();
+                src->uninvite();
+            } else {
+                LOG_WARNING("aoo: can't uninvite - source not found");
             }
             break;
         }
@@ -430,7 +434,7 @@ int32_t aoo::sink::decode() {
         {
             shared_scoped_lock lock(source_mutex_);
             for (auto& src : sources_){
-                src.request_uninvite();
+                src.uninvite();
             }
             break;
         }
@@ -487,10 +491,17 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
             // but only if we can grab the lock!
             unique_lock lock(source_mutex_, std::try_to_lock_t {}); // writer lock!
             if (lock.owns_lock()){
-                LOG_VERBOSE("aoo::sink: removed inactive source " << it->address().name()
-                            << " " << it->address().port());
-                source_event e(AOO_SOURCE_REMOVE_EVENT, *it);
-                push_event(e);
+                if (it->is_inviting()){
+                    LOG_VERBOSE("aoo::sink: invitation for " << it->address().name()
+                                << " " << it->address().port() << " timed out");
+                    source_event e(AOO_INVITE_TIMEOUT_EVENT, *it);
+                    push_event(e);
+                } else {
+                    LOG_VERBOSE("aoo::sink: removed inactive source " << it->address().name()
+                                << " " << it->address().port());
+                    source_event e(AOO_SOURCE_REMOVE_EVENT, *it);
+                    push_event(e);
+                }
                 it =  sources_.erase(it);
                 continue;
             } else {
@@ -713,15 +724,11 @@ source_event::source_event(aoo_event_type _type, const source_desc &desc)
 /*////////////////////////// source_desc /////////////////////////////*/
 
 source_desc::source_desc(const ip_address& addr, aoo_id id)
-    : addr_(addr), id_(id)
+    : addr_(addr), id_(id), state_(source_state::idle)
 {
     // reserve some memory, so we don't have to allocate memory
     // when pushing events in the audio thread.
     eventqueue_.reserve(AOO_EVENTQUEUESIZE);
-    // push "add" event
-    event e(AOO_SOURCE_ADD_EVENT, *this);
-    eventqueue_.push(e); // no need to lock
-    LOG_DEBUG("add new source with id " << id);
     // resendqueue_.reserve(256);
 }
 
@@ -736,8 +743,8 @@ source_desc::~source_desc(){
 }
 
 bool source_desc::is_active(const sink& s) const {
+    // initialize the timer
     if (lastprocesstime_.is_empty()){
-        // initialize
         lastprocesstime_ = s.absolute_time();
         return true;
     }
@@ -809,6 +816,40 @@ void source_desc::update(const sink &s){
     }
 }
 
+// called from the receive thread
+void source_desc::invite(){
+    // only invite when idle or uninviting!
+    // NOTE: state can only change in this thread, so we don't need a CAS
+    auto state = state_.load(std::memory_order_relaxed);
+    if (state != source_state::stream){
+        // special case: (re)invite shortly after uninvite ->
+        // force sending of format, so that we don't spam the source
+        // with redundant invitation messages.
+        if (state == source_state::uninvite){
+            scoped_lock lock(mutex_);
+            // don't set to negative value to avoid redundant "add" event,
+            // see handle_format().
+            salt_++;
+        }
+        state_.store(source_state::invite);
+        LOG_DEBUG("source_desc: invite");
+    } else {
+        LOG_WARNING("aoo: couldn't invite source - already active");
+    }
+}
+
+// called from the receive thread
+void source_desc::uninvite(){
+    // NOTE: state can only change in this thread, so we don't need a CAS
+    auto state = state_.load(std::memory_order_relaxed);
+    if (state != source_state::idle){
+        LOG_DEBUG("source_desc: uninvite");
+        state_.store(source_state::uninvite);
+    } else {
+        LOG_WARNING("aoo: couldn't uninvite source - not active");
+    }
+}
+
 // /aoo/sink/<id>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <settings...>
 
 int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format& f,
@@ -820,11 +861,11 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
         return 0;
     }
 
-    std::unique_ptr<decoder> new_decoder;
-
     // Create a new decoder if necessary.
     // This is the only thread where the decoder can possibly
     // change, so we don't need a lock to safely *read* it!
+    std::unique_ptr<decoder> new_decoder;
+
     if (!decoder_ || strcmp(decoder_->name(), f.codec)){
         auto c = aoo::find_codec(f.codec);
         if (c){
@@ -844,6 +885,7 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
         decoder_ = std::move(new_decoder);
     }
 
+    auto oldsalt = salt_;
     salt_ = salt;
 
     // read format
@@ -852,6 +894,18 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
     update(s);
 
     lock.unlock();
+
+    // NOTE: state can only change in this thread, so we don't need a CAS.
+    auto state = state_.load(std::memory_order_relaxed);
+    if (state == source_state::idle || state == source_state::invite){
+        state_.store(source_state::stream);
+        // only push "add" event, if this is the first format message!
+        if (oldsalt < 0){
+            event e(AOO_SOURCE_ADD_EVENT, *this);
+            eventqueue_.push(e); // no need to lock
+            LOG_DEBUG("add new source with id " << id());
+        }
+    }
 
     // This is the only thread where the format can possibly change,
     // so we don't need a lock to *read* it!
@@ -870,6 +924,12 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
 
 int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_packet& d){
+    // if we're in uninvite state, push uninvite request.
+    // don't ignore data, so we only get removed if the source really stops sending!
+    auto state = state_.load(std::memory_order_relaxed);
+    if (state == source_state::uninvite){
+        push_request(request { request_type::uninvite });
+    }
 
     // synchronize with update()!
     shared_scoped_lock lock(mutex_);
@@ -880,6 +940,7 @@ int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_pa
         push_request(request { request_type::format });
         return 0;
     }
+
 #if 1
     if (!decoder_){
         LOG_DEBUG("ignore data message");
@@ -964,6 +1025,9 @@ bool source_desc::send(const sink& s){
         case request_type::ping:
             send_ping(s, r.ping);
             break;
+        case request_type::uninvite:
+            send_uninvitation(s);
+            break;
         default:
             break;
         }
@@ -971,11 +1035,11 @@ bool source_desc::send(const sink& s){
     }
 
     // data requests are handled specially
-    if (send_data_request(s)){
+    if (send_data_requests(s)){
         didsomething = true;
     }
 
-    if (send_notifications(s)){
+    if (send_invitation(s)){
         didsomething = true;
     }
 
@@ -998,6 +1062,13 @@ bool source_desc::decode(const sink& s){
 bool source_desc::process(const sink& s, aoo_sample *buffer,
                           int32_t nsamples, time_tag tt)
 {
+    // NOTE: make sure that we keep processing for 'uninvite',
+    // see comment in 'handle_data()'.
+#if 0
+    if (state_.load(std::memory_order_acquire) != source_state::stream){
+        return false;
+    }
+#endif
     // synchronize with update()!
     // the mutex should be uncontended most of the time.
     shared_lock lock(mutex_, std::try_to_lock_t{});
@@ -1425,6 +1496,8 @@ void source_desc::send_format_request(const sink& s) {
     s.do_send(msg.Data(), msg.Size(), addr_);
 }
 
+// AoO/<id>/ping <sink>
+
 void source_desc::send_ping(const sink &s, const ping_request &ping){
 #if 0
     // only send ping reply if source is active
@@ -1455,99 +1528,105 @@ void source_desc::send_ping(const sink &s, const ping_request &ping){
     LOG_DEBUG("send /ping to source " << id_);
 }
 
+// AoO/<id>/uninvite <sink>
+
+void source_desc::send_uninvitation(const sink &s){
+    char buffer[AOO_MAXPACKETSIZE];
+    osc::OutboundPacketStream msg(buffer, sizeof(buffer));
+
+    // make OSC address pattern
+    const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+            + AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_UNINVITE_LEN;
+    char address[max_addr_size];
+    snprintf(address, sizeof(address), "%s%s/%d%s",
+             AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_UNINVITE);
+
+    msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
+
+    s.do_send(msg.Data(), msg.Size(), addr_);
+
+    LOG_DEBUG("send /uninvite source " << id_);
+}
+
 
 // /aoo/src/<id>/data <sink> <salt> <seq0> <frame0> <seq1> <frame1> ...
 
-int32_t source_desc::send_data_request(const sink &s){
-    if (!resendqueue_.empty()){
-        // called without lock!
-        shared_lock lock(mutex_);
-        int32_t salt = salt_;
-        lock.unlock();
-
-        // send request messages
-        char buf[AOO_MAXPACKETSIZE];
-        osc::OutboundPacketStream msg(buf, sizeof(buf));
-
-        // make OSC address pattern
-        const int32_t maxaddrsize = AOO_MSG_DOMAIN_LEN +
-                AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_DATA_LEN;
-        char address[maxaddrsize];
-        snprintf(address, sizeof(address), "%s%s/%d%s",
-                 AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_DATA);
-
-        const int32_t maxdatasize = s.packetsize() - maxaddrsize - 16; // id + salt + padding
-        const int32_t maxrequests = maxdatasize / 10; // 2 * (int32_t + typetag)
-        int32_t numrequests = 0;
-
-        while (!resendqueue_.empty() && numrequests < maxrequests){
-            msg << osc::BeginMessage(address) << s.id() << salt;
-
-            for (int i = 0; i < maxrequests; ++i, ++numrequests){
-                data_request request;
-                if (resendqueue_.try_pop(request)){
-                    msg << request.sequence << request.frame;
-                } else {
-                    break;
-                }
-            }
-
-            msg << osc::EndMessage;
-
-            s.do_send(msg.Data(), msg.Size(), addr_);
-        }
-        return numrequests;
-    } else {
+int32_t source_desc::send_data_requests(const sink &s){
+    if (resendqueue_.empty()){
         return 0;
     }
+    // called without lock!
+    shared_lock lock(mutex_);
+    int32_t salt = salt_;
+    lock.unlock();
+
+    // send request messages
+    char buf[AOO_MAXPACKETSIZE];
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+    // make OSC address pattern
+    const int32_t maxaddrsize = AOO_MSG_DOMAIN_LEN +
+            AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_DATA_LEN;
+    char address[maxaddrsize];
+    snprintf(address, sizeof(address), "%s%s/%d%s",
+             AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_DATA);
+
+    const int32_t maxdatasize = s.packetsize() - maxaddrsize - 16; // id + salt + padding
+    const int32_t maxrequests = maxdatasize / 10; // 2 * (int32_t + typetag)
+    int32_t numrequests = 0;
+
+    while (!resendqueue_.empty() && numrequests < maxrequests){
+        msg << osc::BeginMessage(address) << s.id() << salt;
+
+        for (int i = 0; i < maxrequests; ++i, ++numrequests){
+            data_request request;
+            if (resendqueue_.try_pop(request)){
+                msg << request.sequence << request.frame;
+            } else {
+                break;
+            }
+        }
+
+        msg << osc::EndMessage;
+
+        s.do_send(msg.Data(), msg.Size(), addr_);
+    }
+    return numrequests;
 }
 
-// AoO/<id>/ping <sink>
+// AoO/<id>/invite <sink>
 
-bool source_desc::send_notifications(const sink& s){
+bool source_desc::send_invitation(const sink& s){
     // called without lock!
-    bool didsomething = false;
-
-    auto invitation = streamstate_.get_invitation_state();
-    if (invitation == stream_state::INVITE){
-        char buffer[AOO_MAXPACKETSIZE];
-        osc::OutboundPacketStream msg(buffer, sizeof(buffer));
-
-        // make OSC address pattern
-        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                + AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_INVITE_LEN;
-        char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s%s/%d%s",
-                 AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_INVITE);
-
-        msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
-
-        s.do_send(msg.Data(), msg.Size(), addr_);
-
-        LOG_DEBUG("send /invite to source " << id_);
-
-        didsomething = true;
-    } else if (invitation == stream_state::UNINVITE){
-        char buffer[AOO_MAXPACKETSIZE];
-        osc::OutboundPacketStream msg(buffer, sizeof(buffer));
-
-        // make OSC address pattern
-        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                + AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_UNINVITE_LEN;
-        char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s%s/%d%s",
-                 AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_UNINVITE);
-
-        msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
-
-        s.do_send(msg.Data(), msg.Size(), addr_);
-
-        LOG_DEBUG("send /uninvite source " << id_);
-
-        didsomething = true;
+    if (state_.load(std::memory_order_acquire) != source_state::invite){
+        return false;
     }
 
-    return didsomething;
+    // only send every 50 ms! LATER we might make this settable
+    auto now = s.elapsed_time();
+    if ((now - lastsendtime_) < 0.05){
+        return false;
+    } else {
+        lastsendtime_ = now;
+    }
+
+    char buffer[AOO_MAXPACKETSIZE];
+    osc::OutboundPacketStream msg(buffer, sizeof(buffer));
+
+    // make OSC address pattern
+    const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+            + AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_INVITE_LEN;
+    char address[max_addr_size];
+    snprintf(address, sizeof(address), "%s%s/%d%s",
+             AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_INVITE);
+
+    msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
+
+    s.do_send(msg.Data(), msg.Size(), addr_);
+
+    LOG_DEBUG("send /invite to source " << id_);
+
+    return true;
 }
 
 } // aoo

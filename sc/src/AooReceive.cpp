@@ -93,6 +93,15 @@ void AooReceive::handleEvent(const aoo_event *event){
         sendMsgRT(msg);
         break;
     }
+    case AOO_INVITE_TIMEOUT_EVENT:
+    {
+        auto e = (const aoo_source_event *)event;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+
+        beginEvent(msg, "/invite/timeout", addr, e->id);
+        sendMsgRT(msg);
+        break;
+    }
     case AOO_SOURCE_FORMAT_EVENT:
     {
         auto e = (const aoo_format_event *)event;

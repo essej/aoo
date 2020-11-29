@@ -161,7 +161,7 @@ typedef enum aoo_event_type
     AOO_UNINVITE_EVENT,
     // sink: source added
     AOO_SOURCE_ADD_EVENT,
-    // sink: source removed (non implemented yet)
+    // sink: source removed
     AOO_SOURCE_REMOVE_EVENT,
     // sink: source format changed
     AOO_SOURCE_FORMAT_EVENT,
@@ -174,7 +174,9 @@ typedef enum aoo_event_type
     // sink: blocks have been resent
     AOO_BLOCK_RESENT_EVENT,
     // sink: large gap between blocks
-    AOO_BLOCK_GAP_EVENT
+    AOO_BLOCK_GAP_EVENT,
+    // sink: source invitation timed out
+    AOO_INVITE_TIMEOUT_EVENT,
 } aoo_event_type;
 
 #define AOO_ENDPOINT_EVENT  \
@@ -327,7 +329,7 @@ typedef enum aoo_option
     // ---
     // The number of times each frames is sent (default = 1)
     aoo_opt_redundancy,
-    // Source timeout ins ms (int32_t)
+    // Source timeout in ms (int32_t)
     // ---
     // Time to wait before removing inactive source.
     aoo_opt_source_timeout

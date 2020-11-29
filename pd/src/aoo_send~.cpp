@@ -223,17 +223,20 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event)
         auto e = (const aoo_sink_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (x->x_accept){
-            aoo_send_doaddsink(x, addr, e->id);
-        } else {
-            t_atom msg[3];
-            if (endpoint_to_atoms(addr, e->id, 3, msg)){
-                outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
+        // silently ignore invite events for existing sink,
+        // because multiple invite events might get sent in a row.
+        if (!aoo_send_findsink(x, addr, e->id)){
+            if (x->x_accept){
+                aoo_send_doaddsink(x, addr, e->id);
             } else {
-                bug("aoo::endpoint_to_atoms");
+                t_atom msg[3];
+                if (endpoint_to_atoms(addr, e->id, 3, msg)){
+                    outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
+                } else {
+                    bug("aoo::endpoint_to_atoms");
+                }
             }
         }
-
         break;
     }
     case AOO_UNINVITE_EVENT:
@@ -241,14 +244,19 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event)
         auto e = (const aoo_sink_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (x->x_accept){
-            aoo_send_doremovesink(x, addr, e->id);
-        } else {
-            t_atom msg[3];
-            if (endpoint_to_atoms(addr, e->id, 3, msg)){
-                outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
+        // ignore uninvite event for non-existing sink, because
+        // multiple uninvite events might get sent in a row.
+        auto sink = aoo_send_findsink(x, addr, e->id);
+        if (sink && sink->s_id != AOO_ID_WILDCARD){
+            if (x->x_accept){
+                aoo_send_doremovesink(x, addr, e->id);
             } else {
-                bug("aoo::endpoint_to_atoms");
+                t_atom msg[3];
+                if (endpoint_to_atoms(addr, e->id, 3, msg)){
+                    outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
+                } else {
+                    bug("aoo::endpoint_to_atoms");
+                }
             }
         }
         break;

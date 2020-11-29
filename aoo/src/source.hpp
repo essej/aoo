@@ -202,7 +202,7 @@ class source final : public isource {
 
     sink_desc * find_sink(const ip_address& addr, aoo_id id);
 
-    int32_t make_salt();
+    static int32_t make_salt();
 
     bool need_resampling() const;
 

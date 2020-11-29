@@ -271,6 +271,18 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
         outlet_anything(x->x_msgout, gensym("source_remove"), 3, msg);
         break;
     }
+    case AOO_INVITE_TIMEOUT_EVENT:
+    {
+        auto e = (const aoo_source_event *)event;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+
+        // output event
+        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
+            return;
+        }
+        outlet_anything(x->x_msgout, gensym("invite_timeout"), 3, msg);
+        break;
+    }
     case AOO_SOURCE_FORMAT_EVENT:
     {
         auto e = (const aoo_format_event *)event;

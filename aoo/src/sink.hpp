@@ -36,7 +36,6 @@ struct stream_state {
         state_ = AOO_SOURCE_STATE_STOP;
         underrun_ = false;
         xrun_ = 0;
-        invite_ = NONE;
     }
 
     void add_lost(int32_t n) { lost_ += n; lost_since_ping_ += n; }
@@ -65,15 +64,6 @@ struct stream_state {
 
     void set_underrun() { underrun_.store(true); }
     bool have_underrun() { return underrun_.exchange(false); }
-
-    enum invitation_state {
-        NONE = 0,
-        INVITE = 1,
-        UNINVITE = 2,
-    };
-
-    void request_invitation(invitation_state state) { invite_ = state; }
-    invitation_state get_invitation_state() { return invite_.exchange(NONE); }
 private:
     std::atomic<int32_t> lost_since_ping_{0};
     std::atomic<int32_t> lost_{0};
@@ -82,7 +72,6 @@ private:
     std::atomic<int32_t> gap_{0};
     std::atomic<int32_t> xrun_{0};
     std::atomic<aoo_source_state> state_{AOO_SOURCE_STATE_STOP};
-    std::atomic<invitation_state> invite_{NONE};
     std::atomic<bool> underrun_{false};
 };
 
@@ -149,6 +138,13 @@ struct source_request {
 
 class sink;
 
+enum class source_state {
+    idle,
+    stream,
+    invite,
+    uninvite
+};
+
 class source_desc {
 public:
     source_desc(const ip_address& addr, aoo_id id);
@@ -167,6 +163,10 @@ public:
     }
 
     bool is_active(const sink& s) const;
+
+    bool is_inviting() const {
+        return state_.load() == source_state::invite;
+    }
 
     bool has_events() const {
         return !eventqueue_.empty();
@@ -195,9 +195,9 @@ public:
 
     void add_xrun(int32_t n){ streamstate_.add_xrun(n); }
 
-    void request_invite(){ streamstate_.request_invitation(stream_state::INVITE); }
+    void invite();
 
-    void request_uninvite(){ streamstate_.request_invitation(stream_state::UNINVITE); }
+    void uninvite();
 private:
     struct data_request {
         int32_t sequence;
@@ -237,14 +237,18 @@ private:
 
     void send_ping(const sink& s, const ping_request& ping);
 
-    int32_t send_data_request(const sink& s);
+    void send_uninvitation(const sink& s);
 
-    bool send_notifications(const sink& s);
+    int32_t send_data_requests(const sink& s);
+
+    bool send_invitation(const sink& s);
 
     // data
     const ip_address addr_;
     const aoo_id id_;
     int32_t salt_ = -1;
+    std::atomic<source_state> state_;
+    double lastsendtime_ = 0.0;
     // audio decoder
     std::unique_ptr<aoo::decoder> decoder_;
     // state
