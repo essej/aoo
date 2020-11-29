@@ -415,7 +415,7 @@ int32_t aoo::sink::decode() {
             if (!src){
                 src = add_source(r.address, r.id);
             }
-            src->invite();
+            src->invite(*this);
             break;
         }
         case request_type::uninvite:
@@ -424,7 +424,7 @@ int32_t aoo::sink::decode() {
             shared_scoped_lock lock(source_mutex_);
             auto src = find_source(r.address, r.id);
             if (src){
-                src->uninvite();
+                src->uninvite(*this);
             } else {
                 LOG_WARNING("aoo: can't uninvite - source not found");
             }
@@ -434,7 +434,7 @@ int32_t aoo::sink::decode() {
         {
             shared_scoped_lock lock(source_mutex_);
             for (auto& src : sources_){
-                src.uninvite();
+                src.uninvite(*this);
             }
             break;
         }
@@ -597,7 +597,7 @@ aoo::source_desc * sink::find_source(const ip_address& addr, aoo_id id){
 
 source_desc * sink::add_source(const ip_address& addr, aoo_id id){
     // add new source
-    sources_.emplace_front(addr, id);
+    sources_.emplace_front(addr, id, elapsed_time());
     return &sources_.front();
 }
 
@@ -723,8 +723,9 @@ source_event::source_event(aoo_event_type _type, const source_desc &desc)
 
 /*////////////////////////// source_desc /////////////////////////////*/
 
-source_desc::source_desc(const ip_address& addr, aoo_id id)
-    : addr_(addr), id_(id), state_(source_state::idle)
+source_desc::source_desc(const ip_address& addr, aoo_id id, double time)
+    : addr_(addr), id_(id), state_(source_state::idle),
+      last_packet_time_(time)
 {
     // reserve some memory, so we don't have to allocate memory
     // when pushing events in the audio thread.
@@ -743,13 +744,8 @@ source_desc::~source_desc(){
 }
 
 bool source_desc::is_active(const sink& s) const {
-    // initialize the timer
-    if (lastprocesstime_.is_empty()){
-        lastprocesstime_ = s.absolute_time();
-        return true;
-    }
-    auto delta = time_tag::duration(lastprocesstime_, s.absolute_time());
-    return delta < s.source_timeout();
+    auto last = last_packet_time_.load(std::memory_order_relaxed);
+    return (s.elapsed_time() - last) < s.source_timeout();
 }
 
 int32_t source_desc::get_format(aoo_format_storage &format){
@@ -817,20 +813,28 @@ void source_desc::update(const sink &s){
 }
 
 // called from the receive thread
-void source_desc::invite(){
+void source_desc::invite(const sink& s){
     // only invite when idle or uninviting!
     // NOTE: state can only change in this thread, so we don't need a CAS
     auto state = state_.load(std::memory_order_relaxed);
     if (state != source_state::stream){
-        // special case: (re)invite shortly after uninvite ->
-        // force sending of format, so that we don't spam the source
-        // with redundant invitation messages.
+        // special case: (re)invite shortly after uninvite
         if (state == source_state::uninvite){
+            // update last packet time to reset timeout!
+            last_packet_time_.store(s.elapsed_time());
+            // force new format, otherwise handle_format() would ignore
+            // the format messages and we would spam the source with
+            // redundant invitation messages until we time out.
+            // NOTE: don't use a negative value, otherwise we would get
+            // a redundant "add" event, see handle_format().
             scoped_lock lock(mutex_);
-            // don't set to negative value to avoid redundant "add" event,
-            // see handle_format().
             salt_++;
         }
+    #if 1
+        state_time_.store(0.0);
+    #else
+        state_time_.store(s.elapsed_time());
+    #endif
         state_.store(source_state::invite);
         LOG_DEBUG("source_desc: invite");
     } else {
@@ -839,11 +843,15 @@ void source_desc::invite(){
 }
 
 // called from the receive thread
-void source_desc::uninvite(){
+void source_desc::uninvite(const sink& s){
     // NOTE: state can only change in this thread, so we don't need a CAS
     auto state = state_.load(std::memory_order_relaxed);
     if (state != source_state::idle){
         LOG_DEBUG("source_desc: uninvite");
+        // update start time for uninvite phase, see handle_data().
+        // NOTE: send_invitation() might concurrently set "state_time_",
+        // but it also uses "s.elapsed_time()", so we don't care.
+        state_time_.store(s.elapsed_time());
         state_.store(source_state::uninvite);
     } else {
         LOG_WARNING("aoo: couldn't uninvite source - not active");
@@ -902,7 +910,7 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
         // only push "add" event, if this is the first format message!
         if (oldsalt < 0){
             event e(AOO_SOURCE_ADD_EVENT, *this);
-            eventqueue_.push(e); // no need to lock
+            eventqueue_.push(e);
             LOG_DEBUG("add new source with id " << id());
         }
     }
@@ -924,11 +932,17 @@ int32_t source_desc::handle_format(const sink& s, int32_t salt, const aoo_format
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
 
 int32_t source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_packet& d){
-    // if we're in uninvite state, push uninvite request.
-    // don't ignore data, so we only get removed if the source really stops sending!
-    auto state = state_.load(std::memory_order_relaxed);
-    if (state == source_state::uninvite){
-        push_request(request { request_type::uninvite });
+    // always update packet time to signify that we're receiving packets
+    last_packet_time_.store(s.elapsed_time(), std::memory_order_relaxed);
+
+    // if we're in uninvite state, ignore data and push uninvite request.
+    if (state_.load(std::memory_order_relaxed) == source_state::uninvite){
+        // only try for a certain amount of time to avoid spamming the source.
+        auto delta = s.elapsed_time() - state_time_.load(std::memory_order_relaxed);
+        if (delta < s.source_timeout()){
+            push_request(request { request_type::uninvite });
+        }
+        return 0;
     }
 
     // synchronize with update()!
@@ -1062,9 +1076,7 @@ bool source_desc::decode(const sink& s){
 bool source_desc::process(const sink& s, aoo_sample *buffer,
                           int32_t nsamples, time_tag tt)
 {
-    // NOTE: make sure that we keep processing for 'uninvite',
-    // see comment in 'handle_data()'.
-#if 0
+#if 1
     if (state_.load(std::memory_order_acquire) != source_state::stream){
         return false;
     }
@@ -1074,7 +1086,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
     shared_lock lock(mutex_, std::try_to_lock_t{});
     if (!lock.owns_lock()){
         dropped_ += 1.0;
-        LOG_WARNING("aoo::sink: source_desc::process() would block");
+        LOG_VERBOSE("aoo::sink: source_desc::process() would block");
         return false;
     }
 
@@ -1167,8 +1179,6 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
             e.source_state.state = AOO_SOURCE_STATE_PLAY;
             push_event(e);
         }
-
-        lastprocesstime_ = tt;
 
         return true;
     } else {
@@ -1596,18 +1606,20 @@ int32_t source_desc::send_data_requests(const sink &s){
 
 // AoO/<id>/invite <sink>
 
+// only send every 50 ms! LATER we might make this settable
+#define INVITE_INTERVAL 0.05
+
 bool source_desc::send_invitation(const sink& s){
     // called without lock!
     if (state_.load(std::memory_order_acquire) != source_state::invite){
         return false;
     }
 
-    // only send every 50 ms! LATER we might make this settable
     auto now = s.elapsed_time();
-    if ((now - lastsendtime_) < 0.05){
+    if ((now - state_time_.load(std::memory_order_relaxed)) < INVITE_INTERVAL){
         return false;
     } else {
-        lastsendtime_ = now;
+        state_time_.store(now);
     }
 
     char buffer[AOO_MAXPACKETSIZE];

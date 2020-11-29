@@ -147,7 +147,7 @@ enum class source_state {
 
 class source_desc {
 public:
-    source_desc(const ip_address& addr, aoo_id id);
+    source_desc(const ip_address& addr, aoo_id id, double time);
     source_desc(const source_desc& other) = delete;
     source_desc& operator=(const source_desc& other) = delete;
 
@@ -195,9 +195,9 @@ public:
 
     void add_xrun(int32_t n){ streamstate_.add_xrun(n); }
 
-    void invite();
+    void invite(const sink& s);
 
-    void uninvite();
+    void uninvite(const sink& s);
 private:
     struct data_request {
         int32_t sequence;
@@ -248,7 +248,7 @@ private:
     const aoo_id id_;
     int32_t salt_ = -1;
     std::atomic<source_state> state_;
-    double lastsendtime_ = 0.0;
+    std::atomic<double> state_time_{0.0};
     // audio decoder
     std::unique_ptr<aoo::decoder> decoder_;
     // state
@@ -256,7 +256,7 @@ private:
     double samplerate_ = 0; // recent samplerate
     stream_state streamstate_;
     double dropped_ = 0;
-    mutable time_tag lastprocesstime_;
+    std::atomic<double> last_packet_time_;
     // queues and buffers
     jitter_buffer jitterbuffer_;
     lockfree::spsc_queue<aoo_sample> audioqueue_;
