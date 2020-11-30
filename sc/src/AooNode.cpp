@@ -368,12 +368,10 @@ void AooNode::doReceive()
                 switch (type) {
                 case AOO_TYPE_SOURCE:
                 case AOO_TYPE_SINK:
-                    if ((type == c.type) &&
-                        ((id == AOO_ID_WILDCARD) || (id == c.id)))
+                    if ((type == c.type) && (id == c.id))
                     {
                         c.obj->handleMessage(buf, nbytes, addr);
-                        if (id != AOO_ID_WILDCARD)
-                            goto parse_done;
+                        goto parse_done;
                     }
                     break;
                 case AOO_TYPE_CLIENT:

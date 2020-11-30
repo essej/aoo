@@ -223,61 +223,30 @@ int32_t aoo::source::set_sinkoption(const void *address, int32_t addrlen, aoo_id
 {
     ip_address addr((const sockaddr *)address, addrlen);
 
-    if (id == AOO_ID_WILDCARD){
-        // set option on all sinks on the given endpoint
+    shared_scoped_lock lock(sink_mutex_); // reader lock!
+    auto sink = find_sink(addr, id);
+    if (sink){
         switch (opt){
         // channel onset
         case aoo_opt_channelonset:
         {
             CHECKARG(int32_t);
             auto chn = as<int32_t>(ptr);
-            shared_lock lock(sink_mutex_); // reader lock!
-            for (auto& sink : sinks_){
-                if (sink.address == addr){
-                    sink.channel.store(chn);
-                }
-            }
-            LOG_VERBOSE("aoo_source: send to all sinks on channel " << chn);
+            sink->channel.store(chn);
+            LOG_VERBOSE("aoo_source: send to sink " << sink->id
+                        << " on channel " << chn);
             break;
         }
         // unknown
         default:
-            LOG_WARNING("aoo_source: unsupported sink option " << opt);
+            LOG_WARNING("aoo_source: unknown sink option " << opt);
             return 0;
         }
         return 1;
     } else {
-        shared_lock lock(sink_mutex_); // reader lock!
-        auto sink = find_sink(addr, id);
-        if (sink){
-            if (sink->id == AOO_ID_WILDCARD){
-                LOG_WARNING("aoo_source: can't set individual sink option "
-                            << opt << " because of wildcard");
-                return 0;
-            }
-
-            switch (opt){
-            // channel onset
-            case aoo_opt_channelonset:
-            {
-                CHECKARG(int32_t);
-                auto chn = as<int32_t>(ptr);
-                sink->channel.store(chn);
-                LOG_VERBOSE("aoo_source: send to sink " << sink->id
-                            << " on channel " << chn);
-                break;
-            }
-            // unknown
-            default:
-                LOG_WARNING("aoo_source: unknown sink option " << opt);
-                return 0;
-            }
-            return 1;
-        } else {
-            LOG_ERROR("aoo_source: couldn't set option " << opt
-                      << " - sink not found!");
-            return 0;
-        }
+        LOG_ERROR("aoo_source: couldn't set option " << opt
+                  << " - sink not found!");
+        return 0;
     }
 }
 
@@ -292,12 +261,7 @@ int32_t aoo::source::get_sinkoption(const void *address, int32_t addrlen, aoo_id
 {
     ip_address addr((const sockaddr *)address, addrlen);
 
-    if (id == AOO_ID_WILDCARD){
-        LOG_ERROR("aoo_source: can't use wildcard to get sink option");
-        return 0;
-    }
-
-    shared_lock lock(sink_mutex_); // reader lock!
+    shared_scoped_lock lock(sink_mutex_); // reader lock!
     auto sink = find_sink(addr, id);
     if (sink){
         switch (opt){
@@ -367,25 +331,11 @@ int32_t aoo_source_add_sink(aoo_source *src, const void *address,
 int32_t aoo::source::add_sink(const void *address, int32_t addrlen, aoo_id id){
     ip_address addr((const sockaddr *)address, addrlen);
 
-    unique_lock lock(sink_mutex_); // writer lock!
-    if (id == AOO_ID_WILDCARD){
-        // first remove all sinks on the given endpoint!
-        auto it = std::remove_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-            return s.address == addr;
-        });
-        sinks_.erase(it, sinks_.end());
-    } else {
-        // check if sink exists!
-        auto result = find_sink(addr, id);
-        if (result){
-            if (result->id == AOO_ID_WILDCARD){
-                LOG_WARNING("aoo_source: can't add individual sink "
-                            << id << " because of wildcard!");
-            } else {
-                LOG_WARNING("aoo_source: sink already added!");
-            }
-            return 0;
-        }
+    scoped_lock lock(sink_mutex_); // writer lock!
+    // check if sink exists!
+    if (find_sink(addr, id)){
+        LOG_WARNING("aoo_source: sink already added!");
+        return 0;
     }
     // add sink descriptor
     sinks_.emplace_back(addr, id);
@@ -403,30 +353,15 @@ int32_t aoo_source_remove_sink(aoo_source *src, const void *address,
 int32_t aoo::source::remove_sink(const void *address, int32_t addrlen, aoo_id id){
     ip_address addr((const sockaddr *)address, addrlen);
 
-    unique_lock lock(sink_mutex_); // writer lock!
-    if (id == AOO_ID_WILDCARD){
-        // remove all sinks on the given endpoint
-        auto it = std::remove_if(sinks_.begin(), sinks_.end(), [&](auto& s){
-            return s.address == addr;
-        });
-        sinks_.erase(it, sinks_.end());
-        return 1;
-    } else {
-        for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
-            if (it->address == addr){
-                if (it->id == AOO_ID_WILDCARD){
-                    LOG_WARNING("aoo_source: can't remove individual sink "
-                                << id << " because of wildcard!");
-                    return 0;
-                } else if (it->id == id){
-                    sinks_.erase(it);
-                    return 1;
-                }
-            }
+    scoped_lock lock(sink_mutex_); // writer lock!
+    for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
+        if (it->address == addr && it->id == id){
+            sinks_.erase(it);
+            return 1;
         }
-        LOG_WARNING("aoo_source: sink not found!");
-        return 0;
     }
+    LOG_WARNING("aoo_source: sink not found!");
+    return 0;
 }
 
 void aoo_source_remove_all(aoo_source *src) {
@@ -461,10 +396,6 @@ int32_t aoo::source::handle_message(const char *data, int32_t n,
         }
         if (type != AOO_TYPE_SOURCE){
             LOG_WARNING("aoo_source: not a source message!");
-            return 0;
-        }
-        if (src == AOO_ID_WILDCARD){
-            LOG_WARNING("aoo_source: can't handle wildcard messages (yet)!");
             return 0;
         }
         if (src != id()){
@@ -689,9 +620,7 @@ namespace aoo {
 
 sink_desc * source::find_sink(const ip_address& addr, aoo_id id){
     for (auto& sink : sinks_){
-        if ((sink.address == addr) &&
-            (sink.id == AOO_ID_WILDCARD || sink.id == id))
-        {
+        if (sink.address == addr && sink.id == id){
             return &sink;
         }
     }
@@ -845,19 +774,14 @@ bool source::send_format(){
         char buf[AOO_MAXPACKETSIZE];
         osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-        if (r.id != AOO_ID_WILDCARD){
-            const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                    + AOO_MSG_SINK_LEN + 16 + AOO_MSG_FORMAT_LEN;
-            char address[max_addr_size];
-            snprintf(address, sizeof(address), "%s%s/%d%s",
-                     AOO_MSG_DOMAIN, AOO_MSG_SINK, r.id, AOO_MSG_FORMAT);
+        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+                + AOO_MSG_SINK_LEN + 16 + AOO_MSG_FORMAT_LEN;
+        char address[max_addr_size];
+        snprintf(address, sizeof(address), "%s%s/%d%s",
+                 AOO_MSG_DOMAIN, AOO_MSG_SINK, r.id, AOO_MSG_FORMAT);
 
-            msg << osc::BeginMessage(address);
-        } else {
-            msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_FORMAT);
-        }
-
-        msg << id() << (int32_t)make_version() << salt << f.nchannels << f.samplerate << f.blocksize
+        msg << osc::BeginMessage(address) << id() << (int32_t)make_version()
+            << salt << f.nchannels << f.samplerate << f.blocksize
             << f.codec << osc::Blob(options, size) << osc::EndMessage;
 
         do_send(msg.Data(), msg.Size(), r.address);
@@ -1084,25 +1008,19 @@ void source::send_data(const endpoint& ep, int32_t salt, const aoo::data_packet&
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-    if (ep.id != AOO_ID_WILDCARD){
-        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                + AOO_MSG_SINK_LEN + 16 + AOO_MSG_DATA_LEN;
-        char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s%s/%d%s",
-                 AOO_MSG_DOMAIN, AOO_MSG_SINK, ep.id, AOO_MSG_DATA);
+    const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+            + AOO_MSG_SINK_LEN + 16 + AOO_MSG_DATA_LEN;
+    char address[max_addr_size];
+    snprintf(address, sizeof(address), "%s%s/%d%s",
+             AOO_MSG_DOMAIN, AOO_MSG_SINK, ep.id, AOO_MSG_DATA);
 
-        msg << osc::BeginMessage(address);
-    } else {
-        msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_DATA);
-    }
+    msg << osc::BeginMessage(address) << id() << salt << d.sequence << d.samplerate
+        << d.channel << d.totalsize << d.nframes << d.framenum << osc::Blob(d.data, d.size)
+        << osc::EndMessage;
 
     LOG_DEBUG("send block: seq = " << d.sequence << ", sr = " << d.samplerate
               << ", chn = " << d.channel << ", totalsize = " << d.totalsize
               << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
-
-    msg << id() << salt << d.sequence << d.samplerate << d.channel
-        << d.totalsize << d.nframes << d.framenum
-        << osc::Blob(d.data, d.size) << osc::EndMessage;
 
     do_send(msg.Data(), msg.Size(), ep.address);
 }
@@ -1131,19 +1049,14 @@ bool source::send_ping(){
             char buf[AOO_MAXPACKETSIZE];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-            if (s.id != AOO_ID_WILDCARD){
-                const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                        + AOO_MSG_SINK_LEN + 16 + AOO_MSG_PING_LEN;
-                char address[max_addr_size];
-                snprintf(address, sizeof(address), "%s%s/%d%s",
-                         AOO_MSG_DOMAIN, AOO_MSG_SINK, s.id, AOO_MSG_PING);
+            const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+                    + AOO_MSG_SINK_LEN + 16 + AOO_MSG_PING_LEN;
+            char address[max_addr_size];
+            snprintf(address, sizeof(address), "%s%s/%d%s",
+                     AOO_MSG_DOMAIN, AOO_MSG_SINK, s.id, AOO_MSG_PING);
 
-                msg << osc::BeginMessage(address);
-            } else {
-                msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_MSG_SINK AOO_MSG_WILDCARD AOO_MSG_PING);
-            }
-
-            msg << id() << osc::TimeTag(tt) << osc::EndMessage;
+            msg << osc::BeginMessage(address) << id() << osc::TimeTag(tt)
+                << osc::EndMessage;
 
             do_send(msg.Data(), msg.Size(), s.address);
         }
@@ -1224,7 +1137,6 @@ void source::handle_invite(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
     if (!sink){
         // push "invite" event
-        // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
         event e(AOO_INVITE_EVENT, addr, id);
         eventqueue_.push(e);
     } else {
@@ -1244,7 +1156,6 @@ void source::handle_uninvite(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
     if (sink){
         // push "uninvite" event
-        // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
         event e(AOO_UNINVITE_EVENT, addr, id);
         eventqueue_.push(e);
     } else {
@@ -1268,7 +1179,6 @@ void source::handle_ping(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
     if (sink){
         // push "ping" event
-        // Use 'id' because we want the individual sink! ('sink.id' might be a wildcard)
         event e(AOO_PING_EVENT, addr, id);
         e.ping.tt1 = tt1;
         e.ping.tt2 = tt2;

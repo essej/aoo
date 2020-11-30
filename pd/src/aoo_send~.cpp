@@ -115,61 +115,28 @@ static void aoo_send_doremovesink(t_aoo_send *x, const ip_address& addr, aoo_id 
 {
     x->x_source->remove_sink(addr.address(), addr.length(), id);
 
-    // remove from list
-    if (id == AOO_ID_WILDCARD){
-        // pre-allocate array of removed sinks
-        int removed = 0;
-        t_sink *sinks = (t_sink *)alloca(sizeof(t_sink) * x->x_sinks.size());
+    // remove the sink matching endpoint and id
+    for (auto it = x->x_sinks.begin(); it != x->x_sinks.end(); ++it){
+        if (it->s_address == addr && it->s_id == id){
+            x->x_sinks.erase(it);
 
-        // remove all sinks matching endpoint
-        for (auto it = x->x_sinks.begin(); it != x->x_sinks.end();){
-            if (it->s_address == addr){
-                sinks[removed++] = *it;
-                it = x->x_sinks.erase(it);
-            } else {
-                ++it;
-            }
-        }
-
-        // output messages
-        for (int i = 0; i < removed; ++i){
+            // output message
             t_atom msg[3];
-            if (endpoint_to_atoms(sinks[i].s_address, sinks[i].s_id, 3, msg)){
+            if (endpoint_to_atoms(addr, id, 3, msg)){
                 outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
             } else {
                 bug("aoo::endpoint_to_atoms");
             }
-        }
-        return;
-    } else {
-        // remove the sink matching endpoint and id
-        for (auto it = x->x_sinks.begin(); it != x->x_sinks.end(); ++it){
-            if (it->s_address == addr && it->s_id == id){
-                x->x_sinks.erase(it);
-
-                // output message
-                t_atom msg[3];
-                if (endpoint_to_atoms(addr, id, 3, msg)){
-                    outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
-                } else {
-                    bug("aoo::endpoint_to_atoms");
-                }
-                return;
-            }
+            return;
         }
     }
-
-    // only wildcard IDs are allowed to not match anything
-    if (id != AOO_ID_WILDCARD){
-        bug("aoo_send_doremovesink");
-    }
+    bug("aoo_send_doremovesink");
 }
 
 static t_sink *aoo_send_findsink(t_aoo_send *x, const ip_address& addr, aoo_id id)
 {
     for (auto& sink : x->x_sinks){
-        // wildcard sinks match any ID
-        if (sink.s_address == addr && (sink.s_id == AOO_ID_WILDCARD || sink.s_id == id)){
+        if (sink.s_address == addr && sink.s_id == id){
             return &sink;
         }
     }
@@ -246,8 +213,7 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event)
 
         // ignore uninvite event for non-existing sink, because
         // multiple uninvite events might get sent in a row.
-        auto sink = aoo_send_findsink(x, addr, e->id);
-        if (sink && sink->s_id != AOO_ID_WILDCARD){
+        if (aoo_send_findsink(x, addr, e->id)){
             if (x->x_accept){
                 aoo_send_doremovesink(x, addr, e->id);
             } else {
@@ -363,25 +329,10 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
         // check if sink exists
-        if (id != AOO_ID_WILDCARD){
-            for (auto& sink : x->x_sinks){
-                if (sink.s_address == addr){
-                    if (sink.s_id == AOO_ID_WILDCARD){
-                        pd_error(x, "%s: sink %s %d %d already added via wildcard!",
-                                 classname(x), host->s_name, port, id);
-                        return;
-                    } else if (sink.s_id == id){
-                        pd_error(x, "%s: sink %s %d %d already added!",
-                                 classname(x), host->s_name, port, id);
-                        return;
-                    }
-                }
-            }
-        }
-
-        if (id == AOO_ID_WILDCARD){
-            // first remove all sinks on this endpoint
-            aoo_send_doremovesink(x, addr, AOO_ID_WILDCARD);
+        if (aoo_send_findsink(x, addr, id)){
+            pd_error(x, "%s: sink %s %d %d already added!",
+                     classname(x), host->s_name, port, id);
+            return;
         }
 
         aoo_send_doaddsink(x, addr, id);
@@ -392,11 +343,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         }
 
         // print message (use actual hostname)
-        if (id == AOO_ID_WILDCARD){
-            verbose(0, "added all sinks on %s %d", addr.name(), port);
-        } else {
-            verbose(0, "added sink %s %d %d", addr.name(), port, id);
-        }
+        verbose(0, "added sink %s %d %d", addr.name(), port, id);
     }
 }
 
@@ -420,35 +367,13 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     ip_address addr;
     aoo_id id;
     if (get_sink_arg(x, x->x_node, argc, argv, addr, id)){
-        if (id != AOO_ID_WILDCARD){
-            // check if sink exists
-            for (auto& sink : x->x_sinks){
-                if (sink.s_address == addr){
-                    if (sink.s_id == AOO_ID_WILDCARD){
-                        pd_error(x, "%s: can't remove sink %s %d %d because of wildcard!",
-                                 classname(x), addr.name(), addr.port(), id);
-                        return;
-                    } else if (sink.s_id == id) {
-                        aoo_send_doremovesink(x, addr, id);
-
-                        // print message (use actual hostname)
-                        if (id == AOO_ID_WILDCARD){
-                            verbose(0, "removed all sinks on %s %d", addr.name(), addr.port());
-                        } else {
-                            verbose(0, "removed sink %s %d %d", addr.name(), addr.port(), id);
-                        }
-
-                        return; // success
-                    }
-                }
-            }
+        if (aoo_send_findsink(x, addr, id)){
+            aoo_send_doremovesink(x, addr, id);
+            verbose(0, "removed sink %s %d %d", addr.name(), addr.port(), id);
         } else {
-            aoo_send_doremovesink(x, addr, id); // remove all sinks on endpoint
-            return; // success
+            pd_error(x, "%s: couldn't find sink %s %d %d!",
+                     classname(x), addr.name(), addr.port(), id);
         }
-
-        pd_error(x, "%s: couldn't find sink %s %d %d!",
-                 classname(x), addr.name(), addr.port(), id);
     }
 }
 

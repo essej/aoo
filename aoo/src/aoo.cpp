@@ -82,16 +82,12 @@ int32_t aoo_parse_pattern(const char *msg, int32_t n,
         if (!id){
             return offset;
         }
-        if (!memcmp(msg + offset, "/*", 2)){
-            *id = AOO_ID_WILDCARD; // wildcard
-            return offset + 2;
-        }
         int32_t skip = 0;
         if (sscanf(msg + offset, "/%d%n", id, &skip) > 0){
             return offset + skip;
         } else {
             // TODO only print relevant part of OSC address string
-            LOG_ERROR("aoo_parse_pattern: bad ID " << msg + offset);
+            LOG_ERROR("aoo_parse_pattern: bad ID " << (msg + offset));
             return 0;
         }
     } else {

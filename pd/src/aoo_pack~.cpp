@@ -197,21 +197,9 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
         // remove old sink
         x->x_source->remove_all();
         // add new sink
-        if (argv->a_type == A_SYMBOL){
-            if (*argv->a_w.w_symbol->s_name == '*'){
-                x->x_source->add_sink(x->x_address.address(), x->x_address.length(),
-                                      AOO_ID_WILDCARD);
-            } else {
-                pd_error(x, "%s: bad argument '%s' to 'set' message!",
-                         classname(x), argv->a_w.w_symbol->s_name);
-                return;
-            }
-            x->x_sink_id = AOO_ID_WILDCARD;
-        } else {
-            aoo_id id = atom_getfloat(argv);
-            x->x_source->add_sink(x->x_address.address(), x->x_address.length(), id);
-            x->x_sink_id = id;
-        }
+        aoo_id id = atom_getfloat(argv);
+        x->x_source->add_sink(x->x_address.address(), x->x_address.length(), id);
+        x->x_sink_id = id;
         // set channel (if provided)
         if (argc > 1){
             int32_t chn = atom_getfloat(argv + 1);

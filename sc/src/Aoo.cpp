@@ -311,20 +311,17 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::ip_address& addr
     }
 
     if (id){
-        if (!args->remain()){
-            LOG_ERROR("aoo: too few arguments for " << what);
-            return false;
-        }
-        if (args->nextTag() == 's'){
-            s = args->gets();
-            if (!strcmp(s, "*")){
-                *id = AOO_ID_WILDCARD;
+        if (args->remain()){
+            aoo_id i = args->geti(-1);
+            if (i >= 0){
+                *id = i;
             } else {
-                LOG_ERROR("aoo: bad " << what << " ID '" << s << "'!");
+                LOG_ERROR("aoo: bad ID '" << i << "' for " << what);
                 return false;
             }
         } else {
-            *id = args->geti();
+            LOG_ERROR("aoo: too few arguments for " << what);
+            return false;
         }
     }
 

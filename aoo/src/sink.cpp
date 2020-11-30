@@ -343,7 +343,7 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n,
             LOG_WARNING("not a sink message!");
             return 0;
         }
-        if (sinkid != id() && sinkid != AOO_ID_WILDCARD){
+        if (sinkid != id()){
             LOG_WARNING("wrong sink ID!");
             return 0;
         }

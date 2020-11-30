@@ -37,11 +37,7 @@ int endpoint_to_atoms(const ip_address& addr, aoo_id id, int argc, t_atom *argv)
     }
     SETSYMBOL(argv, gensym(addr.name()));
     SETFLOAT(argv + 1, addr.port());
-    if (id == AOO_ID_WILDCARD){
-        SETSYMBOL(argv + 2, gensym("*"));
-    } else {
-        SETFLOAT(argv + 2, id);
-    }
+    SETFLOAT(argv + 2, id);
     return 3;
 }
 
@@ -79,16 +75,19 @@ static bool get_endpoint_arg(void *x, i_node *node, int argc, t_atom *argv,
     }
 
     if (id){
-        if (argv[2].a_type == A_SYMBOL){
-            if (*argv[2].a_w.w_symbol->s_name == '*'){
-                *id = AOO_ID_WILDCARD;
+        if (argv[2].a_type == A_FLOAT){
+            aoo_id i = argv[2].a_w.w_float;
+            if (i >= 0){
+                *id = i;
             } else {
-                pd_error(x, "%s: bad %s ID '%s'!",
-                         classname(x), what, argv[2].a_w.w_symbol->s_name);
+                pd_error(x, "%s: bad ID '%d' for %s",
+                         classname(x), i, what);
                 return false;
             }
         } else {
-            *id = atom_getfloat(argv + 2);
+            pd_error(x, "%s: bad ID '%s' for %s", classname(x),
+                     atom_getsymbol(argv + 2)->s_name, what);
+            return false;
         }
     }
 

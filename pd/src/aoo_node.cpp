@@ -295,24 +295,22 @@ void t_node::do_receive()
                 // forward OSC packet to matching client(s)
                 for (auto& c : x_clients){
                     if ((pd_class(c.c_obj) == aoo_receive_class) &&
-                        ((id == AOO_ID_WILDCARD) || (id == c.c_id)))
+                        (id == c.c_id))
                     {
                         aoo_receive_handle_message((t_aoo_receive *)c.c_obj,
                                                    buf, nbytes, addr);
-                        if (id != AOO_ID_WILDCARD)
-                            break;
+                        break;
                     }
                 }
             } else if (type == AOO_TYPE_SOURCE){
                 // forward OSC packet to matching senders(s)
                 for (auto& c : x_clients){
                     if ((pd_class(c.c_obj) == aoo_send_class) &&
-                        ((id == AOO_ID_WILDCARD) || (id == c.c_id)))
+                        (id == c.c_id))
                     {
                         aoo_send_handle_message((t_aoo_send *)c.c_obj,
                                                 buf, nbytes, addr);
-                        if (id != AOO_ID_WILDCARD)
-                            break;
+                        break;
                     }
                 }
             } else if (type == AOO_TYPE_CLIENT || type == AOO_TYPE_PEER){

@@ -50,8 +50,7 @@ static void aoo_route_list(t_aoo_route *x, t_symbol *s, int argc, t_atom *argv)
         for (int i = 0; i < x->x_n; ++i){
             auto& sel = x->x_vec[i].sel;
             if ((sel.a_type == A_SYMBOL && sel.a_w.w_symbol == sym) ||
-                (sel.a_type == A_FLOAT &&
-                 (id == AOO_ID_WILDCARD || sel.a_w.w_float == id)))
+                (sel.a_type == A_FLOAT && sel.a_w.w_float == id))
             {
                 outlet_list(x->x_vec[i].outlet, s, argc, argv);
                 success = true;
