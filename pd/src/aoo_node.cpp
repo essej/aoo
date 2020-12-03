@@ -100,7 +100,7 @@ struct t_node final : public i_node
     t_symbol *x_bindsym;
     // dependants
     std::vector<t_client> x_clients;
-    aoo::shared_mutex x_clientlock;
+    aoo::shared_mutex x_clientmutex;
     // peer list
     std::vector<t_peer> x_peers;
     // socket
@@ -234,7 +234,7 @@ void t_node::notify()
 bool t_node::add_client(t_pd *obj, aoo_id id)
 {
     // check client and add to list
-    aoo::scoped_lock lock(x_clientlock);
+    aoo::scoped_lock lock(x_clientmutex);
 #if 1
     for (auto& client : x_clients)
     {
@@ -262,7 +262,7 @@ bool t_node::add_client(t_pd *obj, aoo_id id)
 
 void t_node::do_send()
 {
-    aoo::shared_scoped_lock lock(x_clientlock);
+    aoo::shared_scoped_lock lock(x_clientmutex);
 
     for (auto& c : x_clients){
         if (pd_class(c.c_obj) == aoo_receive_class){
@@ -290,7 +290,7 @@ void t_node::do_receive()
         aoo_id id;
         if (aoo_parse_pattern(buf, nbytes, &type, &id) > 0)
         {
-            aoo::shared_scoped_lock l(x_clientlock);
+            aoo::shared_scoped_lock l(x_clientmutex);
             if (type == AOO_TYPE_SINK){
                 // forward OSC packet to matching client(s)
                 for (auto& c : x_clients){
@@ -336,7 +336,7 @@ void t_node::do_receive()
         }
     } else if (nbytes == 0){
         // timeout -> update clients
-        aoo::shared_scoped_lock lock(x_clientlock);
+        aoo::shared_scoped_lock lock(x_clientmutex);
         for (auto& c : x_clients){
             if (pd_class(c.c_obj) == aoo_receive_class){
                 aoo_receive_update((t_aoo_receive *)c.c_obj);
@@ -431,7 +431,7 @@ void t_node::release(t_pd *obj)
 {
     if (x_clients.size() > 1){
         // just remove client from list
-        aoo::scoped_lock l(x_clientlock);
+        aoo::scoped_lock l(x_clientmutex);
         for (auto it = x_clients.begin(); it != x_clients.end(); ++it){
             if (obj == it->c_obj){
                 x_clients.erase(it);
@@ -468,7 +468,7 @@ t_node::~t_node()
     x_condition.notify_all();
 
     // try to wake up receive thread
-    aoo::unique_lock lock(x_clientlock);
+    aoo::unique_lock lock(x_clientmutex);
     int didit = socket_signal(x_socket);
     if (!didit){
         // force wakeup by closing the socket.
