@@ -185,7 +185,7 @@ class source final : public isource {
     lockfree::unbounded_mpsc_queue<data_request> datarequestqueue_;
     history_buffer history_;
     // sinks
-    std::list<sink_desc> sinks_; // don't move in memory!
+    std::list<sink_desc> sinks_;
     // thread synchronization
     aoo::shared_mutex update_mutex_;
     aoo::shared_mutex sink_mutex_;

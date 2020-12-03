@@ -266,7 +266,7 @@ int32_t aoo::sink::set_sourceoption(const void *address, int32_t addrlen, aoo_id
 {
     ip_address addr((const sockaddr *)address, addrlen);
 
-    shared_scoped_lock lock(source_mutex_);
+    source_lock lock(sources_);
     auto src = find_source(addr, id);
     if (src){
         switch (opt){
@@ -296,7 +296,7 @@ int32_t aoo::sink::get_sourceoption(const void *address, int32_t addrlen, aoo_id
 {
     ip_address addr((const sockaddr *)address, addrlen);
 
-    shared_scoped_lock lock(source_mutex_);
+    source_lock lock(sources_);
     auto src = find_source(addr, id);
     if (src){
         switch (opt){
@@ -371,7 +371,7 @@ int32_t aoo_sink_send(aoo_sink *sink){
 int32_t aoo::sink::send(){
     bool didsomething = false;
 
-    shared_scoped_lock lock(source_mutex_);
+    source_lock lock(sources_);
     for (auto& s: sources_){
         if (s.send(*this)){
             didsomething = true;
@@ -387,7 +387,7 @@ int32_t aoo_sink_decode(aoo_sink *sink) {
 int32_t aoo::sink::decode() {
     bool result = false;
 
-    shared_lock lock(source_mutex_);
+    source_lock lock(sources_);
     for (auto& s : sources_){
         if (s.decode(*this)){
             result = true;
@@ -396,7 +396,9 @@ int32_t aoo::sink::decode() {
     lock.unlock();
 
     // free unused source_descs
-    sources_.free();
+    if (!sources_.try_free()){
+        LOG_VERBOSE("aoo::sink: try_free() would block");
+    }
 
     // handle requests
     // NOTE: we invite/uninvite sources in the same thread
@@ -410,7 +412,7 @@ int32_t aoo::sink::decode() {
             // try to find existing source
             // we might want to invite an existing source,
             // e.g. when it is currently uninviting
-            shared_scoped_lock lock(source_mutex_);
+            source_lock lock(sources_);
             auto src = find_source(r.address, r.id);
             if (!src){
                 src = add_source(r.address, r.id);
@@ -421,7 +423,7 @@ int32_t aoo::sink::decode() {
         case request_type::uninvite:
         {
             // try to find existing source
-            shared_scoped_lock lock(source_mutex_);
+            source_lock lock(sources_);
             auto src = find_source(r.address, r.id);
             if (src){
                 src->uninvite(*this);
@@ -432,7 +434,7 @@ int32_t aoo::sink::decode() {
         }
         case request_type::uninvite_all:
         {
-            shared_scoped_lock lock(source_mutex_);
+            source_lock lock(sources_);
             for (auto& src : sources_){
                 src.uninvite(*this);
             }
@@ -487,26 +489,20 @@ int32_t aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
         if (it->process(*this, buffer_.data(), blocksize_, t)){
             didsomething = true;
         } else if (!it->is_active(*this)){
-            // move source to garbage list (will be freed in decode()),
-            // but only if we can grab the lock!
-            unique_lock lock(source_mutex_, std::try_to_lock_t {}); // writer lock!
-            if (lock.owns_lock()){
-                if (it->is_inviting()){
-                    LOG_VERBOSE("aoo::sink: invitation for " << it->address().name()
-                                << " " << it->address().port() << " timed out");
-                    source_event e(AOO_INVITE_TIMEOUT_EVENT, *it);
-                    push_event(e);
-                } else {
-                    LOG_VERBOSE("aoo::sink: removed inactive source " << it->address().name()
-                                << " " << it->address().port());
-                    source_event e(AOO_SOURCE_REMOVE_EVENT, *it);
-                    push_event(e);
-                }
-                it =  sources_.erase(it);
-                continue;
+            // move source to garbage list (will be freed in decode())
+            if (it->is_inviting()){
+                LOG_VERBOSE("aoo::sink: invitation for " << it->address().name()
+                            << " " << it->address().port() << " timed out");
+                source_event e(AOO_INVITE_TIMEOUT_EVENT, *it);
+                push_event(e);
             } else {
-                LOG_WARNING("aoo::sink: removing inactive source would block");
+                LOG_VERBOSE("aoo::sink: removed inactive source " << it->address().name()
+                            << " " << it->address().port());
+                source_event e(AOO_SOURCE_REMOVE_EVENT, *it);
+                push_event(e);
             }
+            it =  sources_.erase(it);
+            continue;
         }
         ++it;
     }
@@ -540,7 +536,7 @@ int32_t aoo::sink::events_available(){
         return true;
     }
 
-    shared_scoped_lock lock(source_mutex_);
+    source_lock lock(sources_);
     for (auto& src : sources_){
         if (src.has_events()){
             return true;
@@ -573,7 +569,7 @@ int32_t aoo::sink::poll_events(aoo_eventhandler fn, void *user){
         total++;
     }
     // we only need to protect against source removal
-    shared_scoped_lock lock(source_mutex_);
+    source_lock lock(sources_);
     for (auto& src : sources_){
         total += src.poll_events(fn, user);
         if (total > EVENT_THROTTLE){
@@ -602,7 +598,7 @@ source_desc * sink::add_source(const ip_address& addr, aoo_id id){
 }
 
 void sink::reset_sources(){
-    shared_scoped_lock lock(source_mutex_);
+    source_lock lock(sources_);
     for (auto& src : sources_){
         src.reset(*this);
     }
@@ -640,7 +636,7 @@ int32_t sink::handle_format_message(const osc::ReceivedMessage& msg,
         return 0;
     }
     // try to find existing source
-    shared_scoped_lock lock(source_mutex_);
+    source_lock lock(sources_);
     auto src = find_source(addr, id);
     if (!src){
         src = add_source(addr, id);
@@ -673,7 +669,7 @@ int32_t sink::handle_data_message(const osc::ReceivedMessage& msg,
         return 0;
     }
     // try to find existing source
-    shared_scoped_lock lock(source_mutex_);
+    source_lock lock(sources_);
     auto src = find_source(addr, id);
     if (!src){
         src = add_source(addr, id);
@@ -694,7 +690,7 @@ int32_t sink::handle_ping_message(const osc::ReceivedMessage& msg,
         return 0;
     }
     // try to find existing source
-    shared_scoped_lock lock(source_mutex_);
+    source_lock lock(sources_);
     auto src = find_source(addr, id);
     if (src){
         return src->handle_ping(*this, tt);
