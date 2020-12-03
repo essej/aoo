@@ -43,7 +43,6 @@ extern "C"
 #define AOO_MSG_DOMAIN_LEN 4
 
 typedef int32_t aoo_id;
-#define AOO_ID_WILDCARD -1
 #define AOO_ID_NONE INT32_MIN
 
 // default UDP packet size
