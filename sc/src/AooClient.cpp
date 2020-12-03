@@ -105,16 +105,28 @@ void AooClient::connect(const char* host, int port,
         return;
     }
 
-    // LATER also send user ID
     auto cb = [](void* x, int32_t result, const void* data) {
         auto client = (AooClient*)x;
+
+        char buf[1024];
+        osc::OutboundPacketStream msg(buf, sizeof(buf));
+        msg << osc::BeginMessage("/aoo/client/connect") << client->port_;
+
         if (result == 0) {
-            client->sendReply("/aoo/client/connect", true);
-        }
-        else {
+            auto reply = (const aoo_net_connect_reply*)data;
+            // send success + ID
+            msg << 1 << reply->user_id;
+        } else {
             auto e = (const aoo_net_error_reply*)data;
-            client->sendReply("/aoo/client/connect", false, e->errormsg);
+            // send fail + error message
+            msg << 0 << e->errormsg;
         }
+
+        msg << osc::EndMessage;
+        // the callback function is never called from the NRT thread!
+        NRTLock(client->world_);
+        ::sendMsgNRT(client->world_, msg);
+        NRTUnlock(client->world_);
     };
     client_->connect(host, port, user, pwd, cb, this);
 }
@@ -133,8 +145,7 @@ void AooClient::disconnect() {
     #endif
         if (result == 0) {
             client->sendReply("/aoo/client/disconnect", true);
-        }
-        else {
+        } else {
             auto e = (const aoo_net_error_reply*)data;
             client->sendReply("/aoo/client/disconnect", false, e->errormsg);
         }

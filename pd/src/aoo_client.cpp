@@ -492,8 +492,14 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
             auto pwd = request->pwd;
 
             if (result == 0){
-                obj->push_reply([obj, group, pwd](){
+                auto reply = (const aoo_net_connect_reply *)data;
+                auto user_id = reply->user_id;
+                obj->push_reply([obj, user_id, group, pwd](){
                     obj->x_connected = true;
+
+                    t_atom msg;
+                    SETFLOAT(&msg, user_id);
+                    outlet_anything(obj->x_msgout, gensym("id"), 1, &msg);
 
                     outlet_float(obj->x_stateout, 1); // connected
 
