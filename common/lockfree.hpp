@@ -252,17 +252,21 @@ class unbounded_mpsc_queue {
 
 /*///////////////////////// simple_list ////////////////////////*/
 
-// a lock-free singly-linked list which supports adding items and iteration.
-// removing items and clearing the list is *not* thread-safe!
+// A lock-free singly-linked list which supports adding/removing items and iteration.
+// You can remove nodes while other threads push nodes or iterate over the list.
+// However, erase(), pop_front(), clear() are not thread-safe in regard to each other.
+// Each thread trying to access the list must call lock()/unlock(), so that try_remove()
+// knows when it is safe to actually free the memory.
 
 template<typename T>
 class simple_list {
     struct node {
+        std::atomic<node*> next_;
+        T data_;
+
         template<typename... U>
         node(U&&... args)
-            : data_(std::forward<U>(args)...), next_(nullptr) {}
-        T data_;
-        node* next_;
+            : next_(nullptr), data_(std::forward<U>(args)...) {}
     };
 public:
     template<typename U>
@@ -279,12 +283,12 @@ public:
         T& operator*() { return node_->data_; }
         T* operator->() { return &node_->data_; }
         base_iterator& operator++() {
-            node_ = node_->next_;
+            node_ = node_->next_.load(std::memory_order_acquire);
             return *this;
         }
         base_iterator operator++(int) {
-            base_iterator old = *this;
-            node_ = node_->next_;
+            base_iterator old(node_);
+            node_ = node_->next_.load(std::memory_order_acquire);
             return old;
         }
         bool operator==(const base_iterator& other){
@@ -305,25 +309,30 @@ public:
     simple_list(simple_list&& other){
         head_ = other.head_.exchange(nullptr);
         free_ = other.free_.exchange(nullptr);
+        refcount_ = other.refcount_.exchange(0);
     }
 
     ~simple_list(){
-        clear();
-        free();
+        destroy_list(head_.load());
+        destroy_list(free_.load());
     }
 
     simple_list& operator=(simple_list&& other){
         head_ = other.head_.exchange(nullptr);
         free_ = other.free_.exchange(nullptr);
+        refcount_ = other.refcount_.exchange(0);
         return *this;
     }
 
     template<typename... U>
     void emplace_front(U&&... args){
         auto n = new node(std::forward<U>(args)...);
-        n->next_ = head_.load(std::memory_order_relaxed);
-        // check if the head has changed and update it atomically.
-        while (!head_.compare_exchange_weak(n->next_, n, std::memory_order_acq_rel)) ;
+        auto next = head_.load(std::memory_order_relaxed);
+        do {
+            n->next_.store(next, std::memory_order_relaxed);
+            // check if the head has changed and update it atomically.
+            // (if the CAS fails, 'next' is updated to the current head)
+        } while (!head_.compare_exchange_weak(next, n, std::memory_order_acq_rel)) ;
     }
 
     void push_front(const T& v){
@@ -334,30 +343,56 @@ public:
         emplace_front(std::move(v));
     }
 
-    // not safe for concurrent iteration!
     void pop_front(){
-        auto head = head_.load(std::memory_order_relaxed);
-        // check if the head has changed and update it atomically.
-        while (!head_.compare_exchange_weak(head, head->next_, std::memory_order_acq_rel)) ;
+        T head = head_.load(std::memory_order_relaxed);
+        T *next;
+        do {
+            next = head->next_.load(std::memory_order_relaxed);
+            // check if the head has changed and update it atomically.
+            // (if the CAS fails, 'head' is updated to the current head)
+        } while (!head_.compare_exchange_weak(head, next, std::memory_order_acq_rel));
+
         dispose_node(head);
     }
 
-    // not thread-safe
     iterator erase(iterator it){
-        node* prev = nullptr;
-        for (node* n = head_.load(); n; prev = n, n = n->next_){
+        for (;;){
+            auto n = head_.load(std::memory_order_acquire);
             if (n == it.node_){
-                auto next = n->next_;
-                if (prev){
-                    prev->next_ = next;
-                } else {
-                    head_.store(next);
+                // try to remove head
+                auto next = n->next_.load(std::memory_order_acquire);
+                if (head_.compare_exchange_strong(n, next, std::memory_order_acq_rel)){
+                    dispose_node(n);
+                    return iterator(next); // success
                 }
-                dispose_node(n);
-                return iterator(next);
+                // someone pushed a new node in between, try again!
+            } else {
+                // find the node before it
+                while (n){
+                    auto next = n->next_.load(std::memory_order_acquire);
+                    if (next == it.node_){
+                        // atomically unlink node
+                        auto next2 = next->next_.load(std::memory_order_acquire);
+                    #if 0
+                        if (n->next_.compare_exchange_strong(next, next2, std::memory_order_acq_rel)){
+                            dispose_node(next);
+                            return iterator(next2);
+                        } else {
+                            // someone concurrently removed 'it'(shouldn't happen)
+                            return iterator{};
+                        }
+                    #else
+                        n->next_.store(next2, std::memory_order_release);
+                        dispose_node(next);
+                        return iterator(next2);
+                    #endif
+                    }
+                    n = next;
+                }
+                // reached end of list, 'it' might have been removed concurrently (shouldn't happen)
+                return iterator{};
             }
         }
-        return iterator{};
     }
 
     T& front() { return *begin(); }
@@ -380,47 +415,93 @@ public:
         return const_iterator();
     }
 
-    int32_t empty() const {
-        return head_.load(std::memory_order_relaxed) != nullptr;
+    bool empty() const {
+        return head_.load(std::memory_order_relaxed) == nullptr;
     }
 
     // not safe for concurrent iteration!
     void clear(){
         // atomically unlink the whole list
         auto head = head_.exchange(nullptr); // relaxed?
-        if (!head){
-            return;
-        }
-        // find last node
-        for (auto n = head; n->next_; n = n->next_){
-            if (!n->next_){
-                // link the last node to the head of the free list.
-                // the head becomes the new head of the free list.
-                n->next_ = free_.load(std::memory_order_relaxed);
-                while (!free_.compare_exchange_weak(n->next_, head, std::memory_order_acq_rel)) ;
-            }
+        if (head){
+            // and move it to the free list
+            append_list(head, free_);
         }
     }
 
-    // can be called concurrently!
-    void free(){
-        // atomically unlink the whole free list
-        auto n = free_.exchange(nullptr); // relaxed?
-        // free memory
-        while (n){
-            auto tmp = n;
-            n = n->next_;
-            delete tmp;
+    void lock(){
+        refcount_.fetch_add(1, std::memory_order_acquire);
+    }
+
+    void unlock(){
+        refcount_.fetch_sub(1, std::memory_order_release);
+    }
+
+    // always call in unlocked state!
+    bool try_free(){
+        // only try to free if the refcount is zero
+        if (!refcount_.load(std::memory_order_relaxed)){
+            // atomically unlink the whole free list
+            auto f = free_.exchange(nullptr); // relaxed?
+            if (!f){
+                return true; // nothing to free
+            }
+            // now really check the refcount.
+            // after this point it can safely go up again,
+            // because if won't affect the old free list.
+            if (!refcount_.load(std::memory_order_acquire)){
+                // free memory
+                destroy_list(f);
+                return true;
+            } else {
+                // put it back to the free list
+                append_list(f, free_);
+            }
         }
+        return false;
     }
 private:
     std::atomic<node *> head_{nullptr};
     std::atomic<node *> free_{nullptr};
+    std::atomic<int32_t> refcount_{0};
 
     void dispose_node(node * n){
         // atomically add node to free list
-        n->next_ = free_.load(std::memory_order_relaxed);
-        while (!free_.compare_exchange_weak(n->next_, n, std::memory_order_acq_rel)) ;
+        auto next = free_.load(std::memory_order_relaxed);
+        do {
+            n->next_.store(next, std::memory_order_relaxed);
+            // check if the head has changed and update it atomically.
+            // (if the CAS fails, 'next' is updated to the current head)
+        } while (!free_.compare_exchange_weak(next, n, std::memory_order_acq_rel));
+    }
+
+    void append_list(node *src, std::atomic<node *>& dst){
+        // find last node
+        auto n = src;
+        for (;;){
+            auto next = n->next_.load(std::memory_order_relaxed);
+            if (!next){
+                // link the last node to the head of 'dst'.
+                // 'src' becomes the new head of 'dst'.
+                auto d = dst.load(std::memory_order_relaxed);
+                do {
+                    n->next_.store(d, std::memory_order_relaxed);
+                    // check if the head has changed and update it atomically.
+                    // (if the CAS fails, 'd' is updated to the current 'dst' head)
+                } while (!dst.compare_exchange_weak(d, src, std::memory_order_acq_rel)) ;
+                return; // success
+            } else {
+                n = next;
+            }
+        }
+    }
+
+    void destroy_list(node *n){
+        while (n){
+            auto tmp = n;
+            n = n->next_.load(std::memory_order_relaxed);
+            delete tmp;
+        }
     }
 };
 
