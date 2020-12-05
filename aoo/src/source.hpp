@@ -185,10 +185,11 @@ class source final : public isource {
     lockfree::unbounded_mpsc_queue<data_request> datarequestqueue_;
     history_buffer history_;
     // sinks
-    std::list<sink_desc> sinks_;
+    using sink_list = lockfree::simple_list<sink_desc>;
+    using sink_lock = std::unique_lock<sink_list>;
+    sink_list sinks_;
     // thread synchronization
     aoo::shared_mutex update_mutex_;
-    aoo::shared_mutex sink_mutex_;
     // options
     std::atomic<int32_t> buffersize_{ AOO_SOURCE_BUFSIZE };
     std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };

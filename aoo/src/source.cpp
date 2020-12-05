@@ -223,7 +223,7 @@ int32_t aoo::source::set_sinkoption(const void *address, int32_t addrlen, aoo_id
 {
     ip_address addr((const sockaddr *)address, addrlen);
 
-    shared_scoped_lock lock(sink_mutex_); // reader lock!
+    sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
     if (sink){
         switch (opt){
@@ -261,7 +261,7 @@ int32_t aoo::source::get_sinkoption(const void *address, int32_t addrlen, aoo_id
 {
     ip_address addr((const sockaddr *)address, addrlen);
 
-    shared_scoped_lock lock(sink_mutex_); // reader lock!
+    sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
     if (sink){
         switch (opt){
@@ -331,14 +331,14 @@ int32_t aoo_source_add_sink(aoo_source *src, const void *address,
 int32_t aoo::source::add_sink(const void *address, int32_t addrlen, aoo_id id){
     ip_address addr((const sockaddr *)address, addrlen);
 
-    scoped_lock lock(sink_mutex_); // writer lock!
+    sink_lock lock(sinks_);
     // check if sink exists!
     if (find_sink(addr, id)){
         LOG_WARNING("aoo_source: sink already added!");
         return 0;
     }
     // add sink descriptor
-    sinks_.emplace_back(addr, id);
+    sinks_.emplace_front(addr, id);
     // push format request
     formatrequestqueue_.push(format_request { addr, id });
 
@@ -353,7 +353,7 @@ int32_t aoo_source_remove_sink(aoo_source *src, const void *address,
 int32_t aoo::source::remove_sink(const void *address, int32_t addrlen, aoo_id id){
     ip_address addr((const sockaddr *)address, addrlen);
 
-    scoped_lock lock(sink_mutex_); // writer lock!
+    sink_lock lock(sinks_);
     for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
         if (it->address == addr && it->id == id){
             sinks_.erase(it);
@@ -369,7 +369,7 @@ void aoo_source_remove_all(aoo_source *src) {
 }
 
 void aoo::source::remove_all(){
-    unique_lock lock(sink_mutex_); // writer lock!
+    sink_lock lock(sinks_);
     sinks_.clear();
 }
 
@@ -460,6 +460,10 @@ int32_t aoo::source::send(){
 
     if (send_ping()){
         didsomething = true;
+    }
+
+    if (!sinks_.try_free()){
+        LOG_VERBOSE("aoo::source: try_free() would block");
     }
 
     return didsomething;
@@ -696,7 +700,7 @@ void source::start_new_stream(){
         history_.clear(); // !
     }
 
-    shared_lock lock(sink_mutex_);
+    sink_lock lock(sinks_);
     for (auto& sink : sinks_){
         formatrequestqueue_.push(format_request { sink });
     }
@@ -901,33 +905,21 @@ bool source::send_data(){
         // now we can unlock
         updatelock.unlock();
 
-        // make local copy of sink descriptors
-        shared_lock listlock(sink_mutex_);
-        int32_t numsinks = sinks_.size();
-        auto sinks = (sink_desc *)alloca((numsinks + 1) * sizeof(sink_desc)); // avoid alloca(0)
-        std::copy(sinks_.begin(), sinks_.end(), sinks);
-
-        // unlock before sending!
-        listlock.unlock();
-
+        // we only free sources in this thread, so we don't have to lock
+    #if 0
+        // this is not a real lock, so we don't have worry about dead locks
+        sink_lock lock(sinks_);
+    #endif
         // send block to sinks
-        for (int i = 0; i < numsinks; ++i){
-            send_data(sinks[i], salt, d);
+        for (auto& sink : sinks_){
+            send_data(sink, salt, d);
         }
         --dropped_;
     } else if (audioqueue_.read_available() && srqueue_.read_available()){
-        // make local copy of sink descriptors
-        shared_lock listlock(sink_mutex_);
-        int32_t numsinks = sinks_.size();
-        auto sinks = (sink_desc *)alloca((numsinks + 1) * sizeof(sink_desc)); // avoid alloca(0)
-        std::copy(sinks_.begin(), sinks_.end(), sinks);
+        // always read samplerate from ringbuffer!
+        srqueue_.read(d.samplerate);
 
-        // unlock before sending!
-        listlock.unlock();
-
-        srqueue_.read(d.samplerate); // always read samplerate from ringbuffer
-
-        if (numsinks){
+        if (!sinks_.empty()){
             // copy and convert audio samples to blob data
             auto nchannels = encoder_->nchannels();
             auto blocksize = encoder_->blocksize();
@@ -960,9 +952,14 @@ bool source::send_data(){
                     d.framenum = frame;
                     d.data = data;
                     d.size = n;
-                    for (int i = 0; i < numsinks; ++i){
-                        d.channel = sinks[i].channel;
-                        send_data(sinks[i], salt, d);
+                    // we only free sources in this thread, so we don't have to lock
+                #if 0
+                    // this is not a real lock, so we don't have worry about dead locks
+                    sink_lock lock(sinks_);
+                #endif
+                    // send block to sinks
+                    for (auto& sink : sinks_){
+                        send_data(sink, salt, d);
                     }
                 };
 
@@ -1031,20 +1028,16 @@ bool source::send_ping(){
     auto pingtime = lastpingtime_.load();
     auto interval = ping_interval_.load(); // 0: no ping
     if (interval > 0 && (elapsed - pingtime) >= interval){
-        // make local copy of sink descriptors
-        shared_lock sinklock(sink_mutex_);
-        int32_t numsinks = sinks_.size();
-        auto sinks = (aoo::sink_desc *)alloca((numsinks + 1) * sizeof(aoo::sink_desc)); // avoid alloca(0)
-        std::copy(sinks_.begin(), sinks_.end(), sinks);
-        sinklock.unlock();
-
         auto tt = timer_.get_absolute();
-
-        for (int i = 0; i < numsinks; ++i){
+        // we only free sources in this thread, so we don't have to lock
+    #if 0
+        // this is not a real lock, so we don't have worry about dead locks
+        sink_lock lock(sinks_);
+    #endif
+        // send ping to sinks
+        for (auto& sink : sinks_){
             // /aoo/sink/<id>/ping <src> <time>
-            auto& s = sinks[i];
-
-            LOG_DEBUG("send ping to " << s.id);
+            LOG_DEBUG("send ping to " << sink.id);
 
             char buf[AOO_MAXPACKETSIZE];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -1053,12 +1046,12 @@ bool source::send_ping(){
                     + AOO_MSG_SINK_LEN + 16 + AOO_MSG_PING_LEN;
             char address[max_addr_size];
             snprintf(address, sizeof(address), "%s%s/%d%s",
-                     AOO_MSG_DOMAIN, AOO_MSG_SINK, s.id, AOO_MSG_PING);
+                     AOO_MSG_DOMAIN, AOO_MSG_SINK, sink.id, AOO_MSG_PING);
 
             msg << osc::BeginMessage(address) << id() << osc::TimeTag(tt)
                 << osc::EndMessage;
 
-            do_send(msg.Data(), msg.Size(), s.address);
+            do_send(msg.Data(), msg.Size(), sink.address);
         }
 
         lastpingtime_.store(elapsed);
@@ -1087,9 +1080,8 @@ void source::handle_format_request(const osc::ReceivedMessage& msg,
     }
 
     // check if sink exists (not strictly necessary, but might help catch errors)
-    shared_lock lock(sink_mutex_); // reader lock!
+    sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
-    lock.unlock();
 
     if (sink){
         formatrequestqueue_.push(format_request { addr, id });
@@ -1108,11 +1100,8 @@ void source::handle_data_request(const osc::ReceivedMessage& msg,
     LOG_DEBUG("handle data request");
 
     // check if sink exists (not strictly necessary, but might help catch errors)
-    shared_lock lock(sink_mutex_); // reader lock!
-    auto sink = find_sink(addr, id);
-    lock.unlock();
-
-    if (sink){
+    sink_lock lock(sinks_);
+    if (find_sink(addr, id)){
         // get pairs of [seq, frame]
         int npairs = (msg.ArgumentCount() - 2) / 2;
         while (npairs--){
@@ -1133,9 +1122,8 @@ void source::handle_invite(const osc::ReceivedMessage& msg,
     LOG_DEBUG("handle invite");
 
     // check if sink exists (not strictly necessary, but might help catch errors)
-    shared_lock lock(sink_mutex_); // reader lock!
-    auto sink = find_sink(addr, id);
-    if (!sink){
+    sink_lock lock(sinks_);
+    if (!find_sink(addr, id)){
         // push "invite" event
         event e(AOO_INVITE_EVENT, addr, id);
         eventqueue_.push(e);
@@ -1152,9 +1140,8 @@ void source::handle_uninvite(const osc::ReceivedMessage& msg,
     LOG_DEBUG("handle uninvite");
 
     // check if sink exists (not strictly necessary, but might help catch errors)
-    shared_lock lock(sink_mutex_); // reader lock!
-    auto sink = find_sink(addr, id);
-    if (sink){
+    sink_lock lock(sinks_);
+    if (find_sink(addr, id)){
         // push "uninvite" event
         event e(AOO_UNINVITE_EVENT, addr, id);
         eventqueue_.push(e);
@@ -1175,9 +1162,8 @@ void source::handle_ping(const osc::ReceivedMessage& msg,
     LOG_DEBUG("handle ping");
 
     // check if sink exists (not strictly necessary, but might help catch errors)
-    shared_lock lock(sink_mutex_); // reader lock!
-    auto sink = find_sink(addr, id);
-    if (sink){
+    sink_lock lock(sinks_);
+    if (find_sink(addr, id)){
         // push "ping" event
         event e(AOO_PING_EVENT, addr, id);
         e.ping.tt1 = tt1;

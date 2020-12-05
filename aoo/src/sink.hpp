@@ -360,8 +360,9 @@ private:
     std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
     std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT * 0.001 };
     // the sources
-    using source_lock = std::unique_lock<lockfree::simple_list<source_desc>>;
-    lockfree::simple_list<source_desc> sources_;
+    using source_list = lockfree::simple_list<source_desc>;
+    using source_lock = std::unique_lock<source_list>;
+    source_list sources_;
     // timing
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
     time_dll dll_;
