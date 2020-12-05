@@ -128,13 +128,43 @@ std::vector<ip_address> ip_address::get_list(const std::string &host,
     return result;
 }
 
-ip_address::ip_address(const std::string& host, int port, ip_type type){
-    auto result = get_list(host, port, type);
-    if (!result.empty()){
-        // just pick the first result
-        *this = result.front();
+ip_address::ip_address(const std::string& ip, int port,
+                       ip_type type){
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    // prevent DNS lookup!
+    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV | AI_PASSIVE;
+    hints.ai_family = AF_UNSPEC;
+
+    char portstr[10]; // largest port is 65535
+    snprintf(portstr, sizeof(portstr), "%d", port);
+
+    struct addrinfo *ailist;
+    int err = getaddrinfo(!ip.empty() ? ip.c_str() : nullptr,
+                          portstr, &hints, &ailist);
+    if (err == 0){
+    #if AOO_NET_USE_IPv6
+        if (type == ip_type::IPv6 && ailist->ai_family == AF_INET){
+            // manually create IPv4-mapped address.
+            // this is workaround for the fact that AI_NUMERICHOST
+            // doesn't seem to work with AI_V4MAPPED (at least on Windows)
+            freeaddrinfo(ailist);
+            std::string mapped = "::ffff:" + ip;
+            err = getaddrinfo(mapped.c_str(),
+                              portstr, &hints, &ailist);
+            if (err != 0){
+                *this = ip_address{};
+                return;
+            }
+        }
+    #endif
+        // otherwise just take the first result
+        memcpy(&address_, ailist->ai_addr, ailist->ai_addrlen);
+        length_ = ailist->ai_addrlen;
+        freeaddrinfo(ailist);
     } else {
-        *this = ip_address {};
+        // fail
+        *this = ip_address{};
     }
 }
 

@@ -33,7 +33,7 @@ public:
     ip_address();
     ip_address(const struct sockaddr *sa, socklen_t len);
     ip_address(uint32_t ipv4, int port);
-    ip_address(const std::string& host, int port, ip_type type);
+    ip_address(const std::string& ip, int port, ip_type type = ip_type::Unspec);
 
     ip_address(const ip_address& other);
     ip_address& operator=(const ip_address& other);
