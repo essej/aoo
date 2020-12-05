@@ -160,8 +160,8 @@ public:
     int32_t send_message(const char *data, int32_t n,
                          const void *addr, int32_t len, int32_t flags) override;
 
-    void do_send_message(const char *data, int32_t size, int32_t flags,
-                         const ip_address* vec, int32_t n);
+    template<typename T>
+    void do_send_message(const char *data, int32_t size, int32_t flags, T&& func);
 
     void perform_send_message(const char *data, int32_t n, int32_t flags);
 
@@ -245,8 +245,9 @@ private:
     std::atomic<bool> quit_{false};
     int eventsocket_;
     // peers
-    std::vector<std::shared_ptr<peer>> peers_;
-    aoo::shared_mutex peer_lock_;
+    using peer_list = lockfree::simple_list<peer>;
+    using peer_lock = std::unique_lock<peer_list>;
+    peer_list peers_;
     // time
     time_tag start_time_;
     double last_ping_time_ = 0;

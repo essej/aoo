@@ -274,6 +274,12 @@ public:
         friend class simple_list;
         U *node_;
     public:
+        typedef std::ptrdiff_t difference_type;
+        typedef U value_type;
+        typedef U& reference;
+        typedef U* pointer;
+        typedef std::forward_iterator_tag iterator_category;
+
         base_iterator()
             : node_(nullptr){}
         base_iterator(U *n)

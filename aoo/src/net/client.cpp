@@ -348,9 +348,14 @@ int32_t aoo::net::client::send(){
         }
 
         // update peers
-        shared_lock lock(peer_lock_);
+        // Note: we don't need to lock because we only free peers
+        // in this thread.
         for (auto& p : peers_){
-            p->send(now);
+            p.send(now);
+        }
+
+        if (!peers_.try_free()){
+            LOG_VERBOSE("aoo::client: try_free() would block");
         }
     }
     return 1;
@@ -386,23 +391,23 @@ bool client::handle_peer_message(const osc::ReceivedMessage& msg, int onset,
                                  const ip_address& addr)
 {
     bool success = false;
-    shared_lock lock(peer_lock_);
+    peer_lock lock(peers_);
     // NOTE: we have to loop over *all* peers because there can
     // be more than 1 peer on a given IP endpoint, since a single
     // user can join multiple groups.
     // LATER make this more efficient, e.g. by associating IP endpoints
     // with peers instead of having them all in a single vector.
     for (auto& p : peers_){
-        if (p->match(addr)){
-            p->handle_message(msg, onset, addr);
+        if (p.match(addr)){
+            p.handle_message(msg, onset, addr);
             success = true;
         }
     }
     return success;
 }
 
-void client::do_send_message(const char *data, int32_t size, int32_t flags,
-                             const ip_address* vec, int32_t n)
+template<typename T>
+void client::do_send_message(const char *data, int32_t size, int32_t flags, T&& func)
 {
     if (!udp_client_){
         return;
@@ -418,11 +423,14 @@ void client::do_send_message(const char *data, int32_t size, int32_t flags,
         msg << osc::BeginMessage(AOO_NET_MSG_PEER_MESSAGE)
             << osc::Blob(data, size) << osc::EndMessage;
 
-        for (int i = 0; i < n; ++i){
-            auto& addr = vec[i];
-            LOG_DEBUG("aoo_client: send message " << data
-                      << " to " << addr.name() << ":" << addr.port());
-            udp_client_->send_message(msg.Data(), msg.Size(),addr);
+        peer_lock lock(peers_);
+        for (auto& peer : peers_){
+            if (func(peer)){
+                auto& addr = peer.address();
+                LOG_DEBUG("aoo_client: send message " << data
+                          << " to " << addr.name() << ":" << addr.port());
+                udp_client_->send_message(msg.Data(), msg.Size(), addr);
+            }
         }
     } catch (const osc::Exception& e){
         LOG_ERROR("aoo_client: error sending OSC message: " << e.what());
@@ -432,45 +440,22 @@ void client::do_send_message(const char *data, int32_t size, int32_t flags,
 void client::perform_send_message(const char *data, int32_t n,
                                   int32_t flags)
 {
-    shared_lock lock(peer_lock_);
-    // make a temporary copy of peer addresses, so we can
-    // send messages without holding a lock.
-    auto count = peers_.size();
-    auto vec = (ip_address *)alloca(count * sizeof(ip_address));
-    for (int i = 0; i < count; ++i){
-        new (vec + i) ip_address(peers_[i]->address());
-    }
-    lock.unlock();
-
-    do_send_message(data, n, flags, vec, count);
+    do_send_message(data, n, flags,
+                    [](auto&){ return true; });
 }
 
 void client::perform_send_message(const char *data, int32_t n,
                                   const ip_address& address, int32_t flags)
 {
-    do_send_message(data, n, flags, &address, 1);
+    do_send_message(data, n, flags,
+                    [&](auto& peer){ return peer.address() == address; });
 }
 
 void client::perform_send_message(const char *data, int32_t n,
                                   const std::string& group, int32_t flags)
 {
-    shared_lock lock(peer_lock_);
-    // make a temporary copy of matching peer addresses,
-    // so we can send messages without holding a lock.
-    // LATER we should use a group dictionary to avoid the linear search.
-    int count = 0;
-    auto numpeers = peers_.size();
-    auto vec = (ip_address *)alloca(numpeers * sizeof(ip_address));
-    for (int i = 0; i < numpeers; ++i){
-        if (peers_[i]->group() == group){
-            new (vec + count++) ip_address(peers_[i]->address());
-        }
-    }
-    lock.unlock();
-
-    LOG_DEBUG("send message to group " << group);
-
-    do_send_message(data, n, flags, vec, count);
+    do_send_message(data, n, flags,
+                    [&](auto& peer){ return peer.group() == group; });
 }
 
 void client::do_connect(const char *host, int port,
@@ -709,9 +694,9 @@ void client::perform_leave_group(const std::string &group,
                     LOG_VERBOSE("aoo_client: successfully left group " << group);
 
                     // remove all peers from this group
-                    unique_lock lock(peer_lock_); // writer lock!
+                    peer_lock lock(peers_);
                     for (auto it = peers_.begin(); it != peers_.end(); ){
-                        if ((*it)->group() == group){
+                        if (it->group() == group){
                             it = peers_.erase(it);
                         } else {
                             ++it;
@@ -998,23 +983,19 @@ void client::handle_peer_add(const osc::ReceivedMessage& msg){
         count -= 2;
     }
 
-    unique_lock lock(peer_lock_); // writer lock!
-
+    peer_lock lock(peers_);
     // check if peer already exists (shouldn't happen)
     for (auto& p: peers_){
-        if (p->match(group, user, id)){
-            LOG_ERROR("aoo_client: peer " << *p << " already added");
+        if (p.match(group, user, id)){
+            LOG_ERROR("aoo_client: peer " << p << " already added");
             return;
         }
     }
-
-    auto p = std::make_unique<peer>(*this, id, group, user, std::move(addrlist));
-
-    peers_.push_back(std::move(p));
+    peers_.emplace_front(*this, id, group, user, std::move(addrlist));
 
     // don't handle event yet, wait for ping handshake
 
-    LOG_VERBOSE("aoo_client: new peer " << *peers_.back());
+    LOG_VERBOSE("aoo_client: new peer " << peers_.front());
 }
 
 void client::handle_peer_remove(const osc::ReceivedMessage& msg){
@@ -1023,17 +1004,16 @@ void client::handle_peer_remove(const osc::ReceivedMessage& msg){
     std::string user = (it++)->AsString();
     int32_t id = (it++)->AsInt32();
 
-    unique_lock lock(peer_lock_); // writer lock!
-
+    peer_lock lock(peers_);
     auto result = std::find_if(peers_.begin(), peers_.end(),
-        [&](auto& p){ return p->match(group, user, id); });
+        [&](auto& p){ return p.match(group, user, id); });
     if (result == peers_.end()){
         LOG_ERROR("aoo_client: couldn't remove " << group << "|" << user);
         return;
     }
 
-    bool connected = (*result)->connected();
-    ip_address addr = (*result)->address();
+    bool connected = result->connected();
+    ip_address addr = result->address();
 
     peers_.erase(result);
 
@@ -1041,7 +1021,7 @@ void client::handle_peer_remove(const osc::ReceivedMessage& msg){
     // that an AOO_NET_PEER_JOIN_EVENT has been sent.
     if (connected){
         auto e = std::make_unique<peer_event>(
-                    AOO_NET_PEER_LEAVE_EVENT, addr, group.c_str(), user.c_str(), id);
+            AOO_NET_PEER_LEAVE_EVENT, addr, group.c_str(), user.c_str(), id);
         push_event(std::move(e));
     }
 
@@ -1069,9 +1049,8 @@ void client::close(bool manual){
     recvbuffer_.reset();
 
     // remove all peers
-    unique_lock peerlock(peer_lock_); // writer lock!
+    peer_lock lock(peers_);
     peers_.clear();
-    peerlock.unlock();
 
     // clear pending request
     // LATER call them all with some dummy input
