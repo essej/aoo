@@ -299,10 +299,9 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::ip_address& addr
         // otherwise try host|port
         auto host = s;
         int port = args->geti();
-        aoo::ip_address temp(host, port, node->type());
-
-        if (temp.valid()){
-            addr = temp;
+        auto result = aoo::ip_address::resolve(host, port, node->type());
+        if (!result.empty()){
+            addr = result.front(); // pick the first result
         } else {
             LOG_ERROR("aoo: couldn't resolve hostname '"
                       << host << "' for " << what);

@@ -521,7 +521,7 @@ int client::try_connect(const std::string &host, int port){
         return err;
     }
     // resolve host name
-    auto result = ip_address::get_list(host, port, type_);
+    auto result = ip_address::resolve(host, port, type_);
     if (result.empty()){
         int err = socket_errno();
         // LATER think about best way for error handling. Maybe exception?

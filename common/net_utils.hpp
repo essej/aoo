@@ -27,8 +27,8 @@ public:
         IPv6
     };
 
-    static std::vector<ip_address> get_list(const std::string& host, int port,
-                                            ip_type type);
+    static std::vector<ip_address> resolve(const std::string& host, int port,
+                                           ip_type type);
 
     ip_address();
     ip_address(const struct sockaddr *sa, socklen_t len);

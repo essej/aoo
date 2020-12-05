@@ -58,8 +58,8 @@ ip_address::ip_address(uint32_t ipv4, int port){
     length_ = sizeof(sa);
 }
 
-std::vector<ip_address> ip_address::get_list(const std::string &host,
-                                             int port, ip_type type){
+std::vector<ip_address> ip_address::resolve(const std::string &host,
+                                            int port, ip_type type){
     std::vector<ip_address> result;
 
     struct addrinfo hints;
@@ -84,17 +84,17 @@ std::vector<ip_address> ip_address::get_list(const std::string &host,
     hints.ai_flags =
 #if AOO_NET_USE_IPv6
     #ifdef AI_ALL
-        AI_ALL |       // both IPv4 and IPv6 addresses
+        AI_ALL |        // both IPv4 and IPv6 addresses
     #endif
     #ifdef AI_V4MAPPED
-        AI_V4MAPPED |  // fallback to IPv4-mapped IPv6 addresses
+        AI_V4MAPPED |   // fallback to IPv4-mapped IPv6 addresses
     #endif
 #endif
-        AI_PASSIVE;    // listen to any addr if hostname is NULL
+        AI_NUMERICSERV | // we use a port number
+        AI_PASSIVE;     // listen to any addr if hostname is NULL
 
     char portstr[10]; // largest port is 65535
-    portstr[0] = '\0';
-    sprintf(portstr, "%d", port);
+    snprintf(portstr, sizeof(portstr), "%d", port);
 
     struct addrinfo *ailist;
     int err = getaddrinfo(!host.empty() ? host.c_str() : nullptr,

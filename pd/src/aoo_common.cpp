@@ -63,10 +63,9 @@ static bool get_endpoint_arg(void *x, i_node *node, int argc, t_atom *argv,
         // otherwise try host|port
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
-        ip_address temp(host->s_name, port, node->type());
-
-        if (temp.valid()){
-            addr = temp;
+        auto result = ip_address::resolve(host->s_name, port, node->type());
+        if (!result.empty()){
+            addr = result.front(); // just pick the first one
         } else {
             pd_error(x, "%s: couldn't resolve hostname '%s' for %s",
                      classname(x), host->s_name, what);
