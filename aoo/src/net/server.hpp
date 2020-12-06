@@ -42,6 +42,8 @@ public:
     client_endpoint(server &s, int sock, const ip_address& addr);
     ~client_endpoint();
 
+    bool match(const ip_address& addr) const;
+
     void close();
 
     bool is_active() const { return socket >= 0; }
@@ -62,7 +64,7 @@ private:
     SLIP sendbuffer_;
     SLIP recvbuffer_;
 
-    bool handle_message(const osc::ReceivedMessage& msg);
+    bool handle_message(const char *data, int32_t n);
 
     bool handle_bundle(const osc::ReceivedBundle& bundle);
 
@@ -179,6 +181,9 @@ public:
     void on_user_joined_group(user& usr, group& grp);
 
     void on_user_left_group(user& usr, group& grp);
+
+    void handle_relay_message(const osc::ReceivedMessage& msg,
+                              const ip_address& src);
 private:
     int tcpsocket_;
     int udpsocket_;

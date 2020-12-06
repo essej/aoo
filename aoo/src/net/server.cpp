@@ -53,8 +53,10 @@ bool check_version(uint32_t version);
 
 namespace net {
 
+// from aoo/client
 char * copy_string(const char *s);
 void * copy_sockaddr(const void *sa, int32_t len);
+int32_t aoo_net_parse_pattern(const char *, int32_t, int32_t *);
 
 } // net
 } // aoo
@@ -346,6 +348,35 @@ void server::on_user_left_group(user& usr, group& grp){
     push_event(std::move(e));
 }
 
+void server::handle_relay_message(const osc::ReceivedMessage& msg,
+                                  const ip_address& src){
+    auto it = msg.ArgumentsBegin();
+
+    auto ip = (it++)->AsString();
+    auto port = (it++)->AsInt32();
+    ip_address dst(ip, port, type());
+
+    const void *msgData;
+    osc::osc_bundle_element_size_t msgSize;
+    (it++)->AsBlob(msgData, msgSize);
+
+    // forward message to matching client
+    // send unmapped address in case the client is IPv4 only!
+    for (auto& client : clients_){
+        if (client->match(dst)) {
+            char buf[AOO_MAXPACKETSIZE];
+            osc::OutboundPacketStream out(buf, sizeof(buf));
+            out << osc::BeginMessage(AOO_MSG_DOMAIN AOO_NET_MSG_RELAY)
+                << src.name_unmapped() << src.port() << osc::Blob(msgData, msgSize)
+                << osc::EndMessage;
+            client->send_message(out.Data(), out.Size());
+            return;
+        }
+    }
+
+    LOG_WARNING("aoo_server: couldn't find matching client for relay message");
+}
+
 bool server::wait_for_event(){
     bool didclose = false;
     int numclients = clients_.size();
@@ -616,6 +647,19 @@ client_endpoint::~client_endpoint(){
     close();
 }
 
+bool client_endpoint::match(const ip_address& addr) const {
+#if 1
+    for (auto& a : addresses){
+        if (a == addr){
+            return true;
+        }
+    }
+    return false;
+#else
+    return addr == addr_;
+#endif
+}
+
 void client_endpoint::close(){
     if (socket >= 0){
         LOG_VERBOSE("aoo_server: close client endpoint");
@@ -684,8 +728,7 @@ bool client_endpoint::receive_data(){
                     return false;
                 }
             } else {
-                osc::ReceivedMessage msg(packet);
-                if (!handle_message(msg)){
+                if (!handle_message(packet.Contents(), packet.Size())){
                     return false;
                 }
             }
@@ -697,35 +740,40 @@ bool client_endpoint::receive_data(){
     return true;
 }
 
-bool client_endpoint::handle_message(const osc::ReceivedMessage &msg){
-    // first check main pattern
-    int32_t len = strlen(msg.AddressPattern());
-    int32_t onset = AOO_MSG_DOMAIN_LEN + AOO_NET_MSG_SERVER_LEN;
+bool client_endpoint::handle_message(const char *data, int32_t n){
+    osc::ReceivedPacket packet(data, n);
+    osc::ReceivedMessage msg(packet);
 
-    if ((len < onset) ||
-        memcmp(msg.AddressPattern(), AOO_MSG_DOMAIN AOO_NET_MSG_SERVER, onset))
-    {
-        LOG_ERROR("aoo_server: received bad message " << msg.AddressPattern()
-                  << " from client");
+    int32_t type;
+    auto onset = aoo_net_parse_pattern(data, n, &type);
+    if (!onset){
+        LOG_WARNING("aoo_server: not an AOO NET message!");
         return false;
     }
 
-    // now compare subpattern
-    auto pattern = msg.AddressPattern() + onset;
-    LOG_DEBUG("aoo_server: got message " << pattern);
-
     try {
-        if (!strcmp(pattern, AOO_NET_MSG_PING)){
-            handle_ping(msg);
-        } else if (!strcmp(pattern, AOO_NET_MSG_LOGIN)){
-            handle_login(msg);
-        } else if (!strcmp(pattern, AOO_NET_MSG_GROUP_JOIN)){
-            handle_group_join(msg);
-        } else if (!strcmp(pattern, AOO_NET_MSG_GROUP_LEAVE)){
-            handle_group_leave(msg);
+        if (type == AOO_TYPE_SERVER){
+            auto pattern = msg.AddressPattern() + onset;
+            LOG_DEBUG("aoo_server: got server message " << pattern);
+            if (!strcmp(pattern, AOO_NET_MSG_PING)){
+                handle_ping(msg);
+            } else if (!strcmp(pattern, AOO_NET_MSG_LOGIN)){
+                handle_login(msg);
+            } else if (!strcmp(pattern, AOO_NET_MSG_GROUP_JOIN)){
+                handle_group_join(msg);
+            } else if (!strcmp(pattern, AOO_NET_MSG_GROUP_LEAVE)){
+                handle_group_leave(msg);
+            } else {
+                LOG_ERROR("aoo_server: unknown server message " << pattern);
+                return false;
+            }
+        } else if (type == AOO_TYPE_RELAY){
+            server_->handle_relay_message(msg, addr_);
         } else {
-            LOG_ERROR("aoo_server: unknown message " << msg.AddressPattern());
+            LOG_WARNING("aoo_client: got unexpected message " << msg.AddressPattern());
+            return false;
         }
+
         return true;
     } catch (const osc::Exception& e){
         LOG_ERROR("aoo_server: exception on handling " << msg.AddressPattern()
@@ -743,8 +791,7 @@ bool client_endpoint::handle_bundle(const osc::ReceivedBundle &bundle){
                 return false;
             }
         } else {
-            osc::ReceivedMessage msg(*it);
-            if (!handle_message(msg)){
+            if (!handle_message(it->Contents(), it->Size())){
                 return false;
             }
         }

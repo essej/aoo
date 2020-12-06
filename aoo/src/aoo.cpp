@@ -74,6 +74,11 @@ int32_t aoo_parse_pattern(const char *msg, int32_t n,
         {
             *type = AOO_TYPE_PEER;
             return offset + AOO_NET_MSG_PEER_LEN;
+        } else if (n >= (offset + AOO_NET_MSG_RELAY_LEN)
+            && !memcmp(msg + offset, AOO_NET_MSG_RELAY, AOO_NET_MSG_RELAY_LEN))
+        {
+            *type = AOO_TYPE_RELAY;
+            return offset + AOO_NET_MSG_RELAY_LEN;
     #endif
         } else {
             return 0;

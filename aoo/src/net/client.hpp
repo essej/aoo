@@ -34,6 +34,7 @@ namespace net {
 
 class client;
 
+/*/////////////////////////// peer /////////////////////////*/
 class peer {
 public:
     peer(client& client, int32_t id,
@@ -43,10 +44,14 @@ public:
     ~peer();
 
     bool connected() const {
-        return connected_.load();
+        return connected_.load(std::memory_order_acquire);
     }
 
-    bool match(const ip_address& addr) const;
+    bool relay() const { return relay_; }
+
+    bool match(const ip_address& addr, bool any) const;
+
+    bool match(const std::string& group) const;
 
     bool match(const std::string& group, const std::string& user,
                int32_t id);
@@ -82,16 +87,10 @@ private:
     std::atomic<bool> connected_{false};
     std::atomic<bool> send_reply_{false};
     bool timeout_ = false;
+    bool relay_ = false;
 };
 
-enum class client_state {
-    disconnected,
-    connecting,
-    handshake,
-    login,
-    connected
-};
-
+/*///////////////////////// udp_client ///////////////////////////*/
 class udp_client {
 public:
     udp_client(client& c, int socket, int port)
@@ -103,7 +102,9 @@ public:
 
     int32_t handle_message(const char *data, int32_t n, const ip_address& addr);
 
-    void send_message(const char *data, int32_t size, const ip_address& addr);
+    void send_server_message(const char *data, int32_t size);
+
+    void send_peer_message(const char *data, int32_t size, const ip_address& addr, bool relay);
 
     void start_handshake(const ip_address& local, std::vector<ip_address>&& remote);
 private:
@@ -118,13 +119,23 @@ private:
     double last_ping_time_ = 0;
     std::atomic<double> first_ping_time_{0};
 
-    void send_ping();
+    void send_message(const char *data, int32_t size, const ip_address& addr);
 
-    void send_server_message(const char *data, int32_t size);
+    void send_ping();
 
     void handle_server_message(const osc::ReceivedMessage& msg, int onset);
 
     bool is_server_address(const ip_address& addr);
+};
+
+/*/////////////////////////////// client /////////////////////////////*/
+
+enum class client_state {
+    disconnected,
+    connecting,
+    handshake,
+    login,
+    connected
 };
 
 class client final : public iclient
@@ -161,18 +172,9 @@ public:
                          const void *addr, int32_t len, int32_t flags) override;
 
     template<typename T>
-    void do_send_message(const char *data, int32_t size, int32_t flags, T&& func);
+    void perform_send_message(const char *data, int32_t size, int32_t flags, T&& filter);
 
-    void perform_send_message(const char *data, int32_t n, int32_t flags);
-
-    void perform_send_message(const char *data, int32_t n,
-                              const ip_address& address, int32_t flags);
-
-    void perform_send_message(const char *data, int32_t n,
-                              const std::string& group, int32_t flags);
-
-    int32_t handle_message(const char *data, int32_t n,
-                           const void *addr, int32_t len) override;
+    int32_t handle_message(const char *data, int32_t n, const void *addr, int32_t len) override;
 
     bool handle_peer_message(const osc::ReceivedMessage& msg, int onset,
                              const ip_address& addr);
@@ -222,7 +224,7 @@ public:
 
     void push_command(std::unique_ptr<icommand>&& cmd);
 
-    void send_udp_message(const char *data, int32_t size, const ip_address& addr);
+    udp_client& udp() { return *udp_client_; }
 
     ip_address::ip_type type() const { return type_; }
 
@@ -231,6 +233,10 @@ public:
     }
 
     client_state current_state() const { return state_.load(); }
+
+    bool have_server_flag(aoo_net_server_flag flag) const {
+        return flag & server_flags_;
+    }
 private:
     std::unique_ptr<udp_client> udp_client_;
     int socket_ = -1;
@@ -243,7 +249,7 @@ private:
     SLIP recvbuffer_;
     // event
     std::atomic<bool> quit_{false};
-    int eventsocket_;
+    int eventsocket_ = -1;
     // peers
     using peer_list = lockfree::simple_list<peer>;
     using peer_lock = std::unique_lock<peer_list>;
@@ -255,8 +261,9 @@ private:
     std::atomic<client_state> state_{client_state::disconnected};
     std::string username_;
     std::string password_;
-    aoo_net_callback callback_;
-    void *userdata_;
+    uint32_t server_flags_ = 0;
+    aoo_net_callback callback_ = nullptr;
+    void *userdata_ = nullptr;
     // commands
     lockfree::unbounded_mpsc_queue<std::unique_ptr<icommand>> commands_;
     // peer/group messages
@@ -278,15 +285,18 @@ private:
 
     bool signal();
 
-    void send_ping();
-
     void send_server_message(const char *data, int32_t size);
+
+    void send_peer_message(const char *data, int32_t size,
+                           const ip_address& addr);
 
     void handle_server_bundle(const osc::ReceivedBundle& bundle);
 
-    void handle_server_message(const osc::ReceivedMessage& msg);
+    void handle_server_message(const char *data, int32_t n);
 
     void handle_login(const osc::ReceivedMessage& msg);
+
+    void handle_relay_message(const osc::ReceivedMessage& msg);
 
     void handle_peer_add(const osc::ReceivedMessage& msg);
 
@@ -338,24 +348,28 @@ public:
     /*////////////////////// commands ///////////////////*/
     struct message_cmd : icommand {
         message_cmd(const char *data, int32_t size, int32_t flags)
-            : data_(data, size), flags_(flags) {}
+            : flags_(flags) {
+            data_.assign(data, data + size);
+        }
 
         void perform(client &obj) override {
-            obj.perform_send_message(data_.data(), data_.size(), flags_);
+            obj.perform_send_message(data_.data(), data_.size(),
+                flags_, [](auto&){ return true; });
         }
     protected:
-        std::string data_;
+        std::vector<char> data_;
         int32_t flags_;
     };
 
     struct peer_message_cmd : message_cmd {
         peer_message_cmd(const char *data, int32_t size,
-                         const sockaddr *addr, int32_t len, int32_t flags)
+                         const sockaddr *addr, int32_t len,
+                         int32_t flags)
             : message_cmd(data, size, flags), address_(addr, len) {}
 
         void perform(client &obj) override {
             obj.perform_send_message(data_.data(), data_.size(),
-                                     address_, flags_);
+                flags_, [&](auto& peer){ return peer.match(address_, false); });
         }
     protected:
         ip_address address_;
@@ -368,7 +382,7 @@ public:
 
         void perform(client &obj) override {
             obj.perform_send_message(data_.data(), data_.size(),
-                                     group_, flags_);
+                flags_, [&](auto& peer){ return peer.match(group_); });
         }
     protected:
         std::string group_;

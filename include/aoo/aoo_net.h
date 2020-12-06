@@ -47,6 +47,9 @@ extern "C"
 #define AOO_NET_MSG_PEER "/peer"
 #define AOO_NET_MSG_PEER_LEN 5
 
+#define AOO_NET_MSG_RELAY "/relay"
+#define AOO_NET_MSG_RELAY_LEN 6
+
 /*///////////////////////// requests/replies ///////////////////////////*/
 
 typedef void (*aoo_net_callback)(void *user, int32_t result, const void *reply);
@@ -70,8 +73,13 @@ typedef struct aoo_net_connect_request {
     const char *user_pwd;
 } aoo_net_connect_request;
 
+typedef enum aoo_net_server_flag {
+    AOO_NET_SERVER_RELAY
+} aoo_net_server_flag;
+
 typedef struct aoo_net_connect_reply {
     int32_t user_id;
+    uint32_t server_flags;
 } aoo_net_connect_reply;
 
 typedef struct aoo_net_group_request {
@@ -178,6 +186,9 @@ AOO_API int32_t aoo_net_server_poll_events(aoo_net_server *server,
 // and set/get server options, group options and user options
 
 /*///////////////////////// AOO client /////////////////////////*/
+
+// flags for aoo_net_client_send_message():
+#define AOO_NET_MESSAGE_RELIABLE 1
 
 #ifdef __cplusplus
 namespace aoo {

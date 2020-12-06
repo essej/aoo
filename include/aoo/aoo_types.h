@@ -71,7 +71,8 @@ typedef enum aoo_type_code
 #if USE_AOO_NET
     AOO_TYPE_SERVER = 1000,
     AOO_TYPE_CLIENT,
-    AOO_TYPE_PEER
+    AOO_TYPE_PEER,
+    AOO_TYPE_RELAY
 #endif
 } aoo_type_code;
 
