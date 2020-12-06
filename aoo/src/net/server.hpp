@@ -37,27 +37,35 @@ using group_list = std::vector<std::shared_ptr<group>>;
 
 
 class client_endpoint {
-    server *server_;
 public:
-    client_endpoint(server &s, int sock, const ip_address& addr);
+    client_endpoint(server &s, int socket, const ip_address& addr);
+
     ~client_endpoint();
+
+    const ip_address& local_address() const { return addr_; }
+
+    const std::vector<ip_address>& public_addresses() const {
+        return public_addresses_;
+    }
 
     bool match(const ip_address& addr) const;
 
+    int socket() const { return socket_; }
+
     void close();
 
-    bool is_active() const { return socket >= 0; }
+    bool is_active() const { return socket_ >= 0; }
 
     void send_message(const char *msg, int32_t);
 
     bool receive_data();
-
-    int socket;
-#ifdef _WIN32
-    HANDLE event;
-#endif
-    std::vector<ip_address> addresses;
 private:
+    server *server_;
+    int socket_;
+#ifdef _WIN32
+    HANDLE event_;
+#endif
+    std::vector<ip_address> public_addresses_;
     std::shared_ptr<user> user_;
     ip_address addr_;
 
@@ -81,15 +89,10 @@ struct user {
     user(const std::string& _name, const std::string& _pwd,
          int32_t _id, uint32_t _version)
         : name(_name), password(_pwd), id(_id), version(_version) {}
+
     ~user() { LOG_VERBOSE("removed user " << name); }
 
-    const std::string name;
-    const std::string password;
-    int32_t id;
-    uint32_t version;
-    client_endpoint *endpoint = nullptr;
-
-    bool is_active() const { return endpoint != nullptr; }
+    bool is_active() const { return endpoint_ != nullptr; }
 
     void on_close(server& s);
 
@@ -100,17 +103,29 @@ struct user {
     int32_t num_groups() const { return groups_.size(); }
 
     const group_list& groups() { return groups_; }
+
+    client_endpoint * endpoint() {
+        return endpoint_;
+    }
+
+    void set_endpoint(client_endpoint *ep){
+        endpoint_ = ep;
+    }
+
+    // data
+    const std::string name;
+    const std::string password;
+    const int32_t id;
+    const uint32_t version;
 private:
     group_list groups_;
+    client_endpoint *endpoint_ = nullptr;
 };
 
 struct group {
     group(const std::string& _name, const std::string& _pwd)
         : name(_name), password(_pwd){}
     ~group() { LOG_VERBOSE("removed group " << name); }
-
-    const std::string name;
-    const std::string password;
 
     bool add_user(std::shared_ptr<user> usr);
 
@@ -119,6 +134,10 @@ struct group {
     int32_t num_users() const { return users_.size(); }
 
     const user_list& users() { return users_; }
+
+    // data
+    const std::string name;
+    const std::string password;
 private:
     user_list users_;
 };

@@ -199,7 +199,7 @@ std::shared_ptr<user> server::get_user(const std::string& name,
     auto usr = find_user(name);
     if (usr){
         // check if someone is already logged in
-        if (usr->endpoint){
+        if (usr->is_active()){
             e = error::access_denied;
             return nullptr;
         }
@@ -214,7 +214,8 @@ std::shared_ptr<user> server::get_user(const std::string& name,
     } else {
         // create new user (LATER add option to disallow this)
         if (true){
-            usr = std::make_shared<user>(name, pwd, next_user_id_++, version);
+            auto id = next_user_id_++;
+            usr = std::make_shared<user>(name, pwd, id, version);
             users_.push_back(usr);
             e = error::none;
             return usr;
@@ -276,14 +277,14 @@ std::shared_ptr<group> server::find_group(const std::string& name)
 void server::on_user_joined(user &usr){
     auto e = std::make_unique<user_event>(AOO_NET_USER_JOIN_EVENT,
                                           usr.name.c_str(), usr.id,
-                                          usr.endpoint->addresses.front()); // FIXME
+                                          usr.endpoint()->local_address()); // do we need this?
     push_event(std::move(e));
 }
 
 void server::on_user_left(user &usr){
     auto e = std::make_unique<user_event>(AOO_NET_USER_LEAVE_EVENT,
                                           usr.name.c_str(), usr.id,
-                                          usr.endpoint->addresses.front()); // FIXME
+                                          usr.endpoint()->local_address()); // do we need this?
     push_event(std::move(e));
 }
 
@@ -291,7 +292,7 @@ void server::on_user_joined_group(user& usr, group& grp){
     // 1) send the new member to existing group members
     // 2) send existing group members to the new member
     for (auto& peer : grp.users()){
-        if (peer.get() != &usr){
+        if (peer->id != usr.id){
             char buf[AOO_MAXPACKETSIZE];
 
             auto notify = [&](client_endpoint* dest, user& u){
@@ -303,7 +304,7 @@ void server::on_user_joined_group(user& usr, group& grp){
                     msg << u.id;
                 }
                 // send *unmapped* addresses in case the client is IPv4 only
-                for (auto& addr : u.endpoint->addresses){
+                for (auto& addr : u.endpoint()->public_addresses()){
                     msg << addr.name_unmapped() << addr.port();
                 }
                 msg << osc::EndMessage;
@@ -312,10 +313,10 @@ void server::on_user_joined_group(user& usr, group& grp){
             };
 
             // notify new member
-            notify(usr.endpoint, *peer);
+            notify(usr.endpoint(), *peer);
 
             // notify existing member
-            notify(peer->endpoint, usr);
+            notify(peer->endpoint(), usr);
         }
     }
 
@@ -331,14 +332,14 @@ void server::on_user_left_group(user& usr, group& grp){
     }
     // notify group members
     for (auto& peer : grp.users()){
-        if (peer.get() != &usr){
+        if (peer->id != usr.id){
             char buf[AOO_MAXPACKETSIZE];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
             msg << osc::BeginMessage(AOO_NET_MSG_CLIENT_PEER_LEAVE)
                   << grp.name.c_str() << usr.name.c_str() << usr.id
                   << osc::EndMessage;
 
-            peer->endpoint->send_message(msg.Data(), msg.Size());
+            peer->endpoint()->send_message(msg.Data(), msg.Size());
         }
     }
 
@@ -388,7 +389,7 @@ bool server::wait_for_event(){
         fds[i].revents = 0;
     }
     for (int i = 0; i < numclients; ++i){
-        fds[i].fd = clients_[i]->socket;
+        fds[i].fd = clients_[i]->socket();
     }
     int tcpindex = numclients;
     int udpindex = numclients + 1;
@@ -573,7 +574,7 @@ void user::on_close(server& s){
 
     groups_.clear();
     // clear endpoint so the server knows it can remove the user
-    endpoint = nullptr;
+    endpoint_ = nullptr;
 }
 
 bool user::add_group(std::shared_ptr<group> grp){
@@ -626,8 +627,8 @@ bool group::remove_user(const user& usr){
 
 /*///////////////////////// client_endpoint /////////////////////////////*/
 
-client_endpoint::client_endpoint(server &s, int sock, const ip_address &addr)
-    : server_(&s), socket(sock), addr_(addr)
+client_endpoint::client_endpoint(server &s, int socket, const ip_address &addr)
+    : server_(&s), socket_(socket), addr_(addr)
 {
     // set TCP_NODELAY - do we need to do this?
     int val = 1;
@@ -642,29 +643,26 @@ client_endpoint::client_endpoint(server &s, int sock, const ip_address &addr)
 
 client_endpoint::~client_endpoint(){
 #ifdef _WIN32
-    WSACloseEvent(event);
+    WSACloseEvent(event_);
 #endif
     close();
 }
 
 bool client_endpoint::match(const ip_address& addr) const {
-#if 1
-    for (auto& a : addresses){
+    // match public UDP addresses!
+    for (auto& a : public_addresses_){
         if (a == addr){
             return true;
         }
     }
     return false;
-#else
-    return addr == addr_;
-#endif
 }
 
 void client_endpoint::close(){
-    if (socket >= 0){
+    if (socket_ >= 0){
         LOG_VERBOSE("aoo_server: close client endpoint");
-        socket_close(socket);
-        socket = -1;
+        socket_close(socket_);
+        socket_ = -1;
 
         if (user_){
             user_->on_close(*server_);
@@ -680,7 +678,7 @@ void client_endpoint::send_message(const char *msg, int32_t size){
 
             int32_t nbytes = 0;
             while (nbytes < total){
-                auto res = ::send(socket, (char *)buf + nbytes, total - nbytes, 0);
+                auto res = ::send(socket_, (char *)buf + nbytes, total - nbytes, 0);
                 if (res >= 0){
                     nbytes += res;
                 #if 0
@@ -702,7 +700,7 @@ void client_endpoint::send_message(const char *msg, int32_t size){
 
 bool client_endpoint::receive_data(){
     char buffer[AOO_MAXPACKETSIZE];
-    auto result = recv(socket, buffer, sizeof(buffer), 0);
+    auto result = recv(socket_, buffer, sizeof(buffer), 0);
     if (result == 0){
         LOG_WARNING("client_endpoint: connection was closed");
         return false;
@@ -838,11 +836,11 @@ void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
                     int32_t port = (it++)->AsInt32();
                     ip_address addr(ip, port, server_->type());
                     if (addr.valid()){
-                        addresses.push_back(addr);
+                        public_addresses_.push_back(addr);
                     }
                     count -= 2;
                 }
-                user_->endpoint = this;
+                user_->set_endpoint(this);
 
                 LOG_VERBOSE("aoo_server: login: id: " << user_->id
                             << ", username: " << username << ", password: " << password);
