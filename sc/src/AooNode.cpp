@@ -82,7 +82,8 @@ private:
     int port_ = 0;
     aoo::ip_address::ip_type type_;
     // dependants
-    std::vector<AooNodeClient> clients_;
+    std::vector<AooNodeClient> clients_; // sources/sinks
+    INodeClient *client_ = nullptr; // client
     aoo::shared_mutex clientMutex_;
 #if USE_PEER_LIST
     // peer list
@@ -243,13 +244,17 @@ INode::ptr INode::get(World *world, INodeClient& client,
 void AooNode::release(INodeClient& client){
     // remove receiver from list
     aoo::scoped_lock l(clientMutex_);
-    for (auto it = clients_.begin(); it != clients_.end(); ++it){
-        if (&client == it->obj){
-            clients_.erase(it);
-            return;
+    if (&client == client_){
+        client_ = nullptr;
+    } else {
+        for (auto it = clients_.begin(); it != clients_.end(); ++it){
+            if (&client == it->obj){
+                clients_.erase(it);
+                return;
+            }
         }
+        LOG_ERROR("AooNode::release: client not found!");
     }
-    LOG_ERROR("AooNode::release: client not found!");
 }
 
 #if USE_PEER_LIST
@@ -318,33 +323,39 @@ bool AooNode::addClient(INodeClient& client, aoo_type type, aoo_id id)
 {
     // check client and add to list
     aoo::scoped_lock lock(clientMutex_);
-#if 1
-    for (auto& c : clients_)
-    {
-        if (c.type == type && c.id == id) {
-            if (c.obj == &client){
-                LOG_ERROR("AooNode::add_client: client already added!");
-            } else {
-                if (type == AOO_TYPE_CLIENT){
-                    LOG_ERROR("aoo client on port " << port_ << " already exists!");
-                } else {
-                    auto which = (type == AOO_TYPE_SOURCE) ? "source" : "sink";
-                    LOG_ERROR("aoo " << which << " with ID " << id
-                              << " on port " << port_ << " already exists!");
-                }
-            }
+    if (type == AOO_TYPE_CLIENT){
+        if (!client_){
+            client_ = &client;
+        } else {
+            LOG_ERROR("aoo client on port " << port_ << " already exists!");
             return false;
         }
+    } else {
+        // check that we don't already have an object
+        // of the same class with the same ID!
+        for (auto& c : clients_) {
+            if (c.type == type && c.id == id) {
+                if (c.obj == &client){
+                    LOG_ERROR("AooNode::add_client: client already added!");
+                } else {
+                    LOG_ERROR("aoo " << ((type == AOO_TYPE_SOURCE) ? "source" : "sink")
+                              << " with ID " << id << " on port " << port_
+                              << " already exists!");
+                }
+                return false;
+            }
+        }
+        clients_.push_back({ &client, type, id });
     }
-#endif
-    clients_.push_back({ &client, type, id });
     return true;
 }
 
 void AooNode::doSend()
 {
     aoo::shared_scoped_lock lock(clientMutex_);
-
+    if (client_){
+        client_->send();
+    }
     for (auto& c : clients_){
         c.obj->send();
     }
@@ -364,25 +375,16 @@ void AooNode::doReceive()
         {
             // forward OSC packet to matching clients(s)
             aoo::shared_scoped_lock l(clientMutex_);
-            for (auto& c : clients_){
-                switch (type) {
-                case AOO_TYPE_SOURCE:
-                case AOO_TYPE_SINK:
-                    if ((type == c.type) && (id == c.id))
-                    {
+            if (type == AOO_TYPE_CLIENT || type == AOO_TYPE_PEER){
+                if (client_){
+                    client_->handleMessage(buf, nbytes, addr);
+                }
+            } else {
+                for (auto& c : clients_){
+                    if ((type == c.type) && (id == c.id)){
                         c.obj->handleMessage(buf, nbytes, addr);
-                        goto parse_done;
+                        break;
                     }
-                    break;
-                case AOO_TYPE_CLIENT:
-                case AOO_TYPE_PEER:
-                    if (c.type == AOO_TYPE_CLIENT) {
-                        c.obj->handleMessage(buf, nbytes, addr);
-                        goto parse_done; // there's only one client
-                    }
-                    break;
-                default:
-                    break; // ignore
                 }
             }
         } else {
@@ -398,13 +400,15 @@ void AooNode::doReceive()
                 LOG_ERROR("AooNode: bad OSC message - " << err.what());
             }
         }
-    parse_done:
         notify(); // !
     } else if (nbytes == 0){
         // timeout -> update clients
         aoo::shared_scoped_lock lock(clientMutex_);
         for (auto& c : clients_){
             c.obj->update();
+        }
+        if (client_){
+            client_->update();
         }
         notify(); // !
     } else {
@@ -420,14 +424,9 @@ void AooNode::handleClientMessage(const char *data, int32_t size,
                                   aoo::time_tag time)
 {
     if (!strncmp("/sc/msg", data, size)){
-        // LATER cache AooClient
-        aoo::shared_scoped_lock l(clientMutex_);
-        for (auto& c : clients_){
-            if (c.type == AOO_TYPE_CLIENT){
-                auto client = static_cast<AooClient *>(c.obj);
-                client->forwardMessage(data, size, time);
-                break;
-            }
+        aoo::shared_scoped_lock lock(clientMutex_);
+        if (client_){
+            static_cast<AooClient *>(client_)->forwardMessage(data, size, time);
         }
     } else {
         LOG_WARNING("AooNode: unknown OSC message " << data);
