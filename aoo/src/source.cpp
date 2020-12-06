@@ -912,6 +912,7 @@ bool source::send_data(){
     #endif
         // send block to sinks
         for (auto& sink : sinks_){
+            d.channel = sink.channel; // !
             send_data(sink, salt, d);
         }
         --dropped_;
@@ -959,6 +960,7 @@ bool source::send_data(){
                 #endif
                     // send block to sinks
                     for (auto& sink : sinks_){
+                        d.channel = sink.channel; // !
                         send_data(sink, salt, d);
                     }
                 };
@@ -977,10 +979,12 @@ bool source::send_data(){
                 }
             } else {
                 LOG_WARNING("aoo_source: couldn't encode audio data!");
+                return 0;
             }
         } else {
             // drain buffer anyway
             audioqueue_.read_commit();
+            return 1;
         }
     } else {
         // LOG_DEBUG("couldn't send");
@@ -992,7 +996,7 @@ bool source::send_data(){
     if (sequence_ == INT32_MAX){
         // we can safely lock the mutex because it is always unlocked
         // before the sequence numbers is incremented.
-        unique_lock lock2(update_mutex_); // writer lock
+        unique_lock lock(update_mutex_); // writer lock
         salt_ = make_salt();
     }
 
