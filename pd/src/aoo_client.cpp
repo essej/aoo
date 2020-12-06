@@ -64,6 +64,7 @@ struct t_aoo_client
     bool x_connected = false;
     bool x_schedule = true;
     bool x_discard = false;
+    bool x_reliable = false;
     std::multimap<float, t_osc_message> x_queue;
 
     void handle_peer_message(const char *data, int32_t size,
@@ -170,7 +171,8 @@ void t_aoo_client::send_message(int argc, t_atom *argv,
         count = argc;
     }
 
-    x_client->send_message(buf, count, target, len, 0);
+    int32_t flags = x_reliable ? AOO_NET_MESSAGE_RELIABLE : 0;
+    x_client->send_message(buf, count, target, len, flags);
 
     x_node->notify();
 }
@@ -238,6 +240,11 @@ static void aoo_client_schedule(t_aoo_client *x, t_floatarg f)
 static void aoo_client_discard_late(t_aoo_client *x, t_floatarg f)
 {
     x->x_discard = (f != 0);
+}
+
+static void aoo_client_reliable(t_aoo_client *x, t_floatarg f)
+{
+    x->x_reliable = (f != 0);
 }
 
 static void aoo_client_target(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
@@ -726,4 +733,6 @@ void aoo_client_setup(void)
                     gensym("schedule"), A_FLOAT, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_discard_late,
                     gensym("discard_late"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_reliable,
+                    gensym("reliable"), A_FLOAT, A_NULL);
 }
