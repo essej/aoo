@@ -5,6 +5,7 @@
 #pragma once
 
 #include "aoo/aoo_net.hpp"
+#include "aoo/aoo.hpp"
 
 #include "common/utils.hpp"
 #include "common/sync.hpp"
@@ -100,11 +101,14 @@ public:
 
     void send(time_tag now);
 
-    int32_t handle_message(const char *data, int32_t n, const ip_address& addr);
+    int32_t handle_message(const char *data, int32_t n,
+                           const ip_address& addr,
+                           int32_t type, aoo_type onset);
 
     void send_server_message(const char *data, int32_t size);
 
-    void send_peer_message(const char *data, int32_t size, const ip_address& addr, bool relay);
+    void send_peer_message(const char *data, int32_t size,
+                           const ip_address& addr, bool relay);
 
     void start_handshake(const ip_address& local, std::vector<ip_address>&& remote);
 private:
@@ -164,6 +168,14 @@ public:
     int32_t run() override;
 
     int32_t quit() override;
+
+    int32_t add_source(isource *src, aoo_id id) override;
+
+    int32_t remove_source(isource *src) override;
+
+    int32_t add_sink(isink *sink, aoo_id id) override;
+
+    int32_t remove_sink(isink *sink) override;
 
     int32_t send_request(aoo_net_request_type request, void *data,
                          aoo_net_callback callback, void *user) override;
@@ -241,9 +253,17 @@ private:
     std::unique_ptr<udp_client> udp_client_;
     int socket_ = -1;
     ip_address::ip_type type_ = ip_address::Unspec;
-
-    // ip_address remote_addr_;
-    // ip_address local_addr_;
+    // dependants
+    struct source_desc {
+        aoo::isource *source;
+        aoo_id id;
+    };
+    std::vector<source_desc> sources_;
+    struct sink_desc {
+        aoo::isink *sink;
+        aoo_id id;
+    };
+    std::vector<sink_desc> sinks_;
     // SLIP buffers
     SLIP sendbuffer_;
     SLIP recvbuffer_;

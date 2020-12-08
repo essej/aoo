@@ -258,6 +258,82 @@ int32_t aoo::net::client::quit(){
     return 1;
 }
 
+int32_t aoo_net_client_add_source(aoo_net_client *client,
+                                  aoo_source *src, aoo_id id)
+{
+    return client->add_source(src, id);
+}
+
+int32_t aoo::net::client::add_source(isource *src, aoo_id id)
+{
+#if 1
+    for (auto& s : sources_){
+        if (s.source == src){
+            LOG_ERROR("aoo_client: source already added");
+            return 1;
+        }
+    }
+#endif
+    sources_.push_back({ src, id });
+    return 1;
+}
+
+int32_t aoo_net_client_remove_source(aoo_net_client *client,
+                                     aoo_source *src)
+{
+    return client->remove_source(src);
+}
+
+int32_t aoo::net::client::remove_source(isource *src)
+{
+    for (auto it = sources_.begin(); it != sources_.end(); ++it){
+        if (it->source == src){
+            sources_.erase(it);
+            return 1;
+        }
+    }
+    LOG_ERROR("aoo_client: source not found");
+    return 0;
+}
+
+int32_t aoo_net_client_add_sink(aoo_net_client *client,
+                                aoo_sink *sink, aoo_id id)
+{
+    return client->add_sink(sink, id);
+}
+
+int32_t aoo::net::client::add_sink(isink *sink, aoo_id id)
+{
+#if 1
+    for (auto& s : sinks_){
+        if (s.sink == sink){
+            LOG_ERROR("aoo_client: sink already added");
+            return 1;
+        }
+    }
+#endif
+    sinks_.push_back({ sink, id });
+    return 1;
+}
+
+int32_t aoo_net_client_remove_sink(aoo_net_client *client,
+                                   aoo_sink *sink)
+{
+    return client->remove_sink(sink);
+}
+
+int32_t aoo::net::client::remove_sink(isink *sink)
+{
+    for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
+        if (it->sink == sink){
+            sinks_.erase(it);
+            return 1;
+        }
+    }
+    LOG_ERROR("aoo_client: sink not found");
+    return 0;
+}
+
 int32_t aoo_net_client_request(aoo_net_client *client,
                                aoo_net_request_type request, void *data,
                                aoo_net_callback callback, void *user) {
@@ -342,9 +418,42 @@ int32_t aoo_net_client_handle_message(aoo_net_client *client, const char *data,
 
 int32_t aoo::net::client::handle_message(const char *data, int32_t n,
                                          const void *addr, int32_t len){
-    if (udp_client_){
+    if (!data){
+        // just update sinks
+        for (auto& s : sinks_){
+            s.sink->handle_message(nullptr, 0, nullptr, 0);
+        }
+        return 1;
+    }
+
+    int32_t type;
+    aoo_id id;
+    int32_t onset = aoo_parse_pattern(data, n, &type, &id);
+    if (onset == 0){
+        LOG_WARNING("aoo_client: not an AOO NET message!");
+        return 0;
+    }
+
+    if (type == AOO_TYPE_SOURCE){
+        // forward to matching source
+        for (auto& s : sources_){
+            if (s.id == id){
+                return s.source->handle_message(data, n, addr, len);
+            }
+        }
+        LOG_WARNING("aoo_client: handle_message(): source not found");
+    } else if (type == AOO_TYPE_SINK){
+        // forward to matching sink
+        for (auto& s : sinks_){
+            if (s.id == id){
+                return s.sink->handle_message(data, n, addr, len);
+            }
+        }
+        LOG_WARNING("aoo_client: handle_message(): sink not found");
+    } else if (udp_client_){
+        // forward to UDP client
         ip_address address((const sockaddr *)addr, len);
-        return udp_client_->handle_message(data, n, address);
+        return udp_client_->handle_message(data, n, address, type, onset);
     }
 
     return 0;
@@ -355,6 +464,13 @@ int32_t aoo_net_client_send(aoo_net_client *client){
 }
 
 int32_t aoo::net::client::send(){
+    // send sources and sinks
+    for (auto& s : sources_){
+        s.source->send();
+    }
+    for (auto& s : sinks_){
+        s.sink->send();
+    }
     // send server messages
     if (state_.load() != client_state::disconnected){
         time_tag now = time_tag::now();
@@ -1250,17 +1366,12 @@ void udp_client::send(time_tag now){
     }
 }
 
-int32_t udp_client::handle_message(const char *data, int32_t n, const ip_address &addr){
+int32_t udp_client::handle_message(const char *data, int32_t n,
+                                   const ip_address &addr,
+                                   aoo_type type, int32_t onset){
     try {
         osc::ReceivedPacket packet(data, n);
         osc::ReceivedMessage msg(packet);
-
-        int32_t type;
-        auto onset = aoo_net_parse_pattern(data, n, &type);
-        if (!onset){
-            LOG_WARNING("aoo_client: not an AOO NET message!");
-            return 0;
-        }
 
         LOG_DEBUG("aoo_client: handle UDP message " << msg.AddressPattern()
             << " from " << addr.name() << ":" << addr.port());

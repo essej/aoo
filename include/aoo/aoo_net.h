@@ -213,6 +213,22 @@ AOO_API int32_t aoo_net_client_run(aoo_net_client *client);
 // quit the AOO client from another thread
 AOO_API int32_t aoo_net_client_quit(aoo_net_client *client);
 
+// add AOO source
+AOO_API int32_t aoo_net_client_add_source(aoo_net_client *client,
+                                          aoo_source *src, aoo_id id);
+
+// remove AOO source
+AOO_API int32_t aoo_net_client_remove_source(aoo_net_client *client,
+                                             aoo_source *src);
+
+// add AOO sink
+AOO_API int32_t aoo_net_client_add_sink(aoo_net_client *client,
+                                        aoo_sink *sink, aoo_id id);
+
+// remove AOO sink
+AOO_API int32_t aoo_net_client_remove_sink(aoo_net_client *client,
+                                           aoo_sink *sink);
+
 // send a request to the AOO server (always thread safe)
 AOO_API int32_t aoo_net_client_request(aoo_net_client *client,
                                        aoo_net_request_type request, void *data,
@@ -256,7 +272,7 @@ static inline int32_t aoo_net_client_connect(aoo_net_client *client,
                                              const char *name, const char *pwd,
                                              aoo_net_callback cb, void *user)
 {
-    aoo_net_connect_request data =  { host, port, name, pwd };
+    aoo_net_connect_request data = { host, port, name, pwd };
     return aoo_net_client_request(client, AOO_NET_CONNECT_REQUEST, &data, cb, user);
 }
 

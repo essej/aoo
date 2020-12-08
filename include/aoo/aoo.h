@@ -340,15 +340,6 @@ typedef enum aoo_option
 
 /*//////////////////// AoO source /////////////////////*/
 
-#ifdef __cplusplus
-namespace aoo {
-    class isource;
-}
-using aoo_source = aoo::isource;
-#else
-typedef struct aoo_source aoo_source;
-#endif
-
 typedef struct aoo_format
 {
     const char *codec;
@@ -500,15 +491,6 @@ static inline int32_t aoo_source_get_sink_channelonset(aoo_source *src, const vo
 }
 
 /*//////////////////// AoO sink /////////////////////*/
-
-#ifdef __cplusplus
-namespace aoo {
-    class isink;
-}
-using aoo_sink = aoo::isink;
-#else
-typedef struct aoo_sink aoo_sink;
-#endif
 
 // create a new AoO sink instance
 AOO_API aoo_sink * aoo_sink_new(aoo_id id, aoo_replyfn replyfn, void *user);

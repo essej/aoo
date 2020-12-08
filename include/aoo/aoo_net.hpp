@@ -100,6 +100,18 @@ public:
     // quit the AOO client from another thread
     virtual int32_t quit() = 0;
 
+    // add AOO source
+    virtual int32_t add_source(aoo::isource *src, aoo_id id) = 0;
+
+    // remove AOO source
+    virtual int32_t remove_source(aoo::isource *src) = 0;
+
+    // add AOO sink
+    virtual int32_t add_sink(aoo::isink *src, aoo_id id) = 0;
+
+    // remove AOO sink
+    virtual int32_t remove_sink(aoo::isink *src) = 0;
+
     // send a request to the AOO server (always thread safe)
     virtual int32_t send_request(aoo_net_request_type request, void *data,
                                  aoo_net_callback callback, void *user) = 0;

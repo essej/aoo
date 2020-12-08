@@ -76,6 +76,18 @@ typedef enum aoo_type_code
 #endif
 } aoo_type_code;
 
+#ifdef __cplusplus
+namespace aoo {
+    class isource;
+    class isink;
+}
+using aoo_source = aoo::isource;
+using aoo_sink = aoo::isink;
+#else
+typedef struct aoo_source aoo_source;
+typedef struct aoo_sink aoo_sink;
+#endif
+
 // log function
 typedef void (*aoo_logfunction)(const char *);
 
