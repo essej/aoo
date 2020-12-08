@@ -25,7 +25,7 @@ public:
     }
 
     void doUpdate() override {
-        sink_->decode();
+        sink_->handle_message(nullptr, 0, nullptr, 0);
     }
 
     void handleEvent(const aoo_event *event);

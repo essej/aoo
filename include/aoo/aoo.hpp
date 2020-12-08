@@ -225,9 +225,6 @@ public:
     // send outgoing messages - will call the reply function (threadsafe, but not reentrant)
     virtual int32_t send() = 0;
 
-    // decode blocks (threadsafe, but not reentrant)
-    virtual int32_t decode() = 0;
-
     // process audio (threadsafe, but not reentrant)
     virtual int32_t process(aoo_sample **data, int32_t nsamples, uint64_t t) = 0;
 

@@ -91,7 +91,7 @@ void aoo_receive_update(t_aoo_receive *x)
 {
     // synchronize with aoo_receive_dsp()
     aoo::shared_scoped_lock lock(x->x_lock);
-    x->x_sink->decode();
+    x->x_sink->handle_message(nullptr, 0, nullptr, 0);
 }
 
 // called from the network send thread

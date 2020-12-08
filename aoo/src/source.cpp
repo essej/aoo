@@ -381,6 +381,10 @@ int32_t aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
 // /aoo/src/<id>/format <sink>
 int32_t aoo::source::handle_message(const char *data, int32_t n,
                                     const void *address, int32_t addrlen){
+    if (!data){
+        return 0;
+    }
+
     try {
         ip_address addr((const sockaddr *)address, addrlen);
 

@@ -182,8 +182,7 @@ public:
     int32_t handle_format(const sink& s, int32_t salt, const aoo_format& f,
                           const char *settings, int32_t size);
 
-    int32_t handle_data(const sink& s, int32_t salt,
-                                     const aoo::data_packet& d);
+    int32_t handle_data(const sink& s, int32_t salt, const aoo::data_packet& d);
 
     int32_t handle_ping(const sink& s, time_tag tt);
 
@@ -295,8 +294,6 @@ public:
 
     int32_t send() override;
 
-    int32_t decode() override;
-
     int32_t process(aoo_sample **data, int32_t nsamples, uint64_t t) override;
 
     int32_t events_available() override;
@@ -383,6 +380,8 @@ private:
     source_desc *add_source(const ip_address& addr, aoo_id id);
 
     void reset_sources();
+
+    int32_t decode();
 
     int32_t handle_format_message(const osc::ReceivedMessage& msg,
                                   const ip_address& addr);

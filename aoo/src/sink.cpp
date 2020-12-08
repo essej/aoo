@@ -322,6 +322,10 @@ int32_t aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_t n,
 
 int32_t aoo::sink::handle_message(const char *data, int32_t n,
                                   const void *address, int32_t addrlen) {
+    if (!data){
+        return decode();
+    }
+
     try {
         ip_address addr((const sockaddr *)address, addrlen);
 
@@ -378,10 +382,6 @@ int32_t aoo::sink::send(){
         }
     }
     return didsomething;
-}
-
-int32_t aoo_sink_decode(aoo_sink *sink) {
-    return sink->decode();
 }
 
 int32_t aoo::sink::decode() {
