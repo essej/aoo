@@ -55,7 +55,7 @@ struct t_aoo_send
     std::vector<t_sink> x_sinks;
     // node
     i_node *x_node = nullptr;
-    aoo::shared_mutex x_lock;
+    aoo::shared_mutex x_mutex;
     // events
     t_clock *x_clock = nullptr;
     t_outlet *x_msgout = nullptr;
@@ -148,7 +148,7 @@ void aoo_send_handle_message(t_aoo_send *x, const char * data,
                              int32_t n, const ip_address& addr)
 {
     // synchronize with aoo_receive_dsp()
-    aoo::shared_scoped_lock lock(x->x_lock);
+    aoo::shared_scoped_lock lock(x->x_mutex);
     // handle incoming message
     x->x_source->handle_message(data, n, addr.address(), addr.length());
 }
@@ -157,7 +157,7 @@ void aoo_send_handle_message(t_aoo_send *x, const char * data,
 void aoo_send_send(t_aoo_send *x)
 {
     // synchronize with aoo_receive_dsp()
-    aoo::shared_scoped_lock lock(x->x_lock);
+    aoo::shared_scoped_lock lock(x->x_mutex);
     // send outgoing messages
     while (x->x_source->send()) ;
 }
@@ -433,7 +433,7 @@ static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
     }
 
     // synchronize with network threads!
-    aoo::scoped_lock lock(x->x_lock); // writer lock!
+    aoo::scoped_lock lock(x->x_mutex); // writer lock!
 
     if (blocksize != x->x_blocksize || samplerate != x->x_samplerate){
         x->x_source->setup(samplerate, blocksize, x->x_nchannels);
