@@ -229,6 +229,13 @@ AOO_API int32_t aoo_net_client_add_sink(aoo_net_client *client,
 AOO_API int32_t aoo_net_client_remove_sink(aoo_net_client *client,
                                            aoo_sink *sink);
 
+// find peer and return its address
+// address: pointer to sockaddr_storage
+// addrlen: initialized with max. storage size, updated to actual size
+AOO_API int32_t aoo_net_client_find_peer(aoo_net_client *client,
+                                         const char *group, const char *user,
+                                         void *address, int32_t *addrlen);
+
 // send a request to the AOO server (always thread safe)
 AOO_API int32_t aoo_net_client_request(aoo_net_client *client,
                                        aoo_net_request_type request, void *data,

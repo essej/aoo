@@ -334,6 +334,34 @@ int32_t aoo::net::client::remove_sink(isink *sink)
     return 0;
 }
 
+AOO_API int32_t aoo_net_client_find_peer(aoo_net_client *client,
+                                         const char *group, const char *user,
+                                         void *address, int32_t *addrlen)
+{
+    return client->find_peer(group, user, address, addrlen);
+}
+
+int32_t aoo::net::client::find_peer(const char *group, const char *user,
+                                    void *address, int32_t *addrlen)
+{
+    peer_lock lock(peers_);
+    for (auto& p : peers_){
+        // we can only access the address if the peer is connected!
+        if (p.match(group, user) && p.connected()){
+            if (address){
+                auto& addr = p.address();
+                if (*addrlen < addr.length()){
+                    return 0;
+                }
+                memcpy(address, addr.address(), addr.length());
+                *addrlen = addr.length();
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int32_t aoo_net_client_request(aoo_net_client *client,
                                aoo_net_request_type request, void *data,
                                aoo_net_callback callback, void *user) {
@@ -531,7 +559,8 @@ bool client::handle_peer_message(const osc::ReceivedMessage& msg, int onset,
     // with peers instead of having them all in a single list.
     peer_lock lock(peers_);
     for (auto& p : peers_){
-        if (p.match(addr, true)){
+        // forward to matching or unconnected peers!
+        if (!p.connected() || p.match(addr)){
             p.handle_message(msg, onset, addr);
             success = true;
         }
@@ -1143,7 +1172,7 @@ void client::handle_peer_add(const osc::ReceivedMessage& msg){
     peer_lock lock(peers_);
     // check if peer already exists (shouldn't happen)
     for (auto& p: peers_){
-        if (p.match(group, user, id)){
+        if (p.match(group, id)){
             LOG_ERROR("aoo_client: peer " << p << " already added");
             return;
         }
@@ -1163,7 +1192,7 @@ void client::handle_peer_remove(const osc::ReceivedMessage& msg){
 
     peer_lock lock(peers_);
     auto result = std::find_if(peers_.begin(), peers_.end(),
-        [&](auto& p){ return p.match(group, user, id); });
+        [&](auto& p){ return p.match(group, id); });
     if (result == peers_.end()){
         LOG_ERROR("aoo_client: couldn't remove " << group << "|" << user);
         return;
@@ -1535,11 +1564,11 @@ peer::~peer(){
     LOG_DEBUG("destroy peer " << *this);
 }
 
-bool peer::match(const ip_address& addr, bool any) const {
+bool peer::match(const ip_address& addr) const {
     if (connected()){
         return real_address_ == addr;
     } else {
-        return any; // 'any' = match all messages
+        return false;
     }
 }
 
@@ -1547,10 +1576,13 @@ bool peer::match(const std::string& group) const {
     return group_ == group; // immutable!
 }
 
-bool peer::match(const std::string& group, const std::string& user,
-                 int32_t id)
+bool peer::match(const std::string& group, const std::string& user) const {
+    return group_ == group && user_ == user; // immutable!
+}
+
+bool peer::match(const std::string& group, int32_t id)
 {
-    return id_ == id && group_ == group && user_ == user; // immutable!
+    return id_ == id && group_ == group; // immutable!
 }
 
 std::ostream& operator << (std::ostream& os, const peer& p)

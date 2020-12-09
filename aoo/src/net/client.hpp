@@ -50,12 +50,13 @@ public:
 
     bool relay() const { return relay_; }
 
-    bool match(const ip_address& addr, bool any) const;
+    bool match(const ip_address& addr) const;
 
     bool match(const std::string& group) const;
 
-    bool match(const std::string& group, const std::string& user,
-               int32_t id);
+    bool match(const std::string& group, const std::string& user) const;
+
+    bool match(const std::string& group, int32_t id);
 
     int32_t id() const { return id_; }
 
@@ -176,6 +177,9 @@ public:
     int32_t add_sink(isink *sink, aoo_id id) override;
 
     int32_t remove_sink(isink *sink) override;
+
+    int32_t find_peer(const char *group, const char *user,
+                      void *address, int32_t *addrlen) override;
 
     int32_t send_request(aoo_net_request_type request, void *data,
                          aoo_net_callback callback, void *user) override;
@@ -389,7 +393,7 @@ public:
 
         void perform(client &obj) override {
             obj.perform_send_message(data_.data(), data_.size(),
-                flags_, [&](auto& peer){ return peer.match(address_, false); });
+                flags_, [&](auto& peer){ return peer.match(address_); });
         }
     protected:
         ip_address address_;

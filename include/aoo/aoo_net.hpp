@@ -112,6 +112,12 @@ public:
     // remove AOO sink
     virtual int32_t remove_sink(aoo::isink *src) = 0;
 
+    // find peer and return its address
+    // address: pointer to sockaddr_storage
+    // addrlen: initialized with max. storage size, updated to actual size
+    virtual int32_t find_peer(const char *group, const char *user,
+                              void *address, int32_t *addrlen) = 0;
+
     // send a request to the AOO server (always thread safe)
     virtual int32_t send_request(aoo_net_request_type request, void *data,
                                  aoo_net_callback callback, void *user) = 0;
