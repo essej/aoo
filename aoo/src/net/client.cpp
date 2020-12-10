@@ -253,7 +253,7 @@ int32_t aoo::net::client::quit(){
         // force wakeup by closing the socket.
         // this is not nice and probably undefined behavior,
         // the MSDN docs explicitly forbid it!
-        socket_close(socket_);
+        socket_close(eventsocket_);
     }
     return 1;
 }
