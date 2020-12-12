@@ -270,7 +270,11 @@ int32_t aoo::net::client::add_source(isource *src, aoo_id id)
     for (auto& s : sources_){
         if (s.source == src){
             LOG_ERROR("aoo_client: source already added");
-            return 1;
+            return 0;
+        } else if (s.id == id){
+            LOG_WARNING("aoo_client: source with id " << id
+                        << " already added!");
+            return 0;
         }
     }
 #endif
@@ -309,6 +313,10 @@ int32_t aoo::net::client::add_sink(isink *sink, aoo_id id)
         if (s.sink == sink){
             LOG_ERROR("aoo_client: sink already added");
             return 1;
+        } else if (s.id == id){
+            LOG_WARNING("aoo_client: sink with id " << id
+                        << " already added!");
+            return 0;
         }
     }
 #endif
