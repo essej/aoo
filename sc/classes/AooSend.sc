@@ -4,7 +4,7 @@ AooSend : UGen {
 	var <>port;
 	var <>id;
 
-	*ar { arg port, id=0, state=0, channels, tag;
+	*ar { arg port, id=0, state=1, channels, tag;
 		^this.multiNewList([\audio, tag, port, id, state] ++ channels);
 	}
 	*kr { ^this.shouldNotImplement(thisMethod) }
