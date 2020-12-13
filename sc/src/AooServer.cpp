@@ -76,9 +76,6 @@ void AooServer::handleEvent(const aoo_event *event){
     osc::OutboundPacketStream msg(buf, sizeof(buf));
     msg << osc::BeginMessage("/aoo/server/event") << port_;
 
-    // always called from the network thread!
-    NRTLock(world_);
-
     switch (event->type) {
     case AOO_NET_USER_JOIN_EVENT:
     {
@@ -116,13 +113,11 @@ void AooServer::handleEvent(const aoo_event *event){
     }
     default:
         LOG_ERROR("AooServer: got unknown event " << event->type);
-        NRTUnlock(world_);
         return; // don't send event!
     }
 
     msg << osc::EndMessage;
     ::sendMsgNRT(world_, msg);
-    NRTUnlock(world_);
 }
 
 namespace {

@@ -5,6 +5,7 @@
 #include "rt_shared_ptr.hpp"
 
 #include "aoo/aoo.hpp"
+#include "aoo/aoo_net.hpp"
 
 #include "common/net_utils.hpp"
 #include "common/sync.hpp"
@@ -31,22 +32,15 @@ inline void sendMsgNRT(World *world, const osc::OutboundPacketStream& msg){
 
 /*//////////////////////// AooNode ////////////////////////*/
 
-#define USE_PEER_LIST 1
-
-class INodeClient;
+class AooClient;
 
 class INode {
 public:
     using ptr = std::shared_ptr<INode>;
 
-    static INode::ptr get(World *world, INodeClient& client,
-                          aoo_type type, int port, aoo_id id);
+    static INode::ptr get(World *world, int port);
 
     virtual ~INode() {}
-
-    virtual void release(INodeClient& client) = 0;
-
-    virtual int socket() const = 0;
 
     virtual aoo::ip_address::ip_type type() const = 0;
 
@@ -55,82 +49,23 @@ public:
     virtual int sendto(const char *buf, int32_t size,
                        const aoo::ip_address& addr) = 0;
 
-#if USE_PEER_LIST
-    virtual bool findPeer(const std::string& group, const std::string& user,
-                          aoo::ip_address& addr) = 0;
+    virtual aoo::net::iclient * client() = 0;
 
-    virtual void addPeer(const std::string& group, const std::string& user,
-                         const aoo::ip_address& addr, aoo_id id) = 0;
+    virtual bool registerClient(AooClient *c) = 0;
 
-    virtual void removePeer(const std::string& group, const std::string& user) = 0;
-
-    virtual void removeAllPeers() = 0;
-
-    virtual void removeGroup(const std::string& group) = 0;
-#endif
+    virtual void unregisterClient(AooClient *c) = 0;
 
     virtual void notify() = 0;
+
+    virtual void lock() = 0;
+
+    virtual void unlock() = 0;
+
+    static int32_t replyFn(INode *node, const char *buf, int32_t size,
+                           const void *addr, int32_t addrlen);
 };
 
-class INodeClient {
-public:
-    virtual ~INodeClient() {}
-
-    bool initialized() const {
-        return initialized_.load(std::memory_order_acquire);
-    }
-
-    void setNode(INode::ptr node) {
-        node_ = std::move(node);
-        initialized_.store(true);
-    }
-
-    void releaseNode() {
-        if (node_) {
-            node_->release(*this);
-            node_ = nullptr;
-        }
-    }
-
-    INode* node() {
-        return node_.get();
-    }
-
-    void send() {
-        if (initialized()) {
-            doSend();
-        }
-    }
-
-    void handleMessage(const char* data, int32_t size,
-                       const aoo::ip_address& addr)
-    {
-        if (initialized()) {
-            doHandleMessage(data, size, addr);
-        }
-    }
-
-    void update() {
-        if (initialized()) {
-            doUpdate();
-        }
-    }
-
-    static int32_t reply(INodeClient *user, const char *buf, int32_t size,
-                         const void *address, int32_t addrlen)
-    {
-        aoo::ip_address addr((const sockaddr *)address, addrlen);
-        return user->node()->sendto(buf, size, addr);
-    }
-protected:
-    virtual void doSend() = 0;
-    virtual void doHandleMessage(const char* data, int32_t size,
-                                 const aoo::ip_address& addr) = 0;
-    virtual void doUpdate() {}
-private:
-    INode::ptr node_;
-    std::atomic<bool> initialized_{ false };
-};
+using NodeLock = std::unique_lock<INode>;
 
 /*/////////////////// Commands //////////////////////*/
 
@@ -206,9 +141,7 @@ inline void skipUnitCmd(sc_msg_iter *args){
 
 class AooUnit;
 
-class AooDelegate :
-        public std::enable_shared_from_this<AooDelegate>,
-        public INodeClient
+class AooDelegate : public std::enable_shared_from_this<AooDelegate>
 {
 public:
     AooDelegate(AooUnit& owner);
@@ -217,6 +150,10 @@ public:
 
     bool alive() const {
         return owner_ != nullptr;
+    }
+
+    bool initialized() const {
+        return node_ != nullptr;
     }
 
     void detach() {
@@ -230,6 +167,14 @@ public:
 
     AooUnit& unit() {
         return *owner_;
+    }
+
+    void setNode(std::shared_ptr<INode> node){
+        node_ = node;
+    }
+
+    INode *node(){
+        return node_.get();
     }
 
     // perform sequenced command
@@ -255,6 +200,7 @@ protected:
 private:
     World *world_;
     AooUnit *owner_;
+    std::shared_ptr<INode> node_;
 };
 
 /*//////////////////////// AooUnit /////////////////////////////*/

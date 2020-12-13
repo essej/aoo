@@ -7,17 +7,10 @@
 #include <string>
 #include <thread>
 
-class AooClient final : public INodeClient {
+class AooClient {
 public:
     AooClient(World *world, int32_t port);
     ~AooClient();
-
-    void doSend() override;
-
-    void doHandleMessage(const char* data, int32_t size,
-                         const aoo::ip_address& addr) override;
-
-    void doUpdate() override;
 
     void connect(const char* host, int port,
                  const char* user, const char* pwd);
@@ -28,20 +21,13 @@ public:
 
     void leaveGroup(const char* name);
 
-    aoo::net::iclient * client() {
-        return client_.get();
-    }
-
     void forwardMessage(const char *data, int32_t size,
                         aoo::time_tag time);
-private:
-    World* world_;
-    aoo::net::iclient::pointer client_;
-    int32_t port_;
-    std::thread thread_;
-    std::thread::id nrtThread_;
 
     void handleEvent(const aoo_event* e);
+private:
+    World* world_;
+    std::shared_ptr<INode> node_;
 
     void sendReply(const char *cmd, bool success,
                    const char *errmsg = nullptr);

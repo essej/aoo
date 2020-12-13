@@ -18,26 +18,32 @@ void AooSend::init(int32_t port, aoo_id id) {
                 LOG_DEBUG("try to get node");
                 // open in NRT thread
                 auto cmd = (OpenCmd *)data;
-                auto node = INode::get(world, *cmd->owner, AOO_TYPE_SOURCE,
-                                       cmd->port, cmd->id);
+                auto node = INode::get(world, cmd->port);
                 if (node){
-                    auto source = aoo::isource::create(cmd->id,
-                        (aoo_replyfn)INodeClient::reply,
-                        static_cast<INodeClient *>(cmd->owner.get()));
+                    aoo::isource::pointer source(
+                        aoo::isource::create(cmd->id,
+                            (aoo_replyfn)INode::replyFn, node.get()));
                     if (source){
-                        cmd->node = node;
-                        source->setup(cmd->sampleRate, cmd->blockSize,
-                                      cmd->numChannels);
+                        NodeLock lock(*node);
+                        if (node->client()->add_source(source.get(), cmd->id) > 0){
+                            source->setup(cmd->sampleRate, cmd->blockSize,
+                                          cmd->numChannels);
 
-                        source->set_buffersize(DEFBUFSIZE);
+                            source->set_buffersize(DEFBUFSIZE);
 
-                        aoo_format_storage f;
-                        makeDefaultFormat(f, cmd->sampleRate,
-                                          cmd->blockSize, cmd->numChannels);
-                        source->set_format(f.header);
+                            aoo_format_storage f;
+                            makeDefaultFormat(f, cmd->sampleRate,
+                                              cmd->blockSize, cmd->numChannels);
+                            source->set_format(f.header);
 
-                        cmd->obj.reset(source);
-                        return true;
+                            cmd->node = std::move(node);
+                            cmd->obj = std::move(source);
+
+                            return true; // success!
+                        } else {
+                            LOG_ERROR("aoo source with ID " << cmd->id << " on port "
+                                      << node->port() << " already exists");
+                        }
                     }
                 }
                 return false;
@@ -46,7 +52,7 @@ void AooSend::init(int32_t port, aoo_id id) {
                 auto cmd = (OpenCmd *)data;
                 auto& owner = static_cast<AooSend&>(*cmd->owner);
                 owner.source_ = std::move(cmd->obj);
-                owner.setNode(std::move(cmd->node)); // last!
+                owner.setNode(std::move(cmd->node));
                 LOG_DEBUG("AooSend initialized");
                 return false; // done
             }
@@ -62,7 +68,15 @@ void AooSend::onDetach() {
                 // release in NRT thread
                 auto cmd = (CmdData*)data;
                 auto& owner = static_cast<AooSend&>(*cmd->owner);
-                owner.releaseNode(); // first!
+                auto node = owner.node();
+                if (node){
+                    // release node
+                    NodeLock lock(*node);
+                    node->client()->remove_source(owner.source());
+
+                    owner.setNode(nullptr);
+                }
+                // release source
                 owner.source_ = nullptr;
                 return false; // done
             }

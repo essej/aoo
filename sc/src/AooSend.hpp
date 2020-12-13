@@ -17,16 +17,6 @@ public:
 
     void onDetach() override;
 
-    void doSend() override {
-        source_->send();
-    }
-
-    void doHandleMessage(const char *data, int32_t size,
-                         const aoo::ip_address& addr) override
-    {
-        source_->handle_message(data, size, addr.address(), addr.length());
-    }
-
     void handleEvent(const aoo_event *event);
 
     aoo::isource * source() { return source_.get(); }

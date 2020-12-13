@@ -14,20 +14,6 @@ public:
 
     void onDetach() override;
 
-    void doSend() override {
-        sink_->send();
-    }
-
-    void doHandleMessage(const char *data, int32_t size,
-                         const aoo::ip_address& addr) override
-    {
-        sink_->handle_message(data, size, addr.address(), addr.length());
-    }
-
-    void doUpdate() override {
-        sink_->handle_message(nullptr, 0, nullptr, 0);
-    }
-
     void handleEvent(const aoo_event *event);
 
     aoo::isink* sink() { return sink_.get(); }

@@ -18,26 +18,31 @@ void AooReceive::init(int32_t port, aoo_id id, int32 bufsize) {
             [](World *world, void *data){
                 // open in NRT thread
                 auto cmd = (OpenCmd *)data;
-                auto node = INode::get(world, *cmd->owner, AOO_TYPE_SINK,
-                                       cmd->port, cmd->id);
+                auto node = INode::get(world, cmd->port);
                 if (node){
-                    auto sink = aoo::isink::create(cmd->id,
-                        (aoo_replyfn)INodeClient::reply,
-                        static_cast<INodeClient *>(cmd->owner.get()));
+                    aoo::isink::pointer sink(
+                        aoo::isink::create(cmd->id,
+                            (aoo_replyfn)INode::replyFn, node.get()));
                     if (sink){
-                        cmd->node = node;
+                        NodeLock lock(*node);
+                        if (node->client()->add_sink(sink.get(), cmd->id) > 0){
+                            sink->setup(cmd->sampleRate, cmd->blockSize,
+                                        cmd->numChannels);
 
-                        sink->setup(cmd->sampleRate, cmd->blockSize,
-                                    cmd->numChannels);
+                            if (cmd->bufferSize <= 0) {
+                                sink->set_buffersize(DEFBUFSIZE);
+                            } else {
+                                sink->set_buffersize(cmd->bufferSize);
+                            }
 
-                        if (cmd->bufferSize <= 0) {
-                            sink->set_buffersize(DEFBUFSIZE);
+                            cmd->node = std::move(node);
+                            cmd->obj = std::move(sink);
+
+                            return true; // success!
                         } else {
-                            sink->set_buffersize(cmd->bufferSize);
+                            LOG_ERROR("aoo sink with ID " << cmd->id << " on port "
+                                      << node->port() << " already exists");
                         }
-
-                        cmd->obj.reset(sink);
-                        return true;
                     }
                 }
                 return false;
@@ -46,7 +51,7 @@ void AooReceive::init(int32_t port, aoo_id id, int32 bufsize) {
                 auto cmd = (OpenCmd *)data;
                 auto& owner = static_cast<AooReceive&>(*cmd->owner);
                 owner.sink_ = std::move(cmd->obj);
-                owner.setNode(std::move(cmd->node)); // last!
+                owner.setNode(std::move(cmd->node));
                 LOG_DEBUG("AooReceive initialized");
                 return false; // done
             }
@@ -62,7 +67,15 @@ void AooReceive::onDetach() {
                 // release in NRT thread
                 auto cmd = (CmdData*)data;
                 auto& owner = static_cast<AooReceive&>(*cmd->owner);
-                owner.releaseNode(); // first!
+                auto node = owner.node();
+                if (node){
+                    // release node
+                    NodeLock lock(*node);
+                    node->client()->remove_sink(owner.sink());
+
+                    owner.setNode(nullptr);
+                }
+                // release sink
                 owner.sink_ = nullptr;
                 return false; // done
             }

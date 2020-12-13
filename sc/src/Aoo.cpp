@@ -26,11 +26,11 @@ namespace {
 
 int gClientSocket;
 aoo::ip_address::ip_type gClientSocketType;
-
-aoo::shared_mutex gClientMutex;
+std::mutex gClientSocketMutex;
 
 using ClientList = std::vector<aoo::ip_address>;
 std::unordered_map<World *, ClientList> gClientMap;
+aoo::shared_mutex gClientMutex;
 
 struct ClientCmd {
     int id;
@@ -135,6 +135,16 @@ struct OscMsgCommand {
 
 } // namespace
 
+void sendMsgNRT(World *world, const char *data, int32_t size){
+    aoo::shared_lock lock(gClientMutex);
+    for (auto& addr : gClientMap[world]){
+        // sendMsgNRT can be called from different threads
+        // (NRT thread and network receive thread)
+        std::lock_guard<std::mutex> lock(gClientSocketMutex);
+        aoo::socket_sendto(gClientSocket, data, size, addr);
+    }
+}
+
 void sendMsgRT(World *world, const char *data, int32_t size){
     auto cmd = CmdData::create<OscMsgCommand>(world, size);
     if (cmd){
@@ -144,10 +154,7 @@ void sendMsgRT(World *world, const char *data, int32_t size){
         auto sendMsg = [](World *world, void *cmdData){
             auto cmd = (OscMsgCommand *)cmdData;
 
-            aoo::shared_lock lock(gClientMutex);
-            for (auto& addr : gClientMap[world]){
-                aoo::socket_sendto(gClientSocket, cmd->data, cmd->size, addr);
-            }
+            sendMsgNRT(world, cmd->data, cmd->size);
 
             return false; // done
         };
@@ -155,13 +162,6 @@ void sendMsgRT(World *world, const char *data, int32_t size){
         DoAsynchronousCommand(world, 0, 0, cmd, sendMsg, 0, 0, &RTFree, 0, 0);
     } else {
         LOG_ERROR("RTAlloc() failed!");
-    }
-}
-
-void sendMsgNRT(World *world, const char *data, int32_t size){
-    aoo::shared_lock lock(gClientMutex);
-    for (auto& addr : gClientMap[world]){
-        aoo::socket_sendto(gClientSocket, data, size, addr);
     }
 }
 
@@ -283,18 +283,13 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::ip_address& addr
 
     // first try peer (group|user)
     if (args->nextTag() == 's'){
-    #if USE_PEER_LIST
         auto group = s;
         auto user = args->gets();
-
-        if (!node->findPeer(group, user, addr)){
+        if (!node->client()->find_peer(group, user, addr.address_ptr(),
+                                       addr.length_ptr()) > 0) {
             LOG_ERROR("aoo: couldn't find peer " << group << "|" << user);
             return false;
         }
-    #else
-        LOG_ERROR("expected <hostname> <port>");
-        return false;
-    #endif
     } else {
         // otherwise try host|port
         auto host = s;
@@ -339,7 +334,7 @@ bool getSourceArg(INode* node, sc_msg_iter *args,
     return getEndpointArg(node, args, addr, &id, "source");
 }
 
-bool getPeerArg(INode *node, sc_msg_iter *args, aoo::ip_address& addr){
+bool getPeerArg(INode* node, sc_msg_iter *args, aoo::ip_address& addr){
     return getEndpointArg(node, args, addr, nullptr, "peer");
 }
 
