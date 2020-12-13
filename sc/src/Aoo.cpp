@@ -285,8 +285,11 @@ static bool getEndpointArg(INode* node, sc_msg_iter *args, aoo::ip_address& addr
     if (args->nextTag() == 's'){
         auto group = s;
         auto user = args->gets();
-        if (!node->client()->find_peer(group, user, addr.address_ptr(),
-                                       addr.length_ptr()) > 0) {
+        // we can't use length_ptr() because socklen_t != int32_t on many platforms
+        int32_t len = aoo::ip_address::max_length;
+        if (node->client()->find_peer(group, user, addr.address_ptr(), &len) > 0) {
+            *addr.length_ptr() = len;
+        } else {
             LOG_ERROR("aoo: couldn't find peer " << group << "|" << user);
             return false;
         }
