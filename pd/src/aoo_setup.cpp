@@ -4,6 +4,8 @@
 
 #include "aoo_common.hpp"
 
+#include "common/time.hpp"
+
 #include "string.h"
 #include "stdlib.h"
 

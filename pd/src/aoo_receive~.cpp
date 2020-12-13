@@ -4,8 +4,6 @@
 
 #include "aoo_common.hpp"
 
-#include "common/sync.hpp"
-
 #include <vector>
 #include <string.h>
 #include <assert.h>
@@ -45,7 +43,6 @@ struct t_aoo_receive
     std::vector<t_source> x_sources;
     // server
     i_node * x_node = nullptr;
-    aoo::shared_mutex x_mutex;
     // events
     t_outlet *x_msgout = nullptr;
     t_clock *x_clock = nullptr;
@@ -74,33 +71,6 @@ static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *arg
                  classname(x), host->s_name, port, id);
     }
     return 0;
-}
-
-// called from the network receive thread
-void aoo_receive_handle_message(t_aoo_receive *x, const char * data,
-                                int32_t n, const ip_address& addr)
-{
-    // synchronize with aoo_receive_dsp()
-    aoo::shared_scoped_lock lock(x->x_mutex);
-    // handle incoming message
-    x->x_sink->handle_message(data, n, addr.address(), addr.length());
-}
-
-// called from the network receive thread
-void aoo_receive_update(t_aoo_receive *x)
-{
-    // synchronize with aoo_receive_dsp()
-    aoo::shared_scoped_lock lock(x->x_mutex);
-    x->x_sink->handle_message(nullptr, 0, nullptr, 0);
-}
-
-// called from the network send thread
-void aoo_receive_send(t_aoo_receive *x)
-{
-    // synchronize with aoo_receive_dsp()
-    aoo::shared_scoped_lock lock(x->x_mutex);
-    // send outgoing messages
-    while (x->x_sink->send()) ;
 }
 
 static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
@@ -217,11 +187,11 @@ static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
             return;
         }
         // release old node
-        x->x_node->release((t_pd *)x);
+        x->x_node->release((t_pd *)x, x->x_sink.get());
     }
     // add new node
     if (port){
-        x->x_node = i_node::get((t_pd *)x, port, x->x_id);
+        x->x_node = i_node::get((t_pd *)x, port, x->x_sink.get(), x->x_id);
         if (x->x_node){
             post("listening on port %d", x->x_node->port());
         }
@@ -418,10 +388,15 @@ static void aoo_receive_dsp(t_aoo_receive *x, t_signal **sp)
     }
 
     // synchronize with network threads!
-    aoo::scoped_lock lock(x->x_mutex); // writer lock!
-
     if (blocksize != x->x_blocksize || samplerate != x->x_samplerate){
+        // synchronize with network threads!
+        if (x->x_node){
+            x->x_node->lock();
+        }
         x->x_sink->setup(samplerate, blocksize, x->x_nchannels);
+        if (x->x_node){
+            x->x_node->unlock();
+        }
         x->x_blocksize = blocksize;
         x->x_samplerate = samplerate;
     }
@@ -440,10 +415,15 @@ static void aoo_receive_port(t_aoo_receive *x, t_floatarg f)
     }
 
     if (x->x_node){
-        x->x_node->release((t_pd *)x);
+        x->x_node->release((t_pd *)x, x->x_sink.get());
     }
 
-    x->x_node = port ? i_node::get((t_pd *)x, port, x->x_id) : 0;
+    if (port){
+        x->x_node = i_node::get((t_pd *)x, port, x->x_sink.get(), x->x_id);
+    } else {
+        x->x_node = 0;
+    }
+
     x->x_port = port;
 }
 
@@ -461,12 +441,17 @@ static void aoo_receive_id(t_aoo_receive *x, t_floatarg f)
     }
 
     if (x->x_node){
-        x->x_node->release((t_pd *)x);
+        x->x_node->release((t_pd *)x, x->x_sink.get());
     }
 
     x->x_sink->set_id(id);
 
-    x->x_node = x->x_port ? i_node::get((t_pd *)x, x->x_port, id) : 0;
+    if (x->x_port){
+        x->x_node = i_node::get((t_pd *)x, x->x_port, x->x_sink.get(), id);
+    } else {
+        x->x_node = nullptr;
+    }
+
     x->x_id = id;
 }
 
@@ -529,7 +514,7 @@ static void aoo_receive_free(t_aoo_receive *x)
 t_aoo_receive::~t_aoo_receive()
 {
     if (x_node){
-        x_node->release((t_pd *)this);
+        x_node->release((t_pd *)this, x_sink.get());
     }
 
     clock_free(x_clock);

@@ -7,9 +7,9 @@
 #include "m_pd.h"
 
 #include "aoo/aoo.hpp"
+#include "aoo/aoo_net.hpp"
 
 #include "common/net_utils.hpp"
-#include "common/time.hpp"
 
 #define classname(x) class_getname(*(t_pd *)x)
 
@@ -28,13 +28,13 @@ uint64_t get_osctime_dejitter(t_dejitter *context);
 /*///////////////////////////// aoo_node /////////////////////////////*/
 
 struct i_node {
-    static i_node * get(t_pd *obj, int port, aoo_id id);
+    static i_node * get(t_pd *obj, int port, void *x = nullptr, aoo_id id = 0);
 
     virtual ~i_node() {}
 
-    virtual void release(t_pd *obj) = 0;
+    virtual void release(t_pd *obj, void *x = nullptr) = 0;
 
-    virtual int socket() const = 0;
+    virtual aoo::net::iclient * client() = 0;
 
     virtual int port() const = 0;
 
@@ -43,20 +43,11 @@ struct i_node {
     virtual int sendto(const char *buf, int32_t size,
                        const ip_address& addr) = 0;
 
-    virtual bool find_peer(t_symbol *group, t_symbol *user, ip_address& addr) = 0;
-
-    virtual void add_peer(t_symbol *group, t_symbol *user, aoo_id id,
-                          const ip_address& addr) = 0;
-
-    virtual void remove_peer(t_symbol *group, t_symbol *user) = 0;
-
-    virtual void remove_all_peers() = 0;
-
-    virtual void list_peers(t_outlet *out) = 0;
-
-    virtual void remove_group(t_symbol *group) = 0;
-
     virtual void notify() = 0;
+
+    virtual void lock() = 0;
+
+    virtual void unlock() = 0;
 };
 
 /*///////////////////////////// helper functions ///////////////////////////////*/

@@ -54,7 +54,9 @@ static bool get_endpoint_arg(void *x, i_node *node, int argc, t_atom *argv,
         t_symbol *group = atom_getsymbol(argv);
         t_symbol *user = atom_getsymbol(argv + 1);
 
-        if (!node->find_peer(group, user, addr)) {
+        if (!node->client()->find_peer(group->s_name, user->s_name,
+                                       addr.address_ptr(), addr.length_ptr()))
+        {
             pd_error(x, "%s: couldn't find peer %s|%s",
                      classname(x), group->s_name, user->s_name, what);
             return false;

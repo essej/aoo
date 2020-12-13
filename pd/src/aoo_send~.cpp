@@ -4,8 +4,6 @@
 
 #include "aoo_common.hpp"
 
-#include "common/sync.hpp"
-
 #include <vector>
 #include <string.h>
 #include <assert.h>
@@ -55,7 +53,6 @@ struct t_aoo_send
     std::vector<t_sink> x_sinks;
     // node
     i_node *x_node = nullptr;
-    aoo::shared_mutex x_mutex;
     // events
     t_clock *x_clock = nullptr;
     t_outlet *x_msgout = nullptr;
@@ -141,25 +138,6 @@ static t_sink *aoo_send_findsink(t_aoo_send *x, const ip_address& addr, aoo_id i
         }
     }
     return nullptr;
-}
-
-// called from the network receive thread
-void aoo_send_handle_message(t_aoo_send *x, const char * data,
-                             int32_t n, const ip_address& addr)
-{
-    // synchronize with aoo_receive_dsp()
-    aoo::shared_scoped_lock lock(x->x_mutex);
-    // handle incoming message
-    x->x_source->handle_message(data, n, addr.address(), addr.length());
-}
-
-// called from the network send thread
-void aoo_send_send(t_aoo_send *x)
-{
-    // synchronize with aoo_receive_dsp()
-    aoo::shared_scoped_lock lock(x->x_mutex);
-    // send outgoing messages
-    while (x->x_source->send()) ;
 }
 
 static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event)
@@ -326,12 +304,20 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     ip_address addr;
     aoo_id id;
     if (get_sink_arg(x, x->x_node, argc, argv, addr, id)){
-        t_symbol *host = atom_getsymbol(argv);
-        int port = atom_getfloat(argv + 1);
         // check if sink exists
         if (aoo_send_findsink(x, addr, id)){
-            pd_error(x, "%s: sink %s %d %d already added!",
-                     classname(x), host->s_name, port, id);
+            if (argv[1].a_type == A_SYMBOL){
+                // group + user
+                auto group = atom_getsymbol(argv)->s_name;
+                auto user = atom_getsymbol(argv + 1)->s_name;
+                pd_error(x, "%s: sink %s|%s %d already added!",
+                         classname(x), group, user, id);
+            } else {
+                // host + port
+                auto host = atom_getsymbol(argv)->s_name;
+                pd_error(x, "%s: sink %s %d %d already added!",
+                         classname(x), host, addr.port(), id);
+            }
             return;
         }
 
@@ -342,8 +328,8 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
                                                id, atom_getfloat(argv + 3));
         }
 
-        // print message (use actual hostname)
-        verbose(0, "added sink %s %d %d", addr.name(), port, id);
+        // print message (use actual IP address)
+        verbose(0, "added sink %s %d %d", addr.name(), addr.port(), id);
     }
 }
 
@@ -371,8 +357,18 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             aoo_send_doremovesink(x, addr, id);
             verbose(0, "removed sink %s %d %d", addr.name(), addr.port(), id);
         } else {
-            pd_error(x, "%s: couldn't find sink %s %d %d!",
-                     classname(x), addr.name(), addr.port(), id);
+            if (argv[1].a_type == A_SYMBOL){
+                // group + user
+                auto group = atom_getsymbol(argv)->s_name;
+                auto user = atom_getsymbol(argv + 1)->s_name;
+                pd_error(x, "%s: sink %s|%s %d already added!",
+                         classname(x), group, user, id);
+            } else {
+                // host + port
+                auto host = atom_getsymbol(argv)->s_name;
+                pd_error(x, "%s: sink %s %d %d not found!",
+                         classname(x), host, addr.port(), id);
+            }
         }
     }
 }
@@ -432,11 +428,15 @@ static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
         x->x_vec[i] = sp[i]->s_vec;
     }
 
-    // synchronize with network threads!
-    aoo::scoped_lock lock(x->x_mutex); // writer lock!
-
     if (blocksize != x->x_blocksize || samplerate != x->x_samplerate){
+        // synchronize with network threads!
+        if (x->x_node){
+            x->x_node->lock();
+        }
         x->x_source->setup(samplerate, blocksize, x->x_nchannels);
+        if (x->x_node){
+            x->x_node->unlock();
+        }
         x->x_blocksize = blocksize;
         x->x_samplerate = samplerate;
     }
@@ -455,10 +455,15 @@ static void aoo_send_port(t_aoo_send *x, t_floatarg f)
     }
 
     if (x->x_node){
-        x->x_node->release((t_pd *)x);
+        x->x_node->release((t_pd *)x, x->x_source.get());
     }
 
-    x->x_node = port ? i_node::get((t_pd *)x, port, x->x_id) : 0;
+    if (port){
+        x->x_node = i_node::get((t_pd *)x, port, x->x_source.get(), x->x_id);
+    } else {
+        x->x_node = nullptr;
+    }
+
     x->x_port = port;
 }
 
@@ -476,12 +481,17 @@ static void aoo_send_id(t_aoo_send *x, t_floatarg f)
     }
 
     if (x->x_node){
-        x->x_node->release((t_pd *)x);
+        x->x_node->release((t_pd *)x, x->x_source.get());
     }
 
     x->x_source->set_id(id);
 
-    x->x_node = x->x_port ? i_node::get((t_pd *)x, x->x_port, id) : 0;
+    if (x->x_port){
+        x->x_node = i_node::get((t_pd *)x, x->x_port, x->x_source.get(), x->x_id);
+    } else {
+        x->x_node = nullptr;
+    }
+
     x->x_id = id;
 }
 
@@ -549,7 +559,7 @@ t_aoo_send::~t_aoo_send()
 {
     // first stop receiving messages
     if (x_node){
-        x_node->release((t_pd *)this);
+        x_node->release((t_pd *)this, x_source.get());
     }
 
     clock_free(x_clock);

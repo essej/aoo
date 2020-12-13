@@ -4,8 +4,6 @@
 
 #include "aoo_common.hpp"
 
-#include "aoo/aoo_net.hpp"
-
 #include <thread>
 
 using namespace aoo;

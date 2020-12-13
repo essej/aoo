@@ -4,16 +4,14 @@
 
 #include "aoo_common.hpp"
 
-#include "aoo/aoo_net.hpp"
-
-#include "common/sync.hpp"
+#include "common/time.hpp"
 
 #include "oscpack/osc/OscReceivedElements.h"
 
-#include <thread>
 #include <functional>
 #include <vector>
 #include <map>
+#include <mutex>
 
 using namespace aoo;
 
@@ -44,6 +42,14 @@ private:
     ip_address address_;
 };
 
+struct t_peer
+{
+    t_symbol *group;
+    t_symbol *user;
+    aoo::ip_address address;
+    aoo_id id;
+};
+
 struct t_aoo_client
 {
     t_aoo_client(int argc, t_atom *argv);
@@ -51,12 +57,10 @@ struct t_aoo_client
 
     t_object x_obj;
 
-    aoo::net::iclient::pointer x_client;
     i_node *x_node = nullptr;
-    std::thread x_thread;
 
     // for OSC messages
-    ip_address x_peer;
+    ip_address x_peeraddr;
     t_symbol *x_group = nullptr;
     t_dejitter *x_dejitter = nullptr;
     t_float x_offset = -1; // immediately
@@ -86,11 +90,14 @@ struct t_aoo_client
     // replies
     using t_reply = std::function<void()>;
     std::vector<t_reply> replies_;
-    aoo::shared_mutex reply_mutex_;
+    std::mutex reply_mutex_;
     void push_reply(t_reply reply){
-        aoo::scoped_lock lock(reply_mutex_);
+        std::lock_guard<std::mutex> lock(reply_mutex_);
         replies_.push_back(std::move(reply));
     }
+
+    // peer list
+    std::vector<t_peer> x_peers;
 
     t_clock *x_clock = nullptr;
     t_clock *x_queue_clock = nullptr;
@@ -107,23 +114,15 @@ struct t_group_request {
 
 static void aoo_client_peer_list(t_aoo_client *x)
 {
-    if (x->x_node){
-        x->x_node->list_peers(x->x_msgout);
-    }
-}
+    for (auto& peer : x->x_peers){
+        t_atom msg[5];
+        SETSYMBOL(msg, peer.group);
+        SETSYMBOL(msg + 1, peer.user);
+        SETFLOAT(msg + 2, peer.id);
+        address_to_atoms(peer.address, 2, msg + 3);
 
-void aoo_client_send(t_aoo_client *x)
-{
-    // avoid potential segfault at startup
-    if (x->x_client){
-        x->x_client->send();
+        outlet_anything(x->x_msgout, gensym("peer"), 5, msg);
     }
-}
-
-void aoo_client_handle_message(t_aoo_client *x, const char * data, int32_t n,
-                               const ip_address& addr)
-{
-    x->x_client->handle_message(data, n, addr.address(), addr.length());
 }
 
 // send OSC messages to peers
@@ -172,7 +171,7 @@ void t_aoo_client::send_message(int argc, t_atom *argv,
     }
 
     int32_t flags = x_reliable ? AOO_NET_MESSAGE_RELIABLE : 0;
-    x_client->send_message(buf, count, target, len, flags);
+    x_node->client()->send_message(buf, count, target, len, flags);
 
     x_node->notify();
 }
@@ -213,7 +212,7 @@ static void aoo_client_list(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv
     if (x->x_node){
         switch (x->x_target){
         case TARGET_PEER:
-            x->send_message(argc, argv, x->x_peer.address(), x->x_peer.length());
+            x->send_message(argc, argv, x->x_peeraddr.address(), x->x_peeraddr.length());
             break;
         case TARGET_GROUP:
             x->send_message(argc, argv, x->x_group->s_name, 0);
@@ -252,7 +251,7 @@ static void aoo_client_target(t_aoo_client *x, t_symbol *s, int argc, t_atom *ar
     if (x->x_node){
         if (argc > 1){
             // <ip> <port> or <group> <peer>
-            if (get_peer_arg(x, x->x_node, argc, argv, x->x_peer)){
+            if (get_peer_arg(x, x->x_node, argc, argv, x->x_peeraddr)){
                 x->x_target = TARGET_PEER;
             } else {
                 // this is important, so that we don't accidentally broadcast!
@@ -389,7 +388,7 @@ static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
     {
         post("%s: disconnected from server", classname(x));
 
-        x->x_node->remove_all_peers();
+        x->x_peers.clear();
         x->x_connected = false;
 
         outlet_float(x->x_stateout, 0); // disconnected
@@ -404,7 +403,14 @@ static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
         auto user = gensym(e->user_name);
         auto id = e->user_id;
 
-        x->x_node->add_peer(group, user, id, addr);
+        for (auto& peer : x->x_peers){
+            if (peer.group == group && peer.id == id){
+                bug("aoo_client: couldn't add peer %s|%s",
+                    group->s_name, user->s_name);
+                return;
+            }
+        }
+        x->x_peers.push_back({ group, user, addr, id });
 
         t_atom msg[5];
         SETSYMBOL(msg, group);
@@ -424,15 +430,23 @@ static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
         auto user = gensym(e->user_name);
         auto id = e->user_id;
 
-        x->x_node->remove_peer(group, user);
+        for (auto it = x->x_peers.begin(); it != x->x_peers.end(); ++it){
+            if (it->group == group && it->id == id){
+                x->x_peers.erase(it);
 
-        t_atom msg[5];
-        SETSYMBOL(msg, group);
-        SETSYMBOL(msg + 1, user);
-        SETFLOAT(msg + 2, id);
-        address_to_atoms(addr, 2, msg + 3);
+                t_atom msg[5];
+                SETSYMBOL(msg, group);
+                SETSYMBOL(msg + 1, user);
+                SETFLOAT(msg + 2, id);
+                address_to_atoms(addr, 2, msg + 3);
 
-        outlet_anything(x->x_msgout, gensym("peer_leave"), 5, msg);
+                outlet_anything(x->x_msgout, gensym("peer_leave"), 5, msg);
+
+                return;
+            }
+        }
+        bug("aoo_client: couldn't remove peer %s|%s",
+            group->s_name, user->s_name);
         break;
     }
     case AOO_NET_ERROR_EVENT:
@@ -449,7 +463,7 @@ static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
 
 static void aoo_client_tick(t_aoo_client *x)
 {
-    x->x_client->poll_events((aoo_eventhandler)aoo_client_handle_event, x);
+    x->x_node->client()->poll_events((aoo_eventhandler)aoo_client_handle_event, x);
 
     x->x_node->notify();
 
@@ -480,10 +494,7 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
         pd_error(x, "%s: too few arguments for '%s' method", classname(x), s->s_name);
         return;
     }
-    if (x->x_client){
-        // first remove peers (to be sure)
-        x->x_node->remove_all_peers();
-
+    if (x->x_node){
         t_symbol *host = atom_getsymbol(argv);
         int port = atom_getfloat(argv + 1);
         t_symbol *userName = atom_getsymbol(argv + 2);
@@ -502,6 +513,8 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
                 auto reply = (const aoo_net_connect_reply *)data;
                 auto user_id = reply->user_id;
                 obj->push_reply([obj, user_id, group, pwd](){
+                    // remove all peers (to be sure)
+                    obj->x_peers.clear();
                     obj->x_connected = true;
 
                     t_atom msg;
@@ -530,7 +543,7 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
 
             delete request;
         };
-        x->x_client->connect(host->s_name, port,
+        x->x_node->client()->connect(host->s_name, port,
                              userName->s_name, userPwd->s_name, cb,
                              new t_group_request { x, group, groupPwd });
     }
@@ -538,13 +551,13 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
 
 static void aoo_client_disconnect(t_aoo_client *x)
 {
-    if (x->x_client){
+    if (x->x_node){
         auto cb = [](void *y, int32_t result, const void *data){
             auto x = (t_aoo_client *)y;
             if (result == 0){
                 x->push_reply([x](){
                     // we have to remove the peers manually!
-                    x->x_node->remove_all_peers();
+                    x->x_peers.clear();
                     x->x_connected = false;
 
                     outlet_float(x->x_stateout, 0); // disconnected
@@ -559,13 +572,13 @@ static void aoo_client_disconnect(t_aoo_client *x)
                 });
             }
         };
-        x->x_client->disconnect(cb, x);
+        x->x_node->client()->disconnect(cb, x);
     }
 }
 
 static void aoo_client_group_join(t_aoo_client *x, t_symbol *group, t_symbol *pwd)
 {
-    if (x->x_client){
+    if (x->x_node){
         auto cb = [](void *x, int32_t result, const void *data){
             auto request = (t_group_request *)x;
             auto obj = request->obj;
@@ -595,14 +608,14 @@ static void aoo_client_group_join(t_aoo_client *x, t_symbol *group, t_symbol *pw
 
             delete request;
         };
-        x->x_client->join_group(group->s_name, pwd->s_name,
+        x->x_node->client()->join_group(group->s_name, pwd->s_name,
                                 cb, new t_group_request { x, group, nullptr });
     }
 }
 
 static void aoo_client_group_leave(t_aoo_client *x, t_symbol *group)
 {
-    if (x->x_client){
+    if (x->x_node){
         auto cb = [](void *x, int32_t result, const void *data){
             auto request = (t_group_request *)x;
             auto obj = request->obj;
@@ -611,7 +624,14 @@ static void aoo_client_group_leave(t_aoo_client *x, t_symbol *group)
             if (result == 0){
                 obj->push_reply([obj, group](){
                     // we have to remove the peers manually!
-                    obj->x_node->remove_group(group);
+                    for (auto it = obj->x_peers.begin(); it != obj->x_peers.end(); ) {
+                        // remove all peers matching group
+                        if (it->group == group){
+                            it = obj->x_peers.erase(it);
+                        } else {
+                            ++it;
+                        }
+                    }
 
                     t_atom msg[2];
                     SETSYMBOL(msg, group);
@@ -635,7 +655,7 @@ static void aoo_client_group_leave(t_aoo_client *x, t_symbol *group)
 
             delete request;
         };
-        x->x_client->leave_group(group->s_name, cb,
+        x->x_node->client()->leave_group(group->s_name, cb,
                                  new t_group_request { x, group, nullptr });
     }
 }
@@ -657,21 +677,14 @@ t_aoo_client::t_aoo_client(int argc, t_atom *argv)
 
     int port = argc ? atom_getfloat(argv) : 0;
 
-    x_node = port > 0 ? i_node::get((t_pd *)this, port, 0) : nullptr;
+    x_node = port > 0 ? i_node::get((t_pd *)this, port) : nullptr;
 
     if (x_node){
-        x_client.reset(aoo::net::iclient::create(x_node->socket()));
-        if (x_client){
-            verbose(0, "new aoo client on port %d", port);
-            // get dejitter context
-            x_dejitter = get_dejitter();
-            // start thread
-            x_thread = std::thread([this](){
-               x_client->run();
-            });
-            // start clock
-            clock_delay(x_clock, AOO_CLIENT_POLL_INTERVAL);
-        }
+        verbose(0, "new aoo client on port %d", port);
+        // get dejitter context
+        x_dejitter = get_dejitter();
+        // start clock
+        clock_delay(x_clock, AOO_CLIENT_POLL_INTERVAL);
     }
 }
 
@@ -683,15 +696,10 @@ static void aoo_client_free(t_aoo_client *x)
 t_aoo_client::~t_aoo_client()
 {
     if (x_node){
-        x_node->remove_all_peers();
-
+        if (x_connected){
+            x_node->client()->disconnect(0, 0);
+        }
         x_node->release((t_pd *)this);
-    }
-
-    if (x_client){
-        x_client->quit();
-        // wait for thread to finish
-        x_thread.join();
     }
 
     // ignore pending requests (doesn't leak)
