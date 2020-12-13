@@ -3,6 +3,7 @@ AooClient {
 
 	var <>server;
 	var <>port;
+	var <>id;
 	var <>state;
 	var <>replyAddr;
 	var <>nodeAddr;
@@ -103,7 +104,7 @@ AooClient {
 		peers = nil;
 	}
 
-	connect { arg serverName, serverPort, user, userPwd, group, groupPwd, action, timeout=10;
+	connect { arg serverName, serverPort, userName, userPwd, groupName, groupPwd, action, timeout=10;
 		var resp;
 
 		port ?? { MethodError("AooClient: not initialized", this).throw };
@@ -115,17 +116,18 @@ AooClient {
 		state = \connecting;
 
 		resp = OSCFunc({ arg msg;
-			var success = msg[2].asBoolean;
-			var errmsg = msg[3];
+			var errmsg, userid, success = msg[2].asBoolean;
 			success.if {
-				"AooClient: connected to % %".format(serverName, serverPort).postln;
+				userid = msg[3];
+				"AooClient: connected to % % (user ID: %)".format(serverName, serverPort, userid).postln;
 				state = \connected;
-				group.notNil.if {
-					this.joinGroup(group, groupPwd, { arg success, errmsg;
-						action.value(success, errmsg);
+				groupName.notNil.if {
+					this.joinGroup(groupName, groupPwd, { arg success;
+						action.value(success, userid);
 					});
-				} { action.value(true, errmsg); }
+				} { action.value(true, userid); }
 			} {
+				errmsg = msg[3];
 				"AooClient: couldn't connect to % %: %".format(serverName, serverPort, errmsg).error;
 				state = \disconnected;
 				action.value(false, errmsg);
@@ -146,7 +148,7 @@ AooClient {
 		});
 
 		server.sendMsg('/cmd', '/aoo_client_connect', port,
-			serverName, serverPort, user, userPwd);
+			serverName, serverPort, userName, userPwd);
 	}
 
 	disconnect { arg action;
@@ -161,6 +163,7 @@ AooClient {
 			var errmsg = msg[3];
 			success.if {
 				this.peers = []; // remove all peers
+				this.id = nil;
 				"AooClient: disconnected".postln;
 			} {
 				"AooClient: couldn't disconnect: %".format(errmsg).error;
