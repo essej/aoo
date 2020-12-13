@@ -157,7 +157,7 @@ public:
     }
 
     void detach() {
-        owner_ = nullptr;
+        owner_ = nullptr; // first
         onDetach();
     }
 

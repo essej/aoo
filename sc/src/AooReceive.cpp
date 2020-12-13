@@ -72,6 +72,7 @@ void AooReceive::onDetach() {
                     // release node
                     NodeLock lock(*node);
                     node->client()->remove_sink(owner.sink());
+                    lock.unlock(); // !
 
                     owner.setNode(nullptr);
                 }

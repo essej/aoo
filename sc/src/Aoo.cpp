@@ -24,8 +24,8 @@ static void SCLog(const char *s){
 
 namespace {
 
-int gClientSocket;
-aoo::ip_address::ip_type gClientSocketType;
+int gClientSocket = -1;
+aoo::ip_address::ip_type gClientSocketType = aoo::ip_address::Unspec;
 std::mutex gClientSocketMutex;
 
 using ClientList = std::vector<aoo::ip_address>;
@@ -140,7 +140,7 @@ void sendMsgNRT(World *world, const char *data, int32_t size){
     for (auto& addr : gClientMap[world]){
         // sendMsgNRT can be called from different threads
         // (NRT thread and network receive thread)
-        std::lock_guard<std::mutex> lock(gClientSocketMutex);
+        std::lock_guard<std::mutex> l(gClientSocketMutex);
         aoo::socket_sendto(gClientSocket, data, size, addr);
     }
 }
@@ -568,4 +568,11 @@ PluginLoad(Aoo) {
     AooPluginCmd(aoo_unregister);
 
     gClientSocket = aoo::socket_udp(0);
+    if (gClientSocket >= 0) {
+        gClientSocketType = aoo::socket_family(gClientSocket);
+    }
+    else {
+        LOG_ERROR("AOO: couldn't open client socket - "
+            << aoo::socket_strerror(aoo::socket_errno()));
+    }
 }

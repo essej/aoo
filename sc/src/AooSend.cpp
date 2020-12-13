@@ -73,6 +73,7 @@ void AooSend::onDetach() {
                     // release node
                     NodeLock lock(*node);
                     node->client()->remove_source(owner.source());
+                    lock.unlock(); // !
 
                     owner.setNode(nullptr);
                 }
@@ -158,7 +159,7 @@ void AooSend::addSinkEvent(const aoo::ip_address& addr, aoo_id id,
 }
 
 bool AooSend::addSink(const aoo::ip_address& addr, aoo_id id,
-                      int channelOnset){
+                      int32_t channelOnset){
     if (source()->add_sink(addr.address(), addr.length(), id) > 0){
         if (channelOnset > 0){
             source()->set_sink_channelonset(addr.address(), addr.length(),
@@ -409,7 +410,7 @@ void aoo_send_timefilter(AooSendUnit *unit, sc_msg_iter* args){
 using AooSendUnitCmdFunc = void (*)(AooSendUnit*, sc_msg_iter*);
 
 // make sure that unit commands only run after the instance
-// has been fully initialized.
+// has been successfully initialized.
 template<AooSendUnitCmdFunc fn>
 void runUnitCmd(AooSendUnit* unit, sc_msg_iter* args) {
     if (unit->initialized() && unit->delegate().initialized()) {

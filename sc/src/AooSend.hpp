@@ -21,8 +21,8 @@ public:
 
     aoo::isource * source() { return source_.get(); }
 
-    void addSinkEvent(const aoo::ip_address& addr, aoo_id id, int channelOnset);
-    bool addSink(const aoo::ip_address& addr, aoo_id id, int channelOnset);
+    void addSinkEvent(const aoo::ip_address& addr, aoo_id id, int32_t channelOnset);
+    bool addSink(const aoo::ip_address& addr, aoo_id id, int32_t channelOnset);
 
     void removeSinkEvent(const aoo::ip_address& addr, aoo_id id);
     bool removeSink(const aoo::ip_address& addr, aoo_id id);
