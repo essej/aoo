@@ -397,7 +397,7 @@ int32_t aoo::sink::decode() {
 
     // free unused source_descs
     if (!sources_.try_free()){
-        LOG_VERBOSE("aoo::sink: try_free() would block");
+        LOG_DEBUG("aoo::sink: try_free() would block");
     }
 
     // handle requests

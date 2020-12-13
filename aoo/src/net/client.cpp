@@ -237,7 +237,7 @@ int32_t aoo::net::client::run(){
         }
 
         if (!peers_.try_free()){
-            LOG_VERBOSE("aoo::client: try_free() would block");
+            LOG_DEBUG("aoo::client: try_free() would block");
         }
     }
     return 1;
@@ -687,7 +687,7 @@ int client::try_connect(const std::string &host, int port){
 
     // for actual TCP connection, just pick the first result
     auto& remote = result.front();
-    LOG_VERBOSE("try to connect to " << remote.name() << ":" << port);
+    LOG_VERBOSE("try to connect to " << remote.name() << "/" << port);
 
     // try to connect (LATER make timeout configurable)
     if (socket_connect(socket_, remote, 5) < 0){

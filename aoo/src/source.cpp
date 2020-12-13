@@ -467,7 +467,7 @@ int32_t aoo::source::send(){
     }
 
     if (!sinks_.try_free()){
-        LOG_VERBOSE("aoo::source: try_free() would block");
+        LOG_DEBUG("aoo::source: try_free() would block");
     }
 
     return didsomething;
@@ -489,7 +489,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
         unique_lock lock(update_mutex_, std::try_to_lock_t{}); // writer lock!
         if (!lock.owns_lock()){
             dropped_++;
-            LOG_WARNING("aoo::source::process() would block");
+            LOG_VERBOSE("aoo::source::process() would block");
             return 0; // ?
         }
 
@@ -513,7 +513,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     shared_lock lock(update_mutex_, std::try_to_lock_t{}); // reader lock!
     if (!lock.owns_lock()){
         dropped_++;
-        LOG_WARNING("aoo::source::process() would block");
+        LOG_VERBOSE("aoo::source::process() would block");
         return 0; // ?
     }
 
