@@ -46,7 +46,7 @@ AooSendCtl : AooCtl {
 	prHandleEvent { arg type ...args;
 		// /invite, /uninvite, /add, /remove, /ping
 		// currently, all events start with endpoint + id
-		var addr = Aoo.prResolveAddr(this.port, AooAddr(*args[0..1]));
+		var addr = this.prResolveAddr(AooAddr(args[0], args[1]));
 		var id = args[2];
 		var sink = ( addr: addr, id: id );
 		var event = [type, addr, id] ++ args[3..];
@@ -66,11 +66,11 @@ AooSendCtl : AooCtl {
 
 	add { arg addr, id, channelOnset, action;
 		var replyID = AooCtl.prNextReplyID;
-		addr = Aoo.prResolveAddr(this.port, addr);
+		addr = this.prResolveAddr(addr);
 		this.prMakeOSCFunc({ arg ip, port, id;
 			var newAddr;
 			ip.notNil.if {
-				newAddr = Aoo.prResolveAddr(this.port, AooAddr(ip, port));
+				newAddr = this.prResolveAddr(AooAddr(ip, port));
 				this.prAdd(( addr: newAddr, id: id ));
 				action.value(newAddr, id);
 			} { action.value }
@@ -80,11 +80,11 @@ AooSendCtl : AooCtl {
 
 	remove { arg addr, id, action;
 		var replyID = AooCtl.prNextReplyID;
-		addr = Aoo.prResolveAddr(this.port, addr);
+		addr = this.prResolveAddr(addr);
 		this.prMakeOSCFunc({ arg ip, port, id;
 			var newAddr;
 			ip.notNil.if {
-				newAddr = Aoo.prResolveAddr(this.port, AooAddr(ip, port));
+				newAddr = this.prResolveAddr(AooAddr(ip, port));
 				this.prRemove(( addr: newAddr, id: id ));
 				action.value(newAddr, id);
 			} { action.value }
@@ -136,7 +136,7 @@ AooSendCtl : AooCtl {
 	}
 
 	channelOnset { arg addr, id, onset;
-		addr = Aoo.prResolveAddr(this.port, addr);
+		addr = this.prResolveAddr(addr);
 		this.prSendMsg('/channel', addr.ip, addr.port, id, onset);
 	}
 

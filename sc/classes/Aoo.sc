@@ -104,24 +104,6 @@ Aoo {
 		};
 		^desc;
 	}
-
-	// Try to find peer, even if IP/port is given.
-	*prResolveAddr { arg port, addr;
-		var client, peer;
-		// find peer by group+user
-		client = AooClient.find(port);
-		client.notNil.if {
-			peer = client.findPeer(addr);
-			peer !? { ^peer };
-		};
-		// we need at least IP+port
-		addr.ip !? { ^addr };
-		addr.isKindOf(AooPeer).if {
-			MethodError("Aoo: couldn't find peer %".format(addr), this).throw;
-		} {
-			MethodError("Aoo: bad address %".format(addr), this).throw;
-		}
-	}
 }
 
 AooFormat {
@@ -347,7 +329,7 @@ AooCtl {
 		this.id = id;
 
 		Aoo.prGetServerAddr(synth.server, { arg addr;
-			"listen: % % %".format(addr, synth.nodeID, synthIndex).postln;
+			// "listen: % % %".format(addr, synth.nodeID, synthIndex).postln;
 			replyAddr = addr;
 			eventOSCFunc = OSCFunc({ arg msg;
 				var event = this.prHandleEvent(*msg[3..]);
@@ -381,5 +363,23 @@ AooCtl {
 		^OSCFunc({ arg msg;
 			func.value(*msg[4..]); // pass arguments after replyID
 		}, path, replyAddr, argTemplate: [synth.nodeID, synthIndex, replyID]);
+	}
+
+	// Try to find peer, even if IP/port is given.
+	prResolveAddr { arg addr;
+		var client, peer;
+		// find peer by group+user
+		client = AooClient.find(this.port);
+		client.notNil.if {
+			peer = client.findPeer(addr);
+			peer !? { ^peer };
+		};
+		// we need at least IP+port
+		addr.ip !? { ^addr };
+		addr.isKindOf(AooPeer).if {
+			MethodError("Aoo: couldn't find peer %".format(addr), this).throw;
+		} {
+			MethodError("Aoo: bad address %".format(addr), this).throw;
+		}
 	}
 }
