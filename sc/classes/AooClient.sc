@@ -130,7 +130,7 @@ AooClient {
 				errmsg = msg[3];
 				"AooClient: couldn't connect to % %: %".format(serverName, serverPort, errmsg).error;
 				state = \disconnected;
-				action.value(false, errmsg);
+				action.value(false);
 			};
 		}, '/aoo/client/connect', replyAddr, argTemplate: [port]).oneShot;
 
@@ -169,7 +169,7 @@ AooClient {
 				"AooClient: couldn't disconnect: %".format(errmsg).error;
 			};
 			state = \disconnected;
-			action.value(success, errmsg);
+			action.value(success);
 		}, '/aoo/client/disconnect', replyAddr, argTemplate: [port]).oneShot;
 		server.sendMsg('/cmd', '/aoo_client_disconnect', port);
 	}
@@ -185,7 +185,7 @@ AooClient {
 			} {
 				"AooClient: couldn't join group '%': %".format(name, errmsg).error;
 			};
-			action.value(success, errmsg);
+			action.value(success);
 		}, '/aoo/client/group/join', replyAddr, argTemplate: [port, name.asSymbol]).oneShot;
 		server.sendMsg('/cmd', '/aoo_client_group_join', port, name, pwd);
 	}
@@ -202,7 +202,7 @@ AooClient {
 			} {
 				"AooClient: couldn't leave group '%': %".format(name, errmsg).error;
 			};
-			action.value(success, errmsg);
+			action.value(success);
 		}, '/aoo/client/group/leave', replyAddr, argTemplate: [port, name.asSymbol]).oneShot;
 		server.sendMsg('/cmd', '/aoo_client_group_leave', port, name);
 	}
