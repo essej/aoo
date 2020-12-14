@@ -23,13 +23,6 @@
 
 using namespace aoo;
 
-int32_t INode::replyFn(INode *node, const char *buf, int32_t size,
-                       const void *addr, int32_t addrlen)
-{
-    ip_address address((const sockaddr *)addr, addrlen);
-    return node->sendto(buf, size, address);
-}
-
 class AooNode final : public INode {
     friend class INode;
 public:
@@ -39,12 +32,6 @@ public:
     aoo::ip_address::ip_type type() const { return type_; }
 
     int port() const override { return port_; }
-
-    int sendto(const char *buf, int32_t size,
-               const ip_address& addr) override
-    {
-        return socket_sendto(socket_, buf, size, addr);
-    }
 
     aoo::net::iclient * client() override {
         return client_.get();
@@ -102,7 +89,15 @@ AooNode::AooNode(World *world, int socket, int port)
     : world_(world), socket_(socket), port_(port)
 {
     type_ = socket_family(socket);
-    client_.reset(aoo::net::iclient::create(socket));
+
+    auto fn = [](void *user, const char *msg, int32_t size,
+                 const void *addr, int32_t addrlen, uint32_t flags)
+    {
+        auto x = (AooNode *)user;
+        ip_address address((const sockaddr *)addr, addrlen);
+        return socket_sendto(x->socket_, msg, size, address);
+    };
+    client_.reset(aoo::net::iclient::create(socket, fn, this, 0));
     // start threads
 #if AOO_NODE_POLL
     thread_ = std::thread([this](){

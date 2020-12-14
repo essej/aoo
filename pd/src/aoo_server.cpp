@@ -127,7 +127,7 @@ t_aoo_server::t_aoo_server(int argc, t_atom *argv)
 
     if (port > 0){
         int32_t err;
-        x_server.reset(aoo::net::iserver::create(port, &err));
+        x_server.reset(aoo::net::iserver::create(port, 0, &err));
         if (x_server){
             verbose(0, "aoo server listening on port %d", port);
             // start thread

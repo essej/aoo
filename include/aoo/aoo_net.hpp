@@ -43,7 +43,7 @@ public:
     using pointer = std::unique_ptr<iserver, deleter>;
 
     // create a new AoO source instance
-    static iserver * create(int port, int32_t *err);
+    static iserver * create(int port, uint32_t flags, int32_t *err);
 
     // destroy the AoO source instance
     static void destroy(iserver *server);
@@ -67,8 +67,8 @@ protected:
     ~iserver(){} // non-virtual!
 };
 
-inline iserver * iserver::create(int port, int32_t *err){
-    return aoo_net_server_new(port, err);
+inline iserver * iserver::create(int port, uint32_t flags, int32_t *err){
+    return aoo_net_server_new(port, flags, err);
 }
 
 inline void iserver::destroy(iserver *server){
@@ -89,7 +89,8 @@ public:
     using pointer = std::unique_ptr<iclient, deleter>;
 
     // create a new AoO sink instance
-    static iclient * create(int socket);
+    static iclient * create(int socket, aoo_sendfn fn,
+                            void *user, uint32_t flags);
 
     // destroy the AoO sink instance
     static void destroy(iclient *client);
@@ -184,8 +185,8 @@ protected:
     ~iclient(){} // non-virtual!
 };
 
-inline iclient * iclient::create(int socket){
-    return aoo_net_client_new(socket);
+inline iclient * iclient::create(int socket, aoo_sendfn fn, void *user, uint32_t flags){
+    return aoo_net_client_new(socket, fn, user, flags);
 }
 
 inline void iclient::destroy(iclient *client){

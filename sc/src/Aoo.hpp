@@ -46,9 +46,6 @@ public:
 
     virtual int port() const = 0;
 
-    virtual int sendto(const char *buf, int32_t size,
-                       const aoo::ip_address& addr) = 0;
-
     virtual aoo::net::iclient * client() = 0;
 
     virtual bool registerClient(AooClient *c) = 0;

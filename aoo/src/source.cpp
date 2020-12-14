@@ -16,12 +16,12 @@
 // typetag string: max. 12 bytes
 // args (without blob data): 36 bytes
 
-aoo_source * aoo_source_new(aoo_id id, aoo_replyfn fn, void *user) {
-    return new aoo::source(id, fn, user);
+aoo_source * aoo_source_new(aoo_id id, uint32_t flags) {
+    return new aoo::source(id, flags);
 }
 
-aoo::source::source(aoo_id id, aoo_replyfn replyfn, void *user)
-    : id_(id), replyfn_(replyfn), user_(user)
+aoo::source::source(aoo_id id, uint32_t flags)
+    : id_(id)
 {
     // event queue
     eventqueue_.reserve(AOO_EVENTQUEUESIZE);
@@ -324,11 +324,13 @@ int32_t aoo::source::setup(int32_t samplerate,
 }
 
 int32_t aoo_source_add_sink(aoo_source *src, const void *address,
-                            int32_t addrlen, aoo_id id) {
-    return src->add_sink(address, addrlen, id);
+                            int32_t addrlen, aoo_id id, uint32_t flags) {
+    return src->add_sink(address, addrlen, id, flags);
 }
 
-int32_t aoo::source::add_sink(const void *address, int32_t addrlen, aoo_id id){
+int32_t aoo::source::add_sink(const void *address, int32_t addrlen,
+                              aoo_id id, uint32_t flags)
+{
     ip_address addr((const sockaddr *)address, addrlen);
 
     sink_lock lock(sinks_);
@@ -338,9 +340,9 @@ int32_t aoo::source::add_sink(const void *address, int32_t addrlen, aoo_id id){
         return 0;
     }
     // add sink descriptor
-    sinks_.emplace_front(addr, id);
+    sinks_.emplace_front(addr, id, flags);
     // push format request
-    formatrequestqueue_.push(format_request { addr, id });
+    formatrequestqueue_.push(format_request { addr, id, flags });
 
     return 1;
 }
@@ -432,8 +434,8 @@ int32_t aoo::source::handle_message(const char *data, int32_t n,
     return 0;
 }
 
-int32_t aoo_source_send(aoo_source *src) {
-    return src->send();
+int32_t aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user) {
+    return src->send(fn, user);
 }
 
 // This method reads audio samples from the ringbuffer,
@@ -443,26 +445,27 @@ int32_t aoo_source_send(aoo_source *src) {
 // to avoid possible deadlocks in the client code.
 // We have to make a local copy of the sink list, but this should be
 // rather cheap in comparison to encoding and sending the audio data.
-int32_t aoo::source::send(){
+int32_t aoo::source::send(aoo_sendfn fn, void *user){
     if (state_.load() != stream_state::play){
         return false;
     }
 
     bool didsomething = false;
+    sendfn func(fn, user);
 
-    if (send_format()){
+    if (send_format(func)){
         didsomething = true;
     }
 
-    if (send_data()){
+    if (send_data(func)){
         didsomething = true;
     }
 
-    if (resend_data()){
+    if (resend_data(func)){
         didsomething = true;
     }
 
-    if (send_ping()){
+    if (send_ping(func)){
         didsomething = true;
     }
 
@@ -751,7 +754,7 @@ void source::update_historybuffer(){
 
 uint32_t make_version();
 
-bool source::send_format(){
+bool source::send_format(sendfn& fn){
     if (formatrequestqueue_.empty()){
         return false;
     }
@@ -792,13 +795,13 @@ bool source::send_format(){
             << salt << f.nchannels << f.samplerate << f.blocksize
             << f.codec << osc::Blob(options, size) << osc::EndMessage;
 
-        do_send(msg.Data(), msg.Size(), r.address);
+        fn(msg.Data(), msg.Size(), r.address, r.flags);
     }
 
     return true;
 }
 
-bool source::resend_data(){
+bool source::resend_data(sendfn& fn){
     shared_lock updatelock(update_mutex_); // reader lock!
     if (!history_.capacity()){
         return false;
@@ -850,7 +853,7 @@ bool source::resend_data(){
                     d.framenum = i;
                     d.data = frameptr[i];
                     d.size = framesize[i];
-                    send_data(r, salt, d);
+                    send_data(fn, r, salt, d);
                 }
 
                 // lock again
@@ -868,7 +871,7 @@ bool source::resend_data(){
                     d.framenum = r.frame;
                     d.data = sendbuffer_.data();
                     d.size = size;
-                    send_data(r, salt, d);
+                    send_data(fn, r, salt, d);
 
                     // lock again
                     updatelock.lock();
@@ -886,7 +889,7 @@ bool source::resend_data(){
     return didsomething;
 }
 
-bool source::send_data(){
+bool source::send_data(sendfn& fn){
     shared_lock updatelock(update_mutex_); // reader lock!
     if (!encoder_){
         return 0;
@@ -917,7 +920,7 @@ bool source::send_data(){
         // send block to sinks
         for (auto& sink : sinks_){
             d.channel = sink.channel; // !
-            send_data(sink, salt, d);
+            send_data(fn, sink, salt, d);
         }
         --dropped_;
     } else if (audioqueue_.read_available() && srqueue_.read_available()){
@@ -965,7 +968,7 @@ bool source::send_data(){
                     // send block to sinks
                     for (auto& sink : sinks_){
                         d.channel = sink.channel; // !
-                        send_data(sink, salt, d);
+                        send_data(fn, sink, salt, d);
                     }
                 };
 
@@ -1009,7 +1012,7 @@ bool source::send_data(){
 
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
-void source::send_data(const endpoint& ep, int32_t salt, const aoo::data_packet& d) const {
+void source::send_data(sendfn& fn, const endpoint& ep, int32_t salt, const aoo::data_packet& d) const {
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
@@ -1027,10 +1030,10 @@ void source::send_data(const endpoint& ep, int32_t salt, const aoo::data_packet&
               << ", chn = " << d.channel << ", totalsize = " << d.totalsize
               << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
 
-    do_send(msg.Data(), msg.Size(), ep.address);
+    fn(msg.Data(), msg.Size(), ep.address, ep.flags);
 }
 
-bool source::send_ping(){
+bool source::send_ping(sendfn& fn){
     // if stream is stopped, the timer won't increment anyway
     auto elapsed = timer_.get_elapsed();
     auto pingtime = lastpingtime_.load();
@@ -1059,7 +1062,7 @@ bool source::send_ping(){
             msg << osc::BeginMessage(address) << id() << osc::TimeTag(tt)
                 << osc::EndMessage;
 
-            do_send(msg.Data(), msg.Size(), sink.address);
+            fn(msg.Data(), msg.Size(), sink.address, sink.flags);
         }
 
         lastpingtime_.store(elapsed);
@@ -1092,7 +1095,7 @@ void source::handle_format_request(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
 
     if (sink){
-        formatrequestqueue_.push(format_request { addr, id });
+        formatrequestqueue_.push(format_request { addr, id, sink->flags });
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_FORMAT << "' message: sink not found");
     }
@@ -1109,13 +1112,15 @@ void source::handle_data_request(const osc::ReceivedMessage& msg,
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     sink_lock lock(sinks_);
-    if (find_sink(addr, id)){
+    auto sink = find_sink(addr, id);
+    if (sink){
         // get pairs of [seq, frame]
         int npairs = (msg.ArgumentCount() - 2) / 2;
         while (npairs--){
             auto seq = (it++)->AsInt32();
             auto frame = (it++)->AsInt32();
-            datarequestqueue_.push(data_request{ addr, id, salt, seq, frame });
+            datarequestqueue_.push(data_request{ addr, id, sink->flags,
+                                                 salt, seq, frame });
         }
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_DATA << "' message: sink not found");

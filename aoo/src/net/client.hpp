@@ -95,16 +95,18 @@ private:
 /*///////////////////////// udp_client ///////////////////////////*/
 class udp_client {
 public:
-    udp_client(client& c, int socket, int port)
-        : client_(&c), socket_(socket), port_(port) {}
+    udp_client(client& c, int socket, int port,
+               aoo_sendfn fn, void *user, uint32_t flags)
+        : client_(&c), socket_(socket), port_(port),
+          fn_(fn), user_(user) {}
 
     int port() const { return port_; }
-
-    void send(time_tag now);
 
     int32_t handle_message(const char *data, int32_t n,
                            const ip_address& addr,
                            int32_t type, aoo_type onset);
+
+    void send(time_tag now);
 
     void send_server_message(const char *data, int32_t size);
 
@@ -116,6 +118,8 @@ private:
     client *client_;
     int socket_;
     int port_;
+    aoo_sendfn fn_;
+    void *user_;
     ip_address local_address_;
     std::vector<ip_address> server_addrlist_;
     std::vector<ip_address> public_addrlist_;
@@ -124,7 +128,9 @@ private:
     double last_ping_time_ = 0;
     std::atomic<double> first_ping_time_{0};
 
-    void send_message(const char *data, int32_t size, const ip_address& addr);
+    void send_message(const char *data, int32_t n, const ip_address& addr){
+        fn_(user_, data, n, addr.address(), addr.length(), 0);
+    }
 
     void send_ping();
 
@@ -163,7 +169,7 @@ public:
         };
     };
 
-    client(int udpsocket);
+    client(int udpsocket, aoo_sendfn, void *user, uint32_t flags);
     ~client();
 
     int32_t run() override;
@@ -257,6 +263,8 @@ private:
     std::unique_ptr<udp_client> udp_client_;
     int socket_ = -1;
     ip_address::ip_type type_ = ip_address::Unspec;
+    aoo_sendfn fn_;
+    void *user_;
     // dependants
     struct source_desc {
         aoo::isource *source;

@@ -163,7 +163,7 @@ typedef struct aoo_net_server aoo_net_server;
 #endif
 
 // create a new AOO server instance, listening on the given port
-AOO_API aoo_net_server * aoo_net_server_new(int port, int32_t *err);
+AOO_API aoo_net_server * aoo_net_server_new(int port, uint32_t flags, int32_t *err);
 
 // destroy AOO server instance
 AOO_API void aoo_net_server_free(aoo_net_server *server);
@@ -202,7 +202,8 @@ typedef struct aoo_net_client aoo_net_client;
 #endif
 
 // create a new AOO client for the given UDP socket
-AOO_API aoo_net_client * aoo_net_client_new(int socket);
+AOO_API aoo_net_client * aoo_net_client_new(int socket, aoo_sendfn fn,
+                                            void *user, uint32_t flags);
 
 // destroy AOO client
 AOO_API void aoo_net_client_free(aoo_net_client *client);

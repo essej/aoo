@@ -50,7 +50,7 @@ AooServer::AooServer(World *world, int port)
     : world_(world), port_(port)
 {
     int32_t err;
-    auto server = aoo::net::iserver::create(port, &err);
+    auto server = aoo::net::iserver::create(port, 0, &err);
     server_.reset(server);
     if (server_) {
         LOG_VERBOSE("new AooServer on port " << port);

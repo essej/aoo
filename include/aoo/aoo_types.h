@@ -92,12 +92,13 @@ typedef struct aoo_sink aoo_sink;
 typedef void (*aoo_logfunction)(const char *);
 
 // reply function
-typedef int32_t (*aoo_replyfn)(
+typedef int32_t (*aoo_sendfn)(
         void *,         // user
         const char *,   // data
         int32_t,        // number of bytes
         const void *,   // address
-        int32_t         // address size
+        int32_t,        // address size
+        uint32_t        // flags
 );
 
 // base event

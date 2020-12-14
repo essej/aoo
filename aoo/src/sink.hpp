@@ -186,7 +186,7 @@ public:
 
     int32_t handle_ping(const sink& s, time_tag tt);
 
-    bool send(const sink& s);
+    bool send(const sink& s, sendfn& fn);
 
     bool decode(const sink& s);
 
@@ -232,19 +232,23 @@ private:
     void check_missing_blocks(const sink& s);
 
     // send messages
-    void send_format_request(const sink& s);
+    void send_format_request(const sink& s, sendfn& fn);
 
-    void send_ping(const sink& s, const ping_request& ping);
+    void send_ping(const sink& s, sendfn& fn, const ping_request& ping);
 
-    void send_uninvitation(const sink& s);
+    void send_uninvitation(const sink& s, sendfn& fn);
 
-    int32_t send_data_requests(const sink& s);
+    int32_t send_data_requests(const sink& s, sendfn& fn);
 
-    bool send_invitation(const sink& s);
+    bool send_invitation(const sink& s, sendfn& fn);
 
     // data
     const ip_address addr_;
     const aoo_id id_;
+    std::atomic<uint32_t> flags_{0};
+    uint32_t flags() const {
+        return flags_.load(std::memory_order_acquire);
+    }
     int32_t salt_ = -1;
     std::atomic<source_state> state_;
     std::atomic<double> state_time_{0.0};
@@ -277,7 +281,7 @@ private:
 
 class sink final : public isink {
 public:
-    sink(aoo_id id, aoo_replyfn replyfn, void *user);
+    sink(aoo_id id, uint32_t flags);
 
     ~sink(){}
 
@@ -292,7 +296,7 @@ public:
     int32_t handle_message(const char *data, int32_t n,
                            const void *address, int32_t addrlen) override;
 
-    int32_t send() override;
+    int32_t send(aoo_sendfn fn, void *user) override;
 
     int32_t process(aoo_sample **data, int32_t nsamples, uint64_t t) override;
 
@@ -335,15 +339,9 @@ public:
     double elapsed_time() const { return timer_.get_elapsed(); }
 
     time_tag absolute_time() const { return timer_.get_absolute(); }
-
-    int32_t do_send(const char *data, int32_t size, const ip_address& addr) const {
-        return replyfn_(user_, data, size, addr.address(), addr.length());
-    }
 private:
     // settings
     std::atomic<aoo_id> id_;
-    aoo_replyfn replyfn_;
-    void *user_;
     int32_t nchannels_ = 0;
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;

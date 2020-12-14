@@ -48,13 +48,6 @@ struct t_aoo_receive
     t_clock *x_clock = nullptr;
 };
 
-static int32_t aoo_receive_reply(t_aoo_receive *x, const char *data, int32_t size,
-                                 const void *address, int32_t addrlen)
-{
-    aoo::ip_address addr((const sockaddr *)address, addrlen);
-    return x->x_node->sendto(data, size, addr);
-}
-
 static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *argv)
 {
     ip_address addr;
@@ -497,7 +490,7 @@ t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
     x_msgout = outlet_new(&x_obj, 0);
 
     // create and initialize aoo_sink object
-    auto sink = aoo::isink::create(x_id, (aoo_replyfn)aoo_receive_reply, this);
+    auto sink = aoo::isink::create(x_id, 0);
     x_sink.reset(sink);
 
     x_sink->set_buffersize(buffersize);

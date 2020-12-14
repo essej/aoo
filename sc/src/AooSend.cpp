@@ -20,9 +20,7 @@ void AooSend::init(int32_t port, aoo_id id) {
                 auto cmd = (OpenCmd *)data;
                 auto node = INode::get(world, cmd->port);
                 if (node){
-                    aoo::isource::pointer source(
-                        aoo::isource::create(cmd->id,
-                            (aoo_replyfn)INode::replyFn, node.get()));
+                    aoo::isource::pointer source(aoo::isource::create(cmd->id, 0));
                     if (source){
                         NodeLock lock(*node);
                         if (node->client()->add_source(source.get(), cmd->id) > 0){
@@ -160,7 +158,7 @@ void AooSend::addSinkEvent(const aoo::ip_address& addr, aoo_id id,
 
 bool AooSend::addSink(const aoo::ip_address& addr, aoo_id id,
                       int32_t channelOnset){
-    if (source()->add_sink(addr.address(), addr.length(), id) > 0){
+    if (source()->add_sink(addr.address(), addr.length(), id, 0) > 0){
         if (channelOnset > 0){
             source()->set_sink_channelonset(addr.address(), addr.length(),
                                             id, channelOnset);

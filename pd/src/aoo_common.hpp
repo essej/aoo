@@ -40,9 +40,6 @@ struct i_node {
 
     virtual ip_address::ip_type type() const = 0;
 
-    virtual int sendto(const char *buf, int32_t size,
-                       const ip_address& addr) = 0;
-
     virtual void notify() = 0;
 
     virtual void lock() = 0;

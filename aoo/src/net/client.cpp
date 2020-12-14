@@ -147,18 +147,21 @@ int32_t aoo_net_parse_pattern(const char *msg, int32_t n, int32_t *type)
 
 /*//////////////////// AoO client /////////////////////*/
 
-aoo_net_client * aoo_net_client_new(int socket) {
-    return new aoo::net::client(socket);
+aoo_net_client * aoo_net_client_new(int socket, aoo_sendfn fn,
+                                    void *user, uint32_t flags) {
+    return new aoo::net::client(socket, fn, user, flags);
 }
 
-aoo::net::client::client(int socket)
+aoo::net::client::client(int socket, aoo_sendfn fn, void *user, uint32_t flags)
+    : fn_(fn), user_(user)
 {
     ip_address addr;
     if (socket_address(socket, addr) < 0){
         // TODO handle error
         socket_error_print("socket_address");
     } else {
-        udp_client_ = std::make_unique<udp_client>(*this, socket, addr.port());
+        udp_client_ = std::make_unique<udp_client>(*this, socket, addr.port(),
+                                                   fn, user, flags);
         type_ = addr.type();
     }
 
@@ -502,10 +505,10 @@ int32_t aoo_net_client_send(aoo_net_client *client){
 int32_t aoo::net::client::send(){
     // send sources and sinks
     for (auto& s : sources_){
-        s.source->send();
+        s.source->send(fn_, user_);
     }
     for (auto& s : sinks_){
-        s.sink->send();
+        s.sink->send(fn_, user_);
     }
     // send server messages
     if (state_.load() != client_state::disconnected){
@@ -1471,10 +1474,6 @@ void udp_client::start_handshake(const ip_address& local,
     local_address_ = local;
     public_addrlist_.clear();
     server_addrlist_ = std::move(remote);
-}
-
-void udp_client::send_message(const char *data, int32_t size, const ip_address& addr){
-    sendto(socket_, data, size, 0, addr.address(), addr.length());
 }
 
 void udp_client::send_server_message(const char *data, int32_t size)

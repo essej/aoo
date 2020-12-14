@@ -29,21 +29,22 @@ class source;
 
 struct endpoint {
     endpoint() = default;
-    endpoint(const ip_address& _address, int32_t _id)
-        : address(_address), id(_id){}
+    endpoint(const ip_address& _address, int32_t _id, uint32_t _flags)
+        : address(_address), id(_id), flags(_flags) {}
 
     // data
     ip_address address;
     aoo_id id = 0;
+    uint32_t flags = 0;
 };
 
 using format_request = endpoint;
 
 struct data_request : endpoint {
     data_request() = default;
-    data_request(const ip_address& _addr, int32_t _id,
+    data_request(const ip_address& _addr, int32_t _id, uint32_t _flags,
                  int32_t _salt, int32_t _sequence, int32_t _frame)
-        : endpoint(_addr, _id),
+        : endpoint(_addr, _id, _flags),
           salt(_salt), sequence(_sequence), frame(_frame){}
     int32_t salt = 0;
     int32_t sequence = 0;
@@ -57,20 +58,22 @@ struct invite_request : endpoint {
     };
 
     invite_request() = default;
-    invite_request(const ip_address& _addr, int32_t _id, int32_t _type)
-        : endpoint(_addr, _id), type(_type){}
+    invite_request(const ip_address& _addr, int32_t _id,
+                   uint32_t _flags, int32_t _type)
+        : endpoint(_addr, _id, _flags), type(_type){}
     int32_t type = 0;
 };
 
 struct sink_desc : endpoint {
-    sink_desc(const ip_address& _addr, int32_t _id)
-        : endpoint(_addr, _id), channel(0) {}
+    sink_desc(const ip_address& _addr, int32_t _id, uint32_t _flags)
+        : endpoint(_addr, _id, _flags), channel(0) {}
     sink_desc(const sink_desc& other)
-        : endpoint(other.address, other.id),
+        : endpoint(other.address, other.id, other.flags),
           channel(other.channel.load()) {}
     sink_desc& operator=(const sink_desc& other){
         address = other.address;
         id = other.id;
+        flags = other.flags;
         channel = other.channel.load();
         return *this;
     }
@@ -114,14 +117,15 @@ class source final : public isource {
         char addr_[ip_address::max_length];
     };
 
-    source(aoo_id id, aoo_replyfn replyfn, void *user);
+    source(aoo_id id, uint32_t flags);
     ~source();
 
     aoo_id id() const { return id_.load(std::memory_order_relaxed); }
 
     int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
-    int32_t add_sink(const void *address, int32_t addrlen, aoo_id id) override;
+    int32_t add_sink(const void *address, int32_t addrlen,
+                     aoo_id id, uint32_t flags) override;
 
     int32_t remove_sink(const void *address, int32_t addrlen, aoo_id id) override;
 
@@ -130,7 +134,7 @@ class source final : public isource {
     int32_t handle_message(const char *data, int32_t n,
                            const void *address, int32_t addrlen) override;
 
-    int32_t send() override;
+    int32_t send(aoo_sendfn fn, void *user) override;
 
     int32_t process(const aoo_sample **data, int32_t n, uint64_t t) override;
 
@@ -147,15 +151,9 @@ class source final : public isource {
 
     int32_t get_sinkoption(const void *address, int32_t addrlen, aoo_id id,
                            int32_t opt, void *ptr, int32_t size) override;
-
-    int32_t do_send(const char *data, int32_t size, const ip_address& addr) const {
-        return replyfn_(user_, data, size, addr.address(), addr.length());
-    }
  private:
     // settings
     std::atomic<aoo_id> id_;
-    aoo_replyfn replyfn_;
-    void *user_;
     int32_t salt_ = 0;
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
@@ -217,15 +215,16 @@ class source final : public isource {
 
     void update_historybuffer();
 
-    bool send_format();
+    bool send_format(sendfn& fn);
 
-    bool send_data();
+    bool send_data(sendfn& fn);
 
-    void send_data(const endpoint& ep, int32_t salt, const aoo::data_packet& d) const;
+    void send_data(sendfn& fn, const endpoint& ep,
+                   int32_t salt, const aoo::data_packet& d) const;
 
-    bool resend_data();
+    bool resend_data(sendfn& fn);
 
-    bool send_ping();
+    bool send_ping(sendfn& fn);
 
     void handle_format_request(const osc::ReceivedMessage& msg,
                                const ip_address& addr);

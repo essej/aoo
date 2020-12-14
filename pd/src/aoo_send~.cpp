@@ -32,6 +32,7 @@ struct t_sink
 {
     aoo::ip_address s_address;
     int32_t s_id;
+    uint32_t s_flags;
 };
 
 struct t_aoo_send
@@ -59,16 +60,9 @@ struct t_aoo_send
     bool x_accept = true;
 };
 
-static int32_t aoo_send_reply(t_aoo_send *x, const char *data, int32_t size,
-                              const void *address, int32_t addrlen)
+static void aoo_send_doaddsink(t_aoo_send *x, const aoo::ip_address& addr, aoo_id id, uint32_t flags)
 {
-    aoo::ip_address addr((const sockaddr *)address, addrlen);
-    return x->x_node->sendto(data, size, addr);
-}
-
-static void aoo_send_doaddsink(t_aoo_send *x, const aoo::ip_address& addr, aoo_id id)
-{
-    x->x_source->add_sink(addr.address(), addr.length(), id);
+    x->x_source->add_sink(addr.address(), addr.length(), id, flags);
 
     // add sink to list
     x->x_sinks.push_back({addr, id});
@@ -172,7 +166,7 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event)
         // because multiple invite events might get sent in a row.
         if (!aoo_send_findsink(x, addr, e->id)){
             if (x->x_accept){
-                aoo_send_doaddsink(x, addr, e->id);
+                aoo_send_doaddsink(x, addr, e->id, 0);
             } else {
                 t_atom msg[3];
                 if (endpoint_to_atoms(addr, e->id, 3, msg)){
@@ -321,7 +315,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             return;
         }
 
-        aoo_send_doaddsink(x, addr, id);
+        aoo_send_doaddsink(x, addr, id, 0);
 
         if (argc > 3){
             x->x_source->set_sink_channelonset(addr.address(), addr.length(),
@@ -537,7 +531,7 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
     x_msgout = outlet_new(&x_obj, 0);
 
     // create and initialize aoo_source object
-    auto src = aoo::isource::create(x_id, (aoo_replyfn)aoo_send_reply, this);
+    auto src = aoo::isource::create(x_id, 0);
     x_source.reset(src);
 
     aoo_format_storage fmt;

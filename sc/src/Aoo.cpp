@@ -39,6 +39,7 @@ struct ClientCmd {
 };
 
 bool registerClient(World *world, void *cmdData){
+    LOG_DEBUG("register client");
     auto data = (ClientCmd *)cmdData;
 
     aoo::ip_address addr(data->host, data->port, gClientSocketType);
@@ -62,6 +63,7 @@ bool registerClient(World *world, void *cmdData){
     osc::OutboundPacketStream msg(buf, 256);
     msg << osc::BeginMessage("/aoo/register") << data->id << osc::EndMessage;
 
+    LOG_DEBUG("send client reply");
     aoo::socket_sendto(gClientSocket, msg.Data(), msg.Size(), addr);
 
     return true;

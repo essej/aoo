@@ -63,7 +63,7 @@ int32_t aoo_net_parse_pattern(const char *, int32_t, int32_t *);
 
 /*//////////////////// AoO server /////////////////////*/
 
-aoo_net_server * aoo_net_server_new(int port, int32_t *err) {
+aoo_net_server * aoo_net_server_new(int port, uint32_t flags, int32_t *err) {
     // create UDP socket
     int udpsocket = aoo::socket_udp(port);
     if (udpsocket < 0){

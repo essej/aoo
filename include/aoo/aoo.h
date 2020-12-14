@@ -355,7 +355,7 @@ typedef struct aoo_format_storage
 } aoo_format_storage;
 
 // create a new AoO source instance
-AOO_API aoo_source * aoo_source_new(aoo_id id, aoo_replyfn fn, void *user);
+AOO_API aoo_source * aoo_source_new(aoo_id id, uint32_t flags);
 
 // destroy the AoO source instance
 AOO_API void aoo_source_free(aoo_source *src);
@@ -365,7 +365,8 @@ AOO_API int32_t aoo_source_setup(aoo_source *src, int32_t samplerate,
                                  int32_t blocksize, int32_t nchannels);
 
 // add a new sink (always threadsafe)
-AOO_API int32_t aoo_source_add_sink(aoo_source *src, const void *address, int32_t addrlen, aoo_id id);
+AOO_API int32_t aoo_source_add_sink(aoo_source *src, const void *address, int32_t addrlen,
+                                    aoo_id id, uint32_t flags);
 
 // remove a sink (always threadsafe)
 AOO_API int32_t aoo_source_remove_sink(aoo_source *src, const void *address, int32_t addrlen, aoo_id id);
@@ -378,7 +379,7 @@ AOO_API int32_t aoo_source_handle_message(aoo_source *src, const char *data, int
                                           const void *address, int32_t addrlen);
 
 // send outgoing messages - will call the reply function (threadsafe, but not reentrant)
-AOO_API int32_t aoo_source_send(aoo_source *src);
+AOO_API int32_t aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user);
 
 // process audio blocks (threadsafe, but not reentrant)
 // data:        array of channel data (non-interleaved)
@@ -493,7 +494,7 @@ static inline int32_t aoo_source_get_sink_channelonset(aoo_source *src, const vo
 /*//////////////////// AoO sink /////////////////////*/
 
 // create a new AoO sink instance
-AOO_API aoo_sink * aoo_sink_new(aoo_id id, aoo_replyfn replyfn, void *user);
+AOO_API aoo_sink * aoo_sink_new(aoo_id id, uint32_t flags);
 
 // destroy the AoO sink instance
 AOO_API void aoo_sink_free(aoo_sink *sink);
@@ -518,7 +519,7 @@ AOO_API int32_t aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_
                                         const void *address, int32_t addrlen);
 
 // send outgoing messages - will call the reply function (threadsafe, but not reentrant)
-AOO_API int32_t aoo_sink_send(aoo_sink *sink);
+AOO_API int32_t aoo_sink_send(aoo_sink *sink, aoo_sendfn fn, void *user);
 
 // process audio (threadsafe, but not reentrant)
 AOO_API int32_t aoo_sink_process(aoo_sink *sink, aoo_sample **data,

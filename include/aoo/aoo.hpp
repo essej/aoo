@@ -42,7 +42,7 @@ public:
     using pointer = std::unique_ptr<isource, deleter>;
 
     // create a new AoO source instance
-    static isource * create(aoo_id id, aoo_replyfn replyfn, void *user);
+    static isource * create(aoo_id id, uint32_t flags);
 
     // destroy the AoO source instance
     static void destroy(isource *src);
@@ -51,7 +51,8 @@ public:
     virtual int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) = 0;
 
     // add a new sink (always threadsafe)
-    virtual int32_t add_sink(const void *address, int32_t addrlen, aoo_id id) = 0;
+    virtual int32_t add_sink(const void *address, int32_t addrlen,
+                             aoo_id id, uint32_t flags) = 0;
 
     // remove a sink (always threadsafe)
     virtual int32_t remove_sink(const void *address, int32_t addrlen, aoo_id id) = 0;
@@ -64,7 +65,7 @@ public:
                                    const void *address, int32_t addrlen) = 0;
 
     // send outgoing messages - will call the reply function (threadsafe, but not reentrant)
-    virtual int32_t send() = 0;
+    virtual int32_t send(aoo_sendfn fn, void *user) = 0;
 
     // process audio blocks (threadsafe, but not reentrant)
     // data:        array of channel data (non-interleaved)
@@ -179,8 +180,8 @@ protected:
     ~isource(){} // non-virtual!
 };
 
-inline isource * isource::create(aoo_id id, aoo_replyfn replyfn, void *user){
-    return aoo_source_new(id, replyfn, user);
+inline isource * isource::create(aoo_id id, uint32_t flags){
+    return aoo_source_new(id, flags);
 }
 
 inline void isource::destroy(isource *src){
@@ -201,7 +202,7 @@ public:
     using pointer = std::unique_ptr<isink, deleter>;
 
     // create a new AoO sink instance
-    static isink * create(aoo_id id, aoo_replyfn replyfn, void *user);
+    static isink * create(aoo_id id, uint32_t flags);
 
     // destroy the AoO sink instance
     static void destroy(isink *sink);
@@ -223,7 +224,7 @@ public:
                                    const void *address, int32_t addrlen) = 0;
 
     // send outgoing messages - will call the reply function (threadsafe, but not reentrant)
-    virtual int32_t send() = 0;
+    virtual int32_t send(aoo_sendfn fn, void *user) = 0;
 
     // process audio (threadsafe, but not reentrant)
     virtual int32_t process(aoo_sample **data, int32_t nsamples, uint64_t t) = 0;
@@ -339,8 +340,8 @@ protected:
     ~isink(){} // non-virtual!
 };
 
-inline isink * isink::create(aoo_id id, aoo_replyfn replyfn, void *user){
-    return aoo_sink_new(id, replyfn, user);
+inline isink * isink::create(aoo_id id, uint32_t flags){
+    return aoo_sink_new(id, flags);
 }
 
 inline void isink::destroy(isink *sink){

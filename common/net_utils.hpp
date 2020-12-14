@@ -1,5 +1,7 @@
 #pragma once
 
+#include "aoo/aoo_types.h"
+
 #include <stdint.h>
 #include <string>
 #include <vector>
@@ -118,5 +120,20 @@ int socket_strerror(int err, char *buf, int size);
 std::string socket_strerror(int err);
 
 void socket_error_print(const char *label = nullptr);
+
+/*//////////////////// helpers /////////////////////*/
+
+struct sendfn {
+    sendfn(aoo_sendfn fn, void *user)
+        : fn_(fn), user_(user) {}
+    void operator () (const char *data, int32_t nbytes,
+                      const ip_address& addr, uint32_t flags) const
+    {
+        fn_(user_, data, nbytes, addr.address(), addr.length(), flags);
+    }
+private:
+    aoo_sendfn fn_;
+    void *user_;
+};
 
 } // aoo

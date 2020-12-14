@@ -9,12 +9,12 @@
 
 /*//////////////////// aoo_sink /////////////////////*/
 
-aoo_sink * aoo_sink_new(aoo_id id, aoo_replyfn replyfn, void *user) {
-    return new aoo::sink(id, replyfn, user);
+aoo_sink * aoo_sink_new(aoo_id id, uint32_t flags) {
+    return new aoo::sink(id, flags);
 }
 
-aoo::sink::sink(aoo_id id, aoo_replyfn replyfn, void *user)
-    : id_(id), replyfn_(replyfn), user_(user) {
+aoo::sink::sink(aoo_id id, uint32_t flags)
+    : id_(id) {
     eventqueue_.reserve(AOO_EVENTQUEUESIZE);
 }
 
@@ -368,16 +368,17 @@ int32_t aoo::sink::handle_message(const char *data, int32_t n,
     return 0;
 }
 
-int32_t aoo_sink_send(aoo_sink *sink){
-    return sink->send();
+int32_t aoo_sink_send(aoo_sink *sink, aoo_sendfn fn, void *user){
+    return sink->send(fn, user);
 }
 
-int32_t aoo::sink::send(){
+int32_t aoo::sink::send(aoo_sendfn fn, void *user){
     bool didsomething = false;
+    sendfn func(fn, user);
 
     source_lock lock(sources_);
     for (auto& s: sources_){
-        if (s.send(*this)){
+        if (s.send(*this, func)){
             didsomething = true;
         }
     }
@@ -1022,7 +1023,7 @@ int32_t source_desc::handle_ping(const sink &s, time_tag tt){
     return 1;
 }
 
-bool source_desc::send(const sink& s){
+bool source_desc::send(const sink& s, sendfn& fn){
     bool didsomething = false;
 
     // handle requests
@@ -1030,13 +1031,13 @@ bool source_desc::send(const sink& s){
     while (requestqueue_.try_pop(r)){
         switch (r.type){
         case request_type::format:
-            send_format_request(s);
+            send_format_request(s, fn);
             break;
         case request_type::ping:
-            send_ping(s, r.ping);
+            send_ping(s, fn, r.ping);
             break;
         case request_type::uninvite:
-            send_uninvitation(s);
+            send_uninvitation(s, fn);
             break;
         default:
             break;
@@ -1045,11 +1046,11 @@ bool source_desc::send(const sink& s){
     }
 
     // data requests are handled specially
-    if (send_data_requests(s)){
+    if (send_data_requests(s, fn)){
         didsomething = true;
     }
 
-    if (send_invitation(s)){
+    if (send_invitation(s, fn)){
         didsomething = true;
     }
 
@@ -1484,7 +1485,7 @@ resend_done:
 
 uint32_t make_version();
 
-void source_desc::send_format_request(const sink& s) {
+void source_desc::send_format_request(const sink& s, sendfn& fn) {
     LOG_VERBOSE("request format for source " << id_);
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -1499,12 +1500,12 @@ void source_desc::send_format_request(const sink& s) {
     msg << osc::BeginMessage(address) << s.id() << (int32_t)make_version()
         << osc::EndMessage;
 
-    s.do_send(msg.Data(), msg.Size(), addr_);
+    fn(msg.Data(), msg.Size(), addr_, flags());
 }
 
 // AoO/<id>/ping <sink>
 
-void source_desc::send_ping(const sink &s, const ping_request &ping){
+void source_desc::send_ping(const sink &s, sendfn& fn, const ping_request &ping){
 #if 0
     // only send ping reply if source is active
     if (streamstate_.get_state() != AOO_SOURCE_STATE_PLAY){
@@ -1529,14 +1530,14 @@ void source_desc::send_ping(const sink &s, const ping_request &ping){
         << lost_blocks
         << osc::EndMessage;
 
-    s.do_send(msg.Data(), msg.Size(), addr_);
+    fn(msg.Data(), msg.Size(), addr_, flags());
 
     LOG_DEBUG("send /ping to source " << id_);
 }
 
 // AoO/<id>/uninvite <sink>
 
-void source_desc::send_uninvitation(const sink &s){
+void source_desc::send_uninvitation(const sink &s, sendfn& fn){
     char buffer[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buffer, sizeof(buffer));
 
@@ -1549,7 +1550,7 @@ void source_desc::send_uninvitation(const sink &s){
 
     msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
 
-    s.do_send(msg.Data(), msg.Size(), addr_);
+    fn(msg.Data(), msg.Size(), addr_, flags());
 
     LOG_DEBUG("send /uninvite source " << id_);
 }
@@ -1557,7 +1558,7 @@ void source_desc::send_uninvitation(const sink &s){
 
 // /aoo/src/<id>/data <sink> <salt> <seq0> <frame0> <seq1> <frame1> ...
 
-int32_t source_desc::send_data_requests(const sink &s){
+int32_t source_desc::send_data_requests(const sink &s, sendfn& fn){
     if (resendqueue_.empty()){
         return 0;
     }
@@ -1595,7 +1596,7 @@ int32_t source_desc::send_data_requests(const sink &s){
 
         msg << osc::EndMessage;
 
-        s.do_send(msg.Data(), msg.Size(), addr_);
+        fn(msg.Data(), msg.Size(), addr_, flags());
     }
     return numrequests;
 }
@@ -1605,7 +1606,7 @@ int32_t source_desc::send_data_requests(const sink &s){
 // only send every 50 ms! LATER we might make this settable
 #define INVITE_INTERVAL 0.05
 
-bool source_desc::send_invitation(const sink& s){
+bool source_desc::send_invitation(const sink& s, sendfn& fn){
     // called without lock!
     if (state_.load(std::memory_order_acquire) != source_state::invite){
         return false;
@@ -1630,7 +1631,7 @@ bool source_desc::send_invitation(const sink& s){
 
     msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
 
-    s.do_send(msg.Data(), msg.Size(), addr_);
+    fn(msg.Data(), msg.Size(), addr_, flags());
 
     LOG_DEBUG("send /invite to source " << id_);
 

@@ -83,11 +83,6 @@ struct t_node final : public i_node
 
     int port() const override { return x_port; }
 
-    int sendto(const char *buf, int32_t size, const ip_address& addr) override
-    {
-        return socket_sendto(x_socket, buf, size, addr);
-    }
-
     void notify() override;
 
     void lock() override {
@@ -224,7 +219,14 @@ t_node::t_node(t_symbol *s, int socket, int port)
       x_socket(socket), x_port(port)
 {
     x_type = socket_family(socket);
-    x_client.reset(aoo::net::iclient::create(socket));
+
+    auto fn = [](void *user, const char *msg, int32_t n,
+            const void *addr, int32_t len, uint32_t flags){
+        auto x = (t_node *)user;
+        ip_address dest((sockaddr *)addr, len);
+        return socket_sendto(x->x_socket, msg, n, dest);
+    };
+    x_client.reset(aoo::net::iclient::create(socket, fn, this, 0));
 
     pd_bind(&x_proxy.x_pd, x_bindsym);
 
