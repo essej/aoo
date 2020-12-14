@@ -39,24 +39,18 @@ set(INCLUDE "../include/aoo")
 set(COMMON "../common")
 
 file(GLOB AOO_HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp"
-     "${INCLUDE}/codec/aoo_pcm.h" "src/*.hpp"
-     "${COMMON}/lockfree.hpp" "${COMMON}/sync.hpp"
-     "${COMMON}/time.hpp" "${COMMON}/utils.hpp")
+     "${INCLUDE}/codec/aoo_pcm.h" "src/*.hpp" "${COMMON}/*.hpp")
+file(GLOB AOO_SRC "src/*.cpp" "src/codec/pcm.cpp" "${COMMON}/*.cpp")
+
 if (CODEC_OPUS)
     list(APPEND AOO_HEADERS "${INCLUDE}/codec/aoo_opus.h")
-endif()
-
-file(GLOB AOO_SRC "src/*.cpp" "src/codec/pcm.cpp"
-    "${COMMON}/ntp.cpp" "${COMMON}/sync.cpp" "${COMMON}/time.cpp")
-if (CODEC_OPUS)
     list(APPEND AOO_SRC "src/codec/opus.cpp")
 endif()
 
 if (USE_AOO_NET)
     list(APPEND AOO_HEADERS "src/net/server.hpp" "src/net/client.hpp"
-        "src/net/SLIP.hpp" "${COMMON}/net_utils.hpp")
-    list(APPEND AOO_SRC "src/net/client.cpp" "src/net/server.cpp"
-        "${COMMON}/net_utils.cpp")
+        "src/net/SLIP.hpp")
+    list(APPEND AOO_SRC "src/net/client.cpp" "src/net/server.cpp")
 endif()
 
 # static library
