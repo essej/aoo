@@ -65,7 +65,8 @@ add_library(${AOO_STATIC} STATIC ${AOO_HEADERS} ${AOO_SRC})
 target_compile_definitions(${AOO_STATIC} PUBLIC ${OPTIONS} "-DAOO_STATIC")
 
 # shared library
-option(BUILD_AOO_SHARED "build 'aoo' as shared library" ON)
+option(BUILD_AOO_SHARED "build 'aoo' shared library" ON)
+option(BUILD_AOO_STATIC "build 'aoo' static library" ON)
 
 if (BUILD_AOO_SHARED)
     add_library(${AOO_SHARED} SHARED ${AOO_HEADERS} ${AOO_SRC})
@@ -79,9 +80,17 @@ if (BUILD_AOO_SHARED)
         target_link_libraries(${AOO_SHARED} ${MD5_LIB})
     endif()
     target_link_libraries(${AOO_SHARED} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS})   
+endif()
 
-    # install shared libraries
-    install(TARGETS ${AOO_SHARED}
+if (BUILD_AOO_SHARED OR BUILD_AOO_STATIC)
+    # install library files
+    if (BUILD_AOO_SHARED)
+        list(APPEND TARGET_LIST ${AOO_SHARED})
+    endif()
+    if (BUILD_AOO_STATIC)
+        list(APPEND TARGET_LIST ${AOO_STATIC})
+    endif()
+    install(TARGETS ${TARGET_LIST}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
