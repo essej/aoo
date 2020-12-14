@@ -185,7 +185,7 @@ public:
     int32_t remove_sink(isink *sink) override;
 
     int32_t find_peer(const char *group, const char *user,
-                      void *address, int32_t *addrlen) override;
+                      void *address, int32_t& addrlen) override;
 
     int32_t send_request(aoo_net_request_type request, void *data,
                          aoo_net_callback callback, void *user) override;

@@ -349,11 +349,11 @@ AOO_API int32_t aoo_net_client_find_peer(aoo_net_client *client,
                                          const char *group, const char *user,
                                          void *address, int32_t *addrlen)
 {
-    return client->find_peer(group, user, address, addrlen);
+    return client->find_peer(group, user, address, *addrlen);
 }
 
 int32_t aoo::net::client::find_peer(const char *group, const char *user,
-                                    void *address, int32_t *addrlen)
+                                    void *address, int32_t& addrlen)
 {
     peer_lock lock(peers_);
     for (auto& p : peers_){
@@ -361,11 +361,11 @@ int32_t aoo::net::client::find_peer(const char *group, const char *user,
         if (p.match(group, user) && p.connected()){
             if (address){
                 auto& addr = p.address();
-                if (*addrlen < addr.length()){
+                if (addrlen < addr.length()){
                     return 0;
                 }
                 memcpy(address, addr.address(), addr.length());
-                *addrlen = addr.length();
+                addrlen = addr.length();
             }
             return 1;
         }

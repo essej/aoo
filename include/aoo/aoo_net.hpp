@@ -117,7 +117,7 @@ public:
     // address: pointer to sockaddr_storage
     // addrlen: initialized with max. storage size, updated to actual size
     virtual int32_t find_peer(const char *group, const char *user,
-                              void *address, int32_t *addrlen) = 0;
+                              void *address, int32_t& addrlen) = 0;
 
     // send a request to the AOO server (always thread safe)
     virtual int32_t send_request(aoo_net_request_type request, void *data,
