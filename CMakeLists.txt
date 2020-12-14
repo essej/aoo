@@ -128,7 +128,10 @@ if (CODEC_OPUS)
         set(CODEC_OPUS_LIB "opus" CACHE STRING "Opus linker flags")
     else()
         include_directories("deps/opus/include")
-        find_library(CODEC_OPUS_LIB "opus" HINTS "deps/opus/lib" REQUIRED)
+        # use different variable for finding the library,
+        # because we don't want to change the cache variable
+        find_library(OPUS_LIB_STATIC "opus" HINTS "deps/opus/lib" REQUIRED)
+        set(CODEC_OPUS_LIB ${OPUS_LIB_STATIC})
         if (MINGW)
             list(APPEND LIBS "ssp") # for fortified functions
         endif()
