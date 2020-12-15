@@ -132,6 +132,7 @@ typedef struct aoo_net_peer_event
     const char *group_name;
     const char *user_name;
     int32_t user_id;
+    uint32_t flags;
 } aoo_net_peer_event;
 
 typedef aoo_net_peer_event aoo_net_group_event;

@@ -1209,18 +1209,19 @@ void client::handle_peer_remove(const osc::ReceivedMessage& msg){
         return;
     }
 
-    bool connected = result->connected();
-    ip_address addr = result->address();
-
-    peers_.erase(result);
-
     // only send event if we're connected, which means
     // that an AOO_NET_PEER_JOIN_EVENT has been sent.
-    if (connected){
+    if (result->connected()){
+        ip_address addr = result->address();
+        uint32_t flags = result->flags();
+
         auto e = std::make_unique<peer_event>(
-            AOO_NET_PEER_LEAVE_EVENT, addr, group.c_str(), user.c_str(), id);
+            AOO_NET_PEER_LEAVE_EVENT, addr,
+            group.c_str(), user.c_str(), id, flags);
         push_event(std::move(e));
     }
+
+    peers_.erase(result);
 
     LOG_VERBOSE("aoo_client: peer " << group << "|" << user << " left");
 }
@@ -1322,7 +1323,8 @@ client::ping_event::~ping_event()
 }
 
 client::peer_event::peer_event(int32_t type, const ip_address& addr,
-                               const char *group, const char *user, int32_t id)
+                               const char *group, const char *user,
+                               int32_t id, uint32_t flags)
 {
     peer_event_.type = type;
     peer_event_.address = copy_sockaddr(addr.address(), addr.length());
@@ -1330,6 +1332,7 @@ client::peer_event::peer_event(int32_t type, const ip_address& addr,
     peer_event_.group_name = copy_string(group);
     peer_event_.user_name = copy_string(user);
     peer_event_.user_id = id;
+    peer_event_.flags = flags;
 }
 
 client::peer_event::~peer_event()
@@ -1556,9 +1559,8 @@ bool udp_client::is_server_address(const ip_address& addr){
 
 /*///////////////////// peer //////////////////////////*/
 
-peer::peer(client& client, int32_t id,
-           const std::string& group, const std::string& user,
-           std::vector<ip_address>&& addrlist)
+peer::peer(client& client, int32_t id, const std::string& group,
+           const std::string& user, std::vector<ip_address>&& addrlist)
     : client_(&client), id_(id), group_(group), user_(user),
       addresses_(std::move(addrlist))
 {
@@ -1590,6 +1592,10 @@ bool peer::match(const std::string& group, const std::string& user) const {
 bool peer::match(const std::string& group, int32_t id)
 {
     return id_ == id && group_ == group; // immutable!
+}
+
+uint32_t peer::flags() const {
+    return 0;
 }
 
 std::ostream& operator << (std::ostream& os, const peer& p)
@@ -1742,7 +1748,7 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
         // push event
         auto e = std::make_unique<client::peer_event>(
                     AOO_NET_PEER_JOIN_EVENT, addr,
-                    group().c_str(), user().c_str(), id());
+                    group().c_str(), user().c_str(), id(), flags());
 
         client_->push_event(std::move(e));
 

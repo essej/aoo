@@ -38,9 +38,8 @@ class client;
 /*/////////////////////////// peer /////////////////////////*/
 class peer {
 public:
-    peer(client& client, int32_t id,
-         const std::string& group, const std::string& user,
-         std::vector<ip_address>&& addrlist);
+    peer(client& client, int32_t id, const std::string& group,
+         const std::string& user, std::vector<ip_address>&& addrlist);
 
     ~peer();
 
@@ -59,6 +58,8 @@ public:
     bool match(const std::string& group, int32_t id);
 
     int32_t id() const { return id_; }
+
+    uint32_t flags() const;
 
     const std::string& group() const { return group_; }
 
@@ -366,7 +367,8 @@ public:
     struct peer_event : ievent
     {
         peer_event(int32_t type, const ip_address& addr,
-                   const char *group, const char *user, int32_t id);
+                   const char *group, const char *user,
+                   int32_t id, uint32_t flags);
         ~peer_event();
     };
 
