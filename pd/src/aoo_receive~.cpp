@@ -356,12 +356,12 @@ static t_int * aoo_receive_perform(t_int *w)
         auto t = aoo::get_osctime();
         auto vec = x->x_vec.get();
 
-        if (x->x_sink->process(vec, n, t) <= 0){
+        if (x->x_sink->process(vec, n, t) != AOO_ERROR_OK){
             bypass();
         }
 
         // handle events
-        if (x->x_sink->events_available() > 0){
+        if (x->x_sink->events_available() == AOO_ERROR_TRUE){
             clock_delay(x->x_clock, 0);
         }
     } else {

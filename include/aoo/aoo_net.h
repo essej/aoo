@@ -52,7 +52,7 @@ extern "C"
 
 /*///////////////////////// requests/replies ///////////////////////////*/
 
-typedef void (*aoo_net_callback)(void *user, int32_t result, const void *reply);
+typedef void (*aoo_net_callback)(void *user, aoo_error result, const void *reply);
 
 typedef struct aoo_net_error_reply {
     const char *errormsg;
@@ -164,23 +164,23 @@ typedef struct aoo_net_server aoo_net_server;
 #endif
 
 // create a new AOO server instance, listening on the given port
-AOO_API aoo_net_server * aoo_net_server_new(int port, uint32_t flags, int32_t *err);
+AOO_API aoo_net_server * aoo_net_server_new(int port, uint32_t flags, aoo_error *err);
 
 // destroy AOO server instance
 AOO_API void aoo_net_server_free(aoo_net_server *server);
 
 // run the AOO server; this function blocks indefinitely.
-AOO_API int32_t aoo_net_server_run(aoo_net_server *server);
+AOO_API aoo_error aoo_net_server_run(aoo_net_server *server);
 
 // quit the AOO server from another thread
-AOO_API int32_t aoo_net_server_quit(aoo_net_server *server);
+AOO_API aoo_error aoo_net_server_quit(aoo_net_server *server);
 
 // get number of pending events (always thread safe)
-AOO_API int32_t aoo_net_server_events_available(aoo_net_server *server);
+AOO_API aoo_error aoo_net_server_events_available(aoo_net_server *server);
 
 // poll events (threadsafe, but not reentrant)
 // will call the event handler function one or more times
-AOO_API int32_t aoo_net_server_poll_events(aoo_net_server *server,
+AOO_API aoo_error aoo_net_server_poll_events(aoo_net_server *server,
                                            aoo_eventhandler fn, void *user);
 
 // LATER add methods to add/remove users and groups
@@ -210,36 +210,36 @@ AOO_API aoo_net_client * aoo_net_client_new(int socket, aoo_sendfn fn,
 AOO_API void aoo_net_client_free(aoo_net_client *client);
 
 // run the AOO client; this function blocks indefinitely.
-AOO_API int32_t aoo_net_client_run(aoo_net_client *client);
+AOO_API aoo_error aoo_net_client_run(aoo_net_client *client);
 
 // quit the AOO client from another thread
-AOO_API int32_t aoo_net_client_quit(aoo_net_client *client);
+AOO_API aoo_error aoo_net_client_quit(aoo_net_client *client);
 
 // add AOO source
-AOO_API int32_t aoo_net_client_add_source(aoo_net_client *client,
+AOO_API aoo_error aoo_net_client_add_source(aoo_net_client *client,
                                           aoo_source *src, aoo_id id);
 
 // remove AOO source
-AOO_API int32_t aoo_net_client_remove_source(aoo_net_client *client,
+AOO_API aoo_error aoo_net_client_remove_source(aoo_net_client *client,
                                              aoo_source *src);
 
 // add AOO sink
-AOO_API int32_t aoo_net_client_add_sink(aoo_net_client *client,
+AOO_API aoo_error aoo_net_client_add_sink(aoo_net_client *client,
                                         aoo_sink *sink, aoo_id id);
 
 // remove AOO sink
-AOO_API int32_t aoo_net_client_remove_sink(aoo_net_client *client,
+AOO_API aoo_error aoo_net_client_remove_sink(aoo_net_client *client,
                                            aoo_sink *sink);
 
 // find peer and return its address
 // address: pointer to sockaddr_storage
 // addrlen: initialized with max. storage size, updated to actual size
-AOO_API int32_t aoo_net_client_find_peer(aoo_net_client *client,
+AOO_API aoo_error aoo_net_client_find_peer(aoo_net_client *client,
                                          const char *group, const char *user,
                                          void *address, int32_t *addrlen);
 
 // send a request to the AOO server (always thread safe)
-AOO_API int32_t aoo_net_client_request(aoo_net_client *client,
+AOO_API aoo_error aoo_net_client_request(aoo_net_client *client,
                                        aoo_net_request_type request, void *data,
                                        aoo_net_callback callback, void *user);
 
@@ -249,25 +249,25 @@ AOO_API int32_t aoo_net_client_request(aoo_net_client *client,
 // b) 'const char *' (group name) + 0: send to all peers of a specific group
 // c) 'NULL' + 0: send to all peers
 // the 'flags' parameter allows for (future) additional settings
-AOO_API int32_t aoo_net_client_send_message(aoo_net_client *client,
+AOO_API aoo_error aoo_net_client_send_message(aoo_net_client *client,
                                             const char *data, int32_t n,
                                             const void *addr, int32_t len, int32_t flags);
 
 // handle messages from peers (threadsafe, but not reentrant)
 // 'addr' should be sockaddr *
-AOO_API int32_t aoo_net_client_handle_message(aoo_net_client *client,
+AOO_API aoo_error aoo_net_client_handle_message(aoo_net_client *client,
                                               const char *data, int32_t n,
                                               const void *addr, int32_t len);
 
 // send outgoing messages to peers (threadsafe, but not reentrant)
-AOO_API int32_t aoo_net_client_send(aoo_net_client *client);
+AOO_API aoo_error aoo_net_client_send(aoo_net_client *client);
 
 // get number of pending events (always thread safe)
-AOO_API int32_t aoo_net_client_events_available(aoo_net_client *client);
+AOO_API aoo_error aoo_net_client_events_available(aoo_net_client *client);
 
 // handle events (threadsafe, but not reentrant)
 // will call the event handler function one or more times
-AOO_API int32_t aoo_net_client_poll_events(aoo_net_client *client,
+AOO_API aoo_error aoo_net_client_poll_events(aoo_net_client *client,
                                            aoo_eventhandler fn, void *user);
 
 // LATER add API functions to set options and do additional
@@ -276,7 +276,7 @@ AOO_API int32_t aoo_net_client_poll_events(aoo_net_client *client,
 // wrapper functions for frequently used requests
 
 // connect to AOO server (always thread safe)
-static inline int32_t aoo_net_client_connect(aoo_net_client *client,
+static inline aoo_error aoo_net_client_connect(aoo_net_client *client,
                                              const char *host, int port,
                                              const char *name, const char *pwd,
                                              aoo_net_callback cb, void *user)
@@ -286,14 +286,14 @@ static inline int32_t aoo_net_client_connect(aoo_net_client *client,
 }
 
 // disconnect from AOO server (always thread safe)
-static inline int32_t aoo_net_client_disconnect(aoo_net_client *client,
+static inline aoo_error aoo_net_client_disconnect(aoo_net_client *client,
                                                 aoo_net_callback cb, void *user)
 {
     return aoo_net_client_request(client, AOO_NET_DISCONNECT_REQUEST, NULL, cb, user);
 }
 
 // join an AOO group
-static inline int32_t aoo_net_client_group_join(aoo_net_client *client,
+static inline aoo_error aoo_net_client_group_join(aoo_net_client *client,
                                                 const char *group, const char *pwd,
                                                 aoo_net_callback cb, void *user)
 {
@@ -302,7 +302,7 @@ static inline int32_t aoo_net_client_group_join(aoo_net_client *client,
 }
 
 // leave an AOO group
-static inline int32_t aoo_net_client_group_leave(aoo_net_client *client, const char *group,
+static inline aoo_error aoo_net_client_group_leave(aoo_net_client *client, const char *group,
                                                  aoo_net_callback cb, void *user)
 {
     aoo_net_group_request data = { group, NULL };

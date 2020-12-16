@@ -174,13 +174,13 @@ public:
 
     ip_address::ip_type type() const { return type_; }
 
-    int32_t run() override;
+    aoo_error run() override;
 
-    int32_t quit() override;
+    aoo_error quit() override;
 
-    int32_t events_available() override;
+    aoo_error events_available() override;
 
-    int32_t poll_events(aoo_eventhandler fn, void *user) override;
+    aoo_error poll_events(aoo_eventhandler fn, void *user) override;
 
     std::shared_ptr<user> get_user(const std::string& name,
                                    const std::string& pwd,

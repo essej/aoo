@@ -134,10 +134,10 @@ struct codec {
     aoo_format_pcm format;
 };
 
-int32_t codec_setformat(void *enc, aoo_format *f)
+aoo_error codec_setformat(void *enc, aoo_format *f)
 {
     if (strcmp(f->codec, AOO_CODEC_PCM)){
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
     auto c = static_cast<codec *>(enc);
     auto fmt = reinterpret_cast<aoo_format_pcm *>(f);
@@ -171,17 +171,17 @@ int32_t codec_setformat(void *enc, aoo_format *f)
     c->format.header.codec = AOO_CODEC_PCM; // !
     print_settings(c->format);
 
-    return 1;
+    return AOO_ERROR_OK;
 }
 
-int32_t codec_getformat(void *x, aoo_format_storage *f)
+aoo_error codec_getformat(void *x, aoo_format_storage *f)
 {
     auto c = static_cast<codec *>(x);
     if (c->format.header.codec){
         memcpy(f, &c->format, sizeof(aoo_format_pcm));
-        return sizeof(aoo_format_pcm);
+        return aoo_error(sizeof(aoo_format_pcm));
     } else {
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
 }
 
@@ -194,8 +194,8 @@ void encoder_free(void *enc){
 }
 
 int32_t encoder_encode(void *enc,
-                       const aoo_sample *s, int32_t n,
-                       char *buf, int32_t size)
+                         const aoo_sample *s, int32_t n,
+                         char *buf, int32_t size)
 {
     auto bitdepth = static_cast<codec *>(enc)->format.bitdepth;
     auto samplesize = bytes_per_sample(bitdepth);
@@ -244,7 +244,7 @@ int32_t encoder_writeformat(void *enc, aoo_format *fmt,
         return 4;
     } else {
         LOG_ERROR("PCM: couldn't write settings - buffer too small!");
-        return -1;
+        return 0;
     }
 }
 
@@ -324,7 +324,7 @@ int32_t decoder_readformat(void *dec, const aoo_format *fmt,
     } else {
         LOG_ERROR("PCM: couldn't read format - not enough data!");
     }
-    return -1;
+    return 0;
 }
 
 aoo_codec codec_class = {

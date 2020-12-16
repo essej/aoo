@@ -34,6 +34,10 @@ extern "C"
 # endif
 #endif
 
+#ifndef AOO_STRICT
+#define AOO_STRICT 1
+#endif
+
 #define AOO_VERSION_MAJOR 2
 #define AOO_VERSION_MINOR 0
 #define AOO_VERSION_PATCH 0
@@ -64,7 +68,7 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #endif
 
 typedef int32_t aoo_type;
-typedef enum aoo_type_code
+enum aoo_type_code
 {
     AOO_TYPE_SOURCE = 0,
     AOO_TYPE_SINK,
@@ -74,7 +78,33 @@ typedef enum aoo_type_code
     AOO_TYPE_PEER,
     AOO_TYPE_RELAY
 #endif
-} aoo_type_code;
+};
+
+enum aoo_error_code
+{
+    AOO_ERROR_UNSPECIFIED = -1,
+    AOO_ERROR_FALSE = AOO_ERROR_UNSPECIFIED,
+    AOO_ERROR_OK = 0,
+    AOO_ERROR_TRUE = AOO_ERROR_OK
+};
+#if !defined(__cplusplus) || !defined(AOO_STRICT)
+typedef int32_t aoo_error;
+#else
+struct aoo_error {
+    aoo_error() = default;
+    aoo_error(aoo_error_code code)
+        : code_(code) {}
+
+    bool operator==(aoo_error e) {
+        return code_ == e.code_;
+    }
+    bool operator!=(aoo_error e) {
+        return code_ != e.code_;
+    }
+private:
+    aoo_error_code code_ = AOO_ERROR_UNSPECIFIED;
+};
+#endif
 
 #ifdef __cplusplus
 namespace aoo {

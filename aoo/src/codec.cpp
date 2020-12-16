@@ -8,35 +8,31 @@
 
 namespace aoo {
 
-bool encoder::set_format(aoo_format& fmt){
+aoo_error encoder::set_format(aoo_format& fmt){
     auto result = codec_->encoder_setformat(obj_, &fmt);
-    if (result > 0){
+    if (result == AOO_ERROR_OK){
         // assign after validation!
         nchannels_ = fmt.nchannels;
         samplerate_ = fmt.samplerate;
         blocksize_ = fmt.blocksize;
-        return true;
-    } else {
-        return false;
     }
+    return result;
 }
 
-bool decoder::set_format(aoo_format& fmt){
+aoo_error decoder::set_format(aoo_format& fmt){
     auto result = codec_->decoder_setformat(obj_, &fmt);
-    if (result > 0){
+    if (result == AOO_ERROR_OK){
         // assign after validation!
         nchannels_ = fmt.nchannels;
         samplerate_ = fmt.samplerate;
         blocksize_ = fmt.blocksize;
-        return true;
-    } else {
-        return false;
     }
+    return result;
 }
 
 int32_t decoder::read_format(const aoo_format& fmt, const char *opt, int32_t size){
     auto result = codec_->decoder_readformat(obj_, &fmt, opt, size);
-    if (result >= 0){
+    if (result > 0){
         nchannels_ = fmt.nchannels;
         samplerate_ = fmt.samplerate;
         blocksize_ = fmt.blocksize;
@@ -74,12 +70,12 @@ const aoo::codec * find_codec(const char * name){
 
 } // aoo
 
-int32_t aoo_register_codec(const char *name, const aoo_codec *codec){
+aoo_error aoo_register_codec(const char *name, const aoo_codec *codec){
     if (aoo::codec_dict.count(name) != 0){
         LOG_WARNING("aoo: codec " << name << " already registered!");
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
     aoo::codec_dict[name] = std::make_unique<aoo::codec>(codec);
     LOG_VERBOSE("aoo: registered codec '" << name << "'");
-    return 1;
+    return AOO_ERROR_OK;
 }

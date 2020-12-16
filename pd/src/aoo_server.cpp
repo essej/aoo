@@ -126,7 +126,7 @@ t_aoo_server::t_aoo_server(int argc, t_atom *argv)
     int port = argc ? atom_getfloat(argv) : 0;
 
     if (port > 0){
-        int32_t err;
+        aoo_error err;
         x_server.reset(aoo::net::iserver::create(port, 0, &err));
         if (x_server){
             verbose(0, "aoo server listening on port %d", port);
@@ -138,7 +138,7 @@ t_aoo_server::t_aoo_server(int argc, t_atom *argv)
             clock_delay(x_clock, AOO_SERVER_POLL_INTERVAL);
         } else {
             char buf[MAXPDSTRING];
-            socket_strerror(err, buf, sizeof(buf));
+            socket_strerror(socket_errno(), buf, sizeof(buf));
             pd_error(this, "%s: %s (%d)", classname(this), buf, err);
         }
     }

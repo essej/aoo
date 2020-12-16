@@ -63,21 +63,21 @@ static void aoo_unpack_list(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv
     // handle incoming message
     x->x_sink->handle_message(msg, argc, x->x_addr.address(), x->x_addr.length());
     // send outgoing messages
-    while (x->x_sink->send((aoo_sendfn)aoo_unpack_send, x)) ;
+    x->x_sink->send((aoo_sendfn)aoo_unpack_send, x);
 }
 
 static void aoo_unpack_invite(t_aoo_unpack *x, t_floatarg f)
 {
     x->x_sink->invite_source(x->x_addr.address(), x->x_addr.length(), f);
     // send outgoing messages
-    while (x->x_sink->send((aoo_sendfn)aoo_unpack_send, x)) ;
+    x->x_sink->send((aoo_sendfn)aoo_unpack_send, x);
 }
 
 static void aoo_unpack_uninvite(t_aoo_unpack *x, t_floatarg f)
 {
     x->x_sink->uninvite_source(x->x_addr.address(), x->x_addr.length(), f);
     // send outgoing messages
-    while (x->x_sink->send((aoo_sendfn)aoo_unpack_send, x)) ;
+    x->x_sink->send((aoo_sendfn)aoo_unpack_send, x);
 }
 
 static void aoo_unpack_buffersize(t_aoo_unpack *x, t_floatarg f)
@@ -227,7 +227,7 @@ static t_int * aoo_unpack_perform(t_int *w)
     int n = (int)(w[2]);
 
     uint64_t t = aoo_osctime_now();
-    if (x->x_sink->process(x->x_vec.get(), n, t) <= 0){
+    if (x->x_sink->process(x->x_vec.get(), n, t) != AOO_ERROR_OK){
         // output zeros
         for (int i = 0; i < x->x_nchannels; ++i){
             memset(x->x_vec[i], 0, sizeof(t_sample) * n);
@@ -235,7 +235,7 @@ static t_int * aoo_unpack_perform(t_int *w)
     }
 
     // handle events
-    if (x->x_sink->events_available()){
+    if (x->x_sink->events_available() == AOO_ERROR_TRUE){
         clock_delay(x->x_clock, 0);
     }
 

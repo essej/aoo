@@ -503,13 +503,13 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
         t_symbol *groupPwd = argc > 5 ? atom_getsymbol(argv + 5) : nullptr;
 
         // LATER also send user ID
-        auto cb = [](void *x, int32_t result, const void *data){
+        auto cb = [](void *x, aoo_error result, const void *data){
             auto request = (t_group_request *)x;
             auto obj = request->obj;
             auto group = request->group;
             auto pwd = request->pwd;
 
-            if (result == 0){
+            if (result == AOO_ERROR_OK){
                 auto reply = (const aoo_net_connect_reply *)data;
                 auto user_id = reply->user_id;
                 obj->push_reply([obj, user_id, group, pwd](){
@@ -552,9 +552,9 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
 static void aoo_client_disconnect(t_aoo_client *x)
 {
     if (x->x_node){
-        auto cb = [](void *y, int32_t result, const void *data){
+        auto cb = [](void *y, aoo_error result, const void *data){
             auto x = (t_aoo_client *)y;
-            if (result == 0){
+            if (result == AOO_ERROR_OK){
                 x->push_reply([x](){
                     // we have to remove the peers manually!
                     x->x_peers.clear();
@@ -579,12 +579,12 @@ static void aoo_client_disconnect(t_aoo_client *x)
 static void aoo_client_group_join(t_aoo_client *x, t_symbol *group, t_symbol *pwd)
 {
     if (x->x_node){
-        auto cb = [](void *x, int32_t result, const void *data){
+        auto cb = [](void *x, aoo_error result, const void *data){
             auto request = (t_group_request *)x;
             auto obj = request->obj;
             auto group = request->group;
 
-            if (result == 0){
+            if (result == AOO_ERROR_OK){
                 obj->push_reply([obj, group](){
                     t_atom msg[2];
                     SETSYMBOL(msg, group);
@@ -609,19 +609,19 @@ static void aoo_client_group_join(t_aoo_client *x, t_symbol *group, t_symbol *pw
             delete request;
         };
         x->x_node->client()->join_group(group->s_name, pwd->s_name,
-                                cb, new t_group_request { x, group, nullptr });
+            cb, new t_group_request { x, group, nullptr });
     }
 }
 
 static void aoo_client_group_leave(t_aoo_client *x, t_symbol *group)
 {
     if (x->x_node){
-        auto cb = [](void *x, int32_t result, const void *data){
+        auto cb = [](void *x, aoo_error result, const void *data){
             auto request = (t_group_request *)x;
             auto obj = request->obj;
             auto group = request->group;
 
-            if (result == 0){
+            if (result == AOO_ERROR_OK){
                 obj->push_reply([obj, group](){
                     // we have to remove the peers manually!
                     for (auto it = obj->x_peers.begin(); it != obj->x_peers.end(); ) {

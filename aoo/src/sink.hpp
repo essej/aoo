@@ -174,21 +174,21 @@ public:
 
     int32_t poll_events(aoo_eventhandler fn, void *user);
 
-    int32_t get_format(aoo_format_storage& format);
+    aoo_error get_format(aoo_format_storage& format);
 
     // methods
     void reset(const sink& s);
 
-    int32_t handle_format(const sink& s, int32_t salt, const aoo_format& f,
-                          const char *settings, int32_t size);
+    aoo_error handle_format(const sink& s, int32_t salt, const aoo_format& f,
+                            const char *settings, int32_t size);
 
-    int32_t handle_data(const sink& s, int32_t salt, const aoo::data_packet& d);
+    aoo_error handle_data(const sink& s, int32_t salt, const aoo::data_packet& d);
 
-    int32_t handle_ping(const sink& s, time_tag tt);
+    aoo_error handle_ping(const sink& s, time_tag tt);
 
-    bool send(const sink& s, sendfn& fn);
+    void send(const sink& s, sendfn& fn);
 
-    bool decode(const sink& s);
+    void decode(const sink& s);
 
     bool process(const sink& s, aoo_sample *buffer, int32_t nsamples, time_tag tt);
 
@@ -238,9 +238,9 @@ private:
 
     void send_uninvitation(const sink& s, sendfn& fn);
 
-    int32_t send_data_requests(const sink& s, sendfn& fn);
+    void send_data_requests(const sink& s, sendfn& fn);
 
-    bool send_invitation(const sink& s, sendfn& fn);
+    void send_invitation(const sink& s, sendfn& fn);
 
     // data
     const ip_address addr_;
@@ -285,33 +285,33 @@ public:
 
     ~sink(){}
 
-    int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
+    aoo_error setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
-    int32_t invite_source(const void *address, int32_t addrlen, aoo_id id) override;
+    aoo_error invite_source(const void *address, int32_t addrlen, aoo_id id) override;
 
-    int32_t uninvite_source(const void *address, int32_t addrlen, aoo_id id) override;
+    aoo_error uninvite_source(const void *address, int32_t addrlen, aoo_id id) override;
 
-    int32_t uninvite_all() override;
+    aoo_error uninvite_all() override;
 
-    int32_t handle_message(const char *data, int32_t n,
-                           const void *address, int32_t addrlen) override;
+    aoo_error handle_message(const char *data, int32_t n,
+                             const void *address, int32_t addrlen) override;
 
-    int32_t send(aoo_sendfn fn, void *user) override;
+    aoo_error send(aoo_sendfn fn, void *user) override;
 
-    int32_t process(aoo_sample **data, int32_t nsamples, uint64_t t) override;
+    aoo_error process(aoo_sample **data, int32_t nsamples, uint64_t t) override;
 
-    int32_t events_available() override;
+    aoo_error events_available() override;
 
-    int32_t poll_events(aoo_eventhandler fn, void *user) override;
+    aoo_error poll_events(aoo_eventhandler fn, void *user) override;
 
-    int32_t set_option(int32_t opt, void *ptr, int32_t size) override;
+    aoo_error set_option(int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t get_option(int32_t opt, void *ptr, int32_t size) override;
+    aoo_error get_option(int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t set_sourceoption(const void *address, int32_t addrlen, aoo_id id,
+    aoo_error set_sourceoption(const void *address, int32_t addrlen, aoo_id id,
                              int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t get_sourceoption(const void *address, int32_t addrlen, aoo_id id,
+    aoo_error get_sourceoption(const void *address, int32_t addrlen, aoo_id id,
                              int32_t opt, void *ptr, int32_t size) override;
     // getters
     aoo_id id() const { return id_.load(std::memory_order_relaxed); }
@@ -379,15 +379,15 @@ private:
 
     void reset_sources();
 
-    int32_t decode();
+    aoo_error decode();
 
-    int32_t handle_format_message(const osc::ReceivedMessage& msg,
+    aoo_error handle_format_message(const osc::ReceivedMessage& msg,
                                   const ip_address& addr);
 
-    int32_t handle_data_message(const osc::ReceivedMessage& msg,
+    aoo_error handle_data_message(const osc::ReceivedMessage& msg,
                                 const ip_address& addr);
 
-    int32_t handle_ping_message(const osc::ReceivedMessage& msg,
+    aoo_error handle_ping_message(const osc::ReceivedMessage& msg,
                                 const ip_address& addr);
 };
 

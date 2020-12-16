@@ -288,7 +288,7 @@ void AooNode::doReceive()
         return;
     }
 
-    if (client_->events_available()){
+    if (client_->events_available() == AOO_ERROR_TRUE){
         // poll events
         aoo::shared_scoped_lock lock(clientMutex_);
         if (clientObject_){

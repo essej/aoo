@@ -23,6 +23,14 @@ void aoo_set_logfunction(aoo_logfunction f){
     gLogFunction = f;
 }
 
+static const char *errmsg[] = {
+
+};
+
+const char *aoo_error_string(aoo_error e){
+    return "unknown error"; // TODO
+}
+
 namespace aoo {
 
 Log::~Log(){
@@ -119,8 +127,8 @@ double aoo_osctime_duration(uint64_t t1, uint64_t t2){
 
 /*/////////////// version ////////////////////*/
 
-void aoo_version(int *major, int *minor,
-                 int *patch, int *pre){
+void aoo_version(int32_t *major, int32_t *minor,
+                 int32_t *patch, int32_t *pre){
     if (major) *major = AOO_VERSION_MAJOR;
     if (minor) *minor = AOO_VERSION_MINOR;
     if (patch) *patch = AOO_VERSION_PATCH;

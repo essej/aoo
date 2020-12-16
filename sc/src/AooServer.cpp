@@ -49,7 +49,7 @@ AooServer* findServer(World* world, int port) {
 AooServer::AooServer(World *world, int port)
     : world_(world), port_(port)
 {
-    int32_t err;
+    aoo_error err;
     auto server = aoo::net::iserver::create(port, 0, &err);
     server_.reset(server);
     if (server_) {
@@ -59,7 +59,7 @@ AooServer::AooServer(World *world, int port)
             server_->run();
         });
     } else {
-        throw std::runtime_error(aoo::socket_strerror(err));
+        throw std::runtime_error(aoo::socket_strerror(aoo::socket_errno()));
     }
 }
 

@@ -103,9 +103,9 @@ public:
 
     int port() const { return port_; }
 
-    int32_t handle_message(const char *data, int32_t n,
-                           const ip_address& addr,
-                           int32_t type, aoo_type onset);
+    aoo_error handle_message(const char *data, int32_t n,
+                             const ip_address& addr,
+                             int32_t type, aoo_type onset);
 
     void send(time_tag now);
 
@@ -173,40 +173,40 @@ public:
     client(int udpsocket, aoo_sendfn, void *user, uint32_t flags);
     ~client();
 
-    int32_t run() override;
+    aoo_error run() override;
 
-    int32_t quit() override;
+    aoo_error quit() override;
 
-    int32_t add_source(isource *src, aoo_id id) override;
+    aoo_error add_source(isource *src, aoo_id id) override;
 
-    int32_t remove_source(isource *src) override;
+    aoo_error remove_source(isource *src) override;
 
-    int32_t add_sink(isink *sink, aoo_id id) override;
+    aoo_error add_sink(isink *sink, aoo_id id) override;
 
-    int32_t remove_sink(isink *sink) override;
+    aoo_error remove_sink(isink *sink) override;
 
-    int32_t find_peer(const char *group, const char *user,
+    aoo_error find_peer(const char *group, const char *user,
                       void *address, int32_t& addrlen) override;
 
-    int32_t send_request(aoo_net_request_type request, void *data,
-                         aoo_net_callback callback, void *user) override;
+    aoo_error send_request(aoo_net_request_type request, void *data,
+                           aoo_net_callback callback, void *user) override;
 
-    int32_t send_message(const char *data, int32_t n,
-                         const void *addr, int32_t len, int32_t flags) override;
+    aoo_error send_message(const char *data, int32_t n,
+                           const void *addr, int32_t len, int32_t flags) override;
 
     template<typename T>
     void perform_send_message(const char *data, int32_t size, int32_t flags, T&& filter);
 
-    int32_t handle_message(const char *data, int32_t n, const void *addr, int32_t len) override;
+    aoo_error handle_message(const char *data, int32_t n, const void *addr, int32_t len) override;
 
     bool handle_peer_message(const osc::ReceivedMessage& msg, int onset,
                              const ip_address& addr);
 
-    int32_t send() override;
+    aoo_error send() override;
 
-    int32_t events_available() override;
+    aoo_error events_available() override;
 
-    int32_t poll_events(aoo_eventhandler fn, void *user) override;
+    aoo_error poll_events(aoo_eventhandler fn, void *user) override;
 
     void do_connect(const char *host, int port,
                     const char *name, const char *pwd,

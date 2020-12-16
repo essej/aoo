@@ -23,7 +23,7 @@ void AooSend::init(int32_t port, aoo_id id) {
                     aoo::isource::pointer source(aoo::isource::create(cmd->id, 0));
                     if (source){
                         NodeLock lock(*node);
-                        if (node->client()->add_source(source.get(), cmd->id) > 0){
+                        if (node->client()->add_source(source.get(), cmd->id) == AOO_ERROR_OK){
                             source->setup(cmd->sampleRate, cmd->blockSize,
                                           cmd->numChannels);
 
@@ -158,7 +158,7 @@ void AooSend::addSinkEvent(const aoo::ip_address& addr, aoo_id id,
 
 bool AooSend::addSink(const aoo::ip_address& addr, aoo_id id,
                       int32_t channelOnset){
-    if (source()->add_sink(addr.address(), addr.length(), id, 0) > 0){
+    if (source()->add_sink(addr.address(), addr.length(), id, 0) == AOO_ERROR_OK){
         if (channelOnset > 0){
             source()->set_sink_channelonset(addr.address(), addr.length(),
                                             id, channelOnset);
@@ -192,7 +192,7 @@ void AooSend::removeSinkEvent(const aoo::ip_address& addr, aoo_id id){
 }
 
 bool AooSend::removeSink(const aoo::ip_address& addr, aoo_id id){
-    return source()->remove_sink(addr.address(), addr.length(), id) > 0;
+    return source()->remove_sink(addr.address(), addr.length(), id) == AOO_ERROR_OK;
 }
 
 void AooSend::removeAll(){
@@ -228,7 +228,7 @@ void AooSendUnit::next(int numSamples){
         auto vec = (const float **)mInBuf + channelOnset_;
         uint64_t t = getOSCTime(mWorld);
 
-        if (source->process(vec, numSamples, t) > 0){
+        if (source->process(vec, numSamples, t) == AOO_ERROR_OK){
             delegate().node()->notify();
         }
 
@@ -339,7 +339,7 @@ void aoo_send_format(AooSendUnit *unit, sc_msg_iter* args){
                               << ") out of range");
                     f.header.nchannels = nchannels;
                 }
-                if (owner.source()->set_format(f.header) > 0){
+                if (owner.source()->set_format(f.header) == AOO_ERROR_OK){
                     // only send format on success
                     serializeFormat(msg, f.header);
                 }

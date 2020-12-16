@@ -401,11 +401,11 @@ static t_int * aoo_send_perform(t_int *w)
         auto t = aoo::get_osctime();
         auto vec = (const aoo_sample **)x->x_vec.get();
 
-        if (x->x_source->process(vec, n, t) > 0){
+        if (x->x_source->process(vec, n, t) == AOO_ERROR_OK){
             x->x_node->notify();
         }
 
-        if (x->x_source->events_available() > 0){
+        if (x->x_source->events_available() == AOO_ERROR_TRUE){
             clock_delay(x->x_clock, 0);
         }
     }

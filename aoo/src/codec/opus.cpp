@@ -84,14 +84,14 @@ void validate_format(aoo_format_opus& f)
     // bitrate, complexity and signal type should be validated by opus
 }
 
-int32_t codec_getformat(void *x, aoo_format_storage *f)
+aoo_error codec_getformat(void *x, aoo_format_storage *f)
 {
     auto c = static_cast<codec *>(x);
     if (c->format.header.codec){
         memcpy(f, &c->format, sizeof(aoo_format_opus));
-        return sizeof(aoo_format_opus);
+        return aoo_error(sizeof(aoo_format_opus));
     } else {
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
 }
 
@@ -132,9 +132,9 @@ int32_t encoder_encode(void *enc,
     return 0;
 }
 
-int32_t encoder_setformat(void *enc, aoo_format *f){
+aoo_error encoder_setformat(void *enc, aoo_format *f){
     if (strcmp(f->codec, AOO_CODEC_OPUS)){
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
     auto c = static_cast<encoder *>(enc);
     auto fmt = reinterpret_cast<aoo_format_opus *>(f);
@@ -178,7 +178,7 @@ int32_t encoder_setformat(void *enc, aoo_format *f){
         opus_multistream_encoder_ctl(c->state, OPUS_GET_SIGNAL(&fmt->signal_type));
     } else {
         LOG_ERROR("Opus: opus_encoder_create() failed with error code " << error);
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
 
     // save and print settings
@@ -186,13 +186,13 @@ int32_t encoder_setformat(void *enc, aoo_format *f){
     c->format.header.codec = AOO_CODEC_OPUS; // !
     print_settings(c->format);
 
-    return 1;
+    return AOO_ERROR_OK;
 }
 
 #define encoder_getformat codec_getformat
 
 int32_t encoder_writeformat(void *enc, aoo_format *fmt,
-                            char *buf, int32_t size){
+                              char *buf, int32_t size){
     if (size >= 12){
         auto c = static_cast<encoder *>(enc);
         memcpy(fmt, &c->format.header, sizeof(aoo_format));
@@ -203,7 +203,7 @@ int32_t encoder_writeformat(void *enc, aoo_format *fmt,
         return 12;
     } else {
         LOG_WARNING("Opus: couldn't write settings");
-        return -1;
+        return 0;
     }
 }
 
@@ -227,8 +227,8 @@ void decoder_free(void *dec){
 }
 
 int32_t decoder_decode(void *dec,
-                       const char *buf, int32_t size,
-                       aoo_sample *s, int32_t n)
+                         const char *buf, int32_t size,
+                         aoo_sample *s, int32_t n)
 {
     auto c = static_cast<decoder *>(dec);
     if (c->state){
@@ -293,10 +293,10 @@ bool decoder_dosetformat(decoder *c, aoo_format_opus& f){
     }
 }
 
-int32_t decoder_setformat(void *dec, aoo_format *f)
+aoo_error decoder_setformat(void *dec, aoo_format *f)
 {
     if (strcmp(f->codec, AOO_CODEC_OPUS)){
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
 
     auto c = static_cast<decoder *>(dec);
@@ -304,7 +304,11 @@ int32_t decoder_setformat(void *dec, aoo_format *f)
 
     validate_format(*fmt);
 
-    return decoder_dosetformat(c, *fmt);
+    if (decoder_dosetformat(c, *fmt)){
+        return AOO_ERROR_OK;
+    } else {
+        return AOO_ERROR_UNSPECIFIED;
+    }
 }
 
 #define decoder_getformat codec_getformat
@@ -313,7 +317,7 @@ int32_t decoder_readformat(void *dec, const aoo_format *fmt,
                            const char *buf, int32_t size){
     if (strcmp(fmt->codec, AOO_CODEC_OPUS)){
         LOG_ERROR("opus: wrong format!");
-        return -1;
+        return 0;
     }
     if (size >= 12){
         auto c = static_cast<decoder *>(dec);
@@ -327,11 +331,11 @@ int32_t decoder_readformat(void *dec, const aoo_format *fmt,
         if (decoder_dosetformat(c, f)){
             return 12; // number of bytes
         } else {
-            return -1; // error
+            return 0; // error
         }
     } else {
         LOG_ERROR("Opus: couldn't read format - too little data!");
-        return -1;
+        return 0;
     }
 }
 

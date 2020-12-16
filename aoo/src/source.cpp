@@ -45,12 +45,12 @@ T& as(void *p){
 
 #define CHECKARG(type) assert(size == sizeof(type))
 
-int32_t aoo_source_set_option(aoo_source *src, int32_t opt, void *p, int32_t size)
+aoo_error aoo_source_set_option(aoo_source *src, int32_t opt, void *p, int32_t size)
 {
     return src->set_option(opt, p, size);
 }
 
-int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
+aoo_error aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
     // id
@@ -143,18 +143,18 @@ int32_t aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
     // unknown
     default:
         LOG_WARNING("aoo_source: unsupported option " << opt);
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
-    return 1;
+    return AOO_ERROR_OK;
 }
 
-int32_t aoo_source_get_option(aoo_source *src, int32_t opt,
+aoo_error aoo_source_get_option(aoo_source *src, int32_t opt,
                               void *p, int32_t size)
 {
     return src->get_option(opt, p, size);
 }
 
-int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
+aoo_error aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
     // id
@@ -170,7 +170,7 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
             shared_lock lock(update_mutex_); // read lock!
             return encoder_->get_format(as<aoo_format_storage>(ptr));
         } else {
-            return 0;
+            return AOO_ERROR_UNSPECIFIED;
         }
         break;
     }
@@ -207,19 +207,19 @@ int32_t aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
     // unknown
     default:
         LOG_WARNING("aoo_source: unsupported option " << opt);
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
-    return 1;
+    return AOO_ERROR_OK;
 }
 
-int32_t aoo_source_set_sinkoption(aoo_source *src, const void *address, int32_t addrlen,
-                                  aoo_id id, int32_t opt, void *p, int32_t size)
+aoo_error aoo_source_set_sinkoption(aoo_source *src, const void *address, int32_t addrlen,
+                                    aoo_id id, int32_t opt, void *p, int32_t size)
 {
     return src->set_sinkoption(address, addrlen, id, opt, p, size);
 }
 
-int32_t aoo::source::set_sinkoption(const void *address, int32_t addrlen, aoo_id id,
-                                    int32_t opt, void *ptr, int32_t size)
+aoo_error aoo::source::set_sinkoption(const void *address, int32_t addrlen, aoo_id id,
+                                      int32_t opt, void *ptr, int32_t size)
 {
     ip_address addr((const sockaddr *)address, addrlen);
 
@@ -240,24 +240,24 @@ int32_t aoo::source::set_sinkoption(const void *address, int32_t addrlen, aoo_id
         // unknown
         default:
             LOG_WARNING("aoo_source: unknown sink option " << opt);
-            return 0;
+            return AOO_ERROR_UNSPECIFIED;
         }
-        return 1;
+        return AOO_ERROR_OK;
     } else {
         LOG_ERROR("aoo_source: couldn't set option " << opt
                   << " - sink not found!");
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
 }
 
-int32_t aoo_source_get_sinkoption(aoo_source *src, const void *address, int32_t addrlen,
-                                  aoo_id id, int32_t opt, void *p, int32_t size)
+aoo_error aoo_source_get_sinkoption(aoo_source *src, const void *address, int32_t addrlen,
+                                    aoo_id id, int32_t opt, void *p, int32_t size)
 {
     return src->get_sinkoption(address, addrlen, id, opt, p, size);
 }
 
-int32_t aoo::source::get_sinkoption(const void *address, int32_t addrlen, aoo_id id,
-                                    int32_t opt, void *p, int32_t size)
+aoo_error aoo::source::get_sinkoption(const void *address, int32_t addrlen, aoo_id id,
+                                      int32_t opt, void *p, int32_t size)
 {
     ip_address addr((const sockaddr *)address, addrlen);
 
@@ -273,23 +273,23 @@ int32_t aoo::source::get_sinkoption(const void *address, int32_t addrlen, aoo_id
         // unknown
         default:
             LOG_WARNING("aoo_source: unsupported sink option " << opt);
-            return 0;
+            return AOO_ERROR_UNSPECIFIED;
         }
-        return 1;
+        return AOO_ERROR_OK;
     } else {
         LOG_ERROR("aoo_source: couldn't get option " << opt
                   << " - sink " << id << " not found!");
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
 }
 
-int32_t aoo_source_setup(aoo_source *src, int32_t samplerate,
-                         int32_t blocksize, int32_t nchannels){
+aoo_error aoo_source_setup(aoo_source *src, int32_t samplerate,
+                           int32_t blocksize, int32_t nchannels){
     return src->setup(samplerate, blocksize, nchannels);
 }
 
-int32_t aoo::source::setup(int32_t samplerate,
-                           int32_t blocksize, int32_t nchannels){
+aoo_error aoo::source::setup(int32_t samplerate,
+                             int32_t blocksize, int32_t nchannels){
     scoped_lock lock(update_mutex_); // writer lock!
     if (samplerate > 0 && blocksize > 0 && nchannels > 0)
     {
@@ -317,19 +317,19 @@ int32_t aoo::source::setup(int32_t samplerate,
             start_new_stream();
         }
 
-        return 1;
+        return AOO_ERROR_OK;
     } else {
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
 }
 
-int32_t aoo_source_add_sink(aoo_source *src, const void *address,
-                            int32_t addrlen, aoo_id id, uint32_t flags) {
+aoo_error aoo_source_add_sink(aoo_source *src, const void *address,
+                              int32_t addrlen, aoo_id id, uint32_t flags) {
     return src->add_sink(address, addrlen, id, flags);
 }
 
-int32_t aoo::source::add_sink(const void *address, int32_t addrlen,
-                              aoo_id id, uint32_t flags)
+aoo_error aoo::source::add_sink(const void *address, int32_t addrlen,
+                                aoo_id id, uint32_t flags)
 {
     ip_address addr((const sockaddr *)address, addrlen);
 
@@ -337,33 +337,33 @@ int32_t aoo::source::add_sink(const void *address, int32_t addrlen,
     // check if sink exists!
     if (find_sink(addr, id)){
         LOG_WARNING("aoo_source: sink already added!");
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
     // add sink descriptor
     sinks_.emplace_front(addr, id, flags);
     // push format request
     formatrequestqueue_.push(format_request { addr, id, flags });
 
-    return 1;
+    return AOO_ERROR_OK;
 }
 
-int32_t aoo_source_remove_sink(aoo_source *src, const void *address,
-                               int32_t addrlen, aoo_id id) {
+aoo_error aoo_source_remove_sink(aoo_source *src, const void *address,
+                                 int32_t addrlen, aoo_id id) {
     return src->remove_sink(address, addrlen, id);
 }
 
-int32_t aoo::source::remove_sink(const void *address, int32_t addrlen, aoo_id id){
+aoo_error aoo::source::remove_sink(const void *address, int32_t addrlen, aoo_id id){
     ip_address addr((const sockaddr *)address, addrlen);
 
     sink_lock lock(sinks_);
     for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
         if (it->address == addr && it->id == id){
             sinks_.erase(it);
-            return 1;
+            return AOO_ERROR_OK;
         }
     }
     LOG_WARNING("aoo_source: sink not found!");
-    return 0;
+    return AOO_ERROR_UNSPECIFIED;
 }
 
 void aoo_source_remove_all(aoo_source *src) {
@@ -375,16 +375,16 @@ void aoo::source::remove_all(){
     sinks_.clear();
 }
 
-int32_t aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
-                                  const void *address, int32_t addrlen) {
+aoo_error aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
+                                    const void *address, int32_t addrlen) {
     return src->handle_message(data, n, address, addrlen);
 }
 
 // /aoo/src/<id>/format <sink>
-int32_t aoo::source::handle_message(const char *data, int32_t n,
-                                    const void *address, int32_t addrlen){
+aoo_error aoo::source::handle_message(const char *data, int32_t n,
+                                      const void *address, int32_t addrlen){
     if (!data){
-        return 0;
+        return AOO_ERROR_OK; // nothing to update
     }
 
     try {
@@ -398,43 +398,40 @@ int32_t aoo::source::handle_message(const char *data, int32_t n,
         auto onset = aoo_parse_pattern(data, n, &type, &src);
         if (!onset){
             LOG_WARNING("aoo_source: not an AoO message!");
-            return 0;
+            return AOO_ERROR_UNSPECIFIED;
         }
         if (type != AOO_TYPE_SOURCE){
             LOG_WARNING("aoo_source: not a source message!");
-            return 0;
+            return AOO_ERROR_UNSPECIFIED;
         }
         if (src != id()){
             LOG_WARNING("aoo_source: wrong source ID!");
-            return 0;
+            return AOO_ERROR_UNSPECIFIED;
         }
 
         auto pattern = msg.AddressPattern() + onset;
         if (!strcmp(pattern, AOO_MSG_FORMAT)){
             handle_format_request(msg, addr);
-            return 1;
         } else if (!strcmp(pattern, AOO_MSG_DATA)){
             handle_data_request(msg, addr);
-            return 1;
         } else if (!strcmp(pattern, AOO_MSG_INVITE)){
             handle_invite(msg, addr);
-            return 1;
         } else if (!strcmp(pattern, AOO_MSG_UNINVITE)){
             handle_uninvite(msg, addr);
-            return 1;
         } else if (!strcmp(pattern, AOO_MSG_PING)){
             handle_ping(msg, addr);
-            return 1;
         } else {
             LOG_WARNING("unknown message " << pattern);
+            return AOO_ERROR_UNSPECIFIED;
         }
+        return AOO_ERROR_OK;
     } catch (const osc::Exception& e){
         LOG_ERROR("aoo_source: exception in handle_message: " << e.what());
+        return AOO_ERROR_UNSPECIFIED;
     }
-    return 0;
 }
 
-int32_t aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user) {
+aoo_error aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user) {
     return src->send(fn, user);
 }
 
@@ -445,45 +442,36 @@ int32_t aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user) {
 // to avoid possible deadlocks in the client code.
 // We have to make a local copy of the sink list, but this should be
 // rather cheap in comparison to encoding and sending the audio data.
-int32_t aoo::source::send(aoo_sendfn fn, void *user){
+aoo_error aoo::source::send(aoo_sendfn fn, void *user){
     if (state_.load() != stream_state::play){
-        return false;
+        return AOO_ERROR_OK; // nothing to do
     }
 
-    bool didsomething = false;
     sendfn func(fn, user);
 
-    if (send_format(func)){
-        didsomething = true;
-    }
+    send_format(func);
 
-    if (send_data(func)){
-        didsomething = true;
-    }
+    send_data(func);
 
-    if (resend_data(func)){
-        didsomething = true;
-    }
+    resend_data(func);
 
-    if (send_ping(func)){
-        didsomething = true;
-    }
+    send_ping(func);
 
     if (!sinks_.try_free()){
         LOG_DEBUG("aoo::source: try_free() would block");
     }
 
-    return didsomething;
+    return AOO_ERROR_OK;
 }
 
-int32_t aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, uint64_t t) {
+aoo_error aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, uint64_t t) {
     return src->process(data, n, t);
 }
 
-int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
+aoo_error aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     auto state = state_.load();
     if (state == stream_state::stop){
-        return 0; // pausing
+        return AOO_ERROR_UNSPECIFIED; // pausing
     } else if (state == stream_state::start){
         // start -> play
         // the mutex should be uncontended most of the time.
@@ -493,7 +481,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
         if (!lock.owns_lock()){
             dropped_++;
             LOG_VERBOSE("aoo::source::process() would block");
-            return 0; // ?
+            return AOO_ERROR_UNSPECIFIED; // ?
         }
 
         resampler_.reset();
@@ -506,7 +494,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
         // check if we have been stopped in the meantime
         auto expected = stream_state::start;
         if (!state_.compare_exchange_strong(expected, stream_state::play)){
-            return 0; // pausing
+            return AOO_ERROR_UNSPECIFIED; // pausing
         }
     }
 
@@ -517,11 +505,11 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     if (!lock.owns_lock()){
         dropped_++;
         LOG_VERBOSE("aoo::source::process() would block");
-        return 0; // ?
+        return AOO_ERROR_UNSPECIFIED; // ?
     }
 
     if (!encoder_){
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
 
     // update time DLL filter
@@ -572,7 +560,7 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
         // go through resampler
         if (!resampler_.write(buf, nsamples)){
             // LOG_DEBUG("couldn't process");
-            return 0;
+            return AOO_ERROR_UNSPECIFIED;
         }
         while (audioqueue_.write_available() && srqueue_.write_available()){
             // copy audio samples
@@ -598,31 +586,29 @@ int32_t aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
             // LOG_DEBUG("couldn't process");
         }
     }
-    return 1;
+    return AOO_ERROR_OK;
 }
 
-int32_t aoo_source_events_available(aoo_source *src){
+aoo_error aoo_source_events_available(aoo_source *src){
     return src->events_available();
 }
 
-int32_t aoo::source::events_available(){
-    return !eventqueue_.empty();
+aoo_error aoo::source::events_available(){
+    return !eventqueue_.empty() ? AOO_ERROR_TRUE : AOO_ERROR_FALSE;
 }
 
-int32_t aoo_source_poll_events(aoo_source *src,
-                                aoo_eventhandler fn, void *user){
+aoo_error aoo_source_poll_events(aoo_source *src,
+                                 aoo_eventhandler fn, void *user){
     return src->poll_events(fn, user);
 }
 
-int32_t aoo::source::poll_events(aoo_eventhandler fn, void *user){
+aoo_error aoo::source::poll_events(aoo_eventhandler fn, void *user){
     // always thread-safe
-    int count = 0;
     event e;
     while (eventqueue_.try_pop(e) > 0){
         fn(user, &e.event_);
-        count++;
     }
-    return count;
+    return AOO_ERROR_OK;
 }
 
 namespace aoo {
@@ -638,7 +624,7 @@ sink_desc * source::find_sink(const ip_address& addr, aoo_id id){
     return nullptr;
 }
 
-int32_t source::set_format(aoo_format &f){
+aoo_error source::set_format(aoo_format &f){
     std::unique_ptr<encoder> new_encoder;
     {
         // create a new encoder if necessary
@@ -649,11 +635,11 @@ int32_t source::set_format(aoo_format &f){
                 new_encoder = codec->create_encoder();
                 if (!new_encoder){
                     LOG_ERROR("couldn't create encoder!");
-                    return 0;
+                    return AOO_ERROR_UNSPECIFIED;
                 }
             } else {
                 LOG_ERROR("codec '" << f.codec << "' not supported!");
-                return 0;
+                return AOO_ERROR_UNSPECIFIED;
             }
         }
     }
@@ -663,7 +649,8 @@ int32_t source::set_format(aoo_format &f){
         encoder_ = std::move(new_encoder);
     }
 
-    if (encoder_->set_format(f)){
+    auto err = encoder_->set_format(f);
+    if (err == AOO_ERROR_OK){
         update_audioqueue();
 
         if (need_resampling()){
@@ -673,11 +660,8 @@ int32_t source::set_format(aoo_format &f){
         update_historybuffer();
 
         start_new_stream();
-
-        return 1;
-    } else {
-        return 0;
     }
+    return err;
 }
 
 int32_t source::make_salt(){
@@ -754,15 +738,15 @@ void source::update_historybuffer(){
 
 uint32_t make_version();
 
-bool source::send_format(sendfn& fn){
+void source::send_format(sendfn& fn){
     if (formatrequestqueue_.empty()){
-        return false;
+        return;
     }
 
     shared_lock updatelock(update_mutex_); // reader lock!
 
     if (!encoder_){
-        return false;
+        return;
     }
 
     int32_t salt = salt_;
@@ -771,7 +755,7 @@ bool source::send_format(sendfn& fn){
     char options[AOO_CODEC_MAXSETTINGSIZE];
     auto size = encoder_->write_format(f, options, sizeof(options));
     if (size < 0){
-        return false;
+        return;
     }
 
     updatelock.unlock();
@@ -797,17 +781,13 @@ bool source::send_format(sendfn& fn){
 
         fn(msg.Data(), msg.Size(), r.address, r.flags);
     }
-
-    return true;
 }
 
-bool source::resend_data(sendfn& fn){
+void source::resend_data(sendfn& fn){
     shared_lock updatelock(update_mutex_); // reader lock!
     if (!history_.capacity()){
-        return false;
+        return;
     }
-
-    bool didsomething = false;
 
     data_request r;
     while (datarequestqueue_.try_pop(r)){
@@ -879,20 +859,16 @@ bool source::resend_data(sendfn& fn){
                     LOG_ERROR("frame number " << r.frame << " out of range!");
                 }
             }
-
-            didsomething = true;
         } else {
             LOG_VERBOSE("couldn't find block " << r.sequence);
         }
     }
-
-    return didsomething;
 }
 
-bool source::send_data(sendfn& fn){
+void source::send_data(sendfn& fn){
     shared_lock updatelock(update_mutex_); // reader lock!
     if (!encoder_){
-        return 0;
+        return;
     }
 
     data_packet d;
@@ -986,16 +962,16 @@ bool source::send_data(sendfn& fn){
                 }
             } else {
                 LOG_WARNING("aoo_source: couldn't encode audio data!");
-                return 0;
+                return;
             }
         } else {
             // drain buffer anyway
             audioqueue_.read_commit();
-            return 1;
+            return;
         }
     } else {
         // LOG_DEBUG("couldn't send");
-        return 0;
+        return;
     }
 
     // handle overflow (with 64 samples @ 44.1 kHz this happens every 36 days)
@@ -1006,8 +982,6 @@ bool source::send_data(sendfn& fn){
         unique_lock lock(update_mutex_); // writer lock
         salt_ = make_salt();
     }
-
-    return 1;
 }
 
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
@@ -1033,7 +1007,7 @@ void source::send_data(sendfn& fn, const endpoint& ep, int32_t salt, const aoo::
     fn(msg.Data(), msg.Size(), ep.address, ep.flags);
 }
 
-bool source::send_ping(sendfn& fn){
+void source::send_ping(sendfn& fn){
     // if stream is stopped, the timer won't increment anyway
     auto elapsed = timer_.get_elapsed();
     auto pingtime = lastpingtime_.load();
@@ -1066,9 +1040,6 @@ bool source::send_ping(sendfn& fn){
         }
 
         lastpingtime_.store(elapsed);
-        return true;
-    } else {
-        return false;
     }
 }
 

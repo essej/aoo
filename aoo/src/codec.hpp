@@ -31,9 +31,9 @@ public:
         codec_->encoder_free(obj_);
     }
 
-    bool set_format(aoo_format& fmt);
-    bool get_format(aoo_format_storage& fmt) const {
-        return codec_->encoder_getformat(obj_, &fmt) > 0;
+    aoo_error set_format(aoo_format& fmt);
+    aoo_error get_format(aoo_format_storage& fmt) const {
+        return codec_->encoder_getformat(obj_, &fmt);
     }
     int32_t write_format(aoo_format& fmt, char *buf, int32_t size){
         return codec_->encoder_writeformat(obj_, &fmt, buf, size);
@@ -50,9 +50,9 @@ public:
         codec_->decoder_free(obj_);
     }
 
-    bool set_format(aoo_format& fmt);
-    bool get_format(aoo_format_storage& f) const {
-        return codec_->decoder_getformat(obj_, &f) > 0;
+    aoo_error set_format(aoo_format& fmt);
+    aoo_error get_format(aoo_format_storage& f) const {
+        return codec_->decoder_getformat(obj_, &f);
     }
     int32_t read_format(const aoo_format& fmt, const char *opt, int32_t size);
     int32_t decode(const char *buf, int32_t size, aoo_sample *s, int32_t n){

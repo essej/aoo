@@ -23,7 +23,7 @@ void AooReceive::init(int32_t port, aoo_id id, int32 bufsize) {
                     aoo::isink::pointer sink(aoo::isink::create(cmd->id, 0));
                     if (sink){
                         NodeLock lock(*node);
-                        if (node->client()->add_sink(sink.get(), cmd->id) > 0){
+                        if (node->client()->add_sink(sink.get(), cmd->id) == AOO_ERROR_OK){
                             sink->setup(cmd->sampleRate, cmd->blockSize,
                                         cmd->numChannels);
 
@@ -209,7 +209,7 @@ void AooReceiveUnit::next(int numSamples){
     if (sink){
         uint64_t t = getOSCTime(mWorld);
 
-        if (sink->process(mOutBuf, numSamples, t) <= 0){
+        if (sink->process(mOutBuf, numSamples, t) != AOO_ERROR_OK){
             ClearUnitOutputs(this, numSamples);
         }
 
@@ -246,7 +246,7 @@ void aoo_recv_invite(AooReceiveUnit *unit, sc_msg_iter *args){
             aoo_id id;
             if (getSourceArg(owner.node(), &args, addr, id)){
                 if (owner.sink()->invite_source(
-                    addr.address(), addr.length(), id) > 0) {
+                    addr.address(), addr.length(), id) == AOO_ERROR_OK) {
                     // only send IP address on success
                     msg << addr.name() << addr.port() << id;
                 }
@@ -279,7 +279,7 @@ void aoo_recv_uninvite(AooReceiveUnit *unit, sc_msg_iter *args){
                 aoo_id id;
                 if (getSourceArg(owner.node(), &args, addr, id)){
                     if (owner.sink()->uninvite_source(
-                        addr.address(), addr.length(), id) > 0) {
+                        addr.address(), addr.length(), id) == AOO_ERROR_OK) {
                         // only send IP address on success
                         msg << addr.name() << addr.port() << id;
                     }

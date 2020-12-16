@@ -63,28 +63,31 @@ int32_t aoo_net_parse_pattern(const char *, int32_t, int32_t *);
 
 /*//////////////////// AoO server /////////////////////*/
 
-aoo_net_server * aoo_net_server_new(int port, uint32_t flags, int32_t *err) {
+aoo_net_server * aoo_net_server_new(int port, uint32_t flags, aoo_error *err) {
     // create UDP socket
     int udpsocket = aoo::socket_udp(port);
     if (udpsocket < 0){
-        *err = aoo::socket_errno();
-        LOG_ERROR("aoo_server: couldn't create UDP socket (" << *err << ")");
+        auto e = aoo::socket_errno();
+        *err = AOO_ERROR_UNSPECIFIED;
+        LOG_ERROR("aoo_server: couldn't create UDP socket (" << e << ")");
         return nullptr;
     }
 
     // create TCP socket
     int tcpsocket = aoo::socket_tcp(port);
     if (tcpsocket < 0){
-        *err = aoo::socket_errno();
-        LOG_ERROR("aoo_server: couldn't create TCP socket (" << *err << ")");
+        auto e = aoo::socket_errno();
+        *err = AOO_ERROR_UNSPECIFIED;
+        LOG_ERROR("aoo_server: couldn't create TCP socket (" << e << ")");
         aoo::socket_close(udpsocket);
         return nullptr;
     }
 
     // listen
     if (listen(tcpsocket, 32) < 0){
-        *err = aoo::socket_errno();
-        LOG_ERROR("aoo_server: listen() failed (" << *err << ")");
+        auto e = aoo::socket_errno();
+        *err = AOO_ERROR_UNSPECIFIED;
+        LOG_ERROR("aoo_server: listen() failed (" << e << ")");
         aoo::socket_close(tcpsocket);
         aoo::socket_close(udpsocket);
         return nullptr;
@@ -117,11 +120,11 @@ aoo::net::server::~server() {
     clients_.clear();
 }
 
-int32_t aoo_net_server_run(aoo_net_server *server){
+aoo_error aoo_net_server_run(aoo_net_server *server){
     return server->run();
 }
 
-int32_t aoo::net::server::run(){
+aoo_error aoo::net::server::run(){
     // wait for networking or other events
     while (!quit_.load()){
         if (!wait_for_event()){
@@ -135,14 +138,14 @@ int32_t aoo::net::server::run(){
         }
     }
 
-    return 1;
+    return AOO_ERROR_OK;
 }
 
-int32_t aoo_net_server_quit(aoo_net_server *server){
+aoo_error aoo_net_server_quit(aoo_net_server *server){
     return server->quit();
 }
 
-int32_t aoo::net::server::quit(){
+aoo_error aoo::net::server::quit(){
     quit_.store(true);
     if (!signal()){
         // force wakeup by closing the socket.
@@ -150,30 +153,28 @@ int32_t aoo::net::server::quit(){
         // the MSDN docs explicitly forbid it!
         socket_close(udpsocket_);
     }
-    return 1;
+    return AOO_ERROR_OK;
 }
 
-int32_t aoo_net_server_events_available(aoo_net_server *server){
+aoo_error aoo_net_server_events_available(aoo_net_server *server){
     return server->events_available();
 }
 
-int32_t aoo::net::server::events_available(){
-    return !events_.empty();
+aoo_error aoo::net::server::events_available(){
+    return !events_.empty() ? AOO_ERROR_TRUE : AOO_ERROR_FALSE;
 }
 
-int32_t aoo_net_server_poll_events(aoo_net_server *server, aoo_eventhandler fn, void *user){
+aoo_error aoo_net_server_poll_events(aoo_net_server *server, aoo_eventhandler fn, void *user){
     return server->poll_events(fn, user);
 }
 
-int32_t aoo::net::server::poll_events(aoo_eventhandler fn, void *user){
+aoo_error aoo::net::server::poll_events(aoo_eventhandler fn, void *user){
     // always thread-safe
-    int count = 0;
     std::unique_ptr<ievent> e;
     while (events_.try_pop(e)){
         fn(user, &e->event_);
-        count++;
     }
-    return count;
+    return AOO_ERROR_OK;
 }
 
 namespace aoo {

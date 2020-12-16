@@ -72,14 +72,14 @@ void AooClient::connect(const char* host, int port,
         return;
     }
 
-    auto cb = [](void* x, int32_t result, const void* data) {
+    auto cb = [](void* x, aoo_error result, const void* data) {
         auto client = (AooClient*)x;
 
         char buf[1024];
         osc::OutboundPacketStream msg(buf, sizeof(buf));
         msg << osc::BeginMessage("/aoo/client/connect") << client->node_->port();
 
-        if (result == 0) {
+        if (result == AOO_ERROR_OK) {
             auto reply = (const aoo_net_connect_reply*)data;
             // send success + ID
             msg << 1 << reply->user_id;
@@ -102,9 +102,9 @@ void AooClient::disconnect() {
         return;
     }
 
-    auto cb = [](void* x, int32_t result, const void* data) {
+    auto cb = [](void* x, aoo_error result, const void* data) {
         auto client = (AooClient*)x;
-        if (result == 0) {
+        if (result == AOO_ERROR_OK) {
             client->sendReply("/aoo/client/disconnect", true);
         } else {
             auto e = (const aoo_net_error_reply*)data;
@@ -120,9 +120,9 @@ void AooClient::joinGroup(const char* name, const char* pwd) {
         return;
     }
 
-    auto cb = [](void* x, int32_t result, const void* data) {
+    auto cb = [](void* x, aoo_error result, const void* data) {
         auto request = (GroupRequest *)x;
-        if (result == 0) {
+        if (result == AOO_ERROR_OK) {
             request->obj->sendGroupReply("/aoo/client/group/join",
                 request->group.c_str(), true);
         } else {
@@ -141,9 +141,9 @@ void AooClient::leaveGroup(const char* name) {
         return;
     }
 
-    auto cb = [](void* x, int32_t result, const void* data) {
+    auto cb = [](void* x, aoo_error result, const void* data) {
         auto request = (GroupRequest*)x;
-        if (result == 0) {
+        if (result == AOO_ERROR_OK) {
             request->obj->sendGroupReply("/aoo/client/group/leave",
                 request->group.c_str(), true);
         } else {

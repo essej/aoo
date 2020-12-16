@@ -122,35 +122,35 @@ class source final : public isource {
 
     aoo_id id() const { return id_.load(std::memory_order_relaxed); }
 
-    int32_t setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
+    aoo_error setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
-    int32_t add_sink(const void *address, int32_t addrlen,
+    aoo_error add_sink(const void *address, int32_t addrlen,
                      aoo_id id, uint32_t flags) override;
 
-    int32_t remove_sink(const void *address, int32_t addrlen, aoo_id id) override;
+    aoo_error remove_sink(const void *address, int32_t addrlen, aoo_id id) override;
 
     void remove_all() override;
 
-    int32_t handle_message(const char *data, int32_t n,
-                           const void *address, int32_t addrlen) override;
+    aoo_error handle_message(const char *data, int32_t n,
+                             const void *address, int32_t addrlen) override;
 
-    int32_t send(aoo_sendfn fn, void *user) override;
+    aoo_error send(aoo_sendfn fn, void *user) override;
 
-    int32_t process(const aoo_sample **data, int32_t n, uint64_t t) override;
+    aoo_error process(const aoo_sample **data, int32_t n, uint64_t t) override;
 
-    int32_t events_available() override;
+    aoo_error events_available() override;
 
-    int32_t poll_events(aoo_eventhandler fn, void *user) override;
+    aoo_error poll_events(aoo_eventhandler fn, void *user) override;
 
-    int32_t set_option(int32_t opt, void *ptr, int32_t size) override;
+    aoo_error set_option(int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t get_option(int32_t opt, void *ptr, int32_t size) override;
+    aoo_error get_option(int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t set_sinkoption(const void *address, int32_t addrlen, aoo_id id,
-                           int32_t opt, void *ptr, int32_t size) override;
+    aoo_error set_sinkoption(const void *address, int32_t addrlen, aoo_id id,
+                             int32_t opt, void *ptr, int32_t size) override;
 
-    int32_t get_sinkoption(const void *address, int32_t addrlen, aoo_id id,
-                           int32_t opt, void *ptr, int32_t size) override;
+    aoo_error get_sinkoption(const void *address, int32_t addrlen, aoo_id id,
+                             int32_t opt, void *ptr, int32_t size) override;
  private:
     // settings
     std::atomic<aoo_id> id_;
@@ -197,7 +197,7 @@ class source final : public isource {
     std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };
 
     // helper methods
-    int32_t set_format(aoo_format& f);
+    aoo_error set_format(aoo_format& f);
 
     sink_desc * find_sink(const ip_address& addr, aoo_id id);
 
@@ -215,16 +215,16 @@ class source final : public isource {
 
     void update_historybuffer();
 
-    bool send_format(sendfn& fn);
+    void send_format(sendfn& fn);
 
-    bool send_data(sendfn& fn);
+    void send_data(sendfn& fn);
 
     void send_data(sendfn& fn, const endpoint& ep,
                    int32_t salt, const aoo::data_packet& d) const;
 
-    bool resend_data(sendfn& fn);
+    void resend_data(sendfn& fn);
 
-    bool send_ping(sendfn& fn);
+    void send_ping(sendfn& fn);
 
     void handle_format_request(const osc::ReceivedMessage& msg,
                                const ip_address& addr);

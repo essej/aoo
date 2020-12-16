@@ -43,23 +43,23 @@ public:
     using pointer = std::unique_ptr<iserver, deleter>;
 
     // create a new AoO source instance
-    static iserver * create(int port, uint32_t flags, int32_t *err);
+    static iserver * create(int port, uint32_t flags, aoo_error *err);
 
     // destroy the AoO source instance
     static void destroy(iserver *server);
 
     // run the AOO server; this function blocks indefinitely.
-    virtual int32_t run() = 0;
+    virtual aoo_error run() = 0;
 
     // quit the AOO server from another thread
-    virtual int32_t quit() = 0;
+    virtual aoo_error quit() = 0;
 
     // get number of pending events (always thread safe)
-    virtual int32_t events_available() = 0;
+    virtual aoo_error events_available() = 0;
 
     // poll events (threadsafe, but not reentrant)
     // will call the event handler function one or more times
-    virtual int32_t poll_events(aoo_eventhandler fn, void *user) = 0;
+    virtual aoo_error poll_events(aoo_eventhandler fn, void *user) = 0;
 
     // LATER add methods to add/remove users and groups
     // and set/get server options, group options and user options
@@ -67,7 +67,7 @@ protected:
     ~iserver(){} // non-virtual!
 };
 
-inline iserver * iserver::create(int port, uint32_t flags, int32_t *err){
+inline iserver * iserver::create(int port, uint32_t flags, aoo_error *err){
     return aoo_net_server_new(port, flags, err);
 }
 
@@ -96,31 +96,31 @@ public:
     static void destroy(iclient *client);
 
     // run the AOO client; this function blocks indefinitely.
-    virtual int32_t run() = 0;
+    virtual aoo_error run() = 0;
 
     // quit the AOO client from another thread
-    virtual int32_t quit() = 0;
+    virtual aoo_error quit() = 0;
 
     // add AOO source
-    virtual int32_t add_source(aoo::isource *src, aoo_id id) = 0;
+    virtual aoo_error add_source(aoo::isource *src, aoo_id id) = 0;
 
     // remove AOO source
-    virtual int32_t remove_source(aoo::isource *src) = 0;
+    virtual aoo_error remove_source(aoo::isource *src) = 0;
 
     // add AOO sink
-    virtual int32_t add_sink(aoo::isink *src, aoo_id id) = 0;
+    virtual aoo_error add_sink(aoo::isink *src, aoo_id id) = 0;
 
     // remove AOO sink
-    virtual int32_t remove_sink(aoo::isink *src) = 0;
+    virtual aoo_error remove_sink(aoo::isink *src) = 0;
 
     // find peer and return its address
     // address: pointer to sockaddr_storage
     // addrlen: initialized with max. storage size, updated to actual size
-    virtual int32_t find_peer(const char *group, const char *user,
+    virtual aoo_error find_peer(const char *group, const char *user,
                               void *address, int32_t& addrlen) = 0;
 
     // send a request to the AOO server (always thread safe)
-    virtual int32_t send_request(aoo_net_request_type request, void *data,
+    virtual aoo_error send_request(aoo_net_request_type request, void *data,
                                  aoo_net_callback callback, void *user) = 0;
 
     // send a message to one or more peers
@@ -129,23 +129,23 @@ public:
     // b) 'const char *' (group name) + 0: send to all peers of a specific group
     // c) 'NULL' + 0: send to all peers
     // the 'flags' parameter allows for (future) additional settings
-    virtual int32_t send_message(const char *data, int32_t n,
+    virtual aoo_error send_message(const char *data, int32_t n,
                                  const void *addr, int32_t len, int32_t flags) = 0;
 
     // handle messages from peers (thread safe, but not reentrant)
     // 'addr' should be sockaddr *
-    virtual int32_t handle_message(const char *data, int32_t n,
+    virtual aoo_error handle_message(const char *data, int32_t n,
                                    const void *addr, int32_t len) = 0;
 
     // send outgoing messages to peers (thread safe, but not reentrant)
-    virtual int32_t send() = 0;
+    virtual aoo_error send() = 0;
 
     // get number of pending events (always thread safe)
-    virtual int32_t events_available() = 0;
+    virtual aoo_error events_available() = 0;
 
     // poll events (threadsafe, but not reentrant)
     // will call the event handler function one or more times
-    virtual int32_t poll_events(aoo_eventhandler fn, void *user) = 0;
+    virtual aoo_error poll_events(aoo_eventhandler fn, void *user) = 0;
 
     // LATER add API functions to set options and do additional
     // peer communication (chat, OSC messages, etc.)
@@ -153,7 +153,7 @@ public:
     //------------------------------ requests ---------------------------//
 
     // connect to AOO server (always thread safe)
-    int32_t connect(const char *host, int port,
+    aoo_error connect(const char *host, int port,
                     const char *name, const char *pwd,
                     aoo_net_callback cb, void *user)
     {
@@ -162,13 +162,13 @@ public:
     }
 
     // disconnect from AOO server (always thread safe)
-    int32_t disconnect(aoo_net_callback cb, void *user)
+    aoo_error disconnect(aoo_net_callback cb, void *user)
     {
         return send_request(AOO_NET_DISCONNECT_REQUEST, NULL, cb, user);
     }
 
     // join an AOO group
-    int32_t join_group(const char *group, const char *pwd,
+    aoo_error join_group(const char *group, const char *pwd,
                        aoo_net_callback cb, void *user)
     {
         aoo_net_group_request data = { group, pwd };
@@ -176,7 +176,7 @@ public:
     }
 
     // leave an AOO group
-    int32_t leave_group(const char *group, aoo_net_callback cb, void *user)
+    aoo_error leave_group(const char *group, aoo_net_callback cb, void *user)
     {
         aoo_net_group_request data = { group, NULL };
         return send_request(AOO_NET_GROUP_LEAVE_REQUEST, &data, cb, user);
