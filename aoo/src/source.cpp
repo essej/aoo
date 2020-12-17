@@ -751,10 +751,15 @@ void source::send_format(sendfn& fn){
 
     int32_t salt = salt_;
 
-    aoo_format f;
+    aoo_format_storage f;
+    f.header.size = sizeof(aoo_format_storage);
+    if (encoder_->get_format(f) != AOO_ERROR_OK){
+        return;
+    }
+
     char options[AOO_CODEC_MAXSETTINGSIZE];
-    auto size = encoder_->write_format(f, options, sizeof(options));
-    if (size < 0){
+    int32_t size = sizeof(options);
+    if (encoder_->serialize(f.header, options, size) != AOO_ERROR_OK){
         return;
     }
 
@@ -776,8 +781,8 @@ void source::send_format(sendfn& fn){
                  AOO_MSG_DOMAIN, AOO_MSG_SINK, r.id, AOO_MSG_FORMAT);
 
         msg << osc::BeginMessage(address) << id() << (int32_t)make_version()
-            << salt << f.nchannels << f.samplerate << f.blocksize
-            << f.codec << osc::Blob(options, size) << osc::EndMessage;
+            << salt << f.header.nchannels << f.header.samplerate << f.header.blocksize
+            << f.header.codec << osc::Blob(options, size) << osc::EndMessage;
 
         fn(msg.Data(), msg.Size(), r.address, r.flags);
     }
@@ -909,9 +914,15 @@ void source::send_data(sendfn& fn){
             auto blocksize = encoder_->blocksize();
             sendbuffer_.resize(sizeof(double) * nchannels * blocksize); // overallocate
 
-            d.totalsize = encoder_->encode(audioqueue_.read_data(), audioqueue_.blocksize(),
-                                           sendbuffer_.data(), sendbuffer_.size());
+            d.totalsize = sendbuffer_.size();
+            auto err = encoder_->encode(audioqueue_.read_data(), audioqueue_.blocksize(),
+                sendbuffer_.data(), d.totalsize);
+
             audioqueue_.read_commit();
+
+            if (err != AOO_ERROR_OK){
+                return;
+            }
 
             if (d.totalsize > 0){
                 d.sequence = sequence_++;

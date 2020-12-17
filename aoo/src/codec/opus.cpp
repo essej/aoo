@@ -45,6 +45,8 @@ struct codec {
 
 void validate_format(aoo_format_opus& f)
 {
+    f.header.codec = AOO_CODEC_OPUS; // static string!
+    f.header.size = sizeof(aoo_format_opus); // actual size!
     // validate samplerate
     switch (f.header.samplerate){
     case 8000:
@@ -84,12 +86,16 @@ void validate_format(aoo_format_opus& f)
     // bitrate, complexity and signal type should be validated by opus
 }
 
-aoo_error codec_getformat(void *x, aoo_format_storage *f)
+aoo_error getformat(void *x, aoo_format *f)
 {
     auto c = static_cast<codec *>(x);
     if (c->format.header.codec){
-        memcpy(f, &c->format, sizeof(aoo_format_opus));
-        return aoo_error(sizeof(aoo_format_opus));
+        if (f->size >= c->format.header.size){
+            memcpy(f, &c->format, sizeof(aoo_format_opus));
+            return AOO_ERROR_OK;
+        } else {
+            return AOO_ERROR_UNSPECIFIED;
+        }
     } else {
         return AOO_ERROR_UNSPECIFIED;
     }
@@ -114,28 +120,33 @@ void encoder_free(void *enc){
     delete (encoder *)enc;
 }
 
-int32_t encoder_encode(void *enc,
-                       const aoo_sample *s, int32_t n,
-                       char *buf, int32_t size)
+aoo_error encoder_encode(void *enc,
+                         const aoo_sample *s, int32_t n,
+                         char *buf, int32_t *size)
 {
     auto c = static_cast<encoder *>(enc);
     if (c->state){
         auto framesize = n / c->format.header.nchannels;
         auto result = opus_multistream_encode_float(
-                    c->state, s, framesize, (unsigned char *)buf, size);
+            c->state, s, framesize, (unsigned char *)buf, *size);
         if (result > 0){
-            return result;
+            *size = result;
+            return AOO_ERROR_OK;
         } else {
             LOG_VERBOSE("Opus: opus_encode_float() failed with error code " << result);
         }
     }
-    return 0;
+    return AOO_ERROR_UNSPECIFIED;
 }
 
 aoo_error encoder_setformat(void *enc, aoo_format *f){
     if (strcmp(f->codec, AOO_CODEC_OPUS)){
         return AOO_ERROR_UNSPECIFIED;
     }
+    if (f->size < sizeof(aoo_format_opus)){
+        return AOO_ERROR_UNSPECIFIED;
+    }
+
     auto c = static_cast<encoder *>(enc);
     auto fmt = reinterpret_cast<aoo_format_opus *>(f);
 
@@ -180,32 +191,14 @@ aoo_error encoder_setformat(void *enc, aoo_format *f){
         LOG_ERROR("Opus: opus_encoder_create() failed with error code " << error);
         return AOO_ERROR_UNSPECIFIED;
     }
-
     // save and print settings
     memcpy(&c->format, fmt, sizeof(aoo_format_opus));
-    c->format.header.codec = AOO_CODEC_OPUS; // !
     print_settings(c->format);
 
     return AOO_ERROR_OK;
 }
 
-#define encoder_getformat codec_getformat
-
-int32_t encoder_writeformat(void *enc, aoo_format *fmt,
-                              char *buf, int32_t size){
-    if (size >= 12){
-        auto c = static_cast<encoder *>(enc);
-        memcpy(fmt, &c->format.header, sizeof(aoo_format));
-        aoo::to_bytes<int32_t>(c->format.bitrate, buf);
-        aoo::to_bytes<int32_t>(c->format.complexity, buf + 4);
-        aoo::to_bytes<int32_t>(c->format.signal_type, buf + 8);
-
-        return 12;
-    } else {
-        LOG_WARNING("Opus: couldn't write settings");
-        return 0;
-    }
-}
+#define encoder_getformat getformat
 
 /*/////////////////////// decoder ///////////////////////////*/
 
@@ -226,76 +219,31 @@ void decoder_free(void *dec){
     delete (decoder *)dec;
 }
 
-int32_t decoder_decode(void *dec,
+aoo_error decoder_decode(void *dec,
                          const char *buf, int32_t size,
-                         aoo_sample *s, int32_t n)
+                         aoo_sample *s, int32_t *n)
 {
     auto c = static_cast<decoder *>(dec);
     if (c->state){
-        auto framesize = n / c->format.header.nchannels;
+        auto framesize = *n / c->format.header.nchannels;
         auto result = opus_multistream_decode_float(
-                    c->state, (const unsigned char *)buf, size, s, framesize, 0);
+            c->state, (const unsigned char *)buf, size, s, framesize, 0);
         if (result > 0){
-            return result;
+            *n = result;
+            return AOO_ERROR_OK;
         } else {
             LOG_VERBOSE("Opus: opus_decode_float() failed with error code " << result);
         }
     }
-    return 0;
-}
-
-bool decoder_dosetformat(decoder *c, aoo_format_opus& f){
-    if (c->state){
-        opus_multistream_decoder_destroy(c->state);
-    }
-    int error = 0;
-    // setup channel mapping
-    // only use decoupled streams (what's the point of coupled streams?)
-
-    // validate nchannels (we might not call validate_format())
-    // the rest is validated by opus
-    auto nchannels = f.header.nchannels;
-    if (nchannels < 1 || nchannels > 255){
-        LOG_WARNING("Opus: channel count " << nchannels << " out of range");
-        return false;
-    }
-    unsigned char mapping[256];
-    for (int i = 0; i < nchannels; ++i){
-        mapping[i] = i;
-    }
-    memset(mapping + nchannels, 255, 256 - nchannels);
-    // create state
-    c->state = opus_multistream_decoder_create(f.header.samplerate,
-                                       nchannels, nchannels, 0, mapping,
-                                       &error);
-    if (error == OPUS_OK){
-        assert(c->state != nullptr);
-        // these are actually encoder settings and do anything on the decoder
-    #if 0
-        // complexity
-        opus_multistream_decoder_ctl(c->state, OPUS_SET_COMPLEXITY(f.complexity));
-        opus_multistream_decoder_ctl(c->state, OPUS_GET_COMPLEXITY(&f.complexity));
-        // bitrate
-        opus_multistream_decoder_ctl(c->state, OPUS_SET_BITRATE(f.bitrate));
-        opus_multistream_decoder_ctl(c->state, OPUS_GET_BITRATE(&f.bitrate));
-        // signal type
-        opus_multistream_decoder_ctl(c->state, OPUS_SET_SIGNAL(f.signal_type));
-        opus_multistream_decoder_ctl(c->state, OPUS_GET_SIGNAL(&f.signal_type));
-    #endif
-        // save and print settings
-        memcpy(&c->format, &f, sizeof(aoo_format_opus));
-        c->format.header.codec = AOO_CODEC_OPUS; // !
-        print_settings(f);
-        return true;
-    } else {
-        LOG_ERROR("Opus: opus_decoder_create() failed with error code " << error);
-        return false;
-    }
+    return AOO_ERROR_UNSPECIFIED;
 }
 
 aoo_error decoder_setformat(void *dec, aoo_format *f)
 {
     if (strcmp(f->codec, AOO_CODEC_OPUS)){
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    if (f->size < sizeof(aoo_format_opus)){
         return AOO_ERROR_UNSPECIFIED;
     }
 
@@ -304,55 +252,106 @@ aoo_error decoder_setformat(void *dec, aoo_format *f)
 
     validate_format(*fmt);
 
-    if (decoder_dosetformat(c, *fmt)){
+    if (c->state){
+        opus_multistream_decoder_destroy(c->state);
+    }
+    // setup channel mapping
+    // only use decoupled streams (what's the point of coupled streams?)
+    auto nchannels = fmt->header.nchannels;
+    unsigned char mapping[256];
+    for (int i = 0; i < nchannels; ++i){
+        mapping[i] = i;
+    }
+    memset(mapping + nchannels, 255, 256 - nchannels);
+    // create state
+    int error = 0;
+    c->state = opus_multistream_decoder_create(fmt->header.samplerate,
+        nchannels, nchannels, 0, mapping, &error);
+    if (error == OPUS_OK){
+        assert(c->state != nullptr);
+        // these are actually encoder settings and do anything on the decoder
+    #if 0
+        // complexity
+        opus_multistream_decoder_ctl(c->state, OPUS_SET_COMPLEXITY(fmt->complexity));
+        opus_multistream_decoder_ctl(c->state, OPUS_GET_COMPLEXITY(&fmt->complexity));
+        // bitrate
+        opus_multistream_decoder_ctl(c->state, OPUS_SET_BITRATE(fmt->bitrate));
+        opus_multistream_decoder_ctl(c->state, OPUS_GET_BITRATE(&fmt->bitrate));
+        // signal type
+        opus_multistream_decoder_ctl(c->state, OPUS_SET_SIGNAL(fmt->signal_type));
+        opus_multistream_decoder_ctl(c->state, OPUS_GET_SIGNAL(&fmt->signal_type));
+    #endif
+        // save and print settings
+        memcpy(&c->format, fmt, sizeof(aoo_format_opus));
+        print_settings(c->format);
         return AOO_ERROR_OK;
     } else {
+        LOG_ERROR("Opus: opus_decoder_create() failed with error code " << error);
         return AOO_ERROR_UNSPECIFIED;
     }
 }
 
-#define decoder_getformat codec_getformat
+#define decoder_getformat getformat
 
-int32_t decoder_readformat(void *dec, const aoo_format *fmt,
-                           const char *buf, int32_t size){
-    if (strcmp(fmt->codec, AOO_CODEC_OPUS)){
-        LOG_ERROR("opus: wrong format!");
-        return 0;
-    }
-    if (size >= 12){
-        auto c = static_cast<decoder *>(dec);
-        aoo_format_opus f;
-        // opus will validate for us
-        memcpy(&f.header, fmt, sizeof(aoo_format));
-        f.bitrate = aoo::from_bytes<int32_t>(buf);
-        f.complexity = aoo::from_bytes<int32_t>(buf + 4);
-        f.signal_type = aoo::from_bytes<int32_t>(buf + 8);
+/*////////////////////// codec ////////////////////*/
 
-        if (decoder_dosetformat(c, f)){
-            return 12; // number of bytes
-        } else {
-            return 0; // error
-        }
+aoo_error serialize(const aoo_format *f, char *buf, int32_t *size){
+    if (*size >= 12){
+        auto fmt = (const aoo_format_opus *)f;
+        aoo::to_bytes<int32_t>(fmt->bitrate, buf);
+        aoo::to_bytes<int32_t>(fmt->complexity, buf + 4);
+        aoo::to_bytes<int32_t>(fmt->signal_type, buf + 8);
+        *size = 12;
+
+        return AOO_ERROR_OK;
     } else {
-        LOG_ERROR("Opus: couldn't read format - too little data!");
-        return 0;
+        LOG_WARNING("Opus: couldn't write settings");
+        return AOO_ERROR_UNSPECIFIED;
     }
+}
+
+aoo_error deserialize(const aoo_format *header, const char *buf,
+                      int32_t size, aoo_format *f){
+    if (size < 12){
+        LOG_ERROR("Opus: couldn't read format - not enough data!");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    if (f->size < sizeof(aoo_format_opus)){
+        LOG_ERROR("Opus: output format storage too small");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    auto fmt = (aoo_format_opus *)f;
+    // header
+    fmt->header.codec = AOO_CODEC_OPUS; // static string!
+    fmt->header.size = sizeof(aoo_format_opus); // actual size!
+    fmt->header.blocksize = header->blocksize;
+    fmt->header.nchannels = header->nchannels;
+    fmt->header.samplerate = header->samplerate;
+    // options
+    fmt->bitrate = aoo::from_bytes<int32_t>(buf);
+    fmt->complexity = aoo::from_bytes<int32_t>(buf + 4);
+    fmt->signal_type = aoo::from_bytes<int32_t>(buf + 8);
+
+    return AOO_ERROR_OK;
 }
 
 aoo_codec codec_class = {
     AOO_CODEC_OPUS,
+    // encoder
     encoder_new,
     encoder_free,
     encoder_setformat,
     encoder_getformat,
-    encoder_writeformat,
     encoder_encode,
+    // decoder
     decoder_new,
     decoder_free,
     decoder_setformat,
     decoder_getformat,
-    decoder_readformat,
-    decoder_decode
+    decoder_decode,
+    // helper
+    serialize,
+    deserialize
 };
 
 } // namespace

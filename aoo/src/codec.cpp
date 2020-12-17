@@ -30,16 +30,6 @@ aoo_error decoder::set_format(aoo_format& fmt){
     return result;
 }
 
-int32_t decoder::read_format(const aoo_format& fmt, const char *opt, int32_t size){
-    auto result = codec_->decoder_readformat(obj_, &fmt, opt, size);
-    if (result > 0){
-        nchannels_ = fmt.nchannels;
-        samplerate_ = fmt.samplerate;
-        blocksize_ = fmt.blocksize;
-    }
-    return result;
-}
-
 std::unique_ptr<encoder> codec::create_encoder() const {
     auto obj = codec_->encoder_new();
     if (obj){

@@ -245,7 +245,7 @@ typedef enum aoo_option
 {
     // The source/sink ID
     aoo_opt_id = 0,
-    // Stream format (set: aoo_format, get: aoo_format_storage)
+    // Stream format (aoo_format)
     // ---
     // The settings for the audio codec to be used for a stream.
     // If you want to set the format, you have to send the format
@@ -253,6 +253,7 @@ typedef enum aoo_option
     // set in sources.
     // If you want to get the format, you have to pass a
     // aoo_format_storage, which is filled with the format.
+    // Make sure that the 'size' field is set to the max. storage size!
     aoo_opt_format,
     // Reset the source/sink (NULL)
     aoo_opt_reset,
@@ -345,6 +346,7 @@ typedef enum aoo_option
 typedef struct aoo_format
 {
     const char *codec;
+    int32_t size;
     int32_t nchannels;
     int32_t samplerate;
     int32_t blocksize;
@@ -634,39 +636,57 @@ typedef void* (*aoo_codec_new)(void);
 
 typedef void (*aoo_codec_free)(void *);
 
-typedef aoo_error (*aoo_codec_setformat)(void *, aoo_format *);
-
-typedef aoo_error (*aoo_codec_getformat)(void *, aoo_format_storage *);
-
-typedef int32_t (*aoo_codec_writeformat)(
-        void *,         // the encoder instance
-        aoo_format *,   // the base format
-        char *,         // output buffer
-        int32_t         // buffer size
+// set the codec format.
+// the 'aoo_format' struct is validated and updated accordingly.
+typedef aoo_error (*aoo_codec_setformat)(
+        void *,         // the encoder/decoder instance
+        aoo_format *    // the format (validated and updated on success)
 );
 
-typedef int32_t (*aoo_codec_readformat)(
-        void *,             // the decoder instance
-        const aoo_format *, // the base format
-        const char *,       // input buffer
-        int32_t             // number of bytes
+// get the codec format.
+// 'aoo_format' must be large enough to hold the codec format, e.g. 'aoo_format_storage'.
+// NOTE: the 'size' member of 'aoo_format' must be initialized to the format storage size.
+// on success, it is updated to the actual size.
+typedef aoo_error (*aoo_codec_getformat)(
+        void *,         // the encoder/decoder instance
+        aoo_format *    // format storage
 );
 
-typedef int32_t (*aoo_codec_encode)(
+// encode samples to bytes
+typedef aoo_error (*aoo_codec_encode)(
         void *,             // the encoder instance
         const aoo_sample *, // input samples (interleaved)
         int32_t,            // number of samples
         char *,             // output buffer
-        int32_t             // max. size of output buffer
+        int32_t *           // max. buffer size (updated to actual size)
 );
 
-typedef int32_t (*aoo_codec_decode)(
+// decode bytes to samples
+typedef aoo_error (*aoo_codec_decode)(
         void *,         // the decoder instance
         const char *,   // input bytes
         int32_t,        // input size
         aoo_sample *,   // output samples (interleaved)
-        int32_t         // number of samples
+        int32_t *       // max. number of samples (updated to actual number)
 
+);
+
+// serialize format options (everything after the 'aoo_format' header)
+typedef aoo_error (*aoo_codec_serialize)(
+        const aoo_format *, // source format
+        char *,             // option buffer
+        int32_t *           // buffer size (updated to actual size)
+);
+
+// deserialize format options (everything after the 'aoo_format' header).
+// 'aoo_format' must be large enough to hold the codec options, e.g. 'aoo_format_storage'.
+typedef aoo_error (*aoo_codec_deserialize)(
+        const aoo_format *, // format header
+        const char *,       // option buffer
+        int32_t,            // buffer size
+        aoo_format *        // format storage
+                            // NOTE: the 'size' field must be initialized to the max.
+                            // available storage size and is updated to the actual size.
 );
 
 typedef struct aoo_codec
@@ -677,15 +697,18 @@ typedef struct aoo_codec
     aoo_codec_free encoder_free;
     aoo_codec_setformat encoder_setformat;
     aoo_codec_getformat encoder_getformat;
-    aoo_codec_writeformat encoder_writeformat;
     aoo_codec_encode encoder_encode;
     // decoder
     aoo_codec_new decoder_new;
     aoo_codec_free decoder_free;
     aoo_codec_setformat decoder_setformat;
     aoo_codec_getformat decoder_getformat;
-    aoo_codec_readformat decoder_readformat;
     aoo_codec_decode decoder_decode;
+    // helpers
+    aoo_codec_serialize serialize;
+    aoo_codec_deserialize deserialize;
+    void *reserved[18];
+
 } aoo_codec;
 
 // register an external codec plugin

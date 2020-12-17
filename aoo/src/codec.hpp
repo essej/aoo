@@ -13,9 +13,23 @@ public:
     base_codec(const aoo_codec&) = delete;
 
     const char *name() const { return codec_->name; }
+
     int32_t nchannels() const { return nchannels_; }
+
     int32_t samplerate() const { return samplerate_; }
+
     int32_t blocksize() const { return blocksize_; }
+
+    aoo_error serialize(const aoo_format& f,
+                        char *buf, int32_t &n) {
+        return codec_->serialize(&f, buf, &n);
+    }
+
+    aoo_error deserialize(const aoo_format& header,
+                          const char *data, int32_t n,
+                          aoo_format_storage& f) {
+        return codec_->deserialize(&header, data, n, (aoo_format *)&f);
+    }
 protected:
     const aoo_codec *codec_;
     void *obj_;
@@ -32,14 +46,13 @@ public:
     }
 
     aoo_error set_format(aoo_format& fmt);
+
     aoo_error get_format(aoo_format_storage& fmt) const {
-        return codec_->encoder_getformat(obj_, &fmt);
+        return codec_->encoder_getformat(obj_, (aoo_format *)&fmt);
     }
-    int32_t write_format(aoo_format& fmt, char *buf, int32_t size){
-        return codec_->encoder_writeformat(obj_, &fmt, buf, size);
-    }
-    int32_t encode(const aoo_sample *s, int32_t n, char *buf, int32_t size){
-        return codec_->encoder_encode(obj_, s, n, buf, size);
+
+    aoo_error encode(const aoo_sample *s, int32_t n, char *buf, int32_t &size){
+        return codec_->encoder_encode(obj_, s, n, buf, &size);
     }
 };
 
@@ -51,12 +64,13 @@ public:
     }
 
     aoo_error set_format(aoo_format& fmt);
+
     aoo_error get_format(aoo_format_storage& f) const {
-        return codec_->decoder_getformat(obj_, &f);
+        return codec_->decoder_getformat(obj_, (aoo_format *)&f);
     }
-    int32_t read_format(const aoo_format& fmt, const char *opt, int32_t size);
-    int32_t decode(const char *buf, int32_t size, aoo_sample *s, int32_t n){
-        return codec_->decoder_decode(obj_, buf, size, s, n);
+
+    aoo_error decode(const char *buf, int32_t size, aoo_sample *s, int32_t &n){
+        return codec_->decoder_decode(obj_, buf, size, s, &n);
     }
 };
 
@@ -64,10 +78,13 @@ class codec {
 public:
     codec(const aoo_codec *c)
         : codec_(c){}
+
     const char *name() const {
         return codec_->name;
     }
+
     std::unique_ptr<encoder> create_encoder() const;
+
     std::unique_ptr<decoder> create_decoder() const;
 private:
     const aoo_codec *codec_;

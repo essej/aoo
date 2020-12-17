@@ -140,6 +140,7 @@ void format_makedefault(aoo_format_storage &f, int nchannels)
 {
     auto& fmt = (aoo_format_pcm &)f;
     fmt.header.codec = AOO_CODEC_PCM;
+    fmt.header.size = sizeof(aoo_format_pcm);
     fmt.header.blocksize = 64;
     fmt.header.samplerate = sys_getsr();
     fmt.header.nchannels = nchannels;
@@ -171,6 +172,7 @@ bool format_parse(void *x, aoo_format_storage &f, int argc, t_atom *argv,
     if (codec == gensym(AOO_CODEC_PCM)){
         auto& fmt = (aoo_format_pcm &)f;
         fmt.header.codec = AOO_CODEC_PCM;
+        fmt.header.size = sizeof(aoo_format_pcm);
         fmt.header.nchannels = format_getparam(x, argc, argv, 1, "channels", maxnumchannels);
         fmt.header.blocksize = format_getparam(x, argc, argv, 2, "blocksize", 64);
         fmt.header.samplerate = format_getparam(x, argc, argv, 3, "samplerate", sys_getsr());
@@ -198,6 +200,7 @@ bool format_parse(void *x, aoo_format_storage &f, int argc, t_atom *argv,
     else if (codec == gensym(AOO_CODEC_OPUS)){
         auto &fmt = (aoo_format_opus &)f;
         fmt.header.codec = AOO_CODEC_OPUS;
+        fmt.header.size = sizeof(aoo_format_opus);
         fmt.header.nchannels = format_getparam(x, argc, argv, 1, "channels", maxnumchannels);
         fmt.header.blocksize = format_getparam(x, argc, argv, 2, "blocksize", 480); // 10ms
         fmt.header.samplerate = format_getparam(x, argc, argv, 3, "samplerate", 48000);

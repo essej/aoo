@@ -30,8 +30,7 @@ void AooSend::init(int32_t port, aoo_id id) {
                             source->set_buffersize(DEFBUFSIZE);
 
                             aoo_format_storage f;
-                            makeDefaultFormat(f, cmd->sampleRate,
-                                              cmd->blockSize, cmd->numChannels);
+                            makeDefaultFormat(f, cmd->sampleRate, cmd->blockSize, cmd->numChannels);
                             source->set_format(f.header);
 
                             cmd->node = std::move(node);

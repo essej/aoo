@@ -622,6 +622,7 @@ aoo_error sink::handle_format_message(const osc::ReceivedMessage& msg,
     f.samplerate = (it++)->AsInt32();
     f.blocksize = (it++)->AsInt32();
     f.codec = (it++)->AsString();
+    f.size = sizeof(aoo_format);
     const void *settings;
     osc::osc_bundle_element_size_t size;
     (it++)->AsBlob(settings, size);
@@ -729,7 +730,7 @@ source_desc::~source_desc(){
     event e;
     while (eventqueue_.try_pop(e)){
         if (e.type_ == AOO_SOURCE_FORMAT_EVENT){
-            delete e.format.format;
+            delete[] e.format.format;
         }
     }
 }
@@ -888,7 +889,15 @@ aoo_error source_desc::handle_format(const sink& s, int32_t salt, const aoo_form
     salt_ = salt;
 
     // read format
-    decoder_->read_format(f, settings, size);
+    aoo_format_storage fmt;
+    fmt.header.size = sizeof(aoo_format_storage); // !
+    if (decoder_->deserialize(f, settings, size, fmt) != AOO_ERROR_OK){
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    // set format
+    if (decoder_->set_format(fmt.header) != AOO_ERROR_OK){
+        return AOO_ERROR_UNSPECIFIED;
+    }
 
     update(s);
 
@@ -906,14 +915,13 @@ aoo_error source_desc::handle_format(const sink& s, int32_t salt, const aoo_form
         }
     }
 
-    // This is the only thread where the format can possibly change,
-    // so we don't need a lock to *read* it!
-    auto fmt = new aoo_format_storage;
-    decoder_->get_format(*fmt);
+    // send format event
+    // NOTE: we could just allocate 'aoo_format_storage', but it would be wasteful.
+    auto fs = new char[fmt.header.size];
+    memcpy(fs, &fmt, fmt.header.size);
 
-    // push event
     event e(AOO_SOURCE_FORMAT_EVENT, *this);
-    e.format.format = (const aoo_format *)fmt;
+    e.format.format = (const aoo_format *)fs;
 
     push_event(e);
 
@@ -1185,7 +1193,7 @@ int32_t source_desc::poll_events(aoo_eventhandler fn, void *user){
             // freeing memory is not really RT safe,
             // but it is the easiest solution.
             // LATER think about better ways.
-            delete e.format.format;
+            delete[] e.format.format;
         }
         count++;
     }
@@ -1213,8 +1221,8 @@ void source_desc::recover(const char *reason, int32_t n){
     for (int i = 0; i < n && audioqueue_.write_available() > 1
            && infoqueue_.write_available() > 1; ++i)
     {
-        decoder_->decode(nullptr, 0, audioqueue_.write_data(),
-                         audioqueue_.blocksize());
+        auto size = audioqueue_.blocksize();
+        decoder_->decode(nullptr, 0, audioqueue_.write_data(), size);
         audioqueue_.write_commit();
 
         // push nominal samplerate + current channel

@@ -134,13 +134,19 @@ struct codec {
     aoo_format_pcm format;
 };
 
-aoo_error codec_setformat(void *enc, aoo_format *f)
+aoo_error setformat(void *enc, aoo_format *f)
 {
     if (strcmp(f->codec, AOO_CODEC_PCM)){
         return AOO_ERROR_UNSPECIFIED;
     }
+    if (f->size < sizeof(aoo_format_pcm)){
+        return AOO_ERROR_UNSPECIFIED;
+    }
     auto c = static_cast<codec *>(enc);
     auto fmt = reinterpret_cast<aoo_format_pcm *>(f);
+
+    fmt->header.codec = AOO_CODEC_PCM; // static string!
+    fmt->header.size = sizeof(aoo_format_pcm); // actual size!
 
     // validate blocksize
     if (fmt->header.blocksize <= 0){
@@ -168,18 +174,22 @@ aoo_error codec_setformat(void *enc, aoo_format *f)
 
     // save and print settings
     memcpy(&c->format, fmt, sizeof(aoo_format_pcm));
-    c->format.header.codec = AOO_CODEC_PCM; // !
     print_settings(c->format);
 
     return AOO_ERROR_OK;
 }
 
-aoo_error codec_getformat(void *x, aoo_format_storage *f)
+aoo_error getformat(void *x, aoo_format *f)
 {
     auto c = static_cast<codec *>(x);
+    // check if format has been set
     if (c->format.header.codec){
-        memcpy(f, &c->format, sizeof(aoo_format_pcm));
-        return aoo_error(sizeof(aoo_format_pcm));
+        if (f->size >= c->format.header.size){
+            memcpy(f, &c->format, sizeof(aoo_format_pcm));
+            return AOO_ERROR_OK;
+        } else {
+            return AOO_ERROR_UNSPECIFIED;
+        }
     } else {
         return AOO_ERROR_UNSPECIFIED;
     }
@@ -193,15 +203,16 @@ void encoder_free(void *enc){
     delete (codec *)enc;
 }
 
-int32_t encoder_encode(void *enc,
-                         const aoo_sample *s, int32_t n,
-                         char *buf, int32_t size)
+aoo_error encode(void *enc,
+                 const aoo_sample *s, int32_t n,
+                 char *buf, int32_t *size)
 {
     auto bitdepth = static_cast<codec *>(enc)->format.bitdepth;
     auto samplesize = bytes_per_sample(bitdepth);
+    auto nbytes = samplesize * n;
 
-    if (size < (n * samplesize)){
-        return 0;
+    if (*size < nbytes){
+        return AOO_ERROR_UNSPECIFIED;
     }
 
     auto samples_to_blob = [&](auto fn){
@@ -230,22 +241,9 @@ int32_t encoder_encode(void *enc,
         break;
     }
 
-    return n * samplesize;
-}
+    *size = nbytes;
 
-int32_t encoder_writeformat(void *enc, aoo_format *fmt,
-                            char *buf, int32_t size)
-{
-    if (size >= 4){
-        auto c = static_cast<codec *>(enc);
-        memcpy(fmt, &c->format.header, sizeof(aoo_format));
-        aoo::to_bytes<int32_t>(c->format.bitdepth, buf);
-
-        return 4;
-    } else {
-        LOG_ERROR("PCM: couldn't write settings - buffer too small!");
-        return 0;
-    }
+    return AOO_ERROR_OK;
 }
 
 void *decoder_new(){
@@ -256,29 +254,30 @@ void decoder_free(void *dec){
     delete (codec *)dec;
 }
 
-int32_t decoder_decode(void *dec,
-                       const char *buf, int32_t size,
-                       aoo_sample *s, int32_t n)
+aoo_error decode(void *dec,
+                 const char *buf, int32_t size,
+                 aoo_sample *s, int32_t *n)
 {
     auto c = static_cast<codec *>(dec);
     assert(c->format.header.blocksize != 0);
 
     if (!buf){
-        for (int i = 0; i < n; ++i){
+        for (int i = 0; i < *n; ++i){
             s[i] = 0;
         }
-        return 0;
+        return AOO_ERROR_OK; // dropped block
     }
 
     auto samplesize = bytes_per_sample(c->format.bitdepth);
+    auto nsamples = size / samplesize;
 
-    if (n < (size / samplesize)){
-        return 0;
+    if (*n < nsamples){
+        return AOO_ERROR_UNSPECIFIED;
     }
 
     auto blob_to_samples = [&](auto convfn){
         auto b = buf;
-        for (int i = 0; i < n; ++i, b += samplesize){
+        for (int i = 0; i < *n; ++i, b += samplesize){
             s[i] = convfn(b);
         }
     };
@@ -298,49 +297,69 @@ int32_t decoder_decode(void *dec,
         break;
     default:
         // unknown bitdepth
-        return 0;
+        return AOO_ERROR_UNSPECIFIED;
     }
 
-    return size / samplesize;
+    *n = nsamples;
+
+    return AOO_ERROR_OK;
 }
 
-int32_t decoder_readformat(void *dec, const aoo_format *fmt,
-                           const char *buf, int32_t size)
+aoo_error serialize(const aoo_format *f, char *buf, int32_t *size)
 {
-    if (size >= 4){
-        auto c = static_cast<codec *>(dec);
-        // TODO validate
-        if (!strcmp(fmt->codec, AOO_CODEC_PCM) && fmt->blocksize > 0
-                && fmt->samplerate > 0 && fmt->blocksize > 0)
-        {
-            memcpy(&c->format.header, fmt, sizeof(aoo_format));
-            c->format.bitdepth = (aoo_pcm_bitdepth)aoo::from_bytes<int32_t>(buf);
-            c->format.header.codec = AOO_CODEC_PCM; // !
-            print_settings(c->format);
-            return 4;
-        } else {
-            LOG_ERROR("PCM: bad format!");
-        }
+    if (*size >= 4){
+        auto fmt = (const aoo_format_pcm *)f;
+        aoo::to_bytes<int32_t>(fmt->bitdepth, buf);
+        *size = 4;
+
+        return AOO_ERROR_OK;
     } else {
-        LOG_ERROR("PCM: couldn't read format - not enough data!");
+        LOG_ERROR("PCM: couldn't write settings - buffer too small!");
+        return AOO_ERROR_UNSPECIFIED;
     }
-    return 0;
+}
+
+aoo_error deserialize(const aoo_format *header, const char *buf,
+                      int32_t size, aoo_format *f)
+{
+    if (size < 4){
+        LOG_ERROR("PCM: couldn't read format - not enough data!");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    if (f->size < sizeof(aoo_format_pcm)){
+        LOG_ERROR("PCM: output format storage too small");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    auto fmt = (aoo_format_pcm *)f;
+    // header
+    fmt->header.codec = AOO_CODEC_PCM; // static string!
+    fmt->header.size = sizeof(aoo_format_pcm); // actual size!
+    fmt->header.blocksize = header->blocksize;
+    fmt->header.nchannels = header->nchannels;
+    fmt->header.samplerate = header->samplerate;
+    // options
+    fmt->bitdepth = (aoo_pcm_bitdepth)aoo::from_bytes<int32_t>(buf);
+
+    return AOO_ERROR_OK;
 }
 
 aoo_codec codec_class = {
     AOO_CODEC_PCM,
+    // encoder
     encoder_new,
     encoder_free,
-    codec_setformat,
-    codec_getformat,
-    encoder_writeformat,
-    encoder_encode,
+    setformat,
+    getformat,
+    encode,
+    // decoder
     decoder_new,
     decoder_free,
-    codec_setformat,
-    codec_getformat,
-    decoder_readformat,
-    decoder_decode
+    setformat,
+    getformat,
+    decode,
+    // helper
+    serialize,
+    deserialize
 };
 
 } // namespace

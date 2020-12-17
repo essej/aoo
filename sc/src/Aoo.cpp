@@ -348,6 +348,7 @@ void makeDefaultFormat(aoo_format_storage& f, int sampleRate,
 {
     auto& fmt = (aoo_format_pcm &)f;
     fmt.header.codec = AOO_CODEC_PCM;
+    fmt.header.size = sizeof(aoo_format_pcm);
     fmt.header.blocksize = blockSize;
     fmt.header.samplerate = sampleRate;
     fmt.header.nchannels = numChannels;
@@ -378,6 +379,7 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
     if (!strcmp(codec, AOO_CODEC_PCM)){
         auto& fmt = (aoo_format_pcm &)f;
         fmt.header.codec = AOO_CODEC_PCM;
+        fmt.header.size = sizeof(aoo_format_pcm);
         fmt.header.nchannels = getFormatParam(args, "channels", defNumChannels);
         fmt.header.blocksize = getFormatParam(args, "blocksize", unit.bufferSize());
         fmt.header.samplerate = getFormatParam(args, "samplerate", unit.sampleRate());
@@ -405,6 +407,7 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
     else if (!strcmp(codec, AOO_CODEC_OPUS)){
         auto &fmt = (aoo_format_opus &)f;
         fmt.header.codec = AOO_CODEC_OPUS;
+        fmt.header.size = sizeof(aoo_format_opus);
         fmt.header.nchannels = getFormatParam(args, "channels", defNumChannels);
         fmt.header.blocksize = getFormatParam(args, "blocksize", 480); // 10ms
         fmt.header.samplerate = getFormatParam(args, "samplerate", 48000);
