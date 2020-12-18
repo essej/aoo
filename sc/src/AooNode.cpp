@@ -90,14 +90,7 @@ AooNode::AooNode(World *world, int socket, int port)
 {
     type_ = socket_family(socket);
 
-    auto fn = [](void *user, const char *msg, int32_t size,
-                 const void *addr, int32_t addrlen, uint32_t flags)
-    {
-        auto x = (AooNode *)user;
-        ip_address address((const sockaddr *)addr, addrlen);
-        return socket_sendto(x->socket_, msg, size, address);
-    };
-    client_.reset(aoo::net::iclient::create(socket, fn, this, 0));
+    client_.reset(aoo::net::iclient::create(socket, 0));
     // start threads
 #if AOO_NODE_POLL
     thread_ = std::thread([this](){
@@ -252,8 +245,16 @@ void AooNode::notify(){
 
 void AooNode::doSend()
 {
+    auto fn = [](void *user, const char *msg, int32_t size,
+                 const void *addr, int32_t addrlen, uint32_t flags)
+    {
+        auto x = (AooNode *)user;
+        ip_address address((const sockaddr *)addr, addrlen);
+        return socket_sendto(x->socket_, msg, size, address);
+    };
+
     aoo::shared_scoped_lock lock(clientMutex_);
-    client_->send();
+    client_->send(fn, this);
 }
 
 void AooNode::doReceive()

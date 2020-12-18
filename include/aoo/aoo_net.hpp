@@ -89,8 +89,7 @@ public:
     using pointer = std::unique_ptr<iclient, deleter>;
 
     // create a new AoO sink instance
-    static iclient * create(int socket, aoo_sendfn fn,
-                            void *user, uint32_t flags);
+    static iclient * create(int socket, uint32_t flags);
 
     // destroy the AoO sink instance
     static void destroy(iclient *client);
@@ -138,7 +137,7 @@ public:
                                    const void *addr, int32_t len) = 0;
 
     // send outgoing messages to peers (thread safe, but not reentrant)
-    virtual aoo_error send() = 0;
+    virtual aoo_error send(aoo_sendfn fn, void *user) = 0;
 
     // get number of pending events (always thread safe)
     virtual aoo_error events_available() = 0;
@@ -185,8 +184,8 @@ protected:
     ~iclient(){} // non-virtual!
 };
 
-inline iclient * iclient::create(int socket, aoo_sendfn fn, void *user, uint32_t flags){
-    return aoo_net_client_new(socket, fn, user, flags);
+inline iclient * iclient::create(int socket, uint32_t flags){
+    return aoo_net_client_new(socket, flags);
 }
 
 inline void iclient::destroy(iclient *client){

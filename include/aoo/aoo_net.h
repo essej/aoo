@@ -203,8 +203,7 @@ typedef struct aoo_net_client aoo_net_client;
 #endif
 
 // create a new AOO client for the given UDP socket
-AOO_API aoo_net_client * aoo_net_client_new(int socket, aoo_sendfn fn,
-                                            void *user, uint32_t flags);
+AOO_API aoo_net_client * aoo_net_client_new(int socket, uint32_t flags);
 
 // destroy AOO client
 AOO_API void aoo_net_client_free(aoo_net_client *client);
@@ -260,7 +259,7 @@ AOO_API aoo_error aoo_net_client_handle_message(aoo_net_client *client,
                                               const void *addr, int32_t len);
 
 // send outgoing messages to peers (threadsafe, but not reentrant)
-AOO_API aoo_error aoo_net_client_send(aoo_net_client *client);
+AOO_API aoo_error aoo_net_client_send(aoo_net_client *client, aoo_sendfn fn, void *user);
 
 // get number of pending events (always thread safe)
 AOO_API aoo_error aoo_net_client_events_available(aoo_net_client *client);

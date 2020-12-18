@@ -94,12 +94,11 @@ private:
 };
 
 /*///////////////////////// udp_client ///////////////////////////*/
+
 class udp_client {
 public:
-    udp_client(client& c, int socket, int port,
-               aoo_sendfn fn, void *user, uint32_t flags)
-        : client_(&c), socket_(socket), port_(port),
-          fn_(fn), user_(user) {}
+    udp_client(client& c, int socket, int port, uint32_t flags)
+        : client_(&c), socket_(socket), port_(port) {}
 
     int port() const { return port_; }
 
@@ -107,7 +106,7 @@ public:
                              const ip_address& addr,
                              int32_t type, aoo_type onset);
 
-    void send(time_tag now);
+    void send(aoo_sendfn fn, void *user, time_tag now);
 
     void send_server_message(const char *data, int32_t size);
 
@@ -119,8 +118,8 @@ private:
     client *client_;
     int socket_;
     int port_;
-    aoo_sendfn fn_;
-    void *user_;
+    aoo_sendfn fn_ = nullptr;
+    void *user_ = nullptr;
     ip_address local_address_;
     std::vector<ip_address> server_addrlist_;
     std::vector<ip_address> public_addrlist_;
@@ -170,7 +169,7 @@ public:
         };
     };
 
-    client(int udpsocket, aoo_sendfn, void *user, uint32_t flags);
+    client(int udpsocket, uint32_t flags);
     ~client();
 
     aoo_error run() override;
@@ -202,7 +201,7 @@ public:
     bool handle_peer_message(const osc::ReceivedMessage& msg, int onset,
                              const ip_address& addr);
 
-    aoo_error send() override;
+    aoo_error send(aoo_sendfn fn, void *user) override;
 
     aoo_error events_available() override;
 
@@ -264,8 +263,6 @@ private:
     std::unique_ptr<udp_client> udp_client_;
     int socket_ = -1;
     ip_address::ip_type type_ = ip_address::Unspec;
-    aoo_sendfn fn_;
-    void *user_;
     // dependants
     struct source_desc {
         aoo::isource *source;

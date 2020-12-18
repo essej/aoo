@@ -151,8 +151,15 @@ bool t_node::add_object(t_pd *obj, void *x, aoo_id id)
 
 void t_node::do_send()
 {
+    auto fn = [](void *user, const char *msg, int32_t n,
+            const void *addr, int32_t len, uint32_t flags){
+        auto x = (t_node *)user;
+        ip_address dest((sockaddr *)addr, len);
+        return socket_sendto(x->x_socket, msg, n, dest);
+    };
+
     aoo::shared_scoped_lock lock(x_clientmutex);
-    x_client->send();
+    x_client->send(fn, this);
 }
 
 void t_node::do_receive()
@@ -220,13 +227,7 @@ t_node::t_node(t_symbol *s, int socket, int port)
 {
     x_type = socket_family(socket);
 
-    auto fn = [](void *user, const char *msg, int32_t n,
-            const void *addr, int32_t len, uint32_t flags){
-        auto x = (t_node *)user;
-        ip_address dest((sockaddr *)addr, len);
-        return socket_sendto(x->x_socket, msg, n, dest);
-    };
-    x_client.reset(aoo::net::iclient::create(socket, fn, this, 0));
+    x_client.reset(aoo::net::iclient::create(socket, 0));
 
     pd_bind(&x_proxy.x_pd, x_bindsym);
 

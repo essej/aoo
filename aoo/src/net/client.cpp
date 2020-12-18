@@ -147,21 +147,18 @@ int32_t aoo_net_parse_pattern(const char *msg, int32_t n, int32_t *type)
 
 /*//////////////////// AoO client /////////////////////*/
 
-aoo_net_client * aoo_net_client_new(int socket, aoo_sendfn fn,
-                                    void *user, uint32_t flags) {
-    return new aoo::net::client(socket, fn, user, flags);
+aoo_net_client * aoo_net_client_new(int socket, uint32_t flags) {
+    return new aoo::net::client(socket, flags);
 }
 
-aoo::net::client::client(int socket, aoo_sendfn fn, void *user, uint32_t flags)
-    : fn_(fn), user_(user)
+aoo::net::client::client(int socket, uint32_t flags)
 {
     ip_address addr;
     if (socket_address(socket, addr) < 0){
         // TODO handle error
         socket_error_print("socket_address");
     } else {
-        udp_client_ = std::make_unique<udp_client>(*this, socket, addr.port(),
-                                                   fn, user, flags);
+        udp_client_ = std::make_unique<udp_client>(*this, socket, addr.port(), flags);
         type_ = addr.type();
     }
 
@@ -498,24 +495,25 @@ aoo_error aoo::net::client::handle_message(const char *data, int32_t n,
     return AOO_ERROR_UNSPECIFIED;
 }
 
-aoo_error aoo_net_client_send(aoo_net_client *client){
-    return client->send();
+aoo_error aoo_net_client_send(aoo_net_client *client, aoo_sendfn fn, void *user){
+    return client->send(fn, user);
 }
 
-aoo_error aoo::net::client::send(){
+aoo_error aoo::net::client::send(aoo_sendfn fn, void *user){
     // send sources and sinks
     for (auto& s : sources_){
-        s.source->send(fn_, user_);
+        s.source->send(fn, user);
     }
     for (auto& s : sinks_){
-        s.sink->send(fn_, user_);
+        s.sink->send(fn, user);
     }
     // send server messages
     if (state_.load() != client_state::disconnected){
         time_tag now = time_tag::now();
 
         if (udp_client_){
-            udp_client_->send(now);
+            // first! (sets callback)
+            udp_client_->send(fn, user, now);
         }
 
         // send outgoing peer/group messages
@@ -1360,7 +1358,11 @@ client::message_event::~message_event()
 
 /*///////////////////// udp_client ////////////////////*/
 
-void udp_client::send(time_tag now){
+void udp_client::send(aoo_sendfn fn, void *user, time_tag now){
+    // save fn + user for command callbacks and peer messages
+    fn_ = fn;
+    user_ = user;
+
     auto elapsed_time = client_->elapsed_time_since(now);
     auto delta = elapsed_time - last_ping_time_;
 
