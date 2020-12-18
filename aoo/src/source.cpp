@@ -736,8 +736,6 @@ void source::update_historybuffer(){
     }
 }
 
-uint32_t make_version();
-
 void source::send_format(sendfn& fn){
     if (formatrequestqueue_.empty()){
         return;
@@ -1053,8 +1051,6 @@ void source::send_ping(sendfn& fn){
         lastpingtime_.store(elapsed);
     }
 }
-
-bool check_version(uint32_t);
 
 void source::handle_format_request(const osc::ReceivedMessage& msg,
                                    const ip_address& addr)

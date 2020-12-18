@@ -14,6 +14,7 @@
 
 #include "codec.hpp"
 #include "buffer.hpp"
+#include "imp.hpp"
 #include "resampler.hpp"
 #include "timer.hpp"
 #include "time_dll.hpp"
@@ -118,6 +119,7 @@ class source final : public isource {
     };
 
     source(aoo_id id, uint32_t flags);
+
     ~source();
 
     aoo_id id() const { return id_.load(std::memory_order_relaxed); }

@@ -599,8 +599,6 @@ void sink::reset_sources(){
     }
 }
 
-bool check_version(uint32_t);
-
 aoo_error sink::handle_format_message(const osc::ReceivedMessage& msg,
                                       const ip_address& addr)
 {
@@ -1474,8 +1472,6 @@ resend_done:
 }
 
 // /aoo/src/<id>/format <version> <sink>
-
-uint32_t make_version();
 
 void source_desc::send_format_request(const sink& s, sendfn& fn) {
     LOG_VERBOSE("request format for source " << id_);

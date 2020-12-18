@@ -46,21 +46,6 @@
 #define AOO_NET_MSG_GROUP_LEAVE \
     AOO_NET_MSG_GROUP AOO_NET_MSG_LEAVE
 
-namespace aoo {
-
-uint32_t make_version();
-bool check_version(uint32_t version);
-
-namespace net {
-
-// from aoo/client
-char * copy_string(const char *s);
-void * copy_sockaddr(const void *sa, int32_t len);
-int32_t aoo_net_parse_pattern(const char *, int32_t, int32_t *);
-
-} // net
-} // aoo
-
 /*//////////////////// AoO server /////////////////////*/
 
 aoo_net_server * aoo_net_server_new(int port, uint32_t flags, aoo_error *err) {
@@ -744,7 +729,7 @@ bool client_endpoint::handle_message(const char *data, int32_t n){
     osc::ReceivedMessage msg(packet);
 
     int32_t type;
-    auto onset = aoo_net_parse_pattern(data, n, &type);
+    auto onset = parse_pattern(data, n, &type);
     if (!onset){
         LOG_WARNING("aoo_server: not an AOO NET message!");
         return false;

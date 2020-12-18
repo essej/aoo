@@ -61,9 +61,6 @@
 
 namespace aoo {
 
-uint32_t make_version();
-bool check_version(uint32_t version);
-
 namespace net {
 
 std::string encrypt(const std::string& input){
@@ -81,30 +78,9 @@ std::string encrypt(const std::string& input){
     return output;
 }
 
-char * copy_string(const char * s){
-    if (s){
-        auto len = strlen(s);
-        auto result = new char[len + 1];
-        memcpy(result, s, len + 1);
-        return result;
-    } else {
-        return nullptr;
-    }
-}
-
-void * copy_sockaddr(const void *sa, int32_t len){
-    if (sa){
-        auto result = new char[len];
-        memcpy(result, sa, len);
-        return result;
-    } else {
-        return nullptr;
-    }
-}
-
 /*//////////////////// OSC ////////////////////////////*/
 
-int32_t aoo_net_parse_pattern(const char *msg, int32_t n, int32_t *type)
+int32_t parse_pattern(const char *msg, int32_t n, int32_t *type)
 {
     int32_t offset = 0;
     if (n >= AOO_MSG_DOMAIN_LEN
@@ -1027,7 +1003,7 @@ void client::handle_server_message(const char *data, int32_t n){
     osc::ReceivedMessage msg(packet);
 
     int32_t type;
-    auto onset = aoo_net_parse_pattern(data, n, &type);
+    auto onset = parse_pattern(data, n, &type);
     if (!onset){
         LOG_WARNING("aoo_client: not an AOO NET message!");
     }

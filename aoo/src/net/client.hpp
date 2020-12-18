@@ -13,6 +13,7 @@
 #include "common/lockfree.hpp"
 #include "common/net_utils.hpp"
 
+#include "../imp.hpp"
 #include "commands.hpp"
 #include "SLIP.hpp"
 

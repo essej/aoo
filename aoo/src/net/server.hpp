@@ -11,6 +11,7 @@
 #include "common/net_utils.hpp"
 
 #include "commands.hpp"
+#include "../imp.hpp"
 #include "SLIP.hpp"
 
 #include "oscpack/osc/OscOutboundPacketStream.h"

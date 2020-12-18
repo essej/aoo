@@ -15,6 +15,33 @@
 #include <iostream>
 #include <sstream>
 
+/*//////////////////// helper /////////////////////////*/
+
+namespace aoo {
+
+char * copy_string(const char * s){
+    if (s){
+        auto len = strlen(s);
+        auto result = new char[len + 1];
+        memcpy(result, s, len + 1);
+        return result;
+    } else {
+        return nullptr;
+    }
+}
+
+void * copy_sockaddr(const void *sa, int32_t len){
+    if (sa){
+        auto result = new char[len];
+        memcpy(result, sa, len);
+        return result;
+    } else {
+        return nullptr;
+    }
+}
+
+} // aoo
+
 /*//////////////////// Log ////////////////////////////*/
 
 static aoo_logfunction gLogFunction = nullptr;

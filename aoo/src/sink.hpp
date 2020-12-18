@@ -14,6 +14,7 @@
 
 #include "buffer.hpp"
 #include "codec.hpp"
+#include "imp.hpp"
 #include "resampler.hpp"
 #include "timer.hpp"
 #include "time_dll.hpp"
