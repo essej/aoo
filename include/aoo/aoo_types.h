@@ -80,12 +80,15 @@ enum aoo_type_code
 #endif
 };
 
+#define AOO_TRUE 1
+#define AOO_FALSE 0
+
+typedef int32_t aoo_bool;
+
 enum aoo_error_code
 {
     AOO_ERROR_UNSPECIFIED = -1,
-    AOO_ERROR_FALSE = AOO_ERROR_UNSPECIFIED,
-    AOO_ERROR_OK = 0,
-    AOO_ERROR_TRUE = AOO_ERROR_OK
+    AOO_ERROR_OK = 0
 };
 #if !defined(__cplusplus) || !defined(AOO_STRICT)
 typedef int32_t aoo_error;
