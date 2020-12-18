@@ -531,12 +531,12 @@ aoo_error aoo::net::client::send(aoo_sendfn fn, void *user){
     return AOO_ERROR_OK;
 }
 
-aoo_error aoo_net_client_events_available(aoo_net_server *client){
+aoo_bool aoo_net_client_events_available(aoo_net_server *client){
     return client->events_available();
 }
 
-aoo_error aoo::net::client::events_available(){
-    return !events_.empty() ? AOO_ERROR_TRUE : AOO_ERROR_FALSE;
+bool aoo::net::client::events_available(){
+    return !events_.empty();
 }
 
 aoo_error aoo_net_client_poll_events(aoo_net_client *client, aoo_eventhandler fn, void *user){

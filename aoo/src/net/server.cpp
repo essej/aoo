@@ -156,12 +156,12 @@ aoo_error aoo::net::server::quit(){
     return AOO_ERROR_OK;
 }
 
-aoo_error aoo_net_server_events_available(aoo_net_server *server){
+aoo_bool aoo_net_server_events_available(aoo_net_server *server){
     return server->events_available();
 }
 
-aoo_error aoo::net::server::events_available(){
-    return !events_.empty() ? AOO_ERROR_TRUE : AOO_ERROR_FALSE;
+bool aoo::net::server::events_available(){
+    return !events_.empty();
 }
 
 aoo_error aoo_net_server_poll_events(aoo_net_server *server, aoo_eventhandler fn, void *user){

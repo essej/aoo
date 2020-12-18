@@ -138,7 +138,7 @@ class source final : public isource {
 
     aoo_error process(const aoo_sample **data, int32_t n, uint64_t t) override;
 
-    aoo_error events_available() override;
+    bool events_available() override;
 
     aoo_error poll_events(aoo_eventhandler fn, void *user) override;
 

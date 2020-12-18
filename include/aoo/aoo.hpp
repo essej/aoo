@@ -74,8 +74,8 @@ public:
     virtual aoo_error process(const aoo_sample **data,
                             int32_t nsamples, uint64_t t) = 0;
 
-    // get number of pending events (always thread safe)
-    virtual aoo_error events_available() = 0;
+    // check for pending events (always thread safe)
+    virtual bool events_available() = 0;
 
     // poll events (threadsafe, but not reentrant)
     // will call the event handler function one or more times
@@ -229,8 +229,8 @@ public:
     // process audio (threadsafe, but not reentrant)
     virtual aoo_error process(aoo_sample **data, int32_t nsamples, uint64_t t) = 0;
 
-    // get number of pending events (always thread safe)
-    virtual aoo_error events_available() = 0;
+    // check for pending events (always thread safe)
+    virtual bool events_available() = 0;
 
     // poll events (threadsafe, but not reentrant)
     // will call the event handler function one or more times

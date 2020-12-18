@@ -366,11 +366,11 @@ AOO_API void aoo_source_free(aoo_source *src);
 
 // setup the source - needs to be synchronized with other method calls!
 AOO_API aoo_error aoo_source_setup(aoo_source *src, int32_t samplerate,
-                                 int32_t blocksize, int32_t nchannels);
+                                   int32_t blocksize, int32_t nchannels);
 
 // add a new sink (always threadsafe)
 AOO_API aoo_error aoo_source_add_sink(aoo_source *src, const void *address, int32_t addrlen,
-                                    aoo_id id, uint32_t flags);
+                                      aoo_id id, uint32_t flags);
 
 // remove a sink (always threadsafe)
 AOO_API aoo_error aoo_source_remove_sink(aoo_source *src, const void *address, int32_t addrlen, aoo_id id);
@@ -390,10 +390,10 @@ AOO_API aoo_error aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user);
 // nsamples:    number of samples per channel
 // t:           current NTP timestamp (see aoo_osctime_get)
 AOO_API aoo_error aoo_source_process(aoo_source *src, const aoo_sample **data,
-                                   int32_t nsamples, uint64_t t);
+                                     int32_t nsamples, uint64_t t);
 
-// get number of pending events (always thread safe)
-AOO_API aoo_error aoo_source_events_available(aoo_source *src);
+// check for pending events (always thread safe)
+AOO_API aoo_bool aoo_source_events_available(aoo_source *src);
 
 // poll events (threadsafe, but not reentrant)
 // will call the event handler function one or more times
@@ -406,10 +406,10 @@ AOO_API aoo_error aoo_source_get_option(aoo_source *src, int32_t opt, void *p, i
 
 // set/get sink options (always threadsafe)
 AOO_API aoo_error aoo_source_set_sinkoption(aoo_source *src, const void *address, int32_t addrlen,
-                                          aoo_id id, int32_t opt, void *p, int32_t size);
+                                            aoo_id id, int32_t opt, void *p, int32_t size);
 
 AOO_API aoo_error aoo_source_get_sinkoption(aoo_source *src, const void *address, int32_t addrlen,
-                                          aoo_id id, int32_t opt, void *p, int32_t size);
+                                            aoo_id id, int32_t opt, void *p, int32_t size);
 
 // wrapper functions for frequently used options
 
@@ -505,32 +505,32 @@ AOO_API void aoo_sink_free(aoo_sink *sink);
 
 // setup the sink - needs to be synchronized with other method calls!
 AOO_API aoo_error aoo_sink_setup(aoo_sink *sink, int32_t samplerate,
-                               int32_t blocksize, int32_t nchannels);
+                                 int32_t blocksize, int32_t nchannels);
 
 // invite a source (always threadsafe)
 AOO_API aoo_error aoo_sink_invite_source(aoo_sink *sink, const void *address,
-                                       int32_t addrlen, aoo_id id);
+                                         int32_t addrlen, aoo_id id);
 
 // uninvite a source (always threadsafe)
 AOO_API aoo_error aoo_sink_uninvite_source(aoo_sink *sink, const void *address,
-                                         int32_t addrlen, aoo_id id);
+                                           int32_t addrlen, aoo_id id);
 
 // uninvite all sources (always threadsafe)
 AOO_API aoo_error aoo_sink_uninvite_all(aoo_sink *sink);
 
 // handle messages from sources (threadsafe, but not reentrant)
 AOO_API aoo_error aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_t n,
-                                        const void *address, int32_t addrlen);
+                                          const void *address, int32_t addrlen);
 
 // send outgoing messages - will call the reply function (threadsafe, but not reentrant)
 AOO_API aoo_error aoo_sink_send(aoo_sink *sink, aoo_sendfn fn, void *user);
 
 // process audio (threadsafe, but not reentrant)
 AOO_API aoo_error aoo_sink_process(aoo_sink *sink, aoo_sample **data,
-                                 int32_t nsamples, uint64_t t);
+                                   int32_t nsamples, uint64_t t);
 
-// get number of pending events (always thread safe)
-AOO_API aoo_error aoo_sink_events_available(aoo_sink *sink);
+// check for pending events (always thread safe)
+AOO_API aoo_bool aoo_sink_events_available(aoo_sink *sink);
 
 // poll events (threadsafe, but not reentrant)
 // will call the event handler function one or more times
@@ -543,10 +543,10 @@ AOO_API aoo_error aoo_sink_get_option(aoo_sink *sink, int32_t opt, void *p, int3
 
 // set/get source options (always threadsafe)
 AOO_API aoo_error aoo_sink_set_sourceoption(aoo_sink *sink, const void *address, int32_t addrlen,
-                                          aoo_id id, int32_t opt, void *p, int32_t size);
+                                            aoo_id id, int32_t opt, void *p, int32_t size);
 
 AOO_API aoo_error aoo_sink_get_sourceoption(aoo_sink *sink, const void *address, int32_t addrlen,
-                                          aoo_id id, int32_t opt, void *p, int32_t size);
+                                            aoo_id id, int32_t opt, void *p, int32_t size);
 
 // wrapper functions for frequently used options
 

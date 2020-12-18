@@ -589,12 +589,12 @@ aoo_error aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     return AOO_ERROR_OK;
 }
 
-aoo_error aoo_source_events_available(aoo_source *src){
+aoo_bool aoo_source_events_available(aoo_source *src){
     return src->events_available();
 }
 
-aoo_error aoo::source::events_available(){
-    return !eventqueue_.empty() ? AOO_ERROR_TRUE : AOO_ERROR_FALSE;
+bool aoo::source::events_available(){
+    return !eventqueue_.empty();
 }
 
 aoo_error aoo_source_poll_events(aoo_source *src,

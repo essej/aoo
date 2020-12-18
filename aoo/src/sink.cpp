@@ -522,23 +522,23 @@ aoo_error aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
         return AOO_ERROR_UNSPECIFIED;
     }
 }
-aoo_error aoo_sink_events_available(aoo_sink *sink){
+aoo_bool aoo_sink_events_available(aoo_sink *sink){
     return sink->events_available();
 }
 
-aoo_error aoo::sink::events_available(){
+bool aoo::sink::events_available(){
     if (!eventqueue_.empty()){
-        return AOO_ERROR_TRUE;
+        return true;
     }
 
     source_lock lock(sources_);
     for (auto& src : sources_){
         if (src.has_events()){
-            return AOO_ERROR_TRUE;
+            return true;
         }
     }
 
-    return AOO_ERROR_FALSE;
+    return false;
 }
 
 aoo_error aoo_sink_poll_events(aoo_sink *sink,

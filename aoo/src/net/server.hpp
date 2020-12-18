@@ -178,7 +178,7 @@ public:
 
     aoo_error quit() override;
 
-    aoo_error events_available() override;
+    bool events_available() override;
 
     aoo_error poll_events(aoo_eventhandler fn, void *user) override;
 

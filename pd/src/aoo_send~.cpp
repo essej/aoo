@@ -405,7 +405,7 @@ static t_int * aoo_send_perform(t_int *w)
             x->x_node->notify();
         }
 
-        if (x->x_source->events_available() == AOO_ERROR_TRUE){
+        if (x->x_source->events_available()){
             clock_delay(x->x_clock, 0);
         }
     }

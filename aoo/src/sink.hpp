@@ -300,7 +300,7 @@ public:
 
     aoo_error process(aoo_sample **data, int32_t nsamples, uint64_t t) override;
 
-    aoo_error events_available() override;
+    bool events_available() override;
 
     aoo_error poll_events(aoo_eventhandler fn, void *user) override;
 

@@ -54,8 +54,8 @@ public:
     // quit the AOO server from another thread
     virtual aoo_error quit() = 0;
 
-    // get number of pending events (always thread safe)
-    virtual aoo_error events_available() = 0;
+    // check for pending events (always thread safe)
+    virtual bool events_available() = 0;
 
     // poll events (threadsafe, but not reentrant)
     // will call the event handler function one or more times
@@ -139,8 +139,8 @@ public:
     // send outgoing messages to peers (thread safe, but not reentrant)
     virtual aoo_error send(aoo_sendfn fn, void *user) = 0;
 
-    // get number of pending events (always thread safe)
-    virtual aoo_error events_available() = 0;
+    // check for pending events (always thread safe)
+    virtual bool events_available() = 0;
 
     // poll events (threadsafe, but not reentrant)
     // will call the event handler function one or more times
