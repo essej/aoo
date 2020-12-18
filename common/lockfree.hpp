@@ -16,20 +16,26 @@ namespace lockfree {
 
 // a lock-free single-producer/single-consumer queue which
 // supports reading/writing data in fixed-sized blocks.
-template<typename T>
+template<typename T, typename Alloc=std::allocator<T>>
 class spsc_queue {
  public:
-    spsc_queue() = default;
+    spsc_queue(const Alloc& alloc = Alloc {})
+        : data_(alloc) {}
+
+    spsc_queue(const spsc_queue& other) = delete;
+
     // we need a move constructor so we can
     // put it in STL containers
     spsc_queue(spsc_queue&& other)
-        : balance_(other.balance_.load()),
+        : Alloc(static_cast<Alloc&&>(other)),
+          balance_(other.balance_.load()),
           rdhead_(other.rdhead_),
           wrhead_(other.wrhead_),
           blocksize_(other.blocksize_),
           data_(std::move(other.data_)) {}
 
     spsc_queue& operator=(spsc_queue&& other){
+        static_cast<Alloc&>(*this) = static_cast<Alloc&>(other);
         balance_ = other.balance_.load();
         rdhead_ = other.rdhead_;
         wrhead_ = other.wrhead_;
@@ -104,7 +110,7 @@ class spsc_queue {
     int32_t wrhead_{0};
     int32_t blocksize_{0};
     int32_t capacity_{0};
-    std::vector<T> data_;
+    std::vector<T, Alloc> data_;
 
     void read_commit(int32_t n){
         rdhead_ += n;
@@ -129,15 +135,75 @@ class spsc_queue {
 
 // based on https://www.drdobbs.com/parallel/writing-lock-free-code-a-corrected-queue/210604448
 
+namespace detail {
+
 template<typename T>
-class unbounded_mpsc_queue {
- public:
-    unbounded_mpsc_queue(){
-        // add dummy node
-        first_ = devider_ = last_ = new node();
+class node_base {
+public:
+    struct node {
+        template<typename... U>
+        node(U&&... args)
+            : next_(nullptr), data_(std::forward<U>(args)...) {}
+        node * next_;
+        T data_;
+    };
+};
+
+template<typename T>
+struct atomic_node_base {
+    struct node {
+        std::atomic<node*> next_;
+        T data_;
+
+        template<typename... U>
+        node(U&&... args)
+            : next_(nullptr), data_(std::forward<U>(args)...) {}
+    };
+};
+
+template<typename T, typename C, typename Alloc>
+class node_allocator_base :
+        protected C,
+        protected Alloc::rebind<typename C::node>::other
+{
+    typedef typename Alloc::rebind<typename C::node>::other base;
+protected:
+    typedef typename C::node node;
+
+    node_allocator_base(const Alloc& alloc)
+        : base(alloc) {}
+
+    node * allocate(){
+        return base::allocate(1);
     }
 
-    unbounded_mpsc_queue(unbounded_mpsc_queue&& other){
+    void deallocate(node *n){
+        base::deallocate(n, 1);
+    }
+};
+
+} // detail
+
+template<typename T, typename Alloc = std::allocator<T>>
+class unbounded_mpsc_queue :
+    detail::node_allocator_base<T, detail::node_base<T>, Alloc>
+{
+    typedef detail::node_allocator_base<T, detail::node_base<T>, Alloc> base;
+    typedef typename base::node node;
+ public:
+    unbounded_mpsc_queue(const Alloc& alloc = Alloc{})
+        : base(alloc) {
+        // add dummy node
+        auto n = base::allocate();
+        new (n) node();
+        first_ = devider_ = last_ = n;
+    }
+
+    unbounded_mpsc_queue(const unbounded_mpsc_queue&) = delete;
+
+    unbounded_mpsc_queue(unbounded_mpsc_queue&& other)
+        : base(std::move(other))
+    {
         first_ = other.first_;
         devider_ = other.devider_;
         last_ = other.last_;
@@ -147,6 +213,7 @@ class unbounded_mpsc_queue {
     }
 
     unbounded_mpsc_queue& operator=(unbounded_mpsc_queue&& other){
+        base::operator=(std::move(other));
         first_ = other.first_;
         devider_ = other.devider_;
         last_ = other.last_;
@@ -161,7 +228,8 @@ class unbounded_mpsc_queue {
         while (it){
             auto tmp = it;
             it = it->next_;
-            delete tmp;
+            tmp->~node();
+            base::deallocate(tmp);
         }
     }
 
@@ -176,7 +244,8 @@ class unbounded_mpsc_queue {
         }
         // add empty nodes
         while (n--){
-            auto tmp = new node();
+            auto tmp = base::allocate();
+            new (tmp) node();
             tmp->next_ = first_;
             first_.store(tmp);
         }
@@ -199,7 +268,8 @@ class unbounded_mpsc_queue {
                 }
             } else {
                 // make new node
-                tmp = new node(std::forward<U>(args)...);
+                tmp = base::allocate();
+                new (tmp) node(std::forward<U>(args)...);
                 break;
             }
         }
@@ -237,13 +307,6 @@ class unbounded_mpsc_queue {
         devider_ = last_;
     }
  private:
-    struct node {
-        template<typename... U>
-        node(U&&... args)
-            : data_(std::forward<U>(args)...), next_(nullptr) {}
-        T data_;
-        node * next_;
-    };
     std::atomic<node *> first_;
     std::atomic<node *> devider_;
     std::atomic<node *> last_;
@@ -258,16 +321,12 @@ class unbounded_mpsc_queue {
 // Each thread trying to access the list must call lock()/unlock(), so that try_remove()
 // knows when it is safe to actually free the memory.
 
-template<typename T>
-class simple_list {
-    struct node {
-        std::atomic<node*> next_;
-        T data_;
-
-        template<typename... U>
-        node(U&&... args)
-            : next_(nullptr), data_(std::forward<U>(args)...) {}
-    };
+template<typename T, typename Alloc = std::allocator<T>>
+class simple_list :
+    detail::node_allocator_base<T, detail::atomic_node_base<T>, Alloc>
+{
+    typedef detail::node_allocator_base<T, detail::atomic_node_base<T>, Alloc> base;
+    typedef typename base::node node;
 public:
     template<typename U>
     class base_iterator {
@@ -307,12 +366,14 @@ public:
     using iterator = base_iterator<node>;
     using const_iterator = base_iterator<const node>;
 
-    simple_list()
-        : head_(nullptr){}
+    simple_list(const Alloc& alloc = Alloc{})
+        : base(alloc) {}
 
     simple_list(const simple_list&) = delete;
 
-    simple_list(simple_list&& other){
+    simple_list(simple_list&& other)
+        : base(std::move(other))
+    {
         head_ = other.head_.exchange(nullptr);
         free_ = other.free_.exchange(nullptr);
         refcount_ = other.refcount_.exchange(0);
@@ -324,6 +385,7 @@ public:
     }
 
     simple_list& operator=(simple_list&& other){
+        base::operator=(std::move(other));
         head_ = other.head_.exchange(nullptr);
         free_ = other.free_.exchange(nullptr);
         refcount_ = other.refcount_.exchange(0);
@@ -332,7 +394,8 @@ public:
 
     template<typename... U>
     void emplace_front(U&&... args){
-        auto n = new node(std::forward<U>(args)...);
+        auto n = base::allocate();
+        new (n) node(std::forward<U>(args)...);
         auto next = head_.load(std::memory_order_relaxed);
         do {
             n->next_.store(next, std::memory_order_relaxed);
@@ -506,7 +569,8 @@ private:
         while (n){
             auto tmp = n;
             n = n->next_.load(std::memory_order_relaxed);
-            delete tmp;
+            tmp->~node();
+            base::deallocate(tmp);
         }
     }
 };
