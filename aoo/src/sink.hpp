@@ -263,14 +263,14 @@ private:
     std::atomic<double> last_packet_time_;
     // queues and buffers
     jitter_buffer jitterbuffer_;
-    lockfree::spsc_queue<aoo_sample, allocator<aoo_sample>> audioqueue_;
-    lockfree::spsc_queue<block_info, allocator<block_info>> infoqueue_;
-    lockfree::unbounded_mpsc_queue<data_request, allocator<data_request>> resendqueue_;
-    lockfree::unbounded_mpsc_queue<request, allocator<request>> requestqueue_;
+    lockfree::spsc_queue<aoo_sample, aoo::allocator<aoo_sample>> audioqueue_;
+    lockfree::spsc_queue<block_info, aoo::allocator<block_info>> infoqueue_;
+    lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> resendqueue_;
+    lockfree::unbounded_mpsc_queue<request, aoo::allocator<request>> requestqueue_;
     void push_request(const request& r){
         requestqueue_.push(r);
     }
-    lockfree::unbounded_mpsc_queue<event, allocator<event>> eventqueue_;
+    lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
     void push_event(const event& e){
         eventqueue_.push(e);
     }
@@ -347,7 +347,7 @@ private:
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
     // buffer for summing source audio output
-    std::vector<aoo_sample, allocator<aoo_sample>> buffer_;
+    std::vector<aoo_sample, aoo::allocator<aoo_sample>> buffer_;
     // options
     std::atomic<int32_t> buffersize_{ AOO_SINK_BUFSIZE };
     std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
@@ -356,7 +356,7 @@ private:
     std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
     std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT * 0.001 };
     // the sources
-    using source_list = lockfree::simple_list<source_desc, allocator<source_desc>>;
+    using source_list = lockfree::simple_list<source_desc, aoo::allocator<source_desc>>;
     using source_lock = std::unique_lock<source_list>;
     source_list sources_;
     // timing
@@ -364,12 +364,12 @@ private:
     time_dll dll_;
     timer timer_;
     // events
-    lockfree::unbounded_mpsc_queue<source_event, allocator<source_event>> eventqueue_;
+    lockfree::unbounded_mpsc_queue<source_event, aoo::allocator<source_event>> eventqueue_;
     void push_event(const source_event& e){
         eventqueue_.push(e);
     }
     // requests
-    lockfree::unbounded_mpsc_queue<source_request, allocator<source_request>> requestqueue_;
+    lockfree::unbounded_mpsc_queue<source_request, aoo::allocator<source_request>> requestqueue_;
     void push_request(const source_request& r){
         requestqueue_.push(r);
     }

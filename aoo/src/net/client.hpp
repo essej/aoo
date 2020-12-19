@@ -37,7 +37,7 @@ namespace net {
 class client;
 
 #if 0
-using ip_address_list = std::vector<ip_address, allocator<ip_address>>;
+using ip_address_list = std::vector<ip_address, aoo::allocator<ip_address>>;
 #else
 using ip_address_list = std::vector<ip_address>;
 #endif
@@ -276,20 +276,20 @@ private:
         aoo::isource *source;
         aoo_id id;
     };
-    std::vector<source_desc, allocator<source_desc>> sources_;
+    std::vector<source_desc, aoo::allocator<source_desc>> sources_;
     struct sink_desc {
         aoo::isink *sink;
         aoo_id id;
     };
-    std::vector<sink_desc, allocator<sink_desc>> sinks_;
+    std::vector<sink_desc, aoo::allocator<sink_desc>> sinks_;
     // SLIP buffers
-    SLIP<allocator<uint8_t>> sendbuffer_;
-    SLIP<allocator<uint8_t>> recvbuffer_;
+    SLIP<aoo::allocator<uint8_t>> sendbuffer_;
+    SLIP<aoo::allocator<uint8_t>> recvbuffer_;
     // event
     std::atomic<bool> quit_{false};
     int eventsocket_ = -1;
     // peers
-    using peer_list = lockfree::simple_list<peer, allocator<peer>>;
+    using peer_list = lockfree::simple_list<peer, aoo::allocator<peer>>;
     using peer_lock = std::unique_lock<peer_list>;
     peer_list peers_;
     // time
@@ -304,16 +304,16 @@ private:
     void *userdata_ = nullptr;   
     // commands
     using icommand_ptr = std::unique_ptr<icommand>;
-    using command_queue = lockfree::unbounded_mpsc_queue<icommand_ptr, allocator<icommand_ptr>>;
+    using command_queue = lockfree::unbounded_mpsc_queue<icommand_ptr, aoo::allocator<icommand_ptr>>;
     command_queue commands_;
     // peer/group messages
     command_queue messages_;
     // pending request
     using request = std::function<bool(const char *pattern, const osc::ReceivedMessage& msg)>;
-    std::vector<request, allocator<request>> pending_requests_;
+    std::vector<request, aoo::allocator<request>> pending_requests_;
     // events
     using ievent_ptr = std::unique_ptr<ievent>;
-    using event_queue = lockfree::unbounded_mpsc_queue<ievent_ptr, allocator<ievent_ptr>>;
+    using event_queue = lockfree::unbounded_mpsc_queue<ievent_ptr, aoo::allocator<ievent_ptr>>;
     event_queue events_;
     // options
     std::atomic<float> ping_interval_{AOO_NET_CLIENT_PING_INTERVAL * 0.001};
@@ -400,7 +400,7 @@ public:
                 flags_, [](auto&){ return true; });
         }
     protected:
-        std::vector<char, allocator<char>> data_;
+        std::vector<char, aoo::allocator<char>> data_;
         int32_t flags_;
     };
 

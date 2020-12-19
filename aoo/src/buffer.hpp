@@ -37,7 +37,7 @@ public:
     double samplerate = 0;
     int32_t channel = 0;
 protected:
-    std::vector<char, allocator<char>> buffer_;
+    std::vector<char, aoo::allocator<char>> buffer_;
     int32_t numframes_ = 0;
     int32_t framesize_ = 0;
 };
@@ -131,7 +131,7 @@ public:
 
     friend std::ostream& operator<<(std::ostream& os, const jitter_buffer& b);
 private:
-    std::vector<received_block, allocator<received_block>> data_;
+    std::vector<received_block, aoo::allocator<received_block>> data_;
     int32_t size_ = 0;
     int32_t head_ = 0;
     int32_t tail_ = 0;
@@ -148,7 +148,7 @@ public:
     block * find(int32_t seq);
     block * push();
 private:
-    std::vector<block, allocator<block>> buffer_;
+    std::vector<block, aoo::allocator<block>> buffer_;
     int32_t oldest_ = 0;
     int32_t head_ = 0;
 };

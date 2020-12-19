@@ -1,7 +1,14 @@
 #pragma once
 
+#include "aoo/aoo.h"
+
 #include <stdint.h>
 #include <utility>
+#include <memory>
+
+#if !AOO_USE_ALLOCATOR
+#include <malloc.h>
+#endif
 
 namespace aoo {
 
@@ -24,6 +31,9 @@ int32_t parse_pattern(const char *msg, int32_t n, int32_t *type);
 } // net
 
 /*///////////////////// allocator ////////////////////*/
+
+
+#if AOO_USE_ALLOCATOR
 
 void * allocate(size_t size);
 
@@ -82,6 +92,31 @@ bool
 {
     return !(x == y);
 }
+
+#else
+
+inline void * allocate(size_t size){
+    return ::malloc(size);
+}
+
+template<class T, class... U>
+T * construct(U&&... args){
+    return new T(std::forward<U>(args)...);
+}
+
+inline void deallocate(void *ptr, size_t size){
+    ::free(ptr);
+}
+
+template<typename T>
+void destroy(T *x){
+    delete x;
+}
+
+template<typename T>
+using allocator = std::allocator<T>;
+
+#endif
 
 template<template<class, class> class C, class T>
 using container = C<T, allocator<T>>;

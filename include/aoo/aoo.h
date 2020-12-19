@@ -20,15 +20,23 @@ AOO_API const char *aoo_version_string(void);
 
 AOO_API void aoo_set_logfunction(aoo_logfunction fn);
 
+#ifndef AOO_USE_ALLOCATOR
+#define AOO_USE_ALLOCATOR 0
+#endif
+
+#if AOO_USE_ALLOCATOR
+
 typedef struct aoo_allocator
 {
-    void * (*alloc)(size_t, void *);        // args: size, context
-    void * (*realloc)(void *, size_t);      // args: ptr, old size, new size, context
+    void* (*alloc)(size_t, void *);        // args: size, context
+    void* (*realloc)(void *, size_t);      // args: ptr, old size, new size, context
     void (*free)(void *, size_t, void *);   // args: ptr, size, context
-    void * context;                         // context passed to functions
+    void* context;                         // context passed to functions
 } aoo_allocator;
 
 AOO_API void aoo_set_allocator(const aoo_allocator *alloc);
+
+#endif
 
 #ifndef AOO_DEBUG_DLL
  #define AOO_DEBUG_DLL 0

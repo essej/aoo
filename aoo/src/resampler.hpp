@@ -18,7 +18,7 @@ public:
 
     double ratio() const { return ideal_ratio_; }
 private:
-    std::vector<aoo_sample, allocator<aoo_sample>> buffer_;
+    std::vector<aoo_sample, aoo::allocator<aoo_sample>> buffer_;
     int32_t nchannels_ = 0;
     double rdpos_ = 0;
     int32_t wrpos_ = 0;

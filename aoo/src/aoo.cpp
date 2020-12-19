@@ -58,6 +58,8 @@ void free_sockaddr(void *sa, int32_t len){
 
 } // aoo
 
+#if AOO_USE_ALLOCATOR
+
 /*//////////////////// allocator /////////////////////*/
 
 #ifndef AOO_DEBUG_MEMORY
@@ -103,6 +105,8 @@ void deallocate(void *ptr, size_t size){
 void aoo_set_allocator(const aoo_allocator *alloc){
     aoo::g_allocator = *alloc;
 }
+
+#endif
 
 /*//////////////////// Log ////////////////////////////*/
 

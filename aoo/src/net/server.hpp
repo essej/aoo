@@ -30,15 +30,15 @@ namespace net {
 
 class server;
 
-using ip_address_list = std::vector<ip_address, allocator<ip_address>>;
+using ip_address_list = std::vector<ip_address, aoo::allocator<ip_address>>;
 
 struct user;
 using user_ptr = std::shared_ptr<user>;
-using user_list = std::vector<user_ptr, allocator<user_ptr>>;
+using user_list = std::vector<user_ptr, aoo::allocator<user_ptr>>;
 
 struct group;
 using group_ptr = std::shared_ptr<group>;
-using group_list = std::vector<group_ptr, allocator<group_ptr>>;
+using group_list = std::vector<group_ptr, aoo::allocator<group_ptr>>;
 
 
 class client_endpoint {
@@ -74,8 +74,8 @@ private:
     std::shared_ptr<user> user_;
     ip_address addr_;
 
-    SLIP<allocator<uint8_t>> sendbuffer_;
-    SLIP<allocator<uint8_t>> recvbuffer_;
+    SLIP<aoo::allocator<uint8_t>> sendbuffer_;
+    SLIP<aoo::allocator<uint8_t>> recvbuffer_;
 
     bool handle_message(const char *data, int32_t n);
 
@@ -218,11 +218,11 @@ private:
     group_list groups_;
     // commands
     using icommand_ptr = std::unique_ptr<icommand>;
-    using command_queue = lockfree::unbounded_mpsc_queue<icommand_ptr, allocator<icommand_ptr>>;
+    using command_queue = lockfree::unbounded_mpsc_queue<icommand_ptr, aoo::allocator<icommand_ptr>>;
     command_queue commands_;
     // events
     using ievent_ptr = std::unique_ptr<ievent>;
-    using event_queue = lockfree::unbounded_mpsc_queue<ievent_ptr, allocator<ievent_ptr>>;
+    using event_queue = lockfree::unbounded_mpsc_queue<ievent_ptr, aoo::allocator<ievent_ptr>>;
     event_queue events_;
     void push_event(std::unique_ptr<ievent> e){
         events_.push(std::move(e));
