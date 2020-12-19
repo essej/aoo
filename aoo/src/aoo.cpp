@@ -58,9 +58,9 @@ void free_sockaddr(void *sa, int32_t len){
 
 } // aoo
 
-#if AOO_USE_ALLOCATOR
-
 /*//////////////////// allocator /////////////////////*/
+
+#if AOO_USE_ALLOCATOR
 
 #ifndef AOO_DEBUG_MEMORY
 #define AOO_DEBUG_MEMORY 0
@@ -68,15 +68,13 @@ void free_sockaddr(void *sa, int32_t len){
 
 namespace aoo {
 
-void *default_alloc(size_t n, void *){
-    return malloc(n);
-}
+static aoo_allocator g_allocator {
+    [](size_t n, void *){ return malloc(n); },
+    nullptr,
+    [](void *ptr, size_t, void *){ free(ptr); },
+    nullptr
+};
 
-void default_free(void *ptr, size_t n, void *){
-    free(ptr);
-}
-
-static aoo_allocator g_allocator { default_alloc, nullptr, default_free, nullptr };
 
 #if AOO_DEBUG_MEMORY
 std::atomic<int64_t> total_memory{0};
@@ -266,9 +264,15 @@ uint32_t make_version(){
 
 /*/////////////// (de)initialize //////////////////*/
 
-void aoo_codec_pcm_setup(aoo_codec_registerfn fn);
+void aoo_codec_pcm_setup(aoo_codec_registerfn fn, const aoo_allocator *alloc);
 #if USE_CODEC_OPUS
-void aoo_codec_opus_setup(aoo_codec_registerfn fn);
+void aoo_codec_opus_setup(aoo_codec_registerfn fn, const aoo_allocator *alloc);
+#endif
+
+#if AOO_USE_ALLOCATOR
+#define ALLOCATOR &aoo::g_allocator
+#else
+#define ALLOCATOR nullptr
 #endif
 
 void aoo_initialize(){
@@ -279,10 +283,10 @@ void aoo_initialize(){
     #endif
 
         // register codecs
-        aoo_codec_pcm_setup(aoo_register_codec);
+        aoo_codec_pcm_setup(aoo_register_codec, ALLOCATOR);
 
     #if USE_CODEC_OPUS
-        aoo_codec_opus_setup(aoo_register_codec);
+        aoo_codec_opus_setup(aoo_register_codec, ALLOCATOR);
     #endif
 
         initialized = true;

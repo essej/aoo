@@ -10,6 +10,13 @@
 
 namespace {
 
+aoo_allocator g_allocator {
+    [](size_t n, void *){ return malloc(n); },
+    nullptr,
+    [](void *ptr, size_t, void *){ free(ptr); },
+    nullptr
+};
+
 // conversion routines between aoo_sample and PCM data
 union convert {
     int8_t b[8];
@@ -196,11 +203,14 @@ aoo_error getformat(void *x, aoo_format *f)
 }
 
 void *encoder_new(){
-    return new codec;
+    auto obj = g_allocator.alloc(sizeof(codec), g_allocator.context);
+    new (obj) codec {};
+    return obj;
 }
 
 void encoder_free(void *enc){
-    delete (codec *)enc;
+    static_cast<codec *>(enc)->~codec();
+    g_allocator.free(enc, sizeof(codec), g_allocator.context);
 }
 
 aoo_error encode(void *enc,
@@ -364,7 +374,10 @@ aoo_codec codec_class = {
 
 } // namespace
 
-void aoo_codec_pcm_setup(aoo_codec_registerfn fn){
+void aoo_codec_pcm_setup(aoo_codec_registerfn fn, const aoo_allocator *alloc){
+    if (alloc){
+        g_allocator = *alloc;
+    }
     fn(AOO_CODEC_PCM, &codec_class);
 }
 

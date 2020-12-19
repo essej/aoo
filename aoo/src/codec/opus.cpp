@@ -11,6 +11,21 @@
 
 namespace {
 
+aoo_allocator g_allocator {
+    [](size_t n, void *){ return malloc(n); },
+    nullptr,
+    [](void *ptr, size_t, void *){ free(ptr); },
+    nullptr
+};
+
+void *allocate(size_t n){
+    return g_allocator.alloc(n, g_allocator.context);
+}
+
+void deallocate(void *ptr, size_t n){
+    g_allocator.free(ptr, n, g_allocator.context);
+}
+
 void print_settings(const aoo_format_opus& f){
     const char *type;
     switch (f.signal_type){
@@ -106,18 +121,22 @@ aoo_error getformat(void *x, aoo_format *f)
 struct encoder : codec {
     ~encoder(){
         if (state){
-            opus_multistream_encoder_destroy(state);
+            deallocate(state, size);
         }
     }
     OpusMSEncoder *state = nullptr;
+    size_t size = 0;
 };
 
 void *encoder_new(){
-    return new encoder;
+    auto obj = allocate(sizeof(encoder));
+    new (obj) encoder {};
+    return obj;
 }
 
 void encoder_free(void *enc){
-    delete (encoder *)enc;
+    static_cast<encoder *>(enc)->~encoder();
+    deallocate(enc, sizeof(encoder));
 }
 
 aoo_error encoder_encode(void *enc,
@@ -152,9 +171,10 @@ aoo_error encoder_setformat(void *enc, aoo_format *f){
 
     validate_format(*fmt);
 
-    int error = 0;
     if (c->state){
-        opus_multistream_encoder_destroy(c->state);
+        deallocate(c->state, c->size);
+        c->state = nullptr;
+        c->size = 0;
     }
     // setup channel mapping
     // only use decoupled streams (what's the point of coupled streams?)
@@ -165,11 +185,16 @@ aoo_error encoder_setformat(void *enc, aoo_format *f){
     }
     memset(mapping + nchannels, 255, 256 - nchannels);
     // create state
-    c->state = opus_multistream_encoder_create(fmt->header.samplerate,
-                                       nchannels, nchannels, 0, mapping,
-                                       OPUS_APPLICATION_AUDIO, &error);
+    size_t size = opus_multistream_encoder_get_size(nchannels, 0);
+    auto state = (OpusMSEncoder *)allocate(size);
+    if (!state){
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    auto error = opus_multistream_encoder_init(state, fmt->header.samplerate,
+        nchannels, nchannels, 0, mapping, OPUS_APPLICATION_AUDIO);
     if (error == OPUS_OK){
-        assert(c->state != nullptr);
+        c->state = state;
+        c->size = size;
         // apply settings
         // complexity
         opus_multistream_encoder_ctl(c->state, OPUS_SET_COMPLEXITY(fmt->complexity));
@@ -205,18 +230,22 @@ aoo_error encoder_setformat(void *enc, aoo_format *f){
 struct decoder : codec {
     ~decoder(){
         if (state){
-            opus_multistream_decoder_destroy(state);
+            deallocate(state, size);
         }
     }
     OpusMSDecoder * state = nullptr;
+    size_t size = 0;
 };
 
 void *decoder_new(){
-    return new decoder;
+    auto obj = allocate(sizeof(decoder));
+    new (obj) decoder {};
+    return obj;
 }
 
 void decoder_free(void *dec){
-    delete (decoder *)dec;
+    static_cast<decoder *>(dec)->~decoder();
+    deallocate(dec, sizeof(decoder));
 }
 
 aoo_error decoder_decode(void *dec,
@@ -253,7 +282,9 @@ aoo_error decoder_setformat(void *dec, aoo_format *f)
     validate_format(*fmt);
 
     if (c->state){
-        opus_multistream_decoder_destroy(c->state);
+        deallocate(c->state, c->size);
+        c->state = nullptr;
+        c->size = 0;
     }
     // setup channel mapping
     // only use decoupled streams (what's the point of coupled streams?)
@@ -264,11 +295,16 @@ aoo_error decoder_setformat(void *dec, aoo_format *f)
     }
     memset(mapping + nchannels, 255, 256 - nchannels);
     // create state
-    int error = 0;
-    c->state = opus_multistream_decoder_create(fmt->header.samplerate,
-        nchannels, nchannels, 0, mapping, &error);
+    size_t size = opus_multistream_decoder_get_size(nchannels, 0);
+    auto state = (OpusMSDecoder *)allocate(size);
+    if (!state){
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    auto error = opus_multistream_decoder_init(state, fmt->header.samplerate,
+                                               nchannels, nchannels, 0, mapping);
     if (error == OPUS_OK){
-        assert(c->state != nullptr);
+        c->state = state;
+        c->size = size;
         // these are actually encoder settings and do anything on the decoder
     #if 0
         // complexity
@@ -356,7 +392,10 @@ aoo_codec codec_class = {
 
 } // namespace
 
-void aoo_codec_opus_setup(aoo_codec_registerfn fn){
+void aoo_codec_opus_setup(aoo_codec_registerfn fn, const aoo_allocator *alloc){
+    if (alloc){
+        g_allocator = *alloc;
+    }
     fn(AOO_CODEC_OPUS, &codec_class);
 }
 

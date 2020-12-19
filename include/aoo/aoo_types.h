@@ -121,6 +121,14 @@ typedef struct aoo_source aoo_source;
 typedef struct aoo_sink aoo_sink;
 #endif
 
+typedef struct aoo_allocator
+{
+    void* (*alloc)(size_t, void *);        // args: size, context
+    void* (*realloc)(void *, size_t);      // args: ptr, old size, new size, context
+    void (*free)(void *, size_t, void *);  // args: ptr, size, context
+    void* context;                         // context passed to functions
+} aoo_allocator;
+
 // log function
 typedef void (*aoo_logfunction)(const char *);
 

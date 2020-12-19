@@ -18,6 +18,7 @@ AOO_API void aoo_version(int32_t *major, int32_t *minor,
 
 AOO_API const char *aoo_version_string(void);
 
+// call before aoo_initialize!
 AOO_API void aoo_set_logfunction(aoo_logfunction fn);
 
 #ifndef AOO_USE_ALLOCATOR
@@ -25,15 +26,7 @@ AOO_API void aoo_set_logfunction(aoo_logfunction fn);
 #endif
 
 #if AOO_USE_ALLOCATOR
-
-typedef struct aoo_allocator
-{
-    void* (*alloc)(size_t, void *);        // args: size, context
-    void* (*realloc)(void *, size_t);      // args: ptr, old size, new size, context
-    void (*free)(void *, size_t, void *);   // args: ptr, size, context
-    void* context;                         // context passed to functions
-} aoo_allocator;
-
+// call before aoo_initialize!
 AOO_API void aoo_set_allocator(const aoo_allocator *alloc);
 
 #endif
@@ -739,10 +732,13 @@ typedef aoo_error (*aoo_codec_registerfn)(const char *, const aoo_codec *);
 // NOTE: AOO doesn't support dynamic plugin loading out of the box,
 // but it is quite easy to implement on your own:
 // Usually, you would put one or more codecs in a shared library
-// and export a single function like 'void aoo_setup(aoo_codec_registerfn fn)'.
+// and export a single function like the following:
+//
+// void aoo_setup(aoo_codec_registerfn fn, const aoo_allocator *alloc);
+//
 // In your host application, you would then scan directories for shared libraries,
 // check if they export a function named 'aoo_setup', and if yes, called it with
-// 'aoo_register_codec'.
+// 'aoo_register_codec' and an (optional) 'aoo_allocator' instance.
 
 #ifdef __cplusplus
 } // extern "C"
