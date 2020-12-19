@@ -6,10 +6,6 @@
 #include <utility>
 #include <memory>
 
-#if !AOO_USE_ALLOCATOR
-#include <stdlib.h>
-#endif
-
 namespace aoo {
 
 uint32_t make_version();
@@ -33,7 +29,7 @@ int32_t parse_pattern(const char *msg, int32_t n, int32_t *type);
 /*///////////////////// allocator ////////////////////*/
 
 
-#if AOO_USE_ALLOCATOR
+#if AOO_USE_ALLOCATOR || AOO_DEBUG_MEMORY
 
 void * allocate(size_t size);
 
@@ -96,7 +92,7 @@ bool
 #else
 
 inline void * allocate(size_t size){
-    return ::malloc(size);
+    return operator new(size);
 }
 
 template<class T, class... U>
@@ -105,7 +101,7 @@ T * construct(U&&... args){
 }
 
 inline void deallocate(void *ptr, size_t size){
-    ::free(ptr);
+    operator delete(ptr);
 }
 
 template<typename T>
@@ -117,8 +113,5 @@ template<typename T>
 using allocator = std::allocator<T>;
 
 #endif
-
-template<template<class, class> class C, class T>
-using container = C<T, allocator<T>>;
 
 } // aoo

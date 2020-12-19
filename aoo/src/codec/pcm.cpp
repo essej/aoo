@@ -11,9 +11,9 @@
 namespace {
 
 aoo_allocator g_allocator {
-    [](size_t n, void *){ return malloc(n); },
+    [](size_t n, void *){ return operator new(n); },
     nullptr,
-    [](void *ptr, size_t, void *){ free(ptr); },
+    [](void *ptr, size_t, void *){ operator delete(ptr); },
     nullptr
 };
 
