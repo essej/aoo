@@ -20,34 +20,6 @@
 
 namespace aoo {
 
-/*//////////////////// allocator /////////////////////*/
-
-#ifndef AOO_DEBUG_MEMORY
-#define AOO_DEBUG_MEMORY 0
-#endif
-
-#if AOO_DEBUG_MEMORY
-std::atomic<int64_t> total_memory{0};
-#endif
-
-void * allocate(size_t size){
-#if AOO_DEBUG_MEMORY
-    auto total = total_memory.fetch_add(size, std::memory_order_relaxed) + size;
-    fprintf(stderr, "allocate %d bytes (total: %d)\n", size, total);
-    fflush(stderr);
-#endif
-    return malloc(size);
-}
-
-void deallocate(void *ptr, size_t size){
-#if AOO_DEBUG_MEMORY
-    auto total = total_memory.fetch_sub(size, std::memory_order_relaxed) - size;
-    fprintf(stderr, "deallocate %d bytes (total: %d)\n", size, total);
-    fflush(stderr);
-#endif
-    return free(ptr);
-}
-
 /*//////////////////// helper /////////////////////////*/
 
 char * copy_string(const char * s){
@@ -85,6 +57,52 @@ void free_sockaddr(void *sa, int32_t len){
 }
 
 } // aoo
+
+/*//////////////////// allocator /////////////////////*/
+
+#ifndef AOO_DEBUG_MEMORY
+#define AOO_DEBUG_MEMORY 0
+#endif
+
+namespace aoo {
+
+void *default_alloc(size_t n, void *){
+    return malloc(n);
+}
+
+void default_free(void *ptr, size_t n, void *){
+    free(ptr);
+}
+
+static aoo_allocator g_allocator { default_alloc, nullptr, default_free, nullptr };
+
+#if AOO_DEBUG_MEMORY
+std::atomic<int64_t> total_memory{0};
+#endif
+
+void * allocate(size_t size){
+#if AOO_DEBUG_MEMORY
+    auto total = total_memory.fetch_add(size, std::memory_order_relaxed) + size;
+    fprintf(stderr, "allocate %d bytes (total: %d)\n", size, total);
+    fflush(stderr);
+#endif
+    return g_allocator.alloc(size, g_allocator.context);
+}
+
+void deallocate(void *ptr, size_t size){
+#if AOO_DEBUG_MEMORY
+    auto total = total_memory.fetch_sub(size, std::memory_order_relaxed) - size;
+    fprintf(stderr, "deallocate %d bytes (total: %d)\n", size, total);
+    fflush(stderr);
+#endif
+    return g_allocator.free(ptr, size, g_allocator.context);
+}
+
+} // aoo
+
+void aoo_set_allocator(const aoo_allocator *alloc){
+    aoo::g_allocator = *alloc;
+}
 
 /*//////////////////// Log ////////////////////////////*/
 
