@@ -90,7 +90,7 @@ enum aoo_error_code
     AOO_ERROR_UNSPECIFIED = -1,
     AOO_ERROR_OK = 0
 };
-#if !defined(__cplusplus) || !defined(AOO_STRICT)
+#if !defined(__cplusplus) || !AOO_STRICT
 typedef int32_t aoo_error;
 #else
 struct aoo_error {

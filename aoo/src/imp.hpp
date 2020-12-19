@@ -7,7 +7,7 @@
 #include <memory>
 
 #if !AOO_USE_ALLOCATOR
-#include <malloc.h>
+#include <stdlib.h>
 #endif
 
 namespace aoo {
