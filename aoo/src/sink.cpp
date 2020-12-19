@@ -10,7 +10,7 @@
 /*//////////////////// aoo_sink /////////////////////*/
 
 aoo_sink * aoo_sink_new(aoo_id id, uint32_t flags) {
-    return new aoo::sink(id, flags);
+    return aoo::construct<aoo::sink>(id, flags);
 }
 
 aoo::sink::sink(aoo_id id, uint32_t flags)
@@ -21,7 +21,7 @@ aoo::sink::sink(aoo_id id, uint32_t flags)
 void aoo_sink_free(aoo_sink *sink) {
     // cast to correct type because base class
     // has no virtual destructor!
-    delete static_cast<aoo::sink *>(sink);
+    aoo::destroy(static_cast<aoo::sink *>(sink));
 }
 
 aoo_error aoo_sink_setup(aoo_sink *sink, int32_t samplerate,
@@ -728,7 +728,8 @@ source_desc::~source_desc(){
     event e;
     while (eventqueue_.try_pop(e)){
         if (e.type_ == AOO_SOURCE_FORMAT_EVENT){
-            delete[] e.format.format;
+            auto fmt = e.format.format;
+            deallocate((void *)fmt, fmt->size);
         }
     }
 }
@@ -915,7 +916,7 @@ aoo_error source_desc::handle_format(const sink& s, int32_t salt, const aoo_form
 
     // send format event
     // NOTE: we could just allocate 'aoo_format_storage', but it would be wasteful.
-    auto fs = new char[fmt.header.size];
+    auto fs = aoo::allocate(fmt.header.size);
     memcpy(fs, &fmt, fmt.header.size);
 
     event e(AOO_SOURCE_FORMAT_EVENT, *this);
@@ -1191,7 +1192,8 @@ int32_t source_desc::poll_events(aoo_eventhandler fn, void *user){
             // freeing memory is not really RT safe,
             // but it is the easiest solution.
             // LATER think about better ways.
-            delete[] e.format.format;
+            auto fmt = e.format.format;
+            deallocate((void *)fmt, fmt->size);
         }
         count++;
     }

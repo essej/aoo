@@ -17,7 +17,7 @@
 // args (without blob data): 36 bytes
 
 aoo_source * aoo_source_new(aoo_id id, uint32_t flags) {
-    return new aoo::source(id, flags);
+    return aoo::construct<aoo::source>(id, flags);
 }
 
 aoo::source::source(aoo_id id, uint32_t flags)
@@ -33,7 +33,7 @@ aoo::source::source(aoo_id id, uint32_t flags)
 void aoo_source_free(aoo_source *src){
     // cast to correct type because base class
     // has no virtual destructor!
-    delete static_cast<aoo::source *>(src);
+    aoo::destroy(static_cast<aoo::source *>(src));
 }
 
 aoo::source::~source() {}

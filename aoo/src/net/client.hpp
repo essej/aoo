@@ -36,11 +36,18 @@ namespace net {
 
 class client;
 
+#if 0
+using ip_address_list = std::vector<ip_address, allocator<ip_address>>;
+#else
+using ip_address_list = std::vector<ip_address>;
+#endif
+
+
 /*/////////////////////////// peer /////////////////////////*/
 class peer {
 public:
     peer(client& client, int32_t id, const std::string& group,
-         const std::string& user, std::vector<ip_address>&& addrlist);
+         const std::string& user, ip_address_list&& addrlist);
 
     ~peer();
 
@@ -84,7 +91,7 @@ private:
     int32_t id_;
     std::string group_;
     std::string user_;
-    std::vector<ip_address> addresses_;
+    ip_address_list addresses_;
     ip_address real_address_;
     time_tag start_time_;
     double last_pingtime_ = 0;
@@ -114,7 +121,7 @@ public:
     void send_peer_message(const char *data, int32_t size,
                            const ip_address& addr, bool relay);
 
-    void start_handshake(const ip_address& local, std::vector<ip_address>&& remote);
+    void start_handshake(const ip_address& local, ip_address_list&& remote);
 private:
     client *client_;
     int socket_;
@@ -122,8 +129,8 @@ private:
     aoo_sendfn fn_ = nullptr;
     void *user_ = nullptr;
     ip_address local_address_;
-    std::vector<ip_address> server_addrlist_;
-    std::vector<ip_address> public_addrlist_;
+    ip_address_list server_addrlist_;
+    ip_address_list public_addrlist_;
     shared_mutex mutex_;
 
     double last_ping_time_ = 0;
@@ -218,7 +225,7 @@ public:
 
     int try_connect(const std::string& host, int port);
 
-    void perform_login(const std::vector<ip_address>& addrlist);
+    void perform_login(const ip_address_list& addrlist);
 
     void perform_timeout();
 
@@ -269,20 +276,20 @@ private:
         aoo::isource *source;
         aoo_id id;
     };
-    std::vector<source_desc> sources_;
+    std::vector<source_desc, allocator<source_desc>> sources_;
     struct sink_desc {
         aoo::isink *sink;
         aoo_id id;
     };
-    std::vector<sink_desc> sinks_;
+    std::vector<sink_desc, allocator<sink_desc>> sinks_;
     // SLIP buffers
-    SLIP sendbuffer_;
-    SLIP recvbuffer_;
+    SLIP<allocator<uint8_t>> sendbuffer_;
+    SLIP<allocator<uint8_t>> recvbuffer_;
     // event
     std::atomic<bool> quit_{false};
     int eventsocket_ = -1;
     // peers
-    using peer_list = lockfree::simple_list<peer>;
+    using peer_list = lockfree::simple_list<peer, allocator<peer>>;
     using peer_lock = std::unique_lock<peer_list>;
     peer_list peers_;
     // time
@@ -294,16 +301,20 @@ private:
     std::string password_;
     uint32_t server_flags_ = 0;
     aoo_net_callback callback_ = nullptr;
-    void *userdata_ = nullptr;
+    void *userdata_ = nullptr;   
     // commands
-    lockfree::unbounded_mpsc_queue<std::unique_ptr<icommand>> commands_;
+    using icommand_ptr = std::unique_ptr<icommand>;
+    using command_queue = lockfree::unbounded_mpsc_queue<icommand_ptr, allocator<icommand_ptr>>;
+    command_queue commands_;
     // peer/group messages
-    lockfree::unbounded_mpsc_queue<std::unique_ptr<icommand>> messages_;
+    command_queue messages_;
     // pending request
     using request = std::function<bool(const char *pattern, const osc::ReceivedMessage& msg)>;
-    std::vector<request> pending_requests_;
+    std::vector<request, allocator<request>> pending_requests_;
     // events
-    lockfree::unbounded_mpsc_queue<std::unique_ptr<ievent>> events_;
+    using ievent_ptr = std::unique_ptr<ievent>;
+    using event_queue = lockfree::unbounded_mpsc_queue<ievent_ptr, allocator<ievent_ptr>>;
+    event_queue events_;
     // options
     std::atomic<float> ping_interval_{AOO_NET_CLIENT_PING_INTERVAL * 0.001};
     std::atomic<float> request_interval_{AOO_NET_CLIENT_REQUEST_INTERVAL * 0.001};
@@ -389,7 +400,7 @@ public:
                 flags_, [](auto&){ return true; });
         }
     protected:
-        std::vector<char> data_;
+        std::vector<char, allocator<char>> data_;
         int32_t flags_;
     };
 
@@ -459,14 +470,14 @@ public:
 
     struct login_cmd : icommand
     {
-        login_cmd(std::vector<ip_address>&& addrlist)
+        login_cmd(ip_address_list&& addrlist)
             : addrlist_(std::move(addrlist)) {}
 
         void perform(client& obj) override {
             obj.perform_login(addrlist_);
         }
     private:
-        std::vector<ip_address> addrlist_;
+        ip_address_list addrlist_;
     };
 
     struct timeout_cmd : icommand

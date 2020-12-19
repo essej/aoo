@@ -30,11 +30,15 @@ namespace net {
 
 class server;
 
+using ip_address_list = std::vector<ip_address, allocator<ip_address>>;
+
 struct user;
-using user_list = std::vector<std::shared_ptr<user>>;
+using user_ptr = std::shared_ptr<user>;
+using user_list = std::vector<user_ptr, allocator<user_ptr>>;
 
 struct group;
-using group_list = std::vector<std::shared_ptr<group>>;
+using group_ptr = std::shared_ptr<group>;
+using group_list = std::vector<group_ptr, allocator<group_ptr>>;
 
 
 class client_endpoint {
@@ -45,7 +49,7 @@ public:
 
     const ip_address& local_address() const { return addr_; }
 
-    const std::vector<ip_address>& public_addresses() const {
+    const ip_address_list& public_addresses() const {
         return public_addresses_;
     }
 
@@ -66,12 +70,12 @@ private:
 #ifdef _WIN32
     HANDLE event_;
 #endif
-    std::vector<ip_address> public_addresses_;
+    ip_address_list public_addresses_;
     std::shared_ptr<user> user_;
     ip_address addr_;
 
-    SLIP sendbuffer_;
-    SLIP recvbuffer_;
+    SLIP<allocator<uint8_t>> sendbuffer_;
+    SLIP<allocator<uint8_t>> recvbuffer_;
 
     bool handle_message(const char *data, int32_t n);
 
@@ -213,9 +217,13 @@ private:
     user_list users_;
     group_list groups_;
     // commands
-    lockfree::unbounded_mpsc_queue<std::unique_ptr<icommand>> commands_;
+    using icommand_ptr = std::unique_ptr<icommand>;
+    using command_queue = lockfree::unbounded_mpsc_queue<icommand_ptr, allocator<icommand_ptr>>;
+    command_queue commands_;
     // events
-    lockfree::unbounded_mpsc_queue<std::unique_ptr<ievent>> events_;
+    using ievent_ptr = std::unique_ptr<ievent>;
+    using event_queue = lockfree::unbounded_mpsc_queue<ievent_ptr, allocator<ievent_ptr>>;
+    event_queue events_;
     void push_event(std::unique_ptr<ievent> e){
         events_.push(std::move(e));
     }

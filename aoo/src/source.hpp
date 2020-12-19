@@ -176,16 +176,16 @@ class source final : public isource {
     time_dll dll_;
     timer timer_;
     // buffers and queues
-    std::vector<char> sendbuffer_;
+    std::vector<char, allocator<char>> sendbuffer_;
     dynamic_resampler resampler_;
-    lockfree::spsc_queue<aoo_sample> audioqueue_;
-    lockfree::spsc_queue<double> srqueue_;
-    lockfree::unbounded_mpsc_queue<event> eventqueue_;
-    lockfree::unbounded_mpsc_queue<format_request> formatrequestqueue_;
-    lockfree::unbounded_mpsc_queue<data_request> datarequestqueue_;
+    lockfree::spsc_queue<aoo_sample, allocator<aoo_sample>> audioqueue_;
+    lockfree::spsc_queue<double, allocator<double>> srqueue_;
+    lockfree::unbounded_mpsc_queue<event, allocator<event>> eventqueue_;
+    lockfree::unbounded_mpsc_queue<format_request, allocator<format_request>> formatrequestqueue_;
+    lockfree::unbounded_mpsc_queue<data_request, allocator<data_request>> datarequestqueue_;
     history_buffer history_;
     // sinks
-    using sink_list = lockfree::simple_list<sink_desc>;
+    using sink_list = lockfree::simple_list<sink_desc, allocator<sink_desc>>;
     using sink_lock = std::unique_lock<sink_list>;
     sink_list sinks_;
     // thread synchronization

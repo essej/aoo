@@ -124,7 +124,7 @@ int32_t parse_pattern(const char *msg, int32_t n, int32_t *type)
 /*//////////////////// AoO client /////////////////////*/
 
 aoo_net_client * aoo_net_client_new(int socket, uint32_t flags) {
-    return new aoo::net::client(socket, flags);
+    return aoo::construct<aoo::net::client>(socket, flags);
 }
 
 aoo::net::client::client(int socket, uint32_t flags)
@@ -155,7 +155,7 @@ aoo::net::client::client(int socket, uint32_t flags)
 void aoo_net_client_free(aoo_net_client *client){
     // cast to correct type because base class
     // has no virtual destructor!
-    delete static_cast<aoo::net::client *>(client);
+    aoo::destroy(static_cast<aoo::net::client *>(client));
 }
 
 aoo::net::client::~client() {
@@ -713,7 +713,7 @@ void client::perform_disconnect(aoo_net_callback cb, void *user){
     if (cb) cb(user, AOO_ERROR_OK, nullptr); // always succeeds
 }
 
-void client::perform_login(const std::vector<ip_address>& addrlist){
+void client::perform_login(const ip_address_list& addrlist){
     state_.store(client_state::login);
 
     char buf[AOO_MAXPACKETSIZE];
@@ -1141,7 +1141,7 @@ void client::handle_peer_add(const osc::ReceivedMessage& msg){
     int32_t id = (it++)->AsInt32();
     count -= 3;
 
-    std::vector<ip_address> addrlist;
+    ip_address_list addrlist;
     while (count >= 2){
         std::string ip = (it++)->AsString();
         int32_t port = (it++)->AsInt32();
@@ -1275,7 +1275,7 @@ client::error_event::error_event(int32_t code, const char *msg)
 
 client::error_event::~error_event()
 {
-    delete error_event_.errormsg;
+    free_string((char *)error_event_.errormsg);
 }
 
 client::ping_event::ping_event(const ip_address& addr, uint64_t tt1,
@@ -1291,7 +1291,7 @@ client::ping_event::ping_event(const ip_address& addr, uint64_t tt1,
 
 client::ping_event::~ping_event()
 {
-    delete (const sockaddr *)ping_event_.address;
+    free_sockaddr((void *)ping_event_.address, ping_event_.length);
 }
 
 client::peer_event::peer_event(int32_t type, const ip_address& addr,
@@ -1309,9 +1309,9 @@ client::peer_event::peer_event(int32_t type, const ip_address& addr,
 
 client::peer_event::~peer_event()
 {
-    delete peer_event_.user_name;
-    delete peer_event_.group_name;
-    delete (const sockaddr *)peer_event_.address;
+    free_string((char *)peer_event_.user_name);
+    free_string((char *)peer_event_.group_name);
+    free_sockaddr((void *)peer_event_.address, peer_event_.length);
 }
 
 client::message_event::message_event(const char *data, int32_t size,
@@ -1320,7 +1320,7 @@ client::message_event::message_event(const char *data, int32_t size,
     message_event_.type = AOO_NET_MESSAGE_EVENT;
     message_event_.address = copy_sockaddr(addr.address(), addr.length());
     message_event_.length = addr.length();
-    auto msg = new char[size];
+    auto msg = (char *)aoo::allocate(size);
     memcpy(msg, data, size);
     message_event_.data = msg;
     message_event_.size = size;
@@ -1328,8 +1328,8 @@ client::message_event::message_event(const char *data, int32_t size,
 
 client::message_event::~message_event()
 {
-    delete message_event_.data;
-    delete (const sockaddr *)message_event_.address;
+    aoo::deallocate((char *)message_event_.data, message_event_.size);
+    free_sockaddr((void *)message_event_.address, message_event_.length);
 }
 
 /*///////////////////// udp_client ////////////////////*/
@@ -1446,7 +1446,7 @@ void udp_client::send_peer_message(const char *data, int32_t size,
 }
 
 void udp_client::start_handshake(const ip_address& local,
-                                 std::vector<ip_address>&& remote)
+                                 ip_address_list&& remote)
 {
     scoped_lock lock(mutex_); // to be really safe
     first_ping_time_ = 0;
@@ -1496,7 +1496,7 @@ void udp_client::handle_server_message(const osc::ReceivedMessage& msg, int onse
                 // LATER improve this
                 if (public_addrlist_.size() == server_addrlist_.size()){
                     // now we can try to login
-                    std::vector<ip_address> addrlist;
+                    ip_address_list addrlist;
                     addrlist.reserve(public_addrlist_.size() + 1);
 
                     // local address first (for backwards compatibility with older versions)
@@ -1536,7 +1536,7 @@ bool udp_client::is_server_address(const ip_address& addr){
 /*///////////////////// peer //////////////////////////*/
 
 peer::peer(client& client, int32_t id, const std::string& group,
-           const std::string& user, std::vector<ip_address>&& addrlist)
+           const std::string& user, ip_address_list&& addrlist)
     : client_(&client), id_(id), group_(group), user_(user),
       addresses_(std::move(addrlist))
 {

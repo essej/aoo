@@ -78,7 +78,7 @@ aoo_net_server * aoo_net_server_new(int port, uint32_t flags, aoo_error *err) {
         return nullptr;
     }
 
-    return new aoo::net::server(tcpsocket, udpsocket);
+    return aoo::construct<aoo::net::server>(tcpsocket, udpsocket);
 }
 
 aoo::net::server::server(int tcpsocket, int udpsocket)
@@ -92,7 +92,7 @@ aoo::net::server::server(int tcpsocket, int udpsocket)
 void aoo_net_server_free(aoo_net_server *server){
     // cast to correct type because base class
     // has no virtual destructor!
-    delete static_cast<aoo::net::server *>(server);
+    aoo::destroy(static_cast<aoo::net::server *>(server));
 }
 
 aoo::net::server::~server() {
@@ -938,7 +938,7 @@ server::error_event::error_event(int32_t type, int32_t result,
 
 server::error_event::~error_event()
 {
-    delete error_event_.errormsg;
+    free_string((char *)error_event_.errormsg);
 }
 
 server::user_event::user_event(int32_t type,
@@ -953,8 +953,8 @@ server::user_event::user_event(int32_t type,
 
 server::user_event::~user_event()
 {
-    delete user_event_.user_name;
-    delete (const sockaddr *)user_event_.address;
+    free_string((char *)user_event_.user_name);
+    free_sockaddr((void *)user_event_.address, user_event_.length);
 }
 
 server::group_event::group_event(int32_t type, const char *group,
@@ -968,8 +968,8 @@ server::group_event::group_event(int32_t type, const char *group,
 
 server::group_event::~group_event()
 {
-    delete group_event_.group_name;
-    delete group_event_.user_name;
+    free_string((char *)group_event_.group_name);
+    free_string((char *)group_event_.user_name);
 }
 
 } // net

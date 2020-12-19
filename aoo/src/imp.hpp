@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <utility>
 
 namespace aoo {
 
@@ -81,5 +82,8 @@ bool
 {
     return !(x == y);
 }
+
+template<template<class, class> class C, class T>
+using container = C<T, allocator<T>>;
 
 } // aoo

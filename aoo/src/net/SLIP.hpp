@@ -5,8 +5,12 @@
 
 namespace aoo {
 
+template<typename Alloc = std::allocator<uint8_t>>
 class SLIP {
 public:
+    SLIP(const Alloc& alloc = Alloc {})
+        : buffer_(alloc) {}
+
     static const uint8_t END = 192;
     static const uint8_t ESC = 219;
     static const uint8_t ESC_END = 220;
@@ -25,24 +29,27 @@ public:
 
     bool write_packet(const uint8_t *data, int32_t size);
 private:
-    std::vector<uint8_t> buffer_;
+    std::vector<uint8_t, Alloc> buffer_;
     int32_t rdhead_ = 0;
     int32_t wrhead_ = 0;
     int32_t balance_ = 0;
 };
 
-inline void SLIP::setup(int32_t buffersize){
+template<typename Alloc>
+inline void SLIP<Alloc>::setup(int32_t buffersize){
     buffer_.resize(buffersize);
     reset();
 }
 
-inline void SLIP::reset(){
+template<typename Alloc>
+inline void SLIP<Alloc>::reset(){
     rdhead_ = 0;
     wrhead_ = 0;
     balance_ = 0;
 }
 
-inline int32_t SLIP::read_bytes(uint8_t *buffer, int32_t size){
+template<typename Alloc>
+inline int32_t SLIP<Alloc>::read_bytes(uint8_t *buffer, int32_t size){
     auto capacity = (int32_t)buffer_.size();
     if (size > balance_){
         size = balance_;
@@ -66,7 +73,8 @@ inline int32_t SLIP::read_bytes(uint8_t *buffer, int32_t size){
     return size;
 }
 
-inline int32_t SLIP::write_bytes(const uint8_t *data, int32_t size){
+template<typename Alloc>
+inline int32_t SLIP<Alloc>::write_bytes(const uint8_t *data, int32_t size){
     auto capacity = (int32_t)buffer_.size();
     auto space = capacity - balance_;
     if (size > space){
@@ -89,7 +97,8 @@ inline int32_t SLIP::write_bytes(const uint8_t *data, int32_t size){
     return size;
 }
 
-inline int32_t SLIP::read_packet(uint8_t *buffer, int32_t size){
+template<typename Alloc>
+inline int32_t SLIP<Alloc>::read_packet(uint8_t *buffer, int32_t size){
     int32_t nbytes = 0;
     int32_t head = rdhead_;
 
@@ -159,7 +168,8 @@ inline int32_t SLIP::read_packet(uint8_t *buffer, int32_t size){
     return packetsize;
 }
 
-inline bool SLIP::write_packet(const uint8_t *data, int32_t size){
+template<typename Alloc>
+inline bool SLIP<Alloc>::write_packet(const uint8_t *data, int32_t size){
     int32_t available = buffer_.size() - balance_;
     int32_t nbytes = 0;
     int32_t head = wrhead_;
