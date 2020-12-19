@@ -35,7 +35,7 @@ extern "C"
 #endif
 
 #ifndef AOO_STRICT
-#define AOO_STRICT 1
+#define AOO_STRICT 0
 #endif
 
 #define AOO_VERSION_MAJOR 2

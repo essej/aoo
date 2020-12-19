@@ -22,16 +22,16 @@ namespace aoo {
 
 /*//////////////////// allocator /////////////////////*/
 
-#ifndef DEBUG_MEMORY
-#define DEBUG_MEMORY 1
+#ifndef AOO_DEBUG_MEMORY
+#define AOO_DEBUG_MEMORY 0
 #endif
 
-#if DEBUG_MEMORY
+#if AOO_DEBUG_MEMORY
 std::atomic<int64_t> total_memory{0};
 #endif
 
 void * allocate(size_t size){
-#if DEBUG_MEMORY
+#if AOO_DEBUG_MEMORY
     auto total = total_memory.fetch_add(size, std::memory_order_relaxed) + size;
     fprintf(stderr, "allocate %d bytes (total: %d)\n", size, total);
     fflush(stderr);
@@ -40,7 +40,7 @@ void * allocate(size_t size){
 }
 
 void deallocate(void *ptr, size_t size){
-#if DEBUG_MEMORY
+#if AOO_DEBUG_MEMORY
     auto total = total_memory.fetch_sub(size, std::memory_order_relaxed) - size;
     fprintf(stderr, "deallocate %d bytes (total: %d)\n", size, total);
     fflush(stderr);
