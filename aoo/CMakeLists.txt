@@ -4,6 +4,8 @@ cmake_minimum_required (VERSION 2.8)
 option(USE_AOO_NET "build with networking support" ON)
 
 # compile time options
+option(USE_ALLOCATOR "build with custom allocator support" OFF)
+
 set(TIMEFILTER_BANDWIDTH 0.0001 CACHE STRING "default time filter bandwidth")
 message(STATUS "default time filter bandwidth: ${TIMEFILTER_BANDWIDTH}")
 
@@ -14,6 +16,8 @@ option(TIMEFILTER_CHECK "use time filter check" ON)
 message(STATUS "time filter check: ${TIMEFILTER_CHECK}")
 
 # compile time debugging options
+option(DEBUG_MEMORY "debug memory usage" OFF)
+
 option(DEBUG_TIMEFILTER "debug time filter" OFF)
 
 option(DEBUG_DLL "debug delay locked loop" OFF)
@@ -25,9 +29,11 @@ option(DEBUG_AUDIO_BUFFER "debug audio buffer" OFF)
 option(DEBUG_JITTER_BUFFER "debug jitter buffer" OFF)
 
 set(OPTIONS
+    "-DAOO_USE_ALLOCATOR=$<BOOL:${USE_ALLOCATOR}>"
     "-DAOO_TIMEFILTER_BANDWIDTH=${TIMEFILTER_BANDWIDTH}"
     "-DAOO_TIMEFILTER_TOLERANCE=${TIMEFILTER_TOLERANCE}"
     "-DAOO_TIMEFILTER_CHECK=$<BOOL:${TIMEFILTER_CHECK}>"
+    "-DAOO_DEBUG_MEMORY=$<BOOL:${DEBUG_MEMORY}>"
     "-DAOO_DEBUG_TIMEFILTER=$<BOOL:${DEBUG_TIMEFILTER}>"
     "-DAOO_DEBUG_DLL=$<BOOL:${DEBUG_DLL}>"
     "-DAOO_DEBUG_RESAMPLING=$<BOOL:${DEBUG_RESAMPLING}>"
