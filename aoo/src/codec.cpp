@@ -47,11 +47,11 @@ std::unique_ptr<decoder> codec::create_decoder() const {
     }
 }
 
-static std::unordered_map<std::string, std::unique_ptr<aoo::codec>> codec_dict;
+static std::unordered_map<std::string, std::unique_ptr<aoo::codec>> g_codec_dict;
 
 const aoo::codec * find_codec(const char * name){
-    auto it = codec_dict.find(name);
-    if (it != codec_dict.end()){
+    auto it = g_codec_dict.find(name);
+    if (it != g_codec_dict.end()){
         return it->second.get();
     } else {
         return nullptr;
@@ -61,11 +61,11 @@ const aoo::codec * find_codec(const char * name){
 } // aoo
 
 aoo_error aoo_register_codec(const char *name, const aoo_codec *codec){
-    if (aoo::codec_dict.count(name) != 0){
+    if (aoo::g_codec_dict.count(name) != 0){
         LOG_WARNING("aoo: codec " << name << " already registered!");
         return AOO_ERROR_UNSPECIFIED;
     }
-    aoo::codec_dict[name] = std::make_unique<aoo::codec>(codec);
+    aoo::g_codec_dict[name] = std::make_unique<aoo::codec>(codec);
     LOG_VERBOSE("aoo: registered codec '" << name << "'");
     return AOO_ERROR_OK;
 }

@@ -109,10 +109,10 @@ void aoo_set_allocator(const aoo_allocator *alloc){
 
 /*//////////////////// Log ////////////////////////////*/
 
-static aoo_logfunction gLogFunction = nullptr;
+static aoo_logfunction g_logfunction = nullptr;
 
 void aoo_set_logfunction(aoo_logfunction f){
-    gLogFunction = f;
+    g_logfunction = f;
 }
 
 static const char *errmsg[] = {
@@ -128,8 +128,8 @@ namespace aoo {
 Log::~Log(){
     stream_ << "\n";
     std::string msg = stream_.str();
-    if (gLogFunction){
-        gLogFunction(msg.c_str());
+    if (g_logfunction){
+        g_logfunction(msg.c_str());
     } else {
         std::cerr << msg;
         std::flush(std::cerr);
