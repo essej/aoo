@@ -60,50 +60,51 @@ void free_sockaddr(void *sa, int32_t len){
 
 /*//////////////////// allocator /////////////////////*/
 
-#if AOO_USE_ALLOCATOR
-
-#ifndef AOO_DEBUG_MEMORY
-#define AOO_DEBUG_MEMORY 0
-#endif
+#if AOO_USE_ALLOCATOR || AOO_DEBUG_MEMORY
 
 namespace aoo {
-
-static aoo_allocator g_allocator {
-    [](size_t n, void *){ return malloc(n); },
-    nullptr,
-    [](void *ptr, size_t, void *){ free(ptr); },
-    nullptr
-};
-
 
 #if AOO_DEBUG_MEMORY
 std::atomic<int64_t> total_memory{0};
 #endif
 
+static aoo_allocator g_allocator {
+    [](size_t n, void *){
+    #if AOO_DEBUG_MEMORY
+        auto total = total_memory.fetch_add(n, std::memory_order_relaxed) + n;
+        fprintf(stderr, "allocate %d bytes (total: %d)\n", n, total);
+        fflush(stderr);
+    #endif
+        return operator new(n);
+    },
+    nullptr,
+    [](void *ptr, size_t n, void *){
+    #if AOO_DEBUG_MEMORY
+        auto total = total_memory.fetch_sub(n, std::memory_order_relaxed) - n;
+        fprintf(stderr, "deallocate %d bytes (total: %d)\n", n, total);
+        fflush(stderr);
+    #endif
+        operator delete(ptr);
+    },
+    nullptr
+};
+
 void * allocate(size_t size){
-#if AOO_DEBUG_MEMORY
-    auto total = total_memory.fetch_add(size, std::memory_order_relaxed) + size;
-    fprintf(stderr, "allocate %d bytes (total: %d)\n", size, total);
-    fflush(stderr);
-#endif
     return g_allocator.alloc(size, g_allocator.context);
 }
 
 void deallocate(void *ptr, size_t size){
-#if AOO_DEBUG_MEMORY
-    auto total = total_memory.fetch_sub(size, std::memory_order_relaxed) - size;
-    fprintf(stderr, "deallocate %d bytes (total: %d)\n", size, total);
-    fflush(stderr);
-#endif
-    return g_allocator.free(ptr, size, g_allocator.context);
+    g_allocator.free(ptr, size, g_allocator.context);
 }
 
 } // aoo
 
+#endif
+
+#if AOO_USE_ALLOCATOR
 void aoo_set_allocator(const aoo_allocator *alloc){
     aoo::g_allocator = *alloc;
 }
-
 #endif
 
 /*//////////////////// Log ////////////////////////////*/
@@ -269,7 +270,7 @@ void aoo_codec_pcm_setup(aoo_codec_registerfn fn, const aoo_allocator *alloc);
 void aoo_codec_opus_setup(aoo_codec_registerfn fn, const aoo_allocator *alloc);
 #endif
 
-#if AOO_USE_ALLOCATOR
+#if AOO_USE_ALLOCATOR || AOO_DEBUG_MEMORY
 #define ALLOCATOR &aoo::g_allocator
 #else
 #define ALLOCATOR nullptr
