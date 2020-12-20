@@ -262,13 +262,14 @@ typedef enum aoo_option
     aoo_opt_id = 0,
     // Stream format (aoo_format)
     // ---
-    // The settings for the audio codec to be used for a stream.
-    // If you want to set the format, you have to send the format
-    // header, e.g. aoo_format_pcm.header. The format can only be
-    // set in sources.
-    // If you want to get the format, you have to pass a
-    // aoo_format_storage, which is filled with the format.
-    // Make sure that the 'size' field is set to the max. storage size!
+    // Set the format by passing a pointer to the format header ('aoo_format').
+    // The format must be non-const because it is validated and updated on success!
+    // This is only works with aoo_source.
+    //
+    // Get the format by passing a pointer to an instance of 'aoo_format_storage' or
+    // similar struct that is large enough to hold any codec format.
+    // On success, the actual format size will be contained in the 'size' member
+    // of the format header.
     aoo_opt_format,
     // Reset the source/sink (NULL)
     aoo_opt_reset,
@@ -353,7 +354,7 @@ typedef enum aoo_option
     aoo_opt_source_timeout
 } aoo_option;
 
-#define AOO_ARG(x) &x, sizeof(x)
+#define AOO_ARG(x) ((void *)&x), sizeof(x)
 #define AOO_ARG_NULL 0, 0
 
 /*//////////////////// AoO source /////////////////////*/
@@ -445,7 +446,7 @@ static inline aoo_error aoo_source_get_id(aoo_source *src, aoo_id *id) {
 }
 
 static inline aoo_error aoo_source_set_format(aoo_source *src, aoo_format *f) {
-    return aoo_source_set_option(src, aoo_opt_format, (void *)f, sizeof(aoo_format));
+    return aoo_source_set_option(src, aoo_opt_format, AOO_ARG(*f));
 }
 
 static inline aoo_error aoo_source_get_format(aoo_source *src, aoo_format_storage *f) {
@@ -501,12 +502,12 @@ static inline aoo_error aoo_source_get_redundancy(aoo_source *src, int32_t *n) {
 }
 
 static inline aoo_error aoo_source_set_sink_channelonset(aoo_source *src, const void *address,
-                                                       int32_t addrlen, aoo_id id, int32_t onset) {
+                                                         int32_t addrlen, aoo_id id, int32_t onset) {
     return aoo_source_set_sinkoption(src, address, addrlen, id, aoo_opt_channelonset, AOO_ARG(onset));
 }
 
 static inline aoo_error aoo_source_get_sink_channelonset(aoo_source *src, const void *address,
-                                                       int32_t addrlen, aoo_id id, int32_t *onset) {
+                                                         int32_t addrlen, aoo_id id, int32_t *onset) {
     return aoo_source_get_sinkoption(src, address, addrlen, id, aoo_opt_channelonset, AOO_ARG(*onset));
 }
 
@@ -634,12 +635,12 @@ static inline aoo_error aoo_sink_get_source_timeout(aoo_sink *sink, int32_t *n) 
 }
 
 static inline aoo_error aoo_sink_reset_source(aoo_sink *sink, const void *address,
-                                            int32_t addrlen, aoo_id id) {
+                                              int32_t addrlen, aoo_id id) {
     return aoo_sink_set_sourceoption(sink, address, addrlen, id, aoo_opt_reset, AOO_ARG_NULL);
 }
 
 static inline aoo_error aoo_sink_get_source_format(aoo_sink *sink, const void *address,
-                                                 int32_t addrlen, aoo_id id, aoo_format_storage *f) {
+                                                   int32_t addrlen, aoo_id id, aoo_format_storage *f) {
     return aoo_sink_get_sourceoption(sink, address, addrlen, id, aoo_opt_format, AOO_ARG(*f));
 }
 
@@ -652,19 +653,17 @@ typedef void* (*aoo_codec_new)(void);
 typedef void (*aoo_codec_free)(void *);
 
 // set the codec format.
-// the 'aoo_format' struct is validated and updated accordingly.
 typedef aoo_error (*aoo_codec_setformat)(
         void *,         // the encoder/decoder instance
         aoo_format *    // the format (validated and updated on success)
 );
 
 // get the codec format.
-// 'aoo_format' must be large enough to hold the codec format, e.g. 'aoo_format_storage'.
-// NOTE: the 'size' member of 'aoo_format' must be initialized to the format storage size.
-// on success, it is updated to the actual size.
 typedef aoo_error (*aoo_codec_getformat)(
         void *,         // the encoder/decoder instance
-        aoo_format *    // format storage
+        aoo_format *    // format buffer large enough to hold the codec format.
+                        // NOTE: the 'size' field must be initialized to the
+                        // buffer size and is updated to the actual size.
 );
 
 // encode samples to bytes
@@ -694,14 +693,13 @@ typedef aoo_error (*aoo_codec_serialize)(
 );
 
 // deserialize format options (everything after the 'aoo_format' header).
-// 'aoo_format' must be large enough to hold the codec options, e.g. 'aoo_format_storage'.
 typedef aoo_error (*aoo_codec_deserialize)(
         const aoo_format *, // format header
         const char *,       // option buffer
         int32_t,            // buffer size
-        aoo_format *        // format storage
-                            // NOTE: the 'size' field must be initialized to the max.
-                            // available storage size and is updated to the actual size.
+        aoo_format *        // format buffer large enough to hold the codec format.
+                            // NOTE: the 'size' field must be initialized to the
+                            // buffer size and is updated to the actual size.
 );
 
 typedef struct aoo_codec

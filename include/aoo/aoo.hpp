@@ -326,16 +326,16 @@ public:
     }
 
     aoo_error get_source_format(const void *address, int32_t addrlen, aoo_id id,
-                              aoo_format_storage& f)
+                                aoo_format_storage& f)
     {
         return get_sourceoption(address, addrlen, id, aoo_opt_format, AOO_ARG(f));
     }
 
     virtual aoo_error set_sourceoption(const void *address, int32_t addrlen, aoo_id id,
-                                     int32_t opt, void *ptr, int32_t size) = 0;
+                                       int32_t opt, void *ptr, int32_t size) = 0;
 
     virtual aoo_error get_sourceoption(const void *address, int32_t addrlen, aoo_id id,
-                                     int32_t opt, void *ptr, int32_t size) = 0;
+                                       int32_t opt, void *ptr, int32_t size) = 0;
 protected:
     ~isink(){} // non-virtual!
 };

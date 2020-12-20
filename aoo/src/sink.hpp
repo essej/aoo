@@ -175,7 +175,7 @@ public:
 
     int32_t poll_events(aoo_eventhandler fn, void *user);
 
-    aoo_error get_format(aoo_format_storage& format);
+    aoo_error get_format(aoo_format& format);
 
     // methods
     void reset(const sink& s);

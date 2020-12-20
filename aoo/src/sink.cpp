@@ -292,7 +292,7 @@ aoo_error aoo_sink_get_sourceoption(aoo_sink *sink, const void *address, int32_t
 }
 
 aoo_error aoo::sink::get_sourceoption(const void *address, int32_t addrlen, aoo_id id,
-                                      int32_t opt, void *p, int32_t size)
+                                      int32_t opt, void *ptr, int32_t size)
 {
     ip_address addr((const sockaddr *)address, addrlen);
 
@@ -302,8 +302,12 @@ aoo_error aoo::sink::get_sourceoption(const void *address, int32_t addrlen, aoo_
         switch (opt){
         // format
         case aoo_opt_format:
-            CHECKARG(aoo_format_storage);
-            return src->get_format(as<aoo_format_storage>(p));
+        {
+            assert(size >= sizeof(aoo_format));
+            auto fmt = as<aoo_format>(ptr);
+            fmt.size = size; // !
+            return src->get_format(fmt);
+        }
         // unsupported
         default:
             LOG_WARNING("aoo_sink: unsupported source option " << opt);
@@ -740,7 +744,7 @@ bool source_desc::is_active(const sink& s) const {
     return (s.elapsed_time() - last) < s.source_timeout();
 }
 
-aoo_error source_desc::get_format(aoo_format_storage &format){
+aoo_error source_desc::get_format(aoo_format &format){
     // synchronize with handle_format() and update()!
     shared_scoped_lock lock(mutex_);
     if (decoder_){
@@ -891,7 +895,7 @@ aoo_error source_desc::handle_format(const sink& s, int32_t salt, const aoo_form
     // read format
     aoo_format_storage fmt;
     fmt.header.size = sizeof(aoo_format_storage); // !
-    if (decoder_->deserialize(f, settings, size, fmt) != AOO_ERROR_OK){
+    if (decoder_->deserialize(f, settings, size, fmt.header) != AOO_ERROR_OK){
         return AOO_ERROR_UNSPECIFIED;
     }
     // set format

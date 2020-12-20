@@ -165,14 +165,15 @@ aoo_error aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
     // format
     case aoo_opt_format:
     {
-        CHECKARG(aoo_format_storage);
+        assert(size >= sizeof(aoo_format));
+        auto fmt = as<aoo_format>(ptr);
+        fmt.size = size; // !
+        shared_lock lock(update_mutex_); // read lock!
         if (encoder_){
-            shared_lock lock(update_mutex_); // read lock!
-            return encoder_->get_format(as<aoo_format_storage>(ptr));
+            return encoder_->get_format(fmt);
         } else {
             return AOO_ERROR_UNSPECIFIED;
         }
-        break;
     }
     // buffer size
     case aoo_opt_buffersize:
@@ -751,8 +752,8 @@ void source::send_format(sendfn& fn){
     int32_t salt = salt_;
 
     aoo_format_storage f;
-    f.header.size = sizeof(aoo_format_storage);
-    if (encoder_->get_format(f) != AOO_ERROR_OK){
+    f.header.size = sizeof(aoo_format_storage); // !
+    if (encoder_->get_format(f.header) != AOO_ERROR_OK){
         return;
     }
 

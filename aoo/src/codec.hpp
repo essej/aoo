@@ -21,14 +21,14 @@ public:
     int32_t blocksize() const { return blocksize_; }
 
     aoo_error serialize(const aoo_format& f,
-                        char *buf, int32_t &n) {
+                        char *buf, int32_t &n) const {
         return codec_->serialize(&f, buf, &n);
     }
 
     aoo_error deserialize(const aoo_format& header,
                           const char *data, int32_t n,
-                          aoo_format_storage& f) {
-        return codec_->deserialize(&header, data, n, (aoo_format *)&f);
+                          aoo_format& f) const {
+        return codec_->deserialize(&header, data, n, &f);
     }
 protected:
     const aoo_codec *codec_;
@@ -47,8 +47,8 @@ public:
 
     aoo_error set_format(aoo_format& fmt);
 
-    aoo_error get_format(aoo_format_storage& fmt) const {
-        return codec_->encoder_getformat(obj_, (aoo_format *)&fmt);
+    aoo_error get_format(aoo_format& fmt) const {
+        return codec_->encoder_getformat(obj_, &fmt);
     }
 
     aoo_error encode(const aoo_sample *s, int32_t n, char *buf, int32_t &size){
@@ -65,8 +65,8 @@ public:
 
     aoo_error set_format(aoo_format& fmt);
 
-    aoo_error get_format(aoo_format_storage& f) const {
-        return codec_->decoder_getformat(obj_, (aoo_format *)&f);
+    aoo_error get_format(aoo_format& f) const {
+        return codec_->decoder_getformat(obj_, &f);
     }
 
     aoo_error decode(const char *buf, int32_t size, aoo_sample *s, int32_t &n){
