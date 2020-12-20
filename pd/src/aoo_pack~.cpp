@@ -40,7 +40,7 @@ struct t_aoo_pack
     t_clock *x_clock = nullptr;
     t_outlet *x_out = nullptr;
     t_outlet *x_msgout = nullptr;
-    aoo_id x_sink_id = 0;
+    aoo_id x_sink_id = AOO_ID_NONE;
     int32_t x_sink_chn = 0;
     bool x_accept = false;
 };
@@ -204,8 +204,8 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
         if (argc > 1){
             int32_t chn = atom_getfloat(argv + 1);
             x->x_sink_chn = chn > 0 ? chn : 0;
+            aoo_pack_channel(x, x->x_sink_chn);
         }
-        aoo_pack_channel(x, x->x_sink_chn);
     }
 }
 
@@ -285,6 +285,7 @@ t_aoo_pack::t_aoo_pack(int argc, t_atom *argv)
     x_f = 0;
     x_clock = clock_new(this, (t_method)aoo_pack_tick);
     x_accept = 1;
+    x_address = aoo::ip_address(1, 1); // fake IP address
 
     // arg #1: ID
     int id = atom_getfloatarg(0, argc, argv);
@@ -322,6 +323,14 @@ t_aoo_pack::t_aoo_pack(int argc, t_atom *argv)
     // create and initialize aoo_sink object
     auto src = aoo::isource::create(id >= 0 ? id : 0, 0);
     x_source.reset(src);
+
+    // add sink
+    if (x_sink_id != AOO_ID_NONE){
+        x_source->add_sink(x_address.address(), x_address.length(), x_sink_id, 0);
+        // set channel
+        x_source->set_sink_channelonset(x_address.address(), x_address.length(),
+                                        x_sink_id, x_sink_chn);
+    }
 
     // default format
     aoo_format_storage fmt;
