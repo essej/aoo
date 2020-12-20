@@ -395,8 +395,9 @@ aoo_error aoo::source::handle_message(const char *data, int32_t n,
 
         aoo_type type;
         aoo_id src;
-        auto onset = aoo_parse_pattern(data, n, &type, &src);
-        if (!onset){
+        int32_t onset;
+        auto err = aoo_parse_pattern(data, n, &type, &src, &onset);
+        if (onset != AOO_ERROR_OK){
             LOG_WARNING("aoo_source: not an AoO message!");
             return AOO_ERROR_UNSPECIFIED;
         }

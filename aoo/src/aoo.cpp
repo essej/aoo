@@ -140,63 +140,78 @@ Log::~Log(){
 
 /*//////////////////// OSC ////////////////////////////*/
 
-int32_t aoo_parse_pattern(const char *msg, int32_t n,
-                          aoo_type *type, aoo_id *id)
+aoo_error aoo_parse_pattern(const char *msg, int32_t n,
+                            aoo_type *type, aoo_id *id, int32_t *offset)
 {
-    int32_t offset = 0;
+    int32_t count = 0;
     if (n >= AOO_MSG_DOMAIN_LEN
         && !memcmp(msg, AOO_MSG_DOMAIN, AOO_MSG_DOMAIN_LEN))
     {
-        offset += AOO_MSG_DOMAIN_LEN;
-        if (n >= (offset + AOO_MSG_SOURCE_LEN)
-            && !memcmp(msg + offset, AOO_MSG_SOURCE, AOO_MSG_SOURCE_LEN))
+        count += AOO_MSG_DOMAIN_LEN;
+        if (n >= (count + AOO_MSG_SOURCE_LEN)
+            && !memcmp(msg + count, AOO_MSG_SOURCE, AOO_MSG_SOURCE_LEN))
         {
             *type = AOO_TYPE_SOURCE;
-            offset += AOO_MSG_SOURCE_LEN;
-        } else if (n >= (offset + AOO_MSG_SINK_LEN)
-            && !memcmp(msg + offset, AOO_MSG_SINK, AOO_MSG_SINK_LEN))
+            count += AOO_MSG_SOURCE_LEN;
+        } else if (n >= (count + AOO_MSG_SINK_LEN)
+            && !memcmp(msg + count, AOO_MSG_SINK, AOO_MSG_SINK_LEN))
         {
             *type = AOO_TYPE_SINK;
-            offset += AOO_MSG_SINK_LEN;
-    #if USE_AOO_NET
-        } else if (n >= (offset + AOO_NET_MSG_CLIENT_LEN)
-            && !memcmp(msg + offset, AOO_NET_MSG_CLIENT, AOO_NET_MSG_CLIENT_LEN))
-        {
-            *type = AOO_TYPE_CLIENT;
-            return offset + AOO_NET_MSG_CLIENT_LEN;
-        } else if (n >= (offset + AOO_NET_MSG_SERVER_LEN)
-            && !memcmp(msg + offset, AOO_NET_MSG_SERVER, AOO_NET_MSG_SERVER_LEN))
-        {
-            *type = AOO_TYPE_SERVER;
-            return offset + AOO_NET_MSG_SERVER_LEN;
-        } else if (n >= (offset + AOO_NET_MSG_PEER_LEN)
-            && !memcmp(msg + offset, AOO_NET_MSG_PEER, AOO_NET_MSG_PEER_LEN))
-        {
-            *type = AOO_TYPE_PEER;
-            return offset + AOO_NET_MSG_PEER_LEN;
-        } else if (n >= (offset + AOO_NET_MSG_RELAY_LEN)
-            && !memcmp(msg + offset, AOO_NET_MSG_RELAY, AOO_NET_MSG_RELAY_LEN))
-        {
-            *type = AOO_TYPE_RELAY;
-            return offset + AOO_NET_MSG_RELAY_LEN;
-    #endif
+            count += AOO_MSG_SINK_LEN;
         } else {
-            return 0;
+        #if USE_AOO_NET
+            if (n >= (count + AOO_NET_MSG_CLIENT_LEN)
+                && !memcmp(msg + count, AOO_NET_MSG_CLIENT, AOO_NET_MSG_CLIENT_LEN))
+            {
+                *type = AOO_TYPE_CLIENT;
+                count += AOO_NET_MSG_CLIENT_LEN;
+            } else if (n >= (count + AOO_NET_MSG_SERVER_LEN)
+                && !memcmp(msg + count, AOO_NET_MSG_SERVER, AOO_NET_MSG_SERVER_LEN))
+            {
+                *type = AOO_TYPE_SERVER;
+                count += AOO_NET_MSG_SERVER_LEN;
+            } else if (n >= (count + AOO_NET_MSG_PEER_LEN)
+                && !memcmp(msg + count, AOO_NET_MSG_PEER, AOO_NET_MSG_PEER_LEN))
+            {
+                *type = AOO_TYPE_PEER;
+                count += AOO_NET_MSG_PEER_LEN;
+            } else if (n >= (count + AOO_NET_MSG_RELAY_LEN)
+                && !memcmp(msg + count, AOO_NET_MSG_RELAY, AOO_NET_MSG_RELAY_LEN))
+            {
+                *type = AOO_TYPE_RELAY;
+                count += AOO_NET_MSG_RELAY_LEN;
+            } else {
+                return AOO_ERROR_UNSPECIFIED;
+            }
+
+            if (offset){
+                *offset = count;
+            }
+        #endif // USE_AOO_NET
+
+            return AOO_ERROR_OK;
         }
 
-        if (!id){
-            return offset;
-        }
-        int32_t skip = 0;
-        if (sscanf(msg + offset, "/%d%n", id, &skip) > 0){
-            return offset + skip;
+        // /aoo/source or /aoo/sink
+        if (id){
+            int32_t skip = 0;
+            if (sscanf(msg + count, "/%d%n", id, &skip) > 0){
+                count += skip;
+            } else {
+                // TODO only print relevant part of OSC address string
+                LOG_ERROR("aoo_parse_pattern: bad ID " << (msg + count));
+                return AOO_ERROR_UNSPECIFIED;
+            }
         } else {
-            // TODO only print relevant part of OSC address string
-            LOG_ERROR("aoo_parse_pattern: bad ID " << (msg + offset));
-            return 0;
+            return AOO_ERROR_UNSPECIFIED;
         }
+
+        if (offset){
+            *offset = count;
+        }
+        return AOO_ERROR_OK;
     } else {
-        return 0; // not an AoO message
+        return AOO_ERROR_UNSPECIFIED; // not an AoO message
     }
 }
 

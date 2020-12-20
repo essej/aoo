@@ -80,41 +80,45 @@ std::string encrypt(const std::string& input){
 
 /*//////////////////// OSC ////////////////////////////*/
 
-int32_t parse_pattern(const char *msg, int32_t n, int32_t *type)
+aoo_error parse_pattern(const char *msg, int32_t n, aoo_type& type, int32_t& offset)
 {
-    int32_t offset = 0;
+    int32_t count = 0;
     if (n >= AOO_MSG_DOMAIN_LEN
             && !memcmp(msg, AOO_MSG_DOMAIN, AOO_MSG_DOMAIN_LEN))
     {
-        offset += AOO_MSG_DOMAIN_LEN;
-        if (n >= (offset + AOO_NET_MSG_SERVER_LEN)
-            && !memcmp(msg + offset, AOO_NET_MSG_SERVER, AOO_NET_MSG_SERVER_LEN))
+        count += AOO_MSG_DOMAIN_LEN;
+        if (n >= (count + AOO_NET_MSG_SERVER_LEN)
+            && !memcmp(msg + count, AOO_NET_MSG_SERVER, AOO_NET_MSG_SERVER_LEN))
         {
-            *type = AOO_TYPE_SERVER;
-            return offset + AOO_NET_MSG_SERVER_LEN;
+            type = AOO_TYPE_SERVER;
+            count += AOO_NET_MSG_SERVER_LEN;
         }
-        else if (n >= (offset + AOO_NET_MSG_CLIENT_LEN)
-            && !memcmp(msg + offset, AOO_NET_MSG_CLIENT, AOO_NET_MSG_CLIENT_LEN))
+        else if (n >= (count + AOO_NET_MSG_CLIENT_LEN)
+            && !memcmp(msg + count, AOO_NET_MSG_CLIENT, AOO_NET_MSG_CLIENT_LEN))
         {
-            *type = AOO_TYPE_CLIENT;
-            return offset + AOO_NET_MSG_CLIENT_LEN;
+            type = AOO_TYPE_CLIENT;
+            count += AOO_NET_MSG_CLIENT_LEN;
         }
-        else if (n >= (offset + AOO_NET_MSG_PEER_LEN)
-            && !memcmp(msg + offset, AOO_NET_MSG_PEER, AOO_NET_MSG_PEER_LEN))
+        else if (n >= (count + AOO_NET_MSG_PEER_LEN)
+            && !memcmp(msg + count, AOO_NET_MSG_PEER, AOO_NET_MSG_PEER_LEN))
         {
-            *type = AOO_TYPE_PEER;
-            return offset + AOO_NET_MSG_PEER_LEN;
+            type = AOO_TYPE_PEER;
+            count += AOO_NET_MSG_PEER_LEN;
         }
-        else if (n >= (offset + AOO_NET_MSG_RELAY_LEN)
-            && !memcmp(msg + offset, AOO_NET_MSG_RELAY, AOO_NET_MSG_RELAY_LEN))
+        else if (n >= (count + AOO_NET_MSG_RELAY_LEN)
+            && !memcmp(msg + count, AOO_NET_MSG_RELAY, AOO_NET_MSG_RELAY_LEN))
         {
-            *type = AOO_TYPE_RELAY;
-            return offset + AOO_NET_MSG_RELAY_LEN;
+            type = AOO_TYPE_RELAY;
+            count += AOO_NET_MSG_RELAY_LEN;
         } else {
-            return 0;
+            return AOO_ERROR_UNSPECIFIED;
         }
+
+        offset = count;
+
+        return AOO_ERROR_OK;
     } else {
-        return 0; // not an AoO message
+        return AOO_ERROR_UNSPECIFIED; // not an AoO message
     }
 }
 
@@ -440,8 +444,9 @@ aoo_error aoo::net::client::handle_message(const char *data, int32_t n,
 
     int32_t type;
     aoo_id id;
-    int32_t onset = aoo_parse_pattern(data, n, &type, &id);
-    if (onset == 0){
+    int32_t onset;
+    auto err = aoo_parse_pattern(data, n, &type, &id, &onset);
+    if (err != AOO_ERROR_OK){
         LOG_WARNING("aoo_client: not an AOO NET message!");
         return AOO_ERROR_UNSPECIFIED;
     }
@@ -1002,10 +1007,12 @@ void client::handle_server_message(const char *data, int32_t n){
     osc::ReceivedPacket packet(data, n);
     osc::ReceivedMessage msg(packet);
 
-    int32_t type;
-    auto onset = parse_pattern(data, n, &type);
-    if (!onset){
+    aoo_type type;
+    int32_t onset;
+    auto err = parse_pattern(data, n, type, onset);
+    if (err != AOO_ERROR_OK){
         LOG_WARNING("aoo_client: not an AOO NET message!");
+        return;
     }
 
     try {

@@ -338,8 +338,9 @@ aoo_error aoo::sink::handle_message(const char *data, int32_t n,
 
         aoo_type type;
         aoo_id sinkid;
-        auto onset = aoo_parse_pattern(data, n, &type, &sinkid);
-        if (!onset){
+        int32_t onset;
+        auto err = aoo_parse_pattern(data, n, &type, &sinkid, &onset);
+        if (err != AOO_ERROR_OK){
             LOG_WARNING("not an AoO message!");
             return AOO_ERROR_UNSPECIFIED;
         }

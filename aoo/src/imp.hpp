@@ -22,7 +22,7 @@ void free_sockaddr(void *sa, int32_t len);
 
 namespace net {
 
-int32_t parse_pattern(const char *msg, int32_t n, int32_t *type);
+aoo_error parse_pattern(const char *msg, int32_t n, aoo_type& type, int32_t& offset);
 
 } // net
 

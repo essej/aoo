@@ -472,8 +472,9 @@ void server::receive_udp(){
             osc::ReceivedMessage msg(packet);
 
             aoo_type type;
-            auto onset = aoo_parse_pattern(buf, result, &type, nullptr);
-            if (!onset){
+            int32_t onset;
+            auto err = parse_pattern(buf, result, type, onset);
+            if (err != AOO_ERROR_OK){
                 LOG_WARNING("aoo_server: not an AOO NET message!");
                 return;
             }
@@ -728,9 +729,10 @@ bool client_endpoint::handle_message(const char *data, int32_t n){
     osc::ReceivedPacket packet(data, n);
     osc::ReceivedMessage msg(packet);
 
-    int32_t type;
-    auto onset = parse_pattern(data, n, &type);
-    if (!onset){
+    aoo_type type;
+    int32_t onset;
+    auto err = parse_pattern(data, n, type, onset);
+    if (err != AOO_ERROR_OK){
         LOG_WARNING("aoo_server: not an AOO NET message!");
         return false;
     }

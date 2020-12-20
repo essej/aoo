@@ -148,8 +148,8 @@ AOO_API void aoo_terminate(void);
 
 // get the aoo_type and ID from an AoO OSC message, e.g. in /aoo/src/<id>/data
 // returns the offset on success, 0 on fail
-AOO_API int32_t aoo_parse_pattern(const char *msg, int32_t n,
-                                  aoo_type *type, aoo_id *id);
+AOO_API aoo_error aoo_parse_pattern(const char *msg, int32_t n,
+                                    aoo_type *type, aoo_id *id, int32_t *offset);
 
 // get the current NTP time
 AOO_API uint64_t aoo_osctime_now(void);
