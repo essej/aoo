@@ -105,8 +105,8 @@ private:
 
 class udp_client {
 public:
-    udp_client(client& c, int socket, int port, uint32_t flags)
-        : client_(&c), socket_(socket), port_(port) {}
+    udp_client(client& c, int port, uint32_t flags)
+        : client_(&c), port_(port) {}
 
     int port() const { return port_; }
 
@@ -124,7 +124,6 @@ public:
     void start_handshake(const ip_address& local, ip_address_list&& remote);
 private:
     client *client_;
-    int socket_;
     int port_;
     aoo_sendfn fn_ = nullptr;
     void *user_ = nullptr;
@@ -177,7 +176,8 @@ public:
         };
     };
 
-    client(int udpsocket, uint32_t flags);
+    client(const void *address, int32_t addrlen, uint32_t flags);
+
     ~client();
 
     aoo_error run() override;

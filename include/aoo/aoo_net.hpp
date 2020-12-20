@@ -39,13 +39,13 @@ public:
             destroy(x);
         }
     };
-    // smart pointer for AoO source instance
+    // smart pointer for AoO server instance
     using pointer = std::unique_ptr<iserver, deleter>;
 
-    // create a new AoO source instance
+    // create a new AoO server instance
     static iserver * create(int port, uint32_t flags, aoo_error *err);
 
-    // destroy the AoO source instance
+    // destroy the AoO server instance
     static void destroy(iserver *server);
 
     // run the AOO server; this function blocks indefinitely.
@@ -85,13 +85,14 @@ public:
             destroy(x);
         }
     };
-    // smart pointer for AoO sink instance
+    // smart pointer for AoO client instance
     using pointer = std::unique_ptr<iclient, deleter>;
 
-    // create a new AoO sink instance
-    static iclient * create(int socket, uint32_t flags);
+    // create a new AoO client instance
+    static iclient * create(const void *address, int32_t addrlen,
+                            uint32_t flags);
 
-    // destroy the AoO sink instance
+    // destroy the AoO client instance
     static void destroy(iclient *client);
 
     // run the AOO client; this function blocks indefinitely.
@@ -184,8 +185,10 @@ protected:
     ~iclient(){} // non-virtual!
 };
 
-inline iclient * iclient::create(int socket, uint32_t flags){
-    return aoo_net_client_new(socket, flags);
+inline iclient * iclient::create(const void *address, int32_t addrlen,
+                                 uint32_t flags)
+{
+    return aoo_net_client_new(address, addrlen, flags);
 }
 
 inline void iclient::destroy(iclient *client){

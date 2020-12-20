@@ -202,8 +202,9 @@ using aoo_net_client = aoo::net::iclient;
 typedef struct aoo_net_client aoo_net_client;
 #endif
 
-// create a new AOO client for the given UDP socket
-AOO_API aoo_net_client * aoo_net_client_new(int socket, uint32_t flags);
+// create a new AOO client for the given UDP port
+AOO_API aoo_net_client * aoo_net_client_new(const void *address, int32_t addrlen,
+                                            uint32_t flags);
 
 // destroy AOO client
 AOO_API void aoo_net_client_free(aoo_net_client *client);

@@ -26,7 +26,8 @@ using namespace aoo;
 class AooNode final : public INode {
     friend class INode;
 public:
-    AooNode(World *world, int socket, int port);
+    AooNode(World *world, int socket, const ip_address& addr);
+
     ~AooNode();
 
     aoo::ip_address::ip_type type() const { return type_; }
@@ -85,12 +86,10 @@ private:
 
 // public methods
 
-AooNode::AooNode(World *world, int socket, int port)
-    : world_(world), socket_(socket), port_(port)
+AooNode::AooNode(World *world, int socket, const ip_address& addr)
+    : world_(world), socket_(socket), port_(addr.port()), type_(addr.type())
 {
-    type_ = socket_family(socket);
-
-    client_.reset(aoo::net::iclient::create(socket, 0));
+    client_.reset(aoo::net::iclient::create(addr.address(), addr.length(), 0));
     // start threads
 #if AOO_NODE_POLL
     thread_ = std::thread([this](){
@@ -195,7 +194,14 @@ INode::ptr INode::get(World *world, int port){
         // first create socket
         int sock = socket_udp(port);
         if (sock < 0){
-            LOG_ERROR("aoo node: couldn't bind to port " << port);
+            LOG_ERROR("AooNode: couldn't bind to port " << port);
+            return nullptr;
+        }
+
+        ip_address addr;
+        if (socket_address(sock, addr) != 0){
+            LOG_ERROR("AooNode: couldn't get socket address");
+            socket_close(sock);
             return nullptr;
         }
 
@@ -205,7 +211,7 @@ INode::ptr INode::get(World *world, int port){
         socket_setrecvbufsize(sock, 2 << 20);
 
         // finally create aoo node instance
-        node = std::make_shared<AooNode>(world, sock, port);
+        node = std::make_shared<AooNode>(world, sock, addr);
         nodeMap.emplace(port, node);
     }
 

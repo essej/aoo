@@ -49,7 +49,8 @@ struct t_node_proxy
 
 struct t_node final : public i_node
 {
-    t_node(t_symbol *s, int socket, int port);
+    t_node(t_symbol *s, int socket, const ip_address& addr);
+
     ~t_node();
 
     t_node_proxy x_proxy; // we can't directly bind t_node because of vtable
@@ -201,7 +202,14 @@ i_node * i_node::get(t_pd *obj, int port, void *x, aoo_id id)
         int sock = socket_udp(port);
         if (sock < 0){
             pd_error(obj, "%s: couldn't bind to port %d", classname(obj), port);
-            return 0;
+            return nullptr;
+        }
+
+        ip_address addr;
+        if (socket_address(sock, addr) != 0){
+            pd_error(obj, "s%: couldn't get socket address", classname(obj));
+            socket_close(sock);
+            return nullptr;
         }
 
         // increase send buffer size to 65 kB
@@ -210,7 +218,7 @@ i_node * i_node::get(t_pd *obj, int port, void *x, aoo_id id)
         socket_setrecvbufsize(sock, 2 << 20);
 
         // finally create aoo node instance
-        node = new t_node(s, sock, port);
+        node = new t_node(s, sock, addr);
     }
 
     if (!node->add_object(obj, x, id)){
@@ -221,13 +229,11 @@ i_node * i_node::get(t_pd *obj, int port, void *x, aoo_id id)
     return node;
 }
 
-t_node::t_node(t_symbol *s, int socket, int port)
+t_node::t_node(t_symbol *s, int socket, const ip_address& addr)
     : x_proxy(this), x_bindsym(s),
-      x_socket(socket), x_port(port)
+      x_socket(socket), x_port(addr.port()), x_type(addr.type())
 {
-    x_type = socket_family(socket);
-
-    x_client.reset(aoo::net::iclient::create(socket, 0));
+    x_client.reset(aoo::net::iclient::create(addr.address(), addr.length(), 0));
 
     pd_bind(&x_proxy.x_pd, x_bindsym);
 

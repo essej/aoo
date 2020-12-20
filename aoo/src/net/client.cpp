@@ -127,20 +127,16 @@ aoo_error parse_pattern(const char *msg, int32_t n, aoo_type& type, int32_t& off
 
 /*//////////////////// AoO client /////////////////////*/
 
-aoo_net_client * aoo_net_client_new(int socket, uint32_t flags) {
-    return aoo::construct<aoo::net::client>(socket, flags);
+aoo_net_client * aoo_net_client_new(const void *address, int32_t addrlen,
+                                    uint32_t flags) {
+    return aoo::construct<aoo::net::client>(address, addrlen, flags);
 }
 
-aoo::net::client::client(int socket, uint32_t flags)
+aoo::net::client::client(const void *address, int32_t addrlen, uint32_t flags)
 {
-    ip_address addr;
-    if (socket_address(socket, addr) < 0){
-        // TODO handle error
-        socket_error_print("socket_address");
-    } else {
-        udp_client_ = std::make_unique<udp_client>(*this, socket, addr.port(), flags);
-        type_ = addr.type();
-    }
+    ip_address addr((const sockaddr *)address, addrlen);
+    udp_client_ = std::make_unique<udp_client>(*this, addr.port(), flags);
+    type_ = addr.type();
 
     eventsocket_ = socket_udp(0);
     if (eventsocket_ < 0){
