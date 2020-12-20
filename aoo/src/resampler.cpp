@@ -29,7 +29,7 @@ void dynamic_resampler::setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_
 }
 
 void dynamic_resampler::reset(){
-    ratio_ = 1;
+    // don't touch ratio_!
     rdpos_ = 0;
     wrpos_ = 0;
     balance_ = 0;
