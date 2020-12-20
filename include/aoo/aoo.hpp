@@ -85,75 +85,75 @@ public:
     // set/get options (always threadsafe)
 
     aoo_error start(){
-        return set_option(aoo_opt_start, AOO_ARG_NULL);
+        return set_option(AOO_OPT_START, AOO_ARG_NULL);
     }
 
     aoo_error stop(){
-        return set_option(aoo_opt_stop, AOO_ARG_NULL);
+        return set_option(AOO_OPT_STOP, AOO_ARG_NULL);
     }
 
     aoo_error set_id(aoo_id id){
-        return set_option(aoo_opt_id, AOO_ARG(id));
+        return set_option(AOO_OPT_ID, AOO_ARG(id));
     }
 
     aoo_error get_id(aoo_id &id){
-        return get_option(aoo_opt_id, AOO_ARG(id));
+        return get_option(AOO_OPT_ID, AOO_ARG(id));
     }
 
     aoo_error set_format(aoo_format& f){
-        return set_option(aoo_opt_format, AOO_ARG(f));
+        return set_option(AOO_OPT_FORMAT, AOO_ARG(f));
     }
 
     aoo_error get_format(aoo_format_storage& f){
-        return get_option(aoo_opt_format, AOO_ARG(f));
+        return get_option(AOO_OPT_FORMAT, AOO_ARG(f));
     }
 
     aoo_error set_buffersize(int32_t n){
-        return set_option(aoo_opt_buffersize, AOO_ARG(n));
+        return set_option(AOO_OPT_BUFFERSIZE, AOO_ARG(n));
     }
 
     aoo_error get_buffersize(int32_t& n){
-        return get_option(aoo_opt_buffersize, AOO_ARG(n));
+        return get_option(AOO_OPT_BUFFERSIZE, AOO_ARG(n));
     }
 
     aoo_error set_timefilter_bandwidth(float f){
-        return set_option(aoo_opt_timefilter_bandwidth, AOO_ARG(f));
+        return set_option(AOO_OPT_TIMEFILTER_BANDWIDTH, AOO_ARG(f));
     }
 
     aoo_error get_timefilter_bandwidth(float& f){
-        return get_option(aoo_opt_timefilter_bandwidth, AOO_ARG(f));
+        return get_option(AOO_OPT_TIMEFILTER_BANDWIDTH, AOO_ARG(f));
     }
 
     aoo_error set_packetsize(int32_t n){
-        return set_option(aoo_opt_packetsize, AOO_ARG(n));
+        return set_option(AOO_OPT_PACKETSIZE, AOO_ARG(n));
     }
 
     aoo_error get_packetsize(int32_t& n){
-        return get_option(aoo_opt_packetsize, AOO_ARG(n));
+        return get_option(AOO_OPT_PACKETSIZE, AOO_ARG(n));
     }
 
     aoo_error set_resend_buffersize(int32_t n){
-        return set_option(aoo_opt_resend_buffersize, AOO_ARG(n));
+        return set_option(AOO_OPT_RESEND_BUFFERSIZE, AOO_ARG(n));
     }
 
     aoo_error get_resend_buffersize(int32_t& n){
-        return get_option(aoo_opt_resend_buffersize, AOO_ARG(n));
+        return get_option(AOO_OPT_RESEND_BUFFERSIZE, AOO_ARG(n));
     }
 
     aoo_error set_redundancy(int32_t n){
-        return set_option(aoo_opt_redundancy, AOO_ARG(n));
+        return set_option(AOO_OPT_REDUNDANCY, AOO_ARG(n));
     }
 
     aoo_error get_redundancy(int32_t& n){
-        return get_option(aoo_opt_redundancy, AOO_ARG(n));
+        return get_option(AOO_OPT_REDUNDANCY, AOO_ARG(n));
     }
 
     aoo_error set_ping_interval(int32_t ms){
-        return set_option(aoo_opt_ping_interval, AOO_ARG(ms));
+        return set_option(AOO_OPT_PING_INTERVAL, AOO_ARG(ms));
     }
 
     aoo_error get_ping_interval(int32_t& ms){
-        return get_option(aoo_opt_ping_interval, AOO_ARG(ms));
+        return get_option(AOO_OPT_PING_INTERVAL, AOO_ARG(ms));
     }
 
     virtual aoo_error set_option(int32_t opt, void *ptr, int32_t size) = 0;
@@ -164,11 +164,11 @@ public:
 
     aoo_error set_sink_channelonset(const void *address, int32_t addrlen,
                                   aoo_id id, int32_t onset){
-        return set_sinkoption(address, addrlen, id, aoo_opt_channelonset, AOO_ARG(onset));
+        return set_sinkoption(address, addrlen, id, AOO_OPT_CHANNELONSET, AOO_ARG(onset));
     }
 
     aoo_error get_sink_channelonset(const void *address, int32_t addrlen, aoo_id id, int32_t& onset){
-        return get_sinkoption(address, addrlen, id, aoo_opt_channelonset, AOO_ARG(onset));
+        return get_sinkoption(address, addrlen, id, AOO_OPT_CHANNELONSET, AOO_ARG(onset));
     }
 
     virtual aoo_error set_sinkoption(const void *address, int32_t addrlen, aoo_id id,
@@ -240,79 +240,79 @@ public:
     // set/get options (always threadsafe)
 
     aoo_error reset(){
-        return set_option(aoo_opt_reset, AOO_ARG_NULL);
+        return set_option(AOO_OPT_RESET, AOO_ARG_NULL);
     }
 
     aoo_error set_id(aoo_id id){
-        return set_option(aoo_opt_id, AOO_ARG(id));
+        return set_option(AOO_OPT_ID, AOO_ARG(id));
     }
 
     aoo_error get_id(aoo_id &id){
-        return get_option(aoo_opt_id, AOO_ARG(id));
+        return get_option(AOO_OPT_ID, AOO_ARG(id));
     }
 
     aoo_error set_buffersize(int32_t n){
-        return set_option(aoo_opt_buffersize, AOO_ARG(n));
+        return set_option(AOO_OPT_BUFFERSIZE, AOO_ARG(n));
     }
 
     aoo_error get_buffersize(int32_t& n){
-        return get_option(aoo_opt_buffersize, AOO_ARG(n));
+        return get_option(AOO_OPT_BUFFERSIZE, AOO_ARG(n));
     }
 
     aoo_error set_timefilter_bandwidth(float f){
-        return set_option(aoo_opt_timefilter_bandwidth, AOO_ARG(f));
+        return set_option(AOO_OPT_TIMEFILTER_BANDWIDTH, AOO_ARG(f));
     }
 
     aoo_error get_timefilter_bandwidth(float& f){
-        return get_option(aoo_opt_timefilter_bandwidth, AOO_ARG(f));
+        return get_option(AOO_OPT_TIMEFILTER_BANDWIDTH, AOO_ARG(f));
     }
 
     aoo_error set_packetsize(int32_t n){
-        return set_option(aoo_opt_packetsize, AOO_ARG(n));
+        return set_option(AOO_OPT_PACKETSIZE, AOO_ARG(n));
     }
 
     aoo_error get_packetsize(int32_t& n){
-        return get_option(aoo_opt_packetsize, AOO_ARG(n));
+        return get_option(AOO_OPT_PACKETSIZE, AOO_ARG(n));
     }
 
     aoo_error set_ping_interval(int32_t n){
-        return set_option(aoo_opt_ping_interval, AOO_ARG(n));
+        return set_option(AOO_OPT_PING_INTERVAL, AOO_ARG(n));
     }
 
     aoo_error get_ping_interval(int32_t& n){
-        return get_option(aoo_opt_ping_interval, AOO_ARG(n));
+        return get_option(AOO_OPT_PING_INTERVAL, AOO_ARG(n));
     }
 
     aoo_error set_resend_enable(bool b){
-        return set_option(aoo_opt_resend_enable, AOO_ARG(b));
+        return set_option(AOO_OPT_RESEND_ENABLE, AOO_ARG(b));
     }
 
     aoo_error get_resend_enable(bool& b){
-        return get_option(aoo_opt_resend_enable, AOO_ARG(b));
+        return get_option(AOO_OPT_RESEND_ENABLE, AOO_ARG(b));
     }
 
     aoo_error set_resend_interval(int32_t n){
-        return set_option(aoo_opt_resend_interval, AOO_ARG(n));
+        return set_option(AOO_OPT_RESEND_INTERVAL, AOO_ARG(n));
     }
 
     aoo_error get_resend_interval(int32_t& n){
-        return get_option(aoo_opt_resend_interval, AOO_ARG(n));
+        return get_option(AOO_OPT_RESEND_INTERVAL, AOO_ARG(n));
     }
 
     aoo_error set_resend_maxnumframes(int32_t n){
-        return set_option(aoo_opt_resend_maxnumframes, AOO_ARG(n));
+        return set_option(AOO_OPT_RESEND_MAXNUMFRAMES, AOO_ARG(n));
     }
 
     aoo_error get_resend_maxnumframes(int32_t& n){
-        return get_option(aoo_opt_resend_maxnumframes, AOO_ARG(n));
+        return get_option(AOO_OPT_RESEND_MAXNUMFRAMES, AOO_ARG(n));
     }
 
     aoo_error set_source_timeout(int32_t n){
-        return set_option(aoo_opt_source_timeout, AOO_ARG(n));
+        return set_option(AOO_OPT_SOURCE_TIMEOUT, AOO_ARG(n));
     }
 
     aoo_error get_source_timeout(int32_t& n){
-        return get_option(aoo_opt_source_timeout, AOO_ARG(n));
+        return get_option(AOO_OPT_SOURCE_TIMEOUT, AOO_ARG(n));
     }
 
     virtual aoo_error set_option(int32_t opt, void *ptr, int32_t size) = 0;
@@ -322,13 +322,13 @@ public:
     // set/get source options (always threadsafe)
 
     aoo_error reset_source(const void *address, int32_t addrlen, aoo_id id) {
-        return set_sourceoption(address, addrlen, id, aoo_opt_reset, AOO_ARG_NULL);
+        return set_sourceoption(address, addrlen, id, AOO_OPT_RESET, AOO_ARG_NULL);
     }
 
     aoo_error get_source_format(const void *address, int32_t addrlen, aoo_id id,
                                 aoo_format_storage& f)
     {
-        return get_sourceoption(address, addrlen, id, aoo_opt_format, AOO_ARG(f));
+        return get_sourceoption(address, addrlen, id, AOO_OPT_FORMAT, AOO_ARG(f));
     }
 
     virtual aoo_error set_sourceoption(const void *address, int32_t addrlen, aoo_id id,

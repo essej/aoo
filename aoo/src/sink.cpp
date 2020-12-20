@@ -112,7 +112,7 @@ aoo_error aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
     // id
-    case aoo_opt_id:
+    case AOO_OPT_ID:
     {
         CHECKARG(int32_t);
         auto newid = as<int32_t>(ptr);
@@ -122,13 +122,13 @@ aoo_error aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         break;
     }
     // reset
-    case aoo_opt_reset:
+    case AOO_OPT_RESET:
         reset_sources();
         // reset time DLL
         timer_.reset();
         break;
     // buffer size
-    case aoo_opt_buffersize:
+    case AOO_OPT_BUFFERSIZE:
     {
         CHECKARG(int32_t);
         auto bufsize = std::max<int32_t>(0, as<int32_t>(ptr));
@@ -139,7 +139,7 @@ aoo_error aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         break;
     }
     // timefilter bandwidth
-    case aoo_opt_timefilter_bandwidth:
+    case AOO_OPT_TIMEFILTER_BANDWIDTH:
     {
         CHECKARG(float);
         auto bw = std::max<double>(0, std::min<double>(1, as<float>(ptr)));
@@ -148,7 +148,7 @@ aoo_error aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         break;
     }
     // packetsize
-    case aoo_opt_packetsize:
+    case AOO_OPT_PACKETSIZE:
     {
         CHECKARG(int32_t);
         const int32_t minpacketsize = 64;
@@ -165,12 +165,12 @@ aoo_error aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         break;
     }
     // resend limit
-    case aoo_opt_resend_enable:
+    case AOO_OPT_RESEND_ENABLE:
         CHECKARG(int32_t);
         resend_enabled_.store(as<int32_t>(ptr));
         break;
     // resend interval
-    case aoo_opt_resend_interval:
+    case AOO_OPT_RESEND_INTERVAL:
     {
         CHECKARG(int32_t);
         auto interval = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
@@ -178,7 +178,7 @@ aoo_error aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         break;
     }
     // resend maxnumframes
-    case aoo_opt_resend_maxnumframes:
+    case AOO_OPT_RESEND_MAXNUMFRAMES:
     {
         CHECKARG(int32_t);
         auto maxnumframes = std::max<int32_t>(1, as<int32_t>(ptr));
@@ -186,7 +186,7 @@ aoo_error aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         break;
     }
     // source timeout
-    case aoo_opt_source_timeout:
+    case AOO_OPT_SOURCE_TIMEOUT:
     {
         CHECKARG(int32_t);
         auto timeout = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
@@ -210,40 +210,40 @@ aoo_error aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
     // id
-    case aoo_opt_id:
+    case AOO_OPT_ID:
         as<aoo_id>(ptr) = id();
         break;
     // buffer size
-    case aoo_opt_buffersize:
+    case AOO_OPT_BUFFERSIZE:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = buffersize_.load();
         break;
     // timefilter bandwidth
-    case aoo_opt_timefilter_bandwidth:
+    case AOO_OPT_TIMEFILTER_BANDWIDTH:
         CHECKARG(float);
         as<float>(ptr) = bandwidth_.load();
         break;
     // resend packetsize
-    case aoo_opt_packetsize:
+    case AOO_OPT_PACKETSIZE:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = packetsize_.load();
         break;
     // resend limit
-    case aoo_opt_resend_enable:
+    case AOO_OPT_RESEND_ENABLE:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = resend_enabled_.load();
         break;
     // resend interval
-    case aoo_opt_resend_interval:
+    case AOO_OPT_RESEND_INTERVAL:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = resend_interval_.load() * 1000.0;
         break;
     // resend maxnumframes
-    case aoo_opt_resend_maxnumframes:
+    case AOO_OPT_RESEND_MAXNUMFRAMES:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = resend_maxnumframes_.load();
         break;
-    case aoo_opt_source_timeout:
+    case AOO_OPT_SOURCE_TIMEOUT:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = source_timeout_.load() * 1000.0;
         break;
@@ -271,7 +271,7 @@ aoo_error aoo::sink::set_sourceoption(const void *address, int32_t addrlen, aoo_
     if (src){
         switch (opt){
         // reset
-        case aoo_opt_reset:
+        case AOO_OPT_RESET:
             src->reset(*this);
             break;
         // unsupported
@@ -301,7 +301,7 @@ aoo_error aoo::sink::get_sourceoption(const void *address, int32_t addrlen, aoo_
     if (src){
         switch (opt){
         // format
-        case aoo_opt_format:
+        case AOO_OPT_FORMAT:
         {
             assert(size >= sizeof(aoo_format));
             auto fmt = as<aoo_format>(ptr);
