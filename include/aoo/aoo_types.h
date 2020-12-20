@@ -68,7 +68,8 @@ typedef AOO_SAMPLETYPE aoo_sample;
 #endif
 
 typedef int32_t aoo_type;
-enum aoo_type_code
+
+enum aoo_types
 {
     AOO_TYPE_SOURCE = 0,
     AOO_TYPE_SINK,
@@ -80,34 +81,18 @@ enum aoo_type_code
 #endif
 };
 
+typedef int32_t aoo_bool;
+
 #define AOO_TRUE 1
 #define AOO_FALSE 0
 
-typedef int32_t aoo_bool;
+typedef int32_t aoo_error;
 
-enum aoo_error_code
+enum aoo_error_codes
 {
     AOO_ERROR_UNSPECIFIED = -1,
     AOO_ERROR_OK = 0
 };
-#if !defined(__cplusplus) || !AOO_STRICT
-typedef int32_t aoo_error;
-#else
-struct aoo_error {
-    aoo_error() = default;
-    aoo_error(aoo_error_code code)
-        : code_(code) {}
-
-    bool operator==(aoo_error e) {
-        return code_ == e.code_;
-    }
-    bool operator!=(aoo_error e) {
-        return code_ != e.code_;
-    }
-private:
-    aoo_error_code code_ = AOO_ERROR_UNSPECIFIED;
-};
-#endif
 
 #ifdef __cplusplus
 namespace aoo {
