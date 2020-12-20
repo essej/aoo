@@ -123,7 +123,7 @@ aoo_error aoo::net::server::run(){
         }
     }
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_net_server_quit(aoo_net_server *server){
@@ -138,7 +138,7 @@ aoo_error aoo::net::server::quit(){
         // the MSDN docs explicitly forbid it!
         socket_close(udpsocket_);
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_bool aoo_net_server_events_available(aoo_net_server *server){
@@ -159,7 +159,7 @@ aoo_error aoo::net::server::poll_events(aoo_eventhandler fn, void *user){
     while (events_.try_pop(e)){
         fn(user, &e->event_);
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 namespace aoo {
@@ -474,7 +474,7 @@ void server::receive_udp(){
             aoo_type type;
             int32_t onset;
             auto err = parse_pattern(buf, result, type, onset);
-            if (err != AOO_ERROR_OK){
+            if (err != AOO_OK){
                 LOG_WARNING("aoo_server: not an AOO NET message!");
                 return;
             }
@@ -732,7 +732,7 @@ bool client_endpoint::handle_message(const char *data, int32_t n){
     aoo_type type;
     int32_t onset;
     auto err = parse_pattern(data, n, type, onset);
-    if (err != AOO_ERROR_OK){
+    if (err != AOO_OK){
         LOG_WARNING("aoo_server: not an AOO NET message!");
         return false;
     }

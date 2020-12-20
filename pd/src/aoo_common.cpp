@@ -56,7 +56,7 @@ static bool get_endpoint_arg(void *x, i_node *node, int argc, t_atom *argv,
         // we can't use length_ptr() because socklen_t != int32_t on many platforms
         int32_t len = aoo::ip_address::max_length;
         if (node->client()->find_peer(group->s_name, user->s_name,
-                                      addr.address_ptr(), len) == AOO_ERROR_OK) {
+                                      addr.address_ptr(), len) == AOO_OK) {
             *addr.length_ptr() = len;
         } else {
             pd_error(x, "%s: couldn't find peer %s|%s",

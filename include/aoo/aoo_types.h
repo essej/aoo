@@ -91,7 +91,7 @@ typedef int32_t aoo_error;
 enum aoo_error_codes
 {
     AOO_ERROR_UNSPECIFIED = -1,
-    AOO_ERROR_OK = 0
+    AOO_OK = 0
 };
 
 #ifdef __cplusplus

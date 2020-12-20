@@ -107,7 +107,7 @@ aoo_error getformat(void *x, aoo_format *f)
     if (c->format.header.codec){
         if (f->size >= c->format.header.size){
             memcpy(f, &c->format, sizeof(aoo_format_opus));
-            return AOO_ERROR_OK;
+            return AOO_OK;
         } else {
             return AOO_ERROR_UNSPECIFIED;
         }
@@ -150,7 +150,7 @@ aoo_error encoder_encode(void *enc,
             c->state, s, framesize, (unsigned char *)buf, *size);
         if (result > 0){
             *size = result;
-            return AOO_ERROR_OK;
+            return AOO_OK;
         } else {
             LOG_VERBOSE("Opus: opus_encode_float() failed with error code " << result);
         }
@@ -220,7 +220,7 @@ aoo_error encoder_setformat(void *enc, aoo_format *f){
     memcpy(&c->format, fmt, sizeof(aoo_format_opus));
     print_settings(c->format);
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 #define encoder_getformat getformat
@@ -259,7 +259,7 @@ aoo_error decoder_decode(void *dec,
             c->state, (const unsigned char *)buf, size, s, framesize, 0);
         if (result > 0){
             *n = result;
-            return AOO_ERROR_OK;
+            return AOO_OK;
         } else {
             LOG_VERBOSE("Opus: opus_decode_float() failed with error code " << result);
         }
@@ -320,7 +320,7 @@ aoo_error decoder_setformat(void *dec, aoo_format *f)
         // save and print settings
         memcpy(&c->format, fmt, sizeof(aoo_format_opus));
         print_settings(c->format);
-        return AOO_ERROR_OK;
+        return AOO_OK;
     } else {
         LOG_ERROR("Opus: opus_decoder_create() failed with error code " << error);
         return AOO_ERROR_UNSPECIFIED;
@@ -339,7 +339,7 @@ aoo_error serialize(const aoo_format *f, char *buf, int32_t *size){
         aoo::to_bytes<int32_t>(fmt->signal_type, buf + 8);
         *size = 12;
 
-        return AOO_ERROR_OK;
+        return AOO_OK;
     } else {
         LOG_WARNING("Opus: couldn't write settings");
         return AOO_ERROR_UNSPECIFIED;
@@ -368,7 +368,7 @@ aoo_error deserialize(const aoo_format *header, const char *buf,
     fmt->complexity = aoo::from_bytes<int32_t>(buf + 4);
     fmt->signal_type = aoo::from_bytes<int32_t>(buf + 8);
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_codec codec_class = {

@@ -145,7 +145,7 @@ aoo_error aoo::source::set_option(int32_t opt, void *ptr, int32_t size)
         LOG_WARNING("aoo_source: unsupported option " << opt);
         return AOO_ERROR_UNSPECIFIED;
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_source_get_option(aoo_source *src, int32_t opt,
@@ -210,7 +210,7 @@ aoo_error aoo::source::get_option(int32_t opt, void *ptr, int32_t size)
         LOG_WARNING("aoo_source: unsupported option " << opt);
         return AOO_ERROR_UNSPECIFIED;
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_source_set_sinkoption(aoo_source *src, const void *address, int32_t addrlen,
@@ -243,7 +243,7 @@ aoo_error aoo::source::set_sinkoption(const void *address, int32_t addrlen, aoo_
             LOG_WARNING("aoo_source: unknown sink option " << opt);
             return AOO_ERROR_UNSPECIFIED;
         }
-        return AOO_ERROR_OK;
+        return AOO_OK;
     } else {
         LOG_ERROR("aoo_source: couldn't set option " << opt
                   << " - sink not found!");
@@ -276,7 +276,7 @@ aoo_error aoo::source::get_sinkoption(const void *address, int32_t addrlen, aoo_
             LOG_WARNING("aoo_source: unsupported sink option " << opt);
             return AOO_ERROR_UNSPECIFIED;
         }
-        return AOO_ERROR_OK;
+        return AOO_OK;
     } else {
         LOG_ERROR("aoo_source: couldn't get option " << opt
                   << " - sink " << id << " not found!");
@@ -318,7 +318,7 @@ aoo_error aoo::source::setup(int32_t samplerate,
             start_new_stream();
         }
 
-        return AOO_ERROR_OK;
+        return AOO_OK;
     } else {
         return AOO_ERROR_UNSPECIFIED;
     }
@@ -345,7 +345,7 @@ aoo_error aoo::source::add_sink(const void *address, int32_t addrlen,
     // push format request
     formatrequestqueue_.push(format_request { addr, id, flags });
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_source_remove_sink(aoo_source *src, const void *address,
@@ -360,7 +360,7 @@ aoo_error aoo::source::remove_sink(const void *address, int32_t addrlen, aoo_id 
     for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
         if (it->address == addr && it->id == id){
             sinks_.erase(it);
-            return AOO_ERROR_OK;
+            return AOO_OK;
         }
     }
     LOG_WARNING("aoo_source: sink not found!");
@@ -385,7 +385,7 @@ aoo_error aoo_source_handle_message(aoo_source *src, const char *data, int32_t n
 aoo_error aoo::source::handle_message(const char *data, int32_t n,
                                       const void *address, int32_t addrlen){
     if (!data){
-        return AOO_ERROR_OK; // nothing to update
+        return AOO_OK; // nothing to update
     }
 
     try {
@@ -398,7 +398,7 @@ aoo_error aoo::source::handle_message(const char *data, int32_t n,
         aoo_id src;
         int32_t onset;
         auto err = aoo_parse_pattern(data, n, &type, &src, &onset);
-        if (onset != AOO_ERROR_OK){
+        if (onset != AOO_OK){
             LOG_WARNING("aoo_source: not an AoO message!");
             return AOO_ERROR_UNSPECIFIED;
         }
@@ -426,7 +426,7 @@ aoo_error aoo::source::handle_message(const char *data, int32_t n,
             LOG_WARNING("unknown message " << pattern);
             return AOO_ERROR_UNSPECIFIED;
         }
-        return AOO_ERROR_OK;
+        return AOO_OK;
     } catch (const osc::Exception& e){
         LOG_ERROR("aoo_source: exception in handle_message: " << e.what());
         return AOO_ERROR_UNSPECIFIED;
@@ -446,7 +446,7 @@ aoo_error aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user) {
 // rather cheap in comparison to encoding and sending the audio data.
 aoo_error aoo::source::send(aoo_sendfn fn, void *user){
     if (state_.load() != stream_state::play){
-        return AOO_ERROR_OK; // nothing to do
+        return AOO_OK; // nothing to do
     }
 
     sendfn func(fn, user);
@@ -463,7 +463,7 @@ aoo_error aoo::source::send(aoo_sendfn fn, void *user){
         LOG_DEBUG("aoo::source: try_free() would block");
     }
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, uint64_t t) {
@@ -588,7 +588,7 @@ aoo_error aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
             // LOG_DEBUG("couldn't process");
         }
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_bool aoo_source_events_available(aoo_source *src){
@@ -610,7 +610,7 @@ aoo_error aoo::source::poll_events(aoo_eventhandler fn, void *user){
     while (eventqueue_.try_pop(e) > 0){
         fn(user, &e.event_);
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 namespace aoo {
@@ -652,7 +652,7 @@ aoo_error source::set_format(aoo_format &f){
     }
 
     auto err = encoder_->set_format(f);
-    if (err == AOO_ERROR_OK){
+    if (err == AOO_OK){
         update_audioqueue();
 
         if (need_resampling()){
@@ -753,13 +753,13 @@ void source::send_format(sendfn& fn){
 
     aoo_format_storage f;
     f.header.size = sizeof(aoo_format_storage); // !
-    if (encoder_->get_format(f.header) != AOO_ERROR_OK){
+    if (encoder_->get_format(f.header) != AOO_OK){
         return;
     }
 
     char options[AOO_CODEC_MAXSETTINGSIZE];
     int32_t size = sizeof(options);
-    if (encoder_->serialize(f.header, options, size) != AOO_ERROR_OK){
+    if (encoder_->serialize(f.header, options, size) != AOO_OK){
         return;
     }
 
@@ -920,7 +920,7 @@ void source::send_data(sendfn& fn){
 
             audioqueue_.read_commit();
 
-            if (err != AOO_ERROR_OK){
+            if (err != AOO_OK){
                 return;
             }
 

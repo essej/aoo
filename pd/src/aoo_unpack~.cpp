@@ -227,7 +227,7 @@ static t_int * aoo_unpack_perform(t_int *w)
     int n = (int)(w[2]);
 
     uint64_t t = aoo_osctime_now();
-    if (x->x_sink->process(x->x_vec.get(), n, t) != AOO_ERROR_OK){
+    if (x->x_sink->process(x->x_vec.get(), n, t) != AOO_OK){
         // output zeros
         for (int i = 0; i < x->x_nchannels; ++i){
             memset(x->x_vec[i], 0, sizeof(t_sample) * n);

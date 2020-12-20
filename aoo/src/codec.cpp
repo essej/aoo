@@ -10,7 +10,7 @@ namespace aoo {
 
 aoo_error encoder::set_format(aoo_format& fmt){
     auto result = codec_->encoder_setformat(obj_, &fmt);
-    if (result == AOO_ERROR_OK){
+    if (result == AOO_OK){
         // assign after validation!
         nchannels_ = fmt.nchannels;
         samplerate_ = fmt.samplerate;
@@ -21,7 +21,7 @@ aoo_error encoder::set_format(aoo_format& fmt){
 
 aoo_error decoder::set_format(aoo_format& fmt){
     auto result = codec_->decoder_setformat(obj_, &fmt);
-    if (result == AOO_ERROR_OK){
+    if (result == AOO_OK){
         // assign after validation!
         nchannels_ = fmt.nchannels;
         samplerate_ = fmt.samplerate;
@@ -67,5 +67,5 @@ aoo_error aoo_register_codec(const char *name, const aoo_codec *codec){
     }
     aoo::g_codec_dict[name] = std::make_unique<aoo::codec>(codec);
     LOG_VERBOSE("aoo: registered codec '" << name << "'");
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }

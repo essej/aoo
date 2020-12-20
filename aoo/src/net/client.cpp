@@ -116,7 +116,7 @@ aoo_error parse_pattern(const char *msg, int32_t n, aoo_type& type, int32_t& off
 
         offset = count;
 
-        return AOO_ERROR_OK;
+        return AOO_OK;
     } else {
         return AOO_ERROR_UNSPECIFIED; // not an AoO message
     }
@@ -216,7 +216,7 @@ aoo_error aoo::net::client::run(){
             LOG_DEBUG("aoo::client: try_free() would block");
         }
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_net_client_quit(aoo_net_client *client){
@@ -231,7 +231,7 @@ aoo_error aoo::net::client::quit(){
         // the MSDN docs explicitly forbid it!
         socket_close(eventsocket_);
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_net_client_add_source(aoo_net_client *client,
@@ -255,7 +255,7 @@ aoo_error aoo::net::client::add_source(isource *src, aoo_id id)
     }
 #endif
     sources_.push_back({ src, id });
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_net_client_remove_source(aoo_net_client *client,
@@ -269,7 +269,7 @@ aoo_error aoo::net::client::remove_source(isource *src)
     for (auto it = sources_.begin(); it != sources_.end(); ++it){
         if (it->source == src){
             sources_.erase(it);
-            return AOO_ERROR_OK;
+            return AOO_OK;
         }
     }
     LOG_ERROR("aoo_client: source not found");
@@ -288,7 +288,7 @@ aoo_error aoo::net::client::add_sink(isink *sink, aoo_id id)
     for (auto& s : sinks_){
         if (s.sink == sink){
             LOG_ERROR("aoo_client: sink already added");
-            return AOO_ERROR_OK;
+            return AOO_OK;
         } else if (s.id == id){
             LOG_WARNING("aoo_client: sink with id " << id
                         << " already added!");
@@ -297,7 +297,7 @@ aoo_error aoo::net::client::add_sink(isink *sink, aoo_id id)
     }
 #endif
     sinks_.push_back({ sink, id });
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_net_client_remove_sink(aoo_net_client *client,
@@ -311,7 +311,7 @@ aoo_error aoo::net::client::remove_sink(isink *sink)
     for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
         if (it->sink == sink){
             sinks_.erase(it);
-            return AOO_ERROR_OK;
+            return AOO_OK;
         }
     }
     LOG_ERROR("aoo_client: sink not found");
@@ -340,7 +340,7 @@ aoo_error aoo::net::client::find_peer(const char *group, const char *user,
                 memcpy(address, addr.address(), addr.length());
                 addrlen = addr.length();
             }
-            return AOO_ERROR_OK;
+            return AOO_OK;
         }
     }
     return AOO_ERROR_UNSPECIFIED;
@@ -380,7 +380,7 @@ aoo_error aoo::net::client::send_request(aoo_net_request_type request, void *dat
         LOG_ERROR("aoo client: unknown request " << request);
         return AOO_ERROR_UNSPECIFIED;
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_net_client_send_message(aoo_net_client *client, const char *data, int32_t n,
@@ -419,7 +419,7 @@ aoo_error aoo::net::client::send_message(const char *data, int32_t n,
         // add to UDP message queue
         messages_.push(std::move(cmd));
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_net_client_handle_message(aoo_net_client *client, const char *data,
@@ -435,14 +435,14 @@ aoo_error aoo::net::client::handle_message(const char *data, int32_t n,
         for (auto& s : sinks_){
             s.sink->handle_message(nullptr, 0, nullptr, 0);
         }
-        return AOO_ERROR_OK;
+        return AOO_OK;
     }
 
     int32_t type;
     aoo_id id;
     int32_t onset;
     auto err = aoo_parse_pattern(data, n, &type, &id, &onset);
-    if (err != AOO_ERROR_OK){
+    if (err != AOO_OK){
         LOG_WARNING("aoo_client: not an AOO NET message!");
         return AOO_ERROR_UNSPECIFIED;
     }
@@ -505,7 +505,7 @@ aoo_error aoo::net::client::send(aoo_sendfn fn, void *user){
             p.send(now);
         }
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_bool aoo_net_client_events_available(aoo_net_server *client){
@@ -526,7 +526,7 @@ aoo_error aoo::net::client::poll_events(aoo_eventhandler fn, void *user){
     while (events_.try_pop(e)){
         fn(user, &e->event_);
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 namespace aoo {
@@ -711,7 +711,7 @@ void client::perform_disconnect(aoo_net_callback cb, void *user){
 
     close(true);
 
-    if (cb) cb(user, AOO_ERROR_OK, nullptr); // always succeeds
+    if (cb) cb(user, AOO_OK, nullptr); // always succeeds
 }
 
 void client::perform_login(const ip_address_list& addrlist){
@@ -765,7 +765,7 @@ void client::perform_join_group(const std::string &group, const std::string &pwd
                 int32_t status = (it++)->AsInt32();
                 if (status > 0){
                     LOG_VERBOSE("aoo_client: successfully joined group " << group);
-                    if (cb) cb(user, AOO_ERROR_OK, nullptr);
+                    if (cb) cb(user, AOO_OK, nullptr);
                 } else {
                     std::string errmsg;
                     if (msg.ArgumentCount() > 2){
@@ -831,7 +831,7 @@ void client::perform_leave_group(const std::string &group,
                     }
                     lock.unlock();
 
-                    if (cb) cb(user, AOO_ERROR_OK, nullptr);
+                    if (cb) cb(user, AOO_OK, nullptr);
                 } else {
                     std::string errmsg;
                     if (msg.ArgumentCount() > 2){
@@ -1006,7 +1006,7 @@ void client::handle_server_message(const char *data, int32_t n){
     aoo_type type;
     int32_t onset;
     auto err = parse_pattern(data, n, type, onset);
-    if (err != AOO_ERROR_OK){
+    if (err != AOO_OK){
         LOG_WARNING("aoo_client: not an AOO NET message!");
         return;
     }
@@ -1082,7 +1082,7 @@ void client::handle_login(const osc::ReceivedMessage& msg){
             reply.server_flags = flags;
             server_flags_ = flags;
 
-            callback_(userdata_, AOO_ERROR_OK, &reply);
+            callback_(userdata_, AOO_OK, &reply);
         } else {
             std::string errmsg;
             if (msg.ArgumentCount() > 1){
@@ -1422,7 +1422,7 @@ aoo_error udp_client::handle_message(const char *data, int32_t n,
             return AOO_ERROR_UNSPECIFIED;
         }
 
-        return AOO_ERROR_OK;
+        return AOO_OK;
     } catch (const osc::Exception& e){
         LOG_ERROR("aoo_client: exception in handle_message: " << e.what());
     #if 0

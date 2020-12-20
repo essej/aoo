@@ -47,7 +47,7 @@ aoo_error aoo::sink::setup(int32_t samplerate,
 
             reset_sources();
         }
-        return AOO_ERROR_OK;
+        return AOO_OK;
     }
     return AOO_ERROR_UNSPECIFIED;
 }
@@ -64,7 +64,7 @@ aoo_error aoo::sink::invite_source(const void *address, int32_t addrlen, aoo_id 
 
     push_request(source_request { request_type::invite, addr, id });
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_sink_uninvite_source(aoo_sink *sink, const void *address,
@@ -79,7 +79,7 @@ aoo_error aoo::sink::uninvite_source(const void *address, int32_t addrlen, aoo_i
 
     push_request(source_request { request_type::uninvite, addr, id });
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_sink_uninvite_all(aoo_sink *sink){
@@ -89,7 +89,7 @@ aoo_error aoo_sink_uninvite_all(aoo_sink *sink){
 aoo_error aoo::sink::uninvite_all(){
     push_request(source_request { request_type::uninvite_all });
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 namespace aoo {
@@ -198,7 +198,7 @@ aoo_error aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
         LOG_WARNING("aoo_sink: unsupported option " << opt);
         return AOO_ERROR_UNSPECIFIED;
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_sink_get_option(aoo_sink *sink, int32_t opt, void *p, int32_t size)
@@ -252,7 +252,7 @@ aoo_error aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
         LOG_WARNING("aoo_sink: unsupported option " << opt);
         return AOO_ERROR_UNSPECIFIED;
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_sink_set_sourceoption(aoo_sink *sink, const void *address, int32_t addrlen,
@@ -279,7 +279,7 @@ aoo_error aoo::sink::set_sourceoption(const void *address, int32_t addrlen, aoo_
             LOG_WARNING("aoo_sink: unsupported source option " << opt);
             return AOO_ERROR_UNSPECIFIED;
         }
-        return AOO_ERROR_OK;
+        return AOO_OK;
     } else {
         return AOO_ERROR_UNSPECIFIED;
     }
@@ -313,7 +313,7 @@ aoo_error aoo::sink::get_sourceoption(const void *address, int32_t addrlen, aoo_
             LOG_WARNING("aoo_sink: unsupported source option " << opt);
             return AOO_ERROR_UNSPECIFIED;
         }
-        return AOO_ERROR_OK;
+        return AOO_OK;
     } else {
         return AOO_ERROR_UNSPECIFIED;
     }
@@ -344,7 +344,7 @@ aoo_error aoo::sink::handle_message(const char *data, int32_t n,
         aoo_id sinkid;
         int32_t onset;
         auto err = aoo_parse_pattern(data, n, &type, &sinkid, &onset);
-        if (err != AOO_ERROR_OK){
+        if (err != AOO_OK){
             LOG_WARNING("not an AoO message!");
             return AOO_ERROR_UNSPECIFIED;
         }
@@ -384,7 +384,7 @@ aoo_error aoo::sink::send(aoo_sendfn fn, void *user){
     for (auto& s: sources_){
         s.send(*this, func);
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo::sink::decode() {
@@ -445,7 +445,7 @@ aoo_error aoo::sink::decode() {
         }
     }
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error aoo_sink_process(aoo_sink *sink, aoo_sample **data,
@@ -522,7 +522,7 @@ aoo_error aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
             auto buf = &buffer_[i * blocksize_];
             std::copy(buf, buf + blocksize_, data[i]);
         }
-        return AOO_ERROR_OK;
+        return AOO_OK;
     } else {
         return AOO_ERROR_UNSPECIFIED;
     }
@@ -576,7 +576,7 @@ aoo_error aoo::sink::poll_events(aoo_eventhandler fn, void *user){
             break;
         }
     }
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 namespace aoo {
@@ -895,11 +895,11 @@ aoo_error source_desc::handle_format(const sink& s, int32_t salt, const aoo_form
     // read format
     aoo_format_storage fmt;
     fmt.header.size = sizeof(aoo_format_storage); // !
-    if (decoder_->deserialize(f, settings, size, fmt.header) != AOO_ERROR_OK){
+    if (decoder_->deserialize(f, settings, size, fmt.header) != AOO_OK){
         return AOO_ERROR_UNSPECIFIED;
     }
     // set format
-    if (decoder_->set_format(fmt.header) != AOO_ERROR_OK){
+    if (decoder_->set_format(fmt.header) != AOO_OK){
         return AOO_ERROR_UNSPECIFIED;
     }
 
@@ -929,7 +929,7 @@ aoo_error source_desc::handle_format(const sink& s, int32_t salt, const aoo_form
 
     push_event(e);
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
@@ -945,7 +945,7 @@ aoo_error source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_
         if (delta < s.source_timeout()){
             push_request(request { request_type::uninvite });
         }
-        return AOO_ERROR_OK;
+        return AOO_OK;
     }
 
     // synchronize with update()!
@@ -955,7 +955,7 @@ aoo_error source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_
     // e.g. because of dropped UDP packets.
     if (salt != salt_){
         push_request(request { request_type::format });
-        return AOO_ERROR_OK;
+        return AOO_OK;
     }
 
 #if 1
@@ -973,13 +973,13 @@ aoo_error source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_
     // check data packet
     LOG_DEBUG("check packet");
     if (!check_packet(d)){
-        return AOO_ERROR_OK; // ?
+        return AOO_OK; // ?
     }
 
     // add data packet
     LOG_DEBUG("add packet");
     if (!add_packet(d)){
-        return AOO_ERROR_OK; // ?
+        return AOO_OK; // ?
     }
 
     // process blocks and send audio
@@ -995,7 +995,7 @@ aoo_error source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_
     DO_LOG("oldest: " << jitterbuffer_.oldest() << ", newest: " << jitterbuffer_.newest());
 #endif
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 // /aoo/sink/<id>/ping <src> <time>
@@ -1026,7 +1026,7 @@ aoo_error source_desc::handle_ping(const sink &s, time_tag tt){
     e.ping.tt3 = 0;
     push_event(e);
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 void source_desc::send(const sink& s, sendfn& fn){
@@ -1411,7 +1411,7 @@ void source_desc::process_blocks(){
         auto ptr = audioqueue_.write_data();
         auto nsamples = audioqueue_.blocksize();
         // decode audio data
-        if (decoder_->decode(data, size, ptr, nsamples) != AOO_ERROR_OK){
+        if (decoder_->decode(data, size, ptr, nsamples) != AOO_OK){
             LOG_WARNING("aoo_sink: couldn't decode block!");
             // decoder failed - fill with zeros
             std::fill(ptr, ptr + nsamples, 0);

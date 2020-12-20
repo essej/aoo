@@ -120,7 +120,11 @@ static const char *errmsg[] = {
 };
 
 const char *aoo_error_string(aoo_error e){
-    return "unknown error"; // TODO
+    if (e == AOO_OK){
+        return "no error";
+    } else {
+        return "unspecified error"; // TODO
+    }
 }
 
 namespace aoo {
@@ -189,7 +193,7 @@ aoo_error aoo_parse_pattern(const char *msg, int32_t n,
             }
         #endif // USE_AOO_NET
 
-            return AOO_ERROR_OK;
+            return AOO_OK;
         }
 
         // /aoo/source or /aoo/sink
@@ -209,7 +213,7 @@ aoo_error aoo_parse_pattern(const char *msg, int32_t n,
         if (offset){
             *offset = count;
         }
-        return AOO_ERROR_OK;
+        return AOO_OK;
     } else {
         return AOO_ERROR_UNSPECIFIED; // not an AoO message
     }

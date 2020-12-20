@@ -183,7 +183,7 @@ aoo_error setformat(void *enc, aoo_format *f)
     memcpy(&c->format, fmt, sizeof(aoo_format_pcm));
     print_settings(c->format);
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error getformat(void *x, aoo_format *f)
@@ -193,7 +193,7 @@ aoo_error getformat(void *x, aoo_format *f)
     if (c->format.header.codec){
         if (f->size >= c->format.header.size){
             memcpy(f, &c->format, sizeof(aoo_format_pcm));
-            return AOO_ERROR_OK;
+            return AOO_OK;
         } else {
             return AOO_ERROR_UNSPECIFIED;
         }
@@ -253,7 +253,7 @@ aoo_error encode(void *enc,
 
     *size = nbytes;
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 void *decoder_new(){
@@ -275,7 +275,7 @@ aoo_error decode(void *dec,
         for (int i = 0; i < *n; ++i){
             s[i] = 0;
         }
-        return AOO_ERROR_OK; // dropped block
+        return AOO_OK; // dropped block
     }
 
     auto samplesize = bytes_per_sample(c->format.bitdepth);
@@ -312,7 +312,7 @@ aoo_error decode(void *dec,
 
     *n = nsamples;
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_error serialize(const aoo_format *f, char *buf, int32_t *size)
@@ -322,7 +322,7 @@ aoo_error serialize(const aoo_format *f, char *buf, int32_t *size)
         aoo::to_bytes<int32_t>(fmt->bitdepth, buf);
         *size = 4;
 
-        return AOO_ERROR_OK;
+        return AOO_OK;
     } else {
         LOG_ERROR("PCM: couldn't write settings - buffer too small!");
         return AOO_ERROR_UNSPECIFIED;
@@ -350,7 +350,7 @@ aoo_error deserialize(const aoo_format *header, const char *buf,
     // options
     fmt->bitdepth = (aoo_pcm_bitdepth)aoo::from_bytes<int32_t>(buf);
 
-    return AOO_ERROR_OK;
+    return AOO_OK;
 }
 
 aoo_codec codec_class = {
