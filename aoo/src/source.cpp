@@ -398,7 +398,7 @@ aoo_error aoo::source::handle_message(const char *data, int32_t n,
         aoo_id src;
         int32_t onset;
         auto err = aoo_parse_pattern(data, n, &type, &src, &onset);
-        if (onset != AOO_OK){
+        if (err != AOO_OK){
             LOG_WARNING("aoo_source: not an AoO message!");
             return AOO_ERROR_UNSPECIFIED;
         }
@@ -885,6 +885,7 @@ void source::send_data(sendfn& fn){
         // send empty block
         d.sequence = sequence_++;
         d.samplerate = encoder_->samplerate(); // use nominal samplerate
+        d.channel = 0;
         d.totalsize = 0;
         d.nframes = 0;
         d.framenum = 0;
