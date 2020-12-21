@@ -1139,8 +1139,11 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
         // get block info and set current channel + samplerate
         block_info info;
         infoqueue_.read(info);
-        channel_ = info.channel;
         samplerate_ = info.sr;
+        // negative channel number: current channel
+        if (info.channel >= 0){
+            channel_ = info.channel;
+        }
     }
 
     // update resampler
@@ -1233,7 +1236,7 @@ void source_desc::recover(const char *reason, int32_t n){
         // push nominal samplerate + current channel
         block_info bi;
         bi.sr = decoder_->samplerate();
-        bi.channel = channel_;
+        bi.channel = -1;
         infoqueue_.write(bi);
 
         count++;
@@ -1381,7 +1384,7 @@ void source_desc::process_blocks(){
                 data = nullptr;
                 size = 0;
                 i.sr = decoder_->samplerate();
-                i.channel = channel_;
+                i.channel = -1; // current channel
                 LOG_VERBOSE("wrote empty block (" << b.sequence << ") for source xrun");
             } else {
                 // block is ready
@@ -1399,7 +1402,7 @@ void source_desc::process_blocks(){
             data = nullptr;
             size = 0;
             i.sr = decoder_->samplerate();
-            i.channel = channel_;
+            i.channel = -1; // current channel
             streamstate_.add_lost(1);
             LOG_VERBOSE("dropped block " << b.sequence);
         } else {
