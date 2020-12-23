@@ -155,8 +155,12 @@ private:
 class history_buffer {
 public:
     void clear();
-    bool is_empty() const { return oldest_ < 0; }
-    int32_t capacity() const;
+    bool empty() const {
+        return oldest_ < 0;
+    }
+    int32_t capacity() const {
+        return buffer_.size();
+    }
     void resize(int32_t n);
     block * find(int32_t seq);
     block * push();

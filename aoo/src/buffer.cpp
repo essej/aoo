@@ -157,10 +157,6 @@ void history_buffer::clear(){
     }
 }
 
-int32_t history_buffer::capacity() const {
-    return buffer_.size();
-}
-
 void history_buffer::resize(int32_t n){
     buffer_.resize(n);
     clear();
@@ -175,6 +171,7 @@ block * history_buffer::find(int32_t seq){
                 return &block;
             }
         }
+        return nullptr;
     #else
         // binary search
         // blocks are always pushed in chronological order,
@@ -193,12 +190,15 @@ block * history_buffer::find(int32_t seq){
         if (!result){
             result = dofind(buffer_.begin(), buffer_.begin() + head_);
         }
+        if (!result){
+            LOG_ERROR("history buffer: couldn't find block " << seq);
+        }
         return result;
     #endif
     } else {
-        LOG_VERBOSE("couldn't find block " << seq << " - too old");
+        LOG_DEBUG("history buffer: block " << seq << " too old");
+        return nullptr;
     }
-    return nullptr;
 }
 
 block * history_buffer::push()
