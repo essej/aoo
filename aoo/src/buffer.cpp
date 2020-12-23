@@ -213,28 +213,12 @@ block * history_buffer::push()
 
 void jitter_buffer::clear(){
     head_ = tail_ = size_ = 0;
-    oldest_ = newest_ = -1;
+    last_popped_ = last_pushed_ = -1;
 }
 
 void jitter_buffer::resize(int32_t n){
     data_.resize(n);
     clear();
-}
-
-bool jitter_buffer::empty() const {
-    return size_ == 0;
-}
-
-bool jitter_buffer::full() const {
-    return size_ == capacity();
-}
-
-int32_t jitter_buffer::size() const {
-    return size_;
-}
-
-int32_t jitter_buffer::capacity() const {
-    return data_.size();
 }
 
 received_block* jitter_buffer::find(int32_t seq){
@@ -301,20 +285,17 @@ received_block* jitter_buffer::push_back(int32_t seq){
         head_ = 0;
     }
     size_++;
-    newest_ = seq;
-    if (oldest_ < 0){
-        oldest_ = seq;
-    }
+    last_pushed_ = seq;
     return &data_[old];
 }
 
 void jitter_buffer::pop_front(){
     assert(!empty());
+    last_popped_ = data_[tail_].sequence;
     if (++tail_ == capacity()){
         tail_ = 0;
     }
     size_--;
-    oldest_++;
 }
 
 received_block& jitter_buffer::front(){

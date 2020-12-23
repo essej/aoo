@@ -107,17 +107,30 @@ public:
 
     void clear();
     void resize(int32_t n);
-    bool empty() const;
-    bool full() const;
-    int32_t size() const;
-    int32_t capacity() const;
 
-    int32_t oldest() const { return oldest_; }
-    int32_t newest() const { return newest_; }
+    bool empty() const {
+        return size_ == 0;
+    }
+    bool full() const {
+        return size_ == capacity();
+    }
+    int32_t size() const {
+        return size_;
+    }
+    int32_t capacity() const {
+        return data_.size();
+    }
 
     received_block* find(int32_t seq);
     received_block* push_back(int32_t seq);
     void pop_front();
+
+    int32_t last_pushed() const {
+        return last_pushed_;
+    }
+    int32_t last_popped() const {
+        return last_popped_;
+    }
 
     received_block& front();
     const received_block& front() const;
@@ -135,8 +148,8 @@ private:
     int32_t size_ = 0;
     int32_t head_ = 0;
     int32_t tail_ = 0;
-    int32_t oldest_ = -1;
-    int32_t newest_ = -1;
+    int32_t last_pushed_ = -1;
+    int32_t last_popped_ = -1;
 };
 
 class history_buffer {

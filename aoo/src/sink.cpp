@@ -992,7 +992,8 @@ aoo_error source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_
 
 #if AOO_DEBUG_JITTER_BUFFER
     DO_LOG(jitterbuffer_);
-    DO_LOG("oldest: " << jitterbuffer_.oldest() << ", newest: " << jitterbuffer_.newest());
+    DO_LOG("oldest: " << jitterbuffer_.last_popped() << ", newest: "
+           << jitterbuffer_.last_pushed());
 #endif
 
     return AOO_OK;
@@ -1249,10 +1250,7 @@ void source_desc::recover(const char *reason, int32_t n){
 }
 
 bool source_desc::check_packet(const data_packet &d){
-    auto oldest = jitterbuffer_.oldest();
-    auto newest = jitterbuffer_.newest();
-
-    if (d.sequence < oldest){
+    if (d.sequence <= jitterbuffer_.last_popped()){
         // block too old, discard!
         LOG_VERBOSE("discard old block " << d.sequence);
         return false;
@@ -1260,6 +1258,7 @@ bool source_desc::check_packet(const data_packet &d){
 
     // check for large gap between incoming block and most recent block
     // (either network problem or stream has temporarily stopped.)
+    auto newest = jitterbuffer_.last_pushed();
     auto diff = d.sequence - newest;
     if (newest > 0 && diff > jitterbuffer_.capacity()){
         recover("transmission gap");
@@ -1285,7 +1284,7 @@ bool source_desc::check_packet(const data_packet &d){
 bool source_desc::add_packet(const data_packet& d){
     auto block = jitterbuffer_.find(d.sequence);
     if (!block){
-        auto newest = jitterbuffer_.newest();
+        auto newest = jitterbuffer_.last_pushed();
         if (d.sequence <= newest){
             LOG_VERBOSE("discard outdated block " << d.sequence);
             return false;
@@ -1303,7 +1302,9 @@ bool source_desc::add_packet(const data_packet& d){
         if (jitterbuffer_.full()){
             recover("jitter buffer overrun");
         }
+
         block = jitterbuffer_.push_back(d.sequence);
+
         if (d.totalsize == 0){
             // dropped block
             block->init(d.sequence, true);
@@ -1317,13 +1318,14 @@ bool source_desc::add_packet(const data_packet& d){
             if (!block->dropped()){
                 // dropped block arrived out of order
                 LOG_VERBOSE("empty block " << d.sequence << " out of order");
-                block->init(d.sequence, true);
+                block->init(d.sequence, true); // don't call before dropped()!
                 return true;
             } else {
                 LOG_VERBOSE("empty block " << d.sequence << " already received");
                 return false;
             }
         }
+
         if (block->num_frames() == 0){
             // placeholder block
             block->init(d.sequence, d.samplerate,
@@ -1333,7 +1335,8 @@ bool source_desc::add_packet(const data_packet& d){
             LOG_VERBOSE("frame " << d.framenum << " of block " << d.sequence << " already received");
             return false;
         }
-        if (d.sequence != jitterbuffer_.newest()){
+
+        if (d.sequence != jitterbuffer_.last_pushed()){
             // out of order or resent
             if (block->resend_count() > 0){
                 LOG_VERBOSE("resent frame " << d.framenum << " of block " << d.sequence);
