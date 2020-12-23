@@ -148,18 +148,18 @@ static void aoo_unpack_handle_event(t_aoo_unpack *x, const aoo_event *event)
         outlet_anything(x->x_msgout, gensym("invite_timeout"), 1, msg);
         break;
     }
-    case AOO_SOURCE_FORMAT_EVENT:
+    case AOO_FORMAT_CHANGE_EVENT:
     {
-        auto e = (const aoo_format_event *)event;
+        auto e = (const aoo_format_change_event *)event;
         aoo_format_storage f;
         SETFLOAT(&msg[0], e->id);
         int fsize = format_to_atoms(*e->format, 31, msg + 1); // skip first atom
         outlet_anything(x->x_msgout, gensym("source_format"), fsize + 1, msg);
         break;
     }
-    case AOO_SOURCE_STATE_EVENT:
+    case AOO_STREAM_STATE_EVENT:
     {
-        auto e = (const aoo_source_state_event *)event;
+        auto e = (const aoo_stream_state_event *)event;
         SETFLOAT(&msg[0], e->id);
         SETFLOAT(&msg[1], e->state);
         outlet_anything(x->x_msgout, gensym("source_state"), 2, msg);

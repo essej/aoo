@@ -246,9 +246,9 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
         outlet_anything(x->x_msgout, gensym("invite_timeout"), 3, msg);
         break;
     }
-    case AOO_SOURCE_FORMAT_EVENT:
+    case AOO_FORMAT_CHANGE_EVENT:
     {
-        auto e = (const aoo_format_event *)event;
+        auto e = (const aoo_format_change_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         if (!endpoint_to_atoms(addr, e->id, 3, msg)){
@@ -258,9 +258,9 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
         outlet_anything(x->x_msgout, gensym("source_format"), fsize + 3, msg);
         break;
     }
-    case AOO_SOURCE_STATE_EVENT:
+    case AOO_STREAM_STATE_EVENT:
     {
-        auto e = (const aoo_source_state_event *)event;
+        auto e = (const aoo_stream_state_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         if (!endpoint_to_atoms(addr, e->id, 3, msg)){

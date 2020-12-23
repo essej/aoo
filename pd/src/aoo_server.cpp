@@ -34,7 +34,7 @@ static void aoo_server_handle_event(t_aoo_server *x, const aoo_event *event)
     {
         auto e = (const aoo_net_user_event *)event;
 
-        aoo::ip_address addr((const sockaddr *)e->address, e->length);
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         t_atom msg[4];
         SETSYMBOL(msg, gensym(e->user_name));
@@ -53,7 +53,7 @@ static void aoo_server_handle_event(t_aoo_server *x, const aoo_event *event)
     {
         auto e = (const aoo_net_user_event *)event;
 
-        aoo::ip_address addr((const sockaddr *)e->address, e->length);
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         t_atom msg[4];
         SETSYMBOL(msg, gensym(e->user_name));
@@ -95,7 +95,7 @@ static void aoo_server_handle_event(t_aoo_server *x, const aoo_event *event)
     case AOO_NET_ERROR_EVENT:
     {
         auto e = (const aoo_net_error_event *)event;
-        pd_error(x, "%s: %s", classname(x), e->errormsg);
+        pd_error(x, "%s: %s", classname(x), e->error_message);
         break;
     }
     default:

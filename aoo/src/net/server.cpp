@@ -930,17 +930,17 @@ void client_endpoint::handle_group_leave(const osc::ReceivedMessage& msg){
 
 /*///////////////////// events ////////////////////////*/
 
-server::error_event::error_event(int32_t type, int32_t result,
-                                 const char * errmsg)
+server::error_event::error_event(int32_t type, int32_t code,
+                                 const char * msg)
 {
     error_event_.type = type;
-    error_event_.errorcode = result;
-    error_event_.errormsg = copy_string(errmsg);
+    error_event_.error_code = code;
+    error_event_.error_message = copy_string(msg);
 }
 
 server::error_event::~error_event()
 {
-    free_string((char *)error_event_.errormsg);
+    free_string((char *)error_event_.error_message);
 }
 
 server::user_event::user_event(int32_t type,
@@ -950,13 +950,13 @@ server::user_event::user_event(int32_t type,
     user_event_.user_name = copy_string(name);
     user_event_.user_id = id;
     user_event_.address = copy_sockaddr(address.address(), address.length());
-    user_event_.length = address.length();
+    user_event_.addrlen = address.length();
 }
 
 server::user_event::~user_event()
 {
     free_string((char *)user_event_.user_name);
-    free_sockaddr((void *)user_event_.address, user_event_.length);
+    free_sockaddr((void *)user_event_.address, user_event_.addrlen);
 }
 
 server::group_event::group_event(int32_t type, const char *group,

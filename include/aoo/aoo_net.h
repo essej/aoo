@@ -55,8 +55,8 @@ extern "C"
 typedef void (*aoo_net_callback)(void *user, aoo_error result, const void *reply);
 
 typedef struct aoo_net_error_reply {
-    const char *errormsg;
-    int32_t errorcode;
+    const char *error_message;
+    int32_t error_code;
 } aoo_net_error_reply;
 
 typedef enum aoo_net_request_type {
@@ -109,13 +109,13 @@ typedef enum aoo_net_event_type
 typedef struct aoo_net_error_event
 {
     int32_t type;
-    int32_t errorcode;
-    const char *errormsg;
+    int32_t error_code;
+    const char *error_message;
 } aoo_net_error_event;
 
 #define AOO_NET_ENDPOINT_EVENT  \
     int32_t type;               \
-    int32_t length;             \
+    int32_t addrlen;            \
     const void *address;        \
 
 typedef struct aoo_net_ping_event

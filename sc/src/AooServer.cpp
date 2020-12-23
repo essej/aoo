@@ -80,7 +80,7 @@ void AooServer::handleEvent(const aoo_event *event){
     case AOO_NET_USER_JOIN_EVENT:
     {
         auto e = (const aoo_net_user_event*)event;
-        aoo::ip_address addr((const sockaddr*)e->address, e->length);
+        aoo::ip_address addr((const sockaddr*)e->address, e->addrlen);
         msg << "/user/join" << e->user_name << e->user_id
             << addr.address() << addr.port();
         break;
@@ -88,7 +88,7 @@ void AooServer::handleEvent(const aoo_event *event){
     case AOO_NET_USER_LEAVE_EVENT:
     {
         auto e = (const aoo_net_user_event*)event;
-        aoo::ip_address addr((const sockaddr*)e->address, e->length);
+        aoo::ip_address addr((const sockaddr*)e->address, e->addrlen);
         msg << "/user/leave" << e->user_name << e->user_id
             << addr.address() << addr.port();
         break;
@@ -108,7 +108,7 @@ void AooServer::handleEvent(const aoo_event *event){
     case AOO_NET_ERROR_EVENT:
     {
         auto e = (const aoo_net_error_event*)event;
-        msg << "/error" << e->errorcode << e->errormsg;
+        msg << "/error" << e->error_code << e->error_message;
         break;
     }
     default:

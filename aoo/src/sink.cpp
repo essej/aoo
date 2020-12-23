@@ -255,13 +255,13 @@ aoo_error aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
     return AOO_OK;
 }
 
-aoo_error aoo_sink_set_sourceoption(aoo_sink *sink, const void *address, int32_t addrlen,
+aoo_error aoo_sink_set_source_option(aoo_sink *sink, const void *address, int32_t addrlen,
                                     aoo_id id, int32_t opt, void *p, int32_t size)
 {
-    return sink->set_sourceoption(address, addrlen, id, opt, p, size);
+    return sink->set_source_option(address, addrlen, id, opt, p, size);
 }
 
-aoo_error aoo::sink::set_sourceoption(const void *address, int32_t addrlen, aoo_id id,
+aoo_error aoo::sink::set_source_option(const void *address, int32_t addrlen, aoo_id id,
                                       int32_t opt, void *ptr, int32_t size)
 {
     ip_address addr((const sockaddr *)address, addrlen);
@@ -285,13 +285,13 @@ aoo_error aoo::sink::set_sourceoption(const void *address, int32_t addrlen, aoo_
     }
 }
 
-aoo_error aoo_sink_get_sourceoption(aoo_sink *sink, const void *address, int32_t addrlen,
+aoo_error aoo_sink_get_source_option(aoo_sink *sink, const void *address, int32_t addrlen,
                                     aoo_id id, int32_t opt, void *p, int32_t size)
 {
-    return sink->get_sourceoption(address, addrlen, id, opt, p, size);
+    return sink->get_source_option(address, addrlen, id, opt, p, size);
 }
 
-aoo_error aoo::sink::get_sourceoption(const void *address, int32_t addrlen, aoo_id id,
+aoo_error aoo::sink::get_source_option(const void *address, int32_t addrlen, aoo_id id,
                                       int32_t opt, void *ptr, int32_t size)
 {
     ip_address addr((const sockaddr *)address, addrlen);
@@ -732,7 +732,7 @@ source_desc::~source_desc(){
     // some events use dynamic memory
     event e;
     while (eventqueue_.try_pop(e)){
-        if (e.type_ == AOO_SOURCE_FORMAT_EVENT){
+        if (e.type_ == AOO_FORMAT_CHANGE_EVENT){
             auto fmt = e.format.format;
             deallocate((void *)fmt, fmt->size);
         }
@@ -924,7 +924,7 @@ aoo_error source_desc::handle_format(const sink& s, int32_t salt, const aoo_form
     auto fs = aoo::allocate(fmt.header.size);
     memcpy(fs, &fmt, fmt.header.size);
 
-    event e(AOO_SOURCE_FORMAT_EVENT, *this);
+    event e(AOO_FORMAT_CHANGE_EVENT, *this);
     e.format.format = (const aoo_format *)fs;
 
     push_event(e);
@@ -1003,7 +1003,7 @@ aoo_error source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_
 
 aoo_error source_desc::handle_ping(const sink &s, time_tag tt){
 #if 0
-    if (streamstate_.get_state() != AOO_SOURCE_STATE_PLAY){
+    if (streamstate_.get_state() != AOO_STREAM_STATE_PLAY){
         return 0;
     }
 #endif
@@ -1169,19 +1169,19 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
 
         // LOG_DEBUG("read samples from source " << id_);
 
-        if (streamstate_.update_state(AOO_SOURCE_STATE_PLAY)){
+        if (streamstate_.update_state(AOO_STREAM_STATE_PLAY)){
             // push "start" event
-            event e(AOO_SOURCE_STATE_EVENT, *this);
-            e.source_state.state = AOO_SOURCE_STATE_PLAY;
+            event e(AOO_STREAM_STATE_EVENT, *this);
+            e.source_state.state = AOO_STREAM_STATE_PLAY;
             push_event(e);
         }
 
         return true;
     } else {
         // buffer ran out -> push "stop" event
-        if (streamstate_.update_state(AOO_SOURCE_STATE_STOP)){
-            event e(AOO_SOURCE_STATE_EVENT, *this);
-            e.source_state.state = AOO_SOURCE_STATE_STOP;
+        if (streamstate_.update_state(AOO_STREAM_STATE_STOP)){
+            event e(AOO_STREAM_STATE_EVENT, *this);
+            e.source_state.state = AOO_STREAM_STATE_STOP;
             push_event(e);
         }
         streamstate_.set_underrun(); // notify network thread!
@@ -1197,7 +1197,7 @@ int32_t source_desc::poll_events(aoo_eventhandler fn, void *user){
     while (eventqueue_.try_pop(e)){
         fn(user, &e.event_);
         // some events use dynamic memory
-        if (e.type_ == AOO_SOURCE_FORMAT_EVENT){
+        if (e.type_ == AOO_FORMAT_CHANGE_EVENT){
             // freeing memory is not really RT safe,
             // but it is the easiest solution.
             // LATER think about better ways.
@@ -1516,7 +1516,7 @@ void source_desc::send_format_request(const sink& s, sendfn& fn) {
 void source_desc::send_ping(const sink &s, sendfn& fn, const ping_request &ping){
 #if 0
     // only send ping reply if source is active
-    if (streamstate_.get_state() != AOO_SOURCE_STATE_PLAY){
+    if (streamstate_.get_state() != AOO_STREAM_STATE_PLAY){
         return;
     }
 #endif

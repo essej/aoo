@@ -602,11 +602,11 @@ void client::perform_connect(const std::string& host, int port,
     auto state = state_.load();
     if (state != client_state::disconnected){
         aoo_net_error_reply reply;
-        reply.errorcode = 0;
+        reply.error_code = 0;
         if (state == client_state::connected){
-            reply.errormsg = "already connected";
+            reply.error_message = "already connected";
         } else {
-            reply.errormsg = "already connecting";
+            reply.error_message = "already connecting";
         }
 
         if (cb) cb(user, AOO_ERROR_UNSPECIFIED, &reply);
@@ -624,8 +624,8 @@ void client::perform_connect(const std::string& host, int port,
         close();
 
         aoo_net_error_reply reply;
-        reply.errorcode = err;
-        reply.errormsg = errmsg.c_str();
+        reply.error_code = err;
+        reply.error_message = errmsg.c_str();
 
         if (cb) cb(user, AOO_ERROR_UNSPECIFIED, &reply);
 
@@ -700,9 +700,9 @@ void client::perform_disconnect(aoo_net_callback cb, void *user){
     auto state = state_.load();
     if (state != client_state::connected){
         aoo_net_error_reply reply;
-        reply.errormsg = (state == client_state::disconnected)
+        reply.error_message = (state == client_state::disconnected)
                 ? "not connected" : "still connecting";
-        reply.errorcode = 0;
+        reply.error_code = 0;
 
         if (cb) cb(user, AOO_ERROR_UNSPECIFIED, &reply);
 
@@ -733,8 +733,8 @@ void client::perform_login(const ip_address_list& addrlist){
 
 void client::perform_timeout(){
     aoo_net_error_reply reply;
-    reply.errorcode = 0;
-    reply.errormsg = "UDP handshake time out";
+    reply.error_code = 0;
+    reply.error_message = "UDP handshake time out";
 
     callback_(userdata_, AOO_ERROR_UNSPECIFIED, &reply);
 
@@ -777,8 +777,8 @@ void client::perform_join_group(const std::string &group, const std::string &pwd
                     }
                     // reply
                     aoo_net_error_reply reply;
-                    reply.errorcode = 0;
-                    reply.errormsg = errmsg.c_str();
+                    reply.error_code = 0;
+                    reply.error_message = errmsg.c_str();
 
                     if (cb) cb(user, AOO_ERROR_UNSPECIFIED, &reply);
                 }
@@ -843,8 +843,8 @@ void client::perform_leave_group(const std::string &group,
                     }
                     // reply
                     aoo_net_error_reply reply;
-                    reply.errorcode = 0;
-                    reply.errormsg = errmsg.c_str();
+                    reply.error_code = 0;
+                    reply.error_message = errmsg.c_str();
 
                     if (cb) cb(user, AOO_ERROR_UNSPECIFIED, &reply);
                 }
@@ -1096,8 +1096,8 @@ void client::handle_login(const osc::ReceivedMessage& msg){
 
             // notify
             aoo_net_error_reply reply;
-            reply.errorcode = 0;
-            reply.errormsg = errmsg.c_str();
+            reply.error_code = 0;
+            reply.error_message = errmsg.c_str();
 
             callback_(userdata_, AOO_ERROR_UNSPECIFIED, &reply);
         }
@@ -1240,9 +1240,13 @@ void client::close(bool manual){
 }
 
 void client::on_socket_error(int err){
-    std::string msg = err ? socket_strerror(err)
-                          : "connection closed by server";
-    auto e = std::make_unique<error_event>(err, msg.c_str());
+    char msg[256];
+    if (err != 0) {
+        socket_strerror(err, msg, sizeof(msg));
+    } else {
+        snprintf(msg, sizeof(msg), "connection closed by server");
+    }
+    auto e = std::make_unique<error_event>(err, msg);
 
     push_event(std::move(e));
 
@@ -1272,13 +1276,13 @@ void client::on_exception(const char *what, const osc::Exception &err,
 client::error_event::error_event(int32_t code, const char *msg)
 {
     error_event_.type = AOO_NET_ERROR_EVENT;
-    error_event_.errorcode = code;
-    error_event_.errormsg = copy_string(msg);
+    error_event_.error_code = code;
+    error_event_.error_message = copy_string(msg);
 }
 
 client::error_event::~error_event()
 {
-    free_string((char *)error_event_.errormsg);
+    free_string((char *)error_event_.error_message);
 }
 
 client::ping_event::ping_event(const ip_address& addr, uint64_t tt1,
@@ -1286,7 +1290,7 @@ client::ping_event::ping_event(const ip_address& addr, uint64_t tt1,
 {
     ping_event_.type = AOO_NET_PING_EVENT;
     ping_event_.address = copy_sockaddr(addr.address(), addr.length());
-    ping_event_.length = addr.length();
+    ping_event_.addrlen = addr.length();
     ping_event_.tt1 = tt1;
     ping_event_.tt2 = tt2;
     ping_event_.tt3 = tt3;
@@ -1294,7 +1298,7 @@ client::ping_event::ping_event(const ip_address& addr, uint64_t tt1,
 
 client::ping_event::~ping_event()
 {
-    free_sockaddr((void *)ping_event_.address, ping_event_.length);
+    free_sockaddr((void *)ping_event_.address, ping_event_.addrlen);
 }
 
 client::peer_event::peer_event(int32_t type, const ip_address& addr,
@@ -1303,7 +1307,7 @@ client::peer_event::peer_event(int32_t type, const ip_address& addr,
 {
     peer_event_.type = type;
     peer_event_.address = copy_sockaddr(addr.address(), addr.length());
-    peer_event_.length = addr.length();
+    peer_event_.addrlen = addr.length();
     peer_event_.group_name = copy_string(group);
     peer_event_.user_name = copy_string(user);
     peer_event_.user_id = id;
@@ -1314,7 +1318,7 @@ client::peer_event::~peer_event()
 {
     free_string((char *)peer_event_.user_name);
     free_string((char *)peer_event_.group_name);
-    free_sockaddr((void *)peer_event_.address, peer_event_.length);
+    free_sockaddr((void *)peer_event_.address, peer_event_.addrlen);
 }
 
 client::message_event::message_event(const char *data, int32_t size,
@@ -1322,7 +1326,7 @@ client::message_event::message_event(const char *data, int32_t size,
 {
     message_event_.type = AOO_NET_MESSAGE_EVENT;
     message_event_.address = copy_sockaddr(addr.address(), addr.length());
-    message_event_.length = addr.length();
+    message_event_.addrlen = addr.length();
     auto msg = (char *)aoo::allocate(size);
     memcpy(msg, data, size);
     message_event_.data = msg;
@@ -1332,7 +1336,7 @@ client::message_event::message_event(const char *data, int32_t size,
 client::message_event::~message_event()
 {
     aoo::deallocate((char *)message_event_.data, message_event_.size);
-    free_sockaddr((void *)message_event_.address, message_event_.length);
+    free_sockaddr((void *)message_event_.address, message_event_.addrlen);
 }
 
 /*///////////////////// udp_client ////////////////////*/

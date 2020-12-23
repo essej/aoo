@@ -86,7 +86,7 @@ void AooClient::connect(const char* host, int port,
         } else {
             auto e = (const aoo_net_error_reply*)data;
             // send fail + error message
-            msg << 0 << e->errormsg;
+            msg << 0 << e->error_message;
         }
 
         msg << osc::EndMessage;
@@ -108,7 +108,7 @@ void AooClient::disconnect() {
             client->sendReply("/aoo/client/disconnect", true);
         } else {
             auto e = (const aoo_net_error_reply*)data;
-            client->sendReply("/aoo/client/disconnect", false, e->errormsg);
+            client->sendReply("/aoo/client/disconnect", false, e->error_message);
         }
     };
     node_->client()->disconnect(cb, this);
@@ -128,7 +128,7 @@ void AooClient::joinGroup(const char* name, const char* pwd) {
         } else {
             auto e = (const aoo_net_error_reply*)data;
             request->obj->sendGroupReply("/aoo/client/group/join",
-                request->group.c_str(), false, e->errormsg);
+                request->group.c_str(), false, e->error_message);
         }
         delete request;
     };
@@ -149,7 +149,7 @@ void AooClient::leaveGroup(const char* name) {
         } else {
             auto e = (const aoo_net_error_reply*)data;
             request->obj->sendGroupReply("/aoo/client/group/leave",
-                request->group.c_str(), false, e->errormsg);
+                request->group.c_str(), false, e->error_message);
         }
         delete request;
     };
@@ -167,7 +167,7 @@ void AooClient::handleEvent(const aoo_event* event) {
     {
         auto e = (const aoo_net_message_event *)event;
 
-        aoo::ip_address address((const sockaddr *)e->address, e->length);
+        aoo::ip_address address((const sockaddr *)e->address, e->addrlen);
 
         try {
             osc::ReceivedPacket packet(e->data, e->size);
@@ -191,7 +191,7 @@ void AooClient::handleEvent(const aoo_event* event) {
     case AOO_NET_PEER_JOIN_EVENT:
     {
         auto e = (const aoo_net_peer_event*)event;
-        aoo::ip_address addr((const sockaddr*)e->address, e->length);
+        aoo::ip_address addr((const sockaddr*)e->address, e->addrlen);
         msg << "/peer/join" << addr.name() << addr.port()
             << e->group_name << e->user_name << e->user_id;
         break;
@@ -199,7 +199,7 @@ void AooClient::handleEvent(const aoo_event* event) {
     case AOO_NET_PEER_LEAVE_EVENT:
     {
         auto e = (const aoo_net_peer_event*)event;
-        aoo::ip_address addr((const sockaddr*)e->address, e->length);
+        aoo::ip_address addr((const sockaddr*)e->address, e->addrlen);
         msg << "/peer/leave" << addr.name() << addr.port()
             << e->group_name << e->user_name << e->user_id;
         break;
@@ -207,7 +207,7 @@ void AooClient::handleEvent(const aoo_event* event) {
     case AOO_NET_ERROR_EVENT:
     {
         auto e = (const aoo_net_error_event*)event;
-        msg << "/error" << e->errorcode << e->errormsg;
+        msg << "/error" << e->error_code << e->error_message;
         break;
     }
     default:

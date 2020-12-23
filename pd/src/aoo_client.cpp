@@ -368,7 +368,7 @@ static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
     {
         auto e = (const aoo_net_message_event *)event;
 
-        ip_address address((const sockaddr *)e->address, e->length);
+        ip_address address((const sockaddr *)e->address, e->addrlen);
 
         try {
             osc::ReceivedPacket packet(e->data, e->size);
@@ -398,7 +398,7 @@ static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
     {
         auto e = (const aoo_net_peer_event *)event;
 
-        ip_address addr((const sockaddr *)e->address, e->length);
+        ip_address addr((const sockaddr *)e->address, e->addrlen);
         auto group = gensym(e->group_name);
         auto user = gensym(e->user_name);
         auto id = e->user_id;
@@ -425,7 +425,7 @@ static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
     {
         auto e = (const aoo_net_peer_event *)event;
 
-        ip_address addr((const sockaddr *)e->address, e->length);
+        ip_address addr((const sockaddr *)e->address, e->addrlen);
         auto group = gensym(e->group_name);
         auto user = gensym(e->user_name);
         auto id = e->user_id;
@@ -452,7 +452,7 @@ static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
     case AOO_NET_ERROR_EVENT:
     {
         auto e = (const aoo_net_error_event *)event;
-        pd_error(x, "%s: %s", classname(x), e->errormsg);
+        pd_error(x, "%s: %s", classname(x), e->error_message);
         break;
     }
     default:
@@ -529,7 +529,7 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
                 });
             } else {
                 auto reply = (const aoo_net_error_reply *)data;
-                t_error_reply error { reply->errorcode, reply->errormsg };
+                t_error_reply error { reply->error_code, reply->error_message };
 
                 obj->push_reply([obj, error=std::move(error)](){
                     pd_error(obj, "%s: couldn't connect to server: %s",
@@ -564,7 +564,7 @@ static void aoo_client_disconnect(t_aoo_client *x)
                 });
             } else {
                 auto reply = (const aoo_net_error_reply *)data;
-                t_error_reply error { reply->errorcode, reply->errormsg };
+                t_error_reply error { reply->error_code, reply->error_message };
 
                 x->push_reply([x, error=std::move(error)](){
                     pd_error(x, "%s: couldn't disconnect from server: %s",
@@ -593,7 +593,7 @@ static void aoo_client_group_join(t_aoo_client *x, t_symbol *group, t_symbol *pw
                 });
             } else {
                 auto reply = (const aoo_net_error_reply *)data;
-                t_error_reply error { reply->errorcode, reply->errormsg };
+                t_error_reply error { reply->error_code, reply->error_message };
 
                 obj->push_reply([obj, group, error=std::move(error)](){
                     pd_error(obj, "%s: couldn't join group %s - %s",
@@ -640,7 +640,7 @@ static void aoo_client_group_leave(t_aoo_client *x, t_symbol *group)
                 });
             } else {
                 auto reply = (const aoo_net_error_reply *)data;
-                t_error_reply error { reply->errorcode, reply->errormsg };
+                t_error_reply error { reply->error_code, reply->error_message };
 
                 obj->push_reply([obj, group, error=std::move(error)](){
                     pd_error(obj, "%s: couldn't leave group %s - %s",

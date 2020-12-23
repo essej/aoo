@@ -11,7 +11,7 @@ extern "C"
 {
 #endif
 
-AOO_API const char *aoo_error_string(aoo_error e);
+AOO_API const char *aoo_error_message(aoo_error e);
 
 AOO_API void aoo_version(int32_t *major, int32_t *minor,
                          int32_t *patch, int32_t *pre);
@@ -170,8 +170,9 @@ AOO_API double aoo_osctime_duration(uint64_t t1, uint64_t t2);
 // event types
 typedef enum aoo_event_type
 {
-    // source: received a ping from sink
-    AOO_PING_EVENT = 0,
+    AOO_ERROR_EVENT = 0,
+    // sink/source: received a ping from source/sink
+    AOO_PING_EVENT,
     // source: invited by sink
     AOO_INVITE_EVENT,
     // source: uninvited by sink
@@ -181,9 +182,9 @@ typedef enum aoo_event_type
     // sink: source removed
     AOO_SOURCE_REMOVE_EVENT,
     // sink: source format changed
-    AOO_SOURCE_FORMAT_EVENT,
+    AOO_FORMAT_CHANGE_EVENT,
     // sink: source changed state
-    AOO_SOURCE_STATE_EVENT,
+    AOO_STREAM_STATE_EVENT,
     // sink: blocks have been lost
     AOO_BLOCK_LOST_EVENT,
     // sink: blocks arrived out of order
@@ -195,6 +196,13 @@ typedef enum aoo_event_type
     // sink: source invitation timed out
     AOO_INVITE_TIMEOUT_EVENT,
 } aoo_event_type;
+
+typedef struct aoo_error_event
+{
+    int32_t type;
+    int32_t error_code;
+    const char *error_message;
+} aoo_error_event;
 
 #define AOO_ENDPOINT_EVENT  \
     int32_t type;           \
@@ -215,17 +223,17 @@ typedef struct aoo_sink_event
 } aoo_sink_event;
 
 // source state event
-typedef enum aoo_source_state
+typedef enum aoo_stream_state
 {
-    AOO_SOURCE_STATE_STOP,
-    AOO_SOURCE_STATE_PLAY
-} aoo_source_state;
+    AOO_STREAM_STATE_STOP,
+    AOO_STREAM_STATE_PLAY
+} aoo_stream_state;
 
-typedef struct aoo_source_state_event
+typedef struct aoo_stream_state_event
 {
     AOO_ENDPOINT_EVENT
     int32_t state;
-} aoo_source_state_event;
+} aoo_stream_state_event;
 
 // block events
 struct _aoo_block_event
@@ -239,6 +247,10 @@ typedef struct _aoo_block_event aoo_block_reordered_event;
 typedef struct _aoo_block_event aoo_block_resent_event;
 typedef struct _aoo_block_event aoo_block_gap_event;
 
+typedef aoo_source_event aoo_invite_event;
+typedef aoo_source_event aoo_uninvite_event;
+typedef aoo_source_event aoo_invite_timeout_event;
+
 // ping event
 typedef struct aoo_ping_event {
     AOO_ENDPOINT_EVENT
@@ -249,10 +261,10 @@ typedef struct aoo_ping_event {
 } aoo_ping_event;
 
 // format event
-typedef struct aoo_format_event {
+typedef struct aoo_format_change_event {
     AOO_ENDPOINT_EVENT
     const struct aoo_format *format;
-} aoo_format_event;
+} aoo_format_change_event;
 
 /*//////////////////// AoO options ////////////////////*/
 
@@ -558,10 +570,10 @@ AOO_API aoo_error aoo_sink_set_option(aoo_sink *sink, int32_t opt, void *p, int3
 AOO_API aoo_error aoo_sink_get_option(aoo_sink *sink, int32_t opt, void *p, int32_t size);
 
 // set/get source options (always threadsafe)
-AOO_API aoo_error aoo_sink_set_sourceoption(aoo_sink *sink, const void *address, int32_t addrlen,
+AOO_API aoo_error aoo_sink_set_source_option(aoo_sink *sink, const void *address, int32_t addrlen,
                                             aoo_id id, int32_t opt, void *p, int32_t size);
 
-AOO_API aoo_error aoo_sink_get_sourceoption(aoo_sink *sink, const void *address, int32_t addrlen,
+AOO_API aoo_error aoo_sink_get_source_option(aoo_sink *sink, const void *address, int32_t addrlen,
                                             aoo_id id, int32_t opt, void *p, int32_t size);
 
 // wrapper functions for frequently used options
@@ -636,12 +648,12 @@ static inline aoo_error aoo_sink_get_source_timeout(aoo_sink *sink, int32_t *n) 
 
 static inline aoo_error aoo_sink_reset_source(aoo_sink *sink, const void *address,
                                               int32_t addrlen, aoo_id id) {
-    return aoo_sink_set_sourceoption(sink, address, addrlen, id, AOO_OPT_RESET, AOO_ARG_NULL);
+    return aoo_sink_set_source_option(sink, address, addrlen, id, AOO_OPT_RESET, AOO_ARG_NULL);
 }
 
 static inline aoo_error aoo_sink_get_source_format(aoo_sink *sink, const void *address,
                                                    int32_t addrlen, aoo_id id, aoo_format_storage *f) {
-    return aoo_sink_get_sourceoption(sink, address, addrlen, id, AOO_OPT_FORMAT, AOO_ARG(*f));
+    return aoo_sink_get_source_option(sink, address, addrlen, id, AOO_OPT_FORMAT, AOO_ARG(*f));
 }
 
 /*//////////////////// Codec API //////////////////////////*/

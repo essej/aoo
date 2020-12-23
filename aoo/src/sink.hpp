@@ -34,7 +34,7 @@ struct stream_state {
         reordered_ = 0;
         resent_ = 0;
         gap_ = 0;
-        state_ = AOO_SOURCE_STATE_STOP;
+        state_ = AOO_STREAM_STATE_STOP;
         underrun_ = false;
         xrun_ = 0;
     }
@@ -52,11 +52,11 @@ struct stream_state {
     void add_gap(int32_t n) { gap_ += n; }
     int32_t get_gap() { return gap_.exchange(0); }
 
-    bool update_state(aoo_source_state state){
+    bool update_state(aoo_stream_state state){
         auto last = state_.exchange(state);
         return state != last;
     }
-    aoo_source_state get_state(){
+    aoo_stream_state get_state(){
         return state_;
     }
 
@@ -72,7 +72,7 @@ private:
     std::atomic<int32_t> resent_{0};
     std::atomic<int32_t> gap_{0};
     std::atomic<int32_t> xrun_{0};
-    std::atomic<aoo_source_state> state_{AOO_SOURCE_STATE_STOP};
+    std::atomic<aoo_stream_state> state_{AOO_STREAM_STATE_STOP};
     std::atomic<bool> underrun_{false};
 };
 
@@ -93,9 +93,9 @@ struct event
         aoo_event_type type_;
         aoo_event event_;
         aoo_source_event source;
-        aoo_format_event format;
+        aoo_format_change_event format;
         aoo_ping_event ping;
-        aoo_source_state_event source_state;
+        aoo_stream_state_event source_state;
         aoo_block_lost_event block_loss;
         aoo_block_reordered_event block_reorder;
         aoo_block_resent_event block_resend;
@@ -309,10 +309,10 @@ public:
 
     aoo_error get_option(int32_t opt, void *ptr, int32_t size) override;
 
-    aoo_error set_sourceoption(const void *address, int32_t addrlen, aoo_id id,
+    aoo_error set_source_option(const void *address, int32_t addrlen, aoo_id id,
                              int32_t opt, void *ptr, int32_t size) override;
 
-    aoo_error get_sourceoption(const void *address, int32_t addrlen, aoo_id id,
+    aoo_error get_source_option(const void *address, int32_t addrlen, aoo_id id,
                              int32_t opt, void *ptr, int32_t size) override;
     // getters
     aoo_id id() const { return id_.load(std::memory_order_relaxed); }

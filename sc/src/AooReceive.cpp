@@ -114,9 +114,9 @@ void AooReceive::handleEvent(const aoo_event *event){
         sendMsgRT(msg);
         break;
     }
-    case AOO_SOURCE_FORMAT_EVENT:
+    case AOO_FORMAT_CHANGE_EVENT:
     {
-        auto e = (const aoo_format_event *)event;
+        auto e = (const aoo_format_change_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         beginEvent(msg, "/format", addr, e->id);
@@ -124,9 +124,9 @@ void AooReceive::handleEvent(const aoo_event *event){
         sendMsgRT(msg);
         break;
     }
-    case AOO_SOURCE_STATE_EVENT:
+    case AOO_STREAM_STATE_EVENT:
     {
-        auto e = (const aoo_source_state_event *)event;
+        auto e = (const aoo_stream_state_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         beginEvent(msg, "/state", addr, e->id);
