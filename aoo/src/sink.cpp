@@ -1388,18 +1388,22 @@ void source_desc::process_blocks(){
                 size = 0;
                 i.sr = decoder_->samplerate();
                 i.channel = -1; // current channel
-                LOG_VERBOSE("wrote empty block (" << b.sequence << ") for source xrun");
+            #if AOO_DEBUG_JITTER_BUFFER
+                DO_LOG("jitter buffer: write empty block (" << b.sequence << ") for source xrun");
+            #endif
             } else {
                 // block is ready
                 data = b.data();
                 size = b.size();
                 i.sr = b.samplerate;
                 i.channel = b.channel;
-                LOG_DEBUG("write samples (" << b.sequence << ")");
+            #if AOO_DEBUG_JITTER_BUFFER
+                DO_LOG("jitter buffer: write samples for block (" << b.sequence << ")");
+            #endif
             }
         } else if (jitterbuffer_.size() > 1 && remaining <= limit){
-            LOG_VERBOSE("remaining: " << remaining << " / " << audioqueue_.capacity()
-                        << ", limit: " << limit);
+            LOG_DEBUG("remaining: " << remaining << " / " << audioqueue_.capacity()
+                      << ", limit: " << limit);
             // we need audio, drop block - but only if it is not
             // the last one (which is expected to be incomplete)
             data = nullptr;
@@ -1410,6 +1414,9 @@ void source_desc::process_blocks(){
             LOG_VERBOSE("dropped block " << b.sequence);
         } else {
             // wait for block
+        #if AOO_DEBUG_JITTER_BUFFER
+            DO_LOG("jitter buffer: wait");
+        #endif
             break;
         }
 
