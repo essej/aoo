@@ -9,13 +9,12 @@ namespace aoo {
 
 /*////////////////////////// block /////////////////////////////*/
 
-void block::set(int32_t seq, double sr, int32_t chn,
+void block::set(int32_t seq, double sr,
                 const char *data, int32_t nbytes,
                 int32_t nframes, int32_t framesize)
 {
     sequence = seq;
     samplerate = sr;
-    channel = chn;
     numframes_ = nframes;
     framesize_ = framesize;
     buffer_.assign(data, data + nbytes);

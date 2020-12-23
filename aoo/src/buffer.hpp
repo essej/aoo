@@ -24,7 +24,7 @@ struct data_packet {
 class block {
 public:
     // methods
-    void set(int32_t seq, double sr, int32_t chn,
+    void set(int32_t seq, double sr,
              const char *data, int32_t nbytes,
              int32_t nframes, int32_t framesize);
     const char* data() const { return buffer_.data(); }
@@ -34,8 +34,8 @@ public:
     int32_t num_frames() const { return numframes_; }
     // data
     int32_t sequence = -1;
+    int32_t channel = 0; // for received_block
     double samplerate = 0;
-    int32_t channel = 0;
 protected:
     std::vector<char, aoo::allocator<char>> buffer_;
     int32_t numframes_ = 0;

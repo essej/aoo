@@ -44,12 +44,13 @@ using format_request = endpoint;
 struct data_request : endpoint {
     data_request() = default;
     data_request(const ip_address& _addr, int32_t _id, uint32_t _flags,
-                 int32_t _salt, int32_t _sequence, int32_t _frame)
+                 int32_t _salt, int32_t _sequence, int32_t _frame, int32_t _channel)
         : endpoint(_addr, _id, _flags),
-          salt(_salt), sequence(_sequence), frame(_frame){}
+          salt(_salt), sequence(_sequence), frame(_frame), channel(_channel){}
     int32_t salt = 0;
     int32_t sequence = 0;
     int32_t frame = 0;
+    int32_t channel = 0;
 };
 
 struct invite_request : endpoint {

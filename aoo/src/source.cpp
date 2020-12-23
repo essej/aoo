@@ -677,6 +677,7 @@ bool source::need_resampling() const {
     return blocksize_ != encoder_->blocksize() || samplerate_ != encoder_->samplerate();
 }
 
+// must be real-time safe because it might be called in process()!
 void source::start_new_stream(){
     // implicitly reset time DLL to be on the safe side
     timer_.reset();
@@ -689,7 +690,7 @@ void source::start_new_stream(){
     sequence_ = 0;
     dropped_ = 0;
 
-    if (!history_.is_empty()){
+    if (!history_.empty()){
         history_.clear(); // !
     }
 
@@ -728,6 +729,7 @@ void source::update_resampler(){
 
 void source::update_historybuffer(){
     if (encoder_){
+        // bufsize can also be 0 (= don't resend)!
         int32_t bufsize = (double)resend_buffersize_.load() * 0.001 * encoder_->samplerate();
         auto d = div(bufsize, encoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
@@ -807,7 +809,7 @@ void source::resend_data(sendfn& fn){
             aoo::data_packet d;
             d.sequence = block->sequence;
             d.samplerate = block->samplerate;
-            d.channel = block->channel;
+            d.channel = r.channel; // !
             d.totalsize = block->size();
             d.nframes = block->num_frames();
             // We use a buffer on the heap because blocks and even frames
@@ -864,8 +866,6 @@ void source::resend_data(sendfn& fn){
                     LOG_ERROR("frame number " << r.frame << " out of range!");
                 }
             }
-        } else {
-            LOG_VERBOSE("couldn't find block " << r.sequence);
         }
     }
 }
@@ -933,9 +933,11 @@ void source::send_data(sendfn& fn){
                 auto dv = div(d.totalsize, maxpacketsize);
                 d.nframes = dv.quot + (dv.rem != 0);
 
-                // save block
-                history_.push()->set(d.sequence, d.samplerate, d.channel, sendbuffer_.data(),
-                                     d.totalsize, d.nframes, maxpacketsize);
+                // save block (if we have a history buffer)
+                if (history_.capacity() > 0){
+                    history_.push()->set(d.sequence, d.samplerate, sendbuffer_.data(),
+                                         d.totalsize, d.nframes, maxpacketsize);
+                }
 
                 // unlock before sending!
                 updatelock.unlock();
@@ -1100,8 +1102,9 @@ void source::handle_data_request(const osc::ReceivedMessage& msg,
         while (npairs--){
             auto seq = (it++)->AsInt32();
             auto frame = (it++)->AsInt32();
+            auto channel = sink->channel.load(std::memory_order_relaxed);
             datarequestqueue_.push(data_request{ addr, id, sink->flags,
-                                                 salt, seq, frame });
+                                                 salt, seq, frame, channel });
         }
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_DATA << "' message: sink not found");
