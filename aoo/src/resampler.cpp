@@ -21,8 +21,8 @@ void dynamic_resampler::setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_
     }
     blocksize *= AOO_RESAMPLER_SPACE;
 #if AOO_DEBUG_RESAMPLING
-    DO_LOG("resampler setup: nfrom: " << nfrom << ", srfrom: " << srfrom << ", nto: " << nto
-           << ", srto: " << srto << ", capacity: " << blocksize);
+    DO_LOG_DEBUG("resampler setup: nfrom: " << nfrom << ", srfrom: " << srfrom
+              << ", nto: " << nto << ", srto: " << srto << ", capacity: " << blocksize);
 #endif
     buffer_.resize(blocksize * nchannels_);
     update(srfrom, srto);
@@ -42,8 +42,8 @@ void dynamic_resampler::update(double srfrom, double srto){
         ratio_ = srto / srfrom;
     }
 #if AOO_DEBUG_RESAMPLING
-    DO_LOG("srfrom: " << srfrom << ", srto: " << srto << ", ratio: " << ratio_);
-    DO_LOG("balance: " << balance_ << ", capacity: " << buffer_.size());
+    DO_LOG_DEBUG("srfrom: " << srfrom << ", srto: " << srto << ", ratio: " << ratio_);
+    DO_LOG_DEBUG("balance: " << balance_ << ", capacity: " << buffer_.size());
 #endif
 }
 

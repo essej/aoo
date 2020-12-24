@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "aoo/aoo_types.h"
+
 #include <stdint.h>
 #include <cstring>
 #include <sstream>
@@ -20,33 +22,36 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
-// 0: error, 1: warning, 2: verbose, 3: debug
 #ifndef LOGLEVEL
- #define LOGLEVEL 1
+ #define LOGLEVEL AOO_LOGLEVEL_WARNING
 #endif
 
-#define DO_LOG(x)(aoo::Log() << x)
+#define DO_LOG(level, msg)(aoo::Log(level) << msg)
+#define DO_LOG_ERROR(msg) DO_LOG(AOO_LOGLEVEL_ERROR, msg)
+#define DO_LOG_WARNING(msg) DO_LOG(AOO_LOGLEVEL_WARNING, msg)
+#define DO_LOG_VERBOSE(msg) DO_LOG(AOO_LOGLEVEL_VERBOSE, msg)
+#define DO_LOG_DEBUG(msg) DO_LOG(AOO_LOGLEVEL_DEBUG, msg)
 
-#if LOGLEVEL >= 0
- #define LOG_ERROR(x) DO_LOG(x)
+#if LOGLEVEL >= AOO_LOGLEVEL_ERROR
+ #define LOG_ERROR(x) DO_LOG_ERROR(x)
 #else
  #define LOG_ERROR(x)
 #endif
 
-#if LOGLEVEL >= 1
- #define LOG_WARNING(x) DO_LOG(x)
+#if LOGLEVEL >= AOO_LOGLEVEL_WARNING
+ #define LOG_WARNING(x) DO_LOG_WARNING(x)
 #else
  #define LOG_WARNING(x)
 #endif
 
-#if LOGLEVEL >= 2
- #define LOG_VERBOSE(x) DO_LOG(x)
+#if LOGLEVEL >= AOO_LOGLEVEL_VERBOSE
+ #define LOG_VERBOSE(x) DO_LOG_VERBOSE(x)
 #else
  #define LOG_VERBOSE(x)
 #endif
 
-#if LOGLEVEL >= 3
- #define LOG_DEBUG(x) DO_LOG(x)
+#if LOGLEVEL >= AOO_LOGLEVEL_DEBUG
+ #define LOG_DEBUG(x) DO_LOG_DEBUG(x)
 #else
  #define LOG_DEBUG(x)
 #endif
@@ -82,6 +87,8 @@ namespace aoo {
 
 class Log {
 public:
+    Log(int level)
+        : level_(level){}
     ~Log();
     template<typename T>
     Log& operator<<(T&& t) {
@@ -90,6 +97,7 @@ public:
     }
 private:
     std::ostringstream stream_;
+    int level_;
 };
 
 template<typename T>

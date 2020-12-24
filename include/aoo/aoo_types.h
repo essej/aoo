@@ -114,8 +114,14 @@ typedef struct aoo_allocator
     void* context;                         // context passed to functions
 } aoo_allocator;
 
-// log function
-typedef void (*aoo_logfunction)(const char *);
+// logging
+#define AOO_LOGLEVEL_NONE 0
+#define AOO_LOGLEVEL_ERROR 1
+#define AOO_LOGLEVEL_WARNING 2
+#define AOO_LOGLEVEL_VERBOSE 3
+#define AOO_LOGLEVEL_DEBUG 4
+
+typedef void (*aoo_logfunction)(const char *msg, int32_t level, void *context);
 
 // reply function
 typedef int32_t (*aoo_sendfn)(

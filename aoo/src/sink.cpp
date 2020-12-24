@@ -477,8 +477,8 @@ aoo_error aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
         auto elapsed = timer_.get_elapsed();
         dll_.update(elapsed);
     #if AOO_DEBUG_DLL
-        DO_LOG("time elapsed: " << elapsed << ", period: " << dll_.period()
-               << ", samplerate: " << dll_.samplerate());
+        DO_LOG_DEBUG("time elapsed: " << elapsed << ", period: "
+                  << dll_.period() << ", samplerate: " << dll_.samplerate());
     #endif
     }
 
@@ -991,9 +991,9 @@ aoo_error source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_
     check_missing_blocks(s);
 
 #if AOO_DEBUG_JITTER_BUFFER
-    DO_LOG(jitterbuffer_);
-    DO_LOG("oldest: " << jitterbuffer_.last_popped() << ", newest: "
-           << jitterbuffer_.last_pushed());
+    DO_LOG_DEBUG(jitterbuffer_);
+    DO_LOG_DEBUG("oldest: " << jitterbuffer_.last_popped()
+              << ", newest: " << jitterbuffer_.last_pushed());
 #endif
 
     return AOO_OK;
@@ -1119,8 +1119,8 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
     }
 
 #if AOO_DEBUG_AUDIO_BUFFER
-    DO_LOG("audioqueue: " << audioqueue_.read_available() << " / "
-           << audioqueue_.capacity());
+    DO_LOG_DEBUG("audioqueue: " << audioqueue_.read_available()
+              << " / " << audioqueue_.capacity());
 #endif
 
     // read audio queue
@@ -1389,7 +1389,8 @@ void source_desc::process_blocks(){
                 i.sr = decoder_->samplerate();
                 i.channel = -1; // current channel
             #if AOO_DEBUG_JITTER_BUFFER
-                DO_LOG("jitter buffer: write empty block (" << b.sequence << ") for source xrun");
+                DO_LOG_DEBUG("jitter buffer: write empty block ("
+                          << b.sequence << ") for source xrun");
             #endif
             } else {
                 // block is ready
@@ -1398,7 +1399,8 @@ void source_desc::process_blocks(){
                 i.sr = b.samplerate;
                 i.channel = b.channel;
             #if AOO_DEBUG_JITTER_BUFFER
-                DO_LOG("jitter buffer: write samples for block (" << b.sequence << ")");
+                DO_LOG_DEBUG("jitter buffer: write samples for block ("
+                          << b.sequence << ")");
             #endif
             }
         } else if (jitterbuffer_.size() > 1 && remaining <= limit){
@@ -1415,7 +1417,7 @@ void source_desc::process_blocks(){
         } else {
             // wait for block
         #if AOO_DEBUG_JITTER_BUFFER
-            DO_LOG("jitter buffer: wait");
+            DO_LOG_DEBUG("jitter buffer: wait");
         #endif
             break;
         }
@@ -1461,7 +1463,7 @@ void source_desc::check_missing_blocks(const sink& s){
                         if (resent < maxnumframes){
                             resendqueue_.push(data_request { b->sequence, i });
                         #if 0
-                            DO_LOG("request " << b->sequence << " (" << i << ")");
+                            DO_LOG_DEBUG("request " << b->sequence << " (" << i << ")");
                         #endif
                             resent++;
                         } else {
@@ -1474,7 +1476,7 @@ void source_desc::check_missing_blocks(const sink& s){
                 if (resent + nframes <= maxnumframes){
                     resendqueue_.push(data_request { b->sequence, -1 }); // whole block
                 #if 0
-                    DO_LOG("request " << b->sequence << " (all)");
+                    DO_LOG_DEBUG("request " << b->sequence << " (all)");
                 #endif
                     resent += nframes;
                 } else {

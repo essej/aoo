@@ -110,13 +110,15 @@ void aoo_set_allocator(const aoo_allocator *alloc){
 /*//////////////////// Log ////////////////////////////*/
 
 static aoo_logfunction g_logfunction = nullptr;
+static void *g_logcontext = nullptr;
 
-void aoo_set_logfunction(aoo_logfunction f){
+void aoo_set_logfunction(aoo_logfunction f, void *context){
     g_logfunction = f;
+    g_logcontext = context;
 }
 
 static const char *errmsg[] = {
-
+    // TODO
 };
 
 const char *aoo_error_string(aoo_error e){
@@ -133,7 +135,7 @@ Log::~Log(){
     stream_ << "\n";
     std::string msg = stream_.str();
     if (g_logfunction){
-        g_logfunction(msg.c_str());
+        g_logfunction(msg.c_str(), level_, g_logcontext);
     } else {
         std::cerr << msg;
         std::flush(std::cerr);

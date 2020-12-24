@@ -535,8 +535,8 @@ aoo_error aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
         auto elapsed = timer_.get_elapsed();
         dll_.update(elapsed);
     #if AOO_DEBUG_DLL
-        DO_LOG("time elapsed: " << elapsed << ", period: " << dll_.period()
-               << ", samplerate: " << dll_.samplerate());
+        DO_LOG_DEBUG("time elapsed: " << elapsed << ", period: "
+                  << dll_.period() << ", samplerate: " << dll_.samplerate());
     #endif
     }
 

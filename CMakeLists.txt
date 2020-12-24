@@ -33,9 +33,9 @@ if(MINGW)
 endif()
 
 # logging
-set(LOGLEVEL 2 CACHE STRING "LOGLEVEL")
+set(LOGLEVEL "WARNING" CACHE STRING "LOGLEVEL")
 message(STATUS "LOGLEVEL: ${LOGLEVEL}")
-add_definitions(-DLOGLEVEL=${LOGLEVEL})
+add_definitions("-DLOGLEVEL=AOO_LOGLEVEL_${LOGLEVEL}")
 
 # Windows paths
 if (WIN32 OR MINGW)

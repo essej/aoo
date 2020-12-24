@@ -97,7 +97,7 @@ timer::state timer::update(time_tag t, double& error){
             return state::error;
         } else {
         #if AOO_DEBUG_TIMEFILTER
-            DO_LOG("delta : " << (delta * 1000.0)
+            DO_LOG_DEBUG("delta : " << (delta * 1000.0)
                       << ", average delta: " << (average * 1000.0)
                       << ", error: " << (last_error * 1000.0)
                       << ", average error: " << (average_error * 1000.0));

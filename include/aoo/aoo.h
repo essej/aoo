@@ -19,7 +19,7 @@ AOO_API void aoo_version(int32_t *major, int32_t *minor,
 AOO_API const char *aoo_version_string(void);
 
 // call before aoo_initialize!
-AOO_API void aoo_set_logfunction(aoo_logfunction fn);
+AOO_API void aoo_set_logfunction(aoo_logfunction fn, void *context);
 
 #ifndef AOO_USE_ALLOCATOR
 #define AOO_USE_ALLOCATOR 0

@@ -16,7 +16,7 @@ namespace rt {
     InterfaceTable* interfaceTable;
 }
 
-static void SCLog(const char *s){
+static void SCLog(const char *s, int32_t, void *){
     Print("%s", s);
 }
 
@@ -549,7 +549,7 @@ PluginLoad(Aoo) {
     ft = inTable; // store pointer to InterfaceTable
     rt::interfaceTable = inTable; // for "rt_shared_ptr.h"
 
-    aoo_set_logfunction(SCLog);
+    aoo_set_logfunction(SCLog, nullptr);
 
     aoo_initialize();
 
