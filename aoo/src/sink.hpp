@@ -173,7 +173,7 @@ public:
         return !eventqueue_.empty();
     }
 
-    int32_t poll_events(aoo_eventhandler fn, void *user);
+    int32_t poll_events(sink& s, aoo_eventhandler fn, void *user);
 
     aoo_error get_format(aoo_format& format);
 
@@ -260,7 +260,7 @@ private:
     double samplerate_ = 0; // recent samplerate
     stream_state streamstate_;
     double dropped_ = 0;
-    std::atomic<double> last_packet_time_;
+    std::atomic<double> last_packet_time_{0};
     // queues and buffers
     jitter_buffer jitterbuffer_;
     lockfree::spsc_queue<aoo_sample, aoo::allocator<aoo_sample>> audioqueue_;
@@ -373,6 +373,23 @@ private:
     void push_request(const source_request& r){
         requestqueue_.push(r);
     }
+    // queue memory deallocation
+    struct sized_deleter {
+        sized_deleter(size_t size = 0)
+            : size_(size){}
+        void operator()(void *ptr){
+            aoo::deallocate(ptr, size_);
+        }
+    private:
+        size_t size_;
+    };
+    using mem_ptr = std::unique_ptr<void, sized_deleter>;
+    lockfree::unbounded_mpsc_queue<mem_ptr, aoo::allocator<mem_ptr>> memqueue_;
+public:
+    void sched_free(void *ptr, size_t size){
+        memqueue_.push(mem_ptr(ptr, sized_deleter(size)));
+    }
+private:
     // helper methods
     source_desc *find_source(const ip_address& addr, aoo_id id);
 

@@ -16,6 +16,7 @@ aoo_sink * aoo_sink_new(aoo_id id, uint32_t flags) {
 aoo::sink::sink(aoo_id id, uint32_t flags)
     : id_(id) {
     eventqueue_.reserve(AOO_EVENTQUEUESIZE);
+    memqueue_.reserve(AOO_EVENTQUEUESIZE);
 }
 
 void aoo_sink_free(aoo_sink *sink) {
@@ -400,6 +401,10 @@ aoo_error aoo::sink::decode() {
         LOG_DEBUG("aoo::sink: try_free() would block");
     }
 
+    // deallocate memory
+    mem_ptr m;
+    while (memqueue_.try_pop(m)) ;
+
     // handle requests
     // NOTE: we invite/uninvite sources in the same thread
     // where we add sources, so we can get away with holding
@@ -571,7 +576,7 @@ aoo_error aoo::sink::poll_events(aoo_eventhandler fn, void *user){
     // we only need to protect against source removal
     source_lock lock(sources_);
     for (auto& src : sources_){
-        total += src.poll_events(fn, user);
+        total += src.poll_events(*this, fn, user);
         if (total > EVENT_THROTTLE){
             break;
         }
@@ -971,23 +976,23 @@ aoo_error source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_
               << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
 
     // check data packet
-    LOG_DEBUG("check packet");
+    // LOG_DEBUG("check packet");
     if (!check_packet(d)){
         return AOO_OK; // ?
     }
 
     // add data packet
-    LOG_DEBUG("add packet");
+    // LOG_DEBUG("add packet");
     if (!add_packet(d)){
         return AOO_OK; // ?
     }
 
     // process blocks and send audio
-    LOG_DEBUG("process blocks");
+    // LOG_DEBUG("process blocks");
     process_blocks();
 
     // check and resend missing blocks
-    LOG_DEBUG("check missing blocks");
+    // LOG_DEBUG("check missing blocks");
     check_missing_blocks(s);
 
 #if AOO_DEBUG_JITTER_BUFFER
@@ -1190,7 +1195,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
     }
 }
 
-int32_t source_desc::poll_events(aoo_eventhandler fn, void *user){
+int32_t source_desc::poll_events(sink& s, aoo_eventhandler fn, void *user){
     // always lockfree!
     int count = 0;
     event e;
@@ -1198,11 +1203,8 @@ int32_t source_desc::poll_events(aoo_eventhandler fn, void *user){
         fn(user, &e.event_);
         // some events use dynamic memory
         if (e.type_ == AOO_FORMAT_CHANGE_EVENT){
-            // freeing memory is not really RT safe,
-            // but it is the easiest solution.
-            // LATER think about better ways.
             auto fmt = e.format.format;
-            deallocate((void *)fmt, fmt->size);
+            s.sched_free((void *)fmt, fmt->size);
         }
         count++;
     }
