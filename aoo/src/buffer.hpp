@@ -156,7 +156,10 @@ class history_buffer {
 public:
     void clear();
     bool empty() const {
-        return oldest_ < 0;
+        return size_ == 0;
+    }
+    int32_t size() const {
+        return size_;
     }
     int32_t capacity() const {
         return buffer_.size();
@@ -165,9 +168,10 @@ public:
     block * find(int32_t seq);
     block * push();
 private:
-    std::vector<block, aoo::allocator<block>> buffer_;
-    int32_t oldest_ = 0;
+    using block_buffer = std::vector<block, aoo::allocator<block>>;
+    block_buffer buffer_;
     int32_t head_ = 0;
+    int32_t size_ = 0;
 };
 
 }
