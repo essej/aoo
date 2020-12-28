@@ -21,11 +21,11 @@ AOO_API const char *aoo_version_string(void);
 // call before aoo_initialize!
 AOO_API void aoo_set_logfunction(aoo_logfunction fn, void *context);
 
-#ifndef AOO_USE_ALLOCATOR
-#define AOO_USE_ALLOCATOR 0
+#ifndef AOO_CUSTOM_ALLOCATOR
+#define AOO_CUSTOM_ALLOCATOR 0
 #endif
 
-#if AOO_USE_ALLOCATOR
+#if AOO_CUSTOM_ALLOCATOR
 // call before aoo_initialize!
 AOO_API void aoo_set_allocator(const aoo_allocator *alloc);
 

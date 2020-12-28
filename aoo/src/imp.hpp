@@ -29,7 +29,7 @@ aoo_error parse_pattern(const char *msg, int32_t n, aoo_type& type, int32_t& off
 /*///////////////////// allocator ////////////////////*/
 
 
-#if AOO_USE_ALLOCATOR || AOO_DEBUG_MEMORY
+#if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
 
 void * allocate(size_t size);
 

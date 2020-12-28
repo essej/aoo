@@ -60,7 +60,7 @@ void free_sockaddr(void *sa, int32_t len){
 
 /*//////////////////// allocator /////////////////////*/
 
-#if AOO_USE_ALLOCATOR || AOO_DEBUG_MEMORY
+#if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
 
 namespace aoo {
 
@@ -101,7 +101,7 @@ void deallocate(void *ptr, size_t size){
 
 #endif
 
-#if AOO_USE_ALLOCATOR
+#if AOO_CUSTOM_ALLOCATOR
 void aoo_set_allocator(const aoo_allocator *alloc){
     aoo::g_allocator = *alloc;
 }
@@ -291,7 +291,7 @@ void aoo_codec_pcm_setup(aoo_codec_registerfn fn, const aoo_allocator *alloc);
 void aoo_codec_opus_setup(aoo_codec_registerfn fn, const aoo_allocator *alloc);
 #endif
 
-#if AOO_USE_ALLOCATOR || AOO_DEBUG_MEMORY
+#if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
 #define ALLOCATOR &aoo::g_allocator
 #else
 #define ALLOCATOR nullptr
