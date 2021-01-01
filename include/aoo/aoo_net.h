@@ -175,13 +175,17 @@ AOO_API aoo_error aoo_net_server_run(aoo_net_server *server);
 // quit the AOO server from another thread
 AOO_API aoo_error aoo_net_server_quit(aoo_net_server *server);
 
+// set event handler callback + mode
+AOO_API aoo_error aoo_net_server_set_eventhandler(aoo_net_server *sink,
+                                                  aoo_eventhandler fn,
+                                                  void *user, int32_t mode);
+
 // check for pending events (always thread safe)
 AOO_API aoo_bool aoo_net_server_events_available(aoo_net_server *server);
 
 // poll events (threadsafe, but not reentrant)
 // will call the event handler function one or more times
-AOO_API aoo_error aoo_net_server_poll_events(aoo_net_server *server,
-                                             aoo_eventhandler fn, void *user);
+AOO_API aoo_error aoo_net_server_poll_events(aoo_net_server *server);
 
 // LATER add methods to add/remove users and groups
 // and set/get server options, group options and user options
@@ -262,13 +266,17 @@ AOO_API aoo_error aoo_net_client_handle_message(aoo_net_client *client,
 // send outgoing messages to peers (threadsafe, but not reentrant)
 AOO_API aoo_error aoo_net_client_send(aoo_net_client *client, aoo_sendfn fn, void *user);
 
+// set event handler callback + mode
+AOO_API aoo_error aoo_net_client_set_eventhandler(aoo_net_client *sink,
+                                                  aoo_eventhandler fn,
+                                                  void *user, int32_t mode);
+
 // check for pending events (always thread safe)
 AOO_API aoo_bool aoo_net_client_events_available(aoo_net_client *client);
 
 // handle events (threadsafe, but not reentrant)
 // will call the event handler function one or more times
-AOO_API aoo_error aoo_net_client_poll_events(aoo_net_client *client,
-                                             aoo_eventhandler fn, void *user);
+AOO_API aoo_error aoo_net_client_poll_events(aoo_net_client *client);
 
 // LATER add API functions to set options and do additional
 // peer communication (chat, OSC messages, etc.)

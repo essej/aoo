@@ -30,6 +30,9 @@ extern t_class *aoo_send_class;
 
 extern t_class *aoo_client_class;
 
+void aoo_client_handle_event(struct t_aoo_client *x,
+                             const aoo_event *event, int32_t level);
+
 /*////////////////////// aoo node //////////////////*/
 
 static t_class *node_proxy_class;
@@ -127,6 +130,9 @@ bool t_node::add_object(t_pd *obj, void *x, aoo_id id)
                    x_client->run();
                 });
             }
+            // set event handler
+            x_client->set_eventhandler((aoo_eventhandler)aoo_client_handle_event,
+                                       obj, AOO_EVENT_POLL);
         } else {
             pd_error(obj, "%s on port %d already exists!",
                      classname(obj), x_port);
@@ -275,6 +281,7 @@ void t_node::release(t_pd *obj, void *x)
     if (pd_class(obj) == aoo_client_class){
         // client
         x_clientobj = nullptr;
+        x_client->set_eventhandler(nullptr, nullptr, AOO_EVENT_NONE);
     } else if (pd_class(obj) == aoo_send_class){
         x_client->remove_source((aoo::isource *)x);
     } else if (pd_class(obj) == aoo_receive_class){

@@ -183,9 +183,11 @@ public:
 
     aoo_error quit() override;
 
-    bool events_available() override;
+    aoo_error set_eventhandler(aoo_eventhandler fn, void *user, int32_t mode) override;
 
-    aoo_error poll_events(aoo_eventhandler fn, void *user) override;
+    aoo_bool events_available() override;
+
+    aoo_error poll_events() override;
 
     std::shared_ptr<user> get_user(const std::string& name,
                                    const std::string& pwd,
@@ -224,9 +226,12 @@ private:
     using ievent_ptr = std::unique_ptr<ievent>;
     using event_queue = lockfree::unbounded_mpsc_queue<ievent_ptr, aoo::allocator<ievent_ptr>>;
     event_queue events_;
-    void push_event(std::unique_ptr<ievent> e){
-        events_.push(std::move(e));
-    }
+    aoo_eventhandler eventhandler_ = nullptr;
+    void *eventcontext_ = nullptr;
+    aoo_event_mode eventmode_ = AOO_EVENT_NONE;
+
+    void send_event(std::unique_ptr<ievent> e);
+
     // signal
     std::atomic<bool> quit_{false};
 

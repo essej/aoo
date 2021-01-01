@@ -54,12 +54,16 @@ public:
     // quit the AOO server from another thread
     virtual aoo_error quit() = 0;
 
+    // set event handler callback + mode
+    virtual aoo_error set_eventhandler(aoo_eventhandler fn,
+                                       void *user, int32_t mode) = 0;
+
     // check for pending events (always thread safe)
-    virtual bool events_available() = 0;
+    virtual aoo_bool events_available() = 0;
 
     // poll events (threadsafe, but not reentrant)
     // will call the event handler function one or more times
-    virtual aoo_error poll_events(aoo_eventhandler fn, void *user) = 0;
+    virtual aoo_error poll_events() = 0;
 
     // LATER add methods to add/remove users and groups
     // and set/get server options, group options and user options
@@ -117,11 +121,11 @@ public:
     // address: pointer to sockaddr_storage
     // addrlen: initialized with max. storage size, updated to actual size
     virtual aoo_error find_peer(const char *group, const char *user,
-                              void *address, int32_t& addrlen) = 0;
+                                void *address, int32_t& addrlen) = 0;
 
     // send a request to the AOO server (always thread safe)
     virtual aoo_error send_request(aoo_net_request_type request, void *data,
-                                 aoo_net_callback callback, void *user) = 0;
+                                   aoo_net_callback callback, void *user) = 0;
 
     // send a message to one or more peers
     // 'addr' + 'len' accept the following values:
@@ -130,7 +134,7 @@ public:
     // c) 'NULL' + 0: send to all peers
     // the 'flags' parameter allows for (future) additional settings
     virtual aoo_error send_message(const char *data, int32_t n,
-                                 const void *addr, int32_t len, int32_t flags) = 0;
+                                   const void *addr, int32_t len, int32_t flags) = 0;
 
     // handle messages from peers (thread safe, but not reentrant)
     // 'addr' should be sockaddr *
@@ -139,13 +143,16 @@ public:
 
     // send outgoing messages to peers (thread safe, but not reentrant)
     virtual aoo_error send(aoo_sendfn fn, void *user) = 0;
+    // set event handler callback + mode
+    virtual aoo_error set_eventhandler(aoo_eventhandler fn,
+                                       void *user, int32_t mode) = 0;
 
     // check for pending events (always thread safe)
-    virtual bool events_available() = 0;
+    virtual aoo_bool events_available() = 0;
 
     // poll events (threadsafe, but not reentrant)
     // will call the event handler function one or more times
-    virtual aoo_error poll_events(aoo_eventhandler fn, void *user) = 0;
+    virtual aoo_error poll_events() = 0;
 
     // LATER add API functions to set options and do additional
     // peer communication (chat, OSC messages, etc.)
@@ -154,8 +161,8 @@ public:
 
     // connect to AOO server (always thread safe)
     aoo_error connect(const char *host, int port,
-                    const char *name, const char *pwd,
-                    aoo_net_callback cb, void *user)
+                      const char *name, const char *pwd,
+                      aoo_net_callback cb, void *user)
     {
         aoo_net_connect_request data =  { host, port, name, pwd };
         return send_request(AOO_NET_CONNECT_REQUEST, &data, cb, user);
@@ -169,7 +176,7 @@ public:
 
     // join an AOO group
     aoo_error join_group(const char *group, const char *pwd,
-                       aoo_net_callback cb, void *user)
+                         aoo_net_callback cb, void *user)
     {
         aoo_net_group_request data = { group, pwd };
         return send_request(AOO_NET_GROUP_JOIN_REQUEST, &data, cb, user);

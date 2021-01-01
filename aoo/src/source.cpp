@@ -591,24 +591,37 @@ aoo_error aoo::source::process(const aoo_sample **data, int32_t n, uint64_t t){
     return AOO_OK;
 }
 
+aoo_error aoo_source_set_eventhandler(aoo_source *src, aoo_eventhandler fn,
+                                      void *user, int32_t mode)
+{
+    return src->set_eventhandler(fn, user, mode);
+}
+
+aoo_error aoo::source::set_eventhandler(aoo_eventhandler fn, void *user,
+                                        int32_t mode){
+    eventhandler_ = fn;
+    eventcontext_ = user;
+    eventmode_ = (aoo_event_mode)mode;
+    return AOO_OK;
+}
+
 aoo_bool aoo_source_events_available(aoo_source *src){
     return src->events_available();
 }
 
-bool aoo::source::events_available(){
+aoo_bool aoo::source::events_available(){
     return !eventqueue_.empty();
 }
 
-aoo_error aoo_source_poll_events(aoo_source *src,
-                                 aoo_eventhandler fn, void *user){
-    return src->poll_events(fn, user);
+aoo_error aoo_source_poll_events(aoo_source *src){
+    return src->poll_events();
 }
 
-aoo_error aoo::source::poll_events(aoo_eventhandler fn, void *user){
+aoo_error aoo::source::poll_events(){
     // always thread-safe
     event e;
     while (eventqueue_.try_pop(e) > 0){
-        fn(user, &e.event_);
+        eventhandler_(eventcontext_, &e.event_, AOO_THREAD_UNKNOWN);
     }
     return AOO_OK;
 }
@@ -675,6 +688,19 @@ int32_t source::make_salt(){
 
 bool source::need_resampling() const {
     return blocksize_ != encoder_->blocksize() || samplerate_ != encoder_->samplerate();
+}
+
+void source::send_event(const event& e, aoo_thread_level level){
+    switch (eventmode_){
+    case AOO_EVENT_POLL:
+        eventqueue_.push(e);
+        break;
+    case AOO_EVENT_CALLBACK:
+        eventhandler_(eventcontext_, &e.event_, level);
+        break;
+    default:
+        break;
+    }
 }
 
 // must be real-time safe because it might be called in process()!
@@ -1123,7 +1149,7 @@ void source::handle_invite(const osc::ReceivedMessage& msg,
     if (!find_sink(addr, id)){
         // push "invite" event
         event e(AOO_INVITE_EVENT, addr, id);
-        eventqueue_.push(e);
+        send_event(e, AOO_THREAD_NETWORK);
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_INVITE << "' message: sink already added");
     }
@@ -1141,7 +1167,7 @@ void source::handle_uninvite(const osc::ReceivedMessage& msg,
     if (find_sink(addr, id)){
         // push "uninvite" event
         event e(AOO_UNINVITE_EVENT, addr, id);
-        eventqueue_.push(e);
+        send_event(e, AOO_THREAD_NETWORK);
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_UNINVITE << "' message: sink not found");
     }
@@ -1171,7 +1197,7 @@ void source::handle_ping(const osc::ReceivedMessage& msg,
     #else
         e.ping.tt3 = aoo::time_tag::now(); // use real system time
     #endif
-        eventqueue_.push(e);
+        send_event(e, AOO_THREAD_NETWORK);
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_PING << "' message: sink not found");
     }

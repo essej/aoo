@@ -27,7 +27,7 @@ struct t_aoo_server
     t_outlet *x_msgout = nullptr;
 };
 
-static void aoo_server_handle_event(t_aoo_server *x, const aoo_event *event)
+static void aoo_server_handle_event(t_aoo_server *x, const aoo_event *event, int32_t)
 {
     switch (event->type){
     case AOO_NET_USER_JOIN_EVENT:
@@ -106,7 +106,7 @@ static void aoo_server_handle_event(t_aoo_server *x, const aoo_event *event)
 
 static void aoo_server_tick(t_aoo_server *x)
 {
-    x->x_server->poll_events((aoo_eventhandler)aoo_server_handle_event, x);
+    x->x_server->poll_events();
     clock_delay(x->x_clock, AOO_SERVER_POLL_INTERVAL);
 }
 
@@ -130,6 +130,10 @@ t_aoo_server::t_aoo_server(int argc, t_atom *argv)
         x_server.reset(aoo::net::iserver::create(port, 0, &err));
         if (x_server){
             verbose(0, "aoo server listening on port %d", port);
+            // first set event handler!
+            // set event handler
+            x_server->set_eventhandler((aoo_eventhandler)aoo_server_handle_event,
+                                       this, AOO_EVENT_POLL);
             // start thread
             x_thread = std::thread([this](){
                 x_server->run();

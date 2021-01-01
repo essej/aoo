@@ -122,7 +122,7 @@ static void aoo_unpack_resend_interval(t_aoo_unpack *x, t_floatarg f)
     x->x_sink->set_resend_interval(f);
 }
 
-static void aoo_unpack_handle_event(t_aoo_unpack *x, const aoo_event *event)
+static void aoo_unpack_handle_event(t_aoo_unpack *x, const aoo_event *event, int32_t)
 {
     // handle events
     t_atom msg[32];
@@ -216,7 +216,8 @@ static void aoo_unpack_handle_event(t_aoo_unpack *x, const aoo_event *event)
 
 static void aoo_unpack_tick(t_aoo_unpack *x)
 {
-    x->x_sink->poll_events((aoo_eventhandler)aoo_unpack_handle_event, x);
+    // poll events
+    x->x_sink->poll_events();
 }
 
 uint64_t aoo_pd_osctime(int n, t_float sr);
@@ -297,6 +298,9 @@ t_aoo_unpack::t_aoo_unpack(int argc, t_atom *argv)
     // create and initialize aoo_sink object
     auto sink = aoo::isink::create(id >= 0 ? id : 0, 0);
     x_sink.reset(sink);
+
+    x_sink->set_eventhandler((aoo_eventhandler)aoo_unpack_handle_event,
+                             this, AOO_EVENT_POLL);
 
     x_sink->set_buffersize(buffersize);
 }

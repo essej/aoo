@@ -27,6 +27,11 @@ void AooReceive::init(int32_t port, aoo_id id, int32 bufsize) {
                             sink->setup(cmd->sampleRate, cmd->blockSize,
                                         cmd->numChannels);
 
+                            sink->set_eventhandler(
+                                [](void *user, const aoo_event *event, int32_t){
+                                    static_cast<AooReceive *>(user)->handleEvent(event);
+                                }, cmd->owner.get(), AOO_EVENT_POLL);
+
                             if (cmd->bufferSize <= 0) {
                                 sink->set_buffersize(DEFBUFSIZE);
                             } else {
@@ -213,10 +218,7 @@ void AooReceiveUnit::next(int numSamples){
             ClearUnitOutputs(this, numSamples);
         }
 
-        sink->poll_events(
-            [](void *user, const aoo_event *event){
-                static_cast<AooReceive *>(user)->handleEvent(event);
-            }, delegate_.get());
+        sink->poll_events();
     } else {
         ClearUnitOutputs(this, numSamples);
     }

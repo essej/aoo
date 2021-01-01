@@ -232,6 +232,10 @@ bool AooNode::registerClient(AooClient *c){
         });
     }
     clientObject_ = c;
+    client_->set_eventhandler(
+        [](void *user, const aoo_event *event, int32_t) {
+            static_cast<AooClient*>(user)->handleEvent(event);
+        }, c, AOO_EVENT_CALLBACK);
     return true;
 }
 
@@ -239,6 +243,7 @@ void AooNode::unregisterClient(AooClient *c){
     aoo::scoped_lock lock(clientMutex_);
     assert(clientObject_ == c);
     clientObject_ = nullptr;
+    client_->set_eventhandler(nullptr, nullptr, AOO_EVENT_NONE);
 }
 
 void AooNode::notify(){
@@ -299,10 +304,7 @@ void AooNode::doReceive()
         // poll events
         aoo::shared_scoped_lock lock(clientMutex_);
         if (clientObject_){
-            client_->poll_events(
-                [](void *user, const aoo_event *event) {
-                    static_cast<AooClient*>(user)->handleEvent(event);
-                }, clientObject_);
+            client_->poll_events();
         }
     }
 }

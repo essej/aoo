@@ -134,7 +134,7 @@ static t_sink *aoo_send_findsink(t_aoo_send *x, const ip_address& addr, aoo_id i
     return nullptr;
 }
 
-static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event)
+static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t)
 {
     switch (event->type){
     case AOO_PING_EVENT:
@@ -206,7 +206,7 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event)
 
 static void aoo_send_tick(t_aoo_send *x)
 {
-    x->x_source->poll_events((aoo_eventhandler)aoo_send_handle_event, x);
+    x->x_source->poll_events();
 }
 
 static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
@@ -533,6 +533,10 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
     // create and initialize aoo_source object
     auto src = aoo::isource::create(x_id, 0);
     x_source.reset(src);
+
+    // set event handler
+    x_source->set_eventhandler((aoo_eventhandler)aoo_send_handle_event,
+                               this, AOO_EVENT_POLL);
 
     aoo_format_storage fmt;
     format_makedefault(fmt, nchannels);

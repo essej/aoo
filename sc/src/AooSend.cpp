@@ -27,6 +27,11 @@ void AooSend::init(int32_t port, aoo_id id) {
                             source->setup(cmd->sampleRate, cmd->blockSize,
                                           cmd->numChannels);
 
+                            source->set_eventhandler(
+                                [](void *user, const aoo_event *event, int32_t){
+                                    static_cast<AooSend *>(user)->handleEvent(event);
+                                }, cmd->owner.get(), AOO_EVENT_POLL);
+
                             source->set_buffersize(DEFBUFSIZE);
 
                             aoo_format_storage f;
@@ -231,10 +236,7 @@ void AooSendUnit::next(int numSamples){
             delegate().node()->notify();
         }
 
-        source->poll_events(
-            [](void *user, const aoo_event *event){
-                static_cast<AooSend *>(user)->handleEvent(event);
-            }, delegate_.get());
+        source->poll_events();
     }
 }
 

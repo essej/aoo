@@ -56,7 +56,7 @@ static int32_t aoo_pack_send(t_aoo_pack *x, const char *data, int32_t n,
     return 1;
 }
 
-static void aoo_pack_handle_event(t_aoo_pack *x, const aoo_event *event)
+static void aoo_pack_handle_event(t_aoo_pack *x, const aoo_event *event, int32_t)
 {
     switch (event->type){
     case AOO_PING_EVENT:
@@ -116,7 +116,7 @@ static void aoo_pack_tick(t_aoo_pack *x)
 {
     x->x_source->send((aoo_sendfn)aoo_pack_send, x);
 
-    x->x_source->poll_events((aoo_eventhandler)aoo_pack_handle_event, x);
+    x->x_source->poll_events();
 }
 
 static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -323,6 +323,9 @@ t_aoo_pack::t_aoo_pack(int argc, t_atom *argv)
     // create and initialize aoo_sink object
     auto src = aoo::isource::create(id >= 0 ? id : 0, 0);
     x_source.reset(src);
+
+    x_source->set_eventhandler((aoo_eventhandler)aoo_pack_handle_event,
+                               this, AOO_EVENT_POLL);
 
     // add sink
     if (x_sink_id != AOO_ID_NONE){

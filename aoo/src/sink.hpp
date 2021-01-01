@@ -265,15 +265,14 @@ private:
     jitter_buffer jitterbuffer_;
     lockfree::spsc_queue<aoo_sample, aoo::allocator<aoo_sample>> audioqueue_;
     lockfree::spsc_queue<block_info, aoo::allocator<block_info>> infoqueue_;
+    // events
     lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> resendqueue_;
     lockfree::unbounded_mpsc_queue<request, aoo::allocator<request>> requestqueue_;
     void push_request(const request& r){
         requestqueue_.push(r);
     }
     lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
-    void push_event(const event& e){
-        eventqueue_.push(e);
-    }
+    void send_event(const sink& s, const event& e, aoo_thread_level level);
     // resampler
     dynamic_resampler resampler_;
     // thread synchronization
@@ -301,9 +300,11 @@ public:
 
     aoo_error process(aoo_sample **data, int32_t nsamples, uint64_t t) override;
 
-    bool events_available() override;
+    aoo_error set_eventhandler(aoo_eventhandler fn, void *user, int32_t mode) override;
 
-    aoo_error poll_events(aoo_eventhandler fn, void *user) override;
+    aoo_bool events_available() override;
+
+    aoo_error poll_events() override;
 
     aoo_error set_option(int32_t opt, void *ptr, int32_t size) override;
 
@@ -340,6 +341,8 @@ public:
     double elapsed_time() const { return timer_.get_elapsed(); }
 
     time_tag absolute_time() const { return timer_.get_absolute(); }
+
+    aoo_event_mode event_mode() const { return eventmode_; }
 private:
     // settings
     std::atomic<aoo_id> id_;
@@ -348,13 +351,6 @@ private:
     int32_t blocksize_ = 0;
     // buffer for summing source audio output
     std::vector<aoo_sample, aoo::allocator<aoo_sample>> buffer_;
-    // options
-    std::atomic<int32_t> buffersize_{ AOO_SINK_BUFSIZE };
-    std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
-    std::atomic<bool> resend_enabled_{AOO_RESEND_ENABLE};
-    std::atomic<float> resend_interval_{ AOO_RESEND_INTERVAL * 0.001 };
-    std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
-    std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT * 0.001 };
     // the sources
     using source_list = lockfree::simple_list<source_desc, aoo::allocator<source_desc>>;
     using source_lock = std::unique_lock<source_list>;
@@ -363,11 +359,22 @@ private:
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
     time_dll dll_;
     timer timer_;
+    // options
+    std::atomic<int32_t> buffersize_{ AOO_SINK_BUFSIZE };
+    std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
+    std::atomic<float> resend_interval_{ AOO_RESEND_INTERVAL * 0.001 };
+    std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
+    std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT * 0.001 };
+    std::atomic<bool> resend_enabled_{AOO_RESEND_ENABLE};
     // events
     lockfree::unbounded_mpsc_queue<source_event, aoo::allocator<source_event>> eventqueue_;
-    void push_event(const source_event& e){
-        eventqueue_.push(e);
-    }
+    void send_event(const source_event& e, aoo_thread_level level);
+public:
+    void call_event(const event& e, aoo_thread_level level) const;
+private:
+    aoo_eventhandler eventhandler_ = nullptr;
+    void *eventcontext_ = nullptr;
+    aoo_event_mode eventmode_ = AOO_EVENT_NONE;
     // requests
     lockfree::unbounded_mpsc_queue<source_request, aoo::allocator<source_request>> requestqueue_;
     void push_request(const source_request& r){

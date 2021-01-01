@@ -420,12 +420,16 @@ AOO_API aoo_error aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user);
 AOO_API aoo_error aoo_source_process(aoo_source *src, const aoo_sample **data,
                                      int32_t nsamples, uint64_t t);
 
+// set event handler callback + mode
+AOO_API aoo_error aoo_source_set_eventhandler(aoo_source *src, aoo_eventhandler fn,
+                                              void *user, int32_t mode);
+
 // check for pending events (always thread safe)
 AOO_API aoo_bool aoo_source_events_available(aoo_source *src);
 
 // poll events (threadsafe, but not reentrant)
 // will call the event handler function one or more times
-AOO_API aoo_error aoo_source_poll_events(aoo_source *src, aoo_eventhandler fn, void *user);
+AOO_API aoo_error aoo_source_poll_events(aoo_source *src);
 
 // set/get options (always threadsafe)
 AOO_API aoo_error aoo_source_set_option(aoo_source *src, int32_t opt, void *p, int32_t size);
@@ -557,12 +561,16 @@ AOO_API aoo_error aoo_sink_send(aoo_sink *sink, aoo_sendfn fn, void *user);
 AOO_API aoo_error aoo_sink_process(aoo_sink *sink, aoo_sample **data,
                                    int32_t nsamples, uint64_t t);
 
+// set event handler callback + mode
+AOO_API aoo_error aoo_sink_set_eventhandler(aoo_sink *sink, aoo_eventhandler fn,
+                                            void *user, int32_t mode);
+
 // check for pending events (always thread safe)
 AOO_API aoo_bool aoo_sink_events_available(aoo_sink *sink);
 
 // poll events (threadsafe, but not reentrant)
 // will call the event handler function one or more times
-AOO_API aoo_error aoo_sink_poll_events(aoo_sink *sink, aoo_eventhandler fn, void *user);
+AOO_API aoo_error aoo_sink_poll_events(aoo_sink *sink);
 
 // set/get options (always threadsafe)
 AOO_API aoo_error aoo_sink_set_option(aoo_sink *sink, int32_t opt, void *p, int32_t size);

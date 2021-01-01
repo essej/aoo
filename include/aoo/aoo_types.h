@@ -139,10 +139,25 @@ typedef struct aoo_event
     int32_t type;
 } aoo_event;
 
+enum aoo_thread_level
+{
+    AOO_THREAD_UNKNOWN = 0,
+    AOO_THREAD_AUDIO,
+    AOO_THREAD_NETWORK
+};
+
+enum aoo_event_mode
+{
+    AOO_EVENT_NONE = 0,
+    AOO_EVENT_CALLBACK,
+    AOO_EVENT_POLL
+};
+
 // event handler
 typedef void (*aoo_eventhandler)(
         void *user,          // user
-        const aoo_event *e   // event
+        const aoo_event *e,  // event
+        int32_t level        // aoo_thread_level
 );
 
 #ifdef __cplusplus

@@ -211,9 +211,11 @@ public:
 
     aoo_error send(aoo_sendfn fn, void *user) override;
 
-    bool events_available() override;
+    aoo_error set_eventhandler(aoo_eventhandler fn, void *user, int32_t mode) override;
 
-    aoo_error poll_events(aoo_eventhandler fn, void *user) override;
+    aoo_bool events_available() override;
+
+    aoo_error poll_events() override;
 
     void do_connect(const char *host, int port,
                     const char *name, const char *pwd,
@@ -250,7 +252,7 @@ public:
 
     double request_timeout() const { return request_timeout_.load(std::memory_order_relaxed); }
 
-    void push_event(std::unique_ptr<ievent> e);
+    void send_event(std::unique_ptr<ievent> e);
 
     void push_command(std::unique_ptr<icommand>&& cmd);
 
@@ -315,6 +317,9 @@ private:
     using ievent_ptr = std::unique_ptr<ievent>;
     using event_queue = lockfree::unbounded_mpsc_queue<ievent_ptr, aoo::allocator<ievent_ptr>>;
     event_queue events_;
+    aoo_eventhandler eventhandler_ = nullptr;
+    void *eventcontext_ = nullptr;
+    aoo_event_mode eventmode_ = AOO_EVENT_NONE;
     // options
     std::atomic<float> ping_interval_{AOO_NET_CLIENT_PING_INTERVAL * 0.001};
     std::atomic<float> request_interval_{AOO_NET_CLIENT_REQUEST_INTERVAL * 0.001};

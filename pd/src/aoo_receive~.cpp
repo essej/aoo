@@ -194,7 +194,7 @@ static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
     }
 }
 
-static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
+static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, int32_t)
 {
     t_atom msg[32];
     switch (event->type){
@@ -338,7 +338,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event)
 
 static void aoo_receive_tick(t_aoo_receive *x)
 {
-    x->x_sink->poll_events((aoo_eventhandler)aoo_receive_handle_event, x);
+    x->x_sink->poll_events();
 }
 
 static t_int * aoo_receive_perform(t_int *w)
@@ -492,6 +492,10 @@ t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
     // create and initialize aoo_sink object
     auto sink = aoo::isink::create(x_id, 0);
     x_sink.reset(sink);
+
+    // set event handler
+    x_sink->set_eventhandler((aoo_eventhandler)aoo_receive_handle_event,
+                             this, AOO_EVENT_POLL);
 
     x_sink->set_buffersize(buffersize);
 

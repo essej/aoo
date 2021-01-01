@@ -508,23 +508,38 @@ aoo_error aoo::net::client::send(aoo_sendfn fn, void *user){
     return AOO_OK;
 }
 
+aoo_error aoo_net_client_set_eventhandler(aoo_net_client *sink, aoo_eventhandler fn,
+                                          void *user, int32_t mode)
+{
+    return sink->set_eventhandler(fn, user, mode);
+}
+
+aoo_error aoo::net::client::set_eventhandler(aoo_eventhandler fn, void *user,
+                                             int32_t mode)
+{
+    eventhandler_ = fn;
+    eventcontext_ = user;
+    eventmode_ = (aoo_event_mode)mode;
+    return AOO_OK;
+}
+
 aoo_bool aoo_net_client_events_available(aoo_net_server *client){
     return client->events_available();
 }
 
-bool aoo::net::client::events_available(){
+aoo_bool aoo::net::client::events_available(){
     return !events_.empty();
 }
 
-aoo_error aoo_net_client_poll_events(aoo_net_client *client, aoo_eventhandler fn, void *user){
-    return client->poll_events(fn, user);
+aoo_error aoo_net_client_poll_events(aoo_net_client *client){
+    return client->poll_events();
 }
 
-aoo_error aoo::net::client::poll_events(aoo_eventhandler fn, void *user){
+aoo_error aoo::net::client::poll_events(){
     // always thread-safe
     std::unique_ptr<ievent> e;
     while (events_.try_pop(e)){
-        fn(user, &e->event_);
+        eventhandler_(eventcontext_, &e->event_, AOO_THREAD_UNKNOWN);
     }
     return AOO_OK;
 }
@@ -864,9 +879,19 @@ void client::perform_leave_group(const std::string &group,
     send_server_message(msg.Data(), msg.Size());
 }
 
-void client::push_event(std::unique_ptr<ievent> e)
+void client::send_event(std::unique_ptr<ievent> e)
 {
-    events_.push(std::move(e));
+    switch (eventmode_){
+    case AOO_EVENT_POLL:
+        events_.push(std::move(e));
+        break;
+    case AOO_EVENT_CALLBACK:
+        // client only has network threads
+        eventhandler_(eventcontext_, &e->event_, AOO_THREAD_NETWORK);
+        break;
+    default:
+        break;
+    }
 }
 
 void client::push_command(std::unique_ptr<icommand>&& cmd){
@@ -1130,7 +1155,7 @@ void client::handle_relay_message(const osc::ReceivedMessage &msg){
         auto e = std::make_unique<client::message_event>(
                     (const char *)data, size, addr);
 
-        push_event(std::move(e));
+        send_event(std::move(e));
     } else {
         LOG_WARNING("aoo_client: got unexpected relay message " << relayMsg.AddressPattern());
     }
@@ -1193,7 +1218,7 @@ void client::handle_peer_remove(const osc::ReceivedMessage& msg){
         auto e = std::make_unique<peer_event>(
             AOO_NET_PEER_LEAVE_EVENT, addr,
             group.c_str(), user.c_str(), id, flags);
-        push_event(std::move(e));
+        send_event(std::move(e));
     }
 
     peers_.erase(result);
@@ -1234,7 +1259,7 @@ void client::close(bool manual){
 
     if (!manual && state_.load() == client_state::connected){
         auto e = std::make_unique<event>(AOO_NET_DISCONNECT_EVENT);
-        push_event(std::move(e));
+        send_event(std::move(e));
     }
     state_.store(client_state::disconnected);
 }
@@ -1248,7 +1273,7 @@ void client::on_socket_error(int err){
     }
     auto e = std::make_unique<error_event>(err, msg);
 
-    push_event(std::move(e));
+    send_event(std::move(e));
 
     close();
 }
@@ -1266,7 +1291,7 @@ void client::on_exception(const char *what, const osc::Exception &err,
 
     auto e = std::make_unique<error_event>(0, msg);
 
-    push_event(std::move(e));
+    send_event(std::move(e));
 
     close();
 }
@@ -1630,7 +1655,7 @@ void peer::send(time_tag now){
                     ss << "couldn't establish connection with peer " << *this;
 
                     auto e = std::make_unique<client::error_event>(0, ss.str().c_str());
-                    client_->push_event(std::move(e));
+                    client_->send_event(std::move(e));
 
                     timeout_ = true;
                 }
@@ -1645,7 +1670,7 @@ void peer::send(time_tag now){
                 ss << "couldn't establish connection with peer " << *this;
 
                 auto e = std::make_unique<client::error_event>(0, ss.str().c_str());
-                client_->push_event(std::move(e));
+                client_->send_event(std::move(e));
 
                 timeout_ = true;
             }
@@ -1733,7 +1758,7 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
                     AOO_NET_PEER_JOIN_EVENT, addr,
                     group().c_str(), user().c_str(), id(), flags());
 
-        client_->push_event(std::move(e));
+        client_->send_event(std::move(e));
 
         LOG_VERBOSE("aoo_client: successfully established connection with "
                   << *this << " (" << addr.name() << ":" << addr.port() << ")");
@@ -1758,7 +1783,7 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
             auto e = std::make_unique<client::message_event>(
                         (const char *)data, size, addr);
 
-            client_->push_event(std::move(e));
+            client_->send_event(std::move(e));
         } else {
             LOG_WARNING("aoo_client: received unknown message "
                         << pattern << " from " << *this);

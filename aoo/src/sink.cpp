@@ -499,12 +499,12 @@ aoo_error aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
                 LOG_VERBOSE("aoo::sink: invitation for " << it->address().name()
                             << " " << it->address().port() << " timed out");
                 source_event e(AOO_INVITE_TIMEOUT_EVENT, *it);
-                push_event(e);
+                send_event(e, AOO_THREAD_AUDIO);
             } else {
                 LOG_VERBOSE("aoo::sink: removed inactive source " << it->address().name()
                             << " " << it->address().port());
                 source_event e(AOO_SOURCE_REMOVE_EVENT, *it);
-                push_event(e);
+                send_event(e, AOO_THREAD_AUDIO);
             }
             it =  sources_.erase(it);
             continue;
@@ -532,11 +532,26 @@ aoo_error aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
         return AOO_ERROR_UNSPECIFIED;
     }
 }
+
+aoo_error aoo_sink_set_eventhandler(aoo_sink *sink, aoo_eventhandler fn,
+                                    void *user, int32_t mode)
+{
+    return sink->set_eventhandler(fn, user, mode);
+}
+
+aoo_error aoo::sink::set_eventhandler(aoo_eventhandler fn, void *user, int32_t mode)
+{
+    eventhandler_ = fn;
+    eventcontext_ = user;
+    eventmode_ = (aoo_event_mode)mode;
+    return AOO_OK;
+}
+
 aoo_bool aoo_sink_events_available(aoo_sink *sink){
     return sink->events_available();
 }
 
-bool aoo::sink::events_available(){
+aoo_bool aoo::sink::events_available(){
     if (!eventqueue_.empty()){
         return true;
     }
@@ -551,17 +566,13 @@ bool aoo::sink::events_available(){
     return false;
 }
 
-aoo_error aoo_sink_poll_events(aoo_sink *sink,
-                               aoo_eventhandler fn, void *user){
-    return sink->poll_events(fn, user);
+aoo_error aoo_sink_poll_events(aoo_sink *sink){
+    return sink->poll_events();
 }
 
 #define EVENT_THROTTLE 1000
 
-aoo_error aoo::sink::poll_events(aoo_eventhandler fn, void *user){
-    if (!fn){
-        return AOO_ERROR_UNSPECIFIED;
-    }
+aoo_error aoo::sink::poll_events(){
     int total = 0;
     source_event e;
     while (eventqueue_.try_pop(e)){
@@ -570,13 +581,14 @@ aoo_error aoo::sink::poll_events(aoo_eventhandler fn, void *user){
         se.address = e.address.address();
         se.addrlen = e.address.length();
         se.id = e.id;
-        fn(user, (const aoo_event *)&se);
+        eventhandler_(eventcontext_, (const aoo_event *)&se,
+                      AOO_THREAD_UNKNOWN);
         total++;
     }
     // we only need to protect against source removal
     source_lock lock(sources_);
     for (auto& src : sources_){
-        total += src.poll_events(*this, fn, user);
+        total += src.poll_events(*this, eventhandler_, eventcontext_);
         if (total > EVENT_THROTTLE){
             break;
         }
@@ -585,6 +597,36 @@ aoo_error aoo::sink::poll_events(aoo_eventhandler fn, void *user){
 }
 
 namespace aoo {
+
+void sink::send_event(const source_event &e, aoo_thread_level level) {
+    switch (eventmode_){
+    case AOO_EVENT_POLL:
+        eventqueue_.push(e);
+        break;
+    case AOO_EVENT_CALLBACK:
+    {
+        aoo_source_event se;
+        se.type = e.type;
+        se.address = e.address.address();
+        se.addrlen = e.address.length();
+        se.id = e.id;
+        eventhandler_(eventcontext_, (const aoo_event *)&se, level);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+// only called if mode is AOO_EVENT_CALLBACK
+void sink::call_event(const event &e, aoo_thread_level level) const {
+    eventhandler_(eventcontext_, &e.event_, level);
+    // some events use dynamic memory
+    if (e.type_ == AOO_FORMAT_CHANGE_EVENT){
+        auto fmt = e.format.format;
+        aoo::deallocate((void *)fmt, fmt->size);
+    }
+}
 
 // must be called with source_mutex_ locked!
 aoo::source_desc * sink::find_source(const ip_address& addr, aoo_id id){
@@ -919,7 +961,7 @@ aoo_error source_desc::handle_format(const sink& s, int32_t salt, const aoo_form
         // only push "add" event, if this is the first format message!
         if (oldsalt < 0){
             event e(AOO_SOURCE_ADD_EVENT, *this);
-            eventqueue_.push(e);
+            send_event(s, e, AOO_THREAD_AUDIO);
             LOG_DEBUG("add new source with id " << id());
         }
     }
@@ -932,7 +974,7 @@ aoo_error source_desc::handle_format(const sink& s, int32_t salt, const aoo_form
     event e(AOO_FORMAT_CHANGE_EVENT, *this);
     e.format.format = (const aoo_format *)fs;
 
-    push_event(e);
+    send_event(s, e, AOO_THREAD_NETWORK);
 
     return AOO_OK;
 }
@@ -1030,7 +1072,7 @@ aoo_error source_desc::handle_ping(const sink &s, time_tag tt){
     e.ping.tt1 = tt;
     e.ping.tt2 = tt2;
     e.ping.tt3 = 0;
-    push_event(e);
+    send_event(s, e, AOO_THREAD_NETWORK);
 
     return AOO_OK;
 }
@@ -1102,25 +1144,25 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
         // push packet loss event
         event e(AOO_BLOCK_LOST_EVENT, *this);
         e.block_loss.count = lost;
-        push_event(e);
+        send_event(s, e, AOO_THREAD_AUDIO);
     }
     if (reordered > 0){
         // push packet reorder event
         event e(AOO_BLOCK_REORDERED_EVENT, *this);
         e.block_reorder.count = reordered;
-        push_event(e);
+        send_event(s, e, AOO_THREAD_AUDIO);
     }
     if (resent > 0){
         // push packet resend event
         event e(AOO_BLOCK_RESENT_EVENT, *this);
         e.block_resend.count = resent;
-        push_event(e);
+        send_event(s, e, AOO_THREAD_AUDIO);
     }
     if (gap > 0){
         // push packet gap event
         event e(AOO_BLOCK_GAP_EVENT, *this);
         e.block_gap.count = gap;
-        push_event(e);
+        send_event(s, e, AOO_THREAD_AUDIO);
     }
 
 #if AOO_DEBUG_AUDIO_BUFFER
@@ -1178,7 +1220,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
             // push "start" event
             event e(AOO_STREAM_STATE_EVENT, *this);
             e.source_state.state = AOO_STREAM_STATE_PLAY;
-            push_event(e);
+            send_event(s, e, AOO_THREAD_AUDIO);
         }
 
         return true;
@@ -1187,7 +1229,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
         if (streamstate_.update_state(AOO_STREAM_STATE_STOP)){
             event e(AOO_STREAM_STATE_EVENT, *this);
             e.source_state.state = AOO_STREAM_STATE_STOP;
-            push_event(e);
+            send_event(s, e, AOO_THREAD_AUDIO);
         }
         streamstate_.set_underrun(); // notify network thread!
 
@@ -1200,7 +1242,7 @@ int32_t source_desc::poll_events(sink& s, aoo_eventhandler fn, void *user){
     int count = 0;
     event e;
     while (eventqueue_.try_pop(e)){
-        fn(user, &e.event_);
+        fn(user, &e.event_, AOO_THREAD_UNKNOWN);
         // some events use dynamic memory
         if (e.type_ == AOO_FORMAT_CHANGE_EVENT){
             auto fmt = e.format.format;
@@ -1645,6 +1687,20 @@ void source_desc::send_invitation(const sink& s, sendfn& fn){
     fn(msg.Data(), msg.Size(), addr_, flags());
 
     LOG_DEBUG("send /invite to source " << id_);
+}
+
+void source_desc::send_event(const sink& s, const event& e,
+                             aoo_thread_level level){
+    switch (s.event_mode()){
+    case AOO_EVENT_POLL:
+        eventqueue_.push(e);
+        break;
+    case AOO_EVENT_CALLBACK:
+        s.call_event(e, level);
+        break;
+    default:
+        break;
+    }
 }
 
 } // aoo

@@ -141,23 +141,38 @@ aoo_error aoo::net::server::quit(){
     return AOO_OK;
 }
 
+aoo_error aoo_net_server_set_eventhandler(aoo_net_client *sink, aoo_eventhandler fn,
+                                          void *user, int32_t mode)
+{
+    return sink->set_eventhandler(fn, user, mode);
+}
+
+aoo_error aoo::net::server::set_eventhandler(aoo_eventhandler fn, void *user,
+                                             int32_t mode)
+{
+    eventhandler_ = fn;
+    eventcontext_ = user;
+    eventmode_ = (aoo_event_mode)mode;
+    return AOO_OK;
+}
+
 aoo_bool aoo_net_server_events_available(aoo_net_server *server){
     return server->events_available();
 }
 
-bool aoo::net::server::events_available(){
+aoo_bool aoo::net::server::events_available(){
     return !events_.empty();
 }
 
-aoo_error aoo_net_server_poll_events(aoo_net_server *server, aoo_eventhandler fn, void *user){
-    return server->poll_events(fn, user);
+aoo_error aoo_net_server_poll_events(aoo_net_server *server){
+    return server->poll_events();
 }
 
-aoo_error aoo::net::server::poll_events(aoo_eventhandler fn, void *user){
+aoo_error aoo::net::server::poll_events(){
     // always thread-safe
     std::unique_ptr<ievent> e;
     while (events_.try_pop(e)){
-        fn(user, &e->event_);
+        eventhandler_(eventcontext_, &e->event_, AOO_THREAD_UNKNOWN);
     }
     return AOO_OK;
 }
@@ -264,14 +279,14 @@ void server::on_user_joined(user &usr){
     auto e = std::make_unique<user_event>(AOO_NET_USER_JOIN_EVENT,
                                           usr.name.c_str(), usr.id,
                                           usr.endpoint()->local_address()); // do we need this?
-    push_event(std::move(e));
+    send_event(std::move(e));
 }
 
 void server::on_user_left(user &usr){
     auto e = std::make_unique<user_event>(AOO_NET_USER_LEAVE_EVENT,
                                           usr.name.c_str(), usr.id,
                                           usr.endpoint()->local_address()); // do we need this?
-    push_event(std::move(e));
+    send_event(std::move(e));
 }
 
 void server::on_user_joined_group(user& usr, group& grp){
@@ -309,7 +324,7 @@ void server::on_user_joined_group(user& usr, group& grp){
     auto e = std::make_unique<group_event>(AOO_NET_GROUP_JOIN_EVENT,
                                            grp.name.c_str(),
                                            usr.name.c_str(), usr.id);
-    push_event(std::move(e));
+    send_event(std::move(e));
 }
 
 void server::on_user_left_group(user& usr, group& grp){
@@ -332,7 +347,7 @@ void server::on_user_left_group(user& usr, group& grp){
     auto e = std::make_unique<group_event>(AOO_NET_GROUP_LEAVE_EVENT,
                                            grp.name.c_str(),
                                            usr.name.c_str(), usr.id);
-    push_event(std::move(e));
+    send_event(std::move(e));
 }
 
 void server::handle_relay_message(const osc::ReceivedMessage& msg,
@@ -362,6 +377,20 @@ void server::handle_relay_message(const osc::ReceivedMessage& msg,
     }
 
     LOG_WARNING("aoo_server: couldn't find matching client for relay message");
+}
+
+void server::send_event(std::unique_ptr<ievent> e){
+    switch (eventmode_){
+    case AOO_EVENT_POLL:
+        events_.push(std::move(e));
+        break;
+    case AOO_EVENT_CALLBACK:
+        // server only has network threads
+        eventhandler_(eventcontext_, &e->event_, AOO_THREAD_NETWORK);
+        break;
+    default:
+        break;
+    }
 }
 
 bool server::wait_for_event(){

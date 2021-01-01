@@ -361,7 +361,7 @@ void t_aoo_client::handle_peer_bundle(const osc::ReceivedBundle& bundle,
     }
 }
 
-static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
+void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event, int32_t level)
 {
     switch (event->type){
     case AOO_NET_MESSAGE_EVENT:
@@ -463,7 +463,7 @@ static void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event)
 
 static void aoo_client_tick(t_aoo_client *x)
 {
-    x->x_node->client()->poll_events((aoo_eventhandler)aoo_client_handle_event, x);
+    x->x_node->client()->poll_events();
 
     x->x_node->notify();
 

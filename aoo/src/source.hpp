@@ -141,9 +141,11 @@ class source final : public isource {
 
     aoo_error process(const aoo_sample **data, int32_t n, uint64_t t) override;
 
-    bool events_available() override;
+    aoo_error set_eventhandler(aoo_eventhandler fn, void *user, int32_t mode) override;
 
-    aoo_error poll_events(aoo_eventhandler fn, void *user) override;
+    aoo_bool events_available() override;
+
+    aoo_error poll_events() override;
 
     aoo_error set_option(int32_t opt, void *ptr, int32_t size) override;
 
@@ -181,10 +183,14 @@ class source final : public isource {
     dynamic_resampler resampler_;
     lockfree::spsc_queue<aoo_sample, aoo::allocator<aoo_sample>> audioqueue_;
     lockfree::spsc_queue<double, aoo::allocator<double>> srqueue_;
-    lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
     lockfree::unbounded_mpsc_queue<format_request, aoo::allocator<format_request>> formatrequestqueue_;
     lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> datarequestqueue_;
     history_buffer history_;
+    // events
+    lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
+    aoo_eventhandler eventhandler_ = nullptr;
+    void *eventcontext_ = nullptr;
+    aoo_event_mode eventmode_ = AOO_EVENT_NONE;
     // sinks
     using sink_list = lockfree::simple_list<sink_desc, aoo::allocator<sink_desc>>;
     using sink_lock = std::unique_lock<sink_list>;
@@ -205,6 +211,8 @@ class source final : public isource {
     sink_desc * find_sink(const ip_address& addr, aoo_id id);
 
     static int32_t make_salt();
+
+    void send_event(const event& e, aoo_thread_level level);
 
     bool need_resampling() const;
 
