@@ -32,7 +32,7 @@ struct t_aoo_unpack
     t_object x_obj;
 
     t_float x_f = 0;
-    aoo::isink::pointer x_sink;
+    aoo::sink::pointer x_sink;
     aoo::ip_address x_addr; // fake address
     int32_t x_samplerate = 0;
     int32_t x_blocksize = 0;
@@ -297,7 +297,7 @@ t_aoo_unpack::t_aoo_unpack(int argc, t_atom *argv)
     x_msgout = outlet_new(&x_obj, 0);
 
     // create and initialize aoo_sink object
-    auto sink = aoo::isink::create(id >= 0 ? id : 0, 0);
+    auto sink = aoo::sink::create(id >= 0 ? id : 0, 0);
     x_sink.reset(sink);
 
     x_sink->set_eventhandler((aoo_eventhandler)aoo_unpack_handle_event,

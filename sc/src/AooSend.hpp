@@ -3,7 +3,7 @@
 // for hardware buffer sizes up to 1024 @ 44.1 kHz
 #define DEFBUFSIZE 25
 
-using OpenCmd = _OpenCmd<aoo::isource>;
+using OpenCmd = _OpenCmd<aoo::source>;
 
 /*////////////////// AooSend ////////////////*/
 
@@ -19,7 +19,7 @@ public:
 
     void handleEvent(const aoo_event *event);
 
-    aoo::isource * source() { return source_.get(); }
+    aoo::source * source() { return source_.get(); }
 
     void addSinkEvent(const aoo::ip_address& addr, aoo_id id, int32_t channelOnset);
     bool addSink(const aoo::ip_address& addr, aoo_id id, int32_t channelOnset);
@@ -32,7 +32,7 @@ public:
         accept_ = b;
     }
 private:
-    aoo::isource::pointer source_;
+    aoo::source::pointer source_;
     bool accept_ = true;
 };
 

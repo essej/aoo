@@ -41,7 +41,7 @@ int endpoint_to_atoms(const ip_address& addr, aoo_id id, int argc, t_atom *argv)
     return 3;
 }
 
-static bool get_endpoint_arg(void *x, i_node *node, int argc, t_atom *argv,
+static bool get_endpoint_arg(void *x, t_node *node, int argc, t_atom *argv,
                              ip_address& addr, int32_t *id, const char *what)
 {
     if (argc < (2 + (id != nullptr))){
@@ -97,19 +97,19 @@ static bool get_endpoint_arg(void *x, i_node *node, int argc, t_atom *argv,
     return true;
 }
 
-bool get_sink_arg(void *x, i_node *node, int argc, t_atom *argv,
+bool get_sink_arg(void *x, t_node *node, int argc, t_atom *argv,
                   ip_address& addr, aoo_id &id)
 {
     return get_endpoint_arg(x, node, argc, argv, addr, &id, "sink");
 }
 
-bool get_source_arg(void *x, i_node *node, int argc, t_atom *argv,
+bool get_source_arg(void *x, t_node *node, int argc, t_atom *argv,
                     ip_address& addr, aoo_id &id)
 {
     return get_endpoint_arg(x, node, argc, argv, addr, &id, "source");
 }
 
-bool get_peer_arg(void *x, i_node *node, int argc, t_atom *argv,
+bool get_peer_arg(void *x, t_node *node, int argc, t_atom *argv,
                   ip_address& addr)
 {
     return get_endpoint_arg(x, node, argc, argv, addr, nullptr, "peer");

@@ -32,7 +32,7 @@ struct t_aoo_receive
     t_object x_obj;
 
     t_float x_f = 0;
-    aoo::isink::pointer x_sink;
+    aoo::sink::pointer x_sink;
     int32_t x_samplerate = 0;
     int32_t x_blocksize = 0;
     int32_t x_nchannels = 0;
@@ -42,7 +42,7 @@ struct t_aoo_receive
     // sinks
     std::vector<t_source> x_sources;
     // server
-    i_node * x_node = nullptr;
+    t_node * x_node = nullptr;
     // events
     t_outlet *x_msgout = nullptr;
     t_clock *x_clock = nullptr;
@@ -184,7 +184,7 @@ static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
     }
     // add new node
     if (port){
-        x->x_node = i_node::get((t_pd *)x, port, x->x_sink.get(), x->x_id);
+        x->x_node = t_node::get((t_pd *)x, port, x->x_sink.get(), x->x_id);
         if (x->x_node){
             post("listening on port %d", x->x_node->port());
         }
@@ -412,7 +412,7 @@ static void aoo_receive_port(t_aoo_receive *x, t_floatarg f)
     }
 
     if (port){
-        x->x_node = i_node::get((t_pd *)x, port, x->x_sink.get(), x->x_id);
+        x->x_node = t_node::get((t_pd *)x, port, x->x_sink.get(), x->x_id);
     } else {
         x->x_node = 0;
     }
@@ -440,7 +440,7 @@ static void aoo_receive_id(t_aoo_receive *x, t_floatarg f)
     x->x_sink->set_id(id);
 
     if (x->x_port){
-        x->x_node = i_node::get((t_pd *)x, x->x_port, x->x_sink.get(), id);
+        x->x_node = t_node::get((t_pd *)x, x->x_port, x->x_sink.get(), id);
     } else {
         x->x_node = nullptr;
     }
@@ -490,7 +490,7 @@ t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
     x_msgout = outlet_new(&x_obj, 0);
 
     // create and initialize aoo_sink object
-    auto sink = aoo::isink::create(x_id, 0);
+    auto sink = aoo::sink::create(x_id, 0);
     x_sink.reset(sink);
 
     // set event handler

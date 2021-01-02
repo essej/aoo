@@ -20,7 +20,7 @@ void AooSend::init(int32_t port, aoo_id id) {
                 auto cmd = (OpenCmd *)data;
                 auto node = INode::get(world, cmd->port);
                 if (node){
-                    aoo::isource::pointer source(aoo::isource::create(cmd->id, 0));
+                    aoo::source::pointer source(aoo::source::create(cmd->id, 0));
                     if (source){
                         NodeLock lock(*node);
                         if (node->client()->add_source(source.get(), cmd->id) == AOO_OK){

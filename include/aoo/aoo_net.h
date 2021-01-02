@@ -155,10 +155,10 @@ typedef struct aoo_net_user_event
 #ifdef __cplusplus
 namespace aoo {
 namespace net {
-    class iserver;
+    class server;
 } // net
 } // aoo
-using aoo_net_server = aoo::net::iserver;
+using aoo_net_server = aoo::net::server;
 #else
 typedef struct aoo_net_server aoo_net_server;
 #endif
@@ -198,10 +198,10 @@ AOO_API aoo_error aoo_net_server_poll_events(aoo_net_server *server);
 #ifdef __cplusplus
 namespace aoo {
 namespace net {
-    class iclient;
+    class client;
 } // net
 } // aoo
-using aoo_net_client = aoo::net::iclient;
+using aoo_net_client = aoo::net::client;
 #else
 typedef struct aoo_net_client aoo_net_client;
 #endif

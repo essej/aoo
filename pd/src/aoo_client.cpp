@@ -57,7 +57,7 @@ struct t_aoo_client
 
     t_object x_obj;
 
-    i_node *x_node = nullptr;
+    t_node *x_node = nullptr;
 
     // for OSC messages
     ip_address x_peeraddr;
@@ -468,12 +468,12 @@ static void aoo_client_tick(t_aoo_client *x)
     x->x_node->notify();
 
     // handle server replies
-    if (x->reply_mutex_.try_lock()){
+    std::unique_lock<std::mutex> lock(x->reply_mutex_, std::try_to_lock);
+    if (lock.owns_lock()){
         for (auto& reply : x->replies_){
             reply();
         }
         x->replies_.clear();
-        x->reply_mutex_.unlock();
     } else {
         LOG_DEBUG("aoo_client_tick: would block");
     }
@@ -677,7 +677,7 @@ t_aoo_client::t_aoo_client(int argc, t_atom *argv)
 
     int port = argc ? atom_getfloat(argv) : 0;
 
-    x_node = port > 0 ? i_node::get((t_pd *)this, port) : nullptr;
+    x_node = port > 0 ? t_node::get((t_pd *)this, port) : nullptr;
 
     if (x_node){
         verbose(0, "new aoo client on port %d", port);

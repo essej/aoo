@@ -28,7 +28,7 @@
 namespace aoo {
 namespace net {
 
-class server;
+class server_imp;
 
 using ip_address_list = std::vector<ip_address, aoo::allocator<ip_address>>;
 
@@ -43,7 +43,7 @@ using group_list = std::vector<group_ptr, aoo::allocator<group_ptr>>;
 
 class client_endpoint {
 public:
-    client_endpoint(server &s, int socket, const ip_address& addr);
+    client_endpoint(server_imp& s, int socket, const ip_address& addr);
 
     ~client_endpoint();
 
@@ -65,7 +65,7 @@ public:
 
     bool receive_data();
 private:
-    server *server_;
+    server_imp *server_;
     int socket_;
 #ifdef _WIN32
     HANDLE event_;
@@ -99,7 +99,7 @@ struct user {
 
     bool is_active() const { return endpoint_ != nullptr; }
 
-    void on_close(server& s);
+    void on_close(server_imp& s);
 
     bool add_group(std::shared_ptr<group> grp);
 
@@ -147,7 +147,7 @@ private:
     user_list users_;
 };
 
-class server final : public iserver {
+class server_imp final : public server {
 public:
     enum class error {
         none,
@@ -160,7 +160,7 @@ public:
 
     struct icommand {
         virtual ~icommand(){}
-        virtual void perform(server&) = 0;
+        virtual void perform(server_imp&) = 0;
     };
 
     struct ievent {
@@ -174,8 +174,8 @@ public:
         };
     };
 
-    server(int tcpsocket, int udpsocket);
-    ~server();
+    server_imp(int tcpsocket, int udpsocket);
+    ~server_imp();
 
     ip_address::ip_type type() const { return type_; }
 

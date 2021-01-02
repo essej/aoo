@@ -11,7 +11,7 @@
 namespace aoo {
 namespace net {
 
-// NOTE: aoo::iserver and aoo::iclient don't define virtual destructors
+// NOTE: aoo::server and aoo::client don't define virtual destructors
 // and have to be destroyed with their respective destroy() method.
 // We provide a custom deleter and shared pointer to automate this task.
 //
@@ -31,22 +31,22 @@ namespace net {
 
 /*//////////////////////// AoO server ///////////////////////*/
 
-class iserver {
+class server {
 public:
     class deleter {
     public:
-        void operator()(iserver *x){
+        void operator()(server *x){
             destroy(x);
         }
     };
     // smart pointer for AoO server instance
-    using pointer = std::unique_ptr<iserver, deleter>;
+    using pointer = std::unique_ptr<server, deleter>;
 
     // create a new AoO server instance
-    static iserver * create(int port, uint32_t flags, aoo_error *err);
+    static server * create(int port, uint32_t flags, aoo_error *err);
 
     // destroy the AoO server instance
-    static void destroy(iserver *server);
+    static void destroy(server *server);
 
     // run the AOO server; this function blocks indefinitely.
     virtual aoo_error run() = 0;
@@ -68,36 +68,36 @@ public:
     // LATER add methods to add/remove users and groups
     // and set/get server options, group options and user options
 protected:
-    ~iserver(){} // non-virtual!
+    ~server(){} // non-virtual!
 };
 
-inline iserver * iserver::create(int port, uint32_t flags, aoo_error *err){
+inline server * server::create(int port, uint32_t flags, aoo_error *err){
     return aoo_net_server_new(port, flags, err);
 }
 
-inline void iserver::destroy(iserver *server){
+inline void server::destroy(server *server){
     aoo_net_server_free(server);
 }
 
 /*//////////////////////// AoO client ///////////////////////*/
 
-class iclient {
+class client {
 public:
     class deleter {
     public:
-        void operator()(iclient *x){
+        void operator()(client *x){
             destroy(x);
         }
     };
     // smart pointer for AoO client instance
-    using pointer = std::unique_ptr<iclient, deleter>;
+    using pointer = std::unique_ptr<client, deleter>;
 
     // create a new AoO client instance
-    static iclient * create(const void *address, int32_t addrlen,
-                            uint32_t flags);
+    static client * create(const void *address, int32_t addrlen,
+                           uint32_t flags);
 
     // destroy the AoO client instance
-    static void destroy(iclient *client);
+    static void destroy(client *client);
 
     // run the AOO client; this function blocks indefinitely.
     virtual aoo_error run() = 0;
@@ -106,16 +106,16 @@ public:
     virtual aoo_error quit() = 0;
 
     // add AOO source
-    virtual aoo_error add_source(aoo::isource *src, aoo_id id) = 0;
+    virtual aoo_error add_source(aoo::source *src, aoo_id id) = 0;
 
     // remove AOO source
-    virtual aoo_error remove_source(aoo::isource *src) = 0;
+    virtual aoo_error remove_source(aoo::source *src) = 0;
 
     // add AOO sink
-    virtual aoo_error add_sink(aoo::isink *src, aoo_id id) = 0;
+    virtual aoo_error add_sink(aoo::sink *src, aoo_id id) = 0;
 
     // remove AOO sink
-    virtual aoo_error remove_sink(aoo::isink *src) = 0;
+    virtual aoo_error remove_sink(aoo::sink *src) = 0;
 
     // find peer and return its address
     // address: pointer to sockaddr_storage
@@ -191,16 +191,16 @@ public:
         return send_request(AOO_NET_GROUP_LEAVE_REQUEST, &data, cb, user);
     }
 protected:
-    ~iclient(){} // non-virtual!
+    ~client(){} // non-virtual!
 };
 
-inline iclient * iclient::create(const void *address, int32_t addrlen,
-                                 uint32_t flags)
+inline client * client::create(const void *address, int32_t addrlen,
+                               uint32_t flags)
 {
     return aoo_net_client_new(address, addrlen, flags);
 }
 
-inline void iclient::destroy(iclient *client){
+inline void client::destroy(client *client){
     aoo_net_client_free(client);
 }
 

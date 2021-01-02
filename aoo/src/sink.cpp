@@ -10,10 +10,10 @@
 /*//////////////////// aoo_sink /////////////////////*/
 
 aoo_sink * aoo_sink_new(aoo_id id, uint32_t flags) {
-    return aoo::construct<aoo::sink>(id, flags);
+    return aoo::construct<aoo::sink_imp>(id, flags);
 }
 
-aoo::sink::sink(aoo_id id, uint32_t flags)
+aoo::sink_imp::sink_imp(aoo_id id, uint32_t flags)
     : id_(id) {
     eventqueue_.reserve(AOO_EVENTQUEUESIZE);
     memqueue_.reserve(AOO_EVENTQUEUESIZE);
@@ -22,7 +22,7 @@ aoo::sink::sink(aoo_id id, uint32_t flags)
 void aoo_sink_free(aoo_sink *sink) {
     // cast to correct type because base class
     // has no virtual destructor!
-    aoo::destroy(static_cast<aoo::sink *>(sink));
+    aoo::destroy(static_cast<aoo::sink_imp *>(sink));
 }
 
 aoo_error aoo_sink_setup(aoo_sink *sink, int32_t samplerate,
@@ -30,8 +30,8 @@ aoo_error aoo_sink_setup(aoo_sink *sink, int32_t samplerate,
     return sink->setup(samplerate, blocksize, nchannels);
 }
 
-aoo_error aoo::sink::setup(int32_t samplerate,
-                           int32_t blocksize, int32_t nchannels){
+aoo_error aoo::sink_imp::setup(int32_t samplerate,
+                               int32_t blocksize, int32_t nchannels){
     if (samplerate > 0 && blocksize > 0 && nchannels > 0)
     {
         if (samplerate != samplerate_ || blocksize != blocksize_ ||
@@ -60,7 +60,7 @@ aoo_error aoo_sink_invite_source(aoo_sink *sink, const void *address,
 }
 
 // LATER put invitations on a queue
-aoo_error aoo::sink::invite_source(const void *address, int32_t addrlen, aoo_id id){
+aoo_error aoo::sink_imp::invite_source(const void *address, int32_t addrlen, aoo_id id){
     ip_address addr((const sockaddr *)address, addrlen);
 
     push_request(source_request { request_type::invite, addr, id });
@@ -75,7 +75,7 @@ aoo_error aoo_sink_uninvite_source(aoo_sink *sink, const void *address,
 }
 
 // LATER put uninvitations on a queue
-aoo_error aoo::sink::uninvite_source(const void *address, int32_t addrlen, aoo_id id){
+aoo_error aoo::sink_imp::uninvite_source(const void *address, int32_t addrlen, aoo_id id){
     ip_address addr((const sockaddr *)address, addrlen);
 
     push_request(source_request { request_type::uninvite, addr, id });
@@ -87,7 +87,7 @@ aoo_error aoo_sink_uninvite_all(aoo_sink *sink){
     return sink->uninvite_all();
 }
 
-aoo_error aoo::sink::uninvite_all(){
+aoo_error aoo::sink_imp::uninvite_all(){
     push_request(source_request { request_type::uninvite_all });
 
     return AOO_OK;
@@ -109,7 +109,7 @@ aoo_error aoo_sink_set_option(aoo_sink *sink, int32_t opt, void *p, int32_t size
     return sink->set_option(opt, p, size);
 }
 
-aoo_error aoo::sink::set_option(int32_t opt, void *ptr, int32_t size)
+aoo_error aoo::sink_imp::set_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
     // id
@@ -207,7 +207,7 @@ aoo_error aoo_sink_get_option(aoo_sink *sink, int32_t opt, void *p, int32_t size
     return sink->get_option(opt, p, size);
 }
 
-aoo_error aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
+aoo_error aoo::sink_imp::get_option(int32_t opt, void *ptr, int32_t size)
 {
     switch (opt){
     // id
@@ -257,13 +257,13 @@ aoo_error aoo::sink::get_option(int32_t opt, void *ptr, int32_t size)
 }
 
 aoo_error aoo_sink_set_source_option(aoo_sink *sink, const void *address, int32_t addrlen,
-                                    aoo_id id, int32_t opt, void *p, int32_t size)
+                                     aoo_id id, int32_t opt, void *p, int32_t size)
 {
     return sink->set_source_option(address, addrlen, id, opt, p, size);
 }
 
-aoo_error aoo::sink::set_source_option(const void *address, int32_t addrlen, aoo_id id,
-                                      int32_t opt, void *ptr, int32_t size)
+aoo_error aoo::sink_imp::set_source_option(const void *address, int32_t addrlen, aoo_id id,
+                                           int32_t opt, void *ptr, int32_t size)
 {
     ip_address addr((const sockaddr *)address, addrlen);
 
@@ -287,13 +287,13 @@ aoo_error aoo::sink::set_source_option(const void *address, int32_t addrlen, aoo
 }
 
 aoo_error aoo_sink_get_source_option(aoo_sink *sink, const void *address, int32_t addrlen,
-                                    aoo_id id, int32_t opt, void *p, int32_t size)
+                                     aoo_id id, int32_t opt, void *p, int32_t size)
 {
     return sink->get_source_option(address, addrlen, id, opt, p, size);
 }
 
-aoo_error aoo::sink::get_source_option(const void *address, int32_t addrlen, aoo_id id,
-                                      int32_t opt, void *ptr, int32_t size)
+aoo_error aoo::sink_imp::get_source_option(const void *address, int32_t addrlen, aoo_id id,
+                                           int32_t opt, void *ptr, int32_t size)
 {
     ip_address addr((const sockaddr *)address, addrlen);
 
@@ -326,9 +326,9 @@ aoo_error aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_t n,
     return sink->handle_message(data, n, address, addrlen, fn, user);
 }
 
-aoo_error aoo::sink::handle_message(const char *data, int32_t n,
-                                    const void *address, int32_t addrlen,
-                                    aoo_sendfn fn, void *user) {
+aoo_error aoo::sink_imp::handle_message(const char *data, int32_t n,
+                                        const void *address, int32_t addrlen,
+                                        aoo_sendfn fn, void *user) {
     try {
         sendfn reply(fn, user);
         ip_address addr((const sockaddr *)address, addrlen);
@@ -377,7 +377,7 @@ aoo_error aoo_sink_update(aoo_sink *sink, aoo_sendfn fn, void *user){
     return sink->update(fn, user);
 }
 
-aoo_error aoo::sink::update(aoo_sendfn fn, void *user){
+aoo_error aoo::sink_imp::update(aoo_sendfn fn, void *user){
     sendfn reply(fn, user);
 
     source_lock lock(sources_);
@@ -449,7 +449,7 @@ aoo_error aoo_sink_process(aoo_sink *sink, aoo_sample **data,
 
 #define AOO_MAXNUMEVENTS 256
 
-aoo_error aoo::sink::process(aoo_sample **data, int32_t nsamples, uint64_t t){
+aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t){
     std::fill(buffer_.begin(), buffer_.end(), 0);
 
     // update time DLL filter
@@ -528,7 +528,7 @@ aoo_error aoo_sink_set_eventhandler(aoo_sink *sink, aoo_eventhandler fn,
     return sink->set_eventhandler(fn, user, mode);
 }
 
-aoo_error aoo::sink::set_eventhandler(aoo_eventhandler fn, void *user, int32_t mode)
+aoo_error aoo::sink_imp::set_eventhandler(aoo_eventhandler fn, void *user, int32_t mode)
 {
     eventhandler_ = fn;
     eventcontext_ = user;
@@ -540,7 +540,7 @@ aoo_bool aoo_sink_events_available(aoo_sink *sink){
     return sink->events_available();
 }
 
-aoo_bool aoo::sink::events_available(){
+aoo_bool aoo::sink_imp::events_available(){
     if (!eventqueue_.empty()){
         return true;
     }
@@ -561,7 +561,7 @@ aoo_error aoo_sink_poll_events(aoo_sink *sink){
 
 #define EVENT_THROTTLE 1000
 
-aoo_error aoo::sink::poll_events(){
+aoo_error aoo::sink_imp::poll_events(){
     int total = 0;
     source_event e;
     while (eventqueue_.try_pop(e)){
@@ -587,7 +587,7 @@ aoo_error aoo::sink::poll_events(){
 
 namespace aoo {
 
-void sink::send_event(const source_event &e, aoo_thread_level level) {
+void sink_imp::send_event(const source_event &e, aoo_thread_level level) {
     switch (eventmode_){
     case AOO_EVENT_POLL:
         eventqueue_.push(e);
@@ -608,7 +608,7 @@ void sink::send_event(const source_event &e, aoo_thread_level level) {
 }
 
 // only called if mode is AOO_EVENT_CALLBACK
-void sink::call_event(const event &e, aoo_thread_level level) const {
+void sink_imp::call_event(const event &e, aoo_thread_level level) const {
     eventhandler_(eventcontext_, &e.event_, level);
     // some events use dynamic memory
     if (e.type_ == AOO_FORMAT_CHANGE_EVENT){
@@ -618,7 +618,7 @@ void sink::call_event(const event &e, aoo_thread_level level) const {
 }
 
 // must be called with source_mutex_ locked!
-aoo::source_desc * sink::find_source(const ip_address& addr, aoo_id id){
+aoo::source_desc * sink_imp::find_source(const ip_address& addr, aoo_id id){
     for (auto& src : sources_){
         if (src.match(addr, id)){
             return &src;
@@ -627,21 +627,21 @@ aoo::source_desc * sink::find_source(const ip_address& addr, aoo_id id){
     return nullptr;
 }
 
-source_desc * sink::add_source(const ip_address& addr, aoo_id id){
+source_desc * sink_imp::add_source(const ip_address& addr, aoo_id id){
     // add new source
     sources_.emplace_front(addr, id, elapsed_time());
     return &sources_.front();
 }
 
-void sink::reset_sources(){
+void sink_imp::reset_sources(){
     source_lock lock(sources_);
     for (auto& src : sources_){
         src.reset(*this);
     }
 }
 
-aoo_error sink::handle_format_message(const osc::ReceivedMessage& msg,
-                                      const ip_address& addr, const sendfn& reply)
+aoo_error sink_imp::handle_format_message(const osc::ReceivedMessage& msg,
+                                          const ip_address& addr, const sendfn& reply)
 {
     auto it = msg.ArgumentsBegin();
 
@@ -679,8 +679,8 @@ aoo_error sink::handle_format_message(const osc::ReceivedMessage& msg,
     return src->handle_format(*this, salt, f, (const char *)settings, size, reply);
 }
 
-aoo_error sink::handle_data_message(const osc::ReceivedMessage& msg,
-                                    const ip_address& addr, const sendfn& reply)
+aoo_error sink_imp::handle_data_message(const osc::ReceivedMessage& msg,
+                                        const ip_address& addr, const sendfn& reply)
 {
     auto it = msg.ArgumentsBegin();
 
@@ -712,8 +712,8 @@ aoo_error sink::handle_data_message(const osc::ReceivedMessage& msg,
     return src->handle_data(*this, salt, d, reply);
 }
 
-aoo_error sink::handle_ping_message(const osc::ReceivedMessage& msg,
-                                    const ip_address& addr, const sendfn& reply)
+aoo_error sink_imp::handle_ping_message(const osc::ReceivedMessage& msg,
+                                        const ip_address& addr, const sendfn& reply)
 {
     auto it = msg.ArgumentsBegin();
 
@@ -775,7 +775,7 @@ source_desc::~source_desc(){
     }
 }
 
-bool source_desc::is_active(const sink& s) const {
+bool source_desc::is_active(const sink_imp& s) const {
     auto last = last_packet_time_.load(std::memory_order_relaxed);
     return (s.elapsed_time() - last) < s.source_timeout();
 }
@@ -790,13 +790,13 @@ aoo_error source_desc::get_format(aoo_format &format){
     }
 }
 
-void source_desc::reset(const sink &s){
+void source_desc::reset(const sink_imp& s){
     // take writer lock!
     scoped_lock lock(mutex_);
     update(s);
 }
 
-void source_desc::update(const sink &s){
+void source_desc::update(const sink_imp& s){
     // resize audio ring buffer
     if (decoder_ && decoder_->blocksize() > 0 && decoder_->samplerate() > 0){
         // recalculate buffersize from ms to samples
@@ -845,7 +845,7 @@ void source_desc::update(const sink &s){
 }
 
 // called from the network thread
-void source_desc::invite(const sink& s){
+void source_desc::invite(const sink_imp& s){
     // only invite when idle or uninviting!
     // NOTE: state can only change in this thread, so we don't need a CAS
     auto state = state_.load(std::memory_order_relaxed);
@@ -875,7 +875,7 @@ void source_desc::invite(const sink& s){
 }
 
 // called from the network thread
-void source_desc::uninvite(const sink& s){
+void source_desc::uninvite(const sink_imp& s){
     // NOTE: state can only change in this thread, so we don't need a CAS
     auto state = state_.load(std::memory_order_relaxed);
     if (state != source_state::idle){
@@ -890,7 +890,7 @@ void source_desc::uninvite(const sink& s){
 
 // /aoo/sink/<id>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <settings...>
 
-aoo_error source_desc::handle_format(const sink& s, int32_t salt, const aoo_format& f,
+aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_format& f,
                                      const char *settings, int32_t size, const sendfn& reply){
     // ignore redundant format messages!
     // NOTE: salt_ can only change in this thread,
@@ -968,7 +968,7 @@ aoo_error source_desc::handle_format(const sink& s, int32_t salt, const aoo_form
 
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
 
-aoo_error source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_packet& d,
+aoo_error source_desc::handle_data(const sink_imp& s, int32_t salt, const aoo::data_packet& d,
                                    const sendfn& reply){
     // always update packet time to signify that we're receiving packets
     last_packet_time_.store(s.elapsed_time(), std::memory_order_relaxed);
@@ -1033,7 +1033,7 @@ aoo_error source_desc::handle_data(const sink& s, int32_t salt, const aoo::data_
 
 // /aoo/sink/<id>/ping <src> <time>
 
-aoo_error source_desc::handle_ping(const sink &s, time_tag tt,
+aoo_error source_desc::handle_ping(const sink_imp& s, time_tag tt,
                                    const sendfn& reply){
 #if 0
     if (streamstate_.get_state() != AOO_STREAM_STATE_PLAY){
@@ -1081,7 +1081,7 @@ aoo_error source_desc::handle_ping(const sink &s, time_tag tt,
     return AOO_OK;
 }
 
-void source_desc::update(const sink& s, const sendfn& reply){
+void source_desc::update(const sink_imp& s, const sendfn& reply){
     // synchronize with update()!
     shared_lock lock(mutex_);
 
@@ -1096,7 +1096,7 @@ void source_desc::update(const sink& s, const sendfn& reply){
     send_invitation(s, reply);
 }
 
-bool source_desc::process(const sink& s, aoo_sample *buffer,
+bool source_desc::process(const sink_imp& s, aoo_sample *buffer,
                           int32_t nsamples, time_tag tt)
 {
 #if 1
@@ -1220,7 +1220,7 @@ bool source_desc::process(const sink& s, aoo_sample *buffer,
     }
 }
 
-int32_t source_desc::poll_events(sink& s, aoo_eventhandler fn, void *user){
+int32_t source_desc::poll_events(sink_imp& s, aoo_eventhandler fn, void *user){
     // always lockfree!
     int count = 0;
     event e;
@@ -1470,7 +1470,7 @@ void source_desc::process_blocks(){
 // /aoo/src/<id>/data <sink> <salt> <seq0> <frame0> <seq1> <frame1> ...
 
 // deal with "holes" in block queue
-void source_desc::check_missing_blocks(const sink& s, const sendfn& reply,
+void source_desc::check_missing_blocks(const sink_imp& s, const sendfn& reply,
                                        aoo::shared_lock& lock){
     // only check if it has more than a single pending block!
     if (jitterbuffer_.size() <= 1 || !s.resend_enabled()){
@@ -1567,7 +1567,7 @@ resend_done:
 
 // /aoo/src/<id>/format <version> <sink>
 // called without lock!
-void source_desc::send_format_request(const sink& s, const sendfn& fn) {
+void source_desc::send_format_request(const sink_imp& s, const sendfn& fn) {
     LOG_VERBOSE("request format for source " << id_);
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -1591,7 +1591,7 @@ void source_desc::send_format_request(const sink& s, const sendfn& fn) {
 #define INVITE_INTERVAL 0.05
 
 // called without lock!
-void source_desc::send_invitation(const sink& s, const sendfn& fn){
+void source_desc::send_invitation(const sink_imp& s, const sendfn& fn){
     if (state_.load(std::memory_order_acquire) != source_state::invite){
         return;
     }
@@ -1620,7 +1620,7 @@ void source_desc::send_invitation(const sink& s, const sendfn& fn){
 }
 
 // called without lock!
-void source_desc::send_uninvitation(const sink &s, const sendfn &fn){
+void source_desc::send_uninvitation(const sink_imp& s, const sendfn &fn){
     // /aoo/<id>/uninvite <sink>
     char buffer[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buffer, sizeof(buffer));
@@ -1639,7 +1639,7 @@ void source_desc::send_uninvitation(const sink &s, const sendfn &fn){
     LOG_DEBUG("send /uninvite source " << id_);
 }
 
-void source_desc::send_event(const sink& s, const event& e,
+void source_desc::send_event(const sink_imp& s, const event& e,
                              aoo_thread_level level){
     switch (s.event_mode()){
     case AOO_EVENT_POLL:

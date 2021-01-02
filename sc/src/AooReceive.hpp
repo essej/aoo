@@ -2,7 +2,7 @@
 
 #define DEFBUFSIZE 50
 
-using OpenCmd = _OpenCmd<aoo::isink>;
+using OpenCmd = _OpenCmd<aoo::sink>;
 
 /*////////////////// AooReceive ////////////////*/
 
@@ -16,9 +16,9 @@ public:
 
     void handleEvent(const aoo_event *event);
 
-    aoo::isink* sink() { return sink_.get(); }
+    aoo::sink* sink() { return sink_.get(); }
 private:
-    aoo::isink::pointer sink_;
+    aoo::sink::pointer sink_;
 };
 
 /*////////////////// AooReceiveUnit ////////////////*/

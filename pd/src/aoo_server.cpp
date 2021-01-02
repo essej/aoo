@@ -19,7 +19,7 @@ struct t_aoo_server
 
     t_object x_obj;
 
-    aoo::net::iserver::pointer x_server;
+    aoo::net::server::pointer x_server;
     int32_t x_numusers = 0;
     std::thread x_thread;
     t_clock *x_clock = nullptr;
@@ -127,7 +127,7 @@ t_aoo_server::t_aoo_server(int argc, t_atom *argv)
 
     if (port > 0){
         aoo_error err;
-        x_server.reset(aoo::net::iserver::create(port, 0, &err));
+        x_server.reset(aoo::net::server::create(port, 0, &err));
         if (x_server){
             verbose(0, "aoo server listening on port %d", port);
             // first set event handler!

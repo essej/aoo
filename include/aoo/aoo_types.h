@@ -96,11 +96,11 @@ enum aoo_error_codes
 
 #ifdef __cplusplus
 namespace aoo {
-    class isource;
-    class isink;
+    class source;
+    class sink;
 }
-using aoo_source = aoo::isource;
-using aoo_sink = aoo::isink;
+using aoo_source = aoo::source;
+using aoo_sink = aoo::sink;
 #else
 typedef struct aoo_source aoo_source;
 typedef struct aoo_sink aoo_sink;

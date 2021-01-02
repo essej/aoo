@@ -68,7 +68,7 @@ private:
     std::atomic<bool> needformat_{true}; // !
 };
 
-class source final : public isource {
+class source_imp final : public source {
  public:
     struct event {
         event() = default;
@@ -103,9 +103,9 @@ class source final : public isource {
         char addr_[ip_address::max_length];
     };
 
-    source(aoo_id id, uint32_t flags);
+    source_imp(aoo_id id, uint32_t flags);
 
-    ~source();
+    ~source_imp();
 
     aoo_id id() const { return id_.load(std::memory_order_relaxed); }
 

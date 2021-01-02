@@ -78,10 +78,10 @@ aoo_net_server * aoo_net_server_new(int port, uint32_t flags, aoo_error *err) {
         return nullptr;
     }
 
-    return aoo::construct<aoo::net::server>(tcpsocket, udpsocket);
+    return aoo::construct<aoo::net::server_imp>(tcpsocket, udpsocket);
 }
 
-aoo::net::server::server(int tcpsocket, int udpsocket)
+aoo::net::server_imp::server_imp(int tcpsocket, int udpsocket)
     : tcpsocket_(tcpsocket), udpsocket_(udpsocket)
 {
     type_ = socket_family(udpsocket);
@@ -92,10 +92,10 @@ aoo::net::server::server(int tcpsocket, int udpsocket)
 void aoo_net_server_free(aoo_net_server *server){
     // cast to correct type because base class
     // has no virtual destructor!
-    aoo::destroy(static_cast<aoo::net::server *>(server));
+    aoo::destroy(static_cast<aoo::net::server_imp *>(server));
 }
 
-aoo::net::server::~server() {
+aoo::net::server_imp::~server_imp() {
     socket_close(tcpsocket_);
     tcpsocket_ = -1;
     socket_close(udpsocket_);
@@ -109,7 +109,7 @@ aoo_error aoo_net_server_run(aoo_net_server *server){
     return server->run();
 }
 
-aoo_error aoo::net::server::run(){
+aoo_error aoo::net::server_imp::run(){
     // wait for networking or other events
     while (!quit_.load()){
         if (!wait_for_event()){
@@ -130,7 +130,7 @@ aoo_error aoo_net_server_quit(aoo_net_server *server){
     return server->quit();
 }
 
-aoo_error aoo::net::server::quit(){
+aoo_error aoo::net::server_imp::quit(){
     quit_.store(true);
     if (!signal()){
         // force wakeup by closing the socket.
@@ -147,7 +147,7 @@ aoo_error aoo_net_server_set_eventhandler(aoo_net_client *sink, aoo_eventhandler
     return sink->set_eventhandler(fn, user, mode);
 }
 
-aoo_error aoo::net::server::set_eventhandler(aoo_eventhandler fn, void *user,
+aoo_error aoo::net::server_imp::set_eventhandler(aoo_eventhandler fn, void *user,
                                              int32_t mode)
 {
     eventhandler_ = fn;
@@ -160,7 +160,7 @@ aoo_bool aoo_net_server_events_available(aoo_net_server *server){
     return server->events_available();
 }
 
-aoo_bool aoo::net::server::events_available(){
+aoo_bool aoo::net::server_imp::events_available(){
     return !events_.empty();
 }
 
@@ -168,7 +168,7 @@ aoo_error aoo_net_server_poll_events(aoo_net_server *server){
     return server->poll_events();
 }
 
-aoo_error aoo::net::server::poll_events(){
+aoo_error aoo::net::server_imp::poll_events(){
     // always thread-safe
     std::unique_ptr<ievent> e;
     while (events_.try_pop(e)){
@@ -180,20 +180,20 @@ aoo_error aoo::net::server::poll_events(){
 namespace aoo {
 namespace net {
 
-std::string server::error_to_string(error e){
+std::string server_imp::error_to_string(error e){
     switch (e){
-    case server::error::access_denied:
+    case server_imp::error::access_denied:
         return "access denied";
-    case server::error::permission_denied:
+    case server_imp::error::permission_denied:
         return "permission denied";
-    case server::error::wrong_password:
+    case server_imp::error::wrong_password:
         return "wrong password";
     default:
         return "unknown error";
     }
 }
 
-std::shared_ptr<user> server::get_user(const std::string& name,
+std::shared_ptr<user> server_imp::get_user(const std::string& name,
                                        const std::string& pwd,
                                        uint32_t version, error& e)
 {
@@ -227,7 +227,7 @@ std::shared_ptr<user> server::get_user(const std::string& name,
     }
 }
 
-std::shared_ptr<user> server::find_user(const std::string& name)
+std::shared_ptr<user> server_imp::find_user(const std::string& name)
 {
     for (auto& usr : users_){
         if (usr->name == name){
@@ -237,7 +237,7 @@ std::shared_ptr<user> server::find_user(const std::string& name)
     return nullptr;
 }
 
-std::shared_ptr<group> server::get_group(const std::string& name,
+std::shared_ptr<group> server_imp::get_group(const std::string& name,
                                          const std::string& pwd, error& e)
 {
     auto grp = find_group(name);
@@ -264,7 +264,7 @@ std::shared_ptr<group> server::get_group(const std::string& name,
     }
 }
 
-std::shared_ptr<group> server::find_group(const std::string& name)
+std::shared_ptr<group> server_imp::find_group(const std::string& name)
 {
     for (auto& grp : groups_){
         if (grp->name == name){
@@ -275,21 +275,21 @@ std::shared_ptr<group> server::find_group(const std::string& name)
 }
 
 
-void server::on_user_joined(user &usr){
+void server_imp::on_user_joined(user &usr){
     auto e = std::make_unique<user_event>(AOO_NET_USER_JOIN_EVENT,
                                           usr.name.c_str(), usr.id,
                                           usr.endpoint()->local_address()); // do we need this?
     send_event(std::move(e));
 }
 
-void server::on_user_left(user &usr){
+void server_imp::on_user_left(user &usr){
     auto e = std::make_unique<user_event>(AOO_NET_USER_LEAVE_EVENT,
                                           usr.name.c_str(), usr.id,
                                           usr.endpoint()->local_address()); // do we need this?
     send_event(std::move(e));
 }
 
-void server::on_user_joined_group(user& usr, group& grp){
+void server_imp::on_user_joined_group(user& usr, group& grp){
     // 1) send the new member to existing group members
     // 2) send existing group members to the new member
     for (auto& peer : grp.users()){
@@ -327,7 +327,7 @@ void server::on_user_joined_group(user& usr, group& grp){
     send_event(std::move(e));
 }
 
-void server::on_user_left_group(user& usr, group& grp){
+void server_imp::on_user_left_group(user& usr, group& grp){
     if (udpsocket_ < 0){
         return; // prevent sending messages during shutdown
     }
@@ -350,7 +350,7 @@ void server::on_user_left_group(user& usr, group& grp){
     send_event(std::move(e));
 }
 
-void server::handle_relay_message(const osc::ReceivedMessage& msg,
+void server_imp::handle_relay_message(const osc::ReceivedMessage& msg,
                                   const ip_address& src){
     auto it = msg.ArgumentsBegin();
 
@@ -379,7 +379,7 @@ void server::handle_relay_message(const osc::ReceivedMessage& msg,
     LOG_WARNING("aoo_server: couldn't find matching client for relay message");
 }
 
-void server::send_event(std::unique_ptr<ievent> e){
+void server_imp::send_event(std::unique_ptr<ievent> e){
     switch (eventmode_){
     case AOO_EVENT_POLL:
         events_.push(std::move(e));
@@ -393,7 +393,7 @@ void server::send_event(std::unique_ptr<ievent> e){
     }
 }
 
-bool server::wait_for_event(){
+bool server_imp::wait_for_event(){
     bool didclose = false;
     int numclients = clients_.size();
     // allocate two extra slots for main TCP socket and UDP socket
@@ -462,7 +462,7 @@ bool server::wait_for_event(){
     return true;
 }
 
-void server::update(){
+void server_imp::update(){
     // remove closed clients
     auto result = std::remove_if(clients_.begin(), clients_.end(),
                                  [](auto& c){ return !c->is_active(); });
@@ -487,7 +487,7 @@ void server::update(){
     }
 }
 
-void server::receive_udp(){
+void server_imp::receive_udp(){
     if (udpsocket_ < 0){
         return;
     }
@@ -526,7 +526,7 @@ void server::receive_udp(){
     // result == 0 -> signalled
 }
 
-void server::send_udp_message(const char *msg, int32_t size,
+void server_imp::send_udp_message(const char *msg, int32_t size,
                               const ip_address &addr)
 {
     int result = ::sendto(udpsocket_, msg, size, 0,
@@ -538,7 +538,7 @@ void server::send_udp_message(const char *msg, int32_t size,
     }
 }
 
-void server::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
+void server_imp::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
                                 const ip_address& addr)
 {
     auto pattern = msg.AddressPattern() + onset;
@@ -573,13 +573,13 @@ void server::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
     }
 }
 
-bool server::signal(){
+bool server_imp::signal(){
     return socket_signal(udpsocket_);
 }
 
 /*////////////////////////// user ///////////////////////////*/
 
-void user::on_close(server& s){
+void user::on_close(server_imp& s){
     // disconnect user from groups
     for (auto& grp : groups_){
         grp->remove_user(*this);
@@ -643,7 +643,7 @@ bool group::remove_user(const user& usr){
 
 /*///////////////////////// client_endpoint /////////////////////////////*/
 
-client_endpoint::client_endpoint(server &s, int socket, const ip_address &addr)
+client_endpoint::client_endpoint(server_imp &s, int socket, const ip_address &addr)
     : server_(&s), socket_(socket), addr_(addr)
 {
     // set TCP_NODELAY - do we need to do this?
@@ -843,7 +843,7 @@ void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
         std::string password = (it++)->AsString();
         count -= 2;
 
-        server::error err;
+        server_imp::error err;
         if (!user_){
             user_ = server_->get_user(username, password, version, err);
             if (user_){
@@ -866,7 +866,7 @@ void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
 
                 server_->on_user_joined(*user_);
             } else {
-                errmsg = server::error_to_string(err);
+                errmsg = server_imp::error_to_string(err);
             }
         } else {
             errmsg = "already logged in"; // shouldn't happen
@@ -897,7 +897,7 @@ void client_endpoint::handle_group_join(const osc::ReceivedMessage& msg)
     std::string name = (it++)->AsString();
     std::string password = (it++)->AsString();
 
-    server::error err;
+    server_imp::error err;
     if (user_){
         auto grp = server_->get_group(name, password, err);
         if (grp){
@@ -909,7 +909,7 @@ void client_endpoint::handle_group_join(const osc::ReceivedMessage& msg)
                 errmsg = "already a group member";
             }
         } else {
-            errmsg = server::error_to_string(err);
+            errmsg = server_imp::error_to_string(err);
         }
     } else {
         errmsg = "not logged in";
@@ -959,7 +959,7 @@ void client_endpoint::handle_group_leave(const osc::ReceivedMessage& msg){
 
 /*///////////////////// events ////////////////////////*/
 
-server::error_event::error_event(int32_t type, int32_t code,
+server_imp::error_event::error_event(int32_t type, int32_t code,
                                  const char * msg)
 {
     error_event_.type = type;
@@ -967,12 +967,12 @@ server::error_event::error_event(int32_t type, int32_t code,
     error_event_.error_message = copy_string(msg);
 }
 
-server::error_event::~error_event()
+server_imp::error_event::~error_event()
 {
     free_string((char *)error_event_.error_message);
 }
 
-server::user_event::user_event(int32_t type,
+server_imp::user_event::user_event(int32_t type,
                                const char *name, int32_t id,
                                const ip_address& address){
     user_event_.type = type;
@@ -982,13 +982,13 @@ server::user_event::user_event(int32_t type,
     user_event_.addrlen = address.length();
 }
 
-server::user_event::~user_event()
+server_imp::user_event::~user_event()
 {
     free_string((char *)user_event_.user_name);
     free_sockaddr((void *)user_event_.address, user_event_.addrlen);
 }
 
-server::group_event::group_event(int32_t type, const char *group,
+server_imp::group_event::group_event(int32_t type, const char *group,
                                  const char *user, int32_t id)
 {
     group_event_.type = type;
@@ -997,7 +997,7 @@ server::group_event::group_event(int32_t type, const char *group,
     group_event_.user_id = id;
 }
 
-server::group_event::~group_event()
+server_imp::group_event::~group_event()
 {
     free_string((char *)group_event_.group_name);
     free_string((char *)group_event_.user_name);

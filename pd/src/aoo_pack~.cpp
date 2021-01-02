@@ -31,7 +31,7 @@ struct t_aoo_pack
     t_object x_obj;
 
     t_float x_f;
-    aoo::isource::pointer x_source;
+    aoo::source::pointer x_source;
     ip_address x_address; // fake IP address
     int32_t x_samplerate = 0;
     int32_t x_blocksize = 0;
@@ -323,7 +323,7 @@ t_aoo_pack::t_aoo_pack(int argc, t_atom *argv)
     x_msgout = outlet_new(&x_obj, 0);
 
     // create and initialize aoo_sink object
-    auto src = aoo::isource::create(id >= 0 ? id : 0, 0);
+    auto src = aoo::source::create(id >= 0 ? id : 0, 0);
     x_source.reset(src);
 
     x_source->set_eventhandler((aoo_eventhandler)aoo_pack_handle_event,

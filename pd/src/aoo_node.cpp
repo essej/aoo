@@ -33,24 +33,24 @@ void aoo_client_handle_event(struct t_aoo_client *x,
 
 static t_class *node_proxy_class;
 
-struct t_node;
+struct t_node_imp;
 
 struct t_node_proxy
 {
-    t_node_proxy(t_node *node){
+    t_node_proxy(t_node_imp *node){
         x_pd = node_proxy_class;
         x_node = node;
     }
 
     t_pd x_pd;
-    t_node *x_node;
+    t_node_imp *x_node;
 };
 
-class t_node final : public i_node
+class t_node_imp final : public t_node
 {
-    t_node_proxy x_proxy; // we can't directly bind t_node because of vtable
+    t_node_proxy x_proxy; // we can't directly bind t_node_imp because of vtable
     t_symbol *x_bindsym;
-    aoo::net::iclient::pointer x_client;
+    aoo::net::client::pointer x_client;
     t_pd * x_clientobj = nullptr;
     std::mutex x_clientmutex;
     std::thread x_clientthread;
@@ -65,13 +65,13 @@ class t_node final : public i_node
     std::atomic<bool> x_quit{false};
 public:
     // public methods
-    t_node(t_symbol *s, int socket, const ip_address& addr);
+    t_node_imp(t_symbol *s, int socket, const ip_address& addr);
 
-    ~t_node();
+    ~t_node_imp();
 
     void release(t_pd *obj, void *x) override;
 
-    aoo::net::iclient * client() override { return x_client.get(); }
+    aoo::net::client * client() override { return x_client.get(); }
 
     ip_address::ip_type type() const override { return x_type; }
 
@@ -87,10 +87,10 @@ public:
         x_clientmutex.unlock();
     }
 private:
-    friend class i_node;
+    friend class t_node;
 
     static int32_t send(void *user, const char *msg, int32_t n,
-                             const void *addr, int32_t len, uint32_t flags);
+                        const void *addr, int32_t len, uint32_t flags);
 
     void perform_network_io();
 
@@ -99,14 +99,14 @@ private:
 
 // public methods
 
-void t_node::notify()
+void t_node_imp::notify()
 {
     x_event.store(true);
 }
 
 // private methods
 
-bool t_node::add_object(t_pd *obj, void *x, aoo_id id)
+bool t_node_imp::add_object(t_pd *obj, void *x, aoo_id id)
 {
     std::lock_guard<std::mutex> lock(x_clientmutex);
     if (pd_class(obj) == aoo_client_class){
@@ -128,24 +128,24 @@ bool t_node::add_object(t_pd *obj, void *x, aoo_id id)
             return false;
         }
     } else  if (pd_class(obj) == aoo_send_class){
-        if (x_client->add_source((aoo::isource *)x, id) != AOO_OK){
+        if (x_client->add_source((aoo::source *)x, id) != AOO_OK){
             pd_error(obj, "%s with ID %d on port %d already exists!",
                      classname(obj), id, x_port);
         }
     } else if (pd_class(obj) == aoo_receive_class){
-        if (x_client->add_sink((aoo::isink *)x, id) != AOO_OK){
+        if (x_client->add_sink((aoo::sink *)x, id) != AOO_OK){
             pd_error(obj, "%s with ID %d on port %d already exists!",
                      classname(obj), id, x_port);
         }
     } else {
-        bug("t_node: bad client");
+        bug("t_node_imp: bad client");
         return false;
     }
     x_refcount++;
     return true;
 }
 
-void t_node::perform_network_io(){
+void t_node_imp::perform_network_io(){
     while (!x_quit){
         ip_address addr;
         char buf[AOO_MAXPACKETSIZE];
@@ -173,17 +173,17 @@ void t_node::perform_network_io(){
     }
 }
 
-int32_t t_node::send(void *user, const char *msg, int32_t n,
-                     const void *addr, int32_t len, uint32_t flags)
+int32_t t_node_imp::send(void *user, const char *msg, int32_t n,
+                         const void *addr, int32_t len, uint32_t flags)
 {
-    auto x = (t_node *)user;
+    auto x = (t_node_imp *)user;
     ip_address dest((sockaddr *)addr, len);
     return socket_sendto(x->x_socket, msg, n, dest);
 }
 
-i_node * i_node::get(t_pd *obj, int port, void *x, aoo_id id)
+t_node * t_node::get(t_pd *obj, int port, void *x, aoo_id id)
 {
-    t_node *node = nullptr;
+    t_node_imp *node = nullptr;
     // make bind symbol for port number
     char buf[64];
     snprintf(buf, sizeof(buf), "aoo_node %d", port);
@@ -213,22 +213,22 @@ i_node * i_node::get(t_pd *obj, int port, void *x, aoo_id id)
         socket_setrecvbufsize(sock, 2 << 20);
 
         // finally create aoo node instance
-        node = new t_node(s, sock, addr);
+        node = new t_node_imp(s, sock, addr);
     }
 
     if (!node->add_object(obj, x, id)){
-        // never fails for new t_node!
+        // never fails for new t_node_imp!
         return nullptr;
     }
 
     return node;
 }
 
-t_node::t_node(t_symbol *s, int socket, const ip_address& addr)
+t_node_imp::t_node_imp(t_symbol *s, int socket, const ip_address& addr)
     : x_proxy(this), x_bindsym(s),
       x_socket(socket), x_port(addr.port()), x_type(addr.type())
 {
-    x_client.reset(aoo::net::iclient::create(addr.address(), addr.length(), 0));
+    x_client.reset(aoo::net::client::create(addr.address(), addr.length(), 0));
 
     pd_bind(&x_proxy.x_pd, x_bindsym);
 
@@ -242,7 +242,7 @@ t_node::t_node(t_symbol *s, int socket, const ip_address& addr)
     verbose(0, "new aoo node on port %d", x_port);
 }
 
-void t_node::release(t_pd *obj, void *x)
+void t_node_imp::release(t_pd *obj, void *x)
 {
     std::unique_lock<std::mutex> lock(x_clientmutex);
     if (pd_class(obj) == aoo_client_class){
@@ -250,11 +250,11 @@ void t_node::release(t_pd *obj, void *x)
         x_clientobj = nullptr;
         x_client->set_eventhandler(nullptr, nullptr, AOO_EVENT_NONE);
     } else if (pd_class(obj) == aoo_send_class){
-        x_client->remove_source((aoo::isource *)x);
+        x_client->remove_source((aoo::source *)x);
     } else if (pd_class(obj) == aoo_receive_class){
-        x_client->remove_sink((aoo::isink *)x);
+        x_client->remove_sink((aoo::sink *)x);
     } else {
-        bug("t_node::release");
+        bug("t_node_imp::release");
         return;
     }
     lock.unlock(); // !
@@ -263,11 +263,11 @@ void t_node::release(t_pd *obj, void *x)
         // last instance
         delete this;
     } else if (x_refcount < 0){
-        bug("t_node::release: negative refcount!");
+        bug("t_node_imp::release: negative refcount!");
     }
 }
 
-t_node::~t_node()
+t_node_imp::~t_node_imp()
 {
     pd_unbind(&x_proxy.x_pd, x_bindsym);
 

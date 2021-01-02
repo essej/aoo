@@ -10,7 +10,7 @@
 
 namespace aoo {
 
-// NOTE: aoo::isource and aoo::isink don't define virtual destructors
+// NOTE: aoo::source and aoo::sink don't define virtual destructors
 // and have to be destroyed with their respective destroy() method.
 // We provide a custom deleter and shared pointer to automate this task.
 //
@@ -30,22 +30,22 @@ namespace aoo {
 
 /*//////////////////////// AoO source ///////////////////////*/
 
-class isource {
+class source {
 public:
     class deleter {
     public:
-        void operator()(isource *x){
+        void operator()(source *x){
             destroy(x);
         }
     };
     // smart pointer for AoO source instance
-    using pointer = std::unique_ptr<isource, deleter>;
+    using pointer = std::unique_ptr<source, deleter>;
 
     // create a new AoO source instance
-    static isource * create(aoo_id id, uint32_t flags);
+    static source * create(aoo_id id, uint32_t flags);
 
     // destroy the AoO source instance
-    static void destroy(isource *src);
+    static void destroy(source *src);
 
     // setup the source - needs to be synchronized with other method calls!
     virtual aoo_error setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) = 0;
@@ -182,35 +182,35 @@ public:
     virtual aoo_error get_sinkoption(const void *address, int32_t addrlen, aoo_id id,
                                    int32_t opt, void *ptr, int32_t size) = 0;
 protected:
-    ~isource(){} // non-virtual!
+    ~source(){} // non-virtual!
 };
 
-inline isource * isource::create(aoo_id id, uint32_t flags){
+inline source * source::create(aoo_id id, uint32_t flags){
     return aoo_source_new(id, flags);
 }
 
-inline void isource::destroy(isource *src){
+inline void source::destroy(source *src){
     aoo_source_free(src);
 }
 
 /*//////////////////////// AoO sink ///////////////////////*/
 
-class isink {
+class sink {
 public:
     class deleter {
     public:
-        void operator()(isink *x){
+        void operator()(sink *x){
             destroy(x);
         }
     };
     // smart pointer for AoO sink instance
-    using pointer = std::unique_ptr<isink, deleter>;
+    using pointer = std::unique_ptr<sink, deleter>;
 
     // create a new AoO sink instance
-    static isink * create(aoo_id id, uint32_t flags);
+    static sink * create(aoo_id id, uint32_t flags);
 
     // destroy the AoO sink instance
-    static void destroy(isink *sink);
+    static void destroy(sink *sink);
 
     // setup the sink - needs to be synchronized with other method calls!
     virtual aoo_error setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) = 0;
@@ -342,19 +342,19 @@ public:
     }
 
     virtual aoo_error set_source_option(const void *address, int32_t addrlen, aoo_id id,
-                                       int32_t opt, void *ptr, int32_t size) = 0;
+                                        int32_t opt, void *ptr, int32_t size) = 0;
 
     virtual aoo_error get_source_option(const void *address, int32_t addrlen, aoo_id id,
-                                       int32_t opt, void *ptr, int32_t size) = 0;
+                                        int32_t opt, void *ptr, int32_t size) = 0;
 protected:
-    ~isink(){} // non-virtual!
+    ~sink(){} // non-virtual!
 };
 
-inline isink * isink::create(aoo_id id, uint32_t flags){
+inline sink * sink::create(aoo_id id, uint32_t flags){
     return aoo_sink_new(id, flags);
 }
 
-inline void isink::destroy(isink *sink){
+inline void sink::destroy(sink *sink){
     aoo_sink_free(sink);
 }
 

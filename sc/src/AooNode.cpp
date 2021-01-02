@@ -30,7 +30,7 @@ public:
 
     int port() const override { return port_; }
 
-    aoo::net::iclient * client() override {
+    aoo::net::client * client() override {
         return client_.get();
     }
 
@@ -53,7 +53,7 @@ private:
     int port_ = 0;
     aoo::ip_address::ip_type type_;
     // client
-    aoo::net::iclient::pointer client_;
+    aoo::net::client::pointer client_;
     std::mutex clientMutex_;
     std::thread clientThread_;
     AooClient *clientObject_ = nullptr;
@@ -80,7 +80,7 @@ private:
 AooNode::AooNode(World *world, int socket, const ip_address& addr)
     : world_(world), socket_(socket), port_(addr.port()), type_(addr.type())
 {
-    client_.reset(aoo::net::iclient::create(addr.address(), addr.length(), 0));
+    client_.reset(aoo::net::client::create(addr.address(), addr.length(), 0));
     // start network thread
     thread_ = std::thread([this](){
         lower_thread_priority();

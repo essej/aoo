@@ -20,7 +20,7 @@ void AooReceive::init(int32_t port, aoo_id id, int32 bufsize) {
                 auto cmd = (OpenCmd *)data;
                 auto node = INode::get(world, cmd->port);
                 if (node){
-                    aoo::isink::pointer sink(aoo::isink::create(cmd->id, 0));
+                    aoo::sink::pointer sink(aoo::sink::create(cmd->id, 0));
                     if (sink){
                         NodeLock lock(*node);
                         if (node->client()->add_sink(sink.get(), cmd->id) == AOO_OK){

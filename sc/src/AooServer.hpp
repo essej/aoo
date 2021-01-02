@@ -11,7 +11,7 @@ public:
     void handleEvent(const aoo_event *event);
 private:
     World* world_;
-    aoo::net::iserver::pointer server_;
+    aoo::net::server::pointer server_;
     int32_t port_;
     std::thread thread_;
 };

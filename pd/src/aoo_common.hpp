@@ -27,14 +27,14 @@ uint64_t get_osctime_dejitter(t_dejitter *context);
 
 /*///////////////////////////// aoo_node /////////////////////////////*/
 
-struct i_node {
-    static i_node * get(t_pd *obj, int port, void *x = nullptr, aoo_id id = 0);
+struct t_node {
+    static t_node * get(t_pd *obj, int port, void *x = nullptr, aoo_id id = 0);
 
-    virtual ~i_node() {}
+    virtual ~t_node() {}
 
     virtual void release(t_pd *obj, void *x = nullptr) = 0;
 
-    virtual aoo::net::iclient * client() = 0;
+    virtual aoo::net::client * client() = 0;
 
     virtual int port() const = 0;
 
@@ -53,14 +53,14 @@ int address_to_atoms(const ip_address& addr, int argc, t_atom *argv);
 
 int endpoint_to_atoms(const ip_address& addr, aoo_id id, int argc, t_atom *argv);
 
-bool get_sink_arg(void *x, i_node *node, int argc, t_atom *argv,
-                 ip_address& addr, aoo_id &id);
+bool get_sink_arg(void *x, t_node *node, int argc, t_atom *argv,
+                  ip_address& addr, aoo_id &id);
 
-bool get_source_arg(void *x, i_node *node, int argc, t_atom *argv,
-                   ip_address& addr, aoo_id &id);
+bool get_source_arg(void *x, t_node *node, int argc, t_atom *argv,
+                    ip_address& addr, aoo_id &id);
 
-bool get_peer_arg(void *x, i_node *node, int argc, t_atom *argv,
-                  ip_address& addr);
+bool get_peer_arg(void *x, t_node *node, int argc, t_atom *argv,
+                   ip_address& addr);
 
 void format_makedefault(aoo_format_storage &f, int nchannels);
 

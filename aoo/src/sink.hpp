@@ -135,7 +135,7 @@ struct source_request {
     aoo_id id = -1;
 };
 
-class sink;
+class sink_imp;
 
 enum class source_state {
     idle,
@@ -161,7 +161,7 @@ public:
         return (addr_ == addr) && (id_ == id);
     }
 
-    bool is_active(const sink& s) const;
+    bool is_active(const sink_imp& s) const;
 
     bool is_inviting() const {
         return state_.load() == source_state::invite;
@@ -171,32 +171,32 @@ public:
         return !eventqueue_.empty();
     }
 
-    int32_t poll_events(sink& s, aoo_eventhandler fn, void *user);
+    int32_t poll_events(sink_imp& s, aoo_eventhandler fn, void *user);
 
     aoo_error get_format(aoo_format& format);
 
     // methods
-    void reset(const sink& s);
+    void reset(const sink_imp& s);
 
-    aoo_error handle_format(const sink& s, int32_t salt, const aoo_format& f,
+    aoo_error handle_format(const sink_imp& s, int32_t salt, const aoo_format& f,
                             const char *settings, int32_t size, const sendfn& reply);
 
-    aoo_error handle_data(const sink& s, int32_t salt, const aoo::data_packet& d,
+    aoo_error handle_data(const sink_imp& s, int32_t salt, const aoo::data_packet& d,
                           const sendfn& reply);
 
-    aoo_error handle_ping(const sink& s, time_tag tt, const sendfn& reply);
+    aoo_error handle_ping(const sink_imp& s, time_tag tt, const sendfn& reply);
 
-    void update(const sink& s, const sendfn& fn);
+    void update(const sink_imp& s, const sendfn& fn);
 
-    bool process(const sink& s, aoo_sample *buffer, int32_t nsamples, time_tag tt);
+    bool process(const sink_imp& s, aoo_sample *buffer, int32_t nsamples, time_tag tt);
 
     void add_xrun(int32_t n){ streamstate_.add_xrun(n); }
 
-    void invite(const sink& s);
+    void invite(const sink_imp& s);
 
-    void uninvite(const sink& s);
+    void uninvite(const sink_imp& s);
 private:
-    void update(const sink& s);
+    void update(const sink_imp& s);
 
     // handle messages
     void recover(const char *reason, int32_t n = 0);
@@ -207,15 +207,15 @@ private:
 
     void process_blocks();
 
-    void check_missing_blocks(const sink& s, const sendfn& reply,
+    void check_missing_blocks(const sink_imp& s, const sendfn& reply,
                               aoo::shared_lock& lock);
 
     // send messages
-    void send_format_request(const sink& s, const sendfn& fn);
+    void send_format_request(const sink_imp& s, const sendfn& fn);
 
-    void send_invitation(const sink& s, const sendfn& fn);
+    void send_invitation(const sink_imp& s, const sendfn& fn);
 
-    void send_uninvitation(const sink& s, const sendfn& fn);
+    void send_uninvitation(const sink_imp& s, const sendfn& fn);
 
     // data
     const ip_address addr_;
@@ -241,18 +241,18 @@ private:
     lockfree::spsc_queue<block_info, aoo::allocator<block_info>> infoqueue_;
     // events
     lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
-    void send_event(const sink& s, const event& e, aoo_thread_level level);
+    void send_event(const sink_imp& s, const event& e, aoo_thread_level level);
     // resampler
     dynamic_resampler resampler_;
     // thread synchronization
     aoo::shared_mutex mutex_; // LATER replace with a spinlock?
 };
 
-class sink final : public isink {
+class sink_imp final : public sink {
 public:
-    sink(aoo_id id, uint32_t flags);
+    sink_imp(aoo_id id, uint32_t flags);
 
-    ~sink(){}
+    ~sink_imp(){}
 
     aoo_error setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
@@ -375,13 +375,13 @@ private:
     void reset_sources();
 
     aoo_error handle_format_message(const osc::ReceivedMessage& msg,
-                                  const ip_address& addr, const sendfn& reply);
+                                    const ip_address& addr, const sendfn& reply);
 
     aoo_error handle_data_message(const osc::ReceivedMessage& msg,
-                                const ip_address& addr, const sendfn& reply);
+                                  const ip_address& addr, const sendfn& reply);
 
     aoo_error handle_ping_message(const osc::ReceivedMessage& msg,
-                                const ip_address& addr, const sendfn& reply);
+                                  const ip_address& addr, const sendfn& reply);
 };
 
 } // aoo

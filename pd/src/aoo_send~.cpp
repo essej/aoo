@@ -43,7 +43,7 @@ struct t_aoo_send
     t_object x_obj;
 
     t_float x_f = 0;
-    aoo::isource::pointer x_source;
+    aoo::source::pointer x_source;
     int32_t x_samplerate = 0;
     int32_t x_blocksize = 0;
     int32_t x_nchannels = 0;
@@ -53,7 +53,7 @@ struct t_aoo_send
     // sinks
     std::vector<t_sink> x_sinks;
     // node
-    i_node *x_node = nullptr;
+    t_node *x_node = nullptr;
     // events
     t_clock *x_clock = nullptr;
     t_outlet *x_msgout = nullptr;
@@ -453,7 +453,7 @@ static void aoo_send_port(t_aoo_send *x, t_floatarg f)
     }
 
     if (port){
-        x->x_node = i_node::get((t_pd *)x, port, x->x_source.get(), x->x_id);
+        x->x_node = t_node::get((t_pd *)x, port, x->x_source.get(), x->x_id);
     } else {
         x->x_node = nullptr;
     }
@@ -481,7 +481,7 @@ static void aoo_send_id(t_aoo_send *x, t_floatarg f)
     x->x_source->set_id(id);
 
     if (x->x_port){
-        x->x_node = i_node::get((t_pd *)x, x->x_port, x->x_source.get(), x->x_id);
+        x->x_node = t_node::get((t_pd *)x, x->x_port, x->x_source.get(), x->x_id);
     } else {
         x->x_node = nullptr;
     }
@@ -531,7 +531,7 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
     x_msgout = outlet_new(&x_obj, 0);
 
     // create and initialize aoo_source object
-    auto src = aoo::isource::create(x_id, 0);
+    auto src = aoo::source::create(x_id, 0);
     x_source.reset(src);
 
     // set event handler
