@@ -16,13 +16,9 @@
 #include <mutex>
 #include <atomic>
 
-using namespace aoo;
-
-#ifndef AOO_NODE_POLL
- #define AOO_NODE_POLL 0
-#endif
-
 #define AOO_POLL_INTERVAL 1000 // microseconds
+
+using namespace aoo;
 
 extern t_class *aoo_receive_class;
 
@@ -50,17 +46,13 @@ struct t_node_proxy
     t_node *x_node;
 };
 
-struct t_node final : public i_node
+class t_node final : public i_node
 {
-    t_node(t_symbol *s, int socket, const ip_address& addr);
-
-    ~t_node();
-
     t_node_proxy x_proxy; // we can't directly bind t_node because of vtable
     t_symbol *x_bindsym;
     aoo::net::iclient::pointer x_client;
     t_pd * x_clientobj = nullptr;
-    aoo::shared_mutex x_clientmutex;
+    std::mutex x_clientmutex;
     std::thread x_clientthread;
     int32_t x_refcount = 0;
     // socket
@@ -68,17 +60,15 @@ struct t_node final : public i_node
     int x_port = 0;
     ip_address::ip_type x_type;
     // threading
-#if AOO_NODE_POLL
     std::thread x_thread;
-#else
-    std::thread x_sendthread;
-    std::thread x_receivethread;
-    std::mutex x_mutex;
-    std::condition_variable x_condition;
-#endif
+    std::atomic<bool> x_event{false};
     std::atomic<bool> x_quit{false};
-
+public:
     // public methods
+    t_node(t_symbol *s, int socket, const ip_address& addr);
+
+    ~t_node();
+
     void release(t_pd *obj, void *x) override;
 
     aoo::net::iclient * client() override { return x_client.get(); }
@@ -99,27 +89,26 @@ struct t_node final : public i_node
 private:
     friend class i_node;
 
+    static int32_t send(void *user, const char *msg, int32_t n,
+                             const void *addr, int32_t len, uint32_t flags);
+
+    void perform_network_io();
+
     bool add_object(t_pd *obj, void *x, aoo_id id);
-
-    void do_send();
-
-    void do_receive();
 };
 
 // public methods
 
 void t_node::notify()
 {
-#if !AOO_NODE_POLL
-    x_condition.notify_all();
-#endif
+    x_event.store(true);
 }
 
 // private methods
 
 bool t_node::add_object(t_pd *obj, void *x, aoo_id id)
 {
-    aoo::scoped_lock lock(x_clientmutex);
+    std::lock_guard<std::mutex> lock(x_clientmutex);
     if (pd_class(obj) == aoo_client_class){
         // aoo_client
         if (!x_clientobj){
@@ -156,40 +145,40 @@ bool t_node::add_object(t_pd *obj, void *x, aoo_id id)
     return true;
 }
 
-void t_node::do_send()
-{
-    auto fn = [](void *user, const char *msg, int32_t n,
-            const void *addr, int32_t len, uint32_t flags){
-        auto x = (t_node *)user;
-        ip_address dest((sockaddr *)addr, len);
-        return socket_sendto(x->x_socket, msg, n, dest);
-    };
+void t_node::perform_network_io(){
+    while (!x_quit){
+        ip_address addr;
+        char buf[AOO_MAXPACKETSIZE];
+        int nbytes = socket_receive(x_socket, buf, AOO_MAXPACKETSIZE,
+                                    &addr, AOO_POLL_INTERVAL);
+        if (nbytes > 0){
+            std::lock_guard<std::mutex> lock(x_clientmutex);
+            x_client->handle_message(buf, nbytes, addr.address(), addr.length(),
+                                     send, this);
+        } else if (nbytes == 0){
+            // timeout -> update client
+            std::lock_guard<std::mutex> lock(x_clientmutex);
+            x_client->update(send, this);
+        } else {
+            // ignore errors when quitting
+            if (!x_quit){
+                socket_error_print("recv");
+            }
+        }
 
-    aoo::shared_scoped_lock lock(x_clientmutex);
-    x_client->send(fn, this);
-}
-
-void t_node::do_receive()
-{
-    ip_address addr;
-    char buf[AOO_MAXPACKETSIZE];
-    int nbytes = socket_receive(x_socket, buf, AOO_MAXPACKETSIZE,
-                                &addr, AOO_POLL_INTERVAL);
-    if (nbytes > 0){
-        aoo::shared_scoped_lock l(x_clientmutex);
-        x_client->handle_message(buf, nbytes, addr.address(), addr.length());
-        notify(); // !
-    } else if (nbytes == 0){
-        // timeout -> update client
-        aoo::shared_scoped_lock lock(x_clientmutex);
-        x_client->handle_message(nullptr, 0, nullptr, 0);
-        notify(); // !
-    } else {
-        // ignore errors when quitting
-        if (!x_quit){
-            socket_error_print("recv");
+        if (x_event.exchange(false, std::memory_order_acquire)){
+            std::lock_guard<std::mutex> lock(x_clientmutex);
+            x_client->update(send, this);
         }
     }
+}
+
+int32_t t_node::send(void *user, const char *msg, int32_t n,
+                     const void *addr, int32_t len, uint32_t flags)
+{
+    auto x = (t_node *)user;
+    ip_address dest((sockaddr *)addr, len);
+    return socket_sendto(x->x_socket, msg, n, dest);
 }
 
 i_node * i_node::get(t_pd *obj, int port, void *x, aoo_id id)
@@ -243,41 +232,19 @@ t_node::t_node(t_symbol *s, int socket, const ip_address& addr)
 
     pd_bind(&x_proxy.x_pd, x_bindsym);
 
-    // start threads
-#if AOO_NODE_POLL
+    // start network thread
     x_thread = std::thread([this](){
         lower_thread_priority();
 
-        while (!x_quit){
-            do_receive();
-            do_send();
-        }
+        perform_network_io();
     });
-#else
-    x_sendthread = std::thread([this](){
-        lower_thread_priority();
-
-        std::unique_lock<std::mutex> lock(x_mutex);
-        while (!x_quit){
-            x_condition.wait(lock);
-            do_send();
-        }
-    });
-    x_receivethread = std::thread([this](){
-        lower_thread_priority();
-
-        while (!x_quit){
-            do_receive();
-        }
-    });
-#endif
 
     verbose(0, "new aoo node on port %d", x_port);
 }
 
 void t_node::release(t_pd *obj, void *x)
 {
-    aoo::unique_lock lock(x_clientmutex);
+    std::unique_lock<std::mutex> lock(x_clientmutex);
     if (pd_class(obj) == aoo_client_class){
         // client
         x_clientobj = nullptr;
@@ -303,42 +270,14 @@ void t_node::release(t_pd *obj, void *x)
 t_node::~t_node()
 {
     pd_unbind(&x_proxy.x_pd, x_bindsym);
-    // tell the threads that we're done
-#if AOO_NODE_POLL
-    // don't bother waking up the thread...
-    // just set the flag and wait
+
+    // tell the network thread that we're done
     x_quit = true;
+    socket_signal(x_socket);
+
     x_thread.join();
 
     socket_close(x_socket);
-#else
-    {
-        std::lock_guard<std::mutex> l(x_mutex);
-        x_quit = true;
-    }
-
-    // notify send thread
-    x_condition.notify_all();
-
-    // try to wake up receive thread
-    aoo::unique_lock lock(x_clientmutex);
-    int didit = socket_signal(x_socket);
-    if (!didit){
-        // force wakeup by closing the socket.
-        // this is not nice and probably undefined behavior,
-        // the MSDN docs explicitly forbid it!
-        socket_close(x_socket);
-    }
-    lock.unlock();
-
-    // wait for threads
-    x_sendthread.join();
-    x_receivethread.join();
-
-    if (didit){
-        socket_close(x_socket);
-    }
-#endif
 
     if (x_clientthread.joinable()){
         x_client->quit();

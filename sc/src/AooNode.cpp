@@ -15,10 +15,6 @@
 #include <mutex>
 #include <atomic>
 
-#ifndef AOO_NODE_POLL
- #define AOO_NODE_POLL 0
-#endif
-
 #define AOO_POLL_INTERVAL 1000 // microseconds
 
 using namespace aoo;
@@ -58,24 +54,19 @@ private:
     aoo::ip_address::ip_type type_;
     // client
     aoo::net::iclient::pointer client_;
-    aoo::shared_mutex clientMutex_;
+    std::mutex clientMutex_;
     std::thread clientThread_;
     AooClient *clientObject_ = nullptr;
     // threading
-#if AOO_NODE_POLL
     std::thread thread_;
-#else
-    std::thread sendThread_;
-    std::thread receiveThread_;
-    std::mutex mutex_;
-    std::condition_variable condition_;
-#endif
+    std::atomic<bool> event_{false};
     std::atomic<bool> quit_{false};
 
     // private methods
-    void doSend();
+    static int32_t send(void *user, const char *msg, int32_t size,
+                        const void *addr, int32_t addrlen, uint32_t flags);
 
-    void doReceive();
+    void performNetworkIO();
 
     void handleClientMessage(const char *data, int32_t size,
                              const ip_address& addr, aoo::time_tag time);
@@ -90,75 +81,24 @@ AooNode::AooNode(World *world, int socket, const ip_address& addr)
     : world_(world), socket_(socket), port_(addr.port()), type_(addr.type())
 {
     client_.reset(aoo::net::iclient::create(addr.address(), addr.length(), 0));
-    // start threads
-#if AOO_NODE_POLL
+    // start network thread
     thread_ = std::thread([this](){
         lower_thread_priority();
 
-        while (!quit_){
-            do_receive();
-            do_send();
-        }
+        performNetworkIO();
     });
-#else
-    sendThread_ = std::thread([this](){
-        lower_thread_priority();
-
-        std::unique_lock<std::mutex> lock(mutex_);
-        while (!quit_){
-            condition_.wait(lock);
-            doSend();
-        }
-    });
-    receiveThread_ = std::thread([this](){
-        lower_thread_priority();
-
-        while (!quit_){
-            doReceive();
-        }
-    });
-#endif
 
     LOG_VERBOSE("aoo: new node on port " << port_);
 }
 
 AooNode::~AooNode(){
-    // tell the threads that we're done
-#if AOO_NODE_POLL
-    // don't bother waking up the thread...
-    // just set the flag and wait
+    // tell the network thread that we're done
     quit_ = true;
+    socket_signal(socket_);
+
     thread_.join();
 
     socket_close(socket_);
-#else
-    {
-        std::lock_guard<std::mutex> l(mutex_);
-        quit_ = true;
-    }
-
-    // notify send thread
-    condition_.notify_all();
-
-    // try to wake up receive thread
-    aoo::unique_lock lock(clientMutex_);
-    int didit = socket_signal(socket_);
-    if (!didit){
-        // force wakeup by closing the socket.
-        // this is not nice and probably undefined behavior,
-        // the MSDN docs explicitly forbid it!
-        socket_close(socket_);
-    }
-    lock.unlock();
-
-    // wait for threads
-    sendThread_.join();
-    receiveThread_.join();
-
-    if (didit){
-        socket_close(socket_);
-    }
-#endif
 
     // quit client thread
     if (clientThread_.joinable()){
@@ -219,7 +159,7 @@ INode::ptr INode::get(World *world, int port){
 }
 
 bool AooNode::registerClient(AooClient *c){
-    aoo::scoped_lock lock(clientMutex_);
+    std::lock_guard<std::mutex> lock(clientMutex_);
     if (clientObject_){
         LOG_ERROR("aoo client on port " << port_
                   << " already exists!");
@@ -240,36 +180,27 @@ bool AooNode::registerClient(AooClient *c){
 }
 
 void AooNode::unregisterClient(AooClient *c){
-    aoo::scoped_lock lock(clientMutex_);
+    std::lock_guard<std::mutex> lock(clientMutex_);
     assert(clientObject_ == c);
     clientObject_ = nullptr;
     client_->set_eventhandler(nullptr, nullptr, AOO_EVENT_NONE);
 }
 
 void AooNode::notify(){
-#if !AOO_NODE_POLL
-    condition_.notify_all();
-#endif
+    event_.store(true);
 }
 
 // private methods
 
-void AooNode::doSend()
+int32_t AooNode::send(void *user, const char *msg, int32_t size,
+                      const void *addr, int32_t addrlen, uint32_t flags)
 {
-    auto fn = [](void *user, const char *msg, int32_t size,
-                 const void *addr, int32_t addrlen, uint32_t flags)
-    {
-        auto x = (AooNode *)user;
-        ip_address address((const sockaddr *)addr, addrlen);
-        return socket_sendto(x->socket_, msg, size, address);
-    };
-
-    aoo::shared_scoped_lock lock(clientMutex_);
-    client_->send(fn, this);
+    auto x = (AooNode *)user;
+    ip_address address((const sockaddr *)addr, addrlen);
+    return socket_sendto(x->socket_, msg, size, address);
 }
 
-void AooNode::doReceive()
-{
+void AooNode::performNetworkIO(){
     ip_address addr;
     char buf[AOO_MAXPACKETSIZE];
     int nbytes = socket_receive(socket_, buf, AOO_MAXPACKETSIZE,
@@ -286,12 +217,10 @@ void AooNode::doReceive()
         } catch (const osc::Exception &err){
             LOG_ERROR("AooNode: bad OSC message - " << err.what());
         }
-        notify(); // !
     } else if (nbytes == 0){
         // timeout - update client
-        aoo::shared_scoped_lock lock(clientMutex_);
-        client_->handle_message(nullptr, 0, nullptr, 0);
-        notify(); // !
+        std::lock_guard<std::mutex> lock(clientMutex_);
+        client_->update(send, this);
     } else {
         // ignore errors when quitting
         if (!quit_){
@@ -300,12 +229,9 @@ void AooNode::doReceive()
         return;
     }
 
-    if (client_->events_available()){
-        // poll events
-        aoo::shared_scoped_lock lock(clientMutex_);
-        if (clientObject_){
-            client_->poll_events();
-        }
+    if (event_.exchange(false)){
+        std::lock_guard<std::mutex> lock(clientMutex_);
+        client_->update(send, this);
     }
 }
 
@@ -314,10 +240,11 @@ void AooNode::handleClientMessage(const char *data, int32_t size,
 {
     if (size > 4 && !memcmp("/aoo", data, 4)){
         // AoO message
-        client_->handle_message(data, size, addr.address(), addr.length());
+        client_->handle_message(data, size, addr.address(), addr.length(),
+                                send, this);
     } else if (!strncmp("/sc/msg", data, size)){
         // OSC message coming from language client
-        aoo::shared_scoped_lock lock(clientMutex_);
+        std::lock_guard<std::mutex> lock(clientMutex_);
         if (clientObject_){
             clientObject_->forwardMessage(data, size, time);
         }

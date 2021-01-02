@@ -77,13 +77,10 @@ public:
         return real_address_;
     }
 
-    void send(time_tag now);
+    void update(const sendfn& reply, time_tag now);
 
     void handle_message(const osc::ReceivedMessage& msg, int onset,
-                        const ip_address& addr);
-
-    bool handle_first_message(const osc::ReceivedMessage& msg, int onset,
-                              const ip_address& addr);
+                        const ip_address& addr, const sendfn& reply);
 
     friend std::ostream& operator << (std::ostream& os, const peer& p);
 private:
@@ -96,9 +93,11 @@ private:
     time_tag start_time_;
     double last_pingtime_ = 0;
     std::atomic<bool> connected_{false};
-    std::atomic<bool> send_reply_{false};
     bool timeout_ = false;
     bool relay_ = false;
+
+    bool handle_first_message(const osc::ReceivedMessage& msg, int onset,
+                              const ip_address& addr);
 };
 
 /*///////////////////////// udp_client ///////////////////////////*/
@@ -112,21 +111,20 @@ public:
 
     aoo_error handle_message(const char *data, int32_t n,
                              const ip_address& addr,
-                             int32_t type, aoo_type onset);
+                             int32_t type, aoo_type onset,
+                             const sendfn& reply);
 
-    void send(aoo_sendfn fn, void *user, time_tag now);
+    void update(const sendfn& reply, time_tag now);
 
-    void send_server_message(const char *data, int32_t size);
+    void send_server_message(const char *data, int32_t size, const sendfn& fn);
 
     void send_peer_message(const char *data, int32_t size,
-                           const ip_address& addr, bool relay);
+                           const ip_address& addr, const sendfn& fn, bool relay);
 
     void start_handshake(const ip_address& local, ip_address_list&& remote);
 private:
     client *client_;
     int port_;
-    aoo_sendfn fn_ = nullptr;
-    void *user_ = nullptr;
     ip_address local_address_;
     ip_address_list server_addrlist_;
     ip_address_list public_addrlist_;
@@ -134,10 +132,6 @@ private:
 
     double last_ping_time_ = 0;
     std::atomic<double> first_ping_time_{0};
-
-    void send_message(const char *data, int32_t n, const ip_address& addr){
-        fn_(user_, data, n, addr.address(), addr.length(), 0);
-    }
 
     void send_ping();
 
@@ -162,6 +156,11 @@ public:
     struct icommand {
         virtual ~icommand(){}
         virtual void perform(client&) = 0;
+    };
+
+    struct imessage {
+        virtual ~imessage(){}
+        virtual void perform(client&, const sendfn& fn) = 0;
     };
 
     struct ievent {
@@ -202,14 +201,16 @@ public:
                            const void *addr, int32_t len, int32_t flags) override;
 
     template<typename T>
-    void perform_send_message(const char *data, int32_t size, int32_t flags, T&& filter);
+    void perform_send_message(const char *data, int32_t size, int32_t flags,
+                              const sendfn& fn, T&& filter);
 
-    aoo_error handle_message(const char *data, int32_t n, const void *addr, int32_t len) override;
+    aoo_error handle_message(const char *data, int32_t n, const void *addr, int32_t len,
+                             aoo_sendfn fn, void *user) override;
 
     bool handle_peer_message(const osc::ReceivedMessage& msg, int onset,
-                             const ip_address& addr);
+                             const ip_address& addr, const sendfn& reply);
 
-    aoo_error send(aoo_sendfn fn, void *user) override;
+    aoo_error update(aoo_sendfn fn, void *user) override;
 
     aoo_error set_eventhandler(aoo_eventhandler fn, void *user, int32_t mode) override;
 
@@ -309,7 +310,10 @@ private:
     using command_queue = lockfree::unbounded_mpsc_queue<icommand_ptr, aoo::allocator<icommand_ptr>>;
     command_queue commands_;
     // peer/group messages
-    command_queue messages_;
+    using imessage_ptr = std::unique_ptr<imessage>;
+    using message_queue = lockfree::unbounded_mpsc_queue<imessage_ptr, aoo::allocator<imessage_ptr>>;
+    message_queue udp_messages_;
+    message_queue tcp_messages_;
     // pending request
     using request = std::function<bool(const char *pattern, const osc::ReceivedMessage& msg)>;
     std::vector<request, aoo::allocator<request>> pending_requests_;
@@ -394,48 +398,6 @@ public:
     };
 
     /*////////////////////// commands ///////////////////*/
-    struct message_cmd : icommand {
-        message_cmd(const char *data, int32_t size, int32_t flags)
-            : flags_(flags) {
-            data_.assign(data, data + size);
-        }
-
-        void perform(client &obj) override {
-            obj.perform_send_message(data_.data(), data_.size(),
-                flags_, [](auto&){ return true; });
-        }
-    protected:
-        std::vector<char, aoo::allocator<char>> data_;
-        int32_t flags_;
-    };
-
-    struct peer_message_cmd : message_cmd {
-        peer_message_cmd(const char *data, int32_t size,
-                         const sockaddr *addr, int32_t len,
-                         int32_t flags)
-            : message_cmd(data, size, flags), address_(addr, len) {}
-
-        void perform(client &obj) override {
-            obj.perform_send_message(data_.data(), data_.size(),
-                flags_, [&](auto& peer){ return peer.match(address_); });
-        }
-    protected:
-        ip_address address_;
-    };
-
-    struct group_message_cmd : message_cmd {
-        group_message_cmd(const char *data, int32_t size,
-                         const char *group, int32_t flags)
-            : message_cmd(data, size, flags), group_(group) {}
-
-        void perform(client &obj) override {
-            obj.perform_send_message(data_.data(), data_.size(),
-                flags_, [&](auto& peer){ return peer.match(group_); });
-        }
-    protected:
-        std::string group_;
-    };
-
     struct request_cmd : icommand
     {
         request_cmd(aoo_net_callback cb, void *user)
@@ -516,6 +478,49 @@ public:
             obj.perform_leave_group(group_, cb_, user_);
         }
     private:
+        std::string group_;
+    };
+
+    /*////////////////// messages ////////////////////*/
+
+    struct message : imessage {
+        message(const char *data, int32_t size, int32_t flags)
+            : flags_(flags) {
+            data_.assign(data, data + size);
+        }
+
+        void perform(client &obj, const sendfn& fn) override {
+            obj.perform_send_message(data_.data(), data_.size(),
+                flags_, fn, [](auto&){ return true; });
+        }
+    protected:
+        std::vector<char, aoo::allocator<char>> data_;
+        int32_t flags_;
+    };
+
+    struct peer_message : message {
+        peer_message(const char *data, int32_t size,
+                     const sockaddr *addr, int32_t len, int32_t flags)
+            : message(data, size, flags), address_(addr, len) {}
+
+        void perform(client &obj, const sendfn& fn) override {
+            obj.perform_send_message(data_.data(), data_.size(),
+                flags_, fn, [&](auto& peer){ return peer.match(address_); });
+        }
+    protected:
+        ip_address address_;
+    };
+
+    struct group_message : message {
+        group_message(const char *data, int32_t size,
+                      const char *group, int32_t flags)
+            : message(data, size, flags), group_(group) {}
+
+        void perform(client &obj, const sendfn& fn) override {
+            obj.perform_send_message(data_.data(), data_.size(),
+                flags_, fn, [&](auto& peer){ return peer.match(group_); });
+        }
+    protected:
         std::string group_;
     };
 };

@@ -139,10 +139,12 @@ public:
     // handle messages from peers (thread safe, but not reentrant)
     // 'addr' should be sockaddr *
     virtual aoo_error handle_message(const char *data, int32_t n,
-                                   const void *addr, int32_t len) = 0;
+                                     const void *addr, int32_t len,
+                                     aoo_sendfn fn, void *user) = 0;
 
-    // send outgoing messages to peers (thread safe, but not reentrant)
-    virtual aoo_error send(aoo_sendfn fn, void *user) = 0;
+    // update and send outgoing messages (threadsafe, called from the network thread)
+    virtual aoo_error update(aoo_sendfn fn, void *user) = 0;
+
     // set event handler callback + mode
     virtual aoo_error set_eventhandler(aoo_eventhandler fn,
                                        void *user, int32_t mode) = 0;

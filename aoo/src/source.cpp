@@ -342,8 +342,7 @@ aoo_error aoo::source::add_sink(const void *address, int32_t addrlen,
     }
     // add sink descriptor
     sinks_.emplace_front(addr, id, flags);
-    // push format request
-    formatrequestqueue_.push(format_request { addr, id, flags });
+    needformat_.store(true, std::memory_order_release); // !
 
     return AOO_OK;
 }
@@ -377,18 +376,21 @@ void aoo::source::remove_all(){
 }
 
 aoo_error aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
-                                    const void *address, int32_t addrlen) {
-    return src->handle_message(data, n, address, addrlen);
+                                    const void *address, int32_t addrlen,
+                                    aoo_sendfn fn, void *user) {
+    return src->handle_message(data, n, address, addrlen, fn, user);
 }
 
 // /aoo/src/<id>/format <sink>
 aoo_error aoo::source::handle_message(const char *data, int32_t n,
-                                      const void *address, int32_t addrlen){
+                                      const void *address, int32_t addrlen,
+                                      aoo_sendfn fn, void *user){
     if (!data){
         return AOO_OK; // nothing to update
     }
 
     try {
+        sendfn reply(fn, user);
         ip_address addr((const sockaddr *)address, addrlen);
 
         osc::ReceivedPacket packet(data, n);
@@ -413,15 +415,15 @@ aoo_error aoo::source::handle_message(const char *data, int32_t n,
 
         auto pattern = msg.AddressPattern() + onset;
         if (!strcmp(pattern, AOO_MSG_FORMAT)){
-            handle_format_request(msg, addr);
+            handle_format_request(msg, addr, reply);
         } else if (!strcmp(pattern, AOO_MSG_DATA)){
-            handle_data_request(msg, addr);
+            handle_data_request(msg, addr, reply);
         } else if (!strcmp(pattern, AOO_MSG_INVITE)){
-            handle_invite(msg, addr);
+            handle_invite(msg, addr, reply);
         } else if (!strcmp(pattern, AOO_MSG_UNINVITE)){
-            handle_uninvite(msg, addr);
+            handle_uninvite(msg, addr, reply);
         } else if (!strcmp(pattern, AOO_MSG_PING)){
-            handle_ping(msg, addr);
+            handle_ping(msg, addr, reply);
         } else {
             LOG_WARNING("unknown message " << pattern);
             return AOO_ERROR_UNSPECIFIED;
@@ -433,8 +435,8 @@ aoo_error aoo::source::handle_message(const char *data, int32_t n,
     }
 }
 
-aoo_error aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user) {
-    return src->send(fn, user);
+aoo_error aoo_source_update(aoo_source *src, aoo_sendfn fn, void *user) {
+    return src->update(fn, user);
 }
 
 // This method reads audio samples from the ringbuffer,
@@ -444,20 +446,18 @@ aoo_error aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user) {
 // to avoid possible deadlocks in the client code.
 // We have to make a local copy of the sink list, but this should be
 // rather cheap in comparison to encoding and sending the audio data.
-aoo_error aoo::source::send(aoo_sendfn fn, void *user){
+aoo_error aoo::source::update(aoo_sendfn fn, void *user){
     if (state_.load() != stream_state::play){
         return AOO_OK; // nothing to do
     }
 
-    sendfn func(fn, user);
+    sendfn reply(fn, user);
 
-    send_format(func);
+    send_format(reply);
 
-    send_data(func);
+    send_data(reply);
 
-    resend_data(func);
-
-    send_ping(func);
+    send_ping(reply);
 
     if (!sinks_.try_free()){
         LOG_DEBUG("aoo::source: try_free() would block");
@@ -721,8 +721,8 @@ void source::start_new_stream(){
     }
 
     sink_lock lock(sinks_);
-    for (auto& sink : sinks_){
-        formatrequestqueue_.push(format_request { sink });
+    for (auto& s : sinks_){
+        s.request_format();
     }
 }
 
@@ -766,8 +766,8 @@ void source::update_historybuffer(){
     }
 }
 
-void source::send_format(sendfn& fn){
-    if (formatrequestqueue_.empty()){
+void source::send_format(const sendfn& fn){
+    if (!needformat_.exchange(false, std::memory_order_acquire)){
         return;
     }
 
@@ -793,110 +793,36 @@ void source::send_format(sendfn& fn){
 
     updatelock.unlock();
 
-    format_request r;
-    while (formatrequestqueue_.try_pop(r)){
-        // /aoo/sink/<id>/format <src> <version> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
+    // we only free sources in this thread, so we don't have to lock
+#if 0
+    // this is not a real lock, so we don't have worry about dead locks
+    sink_lock lock(sinks_);
+#endif
+    for (auto& s : sinks_){
+        if (s.need_format()){
+            // /aoo/sink/<id>/format <src> <version> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
 
-        LOG_DEBUG("send format to " << r.id << " (salt = " << salt << ")");
+            LOG_DEBUG("send format to " << s.id << " (salt = " << salt << ")");
 
-        char buf[AOO_MAXPACKETSIZE];
-        osc::OutboundPacketStream msg(buf, sizeof(buf));
+            char buf[AOO_MAXPACKETSIZE];
+            osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-        const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                + AOO_MSG_SINK_LEN + 16 + AOO_MSG_FORMAT_LEN;
-        char address[max_addr_size];
-        snprintf(address, sizeof(address), "%s%s/%d%s",
-                 AOO_MSG_DOMAIN, AOO_MSG_SINK, r.id, AOO_MSG_FORMAT);
+            const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
+                    + AOO_MSG_SINK_LEN + 16 + AOO_MSG_FORMAT_LEN;
+            char address[max_addr_size];
+            snprintf(address, sizeof(address), "%s%s/%d%s",
+                     AOO_MSG_DOMAIN, AOO_MSG_SINK, s.id, AOO_MSG_FORMAT);
 
-        msg << osc::BeginMessage(address) << id() << (int32_t)make_version()
-            << salt << f.header.nchannels << f.header.samplerate << f.header.blocksize
-            << f.header.codec << osc::Blob(options, size) << osc::EndMessage;
+            msg << osc::BeginMessage(address) << id() << (int32_t)make_version()
+                << salt << f.header.nchannels << f.header.samplerate << f.header.blocksize
+                << f.header.codec << osc::Blob(options, size) << osc::EndMessage;
 
-        fn(msg.Data(), msg.Size(), r.address, r.flags);
-    }
-}
-
-void source::resend_data(sendfn& fn){
-    shared_lock updatelock(update_mutex_); // reader lock!
-    if (!history_.capacity()){
-        return;
-    }
-
-    data_request r;
-    while (datarequestqueue_.try_pop(r)){
-        auto salt = salt_;
-        if (salt != r.salt){
-            // outdated request
-            continue;
-        }
-
-        auto block = history_.find(r.sequence);
-        if (block){
-            aoo::data_packet d;
-            d.sequence = block->sequence;
-            d.samplerate = block->samplerate;
-            d.channel = r.channel; // !
-            d.totalsize = block->size();
-            d.nframes = block->num_frames();
-            // We use a buffer on the heap because blocks and even frames
-            // can be quite large and we don't want them to sit on the stack.
-            if (r.frame < 0){
-                // Copy whole block and save frame pointers.
-                sendbuffer_.resize(d.totalsize);
-                char *buf = sendbuffer_.data();
-                char *frameptr[256];
-                int32_t framesize[256];
-                int32_t onset = 0;
-
-                for (int i = 0; i < d.nframes; ++i){
-                    auto nbytes = block->get_frame(i, buf + onset, d.totalsize - onset);
-                    if (nbytes > 0){
-                        frameptr[i] = buf + onset;
-                        framesize[i] = nbytes;
-                        onset += nbytes;
-                    } else {
-                        LOG_ERROR("empty frame!");
-                    }
-                }
-                // unlock before sending
-                updatelock.unlock();
-
-                // send frames to sink
-                for (int i = 0; i < d.nframes; ++i){
-                    d.framenum = i;
-                    d.data = frameptr[i];
-                    d.size = framesize[i];
-                    send_data(fn, r, salt, d);
-                }
-
-                // lock again
-                updatelock.lock();
-            } else {
-                // Copy a single frame
-                if (r.frame >= 0 && r.frame < d.nframes){
-                    int32_t size = block->frame_size(r.frame);
-                    sendbuffer_.resize(size);
-                    block->get_frame(r.frame, sendbuffer_.data(), size);
-                    // unlock before sending
-                    updatelock.unlock();
-
-                    // send frame to sink
-                    d.framenum = r.frame;
-                    d.data = sendbuffer_.data();
-                    d.size = size;
-                    send_data(fn, r, salt, d);
-
-                    // lock again
-                    updatelock.lock();
-                } else {
-                    LOG_ERROR("frame number " << r.frame << " out of range!");
-                }
-            }
+            fn(msg.Data(), msg.Size(), s.address, s.flags);
         }
     }
 }
 
-void source::send_data(sendfn& fn){
+void source::send_data(const sendfn& fn){
     shared_lock updatelock(update_mutex_); // reader lock!
     if (!encoder_){
         return;
@@ -1026,7 +952,7 @@ void source::send_data(sendfn& fn){
 
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
-void source::send_data(sendfn& fn, const endpoint& ep, int32_t salt, const aoo::data_packet& d) const {
+void source::send_data(const sendfn& fn, const endpoint& ep, int32_t salt, const aoo::data_packet& d) const {
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
@@ -1047,7 +973,7 @@ void source::send_data(sendfn& fn, const endpoint& ep, int32_t salt, const aoo::
     fn(msg.Data(), msg.Size(), ep.address, ep.flags);
 }
 
-void source::send_ping(sendfn& fn){
+void source::send_ping(const sendfn& fn){
     // if stream is stopped, the timer won't increment anyway
     auto elapsed = timer_.get_elapsed();
     auto pingtime = lastpingtime_.load();
@@ -1084,7 +1010,7 @@ void source::send_ping(sendfn& fn){
 }
 
 void source::handle_format_request(const osc::ReceivedMessage& msg,
-                                   const ip_address& addr)
+                                   const ip_address& addr, const sendfn& reply)
 {
     LOG_DEBUG("handle format request");
 
@@ -1104,14 +1030,15 @@ void source::handle_format_request(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
 
     if (sink){
-        formatrequestqueue_.push(format_request { addr, id, sink->flags });
+        sink->request_format();
+        needformat_.store(true, std::memory_order_release);
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_FORMAT << "' message: sink not found");
     }
 }
 
 void source::handle_data_request(const osc::ReceivedMessage& msg,
-                                 const ip_address& addr)
+                                 const ip_address& addr, const sendfn& reply)
 {
     auto it = msg.ArgumentsBegin();
     auto id = (it++)->AsInt32();
@@ -1123,14 +1050,84 @@ void source::handle_data_request(const osc::ReceivedMessage& msg,
     sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
     if (sink){
+        shared_lock updatelock(update_mutex_); // reader lock!
+        if (!history_.capacity()){
+            return;
+        }
+        if (salt != salt_){
+            // outdated request
+            return;
+        }
+
         // get pairs of [seq, frame]
         int npairs = (msg.ArgumentCount() - 2) / 2;
         while (npairs--){
             auto seq = (it++)->AsInt32();
             auto frame = (it++)->AsInt32();
-            auto channel = sink->channel.load(std::memory_order_relaxed);
-            datarequestqueue_.push(data_request{ addr, id, sink->flags,
-                                                 salt, seq, frame, channel });
+
+            auto block = history_.find(seq);
+            if (block){
+                aoo::data_packet d;
+                d.sequence = block->sequence;
+                d.samplerate = block->samplerate;
+                d.channel = sink->channel.load(std::memory_order_relaxed);
+                d.totalsize = block->size();
+                d.nframes = block->num_frames();
+                // We use a buffer on the heap because blocks and even frames
+                // can be quite large and we don't want them to sit on the stack.
+                if (frame < 0){
+                    // Copy whole block and save frame pointers.
+                    sendbuffer_.resize(d.totalsize);
+                    char *buf = sendbuffer_.data();
+                    char *frameptr[256];
+                    int32_t framesize[256];
+                    int32_t onset = 0;
+
+                    for (int i = 0; i < d.nframes; ++i){
+                        auto nbytes = block->get_frame(i, buf + onset, d.totalsize - onset);
+                        if (nbytes > 0){
+                            frameptr[i] = buf + onset;
+                            framesize[i] = nbytes;
+                            onset += nbytes;
+                        } else {
+                            LOG_ERROR("empty frame!");
+                        }
+                    }
+                    // unlock before sending
+                    updatelock.unlock();
+
+                    // send frames to sink
+                    for (int i = 0; i < d.nframes; ++i){
+                        d.framenum = i;
+                        d.data = frameptr[i];
+                        d.size = framesize[i];
+                        send_data(reply, *sink, salt, d);
+                    }
+
+                    // lock again
+                    updatelock.lock();
+                } else {
+                    // Copy a single frame
+                    if (frame >= 0 && frame < d.nframes){
+                        int32_t size = block->frame_size(frame);
+                        sendbuffer_.resize(size);
+                        block->get_frame(frame, sendbuffer_.data(), size);
+                        // unlock before sending
+                        updatelock.unlock();
+
+                        // send frame to sink
+                        d.framenum = frame;
+                        d.data = sendbuffer_.data();
+                        d.size = size;
+                        send_data(reply, *sink, salt, d);
+
+                        // lock again
+                        updatelock.lock();
+                    } else {
+                        LOG_ERROR("frame number " << frame << " out of range!");
+                    }
+                }
+            }
         }
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_DATA << "' message: sink not found");
@@ -1138,7 +1135,7 @@ void source::handle_data_request(const osc::ReceivedMessage& msg,
 }
 
 void source::handle_invite(const osc::ReceivedMessage& msg,
-                           const ip_address& addr)
+                           const ip_address& addr, const sendfn& reply)
 {
     auto id = msg.ArgumentsBegin()->AsInt32();
 
@@ -1156,7 +1153,7 @@ void source::handle_invite(const osc::ReceivedMessage& msg,
 }
 
 void source::handle_uninvite(const osc::ReceivedMessage& msg,
-                             const ip_address& addr)
+                             const ip_address& addr, const sendfn& reply)
 {
     auto id = msg.ArgumentsBegin()->AsInt32();
 
@@ -1174,7 +1171,7 @@ void source::handle_uninvite(const osc::ReceivedMessage& msg,
 }
 
 void source::handle_ping(const osc::ReceivedMessage& msg,
-                         const ip_address& addr)
+                         const ip_address& addr, const sendfn& reply)
 {
     auto it = msg.ArgumentsBegin();
     aoo_id id = (it++)->AsInt32();

@@ -39,49 +39,33 @@ struct endpoint {
     uint32_t flags = 0;
 };
 
-using format_request = endpoint;
-
-struct data_request : endpoint {
-    data_request() = default;
-    data_request(const ip_address& _addr, int32_t _id, uint32_t _flags,
-                 int32_t _salt, int32_t _sequence, int32_t _frame, int32_t _channel)
-        : endpoint(_addr, _id, _flags),
-          salt(_salt), sequence(_sequence), frame(_frame), channel(_channel){}
-    int32_t salt = 0;
-    int32_t sequence = 0;
-    int32_t frame = 0;
-    int32_t channel = 0;
-};
-
-struct invite_request : endpoint {
-    enum type {
-        INVITE,
-        UNINVITE
-    };
-
-    invite_request() = default;
-    invite_request(const ip_address& _addr, int32_t _id,
-                   uint32_t _flags, int32_t _type)
-        : endpoint(_addr, _id, _flags), type(_type){}
-    int32_t type = 0;
-};
-
 struct sink_desc : endpoint {
     sink_desc(const ip_address& _addr, int32_t _id, uint32_t _flags)
         : endpoint(_addr, _id, _flags), channel(0) {}
     sink_desc(const sink_desc& other)
         : endpoint(other.address, other.id, other.flags),
-          channel(other.channel.load()) {}
+          channel(other.channel.load()), needformat_(other.needformat_.load()) {}
     sink_desc& operator=(const sink_desc& other){
         address = other.address;
         id = other.id;
         flags = other.flags;
         channel = other.channel.load();
+        needformat_ = other.needformat_.load();
         return *this;
     }
 
     // data
     std::atomic<int16_t> channel;
+
+    void request_format(){
+        needformat_.store(true, std::memory_order_release);
+    }
+
+    bool need_format() {
+        return needformat_.exchange(false, std::memory_order_acquire);
+    }
+private:
+    std::atomic<bool> needformat_{true}; // !
 };
 
 class source final : public isource {
@@ -135,9 +119,10 @@ class source final : public isource {
     void remove_all() override;
 
     aoo_error handle_message(const char *data, int32_t n,
-                             const void *address, int32_t addrlen) override;
+                             const void *address, int32_t addrlen,
+                             aoo_sendfn fn, void *user) override;
 
-    aoo_error send(aoo_sendfn fn, void *user) override;
+    aoo_error update(aoo_sendfn fn, void *user) override;
 
     aoo_error process(const aoo_sample **data, int32_t n, uint64_t t) override;
 
@@ -169,6 +154,7 @@ class source final : public isource {
     int32_t sequence_ = 0;
     std::atomic<int32_t> dropped_{0};
     std::atomic<float> lastpingtime_{0};
+    std::atomic<bool> needformat_{false};
     enum class stream_state {
         stop,
         start,
@@ -183,8 +169,6 @@ class source final : public isource {
     dynamic_resampler resampler_;
     lockfree::spsc_queue<aoo_sample, aoo::allocator<aoo_sample>> audioqueue_;
     lockfree::spsc_queue<double, aoo::allocator<double>> srqueue_;
-    lockfree::unbounded_mpsc_queue<format_request, aoo::allocator<format_request>> formatrequestqueue_;
-    lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> datarequestqueue_;
     history_buffer history_;
     // events
     lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
@@ -226,31 +210,29 @@ class source final : public isource {
 
     void update_historybuffer();
 
-    void send_format(sendfn& fn);
+    void send_format(const sendfn& fn);
 
-    void send_data(sendfn& fn);
+    void send_data(const sendfn& fn);
 
-    void send_data(sendfn& fn, const endpoint& ep,
+    void send_data(const sendfn& fn, const endpoint& ep,
                    int32_t salt, const aoo::data_packet& d) const;
 
-    void resend_data(sendfn& fn);
-
-    void send_ping(sendfn& fn);
+    void send_ping(const sendfn& fn);
 
     void handle_format_request(const osc::ReceivedMessage& msg,
-                               const ip_address& addr);
+                               const ip_address& addr, const sendfn& reply);
 
     void handle_data_request(const osc::ReceivedMessage& msg,
-                             const ip_address& addr);
+                             const ip_address& addr, const sendfn& reply);
 
     void handle_ping(const osc::ReceivedMessage& msg,
-                     const ip_address& addr);
+                     const ip_address& addr, const sendfn& reply);
 
     void handle_invite(const osc::ReceivedMessage& msg,
-                       const ip_address& addr);
+                       const ip_address& addr, const sendfn& reply);
 
     void handle_uninvite(const osc::ReceivedMessage& msg,
-                         const ip_address& addr);
+                         const ip_address& addr, const sendfn& reply);
 };
 
 } // aoo

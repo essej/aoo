@@ -127,7 +127,7 @@ void socket_error_print(const char *label = nullptr);
 /*//////////////////// helpers /////////////////////*/
 
 struct sendfn {
-    sendfn(aoo_sendfn fn, void *user)
+    sendfn(aoo_sendfn fn = nullptr, void *user = nullptr)
         : fn_(fn), user_(user) {}
     void operator () (const char *data, int32_t nbytes,
                       const ip_address& addr, uint32_t flags) const

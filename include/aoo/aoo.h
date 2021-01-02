@@ -406,14 +406,15 @@ AOO_API aoo_error aoo_source_remove_sink(aoo_source *src, const void *address, i
 // remove all sinks (always threadsafe)
 AOO_API void aoo_source_remove_all(aoo_source *src);
 
-// handle messages from sinks (threadsafe, but not reentrant)
-AOO_API aoo_error aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
-                                          const void *address, int32_t addrlen);
+// handle messages from sinks (threadsafe, called from the network thread)
+AOO_API aoo_error aoo_source_handle_message(aoo_source *src, const char *data, int32_t nbytes,
+                                            const void *address, int32_t addrlen,
+                                            aoo_sendfn fn, void *user);
 
-// send outgoing messages - will call the reply function (threadsafe, but not reentrant)
-AOO_API aoo_error aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user);
+// update and send outgoing messages (threadsafe, called from the network thread)
+AOO_API aoo_error aoo_source_update(aoo_source *src, aoo_sendfn fn, void *user);
 
-// process audio blocks (threadsafe, but not reentrant)
+// process audio blocks (threadsafe, called from the audio thread)
 // data:        array of channel data (non-interleaved)
 // nsamples:    number of samples per channel
 // t:           current NTP timestamp (see aoo_osctime_get)
@@ -550,14 +551,18 @@ AOO_API aoo_error aoo_sink_uninvite_source(aoo_sink *sink, const void *address,
 // uninvite all sources (always threadsafe)
 AOO_API aoo_error aoo_sink_uninvite_all(aoo_sink *sink);
 
-// handle messages from sources (threadsafe, but not reentrant)
-AOO_API aoo_error aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_t n,
-                                          const void *address, int32_t addrlen);
+// handle messages from sources (threadsafe, called from the network thread)
+AOO_API aoo_error aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_t nbytes,
+                                          const void *address, int32_t addrlen,
+                                          aoo_sendfn fn, void *user);
 
-// send outgoing messages - will call the reply function (threadsafe, but not reentrant)
-AOO_API aoo_error aoo_sink_send(aoo_sink *sink, aoo_sendfn fn, void *user);
+// update and send outgoing messages (threadsafe, called from the network thread)
+AOO_API aoo_error aoo_sink_update(aoo_sink *sink, aoo_sendfn fn, void *user);
 
 // process audio (threadsafe, but not reentrant)
+// data:        array of channel data (non-interleaved)
+// nsamples:    number of samples per channel
+// t:           current NTP timestamp (see aoo_osctime_get)
 AOO_API aoo_error aoo_sink_process(aoo_sink *sink, aoo_sample **data,
                                    int32_t nsamples, uint64_t t);
 

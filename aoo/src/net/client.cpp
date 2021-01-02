@@ -396,48 +396,42 @@ aoo_error aoo::net::client::send_message(const char *data, int32_t n,
     // LATER implement ack mechanism over UDP.
     bool reliable = flags & AOO_NET_MESSAGE_RELIABLE;
 
-    std::unique_ptr<icommand> cmd;
+    std::unique_ptr<imessage> msg;
     if (addr){
         if (len > 0){
             // peer message
-            cmd = std::make_unique<peer_message_cmd>(
+            msg = std::make_unique<peer_message>(
                         data, n, (const sockaddr *)addr, len, flags);
         } else {
             // group message
-            cmd = std::make_unique<group_message_cmd>(
+            msg = std::make_unique<group_message>(
                         data, n, (const char *)addr, flags);
         }
     } else {
-        cmd = std::make_unique<message_cmd>(data, n, flags);
+        msg = std::make_unique<message>(data, n, flags);
     }
 
     if (reliable){
-        // add to TCP command queue
-        commands_.push(std::move(cmd));
+        // add to TCP message queue
+        tcp_messages_.push(std::move(msg));
         signal();
     } else {
         // add to UDP message queue
-        messages_.push(std::move(cmd));
+        udp_messages_.push(std::move(msg));
     }
     return AOO_OK;
 }
 
 aoo_error aoo_net_client_handle_message(aoo_net_client *client, const char *data,
-                                        int32_t n, const void *addr, int32_t len)
+                                        int32_t n, const void *addr, int32_t len,
+                                        aoo_sendfn fn, void *user)
 {
-    return client->handle_message(data, n, addr, len);
+    return client->handle_message(data, n, addr, len, fn, user);
 }
 
 aoo_error aoo::net::client::handle_message(const char *data, int32_t n,
-                                           const void *addr, int32_t len){
-    if (!data){
-        // just update sinks
-        for (auto& s : sinks_){
-            s.sink->handle_message(nullptr, 0, nullptr, 0);
-        }
-        return AOO_OK;
-    }
-
+                                           const void *addr, int32_t len,
+                                           aoo_sendfn fn, void *user){
     int32_t type;
     aoo_id id;
     int32_t onset;
@@ -451,7 +445,7 @@ aoo_error aoo::net::client::handle_message(const char *data, int32_t n,
         // forward to matching source
         for (auto& s : sources_){
             if (s.id == id){
-                return s.source->handle_message(data, n, addr, len);
+                return s.source->handle_message(data, n, addr, len, fn, user);
             }
         }
         LOG_WARNING("aoo_client: handle_message(): source not found");
@@ -459,50 +453,50 @@ aoo_error aoo::net::client::handle_message(const char *data, int32_t n,
         // forward to matching sink
         for (auto& s : sinks_){
             if (s.id == id){
-                return s.sink->handle_message(data, n, addr, len);
+                return s.sink->handle_message(data, n, addr, len, fn, user);
             }
         }
         LOG_WARNING("aoo_client: handle_message(): sink not found");
     } else if (udp_client_){
         // forward to UDP client
         ip_address address((const sockaddr *)addr, len);
-        return udp_client_->handle_message(data, n, address, type, onset);
+        return udp_client_->handle_message(data, n, address, type, onset, sendfn(fn, user));
     }
 
     return AOO_ERROR_UNSPECIFIED;
 }
 
-aoo_error aoo_net_client_send(aoo_net_client *client, aoo_sendfn fn, void *user){
-    return client->send(fn, user);
+aoo_error aoo_net_client_update(aoo_net_client *client, aoo_sendfn fn, void *user){
+    return client->update(fn, user);
 }
 
-aoo_error aoo::net::client::send(aoo_sendfn fn, void *user){
+aoo_error aoo::net::client::update(aoo_sendfn fn, void *user){
     // send sources and sinks
     for (auto& s : sources_){
-        s.source->send(fn, user);
+        s.source->update(fn, user);
     }
     for (auto& s : sinks_){
-        s.sink->send(fn, user);
+        s.sink->update(fn, user);
     }
     // send server messages
     if (state_.load() != client_state::disconnected){
         time_tag now = time_tag::now();
+        sendfn reply(fn, user);
 
         if (udp_client_){
-            // first! (sets callback)
-            udp_client_->send(fn, user, now);
+            udp_client_->update(reply, now);
         }
 
         // send outgoing peer/group messages
-        std::unique_ptr<icommand> cmd;
-        while (messages_.try_pop(cmd)){
-            cmd->perform(*this);
+        std::unique_ptr<imessage> msg;
+        while (udp_messages_.try_pop(msg)){
+            msg->perform(*this, reply);
         }
 
         // update peers
         peer_lock lock(peers_);
         for (auto& p : peers_){
-            p.send(now);
+            p.update(reply, now);
         }
     }
     return AOO_OK;
@@ -548,7 +542,7 @@ namespace aoo {
 namespace net {
 
 bool client::handle_peer_message(const osc::ReceivedMessage& msg, int onset,
-                                 const ip_address& addr)
+                                 const ip_address& addr, const sendfn& reply)
 {
     bool success = false;
     // NOTE: we have to loop over *all* peers because there can
@@ -560,7 +554,7 @@ bool client::handle_peer_message(const osc::ReceivedMessage& msg, int onset,
     for (auto& p : peers_){
         // forward to matching or unconnected peers!
         if (!p.connected() || p.match(addr)){
-            p.handle_message(msg, onset, addr);
+            p.handle_message(msg, onset, addr, reply);
             success = true;
         }
     }
@@ -568,7 +562,8 @@ bool client::handle_peer_message(const osc::ReceivedMessage& msg, int onset,
 }
 
 template<typename T>
-void client::perform_send_message(const char *data, int32_t size, int32_t flags, T&& filter)
+void client::perform_send_message(const char *data, int32_t size, int32_t flags,
+                                  const sendfn& fn, T&& filter)
 {
     bool reliable = flags & AOO_NET_MESSAGE_RELIABLE;
     // embed inside an OSC message:
@@ -585,13 +580,13 @@ void client::perform_send_message(const char *data, int32_t size, int32_t flags,
                 auto& addr = peer.address();
                 LOG_DEBUG("aoo_client: send message " << data
                           << " to " << addr.name() << ":" << addr.port());
-                // Note: reliable messages are dispatched in the TCP receive thread,
-                // unreliable messages are dispatched in the UDP send thread.
+                // Note: reliable messages are dispatched in the TCP network thread,
+                // unreliable messages are dispatched in the UDP network thread.
                 if (reliable){
                     send_peer_message(msg.Data(), msg.Size(), addr);
                 } else if (udp_client_){
                     udp_client_->send_peer_message(msg.Data(), msg.Size(),
-                                                   addr, peer.relay());
+                                                   addr, fn, peer.relay());
                 }
             }
         }
@@ -1366,11 +1361,7 @@ client::message_event::~message_event()
 
 /*///////////////////// udp_client ////////////////////*/
 
-void udp_client::send(aoo_sendfn fn, void *user, time_tag now){
-    // save fn + user for command callbacks and peer messages
-    fn_ = fn;
-    user_ = user;
-
+void udp_client::update(const sendfn& reply, time_tag now){
     auto elapsed_time = client_->elapsed_time_since(now);
     auto delta = elapsed_time - last_ping_time_;
 
@@ -1399,7 +1390,7 @@ void udp_client::send(aoo_sendfn fn, void *user, time_tag now){
 
             shared_scoped_lock lock(mutex_);
             for (auto& addr : server_addrlist_){
-                send_message(msg.Data(), msg.Size(), addr);
+                reply(msg.Data(), msg.Size(), addr, 0);
             }
             last_ping_time_ = elapsed_time;
         }
@@ -1411,7 +1402,7 @@ void udp_client::send(aoo_sendfn fn, void *user, time_tag now){
             msg << osc::BeginMessage(AOO_NET_MSG_SERVER_PING)
                 << osc::EndMessage;
 
-            send_server_message(msg.Data(), msg.Size());
+            send_server_message(msg.Data(), msg.Size(), reply);
             last_ping_time_ = elapsed_time;
         }
     }
@@ -1419,7 +1410,8 @@ void udp_client::send(aoo_sendfn fn, void *user, time_tag now){
 
 aoo_error udp_client::handle_message(const char *data, int32_t n,
                                      const ip_address &addr,
-                                     aoo_type type, int32_t onset){
+                                     aoo_type type, int32_t onset,
+                                     const sendfn& reply){
     try {
         osc::ReceivedPacket packet(data, n);
         osc::ReceivedMessage msg(packet);
@@ -1434,7 +1426,7 @@ aoo_error udp_client::handle_message(const char *data, int32_t n,
             // we receive UDP messages which we have to ignore:
             // a) pings from a peer which we haven't had the chance to add yet
             // b) pings sent to alternative endpoint addresses
-            if (!client_->handle_peer_message(msg, onset, addr)){
+            if (!client_->handle_peer_message(msg, onset, addr, reply)){
                 LOG_VERBOSE("aoo_client: ignoring UDP message "
                             << msg.AddressPattern() << " from endpoint "
                             << addr.name() << ":" << addr.port());
@@ -1462,7 +1454,8 @@ aoo_error udp_client::handle_message(const char *data, int32_t n,
 }
 
 void udp_client::send_peer_message(const char *data, int32_t size,
-                                   const ip_address& addr, bool relay)
+                                   const ip_address& addr,
+                                   const sendfn& fn, bool relay)
 {
     if (relay){
         char buf[AOO_MAXPACKETSIZE];
@@ -1471,9 +1464,9 @@ void udp_client::send_peer_message(const char *data, int32_t size,
         msg << osc::BeginMessage(AOO_MSG_DOMAIN AOO_NET_MSG_RELAY)
             << addr.name_unmapped() << addr.port() << osc::Blob(data, size)
             << osc::EndMessage;
-        send_server_message(msg.Data(), msg.Size());
+        send_server_message(msg.Data(), msg.Size(), fn);
     } else {
-        send_message(data, size, addr);
+        fn(data, size, addr, 0);
     }
 }
 
@@ -1487,13 +1480,13 @@ void udp_client::start_handshake(const ip_address& local,
     server_addrlist_ = std::move(remote);
 }
 
-void udp_client::send_server_message(const char *data, int32_t size)
+void udp_client::send_server_message(const char *data, int32_t size, const sendfn& fn)
 {
     shared_scoped_lock lock(mutex_);
     if (!server_addrlist_.empty()){
         auto& remote = server_addrlist_.front();
         if (remote.valid()){
-            send_message(data, size, remote);
+            fn(data, size, remote, 0);
         }
     }
 }
@@ -1612,7 +1605,7 @@ std::ostream& operator << (std::ostream& os, const peer& p)
     return os;
 }
 
-void peer::send(time_tag now){
+void peer::update(const sendfn& reply, time_tag now){
     auto elapsed_time = time_tag::duration(start_time_, now);
     auto delta = elapsed_time - last_pingtime_;
 
@@ -1623,18 +1616,10 @@ void peer::send(time_tag now){
             osc::OutboundPacketStream msg(buf, sizeof(buf));
             msg << osc::BeginMessage(AOO_NET_MSG_PEER_PING) << osc::EndMessage;
 
-            client_->udp().send_peer_message(msg.Data(), msg.Size(), real_address_, relay_);
+            client_->udp().send_peer_message(msg.Data(), msg.Size(),
+                                             real_address_, reply, relay_);
 
             last_pingtime_ = elapsed_time;
-        }
-
-        // send reply
-        if (send_reply_.exchange(false)){
-            char buf[64];
-            osc::OutboundPacketStream msg(buf, sizeof(buf));
-            msg << osc::BeginMessage(AOO_NET_MSG_PEER_REPLY) << osc::EndMessage;
-
-            client_->udp().send_peer_message(msg.Data(), msg.Size(), real_address_, relay_);
         }
     } else if (!timeout_) {
         // try to establish UDP connection with peer
@@ -1691,7 +1676,8 @@ void peer::send(time_tag now){
                 << osc::EndMessage;
 
             for (auto& addr : addresses_){
-                client_->udp().send_peer_message(msg.Data(), msg.Size(), addr, relay_);
+                client_->udp().send_peer_message(msg.Data(), msg.Size(),
+                                                 addr, reply, relay_);
             }
 
             // LOG_DEBUG("send ping to " << *this);
@@ -1746,7 +1732,7 @@ bool peer::handle_first_message(const osc::ReceivedMessage &msg, int onset,
 }
 
 void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
-                          const ip_address& addr)
+                          const ip_address& addr, const sendfn& reply)
 {
     if (!connected()){
         if (!handle_first_message(msg, onset, addr)){
@@ -1767,8 +1753,14 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
     auto pattern = msg.AddressPattern() + onset;
     try {
         if (!strcmp(pattern, AOO_NET_MSG_PING)){
-            send_reply_.store(true);
             LOG_DEBUG("aoo_client: got ping from " << *this);
+
+            char buf[64];
+            osc::OutboundPacketStream msg(buf, sizeof(buf));
+            msg << osc::BeginMessage(AOO_NET_MSG_PEER_REPLY) << osc::EndMessage;
+
+            client_->udp().send_peer_message(msg.Data(), msg.Size(),
+                                             real_address_, reply, relay_);
         } else if (!strcmp(pattern, AOO_NET_MSG_REPLY)){
             LOG_DEBUG("aoo_client: got reply from " << *this);
         } else if (!strcmp(pattern, AOO_NET_MSG_MESSAGE)){
