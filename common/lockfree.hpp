@@ -86,6 +86,20 @@ class spsc_queue {
     void read_commit() {
         read_commit(blocksize_);
     }
+
+    template<typename Fn>
+    void consume(Fn&& func) {
+        func(data_[rdhead_]);
+        read_commit(1);
+    }
+
+    template<typename Fn>
+    void consume_all(Fn&& func) {
+        while (read_available() > 0){
+            consume(std::forward<Fn>(func));
+        }
+    }
+
     // returns: the number of available *blocks* for writing
     int32_t write_available() const {
         return capacity_ - balance_.load(std::memory_order_relaxed);
@@ -103,6 +117,12 @@ class spsc_queue {
 
     void write_commit() {
         write_commit(blocksize_);
+    }
+
+    template<typename Fn>
+    void produce(Fn&& func) {
+        func(data_[wrhead_]);
+        write_commit(1);
     }
  private:
     std::atomic<int32_t> balance_{0};
@@ -161,7 +181,7 @@ struct atomic_node_base {
     };
 };
 
-template<typename T, typename C, typename Alloc>
+template<typename C, typename Alloc>
 class node_allocator_base :
         protected C,
         protected Alloc::template rebind<typename C::node>::other
@@ -186,9 +206,9 @@ protected:
 
 template<typename T, typename Alloc = std::allocator<T>>
 class unbounded_mpsc_queue :
-    detail::node_allocator_base<T, detail::node_base<T>, Alloc>
+    detail::node_allocator_base<detail::node_base<T>, Alloc>
 {
-    typedef detail::node_allocator_base<T, detail::node_base<T>, Alloc> base;
+    typedef detail::node_allocator_base<detail::node_base<T>, Alloc> base;
     typedef typename base::node node;
  public:
     unbounded_mpsc_queue(const Alloc& alloc = Alloc{})
@@ -254,30 +274,16 @@ class unbounded_mpsc_queue :
     // can be called by several threads
     template<typename... U>
     void push(U&&... args){
-        node *tmp;
-        while (true){
-            auto first = first_.load(std::memory_order_relaxed);
-            if (first != devider_.load(std::memory_order_relaxed)){
-                // try to reuse existing node
-                if (first_.compare_exchange_weak(first, first->next_,
-                                                 std::memory_order_acq_rel))
-                {
-                    *first = node(std::forward<U>(args)...);
-                    tmp = first;
-                    break; // success
-                }
-            } else {
-                // make new node
-                tmp = base::allocate();
-                new (tmp) node(std::forward<U>(args)...);
-                break;
-            }
-        }
-        while (lock_.exchange(1, std::memory_order_acquire)) ; // lock
-        auto last = last_.load(std::memory_order_relaxed);
-        last->next_ = tmp;
-        last_.store(tmp, std::memory_order_release); // publish
-        lock_.store(0, std::memory_order_release); // unlock
+        auto n = get_node();
+        n->data_ = T{std::forward<U>(args)...};
+        push_node(n);
+    }
+
+    template<typename Fn>
+    void produce(Fn&& func){
+        auto n = get_node();
+        func(n->data_);
+        push_node(n);
     }
 
     // must be called from a single thread!
@@ -297,6 +303,31 @@ class unbounded_mpsc_queue :
         }
     }
 
+    template<typename Fn>
+    void consume(Fn&& func){
+        // use node *after* devider, because devider is always a dummy!
+        auto next = devider_.load(std::memory_order_relaxed)->next_;
+        func(next->data_);
+        devider_.store(next, std::memory_order_release); // publish
+    }
+
+    template<typename Fn>
+    bool try_consume(Fn&& func){
+        if (!empty()){
+            consume(std::forward<Fn>(func));
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    template<typename Fn>
+    void consume_all(Fn&& func){
+        while (!empty()){
+            consume(std::forward<Fn>(func));
+        }
+    }
+
     bool empty() const {
         return devider_.load(std::memory_order_relaxed)
                 == last_.load(std::memory_order_relaxed);
@@ -311,6 +342,34 @@ class unbounded_mpsc_queue :
     std::atomic<node *> devider_;
     std::atomic<node *> last_;
     std::atomic<int32_t> lock_{0};
+
+    node * get_node(){
+        for (;;){
+            auto first = first_.load(std::memory_order_relaxed);
+            if (first != devider_.load(std::memory_order_relaxed)){
+                // try to reuse existing node
+                if (first_.compare_exchange_weak(first, first->next_,
+                                                 std::memory_order_acq_rel))
+                {
+                    first->next_ = nullptr; // !
+                    return first;
+                }
+            } else {
+                // make new node
+                auto n = base::allocate();
+                new (n) node();
+                return n;
+            }
+        }
+    }
+
+    void push_node(node *n){
+        while (lock_.exchange(1, std::memory_order_acquire)) ; // lock
+        auto last = last_.load(std::memory_order_relaxed);
+        last->next_ = n;
+        last_.store(n, std::memory_order_release); // publish
+        lock_.store(0, std::memory_order_release); // unlock
+    }
 };
 
 /*///////////////////////// simple_list ////////////////////////*/
@@ -323,9 +382,9 @@ class unbounded_mpsc_queue :
 
 template<typename T, typename Alloc = std::allocator<T>>
 class simple_list :
-    detail::node_allocator_base<T, detail::atomic_node_base<T>, Alloc>
+    detail::node_allocator_base<detail::atomic_node_base<T>, Alloc>
 {
-    typedef detail::node_allocator_base<T, detail::atomic_node_base<T>, Alloc> base;
+    typedef detail::node_allocator_base<detail::atomic_node_base<T>, Alloc> base;
     typedef typename base::node node;
 public:
     template<typename U>
