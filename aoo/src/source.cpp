@@ -460,7 +460,7 @@ aoo_error aoo::source_imp::update(aoo_sendfn fn, void *user){
     send_ping(reply);
 
     if (!sinks_.try_free()){
-        LOG_DEBUG("aoo::source: try_free() would block");
+        // LOG_DEBUG("aoo::source: try_free() would block");
     }
 
     return AOO_OK;

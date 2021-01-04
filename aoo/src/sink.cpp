@@ -388,7 +388,7 @@ aoo_error aoo::sink_imp::update(aoo_sendfn fn, void *user){
 
     // free unused source_descs
     if (!sources_.try_free()){
-        LOG_DEBUG("aoo::sink: try_free() would block");
+        // LOG_DEBUG("aoo::sink: try_free() would block");
     }
 
     // deallocate memory
@@ -1237,15 +1237,17 @@ int32_t source_desc::poll_events(sink_imp& s, aoo_eventhandler fn, void *user){
 }
 
 void source_desc::recover(const char *reason, int32_t n){
+    int32_t limit;
     if (n > 0){
-        n = std::min<int32_t>(n, jitterbuffer_.size());
+        limit = std::min<int32_t>(n, jitterbuffer_.size());
         // drop blocks
-        for (int i = 0; i < n; ++i){
+        for (int i = 0; i < limit; ++i){
             jitterbuffer_.pop_front();
         }
     } else {
         // clear buffer
-        n = jitterbuffer_.size();
+        n = jitterbuffer_.size(); // for logging
+        limit = jitterbuffer_.capacity();
         jitterbuffer_.clear();
     }
 
@@ -1254,7 +1256,7 @@ void source_desc::recover(const char *reason, int32_t n){
 
     // push empty blocks to keep the buffer full, but leave room for one block!
     int count = 0;
-    for (int i = 0; i < n && audioqueue_.write_available() > 1
+    for (int i = 0; i < limit && audioqueue_.write_available() > 1
            && infoqueue_.write_available() > 1; ++i)
     {
         auto size = audioqueue_.blocksize();
