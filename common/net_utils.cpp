@@ -38,9 +38,7 @@ ip_address::ip_address(){
     static_assert(sizeof(address_) >= sizeof(sockaddr_in6),
                   "ip_address can't hold IPv6 sockaddr");
 #endif
-
-    memset(&address_, 0, sizeof(address_));
-    length_ = sizeof(address_); // e.g. for recvfrom()
+    clear();
 }
 
 ip_address::ip_address(const struct sockaddr *sa, socklen_t len){
@@ -56,6 +54,11 @@ ip_address::ip_address(uint32_t ipv4, int port){
     sa.sin_port = htons(port);
     memcpy(&address_, &sa, sizeof(sa));
     length_ = sizeof(sa);
+}
+
+void ip_address::clear(){
+    memset(&address_, 0, sizeof(address_));
+    length_ = sizeof(address_); // e.g. for recvfrom()
 }
 
 std::vector<ip_address> ip_address::resolve(const std::string &host,
@@ -128,20 +131,51 @@ std::vector<ip_address> ip_address::resolve(const std::string &host,
     return result;
 }
 
-ip_address::ip_address(const std::string& ip, int port,
-                       ip_type type){
+ip_address::ip_address(int port, ip_type type){
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    // AI_PASSIVE: nullptr means "any" address
+    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV | AI_PASSIVE;
+    switch (type){
+#if AOO_NET_USE_IPv6
+    case ip_type::IPv6:
+        hints.ai_family = AF_INET6;
+        break;
+#endif
+    case ip_type::IPv4:
+        hints.ai_family = AF_INET;
+        break;
+    default:
+        hints.ai_family = AF_UNSPEC;
+    }
+
+    char portstr[10]; // largest port is 65535
+    snprintf(portstr, sizeof(portstr), "%d", port);
+
+    struct addrinfo *ailist;
+    int err = getaddrinfo(nullptr, portstr, &hints, &ailist);
+    if (err == 0){
+        memcpy(&address_, ailist->ai_addr, ailist->ai_addrlen);
+        length_ = ailist->ai_addrlen;
+        freeaddrinfo(ailist);
+    } else {
+        // fail
+        clear();
+    }
+}
+
+ip_address::ip_address(const std::string& ip, int port, ip_type type){
     struct addrinfo hints;
     memset(&hints, 0, sizeof(hints));
     // prevent DNS lookup!
-    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV | AI_PASSIVE;
+    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
     hints.ai_family = AF_UNSPEC;
 
     char portstr[10]; // largest port is 65535
     snprintf(portstr, sizeof(portstr), "%d", port);
 
     struct addrinfo *ailist;
-    int err = getaddrinfo(!ip.empty() ? ip.c_str() : nullptr,
-                          portstr, &hints, &ailist);
+    int err = getaddrinfo(ip.c_str(), portstr, &hints, &ailist);
     if (err == 0){
     #if AOO_NET_USE_IPv6
         if (type == ip_type::IPv6 && ailist->ai_family == AF_INET){
@@ -153,7 +187,8 @@ ip_address::ip_address(const std::string& ip, int port,
             err = getaddrinfo(mapped.c_str(),
                               portstr, &hints, &ailist);
             if (err != 0){
-                *this = ip_address{};
+                // fail
+                clear();
                 return;
             }
         }
@@ -164,7 +199,7 @@ ip_address::ip_address(const std::string& ip, int port,
         freeaddrinfo(ailist);
     } else {
         // fail
-        *this = ip_address{};
+        clear();
     }
 }
 
@@ -371,7 +406,7 @@ int socket_udp(int port)
     ip_address bindaddr;
     int sock = socket(AF_INET6, SOCK_DGRAM, 0);
     if (sock >= 0){
-        bindaddr = ip_address("", port, ip_address::IPv6);
+        bindaddr = ip_address(port, ip_address::IPv6);
         // make dual stack socket by listening to both IPv4 and IPv6 packets
         int val = 0;
         if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&val, sizeof(val))){
@@ -380,11 +415,11 @@ int socket_udp(int port)
         }
     } else {
         sock = socket(AF_INET, SOCK_DGRAM, 0);
-        bindaddr = ip_address("", port, ip_address::IPv4);
+        bindaddr = ip_address(port, ip_address::IPv4);
     }
 #else
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    ip_address bindaddr("", port, ip_address::IPv4);
+    ip_address bindaddr(port, ip_address::IPv4);
 #endif
     if (sock >= 0){
         // finally bind the socket
@@ -407,7 +442,7 @@ int socket_tcp(int port)
     ip_address bindaddr;
     int sock = socket(AF_INET6, SOCK_STREAM, 0);
     if (sock >= 0) {
-        bindaddr = ip_address("", port, ip_address::IPv6);
+        bindaddr = ip_address(port, ip_address::IPv6);
         // make dual stack socket by listening to both IPv4 and IPv6 packets
         int val = 0;
         if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&val, sizeof(val))){
@@ -416,11 +451,11 @@ int socket_tcp(int port)
         }
     } else {
         sock = socket(AF_INET, SOCK_STREAM, 0);
-        bindaddr = ip_address("", port, ip_address::IPv4);
+        bindaddr = ip_address(port, ip_address::IPv4);
     }
 #else
     int sock = socket(AF_INET, SOCK_STREAM, 0);
-    bindaddr = ip_address("", port, ip_address::IPv4);
+    bindaddr = ip_address(port, ip_address::IPv4);
 #endif
     if (sock >= 0){
         // set SO_REUSEADDR
