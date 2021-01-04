@@ -7,6 +7,18 @@
 #include <inttypes.h>
 #include <atomic>
 
+#ifndef _WIN32
+#include <pthread.h>
+#ifdef __APPLE__
+  // macOS doesn't support unnamed pthread semaphores,
+  // so we use Mach semaphores instead
+  #include <mach/mach.h>
+#else
+  // unnamed pthread semaphore
+  #include <semaphore.h>
+#endif
+#endif
+
 // for shared_lock
 #include <shared_mutex>
 
@@ -153,6 +165,81 @@ public:
     ~scoped_shared_lock() { lock_.unlock_shared(); }
 private:
     T& lock_;
+};
+
+/*////////////////////// semaphore ////////////////////*/
+
+namespace detail {
+
+class native_semaphore {
+ public:
+    native_semaphore();
+    ~native_semaphore();
+    native_semaphore(const native_semaphore&) = delete;
+    native_semaphore& operator=(const native_semaphore&) = delete;
+    void post();
+    void wait();
+ private:
+#if defined(_WIN32)
+    void *sem_;
+#elif defined(__APPLE__)
+    semaphore_t sem_;
+#else // pthreads
+    sem_t sem_;
+#endif
+};
+
+} // detail
+
+// thanks to https://preshing.com/20150316/semaphores-are-surprisingly-versatile/
+
+class semaphore {
+ public:
+    void post(){
+        auto old = count_.fetch_add(1, std::memory_order_release);
+        if (old < 0){
+            sem_.post();
+        }
+    }
+    void wait(){
+        auto old = count_.fetch_sub(1, std::memory_order_acquire);
+        if (old <= 0){
+            sem_.wait();
+        }
+    }
+ private:
+    detail::native_semaphore sem_;
+    std::atomic<int32_t> count_{0};
+};
+
+/*////////////////// event ///////////////////////*/
+
+class event {
+ public:
+    void set(){
+        int oldcount = count_.load(std::memory_order_relaxed);
+        for (;;) {
+            // don't increment past 1
+            // NOTE: we have to use the CAS loop even if we don't
+            // increment 'oldcount', because a another thread
+            // might decrement the counter concurrently!
+            auto newcount = oldcount >= 0 ? 1 : oldcount + 1;
+            if (count_.compare_exchange_weak(oldcount, newcount, std::memory_order_release,
+                                             std::memory_order_relaxed))
+                break;
+        }
+        if (oldcount < 0)
+            sem_.post(); // release one waiting thread
+    }
+    void wait(){
+        auto old = count_.fetch_sub(1, std::memory_order_acquire);
+        if (old <= 0){
+            sem_.wait();
+        }
+    }
+ private:
+    detail::native_semaphore sem_;
+    std::atomic<int32_t> count_{0};
 };
 
 } // sync

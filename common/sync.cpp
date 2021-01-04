@@ -226,5 +226,51 @@ void shared_mutex::unlock_shared() {
 }
 #endif
 
+/*//////////////////// semaphore ///////////////////*/
+
+namespace detail {
+
+native_semaphore::native_semaphore(){
+#if defined(_WIN32)
+    sem_ = CreateSemaphoreA(0, 0, LONG_MAX, 0);
+#elif defined(__APPLE__)
+    semaphore_create(mach_task_self(), &sem_, SYNC_POLICY_FIFO, 0);
+#else // pthreads
+    sem_init(&sem_, 0, 0);
+#endif
+}
+
+native_semaphore::~native_semaphore(){
+#if defined(_WIN32)
+    CloseHandle(sem_);
+#elif defined(__APPLE__)
+    semaphore_destroy(mach_task_self(), sem_);
+#else // pthreads
+    sem_destroy(&sem_);
+#endif
+}
+
+void native_semaphore::post(){
+#if defined(_WIN32)
+    ReleaseSemaphore(sem_, 1, 0);
+#elif defined(__APPLE__)
+    semaphore_signal(sem_);
+#else
+    sem_post(&sem_);
+#endif
+}
+
+void native_semaphore::wait(){
+#if defined(_WIN32)
+    WaitForSingleObject(sem_, INFINITE);
+#elif defined(__APPLE__)
+    semaphore_wait(sem_);
+#else
+    while (sem_wait(&sem_) == -1 && errno == EINTR) continue;
+#endif
+}
+
+} // detail
+
 } // sync
 } // aoo
