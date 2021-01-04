@@ -643,7 +643,7 @@ aoo_error source_imp::set_format(aoo_format &f){
     std::unique_ptr<encoder> new_encoder;
     {
         // create a new encoder if necessary
-        shared_scoped_lock lock(update_mutex_); // reader lock!
+        scoped_shared_lock lock(update_mutex_); // reader lock!
         if (!encoder_ || strcmp(encoder_->name(), f.codec)){
             auto codec = aoo::find_codec(f.codec);
             if (codec){

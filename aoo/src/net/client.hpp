@@ -123,12 +123,15 @@ public:
 
     void start_handshake(const ip_address& local, ip_address_list&& remote);
 private:
+    using scoped_lock = sync::scoped_lock<sync::shared_mutex>;
+    using scoped_shared_lock = sync::scoped_shared_lock<sync::shared_mutex>;
+
     client_imp *client_;
     int port_;
     ip_address local_address_;
     ip_address_list server_addrlist_;
     ip_address_list public_addrlist_;
-    shared_mutex mutex_;
+    sync::shared_mutex mutex_;
 
     double last_ping_time_ = 0;
     std::atomic<double> first_ping_time_{0};

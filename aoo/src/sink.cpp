@@ -782,7 +782,7 @@ bool source_desc::is_active(const sink_imp& s) const {
 
 aoo_error source_desc::get_format(aoo_format &format){
     // synchronize with handle_format() and update()!
-    shared_scoped_lock lock(mutex_);
+    scoped_shared_lock lock(mutex_);
     if (decoder_){
         return decoder_->get_format(format);
     } else {
@@ -991,7 +991,7 @@ aoo_error source_desc::handle_data(const sink_imp& s, int32_t salt, const aoo::d
     }
 
     // synchronize with update()!
-    shared_scoped_lock lock(mutex_);
+    scoped_shared_lock lock(mutex_);
 
 #if 1
     if (!decoder_){
@@ -1473,7 +1473,7 @@ void source_desc::process_blocks(){
 
 // deal with "holes" in block queue
 void source_desc::check_missing_blocks(const sink_imp& s, const sendfn& reply,
-                                       aoo::shared_lock& lock){
+                                       shared_lock& lock){
     // only check if it has more than a single pending block!
     if (jitterbuffer_.size() <= 1 || !s.resend_enabled()){
         return;

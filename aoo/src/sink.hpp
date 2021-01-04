@@ -196,6 +196,11 @@ public:
 
     void uninvite(const sink_imp& s);
 private:
+    using shared_lock = sync::shared_lock<sync::shared_mutex>;
+    using unique_lock = sync::unique_lock<sync::shared_mutex>;
+    using scoped_lock = sync::scoped_lock<sync::shared_mutex>;
+    using scoped_shared_lock = sync::scoped_shared_lock<sync::shared_mutex>;
+
     void update(const sink_imp& s);
 
     // handle messages
@@ -208,7 +213,7 @@ private:
     void process_blocks();
 
     void check_missing_blocks(const sink_imp& s, const sendfn& reply,
-                              aoo::shared_lock& lock);
+                              shared_lock& lock);
 
     // send messages
     void send_format_request(const sink_imp& s, const sendfn& fn);
@@ -245,7 +250,7 @@ private:
     // resampler
     dynamic_resampler resampler_;
     // thread synchronization
-    aoo::shared_mutex mutex_; // LATER replace with a spinlock?
+    sync::shared_mutex mutex_; // LATER replace with a spinlock?
 };
 
 class sink_imp final : public sink {

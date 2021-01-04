@@ -48,11 +48,14 @@ struct t_node_proxy
 
 class t_node_imp final : public t_node
 {
+    using unique_lock = sync::unique_lock<sync::mutex>;
+    using scoped_lock = sync::scoped_lock<sync::mutex>;
+
     t_node_proxy x_proxy; // we can't directly bind t_node_imp because of vtable
     t_symbol *x_bindsym;
     aoo::net::client::pointer x_client;
     t_pd * x_clientobj = nullptr;
-    std::mutex x_clientmutex;
+    aoo::sync::mutex x_clientmutex;
     std::thread x_clientthread;
     int32_t x_refcount = 0;
     // socket
@@ -108,7 +111,7 @@ void t_node_imp::notify()
 
 bool t_node_imp::add_object(t_pd *obj, void *x, aoo_id id)
 {
-    std::lock_guard<std::mutex> lock(x_clientmutex);
+    scoped_lock lock(x_clientmutex);
     if (pd_class(obj) == aoo_client_class){
         // aoo_client
         if (!x_clientobj){
@@ -152,12 +155,12 @@ void t_node_imp::perform_network_io(){
         int nbytes = socket_receive(x_socket, buf, AOO_MAXPACKETSIZE,
                                     &addr, AOO_POLL_INTERVAL);
         if (nbytes > 0){
-            std::lock_guard<std::mutex> lock(x_clientmutex);
+            scoped_lock lock(x_clientmutex);
             x_client->handle_message(buf, nbytes, addr.address(), addr.length(),
                                      send, this);
         } else if (nbytes == 0){
             // timeout -> update client
-            std::lock_guard<std::mutex> lock(x_clientmutex);
+            scoped_lock lock(x_clientmutex);
             x_client->update(send, this);
         } else {
             // ignore errors when quitting
@@ -167,7 +170,7 @@ void t_node_imp::perform_network_io(){
         }
 
         if (x_event.exchange(false, std::memory_order_acquire)){
-            std::lock_guard<std::mutex> lock(x_clientmutex);
+            scoped_lock lock(x_clientmutex);
             x_client->update(send, this);
         }
     }
@@ -234,7 +237,7 @@ t_node_imp::t_node_imp(t_symbol *s, int socket, const ip_address& addr)
 
     // start network thread
     x_thread = std::thread([this](){
-        lower_thread_priority();
+        sync::lower_thread_priority();
 
         perform_network_io();
     });
@@ -244,7 +247,7 @@ t_node_imp::t_node_imp(t_symbol *s, int socket, const ip_address& addr)
 
 void t_node_imp::release(t_pd *obj, void *x)
 {
-    std::unique_lock<std::mutex> lock(x_clientmutex);
+    unique_lock lock(x_clientmutex);
     if (pd_class(obj) == aoo_client_class){
         // client
         x_clientobj = nullptr;

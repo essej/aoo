@@ -142,6 +142,11 @@ class source_imp final : public source {
     aoo_error get_sinkoption(const void *address, int32_t addrlen, aoo_id id,
                              int32_t opt, void *ptr, int32_t size) override;
  private:
+    using shared_lock = sync::shared_lock<sync::shared_mutex>;
+    using unique_lock = sync::unique_lock<sync::shared_mutex>;
+    using scoped_lock = sync::scoped_lock<sync::shared_mutex>;
+    using scoped_shared_lock = sync::scoped_shared_lock<sync::shared_mutex>;
+
     // settings
     std::atomic<aoo_id> id_;
     int32_t salt_ = 0;
@@ -180,7 +185,7 @@ class source_imp final : public source {
     using sink_lock = std::unique_lock<sink_list>;
     sink_list sinks_;
     // thread synchronization
-    aoo::shared_mutex update_mutex_;
+    sync::shared_mutex update_mutex_;
     // options
     std::atomic<int32_t> buffersize_{ AOO_SOURCE_BUFSIZE };
     std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };

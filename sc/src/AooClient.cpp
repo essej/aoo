@@ -4,9 +4,12 @@
 
 namespace {
 
+using scoped_lock = aoo::sync::scoped_lock<aoo::sync::shared_mutex>;
+using scoped_shared_lock = aoo::sync::scoped_shared_lock<aoo::sync::shared_mutex>;
+
 InterfaceTable *ft;
 
-aoo::shared_mutex gClientMutex;
+aoo::sync::shared_mutex gClientMutex;
 
 using ClientMap = std::unordered_map<int, std::unique_ptr<AooClient>>;
 std::unordered_map<World*, ClientMap> gClientMap;
@@ -14,14 +17,14 @@ std::unordered_map<World*, ClientMap> gClientMap;
 // called from NRT thread
 void createClient(World* world, int port) {
     auto client = std::make_unique<AooClient>(world, port);
-    aoo::scoped_lock lock(gClientMutex);
+    scoped_lock lock(gClientMutex);
     auto& clientMap = gClientMap[world];
     clientMap[port] = std::move(client);
 }
 
 // called from NRT thread
 void freeClient(World* world, int port) {
-    aoo::scoped_lock lock(gClientMutex);
+    scoped_lock lock(gClientMutex);
     auto it = gClientMap.find(world);
     if (it != gClientMap.end()) {
         auto& clientMap = it->second;
@@ -30,7 +33,7 @@ void freeClient(World* world, int port) {
 }
 
 AooClient* findClient(World* world, int port) {
-    aoo::shared_scoped_lock lock(gClientMutex);
+    scoped_shared_lock lock(gClientMutex);
     auto it = gClientMap.find(world);
     if (it != gClientMap.end()) {
         auto& clientMap = it->second;

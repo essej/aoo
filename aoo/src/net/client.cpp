@@ -1388,7 +1388,7 @@ void udp_client::update(const sendfn& reply, time_tag now){
             osc::OutboundPacketStream msg(buf, sizeof(buf));
             msg << osc::BeginMessage(AOO_NET_MSG_SERVER_REQUEST) << osc::EndMessage;
 
-            shared_scoped_lock lock(mutex_);
+            scoped_shared_lock lock(mutex_);
             for (auto& addr : server_addrlist_){
                 reply(msg.Data(), msg.Size(), addr, 0);
             }
@@ -1482,7 +1482,7 @@ void udp_client::start_handshake(const ip_address& local,
 
 void udp_client::send_server_message(const char *data, int32_t size, const sendfn& fn)
 {
-    shared_scoped_lock lock(mutex_);
+    scoped_shared_lock lock(mutex_);
     if (!server_addrlist_.empty()){
         auto& remote = server_addrlist_.front();
         if (remote.valid()){
@@ -1549,7 +1549,7 @@ void udp_client::handle_server_message(const osc::ReceivedMessage& msg, int onse
 
 bool udp_client::is_server_address(const ip_address& addr){
     // server message
-    shared_scoped_lock lock(mutex_);
+    scoped_shared_lock lock(mutex_);
     for (auto& remote : server_addrlist_){
         if (remote == addr){
             return true;

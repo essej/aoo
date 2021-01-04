@@ -24,13 +24,16 @@ static void SCLog(const char *s, int32_t, void *){
 
 namespace {
 
+using shared_lock = aoo::sync::shared_lock<aoo::sync::shared_mutex>;
+using unique_lock = aoo::sync::unique_lock<aoo::sync::shared_mutex>;
+
 int gClientSocket = -1;
 aoo::ip_address::ip_type gClientSocketType = aoo::ip_address::Unspec;
-std::mutex gClientSocketMutex;
+aoo::sync::mutex gClientSocketMutex;
 
 using ClientList = std::vector<aoo::ip_address>;
 std::unordered_map<World *, ClientList> gClientMap;
-aoo::shared_mutex gClientMutex;
+aoo::sync::shared_mutex gClientMutex;
 
 struct ClientCmd {
     int id;
@@ -44,7 +47,7 @@ bool registerClient(World *world, void *cmdData){
 
     aoo::ip_address addr(data->host, data->port, gClientSocketType);
 
-    aoo::unique_lock lock(gClientMutex);
+    unique_lock lock(gClientMutex);
 
     auto& clientList = gClientMap[world];
     bool found = false;
@@ -75,7 +78,7 @@ bool unregisterClient(World *world, void *cmdData){
     // sclang is IPv4 only
     aoo::ip_address addr(data->host, data->port, gClientSocketType);
 
-    aoo::unique_lock lock(gClientMutex);
+    unique_lock lock(gClientMutex);
 
     auto& clientList = gClientMap[world];
     for (auto it = clientList.begin(); it != clientList.end(); ++it){
@@ -138,11 +141,11 @@ struct OscMsgCommand {
 } // namespace
 
 void sendMsgNRT(World *world, const char *data, int32_t size){
-    aoo::shared_lock lock(gClientMutex);
+    shared_lock lock(gClientMutex);
     for (auto& addr : gClientMap[world]){
         // sendMsgNRT can be called from different threads
         // (NRT thread and network receive thread)
-        std::lock_guard<std::mutex> l(gClientSocketMutex);
+        aoo::sync::scoped_lock<aoo::sync::mutex> l(gClientSocketMutex);
         aoo::socket_sendto(gClientSocket, data, size, addr);
     }
 }

@@ -7,7 +7,10 @@ namespace {
 
 InterfaceTable *ft;
 
-aoo::shared_mutex gServerMutex;
+using scoped_lock = aoo::sync::scoped_lock<aoo::sync::shared_mutex>;
+using scoped_shared_lock = aoo::sync::scoped_shared_lock<aoo::sync::shared_mutex>;
+
+aoo::sync::shared_mutex gServerMutex;
 
 using ServerMap = std::unordered_map<int, std::unique_ptr<AooServer>>;
 std::unordered_map<World*, ServerMap> gServerMap;
@@ -15,14 +18,14 @@ std::unordered_map<World*, ServerMap> gServerMap;
 // called from NRT thread
 void createServer(World* world, int port) {
     auto server = std::make_unique<AooServer>(world, port);
-    aoo::scoped_lock lock(gServerMutex);
+    scoped_lock lock(gServerMutex);
     auto& serverMap = gServerMap[world];
     serverMap[port] = std::move(server);
 }
 
 // called from NRT thread
 void freeServer(World* world, int port) {
-    aoo::scoped_lock lock(gServerMutex);
+    scoped_lock lock(gServerMutex);
     auto it = gServerMap.find(world);
     if (it != gServerMap.end()) {
         auto& serverMap = it->second;
@@ -31,7 +34,7 @@ void freeServer(World* world, int port) {
 }
 
 AooServer* findServer(World* world, int port) {
-    aoo::shared_scoped_lock lock(gServerMutex);
+    scoped_shared_lock lock(gServerMutex);
     auto it = gServerMap.find(world);
     if (it != gServerMap.end()) {
         auto& serverMap = it->second;

@@ -4,6 +4,7 @@
 
 #include "aoo_common.hpp"
 
+#include "common/sync.hpp"
 #include "common/time.hpp"
 
 #include "oscpack/osc/OscReceivedElements.h"
@@ -11,7 +12,6 @@
 #include <functional>
 #include <vector>
 #include <map>
-#include <mutex>
 
 using namespace aoo;
 
@@ -90,9 +90,9 @@ struct t_aoo_client
     // replies
     using t_reply = std::function<void()>;
     std::vector<t_reply> replies_;
-    std::mutex reply_mutex_;
+    aoo::sync::mutex reply_mutex_;
     void push_reply(t_reply reply){
-        std::lock_guard<std::mutex> lock(reply_mutex_);
+        aoo::sync::scoped_lock<aoo::sync::mutex> lock(reply_mutex_);
         replies_.push_back(std::move(reply));
     }
 
@@ -468,7 +468,8 @@ static void aoo_client_tick(t_aoo_client *x)
     x->x_node->notify();
 
     // handle server replies
-    std::unique_lock<std::mutex> lock(x->reply_mutex_, std::try_to_lock);
+    aoo::sync::unique_lock<aoo::sync::mutex> lock(x->reply_mutex_,
+                                                  aoo::sync::try_to_lock);
     if (lock.owns_lock()){
         for (auto& reply : x->replies_){
             reply();

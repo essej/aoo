@@ -48,13 +48,16 @@ public:
         clientMutex_.unlock();
     }
 private:
+    using unique_lock = sync::unique_lock<sync::mutex>;
+    using scoped_lock = sync::scoped_lock<sync::mutex>;
+
     World *world_;
     int socket_ = -1;
     int port_ = 0;
     aoo::ip_address::ip_type type_;
     // client
     aoo::net::client::pointer client_;
-    std::mutex clientMutex_;
+    aoo::sync::mutex clientMutex_;
     std::thread clientThread_;
     AooClient *clientObject_ = nullptr;
     // threading
@@ -83,7 +86,7 @@ AooNode::AooNode(World *world, int socket, const ip_address& addr)
     client_.reset(aoo::net::client::create(addr.address(), addr.length(), 0));
     // start network thread
     thread_ = std::thread([this](){
-        lower_thread_priority();
+        sync::lower_thread_priority();
 
         performNetworkIO();
     });
@@ -111,11 +114,11 @@ AooNode::~AooNode(){
 
 using NodeMap = std::unordered_map<int, std::weak_ptr<AooNode>>;
 
-aoo::shared_mutex gNodeMapMutex;
+aoo::sync::mutex gNodeMapMutex;
 static std::unordered_map<World *, NodeMap> gNodeMap;
 
 static NodeMap& getNodeMap(World *world){
-    scoped_lock lock(gNodeMapMutex);
+    aoo::sync::scoped_lock<aoo::sync::mutex> lock(gNodeMapMutex);
     return gNodeMap[world];
 }
 
@@ -159,7 +162,7 @@ INode::ptr INode::get(World *world, int port){
 }
 
 bool AooNode::registerClient(AooClient *c){
-    std::lock_guard<std::mutex> lock(clientMutex_);
+    scoped_lock lock(clientMutex_);
     if (clientObject_){
         LOG_ERROR("aoo client on port " << port_
                   << " already exists!");
@@ -180,7 +183,7 @@ bool AooNode::registerClient(AooClient *c){
 }
 
 void AooNode::unregisterClient(AooClient *c){
-    std::lock_guard<std::mutex> lock(clientMutex_);
+    scoped_lock lock(clientMutex_);
     assert(clientObject_ == c);
     clientObject_ = nullptr;
     client_->set_eventhandler(nullptr, nullptr, AOO_EVENT_NONE);
@@ -219,7 +222,7 @@ void AooNode::performNetworkIO(){
         }
     } else if (nbytes == 0){
         // timeout - update client
-        std::lock_guard<std::mutex> lock(clientMutex_);
+        scoped_lock lock(clientMutex_);
         client_->update(send, this);
     } else {
         // ignore errors when quitting
@@ -230,7 +233,7 @@ void AooNode::performNetworkIO(){
     }
 
     if (event_.exchange(false)){
-        std::lock_guard<std::mutex> lock(clientMutex_);
+        scoped_lock lock(clientMutex_);
         client_->update(send, this);
     }
 }
@@ -244,7 +247,7 @@ void AooNode::handleClientMessage(const char *data, int32_t size,
                                 send, this);
     } else if (!strncmp("/sc/msg", data, size)){
         // OSC message coming from language client
-        std::lock_guard<std::mutex> lock(clientMutex_);
+        scoped_lock lock(clientMutex_);
         if (clientObject_){
             clientObject_->forwardMessage(data, size, time);
         }

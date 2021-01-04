@@ -11,6 +11,7 @@
 #include <shared_mutex>
 
 namespace aoo {
+namespace sync {
 
 /*////////////////// thread priority /////////////////////*/
 
@@ -66,15 +67,33 @@ using padded_spinlock = padded_class<spinlock, CACHELINE_SIZE>;
 using padded_shared_spinlock =  padded_class<shared_spinlock, CACHELINE_SIZE>;
 
 
-/*//////////////////////// shared_mutex //////////////////////////*/
-
 // The std::mutex implementation on Windows is bad on both MSVC and MinGW:
-// the MSVC version apparantely has some additional overhead; winpthreads (MinGW) doesn't even use the obvious
-// platform primitive (SRWLOCK), they rather roll their own mutex based on atomics and Events, which is bad for our use case.
+// the MSVC version apparantely has some additional overhead;
+// winpthreads (MinGW) doesn't even use the obvious platform primitive (SRWLOCK),
+// they rather roll their own mutex based on atomics and Events, which is bad for our use case.
 //
 // Older OSX versions (OSX 10.11 and below) don't have std:shared_mutex...
 //
 // Even on Linux, there's some overhead for things we don't need, so we use pthreads directly.
+
+class mutex {
+public:
+    mutex();
+    ~mutex();
+    mutex(const mutex&) = delete;
+    mutex& operator=(const mutex&) = delete;
+    void lock();
+    bool try_lock();
+    void unlock();
+private:
+#ifdef _WIN32
+    void* mutex_; // avoid including windows headers (SWRLOCK is pointer sized)
+#else
+    pthread_mutex_t mutex_;
+#endif
+};
+
+/*//////////////////////// shared_mutex //////////////////////////*/
 
 class shared_mutex {
 public:
@@ -98,35 +117,43 @@ private:
 #endif
 };
 
-using shared_lock = std::shared_lock<shared_mutex>;
-using unique_lock = std::unique_lock<shared_mutex>;
+typedef std::try_to_lock_t try_to_lock_t;
+typedef std::defer_lock_t defer_lock_t;
+typedef std::adopt_lock_t adopt_lock_t;
+
+constexpr try_to_lock_t try_to_lock {};
+constexpr defer_lock_t defer_lock {};
+constexpr adopt_lock_t adopt_lock {};
 
 template<typename T>
-class _scoped_lock {
-public:
-    _scoped_lock(T& lock)
-        : lock_(&lock){ lock_->lock(); }
-    _scoped_lock(const T& lock) = delete;
-    _scoped_lock& operator=(const T& lock) = delete;
-    ~_scoped_lock() { lock_->unlock(); }
-private:
-    T* lock_;
-};
-
-using scoped_lock = _scoped_lock<shared_mutex>;
+using shared_lock = std::shared_lock<T>;
 
 template<typename T>
-class _shared_scoped_lock {
+using unique_lock = std::unique_lock<T>;
+
+template<typename T>
+class scoped_lock {
 public:
-    _shared_scoped_lock(T& lock)
-        : lock_(&lock){ lock_->lock_shared(); }
-    _shared_scoped_lock(const T& lock) = delete;
-    _shared_scoped_lock& operator=(const T& lock) = delete;
-    ~_shared_scoped_lock() { lock_->unlock_shared(); }
+    scoped_lock(T& lock)
+        : lock_(lock){ lock_.lock(); }
+    scoped_lock(const T& lock) = delete;
+    scoped_lock& operator=(const T& lock) = delete;
+    ~scoped_lock() { lock_.unlock(); }
 private:
-    T* lock_;
+    T& lock_;
 };
 
-using shared_scoped_lock = _shared_scoped_lock<shared_mutex>;
+template<typename T>
+class scoped_shared_lock {
+public:
+    scoped_shared_lock(T& lock)
+        : lock_(lock){ lock_.lock_shared(); }
+    scoped_shared_lock(const T& lock) = delete;
+    scoped_shared_lock& operator=(const T& lock) = delete;
+    ~scoped_shared_lock() { lock_.unlock_shared(); }
+private:
+    T& lock_;
+};
 
+} // sync
 } // aoo

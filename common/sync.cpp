@@ -24,6 +24,7 @@
 #endif
 
 namespace aoo {
+namespace sync {
 
 void pause_cpu(){
 #if defined(CPU_INTEL)
@@ -134,6 +135,41 @@ void shared_spinlock::unlock_shared(){
     state_.fetch_sub(1, std::memory_order_release);
 }
 
+/*////////////////////// mutex /////////////////////////////*/
+
+#ifdef _WIN32
+mutex::mutex() {
+    InitializeSRWLock((PSRWLOCK)& mutex_);
+}
+mutex::~mutex() {}
+
+void mutex::lock() {
+    AcquireSRWLockExclusive((PSRWLOCK)&mutex_);
+}
+bool mutex::try_lock() {
+    return TryAcquireSRWLockExclusive((PSRWLOCK)&mutex_);
+}
+void mutex::unlock() {
+    ReleaseSRWLockExclusive((PSRWLOCK)&mutex_);
+}
+#else
+mutex::mutex() {
+    pthread_mutex_init(&mutex_, nullptr);
+}
+mutex::~mutex() {
+    pthread_mutex_destroy(&mutex_);
+}
+void mutex::lock() {
+    pthread_mutex_lock(&mutex_);
+}
+bool mutex::try_lock() {
+    return pthread_mutex_trylock(&mutex_) == 0;
+}
+void mutex::unlock() {
+    pthread_mutex_unlock(&mutex_);
+}
+#endif
+
 /*////////////////////// shared_mutex //////////////////////*/
 
 #ifdef _WIN32
@@ -190,4 +226,5 @@ void shared_mutex::unlock_shared() {
 }
 #endif
 
+} // sync
 } // aoo
