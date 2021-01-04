@@ -30,7 +30,7 @@ public:
 
     ~AooNode();
 
-    aoo::ip_address::ip_type type() const { return type_; }
+    aoo::ip_address::ip_type type() const override { return type_; }
 
     int port() const override { return port_; }
 

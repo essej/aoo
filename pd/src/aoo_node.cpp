@@ -207,7 +207,7 @@ i_node * i_node::get(t_pd *obj, int port, void *x, aoo_id id)
 
         ip_address addr;
         if (socket_address(sock, addr) != 0){
-            pd_error(obj, "s%: couldn't get socket address", classname(obj));
+            pd_error(obj, "%s: couldn't get socket address", classname(obj));
             socket_close(sock);
             return nullptr;
         }

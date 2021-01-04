@@ -60,7 +60,7 @@ static bool get_endpoint_arg(void *x, i_node *node, int argc, t_atom *argv,
             *addr.length_ptr() = len;
         } else {
             pd_error(x, "%s: couldn't find peer %s|%s",
-                     classname(x), group->s_name, user->s_name, what);
+                     classname(x), group->s_name, user->s_name);
             return false;
         }
     } else {
