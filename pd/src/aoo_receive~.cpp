@@ -207,7 +207,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         x->x_sources.push_back({ addr, e->id });
 
         // output event
-        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
+        if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
             return;
         }
         outlet_anything(x->x_msgout, gensym("source_add"), 3, msg);
@@ -228,7 +228,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         }
 
         // output event
-        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
+        if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
             return;
         }
         outlet_anything(x->x_msgout, gensym("source_remove"), 3, msg);
@@ -240,7 +240,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         // output event
-        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
+        if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
             return;
         }
         outlet_anything(x->x_msgout, gensym("invite_timeout"), 3, msg);
@@ -251,7 +251,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         auto e = (const aoo_format_change_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
+        if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
             return;
         }
         int fsize = format_to_atoms(*e->format, 29, msg + 3); // skip first three atoms
@@ -263,7 +263,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         auto e = (const aoo_stream_state_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
+        if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
             return;
         }
         SETFLOAT(&msg[3], e->state);
@@ -275,7 +275,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         auto e = (const aoo_block_lost_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
+        if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
             return;
         }
         SETFLOAT(&msg[3], e->count);
@@ -287,7 +287,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         auto e = (const aoo_block_reordered_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
+        if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
             return;
         }
         SETFLOAT(&msg[3], e->count);
@@ -299,7 +299,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         auto e = (const aoo_block_resent_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
+        if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
             return;
         }
         SETFLOAT(&msg[3], e->count);
@@ -311,7 +311,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         auto e = (const aoo_block_gap_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
+        if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
             return;
         }
         SETFLOAT(&msg[3], e->count);
@@ -323,7 +323,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         auto e = (const aoo_ping_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
-        if (!endpoint_to_atoms(addr, e->id, 3, msg)){
+        if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
             return;
         }
         double diff = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;

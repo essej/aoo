@@ -35,7 +35,12 @@ extern t_class *aoo_send_class;
 
 extern t_class *aoo_client_class;
 
-void aoo_client_handle_event(struct t_aoo_client *x,
+struct t_aoo_client;
+
+int aoo_client_resolve_address(const t_aoo_client *x, const ip_address& addr,
+                               aoo_id id, int argc, t_atom *argv);
+
+void aoo_client_handle_event(t_aoo_client *x,
                              const aoo_event *event, int32_t level);
 
 /*////////////////////// aoo node //////////////////*/
@@ -132,6 +137,8 @@ public:
                       ip_address& addr) const override {
         return get_endpoint_arg(x, argc, argv, addr, nullptr, "peer");
     }
+
+    int resolve_endpoint(const ip_address &addr, aoo_id id, int argc, t_atom *argv) const;
 private:
     friend class t_node;
 
@@ -208,7 +215,15 @@ bool t_node_imp::get_endpoint_arg(t_pd *x, int argc, const t_atom *argv,
     return true;
 }
 
-// private methods
+int t_node_imp::resolve_endpoint(const ip_address &addr, aoo_id id,
+                                  int argc, t_atom *argv) const {
+    if (x_clientobj){
+        return aoo_client_resolve_address((t_aoo_client *)x_clientobj,
+                                          addr, id, argc, argv);
+    } else {
+        return endpoint_to_atoms(addr, id, argc, argv);
+    }
+}
 
 bool t_node_imp::add_object(t_pd *obj, void *x, aoo_id id)
 {

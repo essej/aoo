@@ -69,10 +69,10 @@ static void aoo_send_doaddsink(t_aoo_send *x, const aoo::ip_address& addr, aoo_i
 
     // output message
     t_atom msg[3];
-    if (endpoint_to_atoms(addr, id, 3, msg)){
+    if (x->x_node->resolve_endpoint(addr, id, 3, msg)){
         outlet_anything(x->x_msgout, gensym("sink_add"), 3, msg);
     } else {
-        bug("aoo::endpoint_to_atoms");
+        bug("t_node::resolve_endpoint");
     }
 }
 
@@ -94,10 +94,10 @@ static void aoo_send_doremoveall(t_aoo_send *x)
     // output messages
     for (int i = 0; i < numsinks; ++i){
         t_atom msg[3];
-        if (endpoint_to_atoms(sinks[i].s_address, sinks[i].s_id, 3, msg)){
+        if (x->x_node->resolve_endpoint(sinks[i].s_address, sinks[i].s_id, 3, msg)){
             outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
         } else {
-            bug("aoo::endpoint_to_atoms");
+            bug("t_node::resolve_endpoint");
         }
     }
 }
@@ -113,10 +113,10 @@ static void aoo_send_doremovesink(t_aoo_send *x, const ip_address& addr, aoo_id 
 
             // output message
             t_atom msg[3];
-            if (endpoint_to_atoms(addr, id, 3, msg)){
+            if (x->x_node->resolve_endpoint(addr, id, 3, msg)){
                 outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
             } else {
-                bug("aoo::endpoint_to_atoms");
+                bug("t_node::resolve_endpoint");
             }
             return;
         }
@@ -146,14 +146,14 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t
         double rtt = aoo_osctime_duration(e->tt1, e->tt3) * 1000.0;
 
         t_atom msg[7];
-        if (endpoint_to_atoms(addr, e->id, 3, msg)){
+        if (x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
             SETFLOAT(msg + 3, diff1);
             SETFLOAT(msg + 4, diff2);
             SETFLOAT(msg + 5, rtt);
             SETFLOAT(msg + 6, e->lost_blocks);
             outlet_anything(x->x_msgout, gensym("ping"), 7, msg);
         } else {
-            bug("aoo::endpoint_to_atoms");
+            bug("t_node::resolve_endpoint");
         }
         break;
     }
@@ -169,10 +169,10 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t
                 aoo_send_doaddsink(x, addr, e->id, 0);
             } else {
                 t_atom msg[3];
-                if (endpoint_to_atoms(addr, e->id, 3, msg)){
+                if (x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
                     outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
                 } else {
-                    bug("aoo::endpoint_to_atoms");
+                    bug("t_node::resolve_endpoint");
                 }
             }
         }
@@ -190,10 +190,10 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t
                 aoo_send_doremovesink(x, addr, e->id);
             } else {
                 t_atom msg[3];
-                if (endpoint_to_atoms(addr, e->id, 3, msg)){
+                if (x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
                     outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
                 } else {
-                    bug("aoo::endpoint_to_atoms");
+                    bug("t_node::resolve_endpoint");
                 }
             }
         }
@@ -381,10 +381,10 @@ static void aoo_send_listsinks(t_aoo_send *x)
 {
     for (auto& sink : x->x_sinks){
         t_atom msg[3];
-        if (endpoint_to_atoms(sink.s_address, sink.s_id, 3, msg)){
+        if (x->x_node->resolve_endpoint(sink.s_address, sink.s_id, 3, msg)){
             outlet_anything(x->x_msgout, gensym("sink"), 3, msg);
         } else {
-            bug("aoo::endpoint_to_atoms");
+            bug("t_node::resolve_endpoint");
         }
     }
 }

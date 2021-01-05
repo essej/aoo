@@ -78,14 +78,16 @@ struct t_aoo_client
                             const ip_address& address, aoo::time_tag t);
 
     void perform_message(const char *data, int32_t size,
-                         const ip_address& address, double delay);
+                         const ip_address& address, double delay) const;
 
-    void perform_message(const t_osc_message& msg){
+    void perform_message(const t_osc_message& msg) const {
         perform_message(msg.data(), msg.size(), msg.address(), 0);
     }
 
     void send_message(int argc, t_atom *argv,
                       const void *target, int32_t len);
+
+    const t_peer * find_peer(const ip_address& addr) const;
 
     // replies
     using t_reply = std::function<void()>;
@@ -111,6 +113,32 @@ struct t_group_request {
     t_symbol *group;
     t_symbol *pwd;
 };
+
+const t_peer * t_aoo_client::find_peer(const ip_address& addr) const {
+    for (auto& peer : x_peers){
+        if (peer.address == addr){
+            return &peer;
+        }
+    }
+    return nullptr;
+}
+
+int aoo_client_resolve_address(const t_aoo_client *x, const ip_address& addr,
+                                aoo_id id, int argc, t_atom *argv){
+    if (argc < 3){
+        return 0;
+    }
+
+    auto peer = x->find_peer(addr);
+    if (peer){
+        SETSYMBOL(argv, peer->group);
+        SETSYMBOL(argv + 1, peer->user);
+        SETFLOAT(argv + 2, id);
+        return 3;
+    } else {
+        return endpoint_to_atoms(addr, id, argc, argv);
+    }
+}
 
 static void aoo_client_peer_list(t_aoo_client *x)
 {
@@ -274,11 +302,17 @@ static void aoo_client_target(t_aoo_client *x, t_symbol *s, int argc, t_atom *ar
 
 // handle incoming OSC message/bundle from peer
 void t_aoo_client::perform_message(const char *data, int32_t size,
-                                   const ip_address& address, double delay)
+                                   const ip_address& address, double delay) const
 {
     // 1) peer + time tag
     t_atom info[3];
-    address_to_atoms(address, 2, info);
+    auto peer = find_peer(address);
+    if (peer){
+        SETSYMBOL(info, peer->group);
+        SETSYMBOL(info + 1, peer->user);
+    } else {
+        address_to_atoms(address, 2, info);
+    }
     SETFLOAT(info + 2, delay);
 
     outlet_list(x_addrout, &s_list, 3, info);
