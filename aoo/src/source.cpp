@@ -481,8 +481,8 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t n, uint64_t 
         // returns early if we're not already playing.
         unique_lock lock(update_mutex_, std::try_to_lock_t{}); // writer lock!
         if (!lock.owns_lock()){
+            LOG_VERBOSE("aoo_source: process would block");
             dropped_++;
-            LOG_VERBOSE("aoo::source_imp::process() would block");
             return AOO_ERROR_UNSPECIFIED; // ?
         }
 
@@ -505,8 +505,8 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t n, uint64_t 
     // e.g. changing the buffer size.
     shared_lock lock(update_mutex_, std::try_to_lock); // reader lock!
     if (!lock.owns_lock()){
+        LOG_VERBOSE("aoo_source: process would block");
         dropped_++;
-        LOG_VERBOSE("aoo::source_imp::process() would block");
         return AOO_ERROR_UNSPECIFIED; // ?
     }
 
@@ -528,7 +528,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t n, uint64_t 
         // skip blocks
         double period = (double)blocksize_ / (double)samplerate_;
         int nblocks = error / period + 0.5;
-        LOG_VERBOSE("skip " << nblocks << " blocks");
+        LOG_VERBOSE("aoo_source: skip " << nblocks << " blocks");
         dropped_ += nblocks;
         timer_.reset();
     } else {
@@ -561,7 +561,8 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t n, uint64_t 
     if (need_resampling()){
         // go through resampler
         if (!resampler_.write(buf, nsamples)){
-            // LOG_DEBUG("couldn't process");
+            LOG_WARNING("aoo_source: send buffer overflow");
+            dropped_++;
             return AOO_ERROR_UNSPECIFIED;
         }
         while (audioqueue_.write_available() && srqueue_.write_available()){
@@ -585,7 +586,9 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t n, uint64_t 
             // push samplerate
             srqueue_.write(dll_.samplerate());
         } else {
-            // LOG_DEBUG("couldn't process");
+            LOG_WARNING("aoo_source: send buffer overflow");
+            dropped_++;
+            return AOO_ERROR_UNSPECIFIED;
         }
     }
     return AOO_OK;
