@@ -356,7 +356,9 @@ static t_int * aoo_receive_perform(t_int *w)
         auto t = aoo::get_osctime();
         auto vec = x->x_vec.get();
 
-        if (x->x_sink->process(vec, n, t) != AOO_OK){
+        if (x->x_sink->process(vec, n, t) == AOO_OK){
+            x->x_node->notify();
+        } else {
             bypass();
         }
 
