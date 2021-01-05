@@ -47,6 +47,20 @@ public:
     void unlock() override {
         clientMutex_.unlock();
     }
+
+    bool getSinkArg(sc_msg_iter *args, aoo::ip_address& addr,
+                    aoo_id &id) const override {
+        return getEndpointArg(args, addr, &id, "sink");
+    }
+
+    bool getSourceArg(sc_msg_iter *args, aoo::ip_address& addr,
+                      aoo_id &id) const override {
+        return getEndpointArg(args, addr, &id, "source");
+    }
+
+    bool getPeerArg(sc_msg_iter *args, aoo::ip_address& addr) const override {
+        return getEndpointArg(args, addr, nullptr, "peer");
+    }
 private:
     using unique_lock = sync::unique_lock<sync::mutex>;
     using scoped_lock = sync::scoped_lock<sync::mutex>;
@@ -66,6 +80,9 @@ private:
     std::atomic<bool> quit_{false};
 
     // private methods
+    bool getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
+                        int32_t *id, const char *what) const;
+
     static int32_t send(void *user, const char *msg, int32_t size,
                         const void *addr, int32_t addrlen, uint32_t flags);
 
@@ -194,6 +211,60 @@ void AooNode::notify(){
 }
 
 // private methods
+
+bool AooNode::getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
+                             int32_t *id, const char *what) const
+{
+    if (args->remain() < 2){
+        LOG_ERROR("aoo: too few arguments for " << what);
+        return false;
+    }
+
+    auto s = args->gets("");
+
+    // first try peer (group|user)
+    if (args->nextTag() == 's'){
+        auto group = s;
+        auto user = args->gets();
+        // we can't use length_ptr() because socklen_t != int32_t on many platforms
+        int32_t len = aoo::ip_address::max_length;
+        if (client_->find_peer(group, user, addr.address_ptr(), len) == AOO_OK) {
+            *addr.length_ptr() = len;
+        } else {
+            LOG_ERROR("aoo: couldn't find peer " << group << "|" << user);
+            return false;
+        }
+    } else {
+        // otherwise try host|port
+        auto host = s;
+        int port = args->geti();
+        auto result = aoo::ip_address::resolve(host, port, type_);
+        if (!result.empty()){
+            addr = result.front(); // pick the first result
+        } else {
+            LOG_ERROR("aoo: couldn't resolve hostname '"
+                      << host << "' for " << what);
+            return false;
+        }
+    }
+
+    if (id){
+        if (args->remain()){
+            aoo_id i = args->geti(-1);
+            if (i >= 0){
+                *id = i;
+            } else {
+                LOG_ERROR("aoo: bad ID '" << i << "' for " << what);
+                return false;
+            }
+        } else {
+            LOG_ERROR("aoo: too few arguments for " << what);
+            return false;
+        }
+    }
+
+    return true;
+}
 
 int32_t AooNode::send(void *user, const char *msg, int32_t size,
                       const void *addr, int32_t addrlen, uint32_t flags)

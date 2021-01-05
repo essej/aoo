@@ -58,8 +58,13 @@ public:
 
     virtual void unlock() = 0;
 
-    static int32_t replyFn(INode *node, const char *buf, int32_t size,
-                           const void *addr, int32_t addrlen);
+    virtual bool getSinkArg(sc_msg_iter *args, aoo::ip_address& addr,
+                            aoo_id &id) const = 0;
+
+    virtual bool getSourceArg(sc_msg_iter *args, aoo::ip_address& addr,
+                              aoo_id &id) const = 0;
+
+    virtual bool getPeerArg(sc_msg_iter *args, aoo::ip_address& addr) const = 0;
 };
 
 using NodeLock = std::unique_lock<INode>;
@@ -225,18 +230,10 @@ protected:
 
 uint64_t getOSCTime(World *world);
 
-bool getSinkArg(INode* node, sc_msg_iter *args,
-                aoo::ip_address& addr, aoo_id &id);
-
-bool getSourceArg(INode* node, sc_msg_iter *args,
-                  aoo::ip_address& addr, aoo_id &id);
-
-bool getPeerArg(INode* node, sc_msg_iter *args, aoo::ip_address& addr);
-
 void makeDefaultFormat(aoo_format_storage& f, int sampleRate,
                        int blockSize, int numChannels);
 
-bool parseFormat(const AooUnit& unit, int defNumChannels,
-                 sc_msg_iter *args, aoo_format_storage &f);
-
 void serializeFormat(osc::OutboundPacketStream& msg, const aoo_format& f);
+
+bool parseFormat(const AooUnit& unit, int defNumChannels, sc_msg_iter *args,
+                 aoo_format_storage &f);

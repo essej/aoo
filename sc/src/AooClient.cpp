@@ -294,7 +294,7 @@ void AooClient::forwardMessage(const char *data, int32_t size,
         if (args.tags[count] && args.tags[count + 1]) {
             // peer: host|port or group|user
             aoo::ip_address addr;
-            auto success = getPeerArg(node_.get(), &args, addr);
+            auto success = node_->getPeerArg(&args, addr);
             if (success) {
                 node_->client()->send_message(msg, msgSize,
                     addr.address(), addr.length(), flags);

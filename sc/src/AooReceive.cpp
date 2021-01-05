@@ -246,7 +246,7 @@ void aoo_recv_invite(AooReceiveUnit *unit, sc_msg_iter *args){
 
             aoo::ip_address addr;
             aoo_id id;
-            if (getSourceArg(owner.node(), &args, addr, id)){
+            if (owner.node()->getSourceArg(&args, addr, id)){
                 if (owner.sink()->invite_source(
                     addr.address(), addr.length(), id) == AOO_OK) {
                     // only send IP address on success
@@ -279,7 +279,7 @@ void aoo_recv_uninvite(AooReceiveUnit *unit, sc_msg_iter *args){
             if (args.remain() > 0){
                 aoo::ip_address addr;
                 aoo_id id;
-                if (getSourceArg(owner.node(), &args, addr, id)){
+                if (owner.node()->getSourceArg(&args, addr, id)){
                     if (owner.sink()->uninvite_source(
                         addr.address(), addr.length(), id) == AOO_OK) {
                         // only send IP address on success
@@ -345,7 +345,7 @@ void aoo_recv_reset(AooReceiveUnit *unit, sc_msg_iter *args){
             if (args.remain() > 0){
                 aoo::ip_address addr;
                 aoo_id id;
-                if (getSourceArg(owner.node(), &args, addr, id)){
+                if (owner.node()->getSourceArg(&args, addr, id)){
                     owner.sink()->reset_source(addr.address(), addr.length(), id);
                 }
             } else {

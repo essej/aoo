@@ -262,7 +262,7 @@ void aoo_send_add(AooSendUnit *unit, sc_msg_iter* args){
 
             aoo::ip_address addr;
             aoo_id id;
-            if (getSinkArg(owner.node(), &args, addr, id)){
+            if (owner.node()->getSinkArg(&args, addr, id)){
                 auto channelOnset = args.geti();
 
                 // only send IP address on success
@@ -296,7 +296,7 @@ void aoo_send_remove(AooSendUnit *unit, sc_msg_iter* args){
             if (args.remain() > 0){
                 aoo::ip_address addr;
                 aoo_id id;
-                if (getSinkArg(owner.node(), &args, addr, id)){
+                if (owner.node()->getSinkArg(&args, addr, id)){
                     if (owner.removeSink(addr, id)){
                         // only send IP address on success
                         msg << addr.name() << addr.port() << id;
@@ -364,7 +364,7 @@ void aoo_send_channel(AooSendUnit *unit, sc_msg_iter* args){
 
             aoo::ip_address addr;
             aoo_id id;
-            if (getSinkArg(owner.node(), &args, addr, id)){
+            if (owner.node()->getSinkArg(&args, addr, id)){
                 auto channelOnset = args.geti();
                 owner.source()->set_sink_channelonset(
                     addr.address(), addr.length(), id, channelOnset);
