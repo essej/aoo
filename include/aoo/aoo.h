@@ -133,8 +133,6 @@ AOO_API void aoo_terminate(void);
 #define AOO_MSG_SOURCE_LEN 4
 #define AOO_MSG_SINK "/sink"
 #define AOO_MSG_SINK_LEN 5
-#define AOO_MSG_WILDCARD "/*"
-#define AOO_MSG_WILDCARD_LEN 2
 #define AOO_MSG_FORMAT "/format"
 #define AOO_MSG_FORMAT_LEN 7
 #define AOO_MSG_DATA "/data"
