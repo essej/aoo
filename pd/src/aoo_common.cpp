@@ -41,80 +41,6 @@ int endpoint_to_atoms(const ip_address& addr, aoo_id id, int argc, t_atom *argv)
     return 3;
 }
 
-static bool get_endpoint_arg(void *x, t_node *node, int argc, t_atom *argv,
-                             ip_address& addr, int32_t *id, const char *what)
-{
-    if (argc < (2 + (id != nullptr))){
-        pd_error(x, "%s: too few arguments for %s", classname(x), what);
-        return false;
-    }
-
-    // first try peer (group|user)
-    if (argv[1].a_type == A_SYMBOL){
-        t_symbol *group = atom_getsymbol(argv);
-        t_symbol *user = atom_getsymbol(argv + 1);
-        // we can't use length_ptr() because socklen_t != int32_t on many platforms
-        int32_t len = aoo::ip_address::max_length;
-        if (node->client()->find_peer(group->s_name, user->s_name,
-                                      addr.address_ptr(), len) == AOO_OK) {
-            *addr.length_ptr() = len;
-        } else {
-            pd_error(x, "%s: couldn't find peer %s|%s",
-                     classname(x), group->s_name, user->s_name);
-            return false;
-        }
-    } else {
-        // otherwise try host|port
-        t_symbol *host = atom_getsymbol(argv);
-        int port = atom_getfloat(argv + 1);
-        auto result = ip_address::resolve(host->s_name, port, node->type());
-        if (!result.empty()){
-            addr = result.front(); // just pick the first one
-        } else {
-            pd_error(x, "%s: couldn't resolve hostname '%s' for %s",
-                     classname(x), host->s_name, what);
-            return false;
-        }
-    }
-
-    if (id){
-        if (argv[2].a_type == A_FLOAT){
-            aoo_id i = argv[2].a_w.w_float;
-            if (i >= 0){
-                *id = i;
-            } else {
-                pd_error(x, "%s: bad ID '%d' for %s",
-                         classname(x), i, what);
-                return false;
-            }
-        } else {
-            pd_error(x, "%s: bad ID '%s' for %s", classname(x),
-                     atom_getsymbol(argv + 2)->s_name, what);
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool get_sink_arg(void *x, t_node *node, int argc, t_atom *argv,
-                  ip_address& addr, aoo_id &id)
-{
-    return get_endpoint_arg(x, node, argc, argv, addr, &id, "sink");
-}
-
-bool get_source_arg(void *x, t_node *node, int argc, t_atom *argv,
-                    ip_address& addr, aoo_id &id)
-{
-    return get_endpoint_arg(x, node, argc, argv, addr, &id, "source");
-}
-
-bool get_peer_arg(void *x, t_node *node, int argc, t_atom *argv,
-                  ip_address& addr)
-{
-    return get_endpoint_arg(x, node, argc, argv, addr, nullptr, "peer");
-}
-
 static bool getarg(const char *name, void *x, int which,
                       int argc, const t_atom *argv, t_float &f, t_float def)
 {
@@ -164,7 +90,7 @@ static int32_t format_getparam(void *x, int argc, t_atom *argv, int which,
     return def;
 }
 
-bool format_parse(void *x, aoo_format_storage &f, int argc, t_atom *argv,
+bool format_parse(t_pd *x, aoo_format_storage &f, int argc, t_atom *argv,
                   int maxnumchannels)
 {
     t_symbol *codec = atom_getsymbolarg(0, argc, argv);

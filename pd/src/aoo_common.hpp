@@ -45,6 +45,18 @@ struct t_node {
     virtual void lock() = 0;
 
     virtual void unlock() = 0;
+
+    virtual bool get_sink_arg(t_pd *x, int argc, const t_atom *argv,
+                              ip_address& addr, aoo_id &id) const = 0;
+
+    virtual bool get_source_arg(t_pd *x, int argc, const t_atom *argv,
+                                ip_address& addr, aoo_id &id) const = 0;
+
+    virtual bool get_peer_arg(t_pd *x, int argc, const t_atom *argv,
+                              ip_address& addr) const = 0;
+
+    virtual int resolve_endpoint(const ip_address& addr, aoo_id id,
+                                 int argc, t_atom *argv) const = 0;
 };
 
 /*///////////////////////////// helper functions ///////////////////////////////*/
@@ -53,18 +65,9 @@ int address_to_atoms(const ip_address& addr, int argc, t_atom *argv);
 
 int endpoint_to_atoms(const ip_address& addr, aoo_id id, int argc, t_atom *argv);
 
-bool get_sink_arg(void *x, t_node *node, int argc, t_atom *argv,
-                  ip_address& addr, aoo_id &id);
-
-bool get_source_arg(void *x, t_node *node, int argc, t_atom *argv,
-                    ip_address& addr, aoo_id &id);
-
-bool get_peer_arg(void *x, t_node *node, int argc, t_atom *argv,
-                   ip_address& addr);
-
 void format_makedefault(aoo_format_storage &f, int nchannels);
 
-bool format_parse(void *x, aoo_format_storage &f, int argc, t_atom *argv,
+bool format_parse(t_pd *x, aoo_format_storage &f, int argc, t_atom *argv,
                   int maxnumchannels);
 
 int format_to_atoms(const aoo_format &f, int argc, t_atom *argv);

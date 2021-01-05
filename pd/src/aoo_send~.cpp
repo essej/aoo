@@ -212,7 +212,7 @@ static void aoo_send_tick(t_aoo_send *x)
 static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     aoo_format_storage f;
-    if (format_parse(x, f, argc, argv, x->x_nchannels)){
+    if (format_parse((t_pd *)x, f, argc, argv, x->x_nchannels)){
         // Prevent user from accidentally creating huge number of channels.
         // This also helps to catch an issue with old patches (before 2.0-pre3),
         // which would pass the block size as the channel count, because the
@@ -246,7 +246,7 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         pd_error(x, "%s: too few arguments for 'channel' message", classname(x));
         return;
     }
-    if (get_sink_arg(x, x->x_node, argc, argv, addr, id)){
+    if (x->x_node->get_sink_arg((t_pd *)x, argc, argv, addr, id)){
         int32_t chn = atom_getfloat(argv + 3);
     #if 1
         if (!aoo_send_findsink(x, addr, id)){
@@ -297,7 +297,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
     ip_address addr;
     aoo_id id;
-    if (get_sink_arg(x, x->x_node, argc, argv, addr, id)){
+    if (x->x_node->get_sink_arg((t_pd *)x, argc, argv, addr, id)){
         // check if sink exists
         if (aoo_send_findsink(x, addr, id)){
             if (argv[1].a_type == A_SYMBOL){
@@ -346,7 +346,7 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
     ip_address addr;
     aoo_id id;
-    if (get_sink_arg(x, x->x_node, argc, argv, addr, id)){
+    if (x->x_node->get_sink_arg((t_pd *)x, argc, argv, addr, id)){
         if (aoo_send_findsink(x, addr, id)){
             aoo_send_doremovesink(x, addr, id);
             verbose(0, "removed sink %s %d %d", addr.name(), addr.port(), id);

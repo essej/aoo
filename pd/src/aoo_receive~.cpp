@@ -52,7 +52,7 @@ static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *arg
 {
     ip_address addr;
     aoo_id id = 0;
-    if (get_source_arg(x, x->x_node, argc, argv, addr, id)){
+    if (x->x_node->get_source_arg((t_pd *)x, argc, argv, addr, id)){
         for (auto& src : x->x_sources){
             if (src.s_address == addr && src.s_id == id){
                 return &src;
@@ -80,7 +80,7 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
 
     ip_address addr;
     aoo_id id = 0;
-    if (get_source_arg(x, x->x_node, argc, argv, addr, id)){
+    if (x->x_node->get_source_arg((t_pd *)x, argc, argv, addr, id)){
         x->x_sink->invite_source(addr.address(), addr.length(), id);
         // notify send thread
         x->x_node->notify();

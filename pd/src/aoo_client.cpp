@@ -201,7 +201,7 @@ static void aoo_client_send_peer(t_aoo_client *x, t_symbol *s, int argc, t_atom 
 {
     if (x->x_node){
         ip_address address;
-        if (get_peer_arg(x, x->x_node, argc, argv, address)){
+        if (x->x_node->get_peer_arg((t_pd *)x, argc, argv, address)){
             x->send_message(argc - 2, argv + 2, address.address(), address.length());
         }
     }
@@ -251,7 +251,7 @@ static void aoo_client_target(t_aoo_client *x, t_symbol *s, int argc, t_atom *ar
     if (x->x_node){
         if (argc > 1){
             // <ip> <port> or <group> <peer>
-            if (get_peer_arg(x, x->x_node, argc, argv, x->x_peeraddr)){
+            if (x->x_node->get_peer_arg((t_pd *)x, argc, argv, x->x_peeraddr)){
                 x->x_target = TARGET_PEER;
             } else {
                 // this is important, so that we don't accidentally broadcast!

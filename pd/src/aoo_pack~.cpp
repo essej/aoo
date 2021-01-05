@@ -132,7 +132,7 @@ static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
 {
     aoo_format_storage f;
-    if (format_parse(x, f, argc, argv, x->x_nchannels)){
+    if (format_parse((t_pd *)x, f, argc, argv, x->x_nchannels)){
         // Prevent user from accidentally creating huge number of channels.
         // This also helps to catch an issue with old patches (before 2.0-pre3),
         // which would pass the block size as the channel count, because the

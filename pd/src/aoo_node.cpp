@@ -103,7 +103,12 @@ public:
 
     int port() const override { return x_port; }
 
-    void notify() override;
+    void notify() override {
+        x_update.store(true);
+    #if USE_NETWORK_THREAD
+        x_event.set();
+    #endif
+    }
 
     void lock() override {
         x_clientmutex.lock();
@@ -111,6 +116,21 @@ public:
 
     void unlock() override {
         x_clientmutex.unlock();
+    }
+
+    bool get_sink_arg(t_pd *x, int argc, const t_atom *argv,
+                      ip_address& addr, aoo_id &id) const override {
+        return get_endpoint_arg(x, argc, argv, addr, &id, "sink");
+    }
+
+    bool get_source_arg(t_pd *x, int argc, const t_atom *argv,
+                        ip_address& addr, aoo_id &id) const override {
+        return get_endpoint_arg(x, argc, argv, addr, &id, "source");
+    }
+
+    bool get_peer_arg(t_pd *x, int argc, const t_atom *argv,
+                      ip_address& addr) const override {
+        return get_endpoint_arg(x, argc, argv, addr, nullptr, "peer");
     }
 private:
     friend class t_node;
@@ -125,16 +145,67 @@ private:
     void receive_packets();
 
     bool add_object(t_pd *obj, void *x, aoo_id id);
+
+    bool get_endpoint_arg(t_pd *x, int argc, const t_atom *argv,
+                          ip_address& addr, int32_t *id, const char *what) const;
 };
 
-// public methods
+// private methods
 
-void t_node_imp::notify()
+bool t_node_imp::get_endpoint_arg(t_pd *x, int argc, const t_atom *argv,
+                                  ip_address& addr, int32_t *id, const char *what) const
 {
-    x_update.store(true);
-#if USE_NETWORK_THREAD
-    x_event.set();
-#endif
+    if (argc < (2 + (id != nullptr))){
+        pd_error(x, "%s: too few arguments for %s", classname(x), what);
+        return false;
+    }
+
+    // first try peer (group|user)
+    if (argv[1].a_type == A_SYMBOL){
+        t_symbol *group = atom_getsymbol(argv);
+        t_symbol *user = atom_getsymbol(argv + 1);
+        // we can't use length_ptr() because socklen_t != int32_t on many platforms
+        int32_t len = aoo::ip_address::max_length;
+        if (x_client->find_peer(group->s_name, user->s_name,
+                                addr.address_ptr(), len) == AOO_OK) {
+            *addr.length_ptr() = len;
+        } else {
+            pd_error(x, "%s: couldn't find peer %s|%s",
+                     classname(x), group->s_name, user->s_name);
+            return false;
+        }
+    } else {
+        // otherwise try host|port
+        t_symbol *host = atom_getsymbol(argv);
+        int port = atom_getfloat(argv + 1);
+        auto result = ip_address::resolve(host->s_name, port, x_type);
+        if (!result.empty()){
+            addr = result.front(); // just pick the first one
+        } else {
+            pd_error(x, "%s: couldn't resolve hostname '%s' for %s",
+                     classname(x), host->s_name, what);
+            return false;
+        }
+    }
+
+    if (id){
+        if (argv[2].a_type == A_FLOAT){
+            aoo_id i = argv[2].a_w.w_float;
+            if (i >= 0){
+                *id = i;
+            } else {
+                pd_error(x, "%s: bad ID '%d' for %s",
+                         classname(x), i, what);
+                return false;
+            }
+        } else {
+            pd_error(x, "%s: bad ID '%s' for %s", classname(x),
+                     atom_getsymbol(argv + 2)->s_name, what);
+            return false;
+        }
+    }
+
+    return true;
 }
 
 // private methods
