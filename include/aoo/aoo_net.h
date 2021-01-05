@@ -78,7 +78,7 @@ typedef enum aoo_net_server_flag {
 } aoo_net_server_flag;
 
 typedef struct aoo_net_connect_reply {
-    int32_t user_id;
+    aoo_id user_id;
     uint32_t server_flags;
 } aoo_net_connect_reply;
 
@@ -131,7 +131,7 @@ typedef struct aoo_net_peer_event
     AOO_NET_ENDPOINT_EVENT
     const char *group_name;
     const char *user_name;
-    int32_t user_id;
+    aoo_id user_id;
     uint32_t flags;
 } aoo_net_peer_event;
 
@@ -147,7 +147,7 @@ typedef struct aoo_net_user_event
 {
     AOO_NET_ENDPOINT_EVENT
     const char *user_name;
-    int32_t user_id;
+    aoo_id user_id;
 } aoo_net_user_event;
 
 /*///////////////////////// AOO server /////////////////////////*/
