@@ -346,6 +346,37 @@ aoo_error aoo::net::client_imp::find_peer(const char *group, const char *user,
     return AOO_ERROR_UNSPECIFIED;
 }
 
+aoo_error aoo_net_client_get_peer_info(aoo_net_client *client,
+                                       const void *address, int32_t addrlen,
+                                       aoo_net_peer_info *info)
+{
+    return client->get_peer_info(address, addrlen, info);
+}
+
+aoo_error aoo::net::client_imp::get_peer_info(const void *address, int32_t addrlen,
+                                              aoo_net_peer_info *info)
+{
+    peer_lock lock(peers_);
+    for (auto& p : peers_){
+        ip_address addr((const sockaddr *)address, addrlen);
+        if (p.match(addr)){
+            auto copy = [](auto& src, auto dst, auto size){
+                const auto limit = size - 1; // leave space for '\0'
+                auto n = (src.size() > limit) ? limit : src.size();
+                memcpy(dst, src.data(), n);
+                dst[n] = '\0';
+            };
+
+            copy(p.group(), info->group_name, sizeof(info->group_name));
+            copy(p.user(), info->user_name, sizeof(info->user_name));
+            info->user_id = p.id();
+
+            return AOO_OK;
+        }
+    }
+    return AOO_ERROR_UNSPECIFIED;
+}
+
 aoo_error aoo_net_client_request(aoo_net_client *client,
                                  aoo_net_request_type request, void *data,
                                  aoo_net_callback callback, void *user) {

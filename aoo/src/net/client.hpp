@@ -197,6 +197,9 @@ public:
     aoo_error find_peer(const char *group, const char *user,
                       void *address, int32_t& addrlen) override;
 
+    aoo_error get_peer_info(const void *address, int32_t addrlen,
+                            aoo_net_peer_info *info) override;
+
     aoo_error send_request(aoo_net_request_type request, void *data,
                            aoo_net_callback callback, void *user) override;
 

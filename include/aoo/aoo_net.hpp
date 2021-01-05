@@ -120,8 +120,13 @@ public:
     // find peer and return its address
     // address: pointer to sockaddr_storage
     // addrlen: initialized with max. storage size, updated to actual size
+    // NOTE: if 'address' is NULL, we only check if the peer exists
     virtual aoo_error find_peer(const char *group, const char *user,
                                 void *address, int32_t& addrlen) = 0;
+
+    // find peer by its IP address and return additional info
+    virtual aoo_error get_peer_info(const void *address, int32_t addrlen,
+                                    aoo_net_peer_info *info) = 0;
 
     // send a request to the AOO server (always thread safe)
     virtual aoo_error send_request(aoo_net_request_type request, void *data,
