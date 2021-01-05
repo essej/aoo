@@ -214,7 +214,9 @@ void AooReceiveUnit::next(int numSamples){
     if (sink){
         uint64_t t = getOSCTime(mWorld);
 
-        if (sink->process(mOutBuf, numSamples, t) != AOO_OK){
+        if (sink->process(mOutBuf, numSamples, t) == AOO_OK){
+            delegate().node()->notify();
+        } else {
             ClearUnitOutputs(this, numSamples);
         }
 

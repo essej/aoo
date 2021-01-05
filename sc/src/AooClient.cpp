@@ -298,15 +298,18 @@ void AooClient::forwardMessage(const char *data, int32_t size,
             if (success) {
                 node_->client()->send_message(msg, msgSize,
                     addr.address(), addr.length(), flags);
+                node_->notify();
             }
         } else {
             // group name
             auto group = args.gets("");
             node_->client()->send_message(msg, msgSize, group, 0, flags);
+            node_->notify();
         }
     } else {
         // broadcast
         node_->client()->send_message(msg, msgSize, 0, 0, flags);
+        node_->notify();
     }
 }
 
