@@ -10,16 +10,6 @@
 #include <algorithm>
 #include <iostream>
 
-#ifndef _WIN32
-#include <sys/poll.h>
-#include <unistd.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
-#include <errno.h>
-#endif
-
 #define AOO_NET_MSG_CLIENT_PING \
     AOO_MSG_DOMAIN AOO_NET_MSG_CLIENT AOO_NET_MSG_PING
 
@@ -508,8 +498,8 @@ uint32_t server_imp::flags() const {
 udp_server::udp_server(int socket) {
     socket_ = socket;
     type_ = socket_family(socket);
-    receivethread_ = std::thread(receive_packets, this);
-    workerthread_ = std::thread(handle_packets, this);
+    receivethread_ = std::thread(&udp_server::receive_packets, this);
+    workerthread_ = std::thread(&udp_server::handle_packets, this);
 }
 
 udp_server::~udp_server(){
