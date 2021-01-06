@@ -1512,6 +1512,7 @@ void source_desc::check_missing_blocks(const sink_imp& s, const sendfn& reply,
             // send it off
             msg << osc::EndMessage;
 
+            // send without lock!
             lock.unlock();
             reply(msg.Data(), msg.Size(), address(), flags_);
             lock.lock();

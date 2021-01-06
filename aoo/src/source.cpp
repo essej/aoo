@@ -719,9 +719,7 @@ void source_imp::start_new_stream(){
     sequence_ = 0;
     dropped_ = 0;
 
-    if (!history_.empty()){
-        history_.clear(); // !
-    }
+    history_.clear(); // !
 
     sink_lock lock(sinks_);
     for (auto& s : sinks_){
@@ -826,131 +824,135 @@ void source_imp::send_format(const sendfn& fn){
 }
 
 void source_imp::send_data(const sendfn& fn){
-    for (;;){
+    int32_t last_sequence = 0;
+
+    // *first* check for dropped blocks
+    auto dropped = dropped_.exchange(0, std::memory_order_relaxed);
+    while (dropped--){
         shared_lock updatelock(update_mutex_); // reader lock!
         if (!encoder_){
             return;
         }
+        int32_t salt = salt_; // make snapshot
 
+        // send empty block
+        // NOTE: we're the only thread reading 'sequence_', so we can increment
+        // it even while holding a reader lock!
         data_packet d;
-        int32_t salt = salt_;
+        d.sequence = last_sequence = sequence_++;
+        d.samplerate = encoder_->samplerate(); // use nominal samplerate
+        d.channel = 0;
+        d.totalsize = 0;
+        d.nframes = 0;
+        d.framenum = 0;
+        d.data = nullptr;
+        d.size = 0;
+        // now we can unlock
+        updatelock.unlock();
 
-        // *first* check for dropped blocks
-        // NOTE: there's no ABA problem because the variable will only be decremented in this method.
-        if (dropped_.load(std::memory_order_relaxed) > 0){
-            // send empty block
-            d.sequence = sequence_++;
-            d.samplerate = encoder_->samplerate(); // use nominal samplerate
-            d.channel = 0;
-            d.totalsize = 0;
-            d.nframes = 0;
-            d.framenum = 0;
-            d.data = nullptr;
-            d.size = 0;
-            // now we can unlock
-            updatelock.unlock();
+        // we only free sources in this thread, so we don't have to lock
+    #if 0
+        // this is not a real lock, so we don't have worry about dead locks
+        sink_lock lock(sinks_);
+    #endif
+        // send block to sinks
+        for (auto& sink : sinks_){
+            d.channel = sink.channel.load(std::memory_order_relaxed); // !
+            send_data(fn, sink, salt, d);
+        }
+    }
 
-            // we only free sources in this thread, so we don't have to lock
-        #if 0
-            // this is not a real lock, so we don't have worry about dead locks
-            sink_lock lock(sinks_);
-        #endif
-            // send block to sinks
-            for (auto& sink : sinks_){
-                d.channel = sink.channel; // !
-                send_data(fn, sink, salt, d);
-            }
-            --dropped_;
-        } else if (audioqueue_.read_available() && srqueue_.read_available()){
-            // always read samplerate from ringbuffer!
-            srqueue_.read(d.samplerate);
-
-            if (!sinks_.empty()){
-                // copy and convert audio samples to blob data
-                auto nchannels = encoder_->nchannels();
-                auto blocksize = encoder_->blocksize();
-                sendbuffer_.resize(sizeof(double) * nchannels * blocksize); // overallocate
-
-                d.totalsize = sendbuffer_.size();
-                auto err = encoder_->encode(audioqueue_.read_data(), audioqueue_.blocksize(),
-                    sendbuffer_.data(), d.totalsize);
-
-                audioqueue_.read_commit();
-
-                if (err != AOO_OK){
-                    return;
-                }
-
-                if (d.totalsize > 0){
-                    d.sequence = sequence_++;
-
-                    // calculate number of frames
-                    auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
-                    auto dv = div(d.totalsize, maxpacketsize);
-                    d.nframes = dv.quot + (dv.rem != 0);
-
-                    // save block (if we have a history buffer)
-                    if (history_.capacity() > 0){
-                        history_.push()->set(d.sequence, d.samplerate, sendbuffer_.data(),
-                                             d.totalsize, d.nframes, maxpacketsize);
-                    }
-
-                    // unlock before sending!
-                    updatelock.unlock();
-
-                    // from here on we don't hold any lock!
-
-                    // send a single frame to all sinks
-                    // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
-                    auto dosend = [&](int32_t frame, const char* data, auto n){
-                        d.framenum = frame;
-                        d.data = data;
-                        d.size = n;
-                        // we only free sources in this thread, so we don't have to lock
-                    #if 0
-                        // this is not a real lock, so we don't have worry about dead locks
-                        sink_lock lock(sinks_);
-                    #endif
-                        // send block to sinks
-                        for (auto& sink : sinks_){
-                            d.channel = sink.channel; // !
-                            send_data(fn, sink, salt, d);
-                        }
-                    };
-
-                    auto ntimes = redundancy_.load();
-                    for (auto i = 0; i < ntimes; ++i){
-                        auto ptr = sendbuffer_.data();
-                        // send large frames (might be 0)
-                        for (int32_t j = 0; j < dv.quot; ++j, ptr += maxpacketsize){
-                            dosend(j, ptr, maxpacketsize);
-                        }
-                        // send remaining bytes as a single frame (might be the only one!)
-                        if (dv.rem){
-                            dosend(dv.quot, ptr, dv.rem);
-                        }
-                    }
-                } else {
-                    LOG_WARNING("aoo_source: couldn't encode audio data!");
-                    return;
-                }
-            } else {
-                // drain buffer anyway
-                audioqueue_.read_commit();
-            }
-        } else {
+    // now send audio
+    while (audioqueue_.read_available() && srqueue_.read_available()){
+        shared_lock updatelock(update_mutex_); // reader lock!
+        if (!encoder_){
             return;
         }
+        int32_t salt = salt_; // make snapshot
 
-        // handle overflow (with 64 samples @ 44.1 kHz this happens every 36 days)
-        // for now just force a reset by changing the salt, LATER think how to handle this better
-        if (sequence_ == INT32_MAX){
-            if (updatelock.owns_lock()){
-                updatelock.unlock();
+        data_packet d;
+        // always read samplerate from ringbuffer!
+        srqueue_.read(d.samplerate);
+
+        if (!sinks_.empty()){
+            // copy and convert audio samples to blob data
+            auto nchannels = encoder_->nchannels();
+            auto blocksize = encoder_->blocksize();
+            sendbuffer_.resize(sizeof(double) * nchannels * blocksize); // overallocate
+
+            d.totalsize = sendbuffer_.size();
+            auto err = encoder_->encode(audioqueue_.read_data(), audioqueue_.blocksize(),
+                sendbuffer_.data(), d.totalsize);
+
+            audioqueue_.read_commit(); // always commit!
+
+            if (err != AOO_OK){
+                LOG_WARNING("aoo_source: couldn't encode audio data!");
+                return;
             }
-            unique_lock lock(update_mutex_); // switch to writer lock
-            salt_ = make_salt();
+
+            // NOTE: we're the only thread reading 'sequence_', so we can increment
+            // it even while holding a reader lock!
+            d.sequence = last_sequence = sequence_++;
+
+            // calculate number of frames
+            auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
+            auto dv = div(d.totalsize, maxpacketsize);
+            d.nframes = dv.quot + (dv.rem != 0);
+
+            // save block (if we have a history buffer)
+            if (history_.capacity() > 0){
+                history_.push()->set(d.sequence, d.samplerate, sendbuffer_.data(),
+                                     d.totalsize, d.nframes, maxpacketsize);
+            }
+
+            // unlock before sending!
+            updatelock.unlock();
+
+            // from here on we don't hold any lock!
+
+            // send a single frame to all sinks
+            // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
+            auto dosend = [&](int32_t frame, const char* data, auto n){
+                d.framenum = frame;
+                d.data = data;
+                d.size = n;
+                // we only free sources in this thread, so we don't have to lock
+            #if 0
+                // this is not a real lock, so we don't have worry about dead locks
+                sink_lock lock(sinks_);
+            #endif
+                // send block to sinks
+                for (auto& sink : sinks_){
+                    d.channel = sink.channel.load(std::memory_order_relaxed); // !
+                    send_data(fn, sink, salt, d);
+                }
+            };
+
+            auto ntimes = redundancy_.load();
+            for (auto i = 0; i < ntimes; ++i){
+                auto ptr = sendbuffer_.data();
+                // send large frames (might be 0)
+                for (int32_t j = 0; j < dv.quot; ++j, ptr += maxpacketsize){
+                    dosend(j, ptr, maxpacketsize);
+                }
+                // send remaining bytes as a single frame (might be the only one!)
+                if (dv.rem){
+                    dosend(dv.quot, ptr, dv.rem);
+                }
+            }
+        } else {
+            // drain buffer anyway
+            audioqueue_.read_commit();
         }
+    }
+
+    // handle overflow (with 64 samples @ 44.1 kHz this happens every 36 days)
+    // for now just force a reset by changing the salt, LATER think how to handle this better
+    if (last_sequence == INT32_MAX){
+        scoped_lock lock(update_mutex_);
+        sequence_ = 0;
+        salt_ = make_salt();
     }
 }
 
