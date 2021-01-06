@@ -59,6 +59,12 @@
 #define AOO_NET_MSG_PEER_LEAVE \
     AOO_NET_MSG_PEER AOO_NET_MSG_LEAVE
 
+// debugging
+
+#define FORCE_RELAY 0
+
+#define DEBUG_RELAY 0
+
 namespace aoo {
 
 namespace net {
@@ -76,6 +82,13 @@ std::string encrypt(const std::string& input){
     }
 
     return output;
+}
+
+void copy_string(const std::string& src, char *dst, int32_t size){
+    const auto limit = size - 1; // leave space for '\0'
+    auto n = (src.size() > limit) ? limit : src.size();
+    memcpy(dst, src.data(), n);
+    dst[n] = '\0';
 }
 
 /*//////////////////// OSC ////////////////////////////*/
@@ -318,15 +331,15 @@ aoo_error aoo::net::client_imp::remove_sink(sink *sink)
     return AOO_ERROR_UNSPECIFIED;
 }
 
-aoo_error aoo_net_client_find_peer(aoo_net_client *client,
-                                   const char *group, const char *user,
-                                   void *address, int32_t *addrlen)
+aoo_error aoo_net_client_get_peer_address(aoo_net_client *client,
+                                          const char *group, const char *user,
+                                          void *address, int32_t *addrlen, uint32_t *flags)
 {
-    return client->find_peer(group, user, address, *addrlen);
+    return client->get_peer_address(group, user, address, addrlen, flags);
 }
 
-aoo_error aoo::net::client_imp::find_peer(const char *group, const char *user,
-                                          void *address, int32_t& addrlen)
+aoo_error aoo::net::client_imp::get_peer_address(const char *group, const char *user,
+                                                 void *address, int32_t *addrlen, uint32_t *flags)
 {
     peer_lock lock(peers_);
     for (auto& p : peers_){
@@ -334,11 +347,14 @@ aoo_error aoo::net::client_imp::find_peer(const char *group, const char *user,
         if (p.match(group, user) && p.connected()){
             if (address){
                 auto& addr = p.address();
-                if (addrlen < addr.length()){
+                if (*addrlen < addr.length()){
                     return AOO_ERROR_UNSPECIFIED;
                 }
                 memcpy(address, addr.address(), addr.length());
-                addrlen = addr.length();
+                *addrlen = addr.length();
+            }
+            if (flags){
+                *flags = p.flags();
             }
             return AOO_OK;
         }
@@ -360,16 +376,10 @@ aoo_error aoo::net::client_imp::get_peer_info(const void *address, int32_t addrl
     for (auto& p : peers_){
         ip_address addr((const sockaddr *)address, addrlen);
         if (p.match(addr)){
-            auto copy = [](auto& src, auto dst, auto size){
-                const auto limit = size - 1; // leave space for '\0'
-                auto n = (src.size() > limit) ? limit : src.size();
-                memcpy(dst, src.data(), n);
-                dst[n] = '\0';
-            };
-
-            copy(p.group(), info->group_name, sizeof(info->group_name));
-            copy(p.user(), info->user_name, sizeof(info->user_name));
+            aoo::net::copy_string(p.group(), info->group_name, sizeof(info->group_name));
+            aoo::net::copy_string(p.user(), info->user_name, sizeof(info->user_name));
             info->user_id = p.id();
+            info->flags = p.flags();
 
             return AOO_OK;
         }
@@ -502,12 +512,40 @@ aoo_error aoo_net_client_update(aoo_net_client *client, aoo_sendfn fn, void *use
 }
 
 aoo_error aoo::net::client_imp::update(aoo_sendfn fn, void *user){
+    struct proxy_data {
+        client_imp *self;
+        aoo_sendfn fn;
+        void *user;
+    };
+
+    auto proxy = [](void *x, const char *data, int32_t n,
+            const void *address, int32_t addrlen, uint32_t flags){
+        auto y = static_cast<proxy_data *>(x);
+
+        bool relay = flags & AOO_ENDPOINT_RELAY;
+        if (relay){
+            // relay via server
+            ip_address addr((const sockaddr *)address, addrlen);
+
+            sendfn reply(y->fn, y->user);
+
+            y->self->udp().send_peer_message(data, n, addr, reply, true);
+
+            return (int32_t)0;
+        } else {
+            // just forward
+            return y->fn(y->user, data, n, address, addrlen, flags);
+        }
+    };
+
+    proxy_data data {this, fn, user};
+
     // send sources and sinks
     for (auto& s : sources_){
-        s.source->update(fn, user);
+        s.source->update(proxy, &data);
     }
     for (auto& s : sinks_){
-        s.sink->update(fn, user);
+        s.sink->update(proxy, &data);
     }
     // send server messages
     if (state_.load() != client_state::disconnected){
@@ -1121,8 +1159,9 @@ void client_imp::handle_login(const osc::ReceivedMessage& msg){
 
         if (status > 0){
             int32_t id = (it++)->AsInt32();
+            // for backwards compatibility (LATER remove check)
             uint32_t flags = (it != msg.ArgumentsEnd()) ?
-                (it++)->AsInt32() : 0;
+                (uint32_t)(it++)->AsInt32() : 0;
             // connected!
             state_.store(client_state::connected);
             LOG_VERBOSE("aoo_client: successfully logged in (user ID: "
@@ -1155,17 +1194,26 @@ void client_imp::handle_login(const osc::ReceivedMessage& msg){
     }
 }
 
-void client_imp::handle_relay_message(const osc::ReceivedMessage &msg){
+static osc::ReceivedPacket unwrap_message(const osc::ReceivedMessage& msg,
+    ip_address& addr, ip_address::ip_type type)
+{
     auto it = msg.ArgumentsBegin();
 
     auto ip = (it++)->AsString();
     auto port = (it++)->AsInt32();
-    ip_address addr(ip, port, type());
+
+    addr = ip_address(ip, port, type);
 
     const void *blobData;
     osc::osc_bundle_element_size_t blobSize;
     (it++)->AsBlob(blobData, blobSize);
-    osc::ReceivedPacket packet((const char *)blobData, blobSize);
+
+    return osc::ReceivedPacket((const char *)blobData, blobSize);
+}
+
+void client_imp::handle_relay_message(const osc::ReceivedMessage &msg){
+    ip_address addr;
+    auto packet = unwrap_message(msg, addr, type());
     osc::ReceivedMessage relayMsg(packet);
 
     // for now, we only handle peer OSC messages
@@ -1328,7 +1376,7 @@ client_imp::error_event::error_event(int32_t code, const char *msg)
 {
     error_event_.type = AOO_NET_ERROR_EVENT;
     error_event_.error_code = code;
-    error_event_.error_message = copy_string(msg);
+    error_event_.error_message = aoo::copy_string(msg);
 }
 
 client_imp::error_event::~error_event()
@@ -1359,8 +1407,8 @@ client_imp::peer_event::peer_event(int32_t type, const ip_address& addr,
     peer_event_.type = type;
     peer_event_.address = copy_sockaddr(addr.address(), addr.length());
     peer_event_.addrlen = addr.length();
-    peer_event_.group_name = copy_string(group);
-    peer_event_.user_name = copy_string(user);
+    peer_event_.group_name = aoo::copy_string(group);
+    peer_event_.user_name = aoo::copy_string(user);
     peer_event_.user_id = id;
     peer_event_.flags = flags;
 }
@@ -1469,6 +1517,8 @@ aoo_error udp_client::handle_message(const char *data, int32_t n,
             } else {
                 LOG_WARNING("aoo_client: got message from unknown server " << addr.name());
             }
+        } else if (type == AOO_TYPE_RELAY){
+            handle_relay_message(msg, reply);
         } else {
             LOG_WARNING("aoo_client: got unexpected message " << msg.AddressPattern());
             return AOO_ERROR_UNSPECIFIED;
@@ -1482,6 +1532,18 @@ aoo_error udp_client::handle_message(const char *data, int32_t n,
     #endif
         return AOO_ERROR_UNSPECIFIED;
     }
+}
+
+void udp_client::handle_relay_message(const osc::ReceivedMessage &msg,
+                                      const sendfn& reply){
+    ip_address addr;
+    auto packet = unwrap_message(msg, addr, client_->type());
+#if DEBUG_RELAY
+    LOG_DEBUG("aoo_client: got relayed message " << packet.Contents());
+#endif
+
+    client_->handle_message(packet.Contents(), packet.Size(),
+                            addr.address(), addr.length(), reply.fn(), reply.user());
 }
 
 void udp_client::send_peer_message(const char *data, int32_t size,
@@ -1626,10 +1688,6 @@ bool peer::match(const std::string& group, int32_t id)
     return id_ == id && group_ == group; // immutable!
 }
 
-uint32_t peer::flags() const {
-    return 0;
-}
-
 std::ostream& operator << (std::ostream& os, const peer& p)
 {
     os << p.group_ << "|" << p.user_;
@@ -1648,7 +1706,7 @@ void peer::update(const sendfn& reply, time_tag now){
             msg << osc::BeginMessage(AOO_NET_MSG_PEER_PING) << osc::EndMessage;
 
             client_->udp().send_peer_message(msg.Data(), msg.Size(),
-                                             real_address_, reply, relay_);
+                                             real_address_, reply, relay());
 
             last_pingtime_ = elapsed_time;
         }
@@ -1656,40 +1714,30 @@ void peer::update(const sendfn& reply, time_tag now){
         // try to establish UDP connection with peer
         if (elapsed_time > client_->request_timeout()){
             // time out
-            if (client_->have_server_flag(AOO_NET_SERVER_RELAY)){
-                if (!relay_){
-                    // try to relay traffic over server
-                    start_time_ = now; // reset timer
-                    relay_ = true;
-                } else {
-                    // couldn't establish relay connection!
-                    LOG_ERROR("aoo_client: couldn't establish UDP relay connection to "
-                              << *this << "; timed out after "
-                              << client_->request_timeout() << " seconds");
-
-                    std::stringstream ss;
-                    ss << "couldn't establish connection with peer " << *this;
-
-                    auto e = std::make_unique<client_imp::error_event>(0, ss.str().c_str());
-                    client_->send_event(std::move(e));
-
-                    timeout_ = true;
-                }
-            } else {
-                // couldn't establish peer connection! send error and give up
-                LOG_ERROR("aoo_client: couldn't establish UDP peer-to-peer connection to "
-                          << *this << "; timed out after "
-                          << client_->request_timeout() << " seconds");
-
-
-                std::stringstream ss;
-                ss << "couldn't establish connection with peer " << *this;
-
-                auto e = std::make_unique<client_imp::error_event>(0, ss.str().c_str());
-                client_->send_event(std::move(e));
-
-                timeout_ = true;
+            bool can_relay = client_->have_server_flag(AOO_NET_SERVER_RELAY);
+            if (can_relay && !relay()){
+                LOG_VERBOSE("aoo_client: try to relay " << *this);
+                // try to relay traffic over server
+                start_time_ = now; // reset timer
+                last_pingtime_ = 0;
+                flags_ |= AOO_ENDPOINT_RELAY;
+                return;
             }
+
+            // couldn't establish relay connection!
+            const char *what = relay() ? "relay" : "peer-to-peer";
+            LOG_ERROR("aoo_client: couldn't establish UDP " << what
+                      << " connection to " << *this << "; timed out after "
+                      << client_->request_timeout() << " seconds");
+
+            std::stringstream ss;
+            ss << "couldn't establish connection with peer " << *this;
+
+            auto e = std::make_unique<client_imp::error_event>(0, ss.str().c_str());
+            client_->send_event(std::move(e));
+
+            timeout_ = true;
+
             return;
         }
         // send handshakes in fast succession to all addresses
@@ -1708,7 +1756,7 @@ void peer::update(const sendfn& reply, time_tag now){
 
             for (auto& addr : addresses_){
                 client_->udp().send_peer_message(msg.Data(), msg.Size(),
-                                                 addr, reply, relay_);
+                                                 addr, reply, relay());
             }
 
             // LOG_DEBUG("send ping to " << *this);
@@ -1721,6 +1769,12 @@ void peer::update(const sendfn& reply, time_tag now){
 bool peer::handle_first_message(const osc::ReceivedMessage &msg, int onset,
                                 const ip_address &addr)
 {
+#if FORCE_RELAY
+    // force relay
+    if (!relay()){
+        return false;
+    }
+#endif
     // Try to find matching address
     for (auto& a : addresses_){
         if (a == addr){
@@ -1778,7 +1832,8 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
         client_->send_event(std::move(e));
 
         LOG_VERBOSE("aoo_client: successfully established connection with "
-                  << *this << " (" << addr.name() << ":" << addr.port() << ")");
+                  << *this << " [" << addr.name() << "]:" << addr.port()
+                    << (relay() ? " (relayed)" : ""));
     }
 
     auto pattern = msg.AddressPattern() + onset;
@@ -1791,7 +1846,7 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
             msg << osc::BeginMessage(AOO_NET_MSG_PEER_REPLY) << osc::EndMessage;
 
             client_->udp().send_peer_message(msg.Data(), msg.Size(),
-                                             real_address_, reply, relay_);
+                                             real_address_, reply, relay());
         } else if (!strcmp(pattern, AOO_NET_MSG_REPLY)){
             LOG_DEBUG("aoo_client: got reply from " << *this);
         } else if (!strcmp(pattern, AOO_NET_MSG_MESSAGE)){

@@ -665,6 +665,9 @@ aoo_error sink_imp::handle_format_message(const osc::ReceivedMessage& msg,
     const void *settings;
     osc::osc_bundle_element_size_t size;
     (it++)->AsBlob(settings, size);
+    // for backwards comptability (later remove check)
+    uint32_t flags = (it != msg.ArgumentsEnd()) ?
+                (uint32_t)(it++)->AsInt32() : 0;
 
     if (id < 0){
         LOG_WARNING("bad ID for " << AOO_MSG_FORMAT << " message");
@@ -676,7 +679,7 @@ aoo_error sink_imp::handle_format_message(const osc::ReceivedMessage& msg,
     if (!src){
         src = add_source(addr, id);
     }
-    return src->handle_format(*this, salt, f, (const char *)settings, size, reply);
+    return src->handle_format(*this, salt, f, (const char *)settings, size, flags, reply);
 }
 
 aoo_error sink_imp::handle_data_message(const osc::ReceivedMessage& msg,
@@ -891,7 +894,8 @@ void source_desc::uninvite(const sink_imp& s){
 // /aoo/sink/<id>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <settings...>
 
 aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_format& f,
-                                     const char *settings, int32_t size, const sendfn& reply){
+                                     const char *settings, int32_t size, uint32_t flags,
+                                     const sendfn& reply){
     // ignore redundant format messages!
     // NOTE: salt_ can only change in this thread,
     // so we don't need a lock to safely *read* it!
@@ -925,6 +929,8 @@ aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_
 
     auto oldsalt = salt_;
     salt_ = salt;
+
+    flags_ = flags;
 
     // read format
     aoo_format_storage fmt;
@@ -1067,7 +1073,7 @@ aoo_error source_desc::handle_ping(const sink_imp& s, time_tag tt,
         << lost_blocks
         << osc::EndMessage;
 
-    reply(msg.Data(), msg.Size(), addr_, flags());
+    reply(msg.Data(), msg.Size(), addr_, flags_);
 
     LOG_DEBUG("send /ping to source " << id_);
 
@@ -1507,7 +1513,7 @@ void source_desc::check_missing_blocks(const sink_imp& s, const sendfn& reply,
             msg << osc::EndMessage;
 
             lock.unlock();
-            reply(msg.Data(), msg.Size(), address(), flags());
+            reply(msg.Data(), msg.Size(), address(), flags_);
             lock.lock();
 
             // prepare next message
@@ -1558,7 +1564,7 @@ resend_done:
         // send it off
         msg << osc::EndMessage;
 
-        reply(msg.Data(), msg.Size(), address(), flags());
+        reply(msg.Data(), msg.Size(), address(), flags_);
     }
 
     assert(resent <= maxnumframes);
@@ -1584,7 +1590,7 @@ void source_desc::send_format_request(const sink_imp& s, const sendfn& fn) {
     msg << osc::BeginMessage(address) << s.id() << (int32_t)make_version()
         << osc::EndMessage;
 
-    fn(msg.Data(), msg.Size(), addr_, flags());
+    fn(msg.Data(), msg.Size(), addr_, flags_);
 }
 
 // AoO/<id>/invite <sink>
@@ -1616,7 +1622,7 @@ void source_desc::send_invitation(const sink_imp& s, const sendfn& fn){
 
     msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
 
-    fn(msg.Data(), msg.Size(), addr_, flags());
+    fn(msg.Data(), msg.Size(), addr_, flags_);
 
     LOG_DEBUG("send /invite to source " << id_);
 }
@@ -1636,7 +1642,7 @@ void source_desc::send_uninvitation(const sink_imp& s, const sendfn &fn){
 
     msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
 
-    fn(msg.Data(), msg.Size(), addr_, flags());
+    fn(msg.Data(), msg.Size(), addr_, flags_);
 
     LOG_DEBUG("send /uninvite source " << id_);
 }

@@ -351,7 +351,7 @@ void server_imp::on_user_left_group(user& usr, group& grp){
 }
 
 void server_imp::handle_relay_message(const osc::ReceivedMessage& msg,
-                                  const ip_address& src){
+                                      const ip_address& src, bool tcp){
     auto it = msg.ArgumentsBegin();
 
     auto ip = (it++)->AsString();
@@ -364,19 +364,23 @@ void server_imp::handle_relay_message(const osc::ReceivedMessage& msg,
 
     // forward message to matching client
     // send unmapped address in case the client is IPv4 only!
-    for (auto& client : clients_){
-        if (client->match(dst)) {
-            char buf[AOO_MAXPACKETSIZE];
-            osc::OutboundPacketStream out(buf, sizeof(buf));
-            out << osc::BeginMessage(AOO_MSG_DOMAIN AOO_NET_MSG_RELAY)
-                << src.name_unmapped() << src.port() << osc::Blob(msgData, msgSize)
-                << osc::EndMessage;
-            client->send_message(out.Data(), out.Size());
-            return;
-        }
-    }
+    char buf[AOO_MAXPACKETSIZE];
+    osc::OutboundPacketStream out(buf, sizeof(buf));
+    out << osc::BeginMessage(AOO_MSG_DOMAIN AOO_NET_MSG_RELAY)
+        << src.name_unmapped() << src.port() << osc::Blob(msgData, msgSize)
+        << osc::EndMessage;
 
-    LOG_WARNING("aoo_server: couldn't find matching client for relay message");
+    if (tcp){
+        for (auto& client : clients_){
+            if (client->match(dst)) {
+                client->send_message(out.Data(), out.Size());
+                return;
+            }
+        }
+        LOG_WARNING("aoo_server: couldn't find matching client for relay message");
+    } else {
+        send_udp_message(out.Data(), out.Size(), dst);
+    }
 }
 
 void server_imp::send_event(std::unique_ptr<ievent> e){
@@ -508,12 +512,14 @@ void server_imp::receive_udp(){
                 return;
             }
 
-            if (type != AOO_TYPE_SERVER){
+            if (type == AOO_TYPE_SERVER){
+                handle_udp_message(msg, onset, addr);
+            } else if (type == AOO_TYPE_RELAY){
+                handle_relay_message(msg, addr, false);
+            } else {
                 LOG_WARNING("aoo_server: not a client message!");
                 return;
             }
-
-            handle_udp_message(msg, onset, addr);
         } catch (const osc::Exception& e){
             LOG_ERROR("aoo_server: exception in receive_udp: " << e.what());
             // ignore for now
@@ -575,6 +581,14 @@ void server_imp::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
 
 bool server_imp::signal(){
     return socket_signal(udpsocket_);
+}
+
+uint32_t server_imp::flags() const {
+    uint32_t flags = 0;
+    if (allow_relay_.load(std::memory_order_relaxed)){
+        flags |= AOO_NET_SERVER_RELAY;
+    }
+    return flags;
 }
 
 /*////////////////////////// user ///////////////////////////*/
@@ -783,7 +797,7 @@ bool client_endpoint::handle_message(const char *data, int32_t n){
                 return false;
             }
         } else if (type == AOO_TYPE_RELAY){
-            server_->handle_relay_message(msg, addr_);
+            server_->handle_relay_message(msg, addr_, true);
         } else {
             LOG_WARNING("aoo_client: got unexpected message " << msg.AddressPattern());
             return false;
@@ -880,6 +894,7 @@ void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
     reply << osc::BeginMessage(AOO_NET_MSG_CLIENT_LOGIN) << result;
     if (result){
         reply << user_->id;
+        reply << (int32_t)server_->flags();
     } else {
         reply << errmsg.c_str();
     }

@@ -209,7 +209,9 @@ public:
     void on_user_left_group(user& usr, group& grp);
 
     void handle_relay_message(const osc::ReceivedMessage& msg,
-                              const ip_address& src);
+                              const ip_address& src, bool tcp);
+
+    uint32_t flags() const;
 private:
     int tcpsocket_;
     int udpsocket_;
@@ -234,6 +236,9 @@ private:
 
     // signal
     std::atomic<bool> quit_{false};
+
+    // options
+    std::atomic<bool> allow_relay_{AOO_NET_RELAY_ENABLE};
 
     bool wait_for_event();
 

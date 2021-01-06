@@ -179,7 +179,8 @@ public:
     void reset(const sink_imp& s);
 
     aoo_error handle_format(const sink_imp& s, int32_t salt, const aoo_format& f,
-                            const char *settings, int32_t size, const sendfn& reply);
+                            const char *settings, int32_t size, uint32_t flags,
+                            const sendfn& reply);
 
     aoo_error handle_data(const sink_imp& s, int32_t salt, const aoo::data_packet& d,
                           const sendfn& reply);
@@ -225,10 +226,7 @@ private:
     // data
     const ip_address addr_;
     const aoo_id id_;
-    std::atomic<uint32_t> flags_{0};
-    uint32_t flags() const {
-        return flags_.load(std::memory_order_acquire);
-    }
+    uint32_t flags_ = 0;
     int32_t salt_ = -1; // start with invalid stream ID!
     std::atomic<source_state> state_;
     double state_time_ = 0.0;

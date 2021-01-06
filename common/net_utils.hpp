@@ -134,6 +134,8 @@ struct sendfn {
     {
         fn_(user_, data, nbytes, addr.address(), addr.length(), flags);
     }
+    aoo_sendfn fn() const { return fn_; }
+    void * user() const { return user_; }
 private:
     aoo_sendfn fn_;
     void *user_;

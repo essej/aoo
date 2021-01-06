@@ -803,7 +803,7 @@ void source_imp::send_format(const sendfn& fn){
 #endif
     for (auto& s : sinks_){
         if (s.need_format()){
-            // /aoo/sink/<id>/format <src> <version> <salt> <numchannels> <samplerate> <blocksize> <codec> <options...>
+            // /aoo/sink/<id>/format <src> <version> <salt> <numchannels> <samplerate> <blocksize> <codec> <options> <flags>
 
             LOG_DEBUG("send format to " << s.id << " (salt = " << salt << ")");
 
@@ -818,7 +818,7 @@ void source_imp::send_format(const sendfn& fn){
 
             msg << osc::BeginMessage(address) << id() << (int32_t)make_version()
                 << salt << f.header.nchannels << f.header.samplerate << f.header.blocksize
-                << f.header.codec << osc::Blob(options, size) << osc::EndMessage;
+                << f.header.codec << osc::Blob(options, size) << (int32_t)s.flags << osc::EndMessage;
 
             fn(msg.Data(), msg.Size(), s.address, s.flags);
         }

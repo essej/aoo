@@ -55,8 +55,6 @@ public:
         return connected_.load(std::memory_order_acquire);
     }
 
-    bool relay() const { return relay_; }
-
     bool match(const ip_address& addr) const;
 
     bool match(const std::string& group) const;
@@ -67,7 +65,9 @@ public:
 
     int32_t id() const { return id_; }
 
-    uint32_t flags() const;
+    uint32_t flags() const { return flags_; }
+
+    bool relay() const { return flags_ & AOO_ENDPOINT_RELAY; }
 
     const std::string& group() const { return group_; }
 
@@ -86,6 +86,7 @@ public:
 private:
     client_imp *client_;
     int32_t id_;
+    uint32_t flags_ = 0;
     std::string group_;
     std::string user_;
     ip_address_list addresses_;
@@ -94,7 +95,6 @@ private:
     double last_pingtime_ = 0;
     std::atomic<bool> connected_{false};
     bool timeout_ = false;
-    bool relay_ = false;
 
     bool handle_first_message(const osc::ReceivedMessage& msg, int onset,
                               const ip_address& addr);
@@ -113,6 +113,8 @@ public:
                              const ip_address& addr,
                              int32_t type, aoo_type onset,
                              const sendfn& reply);
+
+    void handle_relay_message(const osc::ReceivedMessage& msg, const sendfn& fn);
 
     void update(const sendfn& reply, time_tag now);
 
@@ -194,8 +196,8 @@ public:
 
     aoo_error remove_sink(sink *sink) override;
 
-    aoo_error find_peer(const char *group, const char *user,
-                      void *address, int32_t& addrlen) override;
+    aoo_error get_peer_address(const char *group, const char *user,
+                               void *address, int32_t *addrlen, uint32_t *flags) override;
 
     aoo_error get_peer_info(const void *address, int32_t addrlen,
                             aoo_net_peer_info *info) override;
@@ -273,7 +275,7 @@ public:
 
     client_state current_state() const { return state_.load(); }
 
-    bool have_server_flag(aoo_net_server_flag flag) const {
+    bool have_server_flag(uint32_t flag) const {
         return flag & server_flags_;
     }
 private:

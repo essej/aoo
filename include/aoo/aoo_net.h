@@ -38,6 +38,12 @@ extern "C"
 
 #define AOO_NET_MAXNAMELEN 64
 
+/*////////// default values ////////////*/
+
+#ifndef AOO_NET_RELAY_ENABLE
+#define AOO_NET_RELAY_ENABLE 1
+#endif
+
 /*///////////////////////// OSC ////////////////////////////////*/
 
 #define AOO_NET_MSG_SERVER "/server"
@@ -75,9 +81,9 @@ typedef struct aoo_net_connect_request {
     const char *user_pwd;
 } aoo_net_connect_request;
 
-typedef enum aoo_net_server_flag {
-    AOO_NET_SERVER_RELAY
-} aoo_net_server_flag;
+enum aoo_net_server_flags {
+    AOO_NET_SERVER_RELAY = 1
+};
 
 typedef struct aoo_net_connect_reply {
     aoo_id user_id;
