@@ -67,9 +67,6 @@ public:
 private:
     server_imp *server_;
     int socket_;
-#ifdef _WIN32
-    HANDLE event_;
-#endif
     ip_address_list public_addresses_;
     std::shared_ptr<user> user_;
     ip_address addr_;
@@ -158,11 +155,6 @@ public:
 
     static std::string error_to_string(error e);
 
-    struct icommand {
-        virtual ~icommand(){}
-        virtual void perform(server_imp&) = 0;
-    };
-
     struct ievent {
         virtual ~ievent(){}
 
@@ -220,10 +212,6 @@ private:
     int32_t next_user_id_ = 0;
     user_list users_;
     group_list groups_;
-    // commands
-    using icommand_ptr = std::unique_ptr<icommand>;
-    using command_queue = lockfree::unbounded_mpsc_queue<icommand_ptr, aoo::allocator<icommand_ptr>>;
-    command_queue commands_;
     // events
     using ievent_ptr = std::unique_ptr<ievent>;
     using event_queue = lockfree::unbounded_mpsc_queue<ievent_ptr, aoo::allocator<ievent_ptr>>;

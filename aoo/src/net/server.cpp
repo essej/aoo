@@ -115,12 +115,6 @@ aoo_error aoo::net::server_imp::run(){
         if (!wait_for_event()){
             break;
         }
-
-        // handle commands
-        std::unique_ptr<icommand> cmd;
-        while (commands_.try_pop(cmd)){
-            cmd->perform(*this);
-        }
     }
 
     return AOO_OK;
@@ -672,9 +666,6 @@ client_endpoint::client_endpoint(server_imp &s, int socket, const ip_address &ad
 }
 
 client_endpoint::~client_endpoint(){
-#ifdef _WIN32
-    WSACloseEvent(event_);
-#endif
     close();
 }
 
