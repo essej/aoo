@@ -6,6 +6,7 @@
 
 #include "aoo/aoo_net.hpp"
 
+#include "common/sync.hpp"
 #include "common/utils.hpp"
 #include "common/lockfree.hpp"
 #include "common/net_utils.hpp"
@@ -23,7 +24,11 @@
 
 #include <memory.h>
 #include <unordered_map>
+#include <list>
 #include <vector>
+#include <thread>
+
+#define DEBUG_THREADS 0
 
 namespace aoo {
 namespace net {
@@ -144,6 +149,44 @@ private:
     user_list users_;
 };
 
+class server_imp;
+
+class udp_server {
+public:
+    udp_server(int socket);
+    ~udp_server();
+private:
+    int socket_;
+    ip_address::ip_type type_;
+
+    std::thread receivethread_;
+    std::thread workerthread_;
+
+    struct udp_packet {
+        std::vector<char> data;
+        ip_address address;
+    };
+    using packet_queue = lockfree::unbounded_mpsc_queue<udp_packet, aoo::allocator<udp_packet>>;
+    packet_queue recvbuffer_;
+#if DEBUG_THREADS
+    std::atomic<int32_t> recvbufferfill_{0};
+#endif
+    std::atomic<bool> quit_{false};
+    sync::event event_;
+
+    void receive_packets();
+
+    void handle_packets();
+
+    void handle_packet(const char *data, int32_t n, const ip_address& addr);
+
+    void handle_message(const osc::ReceivedMessage& msg, int onset, const ip_address& addr);
+
+    void relay_message(const osc::ReceivedMessage& msg, const ip_address& src);
+
+    void send_message(const char *data, int32_t n, const ip_address& addr);
+};
+
 class server_imp final : public server {
 public:
     enum class error {
@@ -167,6 +210,7 @@ public:
     };
 
     server_imp(int tcpsocket, int udpsocket);
+
     ~server_imp();
 
     ip_address::ip_type type() const { return type_; }
@@ -201,14 +245,18 @@ public:
     void on_user_left_group(user& usr, group& grp);
 
     void handle_relay_message(const osc::ReceivedMessage& msg,
-                              const ip_address& src, bool tcp);
+                              const ip_address& src);
 
     uint32_t flags() const;
 private:
     int tcpsocket_;
-    int udpsocket_;
+    int eventsocket_;
     ip_address::ip_type type_;
-    std::vector<std::unique_ptr<client_endpoint>> clients_;
+    std::vector<pollfd> pollarray_;
+    udp_server udpserver_;
+    // clients
+    std::list<client_endpoint> clients_;
+    // users/groups
     int32_t next_user_id_ = 0;
     user_list users_;
     group_list groups_;
@@ -228,19 +276,9 @@ private:
     // options
     std::atomic<bool> allow_relay_{AOO_NET_RELAY_ENABLE};
 
-    bool wait_for_event();
+    bool receive();
 
     void update();
-
-    void receive_udp();
-
-    void send_udp_message(const char *msg, int32_t size,
-                          const ip_address& addr);
-
-    void handle_udp_message(const osc::ReceivedMessage& msg, int onset,
-                            const ip_address& addr);
-
-    bool signal();
 
     /*/////////////////// events //////////////////////*/
 

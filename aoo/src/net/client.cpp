@@ -61,7 +61,7 @@
 
 // debugging
 
-#define FORCE_RELAY 0
+#define FORCE_RELAY 1
 
 #define DEBUG_RELAY 0
 

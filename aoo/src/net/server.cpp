@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <algorithm>
+#include <iostream>
 
 #ifndef _WIN32
 #include <sys/poll.h>
@@ -58,6 +59,11 @@ aoo_net_server * aoo_net_server_new(int port, uint32_t flags, aoo_error *err) {
         return nullptr;
     }
 
+    // increase UDP receive buffer size to 16 MB
+    if (aoo::socket_setrecvbufsize(udpsocket, 1<<24) < 0){
+        aoo::socket_error_print("setrecvbufsize");
+    }
+
     // create TCP socket
     int tcpsocket = aoo::socket_tcp(port);
     if (tcpsocket < 0){
@@ -82,8 +88,9 @@ aoo_net_server * aoo_net_server_new(int port, uint32_t flags, aoo_error *err) {
 }
 
 aoo::net::server_imp::server_imp(int tcpsocket, int udpsocket)
-    : tcpsocket_(tcpsocket), udpsocket_(udpsocket)
+    : tcpsocket_(tcpsocket), udpserver_(udpsocket)
 {
+    eventsocket_ = socket_udp(0);
     type_ = socket_family(udpsocket);
     // commands_.reserve(256);
     // events_.reserve(256);
@@ -98,8 +105,6 @@ void aoo_net_server_free(aoo_net_server *server){
 aoo::net::server_imp::~server_imp() {
     socket_close(tcpsocket_);
     tcpsocket_ = -1;
-    socket_close(udpsocket_);
-    udpsocket_ = -1;
 
     // clear explicitly to avoid crash!
     clients_.clear();
@@ -112,7 +117,7 @@ aoo_error aoo_net_server_run(aoo_net_server *server){
 aoo_error aoo::net::server_imp::run(){
     // wait for networking or other events
     while (!quit_.load()){
-        if (!wait_for_event()){
+        if (!receive()){
             break;
         }
     }
@@ -125,12 +130,13 @@ aoo_error aoo_net_server_quit(aoo_net_server *server){
 }
 
 aoo_error aoo::net::server_imp::quit(){
+    // set quit and wake up receive thread
     quit_.store(true);
-    if (!signal()){
+    if (!socket_signal(eventsocket_)){
         // force wakeup by closing the socket.
         // this is not nice and probably undefined behavior,
         // the MSDN docs explicitly forbid it!
-        socket_close(udpsocket_);
+        socket_close(eventsocket_);
     }
     return AOO_OK;
 }
@@ -322,7 +328,7 @@ void server_imp::on_user_joined_group(user& usr, group& grp){
 }
 
 void server_imp::on_user_left_group(user& usr, group& grp){
-    if (udpsocket_ < 0){
+    if (tcpsocket_ < 0){
         return; // prevent sending messages during shutdown
     }
     // notify group members
@@ -345,7 +351,7 @@ void server_imp::on_user_left_group(user& usr, group& grp){
 }
 
 void server_imp::handle_relay_message(const osc::ReceivedMessage& msg,
-                                      const ip_address& src, bool tcp){
+                                      const ip_address& src){
     auto it = msg.ArgumentsBegin();
 
     auto ip = (it++)->AsString();
@@ -364,17 +370,13 @@ void server_imp::handle_relay_message(const osc::ReceivedMessage& msg,
         << src.name_unmapped() << src.port() << osc::Blob(msgData, msgSize)
         << osc::EndMessage;
 
-    if (tcp){
-        for (auto& client : clients_){
-            if (client->match(dst)) {
-                client->send_message(out.Data(), out.Size());
-                return;
-            }
+    for (auto& client : clients_){
+        if (client.match(dst)) {
+            client.send_message(out.Data(), out.Size());
+            return;
         }
-        LOG_WARNING("aoo_server: couldn't find matching client for relay message");
-    } else {
-        send_udp_message(out.Data(), out.Size(), dst);
     }
+    LOG_WARNING("aoo_server: couldn't find matching client for relay message");
 }
 
 void server_imp::send_event(std::unique_ptr<ievent> e){
@@ -391,29 +393,35 @@ void server_imp::send_event(std::unique_ptr<ievent> e){
     }
 }
 
-bool server_imp::wait_for_event(){
+bool server_imp::receive(){
     bool didclose = false;
     int numclients = clients_.size();
-    // allocate two extra slots for main TCP socket and UDP socket
-    int numfds = numclients + 2;
-    auto fds = (struct pollfd *)alloca(numfds * sizeof(struct pollfd));
-    for (int i = 0; i < numfds; ++i){
-        fds[i].events = POLLIN;
-        fds[i].revents = 0;
-    }
-    for (int i = 0; i < numclients; ++i){
-        fds[i].fd = clients_[i]->socket();
-    }
-    int tcpindex = numclients;
-    int udpindex = numclients + 1;
-    fds[tcpindex].fd = tcpsocket_;
-    fds[udpindex].fd = udpsocket_;
 
-    // NOTE: macOS requires the negative timeout to be exactly -1!
+    // initialize pollfd array
+    // allocate extra slots for main TCP socket and event socket
+    pollarray_.resize(numclients + 2);
+
+    for (int i = 0; i < (int)pollarray_.size(); ++i){
+        pollarray_[i].events = POLLIN;
+        pollarray_[i].revents = 0;
+    }
+
+    int index = 0;
+    for (auto& client : clients_){
+        pollarray_[index++].fd = client.socket();
+    }
+
+    auto& tcp_fd = pollarray_[numclients];
+    tcp_fd.fd = tcpsocket_;
+
+    auto& event_fd = pollarray_[numclients+1];
+    event_fd.fd = eventsocket_;
+
+    // NOTE: macOS/BSD requires the negative timeout to be exactly -1!
 #ifdef _WIN32
-    int result = WSAPoll(fds, numfds, -1);
+    int result = WSAPoll(pollarray_.data(), pollarray_.size(), -1);
 #else
-    int result = poll(fds, numfds, -1);
+    int result = poll(pollarray_.data(), pollarray_.size(), -1);
 #endif
     if (result < 0){
         int err = errno;
@@ -425,12 +433,16 @@ bool server_imp::wait_for_event(){
         }
     }
 
-    if (fds[tcpindex].revents){
+    if (event_fd.revents){
+        return false; // quit
+    }
+
+    if (tcp_fd.revents){
         // accept new client
         ip_address addr;
         auto sock = accept(tcpsocket_, addr.address_ptr(), addr.length_ptr());
         if (sock >= 0){
-            clients_.push_back(std::make_unique<client_endpoint>(*this, sock, addr));
+            clients_.emplace_back(*this, sock, addr);
             LOG_VERBOSE("aoo_server: accepted client (IP: "
                         << addr.name() << ", port: " << addr.port() << ")");
         } else {
@@ -439,18 +451,16 @@ bool server_imp::wait_for_event(){
         }
     }
 
-    if (fds[udpindex].revents){
-        receive_udp();
-    }
-
-    for (int i = 0; i < numclients; ++i){
-        if (fds[i].revents){
+    index = 0;
+    for (auto& client : clients_){
+        if (pollarray_[index].revents){
             // receive data from client
-            if (!clients_[i]->receive_data()){
-                clients_[i]->close();
+            if (!client.receive_data()){
+                client.close();
                 didclose = true;
             }
         }
+        index++;
     }
 
     if (didclose){
@@ -463,7 +473,7 @@ bool server_imp::wait_for_event(){
 void server_imp::update(){
     // remove closed clients
     auto result = std::remove_if(clients_.begin(), clients_.end(),
-                                 [](auto& c){ return !c->is_active(); });
+                                 [](auto& c){ return !c.is_active(); });
     clients_.erase(result, clients_.end());
     // automatically purge stale users
     // LATER add an option so that users will persist
@@ -485,60 +495,115 @@ void server_imp::update(){
     }
 }
 
-void server_imp::receive_udp(){
-    if (udpsocket_ < 0){
-        return;
+uint32_t server_imp::flags() const {
+    uint32_t flags = 0;
+    if (allow_relay_.load(std::memory_order_relaxed)){
+        flags |= AOO_NET_SERVER_RELAY;
     }
-    char buf[AOO_MAXPACKETSIZE];
-    ip_address addr;
-    int32_t result = recvfrom(udpsocket_, buf, sizeof(buf), 0,
-                              addr.address_ptr(), addr.length_ptr());
-    if (result > 0){
-        try {
-            osc::ReceivedPacket packet(buf, result);
-            osc::ReceivedMessage msg(packet);
+    return flags;
+}
 
-            aoo_type type;
-            int32_t onset;
-            auto err = parse_pattern(buf, result, type, onset);
-            if (err != AOO_OK){
-                LOG_WARNING("aoo_server: not an AOO NET message!");
-                return;
-            }
+/*////////////////////////// udp_server /////////////////////*/
 
-            if (type == AOO_TYPE_SERVER){
-                handle_udp_message(msg, onset, addr);
-            } else if (type == AOO_TYPE_RELAY){
-                handle_relay_message(msg, addr, false);
-            } else {
-                LOG_WARNING("aoo_server: not a client message!");
-                return;
+udp_server::udp_server(int socket) {
+    socket_ = socket;
+    type_ = socket_family(socket);
+    receivethread_ = std::thread(receive_packets, this);
+    workerthread_ = std::thread(handle_packets, this);
+}
+
+udp_server::~udp_server(){
+    quit_ = true;
+    event_.set();
+    socket_signal(socket_);
+
+    if (receivethread_.joinable()){
+        receivethread_.join();
+    }
+
+    if (workerthread_.joinable()){
+        workerthread_.join();
+    }
+
+    socket_close(socket_);
+}
+
+void udp_server::receive_packets(){
+    while (!quit_.load(std::memory_order_relaxed)){
+        ip_address addr;
+        char buf[AOO_MAXPACKETSIZE];
+        int nbytes = socket_receive(socket_, buf, AOO_MAXPACKETSIZE, &addr, -1);
+        if (nbytes > 0){
+            // add packet to queue
+            recvbuffer_.produce([&](udp_packet& p){
+                p.address = addr;
+                p.data.assign(buf, buf + nbytes);
+            });
+        #if DEBUG_THREADS
+            recvbufferfill_.fetch_add(1, std::memory_order_relaxed);
+        #endif
+            event_.set();
+        } else if (nbytes < 0) {
+            // ignore errors when quitting
+            if (!quit_){
+                socket_error_print("recv");
             }
-        } catch (const osc::Exception& e){
-            LOG_ERROR("aoo_server: exception in receive_udp: " << e.what());
-            // ignore for now
+            break;
         }
-    } else if (result < 0){
-        int err = socket_errno();
-        // TODO handle error
-        LOG_ERROR("aoo_server: recv() failed (" << err << ")");
-    }
-    // result == 0 -> signalled
-}
-
-void server_imp::send_udp_message(const char *msg, int32_t size,
-                              const ip_address &addr)
-{
-    int result = ::sendto(udpsocket_, msg, size, 0,
-                          addr.address(), addr.length());
-    if (result < 0){
-        int err = socket_errno();
-        // TODO handle error
-        LOG_ERROR("aoo_server: send() failed (" << err << ")");
+        // ignore empty packets (used for quit signalling)
+    #if DEBUG_THREADS
+        std::cout << "receive_packets: waiting" << std::endl;
+    #endif
     }
 }
 
-void server_imp::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
+void udp_server::handle_packets(){
+    while (!quit_.load(std::memory_order_relaxed)){
+        event_.wait();
+
+        while (!recvbuffer_.empty()){
+        #if DEBUG_THREADS
+            std::cout << "perform_io: handle_message" << std::endl;
+        #endif
+            recvbuffer_.consume([&](const udp_packet& p){
+                handle_packet(p.data.data(), p.data.size(), p.address);
+            });
+        #if DEBUG_THREADS
+            auto fill = recvbufferfill_.fetch_sub(1, std::memory_order_relaxed) - 1;
+            std::cerr << "receive buffer fill: " << fill << std::endl;
+        #endif
+        }
+    }
+}
+
+void udp_server::handle_packet(const char *data, int32_t size, const ip_address& addr){
+    try {
+        osc::ReceivedPacket packet(data, size);
+        osc::ReceivedMessage msg(packet);
+
+        aoo_type type;
+        int32_t onset;
+        auto err = parse_pattern(data, size, type, onset);
+        if (err != AOO_OK){
+            LOG_WARNING("aoo_server: not an AOO NET message!");
+            return;
+        }
+
+        if (type == AOO_TYPE_SERVER){
+            handle_message(msg, onset, addr);
+        } else if (type == AOO_TYPE_RELAY){
+            relay_message(msg, addr);
+        } else {
+            LOG_WARNING("aoo_server: not a client message!");
+            return;
+        }
+    } catch (const osc::Exception& e){
+        LOG_ERROR("aoo_server: exception in receive_udp: " << e.what());
+        // ignore for now
+    }
+}
+
+void udp_server::handle_message(const osc::ReceivedMessage &msg, int onset,
                                 const ip_address& addr)
 {
     auto pattern = msg.AddressPattern() + onset;
@@ -552,7 +617,7 @@ void server_imp::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
             reply << osc::BeginMessage(AOO_NET_MSG_CLIENT_PING)
                   << osc::EndMessage;
 
-            send_udp_message(reply.Data(), reply.Size(), addr);
+            send_message(reply.Data(), reply.Size(), addr);
         } else if (!strcmp(pattern, AOO_NET_MSG_REQUEST)){
             // reply with /reply message
             // send *unmapped* address in case the client is IPv4 only
@@ -562,7 +627,7 @@ void server_imp::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
                   << addr.name_unmapped() << addr.port()
                   << osc::EndMessage;
 
-            send_udp_message(reply.Data(), reply.Size(), addr);
+            send_message(reply.Data(), reply.Size(), addr);
         } else {
             LOG_ERROR("aoo_server: unknown message " << pattern);
         }
@@ -573,16 +638,39 @@ void server_imp::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
     }
 }
 
-bool server_imp::signal(){
-    return socket_signal(udpsocket_);
+void udp_server::relay_message(const osc::ReceivedMessage& msg,
+                               const ip_address& src){
+    auto it = msg.ArgumentsBegin();
+
+    auto ip = (it++)->AsString();
+    auto port = (it++)->AsInt32();
+    ip_address dst(ip, port, type_);
+
+    const void *msgData;
+    osc::osc_bundle_element_size_t msgSize;
+    (it++)->AsBlob(msgData, msgSize);
+
+    // forward message to matching client
+    // send unmapped address in case the client is IPv4 only!
+    char buf[AOO_MAXPACKETSIZE];
+    osc::OutboundPacketStream out(buf, sizeof(buf));
+    out << osc::BeginMessage(AOO_MSG_DOMAIN AOO_NET_MSG_RELAY)
+        << src.name_unmapped() << src.port() << osc::Blob(msgData, msgSize)
+        << osc::EndMessage;
+
+    send_message(out.Data(), out.Size(), dst);
 }
 
-uint32_t server_imp::flags() const {
-    uint32_t flags = 0;
-    if (allow_relay_.load(std::memory_order_relaxed)){
-        flags |= AOO_NET_SERVER_RELAY;
+void udp_server::send_message(const char *msg, int32_t size,
+                              const ip_address &addr)
+{
+    int result = ::sendto(socket_, msg, size, 0,
+                          addr.address(), addr.length());
+    if (result < 0){
+        int err = socket_errno();
+        // TODO handle error
+        LOG_ERROR("aoo_server: send() failed (" << err << ")");
     }
-    return flags;
 }
 
 /*////////////////////////// user ///////////////////////////*/
@@ -788,7 +876,7 @@ bool client_endpoint::handle_message(const char *data, int32_t n){
                 return false;
             }
         } else if (type == AOO_TYPE_RELAY){
-            server_->handle_relay_message(msg, addr_, true);
+            server_->handle_relay_message(msg, addr_);
         } else {
             LOG_WARNING("aoo_client: got unexpected message " << msg.AddressPattern());
             return false;
