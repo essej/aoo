@@ -62,17 +62,17 @@ public:
     }
 
     bool getSinkArg(sc_msg_iter *args, aoo::ip_address& addr,
-                    aoo_id &id) const override {
-        return getEndpointArg(args, addr, &id, "sink");
+                    uint32_t &flags, aoo_id &id) const override {
+        return getEndpointArg(args, addr, &flags, &id, "sink");
     }
 
     bool getSourceArg(sc_msg_iter *args, aoo::ip_address& addr,
                       aoo_id &id) const override {
-        return getEndpointArg(args, addr, &id, "source");
+        return getEndpointArg(args, addr, nullptr, &id, "source");
     }
 
     bool getPeerArg(sc_msg_iter *args, aoo::ip_address& addr) const override {
-        return getEndpointArg(args, addr, nullptr, "peer");
+        return getEndpointArg(args, addr, nullptr, nullptr, "peer");
     }
 private:
     using unique_lock = sync::unique_lock<sync::mutex>;
@@ -108,7 +108,7 @@ private:
 
     // private methods
     bool getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
-                        int32_t *id, const char *what) const;
+                        uint32_t *flags, int32_t *id, const char *what) const;
 
     static int32_t send(void *user, const char *msg, int32_t size,
                         const void *addr, int32_t addrlen, uint32_t flags);
@@ -260,7 +260,7 @@ void AooNode::unregisterClient(AooClient *c){
 // private methods
 
 bool AooNode::getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
-                             int32_t *id, const char *what) const
+                             uint32_t *flags, int32_t *id, const char *what) const
 {
     if (args->remain() < 2){
         LOG_ERROR("aoo: too few arguments for " << what);
@@ -275,7 +275,7 @@ bool AooNode::getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
         auto user = args->gets();
         // we can't use length_ptr() because socklen_t != int32_t on many platforms
         int32_t len = aoo::ip_address::max_length;
-        if (client_->find_peer(group, user, addr.address_ptr(), &len, nullptr) == AOO_OK) {
+        if (client_->get_peer_address(group, user, addr.address_ptr(), &len, flags) == AOO_OK) {
             *addr.length_ptr() = len;
         } else {
             LOG_ERROR("aoo: couldn't find peer " << group << "|" << user);
@@ -288,6 +288,9 @@ bool AooNode::getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
         auto result = aoo::ip_address::resolve(host, port, type_);
         if (!result.empty()){
             addr = result.front(); // pick the first result
+            if (flags){
+                *flags = 0;
+            }
         } else {
             LOG_ERROR("aoo: couldn't resolve hostname '"
                       << host << "' for " << what);

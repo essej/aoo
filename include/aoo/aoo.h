@@ -259,7 +259,8 @@ typedef struct aoo_ping_event {
 } aoo_ping_event;
 
 // format event
-typedef struct aoo_format_change_event {
+typedef struct aoo_format_change_event
+{
     AOO_ENDPOINT_EVENT
     const struct aoo_format *format;
 } aoo_format_change_event;
@@ -383,6 +384,11 @@ typedef struct aoo_format_storage
     aoo_format header;
     char data[256];
 } aoo_format_storage;
+
+enum aoo_endpoint_flags
+{
+    AOO_ENDPOINT_RELAY = 1
+};
 
 // create a new AoO source instance
 AOO_API aoo_source * aoo_source_new(aoo_id id, uint32_t flags);

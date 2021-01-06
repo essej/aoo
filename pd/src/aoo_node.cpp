@@ -14,8 +14,6 @@
 #include <errno.h>
 
 #include <thread>
-#include <condition_variable>
-#include <mutex>
 #include <atomic>
 
 
@@ -123,19 +121,19 @@ public:
         x_clientmutex.unlock();
     }
 
-    bool get_sink_arg(t_pd *x, int argc, const t_atom *argv,
-                      ip_address& addr, aoo_id &id) const override {
-        return get_endpoint_arg(x, argc, argv, addr, &id, "sink");
+    bool get_source_arg(t_pd *x, int argc, const t_atom *argv,
+                        ip_address& addr, aoo_id &id) const override{
+        return get_endpoint_arg(x, argc, argv, addr, nullptr, &id, "source");
     }
 
-    bool get_source_arg(t_pd *x, int argc, const t_atom *argv,
-                        ip_address& addr, aoo_id &id) const override {
-        return get_endpoint_arg(x, argc, argv, addr, &id, "source");
+    bool get_sink_arg(t_pd *x, int argc, const t_atom *argv,
+                      ip_address& addr, uint32_t& flags, aoo_id &id) const override {
+        return get_endpoint_arg(x, argc, argv, addr, &flags, &id, "sink");
     }
 
     bool get_peer_arg(t_pd *x, int argc, const t_atom *argv,
                       ip_address& addr) const override {
-        return get_endpoint_arg(x, argc, argv, addr, nullptr, "peer");
+        return get_endpoint_arg(x, argc, argv, addr, nullptr, nullptr, "peer");
     }
 
     int resolve_endpoint(const ip_address &addr, aoo_id id, int argc, t_atom *argv) const;
@@ -154,13 +152,15 @@ private:
     bool add_object(t_pd *obj, void *x, aoo_id id);
 
     bool get_endpoint_arg(t_pd *x, int argc, const t_atom *argv,
-                          ip_address& addr, int32_t *id, const char *what) const;
+                          ip_address& addr, uint32_t *flags,
+                          int32_t *id, const char *what) const;
 };
 
 // private methods
 
 bool t_node_imp::get_endpoint_arg(t_pd *x, int argc, const t_atom *argv,
-                                  ip_address& addr, int32_t *id, const char *what) const
+                                  ip_address& addr, uint32_t *flags,
+                                  int32_t *id, const char *what) const
 {
     if (argc < (2 + (id != nullptr))){
         pd_error(x, "%s: too few arguments for %s", classname(x), what);
@@ -173,8 +173,8 @@ bool t_node_imp::get_endpoint_arg(t_pd *x, int argc, const t_atom *argv,
         t_symbol *user = atom_getsymbol(argv + 1);
         // we can't use length_ptr() because socklen_t != int32_t on many platforms
         int32_t len = aoo::ip_address::max_length;
-        if (x_client->find_peer(group->s_name, user->s_name,
-                                addr.address_ptr(), len) == AOO_OK) {
+        if (x_client->get_peer_address(group->s_name, user->s_name,
+                                       addr.address_ptr(), &len, flags) == AOO_OK) {
             *addr.length_ptr() = len;
         } else {
             pd_error(x, "%s: couldn't find peer %s|%s",
@@ -188,6 +188,9 @@ bool t_node_imp::get_endpoint_arg(t_pd *x, int argc, const t_atom *argv,
         auto result = ip_address::resolve(host->s_name, port, x_type);
         if (!result.empty()){
             addr = result.front(); // just pick the first one
+            if (flags){
+                *flags = 0;
+            }
         } else {
             pd_error(x, "%s: couldn't resolve hostname '%s' for %s",
                      classname(x), host->s_name, what);
@@ -266,7 +269,7 @@ bool t_node_imp::add_object(t_pd *obj, void *x, aoo_id id)
 
 #if USE_NETWORK_THREAD
 void t_node_imp::receive_packets(){
-    while (!x_quit){
+    while (!x_quit.load(std::memory_order_relaxed)){
         ip_address addr;
         char buf[AOO_MAXPACKETSIZE];
         int nbytes = socket_receive(x_socket, buf, AOO_MAXPACKETSIZE, &addr, -1);
@@ -295,7 +298,7 @@ void t_node_imp::receive_packets(){
 }
 
 void t_node_imp::perform_io(){
-    while (!x_quit){
+    while (!x_quit.load(std::memory_order_relaxed)){
         x_event.wait();
 
         const int32_t throttle = 10;
@@ -317,8 +320,8 @@ void t_node_imp::perform_io(){
         #endif
             // in case the receive buffer is never empty
             if (++count >= throttle){
-                // relinquish client lock in case we're
-                // blocking on get() or release()
+                // relinquish client lock in case another thread is waiting
+                // for the client mutex
                 lock.unlock();
             #if DEBUG_THREADS
                 std::cout << "perform_io: throttle" << std::endl;
@@ -342,7 +345,7 @@ void t_node_imp::perform_io(){
 }
 #else
 void t_node_imp::receive_packets(){
-    while (!x_quit){
+    while (!x_quit.load(std::memory_order_relaxed)){
         ip_address addr;
         char buf[AOO_MAXPACKETSIZE];
         int nbytes = socket_receive(x_socket, buf, AOO_MAXPACKETSIZE,

@@ -117,12 +117,13 @@ public:
     // remove AOO sink
     virtual aoo_error remove_sink(aoo::sink *src) = 0;
 
-    // find peer and return its address
+    // find peer by name and return its IP endpoint address
     // address: pointer to sockaddr_storage
     // addrlen: initialized with max. storage size, updated to actual size
+    // info (optional): provide additional info
     // NOTE: if 'address' is NULL, we only check if the peer exists
-    virtual aoo_error find_peer(const char *group, const char *user,
-                                void *address, int32_t& addrlen) = 0;
+    virtual aoo_error get_peer_address(const char *group, const char *user,
+                                       void *address, int32_t *addrlen, uint32_t *flags) = 0;
 
     // find peer by its IP address and return additional info
     virtual aoo_error get_peer_info(const void *address, int32_t addrlen,

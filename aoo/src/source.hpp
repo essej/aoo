@@ -97,6 +97,7 @@ class source_imp final : public source {
             aoo_event_type type_;
             aoo_event event_;
             aoo_sink_event sink;
+            aoo_invite_event invite;
             aoo_ping_event ping;
         };
     private:

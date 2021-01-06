@@ -195,7 +195,19 @@ AOO_API aoo_error aoo_net_server_poll_events(aoo_net_server *server);
 /*///////////////////////// AOO client /////////////////////////*/
 
 // flags for aoo_net_client_send_message():
-#define AOO_NET_MESSAGE_RELIABLE 1
+enum aoo_net_message_flags
+{
+    AOO_NET_MESSAGE_RELIABLE = 1
+};
+
+typedef struct aoo_net_peer_info
+{
+    char group_name[AOO_NET_MAXNAMELEN];
+    char user_name[AOO_NET_MAXNAMELEN];
+    aoo_id user_id;
+    uint32_t flags;
+    char reserved[56];
+} aoo_net_peer_info;
 
 #ifdef __cplusplus
 namespace aoo {
@@ -237,23 +249,14 @@ AOO_API aoo_error aoo_net_client_add_sink(aoo_net_client *client,
 AOO_API aoo_error aoo_net_client_remove_sink(aoo_net_client *client,
                                              aoo_sink *sink);
 
-// find peer by name and return its IP address
+// find peer by name and return its IP endpoint address
 // address: pointer to sockaddr_storage
 // addrlen: initialized with max. storage size, updated to actual size
-// NOTE: if 'address' is NULL, we only check if the peer exists
-AOO_API aoo_error aoo_net_client_find_peer(aoo_net_client *client,
-                                           const char *group, const char *user,
-                                           void *address, int32_t *addrlen);
+AOO_API aoo_error aoo_net_client_get_peer_address(aoo_net_client *client,
+                                                  const char *group, const char *user,
+                                                  void *address, int32_t *addrlen, uint32_t *flags);
 
 // find peer by its IP address and return additional info
-typedef struct aoo_net_peer_info
-{
-    char group_name[AOO_NET_MAXNAMELEN];
-    char user_name[AOO_NET_MAXNAMELEN];
-    aoo_id user_id;
-    char reserved[60];
-} aoo_net_peer_info;
-
 AOO_API aoo_error aoo_net_client_get_peer_info(aoo_net_client *client,
                                                const void *address, int32_t addrlen,
                                                aoo_net_peer_info *info);

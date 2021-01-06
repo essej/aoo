@@ -46,11 +46,11 @@ struct t_node {
 
     virtual void unlock() = 0;
 
-    virtual bool get_sink_arg(t_pd *x, int argc, const t_atom *argv,
-                              ip_address& addr, aoo_id &id) const = 0;
-
     virtual bool get_source_arg(t_pd *x, int argc, const t_atom *argv,
                                 ip_address& addr, aoo_id &id) const = 0;
+
+    virtual bool get_sink_arg(t_pd *x, int argc, const t_atom *argv,
+                              ip_address& addr, uint32_t& flags, aoo_id &id) const = 0;
 
     virtual bool get_peer_arg(t_pd *x, int argc, const t_atom *argv,
                               ip_address& addr) const = 0;
