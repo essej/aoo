@@ -160,14 +160,14 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t
     }
     case AOO_INVITE_EVENT:
     {
-        auto e = (const aoo_sink_event *)event;
+        auto e = (const aoo_invite_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         // silently ignore invite events for existing sink,
         // because multiple invite events might get sent in a row.
         if (!aoo_send_findsink(x, addr, e->id)){
             if (x->x_accept){
-                aoo_send_doaddsink(x, addr, e->id, 0);
+                aoo_send_doaddsink(x, addr, e->id, e->flags);
             } else {
                 t_atom msg[3];
                 if (x->x_node->resolve_endpoint(addr, e->id, 3, msg)){

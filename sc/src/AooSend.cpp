@@ -107,11 +107,11 @@ void AooSend::handleEvent(const aoo_event *event){
     }
     case AOO_INVITE_EVENT:
     {
-        auto e = (const aoo_sink_event *)event;
+        auto e = (const aoo_invite_event *)event;
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         if (accept_){
-            addSinkEvent(addr, e->id, 0);
+            addSinkEvent(addr, e->id, e->flags);
         } else {
             beginEvent(msg, "/invite", addr, e->id);
             sendMsgRT(msg);

@@ -1148,9 +1148,11 @@ void source_imp::handle_invite(const osc::ReceivedMessage& msg,
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     sink_lock lock(sinks_);
-    if (!find_sink(addr, id)){
+    auto sink = find_sink(addr, id);
+    if (sink){
         // push "invite" event
         event e(AOO_INVITE_EVENT, addr, id);
+        e.invite.flags = sink->flags;
         send_event(e, AOO_THREAD_NETWORK);
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_INVITE << "' message: sink already added");

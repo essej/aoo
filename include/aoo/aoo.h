@@ -245,12 +245,19 @@ typedef struct _aoo_block_event aoo_block_reordered_event;
 typedef struct _aoo_block_event aoo_block_resent_event;
 typedef struct _aoo_block_event aoo_block_gap_event;
 
-typedef aoo_source_event aoo_invite_event;
-typedef aoo_source_event aoo_uninvite_event;
+
+typedef struct aoo_invite_event
+{
+    AOO_ENDPOINT_EVENT
+    uint32_t flags;
+} aoo_invite_event;
+
+typedef aoo_sink_event aoo_uninvite_event;
 typedef aoo_source_event aoo_invite_timeout_event;
 
 // ping event
-typedef struct aoo_ping_event {
+typedef struct aoo_ping_event
+{
     AOO_ENDPOINT_EVENT
     uint64_t tt1;
     uint64_t tt2;
