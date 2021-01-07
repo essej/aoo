@@ -61,7 +61,7 @@
 
 // debugging
 
-#define FORCE_RELAY 1
+#define FORCE_RELAY 0
 
 #define DEBUG_RELAY 0
 
@@ -1182,6 +1182,10 @@ void client_imp::handle_login(const osc::ReceivedMessage& msg){
             }
             LOG_WARNING("aoo_client: login failed: " << errmsg);
 
+            // cache callback and userdata
+            auto cb = callback_;
+            auto ud = userdata_;
+
             close();
 
             // notify
@@ -1189,7 +1193,7 @@ void client_imp::handle_login(const osc::ReceivedMessage& msg){
             reply.error_code = 0;
             reply.error_message = errmsg.c_str();
 
-            callback_(userdata_, AOO_ERROR_UNSPECIFIED, &reply);
+            cb(ud, AOO_ERROR_UNSPECIFIED, &reply);
         }
     }
 }
