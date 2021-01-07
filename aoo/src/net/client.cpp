@@ -225,6 +225,13 @@ aoo_error aoo::net::client_imp::run(){
             cmd->perform(*this);
         }
 
+        // handle messages
+        std::unique_ptr<imessage> msg;
+        while (tcp_messages_.try_pop(msg)){
+            // call with dummy reply function
+            msg->perform(*this, sendfn{});
+        }
+
         if (!peers_.try_free()){
             LOG_DEBUG("aoo::client: try_free() would block");
         }

@@ -193,7 +193,7 @@ private:
 
     void handle_message(const osc::ReceivedMessage& msg, int onset, const ip_address& addr);
 
-    void relay_message(const osc::ReceivedMessage& msg, const ip_address& src);
+    void handle_relay_message(const osc::ReceivedMessage& msg, const ip_address& src);
 
     void send_message(const char *data, int32_t n, const ip_address& addr);
 };

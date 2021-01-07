@@ -580,7 +580,7 @@ void udp_server::handle_packet(const char *data, int32_t size, const ip_address&
         if (type == AOO_TYPE_SERVER){
             handle_message(msg, onset, addr);
         } else if (type == AOO_TYPE_RELAY){
-            relay_message(msg, addr);
+            handle_relay_message(msg, addr);
         } else {
             LOG_WARNING("aoo_server: not a client message!");
             return;
@@ -626,8 +626,8 @@ void udp_server::handle_message(const osc::ReceivedMessage &msg, int onset,
     }
 }
 
-void udp_server::relay_message(const osc::ReceivedMessage& msg,
-                               const ip_address& src){
+void udp_server::handle_relay_message(const osc::ReceivedMessage& msg,
+                                      const ip_address& src){
     auto it = msg.ArgumentsBegin();
 
     auto ip = (it++)->AsString();
@@ -865,7 +865,8 @@ bool client_endpoint::handle_message(const char *data, int32_t n){
                 return false;
             }
         } else if (type == AOO_TYPE_RELAY){
-            server_->handle_relay_message(msg, addr_);
+            // use public address!
+            server_->handle_relay_message(msg, public_addresses().front());
         } else {
             LOG_WARNING("aoo_client: got unexpected message " << msg.AddressPattern());
             return false;
