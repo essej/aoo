@@ -190,7 +190,7 @@ std::shared_ptr<user> server_imp::get_user(const std::string& name,
     auto usr = find_user(name);
     if (usr){
         // check if someone is already logged in
-        if (usr->is_active()){
+        if (usr->active()){
             e = error::access_denied;
             return nullptr;
         }
@@ -397,8 +397,8 @@ bool server_imp::receive(){
     }
 
     int index = 0;
-    for (auto& client : clients_){
-        pollarray_[index++].fd = client.socket();
+    for (auto& c : clients_){
+        pollarray_[index++].fd = c.socket();
     }
 
     auto& tcp_fd = pollarray_[numclients];
@@ -441,16 +441,17 @@ bool server_imp::receive(){
         }
     }
 
+    // use original number of clients!
     index = 0;
-    for (auto& client : clients_){
+    for (auto it = clients_.begin(); index < numclients; ++index, ++it){
         if (pollarray_[index].revents){
             // receive data from client
-            if (!client.receive_data()){
-                client.close();
+            if (!it->receive_data()){
+                LOG_VERBOSE("aoo_server: close client");
+                it->close();
                 didclose = true;
             }
         }
-        index++;
     }
 
     if (didclose){
@@ -461,14 +462,11 @@ bool server_imp::receive(){
 }
 
 void server_imp::update(){
-    // remove closed clients
-    auto result = std::remove_if(clients_.begin(), clients_.end(),
-                                 [](auto& c){ return !c.is_active(); });
-    clients_.erase(result, clients_.end());
+    clients_.remove_if([](auto& c){ return !c.active(); });
     // automatically purge stale users
     // LATER add an option so that users will persist
     for (auto it = users_.begin(); it != users_.end(); ){
-        if (!(*it)->is_active()){
+        if (!(*it)->active()){
             it = users_.erase(it);
         } else {
             ++it;
@@ -759,7 +757,8 @@ bool client_endpoint::match(const ip_address& addr) const {
 
 void client_endpoint::close(){
     if (socket_ >= 0){
-        LOG_VERBOSE("aoo_server: close client endpoint");
+        LOG_VERBOSE("aoo_server: close client endpoint "
+                    << addr_.name() << " " << addr_.port());
         socket_close(socket_);
         socket_ = -1;
 

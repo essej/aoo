@@ -72,7 +72,7 @@ public:
 
     void close();
 
-    bool is_active() const { return socket_ >= 0; }
+    bool active() const { return socket_ >= 0; }
 
     void send_message(const char *msg, int32_t);
 
@@ -107,7 +107,7 @@ struct user {
 
     ~user() { LOG_VERBOSE("removed user " << name); }
 
-    bool is_active() const { return endpoint_ != nullptr; }
+    bool active() const { return endpoint_ != nullptr; }
 
     void on_close(server_imp& s);
 
