@@ -60,6 +60,9 @@ public:
 
     ~client_endpoint();
 
+    client_endpoint(const client_endpoint&) = delete;
+    client_endpoint(client_endpoint&&) = delete;
+
     const ip_address& local_address() const { return addr_; }
 
     const ip_address_list& public_addresses() const {
