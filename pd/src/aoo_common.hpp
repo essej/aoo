@@ -27,7 +27,8 @@ uint64_t get_osctime_dejitter(t_dejitter *context);
 
 /*///////////////////////////// aoo_node /////////////////////////////*/
 
-struct t_node {
+class t_node {
+public:
     static t_node * get(t_pd *obj, int port, void *x = nullptr, aoo_id id = 0);
 
     virtual ~t_node() {}

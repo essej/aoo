@@ -45,7 +45,7 @@ void aoo_client_handle_event(t_aoo_client *x,
 
 static t_class *node_proxy_class;
 
-struct t_node_imp;
+class t_node_imp;
 
 struct t_node_proxy
 {

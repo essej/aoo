@@ -119,6 +119,7 @@ void aoo_set_logfunction(aoo_logfunction f, void *context){
 
 static const char *errmsg[] = {
     // TODO
+    "undefined"
 };
 
 const char *aoo_error_string(aoo_error e){
