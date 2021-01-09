@@ -6,6 +6,7 @@
 
 #include "imp.hpp"
 
+#include "common/sync.hpp"
 #include "common/time.hpp"
 #include "common/utils.hpp"
 
@@ -109,9 +110,16 @@ void aoo_set_allocator(const aoo_allocator *alloc){
 
 /*//////////////////// Log ////////////////////////////*/
 
-static aoo_logfunction g_logfunction = nullptr;
+#define LOG_MUTEX 1
+
+#if LOG_MUTEX
+static aoo::sync::mutex g_log_mutex;
+#endif
 
 static void cerr_logfunction(const char *msg, int32_t level, void *ctx){
+#if LOG_MUTEX
+    aoo::sync::scoped_lock<aoo::sync::mutex> lock(g_log_mutex);
+#endif
     std::cerr << msg;
     std::flush(std::cerr);
 }
