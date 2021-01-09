@@ -110,6 +110,13 @@ void aoo_set_allocator(const aoo_allocator *alloc){
 /*//////////////////// Log ////////////////////////////*/
 
 static aoo_logfunction g_logfunction = nullptr;
+
+static void cerr_logfunction(const char *msg, int32_t level, void *ctx){
+    std::cerr << msg;
+    std::flush(std::cerr);
+}
+
+static aoo_logfunction g_logfunction = cerr_logfunction;
 static void *g_logcontext = nullptr;
 
 void aoo_set_logfunction(aoo_logfunction f, void *context){
@@ -135,12 +142,7 @@ namespace aoo {
 Log::~Log(){
     stream_ << "\n";
     std::string msg = stream_.str();
-    if (g_logfunction){
-        g_logfunction(msg.c_str(), level_, g_logcontext);
-    } else {
-        std::cerr << msg;
-        std::flush(std::cerr);
-    }
+    g_logfunction(msg.c_str(), level_, g_logcontext);
 }
 
 }
