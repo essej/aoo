@@ -136,7 +136,8 @@ public:
         return get_endpoint_arg(x, argc, argv, addr, nullptr, nullptr, "peer");
     }
 
-    int resolve_endpoint(const ip_address &addr, aoo_id id, int argc, t_atom *argv) const;
+    int resolve_endpoint(const ip_address &addr, aoo_id id,
+                         int argc, t_atom *argv) const override;
 private:
     friend class t_node;
 

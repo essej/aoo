@@ -32,7 +32,7 @@ class AooNode final : public INode {
 public:
     AooNode(World *world, int socket, const ip_address& addr);
 
-    ~AooNode();
+    ~AooNode() override;
 
     aoo::ip_address::ip_type type() const override { return type_; }
 
@@ -78,7 +78,6 @@ private:
     using unique_lock = sync::unique_lock<sync::mutex>;
     using scoped_lock = sync::scoped_lock<sync::mutex>;
 
-    World *world_;
     int socket_ = -1;
     int port_ = 0;
     aoo::ip_address::ip_type type_;
@@ -129,7 +128,7 @@ private:
 // public methods
 
 AooNode::AooNode(World *world, int socket, const ip_address& addr)
-    : world_(world), socket_(socket), port_(addr.port()), type_(addr.type())
+    : socket_(socket), port_(addr.port()), type_(addr.type())
 {
     client_.reset(aoo::net::client::create(addr.address(), addr.length(), 0));
 
@@ -177,7 +176,7 @@ AooNode::~AooNode(){
 
 using NodeMap = std::unordered_map<int, std::weak_ptr<AooNode>>;
 
-aoo::sync::mutex gNodeMapMutex;
+static aoo::sync::mutex gNodeMapMutex;
 static std::unordered_map<World *, NodeMap> gNodeMap;
 
 static NodeMap& getNodeMap(World *world){
