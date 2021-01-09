@@ -4,36 +4,39 @@
 #X msg 78 230 bufsize \$1;
 #X obj 78 206 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#N canvas 764 124 537 633 events 0;
+#N canvas 763 79 537 691 events 0;
 #X obj 37 32 inlet;
 #X obj 104 82 print aoo_receive~;
-#X text 69 255 the source format has changed;
-#X text 71 310 blocks have been lost;
-#X text 71 365 blocks arrived out of order;
-#X text 71 420 blocks have been resent;
-#X text 70 477 large gap between blocks;
+#X text 72 257 the source format has changed;
+#X text 71 363 blocks have been lost;
+#X text 71 418 blocks arrived out of order;
+#X text 71 473 blocks have been resent;
+#X text 70 530 large gap between blocks;
 #X text 72 139 a source has been added;
-#X text 69 184 the source has change its state (0: stop \, 1: play)
+#X text 69 190 the source has change its state (0: stop \, 1: play)
 ;
-#X text 61 584 <delta> is the approx. delay between source and sink
+#X text 64 637 <delta> is the approx. delay between source and sink
 (in ms), f 62;
-#X text 62 533 a periodic message coming from the source. The sink
-automatically replies with another ping message to tell the source
-that it is receiving its messages., f 54;
 #X obj 37 56 route ping;
 #X obj 37 80 outlet;
 #X msg 37 117 source_add <host> <port> <ID>;
-#X msg 37 160 source_state <host> <port> <ID> <state>;
-#X msg 36 211 source_format <host> <port> <ID> <codec> <blocksize>
+#X msg 37 166 source_state <host> <port> <ID> <state>;
+#X msg 36 218 source_format <host> <port> <ID> <codec> <blocksize>
 <samplerate> <channels> ...;
-#X msg 38 282 block_lost <host> <port> <ID> <count>;
-#X msg 39 338 block_reordered <host> <port> <ID> <count>;
-#X msg 39 393 block_resent <host> <port> <ID> <count>;
-#X msg 40 449 block_gap <host> <port> <ID> <count>;
-#X msg 40 505 ping <host> <port> <ID> <delta>;
-#X connect 0 0 11 0;
-#X connect 11 0 12 0;
-#X connect 11 1 1 0;
+#X msg 38 335 block_lost <host> <port> <ID> <count>;
+#X msg 39 391 block_reordered <host> <port> <ID> <count>;
+#X msg 39 446 block_resent <host> <port> <ID> <count>;
+#X msg 40 502 block_gap <host> <port> <ID> <count>;
+#X msg 40 558 ping <host> <port> <ID> <delta>;
+#X msg 37 283 invite_timeout <host> <port> <ID>;
+#X text 75 307 an invite request for the given source has timed out
+;
+#X text 65 586 a periodic message coming from the source. The sink
+automatically replies with another ping message to tell the source
+that it is actively listening., f 54;
+#X connect 0 0 10 0;
+#X connect 10 0 11 0;
+#X connect 10 1 1 0;
 #X restore 182 324 pd events;
 #X text 35 24 aoo_receive~: receive one or more AoO audio streams;
 #X msg 521 468 \; pd dsp \$1;
