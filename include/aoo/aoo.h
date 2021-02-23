@@ -245,13 +245,7 @@ typedef struct _aoo_block_event aoo_block_reordered_event;
 typedef struct _aoo_block_event aoo_block_resent_event;
 typedef struct _aoo_block_event aoo_block_gap_event;
 
-
-typedef struct aoo_invite_event
-{
-    AOO_ENDPOINT_EVENT
-    uint32_t flags;
-} aoo_invite_event;
-
+typedef aoo_sink_event aoo_invite_event;
 typedef aoo_sink_event aoo_uninvite_event;
 typedef aoo_source_event aoo_invite_timeout_event;
 
@@ -417,13 +411,12 @@ AOO_API aoo_error aoo_source_remove_sink(aoo_source *src, const void *address, i
 // remove all sinks (always threadsafe)
 AOO_API void aoo_source_remove_all(aoo_source *src);
 
-// handle messages from sinks (threadsafe, called from the network thread)
+// handle messages from sinks (threadsafe, called from a network thread)
 AOO_API aoo_error aoo_source_handle_message(aoo_source *src, const char *data, int32_t nbytes,
-                                            const void *address, int32_t addrlen,
-                                            aoo_sendfn fn, void *user);
+                                            const void *address, int32_t addrlen);
 
 // update and send outgoing messages (threadsafe, called from the network thread)
-AOO_API aoo_error aoo_source_update(aoo_source *src, aoo_sendfn fn, void *user);
+AOO_API aoo_error aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user);
 
 // process audio blocks (threadsafe, called from the audio thread)
 // data:        array of channel data (non-interleaved)
@@ -562,13 +555,12 @@ AOO_API aoo_error aoo_sink_uninvite_source(aoo_sink *sink, const void *address,
 // uninvite all sources (always threadsafe)
 AOO_API aoo_error aoo_sink_uninvite_all(aoo_sink *sink);
 
-// handle messages from sources (threadsafe, called from the network thread)
+// handle messages from sources (threadsafe, called from a network thread)
 AOO_API aoo_error aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_t nbytes,
-                                          const void *address, int32_t addrlen,
-                                          aoo_sendfn fn, void *user);
+                                          const void *address, int32_t addrlen);
 
-// update and send outgoing messages (threadsafe, called from the network thread)
-AOO_API aoo_error aoo_sink_update(aoo_sink *sink, aoo_sendfn fn, void *user);
+// send outgoing messages (threadsafe, called from a network thread)
+AOO_API aoo_error aoo_sink_send(aoo_sink *sink, aoo_sendfn fn, void *user);
 
 // process audio (threadsafe, but not reentrant)
 // data:        array of channel data (non-interleaved)

@@ -39,6 +39,11 @@ struct endpoint {
     uint32_t flags = 0;
 };
 
+struct data_request {
+    int32_t sequence;
+    int32_t frame;
+};
+
 struct sink_desc : endpoint {
     sink_desc(const ip_address& _addr, int32_t _id, uint32_t _flags)
         : endpoint(_addr, _id, _flags), channel(0) {}
@@ -56,6 +61,7 @@ struct sink_desc : endpoint {
 
     // data
     std::atomic<int16_t> channel;
+    lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> data_requests;
 
     void request_format(){
         needformat_.store(true, std::memory_order_release);
@@ -63,6 +69,10 @@ struct sink_desc : endpoint {
 
     bool need_format() {
         return needformat_.exchange(false, std::memory_order_acquire);
+    }
+
+    void reset(){
+        data_requests.clear();
     }
 private:
     std::atomic<bool> needformat_{true}; // !
@@ -97,7 +107,6 @@ class source_imp final : public source {
             aoo_event_type type_;
             aoo_event event_;
             aoo_sink_event sink;
-            aoo_invite_event invite;
             aoo_ping_event ping;
         };
     private:
@@ -120,10 +129,9 @@ class source_imp final : public source {
     void remove_all() override;
 
     aoo_error handle_message(const char *data, int32_t n,
-                             const void *address, int32_t addrlen,
-                             aoo_sendfn fn, void *user) override;
+                             const void *address, int32_t addrlen) override;
 
-    aoo_error update(aoo_sendfn fn, void *user) override;
+    aoo_error send(aoo_sendfn fn, void *user) override;
 
     aoo_error process(const aoo_sample **data, int32_t n, uint64_t t) override;
 
@@ -220,25 +228,27 @@ class source_imp final : public source {
 
     void send_data(const sendfn& fn);
 
-    void send_data(const sendfn& fn, const endpoint& ep,
-                   int32_t salt, const aoo::data_packet& d) const;
+    void resend_data(const sendfn& fn);
+
+    void send_packet(const sendfn& fn, const endpoint& ep,
+                     int32_t salt, const aoo::data_packet& d) const;
 
     void send_ping(const sendfn& fn);
 
     void handle_format_request(const osc::ReceivedMessage& msg,
-                               const ip_address& addr, const sendfn& reply);
+                               const ip_address& addr);
 
     void handle_data_request(const osc::ReceivedMessage& msg,
-                             const ip_address& addr, const sendfn& reply);
+                             const ip_address& addr);
 
     void handle_ping(const osc::ReceivedMessage& msg,
-                     const ip_address& addr, const sendfn& reply);
+                     const ip_address& addr);
 
     void handle_invite(const osc::ReceivedMessage& msg,
-                       const ip_address& addr, const sendfn& reply);
+                       const ip_address& addr);
 
     void handle_uninvite(const osc::ReceivedMessage& msg,
-                         const ip_address& addr, const sendfn& reply);
+                         const ip_address& addr);
 };
 
 } // aoo

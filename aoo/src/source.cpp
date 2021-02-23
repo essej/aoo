@@ -376,21 +376,18 @@ void aoo::source_imp::remove_all(){
 }
 
 aoo_error aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
-                                    const void *address, int32_t addrlen,
-                                    aoo_sendfn fn, void *user) {
-    return src->handle_message(data, n, address, addrlen, fn, user);
+                                    const void *address, int32_t addrlen) {
+    return src->handle_message(data, n, address, addrlen);
 }
 
 // /aoo/src/<id>/format <sink>
 aoo_error aoo::source_imp::handle_message(const char *data, int32_t n,
-                                          const void *address, int32_t addrlen,
-                                          aoo_sendfn fn, void *user){
+                                          const void *address, int32_t addrlen){
     if (!data){
         return AOO_OK; // nothing to update
     }
 
     try {
-        sendfn reply(fn, user);
         ip_address addr((const sockaddr *)address, addrlen);
 
         osc::ReceivedPacket packet(data, n);
@@ -415,15 +412,15 @@ aoo_error aoo::source_imp::handle_message(const char *data, int32_t n,
 
         auto pattern = msg.AddressPattern() + onset;
         if (!strcmp(pattern, AOO_MSG_FORMAT)){
-            handle_format_request(msg, addr, reply);
+            handle_format_request(msg, addr);
         } else if (!strcmp(pattern, AOO_MSG_DATA)){
-            handle_data_request(msg, addr, reply);
+            handle_data_request(msg, addr);
         } else if (!strcmp(pattern, AOO_MSG_INVITE)){
-            handle_invite(msg, addr, reply);
+            handle_invite(msg, addr);
         } else if (!strcmp(pattern, AOO_MSG_UNINVITE)){
-            handle_uninvite(msg, addr, reply);
+            handle_uninvite(msg, addr);
         } else if (!strcmp(pattern, AOO_MSG_PING)){
-            handle_ping(msg, addr, reply);
+            handle_ping(msg, addr);
         } else {
             LOG_WARNING("unknown message " << pattern);
             return AOO_ERROR_UNSPECIFIED;
@@ -435,18 +432,13 @@ aoo_error aoo::source_imp::handle_message(const char *data, int32_t n,
     }
 }
 
-aoo_error aoo_source_update(aoo_source *src, aoo_sendfn fn, void *user) {
-    return src->update(fn, user);
+aoo_error aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user) {
+    return src->send(fn, user);
 }
 
 // This method reads audio samples from the ringbuffer,
 // encodes them and sends them to all sinks.
-// We have to aquire both the update lock and the sink list lock
-// and release both before calling the sink's send method
-// to avoid possible deadlocks in the client code.
-// We have to make a local copy of the sink list, but this should be
-// rather cheap in comparison to encoding and sending the audio data.
-aoo_error aoo::source_imp::update(aoo_sendfn fn, void *user){
+aoo_error aoo::source_imp::send(aoo_sendfn fn, void *user){
     if (state_.load() != stream_state::play){
         return AOO_OK; // nothing to do
     }
@@ -456,6 +448,8 @@ aoo_error aoo::source_imp::update(aoo_sendfn fn, void *user){
     send_format(reply);
 
     send_data(reply);
+
+    resend_data(reply);
 
     send_ping(reply);
 
@@ -707,6 +701,7 @@ void source_imp::send_event(const event& e, aoo_thread_level level){
 }
 
 // must be real-time safe because it might be called in process()!
+// always called with update lock!
 void source_imp::start_new_stream(){
     // implicitly reset time DLL to be on the safe side
     timer_.reset();
@@ -723,8 +718,10 @@ void source_imp::start_new_stream(){
 
     sink_lock lock(sinks_);
     for (auto& s : sinks_){
+        s.reset();
         s.request_format();
     }
+    needformat_.store(true, std::memory_order_release); // !
 }
 
 void source_imp::update_audioqueue(){
@@ -858,7 +855,7 @@ void source_imp::send_data(const sendfn& fn){
         // send block to sinks
         for (auto& sink : sinks_){
             d.channel = sink.channel.load(std::memory_order_relaxed); // !
-            send_data(fn, sink, salt, d);
+            send_packet(fn, sink, salt, d);
         }
     }
 
@@ -925,7 +922,7 @@ void source_imp::send_data(const sendfn& fn){
                 // send block to sinks
                 for (auto& sink : sinks_){
                     d.channel = sink.channel.load(std::memory_order_relaxed); // !
-                    send_data(fn, sink, salt, d);
+                    send_packet(fn, sink, salt, d);
                 }
             };
 
@@ -956,10 +953,93 @@ void source_imp::send_data(const sendfn& fn){
     }
 }
 
+void source_imp::resend_data(const sendfn &fn){
+    shared_lock updatelock(update_mutex_); // reader lock for history buffer!
+    if (!history_.capacity()){
+        return;
+    }
+    int32_t salt = salt_; // cache salt!
+
+    // we only free sources in this thread, so we don't have to lock
+#if 0
+    // this is not a real lock, so we don't have worry about dead locks
+    sink_lock lock(sinks_);
+#endif
+    // send block to sinks
+    for (auto& sink : sinks_){
+        data_request request;
+        while (sink.data_requests.try_pop(request)){
+            auto block = history_.find(request.sequence);
+            if (block){
+                aoo::data_packet d;
+                d.sequence = block->sequence;
+                d.samplerate = block->samplerate;
+                d.channel = sink.channel.load(std::memory_order_relaxed);
+                d.totalsize = block->size();
+                d.nframes = block->num_frames();
+                // We use a buffer on the heap because blocks and even frames
+                // can be quite large and we don't want them to sit on the stack.
+                if (request.frame < 0){
+                    // Copy whole block and save frame pointers.
+                    sendbuffer_.resize(d.totalsize);
+                    char *buf = sendbuffer_.data();
+                    char *frameptr[256];
+                    int32_t framesize[256];
+                    int32_t onset = 0;
+
+                    for (int i = 0; i < d.nframes; ++i){
+                        auto nbytes = block->get_frame(i, buf + onset, d.totalsize - onset);
+                        if (nbytes > 0){
+                            frameptr[i] = buf + onset;
+                            framesize[i] = nbytes;
+                            onset += nbytes;
+                        } else {
+                            LOG_ERROR("empty frame!");
+                        }
+                    }
+                    // unlock before sending
+                    updatelock.unlock();
+
+                    // send frames to sink
+                    for (int i = 0; i < d.nframes; ++i){
+                        d.framenum = i;
+                        d.data = frameptr[i];
+                        d.size = framesize[i];
+                        send_packet(fn, sink, salt, d);
+                    }
+
+                    // lock again
+                    updatelock.lock();
+                } else {
+                    // Copy a single frame
+                    if (request.frame >= 0 && request.frame < d.nframes){
+                        int32_t size = block->frame_size(request.frame);
+                        sendbuffer_.resize(size);
+                        block->get_frame(request.frame, sendbuffer_.data(), size);
+                        // unlock before sending
+                        updatelock.unlock();
+
+                        // send frame to sink
+                        d.framenum = request.frame;
+                        d.data = sendbuffer_.data();
+                        d.size = size;
+                        send_packet(fn, sink, salt, d);
+
+                        // lock again
+                        updatelock.lock();
+                    } else {
+                        LOG_ERROR("frame number " << request.frame << " out of range!");
+                    }
+                }
+            }
+        }
+    }
+}
+
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
-void source_imp::send_data(const sendfn& fn, const endpoint& ep,
-                           int32_t salt, const aoo::data_packet& d) const {
+void source_imp::send_packet(const sendfn& fn, const endpoint& ep,
+                             int32_t salt, const aoo::data_packet& d) const {
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
@@ -1016,8 +1096,9 @@ void source_imp::send_ping(const sendfn& fn){
     }
 }
 
+// /format <id> <version>
 void source_imp::handle_format_request(const osc::ReceivedMessage& msg,
-                                       const ip_address& addr, const sendfn& reply)
+                                       const ip_address& addr)
 {
     LOG_DEBUG("handle format request");
 
@@ -1045,96 +1126,23 @@ void source_imp::handle_format_request(const osc::ReceivedMessage& msg,
 }
 
 void source_imp::handle_data_request(const osc::ReceivedMessage& msg,
-                                     const ip_address& addr, const sendfn& reply)
+                                     const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
     auto id = (it++)->AsInt32();
-    auto salt = (it++)->AsInt32();
+    auto salt = (it++)->AsInt32(); // we can ignore the salt
 
     LOG_DEBUG("handle data request");
 
-    // check if sink exists (not strictly necessary, but might help catch errors)
     sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
     if (sink){
-        shared_lock updatelock(update_mutex_); // reader lock!
-        if (!history_.capacity()){
-            return;
-        }
-        if (salt != salt_){
-            // outdated request
-            return;
-        }
-
-        // get pairs of [seq, frame]
+        // get pairs of sequence + frame
         int npairs = (msg.ArgumentCount() - 2) / 2;
         while (npairs--){
-            auto seq = (it++)->AsInt32();
-            auto frame = (it++)->AsInt32();
-
-            auto block = history_.find(seq);
-            if (block){
-                aoo::data_packet d;
-                d.sequence = block->sequence;
-                d.samplerate = block->samplerate;
-                d.channel = sink->channel.load(std::memory_order_relaxed);
-                d.totalsize = block->size();
-                d.nframes = block->num_frames();
-                // We use a buffer on the heap because blocks and even frames
-                // can be quite large and we don't want them to sit on the stack.
-                if (frame < 0){
-                    // Copy whole block and save frame pointers.
-                    sendbuffer_.resize(d.totalsize);
-                    char *buf = sendbuffer_.data();
-                    char *frameptr[256];
-                    int32_t framesize[256];
-                    int32_t onset = 0;
-
-                    for (int i = 0; i < d.nframes; ++i){
-                        auto nbytes = block->get_frame(i, buf + onset, d.totalsize - onset);
-                        if (nbytes > 0){
-                            frameptr[i] = buf + onset;
-                            framesize[i] = nbytes;
-                            onset += nbytes;
-                        } else {
-                            LOG_ERROR("empty frame!");
-                        }
-                    }
-                    // unlock before sending
-                    updatelock.unlock();
-
-                    // send frames to sink
-                    for (int i = 0; i < d.nframes; ++i){
-                        d.framenum = i;
-                        d.data = frameptr[i];
-                        d.size = framesize[i];
-                        send_data(reply, *sink, salt, d);
-                    }
-
-                    // lock again
-                    updatelock.lock();
-                } else {
-                    // Copy a single frame
-                    if (frame >= 0 && frame < d.nframes){
-                        int32_t size = block->frame_size(frame);
-                        sendbuffer_.resize(size);
-                        block->get_frame(frame, sendbuffer_.data(), size);
-                        // unlock before sending
-                        updatelock.unlock();
-
-                        // send frame to sink
-                        d.framenum = frame;
-                        d.data = sendbuffer_.data();
-                        d.size = size;
-                        send_data(reply, *sink, salt, d);
-
-                        // lock again
-                        updatelock.lock();
-                    } else {
-                        LOG_ERROR("frame number " << frame << " out of range!");
-                    }
-                }
-            }
+            int32_t sequence = (it++)->AsInt32();
+            int32_t frame = (it++)->AsInt32();
+            sink->data_requests.push(sequence, frame);
         }
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_DATA << "' message: sink not found");
@@ -1142,19 +1150,19 @@ void source_imp::handle_data_request(const osc::ReceivedMessage& msg,
 }
 
 void source_imp::handle_invite(const osc::ReceivedMessage& msg,
-                               const ip_address& addr, const sendfn& reply)
+                               const ip_address& addr)
 {
     auto id = msg.ArgumentsBegin()->AsInt32();
 
-    LOG_DEBUG("handle invite");
+    LOG_DEBUG("handle invitation by " << addr.name()
+              << " " << addr.port() << " " << id);
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
-    if (sink){
+    if (!sink){
         // push "invite" event
         event e(AOO_INVITE_EVENT, addr, id);
-        e.invite.flags = sink->flags;
         send_event(e, AOO_THREAD_NETWORK);
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_INVITE << "' message: sink already added");
@@ -1162,11 +1170,12 @@ void source_imp::handle_invite(const osc::ReceivedMessage& msg,
 }
 
 void source_imp::handle_uninvite(const osc::ReceivedMessage& msg,
-                                 const ip_address& addr, const sendfn& reply)
+                                 const ip_address& addr)
 {
     auto id = msg.ArgumentsBegin()->AsInt32();
 
-    LOG_DEBUG("handle uninvite");
+    LOG_DEBUG("handle uninvitation by " << addr.name()
+              << " " << addr.port() << " " << id);
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     sink_lock lock(sinks_);
@@ -1180,7 +1189,7 @@ void source_imp::handle_uninvite(const osc::ReceivedMessage& msg,
 }
 
 void source_imp::handle_ping(const osc::ReceivedMessage& msg,
-                             const ip_address& addr, const sendfn& reply)
+                             const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
     aoo_id id = (it++)->AsInt32();

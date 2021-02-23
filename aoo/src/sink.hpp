@@ -115,9 +115,25 @@ struct source_event {
 
 enum class request_type {
     unknown,
+    format,
+    ping_reply,
     invite,
     uninvite,
     uninvite_all
+};
+
+// used in 'source_desc'
+struct request {
+    request(request_type _type = request_type::unknown)
+        : type(_type){}
+
+    request_type type;
+    union {
+        struct {
+            uint64_t tt1;
+            uint64_t tt2;
+        } ping;
+    };
 };
 
 // used in 'sink'
@@ -179,15 +195,13 @@ public:
     void reset(const sink_imp& s);
 
     aoo_error handle_format(const sink_imp& s, int32_t salt, const aoo_format& f,
-                            const char *settings, int32_t size, uint32_t flags,
-                            const sendfn& reply);
+                            const char *settings, int32_t size, uint32_t flags);
 
-    aoo_error handle_data(const sink_imp& s, int32_t salt, const aoo::data_packet& d,
-                          const sendfn& reply);
+    aoo_error handle_data(const sink_imp& s, int32_t salt, const aoo::data_packet& d);
 
-    aoo_error handle_ping(const sink_imp& s, time_tag tt, const sendfn& reply);
+    aoo_error handle_ping(const sink_imp& s, time_tag tt);
 
-    void update(const sink_imp& s, const sendfn& fn);
+    void send(const sink_imp& s, const sendfn& fn);
 
     bool process(const sink_imp& s, aoo_sample *buffer, int32_t nsamples, time_tag tt);
 
@@ -213,11 +227,15 @@ private:
 
     void process_blocks();
 
-    void check_missing_blocks(const sink_imp& s, const sendfn& reply,
-                              shared_lock& lock);
+    void check_missing_blocks(const sink_imp& s);
 
     // send messages
+    void send_ping_reply(const sink_imp& s, const sendfn& fn,
+                         const request& r);
+
     void send_format_request(const sink_imp& s, const sendfn& fn);
+
+    void send_data_requests(const sink_imp& s, const sendfn& fn);
 
     void send_invitation(const sink_imp& s, const sendfn& fn);
 
@@ -229,7 +247,7 @@ private:
     uint32_t flags_ = 0;
     int32_t salt_ = -1; // start with invalid stream ID!
     std::atomic<source_state> state_;
-    double state_time_ = 0.0;
+    std::atomic<double> state_time_{0.0};
     // audio decoder
     std::unique_ptr<aoo::decoder> decoder_;
     // state
@@ -242,6 +260,19 @@ private:
     jitter_buffer jitterbuffer_;
     lockfree::spsc_queue<aoo_sample, aoo::allocator<aoo_sample>> audioqueue_;
     lockfree::spsc_queue<block_info, aoo::allocator<block_info>> infoqueue_;
+    // requests
+    lockfree::unbounded_mpsc_queue<request, aoo::allocator<request>> requestqueue_;
+    void push_request(const request& r){
+        requestqueue_.push(r);
+    }
+    struct data_request {
+        int32_t sequence;
+        int32_t frame;
+    };
+    lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> datarequestqueue_;
+    void push_data_request(const data_request& r){
+        datarequestqueue_.push(r);
+    }
     // events
     lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
     void send_event(const sink_imp& s, const event& e, aoo_thread_level level);
@@ -266,10 +297,9 @@ public:
     aoo_error uninvite_all() override;
 
     aoo_error handle_message(const char *data, int32_t n,
-                             const void *address, int32_t addrlen,
-                             aoo_sendfn fn, void *user) override;
+                             const void *address, int32_t addrlen) override;
 
-    aoo_error update(aoo_sendfn fn, void *user) override;
+    aoo_error send(aoo_sendfn fn, void *user) override;
 
     aoo_error process(aoo_sample **data, int32_t nsamples, uint64_t t) override;
 
@@ -328,6 +358,7 @@ private:
     using source_list = lockfree::simple_list<source_desc, aoo::allocator<source_desc>>;
     using source_lock = std::unique_lock<source_list>;
     source_list sources_;
+    sync::mutex source_mutex_;
     // timing
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
     time_dll dll_;
@@ -378,13 +409,13 @@ private:
     void reset_sources();
 
     aoo_error handle_format_message(const osc::ReceivedMessage& msg,
-                                    const ip_address& addr, const sendfn& reply);
+                                    const ip_address& addr);
 
     aoo_error handle_data_message(const osc::ReceivedMessage& msg,
-                                  const ip_address& addr, const sendfn& reply);
+                                  const ip_address& addr);
 
     aoo_error handle_ping_message(const osc::ReceivedMessage& msg,
-                                  const ip_address& addr, const sendfn& reply);
+                                  const ip_address& addr);
 };
 
 } // aoo

@@ -60,13 +60,12 @@ public:
     // remove all sinks (always threadsafe)
     virtual void remove_all() = 0;
 
-    // handle messages from sinks (threadsafe, called from the network thread)
+    // handle messages from sinks (threadsafe, called from a network thread)
     virtual aoo_error handle_message(const char *data, int32_t n,
-                                     const void *address, int32_t addrlen,
-                                     aoo_sendfn fn, void *user) = 0;
+                                     const void *address, int32_t addrlen) = 0;
 
-    // update and send outgoing messages (threadsafe, called from the network thread)
-    virtual aoo_error update(aoo_sendfn fn, void *user) = 0;
+    // send outgoing messages (threadsafe, called from a network thread)
+    virtual aoo_error send(aoo_sendfn fn, void *user) = 0;
 
     // process audio blocks (threadsafe, called from the audio thread)
     // data:        array of channel data (non-interleaved)
@@ -224,13 +223,12 @@ public:
     // uninvite all sources (always thread safe)
     virtual aoo_error uninvite_all() = 0;
 
-    // handle messages from sources (threadsafe, called from the network thread)
+    // handle messages from sources (threadsafe, called from a network thread)
     virtual aoo_error handle_message(const char *data, int32_t n,
-                                     const void *address, int32_t addrlen,
-                                     aoo_sendfn fn, void *user) = 0;
+                                     const void *address, int32_t addrlen) = 0;
 
-    // update and send outgoing messages (threadsafe, called from the network thread)
-    virtual aoo_error update(aoo_sendfn fn, void *user) = 0;
+    // send outgoing messages (threadsafe, called from a network thread)
+    virtual aoo_error send(aoo_sendfn fn, void *user) = 0;
 
     // process audio (threadsafe, but not reentrant)
     virtual aoo_error process(aoo_sample **data, int32_t nsamples, uint64_t t) = 0;

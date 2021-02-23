@@ -291,7 +291,7 @@ void server_imp::on_user_joined_group(user& usr, group& grp){
                 msg << osc::BeginMessage(AOO_NET_MSG_CLIENT_PEER_JOIN)
                     << grp.name.c_str() << u.name.c_str();
                 // only v0.2-pre3 and abvoe
-                if (usr.version > 0){
+                if (peer->version > 0){
                     msg << u.id;
                 }
                 // send *unmapped* addresses in case the client is IPv4 only

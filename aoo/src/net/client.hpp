@@ -77,10 +77,10 @@ public:
         return real_address_;
     }
 
-    void update(const sendfn& reply, time_tag now);
+    void send(const sendfn& reply, time_tag now);
 
     void handle_message(const osc::ReceivedMessage& msg, int onset,
-                        const ip_address& addr, const sendfn& reply);
+                        const ip_address& addr);
 
     friend std::ostream& operator << (std::ostream& os, const peer& p);
 private:
@@ -94,6 +94,7 @@ private:
     time_tag start_time_;
     double last_pingtime_ = 0;
     std::atomic<bool> connected_{false};
+    std::atomic<bool> got_ping_{false};
     bool timeout_ = false;
 
     bool handle_first_message(const osc::ReceivedMessage& msg, int onset,
@@ -111,10 +112,9 @@ public:
 
     aoo_error handle_message(const char *data, int32_t n,
                              const ip_address& addr,
-                             int32_t type, aoo_type onset,
-                             const sendfn& reply);
+                             int32_t type, aoo_type onset);
 
-    void handle_relay_message(const osc::ReceivedMessage& msg, const sendfn& fn);
+    void handle_relay_message(const osc::ReceivedMessage& msg);
 
     void update(const sendfn& reply, time_tag now);
 
@@ -212,13 +212,13 @@ public:
     void perform_send_message(const char *data, int32_t size, int32_t flags,
                               const sendfn& fn, T&& filter);
 
-    aoo_error handle_message(const char *data, int32_t n, const void *addr, int32_t len,
-                             aoo_sendfn fn, void *user) override;
+    aoo_error handle_message(const char *data, int32_t n,
+                             const void *addr, int32_t len) override;
 
     bool handle_peer_message(const osc::ReceivedMessage& msg, int onset,
-                             const ip_address& addr, const sendfn& reply);
+                             const ip_address& addr);
 
-    aoo_error update(aoo_sendfn fn, void *user) override;
+    aoo_error send(aoo_sendfn fn, void *user) override;
 
     aoo_error set_eventhandler(aoo_eventhandler fn, void *user, int32_t mode) override;
 

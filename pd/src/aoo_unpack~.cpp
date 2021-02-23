@@ -61,22 +61,21 @@ static void aoo_unpack_list(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv
         msg[i] = (int)(argv[i].a_type == A_FLOAT ? argv[i].a_w.w_float : 0.f);
     }
     // handle incoming message
-    x->x_sink->handle_message(msg, argc, x->x_addr.address(), x->x_addr.length(),
-                              (aoo_sendfn)aoo_unpack_send, x);
+    x->x_sink->handle_message(msg, argc, x->x_addr.address(), x->x_addr.length());
 }
 
 static void aoo_unpack_invite(t_aoo_unpack *x, t_floatarg f)
 {
     x->x_sink->invite_source(x->x_addr.address(), x->x_addr.length(), f);
     // send outgoing messages
-    x->x_sink->update((aoo_sendfn)aoo_unpack_send, x);
+    x->x_sink->send((aoo_sendfn)aoo_unpack_send, x);
 }
 
 static void aoo_unpack_uninvite(t_aoo_unpack *x, t_floatarg f)
 {
     x->x_sink->uninvite_source(x->x_addr.address(), x->x_addr.length(), f);
     // send outgoing messages
-    x->x_sink->update((aoo_sendfn)aoo_unpack_send, x);
+    x->x_sink->send((aoo_sendfn)aoo_unpack_send, x);
 }
 
 static void aoo_unpack_buffersize(t_aoo_unpack *x, t_floatarg f)
@@ -216,7 +215,7 @@ static void aoo_unpack_handle_event(t_aoo_unpack *x, const aoo_event *event, int
 static void aoo_unpack_tick(t_aoo_unpack *x)
 {
     // send outgoing messages
-    x->x_sink->update((aoo_sendfn)aoo_unpack_send, x);
+    x->x_sink->send((aoo_sendfn)aoo_unpack_send, x);
     // poll events
     x->x_sink->poll_events();
 }

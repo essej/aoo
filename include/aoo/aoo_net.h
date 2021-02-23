@@ -282,15 +282,14 @@ AOO_API aoo_error aoo_net_client_send_message(aoo_net_client *client,
                                               const char *data, int32_t n,
                                               const void *addr, int32_t len, int32_t flags);
 
-// handle messages from peers (threadsafe, but not reentrant)
+// handle messages from peers (threadsafe, called from a network thread)
 // 'addr' should be sockaddr *
 AOO_API aoo_error aoo_net_client_handle_message(aoo_net_client *client,
                                                 const char *data, int32_t nbytes,
-                                                const void *addr, int32_t addrlen,
-                                                aoo_sendfn fn, void *user);
+                                                const void *addr, int32_t addrlen);
 
-// update and send outgoing messages (threadsafe, called from the network thread)
-AOO_API aoo_error aoo_net_client_update(aoo_net_client *client, aoo_sendfn fn, void *user);
+// send outgoing messages (threadsafe, called from a network thread)
+AOO_API aoo_error aoo_net_client_send(aoo_net_client *client, aoo_sendfn fn, void *user);
 
 // set event handler callback + mode
 AOO_API aoo_error aoo_net_client_set_eventhandler(aoo_net_client *sink,

@@ -111,7 +111,12 @@ void AooSend::handleEvent(const aoo_event *event){
         aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
 
         if (accept_){
-            addSinkEvent(addr, e->id, e->flags);
+            aoo_net_peer_info info;
+            if (node()->client()->get_peer_info(e->address, e->addrlen, &info) == AOO_OK){
+                addSinkEvent(addr, e->id, info.flags);
+            } else {
+                addSinkEvent(addr, e->id, 0);
+            }
         } else {
             beginEvent(msg, "/invite", addr, e->id);
             sendMsgRT(msg);

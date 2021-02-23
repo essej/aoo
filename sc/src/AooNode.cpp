@@ -15,11 +15,9 @@
 #include <thread>
 #include <atomic>
 
-#define USE_NETWORK_THREAD 1
+#define NETWORK_THREAD_POLL 0
 
-#if USE_NETWORK_THREAD
-#define RECEIVE_TIMEOUT 5000 // microseconds
-#else
+#if NETWORK_THREAD_POLL
 #define POLL_INTERVAL 1000 // microseconds
 #endif
 
@@ -47,8 +45,9 @@ public:
     void unregisterClient(AooClient *c) override;
 
     void notify() override {
+    #if NETWORK_THREAD_POLL
         update_.store(true);
-    #if USE_NETWORK_THREAD
+    #else
         event_.set();
     #endif
     }
@@ -87,23 +86,15 @@ private:
     std::thread clientThread_;
     AooClient *clientObject_ = nullptr;
     // threading
-    std::thread recvthread_;
-#if USE_NETWORK_THREAD
+#if NETWORK_THREAD_POLL
     std::thread iothread_;
+    std::atomic<bool> update_{false};
+#else
+    std::thread sendthread_;
+    std::thread recvthread_;
     aoo::sync::event event_;
 #endif
-    std::atomic<bool> update_{false};
     std::atomic<bool> quit_{false};
-#if USE_NETWORK_THREAD
-    struct packet {
-        aoo::ip_address address;
-        std::vector<char> data;
-    };
-    aoo::lockfree::unbounded_mpsc_queue<packet> recvbuffer_;
-#if DEBUG_THREADS
-    std::atomic<int32_t> recvbufferfill_{0};
-#endif
-#endif // USE_NETWORK_THREAD
 
     // private methods
     bool getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
@@ -112,11 +103,12 @@ private:
     static int32_t send(void *user, const char *msg, int32_t size,
                         const void *addr, int32_t addrlen, uint32_t flags);
 
-#if USE_NETWORK_THREAD
+#if NETWORK_THREAD_POLL
     void performNetworkIO();
-#endif
-
+#else
+    void sendPackets();
     void receivePackets();
+#endif
 
     void handleClientMessage(const char *data, int32_t size,
                              const ip_address& addr, aoo::time_tag time);
@@ -132,17 +124,22 @@ AooNode::AooNode(World *world, int socket, const ip_address& addr)
 {
     client_.reset(aoo::net::client::create(addr.address(), addr.length(), 0));
 
+#if NETWORK_THREAD_POLL
+    // start network I/O thread
+    iothread_ = std::thread([this](){
+        sync::lower_thread_priority();
+        performNetworkIO();
+    });
+#else
+    // start receive thread
+    sendthread_ = std::thread([this](){
+        sync::lower_thread_priority();
+        sendPackets();
+    });
     // start receive thread
     recvthread_ = std::thread([this](){
         sync::lower_thread_priority();
         receivePackets();
-    });
-
-#if USE_NETWORK_THREAD
-    // start network thread
-    iothread_ = std::thread([this](){
-        sync::lower_thread_priority();
-        performNetworkIO();
     });
 #endif
 
@@ -153,14 +150,14 @@ AooNode::~AooNode(){
     // ask threads to quit
     quit_ = true;
 
-#if USE_NETWORK_THREAD
-    event_.set(); // wake perform_io()
-#endif
-    socket_signal(socket_); // wake receive_packets()
-
-    recvthread_.join();
-#if USE_NETWORK_THREAD
+#if NETWORK_THREAD_POLL
+    socket_signal(socket_); // wake perform_io()
     iothread_.join();
+#else
+    event_.set(); // wake send_packets()
+    socket_signal(socket_); // wake receive_packets()
+    sendthread_.join();
+    recvthread_.join();
 #endif
 
     socket_close(socket_);
@@ -212,10 +209,10 @@ INode::ptr INode::get(World *world, int port){
 
         // increase socket buffers
         const int sendbufsize = 1 << 16; // 65 KB
-    #if USE_NETWORK_THREAD
-        const int recvbufsize = 1 << 16; // 65 KB
-    #else
+    #if NETWORK_THREAD_POLL
         const int recvbufsize = 1 << 20; // 1 MB
+    #else
+        const int recvbufsize = 1 << 16; // 65 KB
     #endif
         socket_setsendbufsize(sock, sendbufsize);
         socket_setrecvbufsize(sock, recvbufsize);
@@ -323,99 +320,8 @@ int32_t AooNode::send(void *user, const char *msg, int32_t size,
     return socket_sendto(x->socket_, msg, size, address);
 }
 
-#if USE_NETWORK_THREAD
-void AooNode::receivePackets(){
-    while (!quit_.load(std::memory_order_relaxed)){
-        ip_address addr;
-        char buf[AOO_MAXPACKETSIZE];
-
-        // if we have a client, make sure to periodically wake up the network thread
-        // NOTE: clientObject_ should really be atomic, but in this case nothing bad can happen.
-        auto timeout = clientObject_ ? RECEIVE_TIMEOUT : -1;
-
-        int nbytes = socket_receive(socket_, buf, AOO_MAXPACKETSIZE, &addr, timeout);
-        if (nbytes > 0){
-            // add packet to queue
-            recvbuffer_.produce([&](packet& p){
-                p.address = addr;
-                p.data.assign(buf, buf + nbytes);
-            });
-        #if DEBUG_THREADS
-            recvbufferfill_.fetch_add(1, std::memory_order_relaxed);
-        #endif
-        } else if (nbytes < 0) {
-            // ignore errors when quitting
-            if (!quit_){
-                socket_error_print("recv");
-            }
-            break;
-        }
-        // ignore empty packets (time out and quit signalling)
-
-        event_.set(); // always set event!
-    #if DEBUG_THREADS
-        std::cout << "receivePackets: waiting" << std::endl;
-    #endif
-    }
-}
-
+#if NETWORK_THREAD_POLL
 void AooNode::performNetworkIO(){
-    while (!quit_.load(std::memory_order_relaxed)){
-        event_.wait();
-
-        const int32_t throttle = 10;
-        int32_t count = 0;
-
-        while (!recvbuffer_.empty()){
-            unique_lock lock(clientMutex_);
-        #if DEBUG_THREADS
-            std::cout << "performNetworkIO: handle_message" << std::endl;
-        #endif
-            recvbuffer_.consume([&](const packet& p){
-                try {
-                    osc::ReceivedPacket packet(p.data.data(), p.data.size());
-                    if (packet.IsBundle()){
-                        osc::ReceivedBundle bundle(packet);
-                        handleClientBundle(bundle, p.address);
-                    } else {
-                        handleClientMessage(p.data.data(), p.data.size(),
-                                            p.address, aoo::time_tag::immediate());
-                    }
-                } catch (const osc::Exception &err){
-                    LOG_ERROR("AooNode: bad OSC message - " << err.what());
-                }
-            });
-        #if DEBUG_THREADS
-            auto fill = recvbufferfill_.fetch_sub(1, std::memory_order_relaxed) - 1;
-            std::cerr << "receive buffer fill: " << fill << std::endl;
-        #endif
-            // in case the receive buffer is never empty
-            if (++count >= throttle){
-                // relinquish client lock in case another thread is waiting
-                // for the client mutex
-                lock.unlock();
-            #if DEBUG_THREADS
-                std::cout << "performNetworkIO: throttle" << std::endl;
-            #endif
-                lock.lock();
-
-                client_->update(send, this);
-
-                count = 0;
-            }
-        }
-
-        if (update_.exchange(false, std::memory_order_acquire)){
-            scoped_lock lock(clientMutex_);
-        #if DEBUG_THREADS
-            std::cout << "performNetworkIO: update" << std::endl;
-        #endif
-            client_->update(send, this);
-        }
-    }
-}
-#else
-void AooNode::receivePackets(){
     while (!quit_.load(std::memory_order_relaxed)){
         ip_address addr;
         char buf[AOO_MAXPACKETSIZE];
@@ -424,7 +330,7 @@ void AooNode::receivePackets(){
         if (nbytes > 0){
             scoped_lock lock(clientMutex_);
         #if DEBUG_THREADS
-            std::cout << "receivePackets: handle_message" << std::endl;
+            std::cout << "performNetworkIO: receive" << std::endl;
         #endif
             try {
                 osc::ReceivedPacket packet(buf, nbytes);
@@ -432,7 +338,8 @@ void AooNode::receivePackets(){
                     osc::ReceivedBundle bundle(packet);
                     handleClientBundle(bundle, addr);
                 } else {
-                    handleClientMessage(buf, nbytes, addr, aoo::time_tag::immediate());
+                    handleClientMessage(buf, nbytes, addr,
+                                        aoo::time_tag::immediate());
                 }
             } catch (const osc::Exception &err){
                 LOG_ERROR("AooNode: bad OSC message - " << err.what());
@@ -443,14 +350,62 @@ void AooNode::receivePackets(){
                 socket_error_print("recv");
             }
             return;
+        } else {
+            // timeout
         }
 
         if (update_.exchange(false, std::memory_order_acquire)){
             scoped_lock lock(clientMutex_);
         #if DEBUG_THREADS
-            std::cout << "receivePacket: update" << std::endl;
+            std::cout << "performNetworkIO: send" << std::endl;
         #endif
-            client_->update(send, this);
+            client_->send(send, this);
+        }
+    }
+}
+#else
+void AooNode::sendPackets(){
+    while (!quit_.load(std::memory_order_relaxed)){
+        event_.wait();
+
+        scoped_lock lock(clientMutex_);
+    #if DEBUG_THREADS
+        std::cout << "sendPackets" << std::endl;
+    #endif
+        client_->send(send, this);
+    }
+}
+
+void AooNode::receivePackets(){
+    while (!quit_.load(std::memory_order_relaxed)){
+        ip_address addr;
+        char buf[AOO_MAXPACKETSIZE];
+        int nbytes = socket_receive(socket_, buf, AOO_MAXPACKETSIZE, &addr, -1);
+        if (nbytes > 0){
+            scoped_lock lock(clientMutex_);
+        #if DEBUG_THREADS
+            std::cout << "receivePackets" << std::endl;
+        #endif
+            try {
+                osc::ReceivedPacket packet(buf, nbytes);
+                if (packet.IsBundle()){
+                    osc::ReceivedBundle bundle(packet);
+                    handleClientBundle(bundle, addr);
+                } else {
+                    handleClientMessage(buf, nbytes, addr,
+                                        aoo::time_tag::immediate());
+                }
+            } catch (const osc::Exception &err){
+                LOG_ERROR("AooNode: bad OSC message - " << err.what());
+            }
+        } else if (nbytes < 0) {
+            // ignore errors when quitting
+            if (!quit_){
+                socket_error_print("recv");
+            }
+            return;
+        } else {
+            // timeout
         }
     }
 }
@@ -461,8 +416,7 @@ void AooNode::handleClientMessage(const char *data, int32_t size,
 {
     if (size > 4 && !memcmp("/aoo", data, 4)){
         // AoO message
-        client_->handle_message(data, size, addr.address(), addr.length(),
-                                send, this);
+        client_->handle_message(data, size, addr.address(), addr.length());
     } else if (!strncmp("/sc/msg", data, size)){
         // OSC message coming from language client
         if (clientObject_){

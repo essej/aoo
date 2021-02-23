@@ -114,7 +114,7 @@ static void aoo_pack_handle_event(t_aoo_pack *x, const aoo_event *event, int32_t
 
 static void aoo_pack_tick(t_aoo_pack *x)
 {
-    x->x_source->update((aoo_sendfn)aoo_pack_send, x);
+    x->x_source->send((aoo_sendfn)aoo_pack_send, x);
 
     x->x_source->poll_events();
 }
@@ -125,8 +125,7 @@ static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
     for (int i = 0; i < argc; ++i){
         msg[i] = (int)(argv[i].a_type == A_FLOAT ? argv[i].a_w.w_float : 0.f);
     }
-    x->x_source->handle_message(msg, argc, x->x_address.address(), x->x_address.length(),
-                                (aoo_sendfn)aoo_pack_send, x);
+    x->x_source->handle_message(msg, argc, x->x_address.address(), x->x_address.length());
 }
 
 static void aoo_pack_format(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)

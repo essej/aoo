@@ -335,7 +335,7 @@ class unbounded_mpsc_queue :
 
     // not thread-safe (?)
     void clear(){
-        devider_ = last_;
+        devider_.store(last_);
     }
  private:
     std::atomic<node *> first_;

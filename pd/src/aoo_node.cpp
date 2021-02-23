@@ -17,9 +17,9 @@
 #include <atomic>
 
 
-#define USE_NETWORK_THREAD 1
+#define NETWORK_THREAD_POLL 0
 
-#if !USE_NETWORK_THREAD
+#if NETWORK_THREAD_POLL
 #define POLL_INTERVAL 1000 // microseconds
 #endif
 
@@ -75,23 +75,15 @@ class t_node_imp final : public t_node
     int x_port = 0;
     ip_address::ip_type x_type;
     // threading
-    std::thread x_recvthread;
-#if USE_NETWORK_THREAD
+#if NETWORK_THREAD_POLL
     std::thread x_iothread;
+    std::atomic<bool> x_update{false};
+#else
+    std::thread x_sendthread;
+    std::thread x_recvthread;
     aoo::sync::event x_event;
 #endif
-    std::atomic<bool> x_update{false};
     std::atomic<bool> x_quit{false};
-#if USE_NETWORK_THREAD
-    struct packet {
-        aoo::ip_address address;
-        std::vector<char> data;
-    };
-    aoo::lockfree::unbounded_mpsc_queue<packet> x_recvbuffer;
-#if DEBUG_THREADS
-    std::atomic<int32_t> x_recvbufferfill{0};
-#endif
-#endif // USE_NETWORK_THREAD
 public:
     // public methods
     t_node_imp(t_symbol *s, int socket, const ip_address& addr);
@@ -107,8 +99,9 @@ public:
     int port() const override { return x_port; }
 
     void notify() override {
+    #if NETWORK_THREAD_POLL
         x_update.store(true);
-    #if USE_NETWORK_THREAD
+    #else
         x_event.set();
     #endif
     }
@@ -144,11 +137,13 @@ private:
     static int32_t send(void *user, const char *msg, int32_t n,
                         const void *addr, int32_t len, uint32_t flags);
 
-#if USE_NETWORK_THREAD
+#if NETWORK_THREAD_POLL
     void perform_io();
-#endif
+#else
+    void send_packets();
 
     void receive_packets();
+#endif
 
     bool add_object(t_pd *obj, void *x, aoo_id id);
 
@@ -268,84 +263,8 @@ bool t_node_imp::add_object(t_pd *obj, void *x, aoo_id id)
     return true;
 }
 
-#if USE_NETWORK_THREAD
-void t_node_imp::receive_packets(){
-    while (!x_quit.load(std::memory_order_relaxed)){
-        ip_address addr;
-        char buf[AOO_MAXPACKETSIZE];
-        int nbytes = socket_receive(x_socket, buf, AOO_MAXPACKETSIZE, &addr, -1);
-        if (nbytes > 0){
-            // add packet to queue
-            x_recvbuffer.produce([&](packet& p){
-                p.address = addr;
-                p.data.assign(buf, buf + nbytes);
-            });
-        #if DEBUG_THREADS
-            x_recvbufferfill.fetch_add(1, std::memory_order_relaxed);
-        #endif
-            x_event.set();
-        } else if (nbytes < 0) {
-            // ignore errors when quitting
-            if (!x_quit){
-                socket_error_print("recv");
-            }
-            break;
-        }
-        // ignore empty packets (used for quit signalling)
-    #if DEBUG_THREADS
-        std::cout << "receive_packets: waiting" << std::endl;
-    #endif
-    }
-}
-
+#if NETWORK_THREAD_POLL
 void t_node_imp::perform_io(){
-    while (!x_quit.load(std::memory_order_relaxed)){
-        x_event.wait();
-
-        const int32_t throttle = 10;
-        int32_t count = 0;
-
-        while (!x_recvbuffer.empty()){
-            unique_lock lock(x_clientmutex);
-        #if DEBUG_THREADS
-            std::cout << "perform_io: handle_message" << std::endl;
-        #endif
-            x_recvbuffer.consume([&](const packet& p){
-                x_client->handle_message(p.data.data(), p.data.size(),
-                                         p.address.address(), p.address.length(),
-                                         send, this);
-            });
-        #if DEBUG_THREADS
-            auto fill = x_recvbufferfill.fetch_sub(1, std::memory_order_relaxed) - 1;
-            std::cerr << "receive buffer fill: " << fill << std::endl;
-        #endif
-            // in case the receive buffer is never empty
-            if (++count >= throttle){
-                // relinquish client lock in case another thread is waiting
-                // for the client mutex
-                lock.unlock();
-            #if DEBUG_THREADS
-                std::cout << "perform_io: throttle" << std::endl;
-            #endif
-                lock.lock();
-
-                x_client->update(send, this);
-
-                count = 0;
-            }
-        }
-
-        if (x_update.exchange(false, std::memory_order_acquire)){
-            scoped_lock lock(x_clientmutex);
-        #if DEBUG_THREADS
-            std::cout << "perform_io: update" << std::endl;
-        #endif
-            x_client->update(send, this);
-        }
-    }
-}
-#else
-void t_node_imp::receive_packets(){
     while (!x_quit.load(std::memory_order_relaxed)){
         ip_address addr;
         char buf[AOO_MAXPACKETSIZE];
@@ -354,24 +273,60 @@ void t_node_imp::receive_packets(){
         if (nbytes > 0){
             scoped_lock lock(x_clientmutex);
         #if DEBUG_THREADS
-            std::cout << "receive_packets: handle_message" << std::endl;
+            std::cout << "perform_io: handle_message" << std::endl;
         #endif
-            x_client->handle_message(buf, nbytes, addr.address(), addr.length(),
-                                     send, this);
+            x_client->handle_message(buf, nbytes, addr.address(), addr.length());
         } else if (nbytes < 0) {
             // ignore errors when quitting
             if (!x_quit){
                 socket_error_print("recv");
             }
             return;
+        } else {
+            // timeout
         }
 
         if (x_update.exchange(false, std::memory_order_acquire)){
             scoped_lock lock(x_clientmutex);
         #if DEBUG_THREADS
-            std::cout << "receive_packets: update" << std::endl;
+            std::cout << "perform_io: send" << std::endl;
         #endif
-            x_client->update(send, this);
+            x_client->send(send, this);
+        }
+    }
+}
+#else
+void t_node_imp::send_packets(){
+    while (!x_quit.load(std::memory_order_relaxed)){
+        x_event.wait();
+
+        scoped_lock lock(x_clientmutex);
+    #if DEBUG_THREADS
+        std::cout << "send_packets" << std::endl;
+    #endif
+        x_client->send(send, this);
+    }
+}
+
+void t_node_imp::receive_packets(){
+    while (!x_quit.load(std::memory_order_relaxed)){
+        ip_address addr;
+        char buf[AOO_MAXPACKETSIZE];
+        int nbytes = socket_receive(x_socket, buf, AOO_MAXPACKETSIZE, &addr, -1);
+        if (nbytes > 0){
+            scoped_lock lock(x_clientmutex);
+        #if DEBUG_THREADS
+            std::cout << "receive_packets" << std::endl;
+        #endif
+            x_client->handle_message(buf, nbytes, addr.address(), addr.length());
+        } else if (nbytes < 0) {
+            // ignore errors when quitting
+            if (!x_quit){
+                socket_error_print("recv");
+            }
+            break;
+        } else {
+            // ignore empty packets (used for quit signalling)
         }
     }
 }
@@ -413,10 +368,10 @@ t_node * t_node::get(t_pd *obj, int port, void *x, aoo_id id)
 
         // increase socket buffers
         const int sendbufsize = 1 << 16; // 65 KB
-    #if USE_NETWORK_THREAD
-        const int recvbufsize = 1 << 16; // 65 KB
-    #else
+    #if NETWORK_THREAD_POLL
         const int recvbufsize = 1 << 20; // 1 MB
+    #else
+        const int recvbufsize = 1 << 16; // 65 KB
     #endif
         socket_setsendbufsize(sock, sendbufsize);
         socket_setrecvbufsize(sock, recvbufsize);
@@ -441,17 +396,23 @@ t_node_imp::t_node_imp(t_symbol *s, int socket, const ip_address& addr)
 
     pd_bind(&x_proxy.x_pd, x_bindsym);
 
+#if NETWORK_THREAD_POLL
+    // start network I/O thread
+    x_iothread = std::thread([this](){
+        sync::lower_thread_priority();
+        perform_io();
+    });
+#else
+    // start send thread
+    x_sendthread = std::thread([this](){
+        sync::lower_thread_priority();
+        send_packets();
+    });
+
     // start receive thread
     x_recvthread = std::thread([this](){
         sync::lower_thread_priority();
         receive_packets();
-    });
-
-#if USE_NETWORK_THREAD
-    // start network thread
-    x_iothread = std::thread([this](){
-        sync::lower_thread_priority();
-        perform_io();
     });
 #endif
 
@@ -490,14 +451,14 @@ t_node_imp::~t_node_imp()
     // ask threads to quit
     x_quit = true;
 
-#if USE_NETWORK_THREAD
-    x_event.set(); // wake perform_io()
-#endif
-    socket_signal(x_socket); // wake receive_packets()
-
-    x_recvthread.join();
-#if USE_NETWORK_THREAD
+#if NETWORK_THREAD_POLL
+    socket_signal(x_socket); // wake perform_io()
     x_iothread.join();
+#else
+    x_event.set(); // wake send_packets()
+    socket_signal(x_socket); // wake receive_packets()
+    x_sendthread.join();
+    x_recvthread.join();
 #endif
 
     socket_close(x_socket);

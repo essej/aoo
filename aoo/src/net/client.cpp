@@ -471,15 +471,13 @@ aoo_error aoo::net::client_imp::send_message(const char *data, int32_t n,
 }
 
 aoo_error aoo_net_client_handle_message(aoo_net_client *client, const char *data,
-                                        int32_t n, const void *addr, int32_t len,
-                                        aoo_sendfn fn, void *user)
+                                        int32_t n, const void *addr, int32_t len)
 {
-    return client->handle_message(data, n, addr, len, fn, user);
+    return client->handle_message(data, n, addr, len);
 }
 
 aoo_error aoo::net::client_imp::handle_message(const char *data, int32_t n,
-                                               const void *addr, int32_t len,
-                                               aoo_sendfn fn, void *user){
+                                               const void *addr, int32_t len){
     int32_t type;
     aoo_id id;
     int32_t onset;
@@ -493,7 +491,7 @@ aoo_error aoo::net::client_imp::handle_message(const char *data, int32_t n,
         // forward to matching source
         for (auto& s : sources_){
             if (s.id == id){
-                return s.source->handle_message(data, n, addr, len, fn, user);
+                return s.source->handle_message(data, n, addr, len);
             }
         }
         LOG_WARNING("aoo_client: handle_message(): source not found");
@@ -501,24 +499,24 @@ aoo_error aoo::net::client_imp::handle_message(const char *data, int32_t n,
         // forward to matching sink
         for (auto& s : sinks_){
             if (s.id == id){
-                return s.sink->handle_message(data, n, addr, len, fn, user);
+                return s.sink->handle_message(data, n, addr, len);
             }
         }
         LOG_WARNING("aoo_client: handle_message(): sink not found");
     } else if (udp_client_){
         // forward to UDP client
         ip_address address((const sockaddr *)addr, len);
-        return udp_client_->handle_message(data, n, address, type, onset, sendfn(fn, user));
+        return udp_client_->handle_message(data, n, address, type, onset);
     }
 
     return AOO_ERROR_UNSPECIFIED;
 }
 
-aoo_error aoo_net_client_update(aoo_net_client *client, aoo_sendfn fn, void *user){
-    return client->update(fn, user);
+aoo_error aoo_net_client_send(aoo_net_client *client, aoo_sendfn fn, void *user){
+    return client->send(fn, user);
 }
 
-aoo_error aoo::net::client_imp::update(aoo_sendfn fn, void *user){
+aoo_error aoo::net::client_imp::send(aoo_sendfn fn, void *user){
     struct proxy_data {
         client_imp *self;
         aoo_sendfn fn;
@@ -549,10 +547,10 @@ aoo_error aoo::net::client_imp::update(aoo_sendfn fn, void *user){
 
     // send sources and sinks
     for (auto& s : sources_){
-        s.source->update(proxy, &data);
+        s.source->send(proxy, &data);
     }
     for (auto& s : sinks_){
-        s.sink->update(proxy, &data);
+        s.sink->send(proxy, &data);
     }
     // send server messages
     if (state_.load() != client_state::disconnected){
@@ -572,7 +570,7 @@ aoo_error aoo::net::client_imp::update(aoo_sendfn fn, void *user){
         // update peers
         peer_lock lock(peers_);
         for (auto& p : peers_){
-            p.update(reply, now);
+            p.send(reply, now);
         }
     }
     return AOO_OK;
@@ -618,7 +616,7 @@ namespace aoo {
 namespace net {
 
 bool client_imp::handle_peer_message(const osc::ReceivedMessage& msg, int onset,
-                                     const ip_address& addr, const sendfn& reply)
+                                     const ip_address& addr)
 {
     bool success = false;
     // NOTE: we have to loop over *all* peers because there can
@@ -630,7 +628,7 @@ bool client_imp::handle_peer_message(const osc::ReceivedMessage& msg, int onset,
     for (auto& p : peers_){
         // forward to matching or unconnected peers!
         if (!p.connected() || p.match(addr)){
-            p.handle_message(msg, onset, addr, reply);
+            p.handle_message(msg, onset, addr);
             success = true;
         }
     }
@@ -1500,8 +1498,7 @@ void udp_client::update(const sendfn& reply, time_tag now){
 
 aoo_error udp_client::handle_message(const char *data, int32_t n,
                                      const ip_address &addr,
-                                     aoo_type type, int32_t onset,
-                                     const sendfn& reply){
+                                     aoo_type type, int32_t onset){
     try {
         osc::ReceivedPacket packet(data, n);
         osc::ReceivedMessage msg(packet);
@@ -1516,7 +1513,7 @@ aoo_error udp_client::handle_message(const char *data, int32_t n,
             // we receive UDP messages which we have to ignore:
             // a) pings from a peer which we haven't had the chance to add yet
             // b) pings sent to alternative endpoint addresses
-            if (!client_->handle_peer_message(msg, onset, addr, reply)){
+            if (!client_->handle_peer_message(msg, onset, addr)){
                 LOG_VERBOSE("aoo_client: ignoring UDP message "
                             << msg.AddressPattern() << " from endpoint "
                             << addr.name() << ":" << addr.port());
@@ -1529,7 +1526,7 @@ aoo_error udp_client::handle_message(const char *data, int32_t n,
                 LOG_WARNING("aoo_client: got message from unknown server " << addr.name());
             }
         } else if (type == AOO_TYPE_RELAY){
-            handle_relay_message(msg, reply);
+            handle_relay_message(msg);
         } else {
             LOG_WARNING("aoo_client: got unexpected message " << msg.AddressPattern());
             return AOO_ERROR_UNSPECIFIED;
@@ -1545,8 +1542,7 @@ aoo_error udp_client::handle_message(const char *data, int32_t n,
     }
 }
 
-void udp_client::handle_relay_message(const osc::ReceivedMessage &msg,
-                                      const sendfn& reply){
+void udp_client::handle_relay_message(const osc::ReceivedMessage &msg){
     ip_address addr;
     auto packet = unwrap_message(msg, addr, client_->type());
 #if DEBUG_RELAY
@@ -1554,7 +1550,7 @@ void udp_client::handle_relay_message(const osc::ReceivedMessage &msg,
 #endif
 
     client_->handle_message(packet.Contents(), packet.Size(),
-                            addr.address(), addr.length(), reply.fn(), reply.user());
+                            addr.address(), addr.length());
 }
 
 void udp_client::send_peer_message(const char *data, int32_t size,
@@ -1705,7 +1701,7 @@ std::ostream& operator << (std::ostream& os, const peer& p)
     return os;
 }
 
-void peer::update(const sendfn& reply, time_tag now){
+void peer::send(const sendfn& reply, time_tag now){
     auto elapsed_time = time_tag::duration(start_time_, now);
     auto delta = elapsed_time - last_pingtime_;
 
@@ -1720,6 +1716,15 @@ void peer::update(const sendfn& reply, time_tag now){
                                              real_address_, reply, relay());
 
             last_pingtime_ = elapsed_time;
+        }
+        // reply to /ping message
+        if (got_ping_.exchange(false)){
+            char buf[64];
+            osc::OutboundPacketStream msg(buf, sizeof(buf));
+            msg << osc::BeginMessage(AOO_NET_MSG_PEER_REPLY) << osc::EndMessage;
+
+            client_->udp().send_peer_message(msg.Data(), msg.Size(),
+                                             real_address_, reply, relay());
         }
     } else if (!timeout_) {
         // try to establish UDP connection with peer
@@ -1828,7 +1833,7 @@ bool peer::handle_first_message(const osc::ReceivedMessage &msg, int onset,
 }
 
 void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
-                          const ip_address& addr, const sendfn& reply)
+                          const ip_address& addr)
 {
     if (!connected()){
         if (!handle_first_message(msg, onset, addr)){
@@ -1851,13 +1856,7 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
     try {
         if (!strcmp(pattern, AOO_NET_MSG_PING)){
             LOG_DEBUG("aoo_client: got ping from " << *this);
-
-            char buf[64];
-            osc::OutboundPacketStream msg(buf, sizeof(buf));
-            msg << osc::BeginMessage(AOO_NET_MSG_PEER_REPLY) << osc::EndMessage;
-
-            client_->udp().send_peer_message(msg.Data(), msg.Size(),
-                                             real_address_, reply, relay());
+            got_ping_.store(true);
         } else if (!strcmp(pattern, AOO_NET_MSG_REPLY)){
             LOG_DEBUG("aoo_client: got reply from " << *this);
         } else if (!strcmp(pattern, AOO_NET_MSG_MESSAGE)){

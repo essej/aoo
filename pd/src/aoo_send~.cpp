@@ -167,7 +167,12 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t
         // because multiple invite events might get sent in a row.
         if (!aoo_send_findsink(x, addr, e->id)){
             if (x->x_accept){
-                aoo_send_doaddsink(x, addr, e->id, e->flags);
+                aoo_net_peer_info info;
+                if (x->x_node->client()->get_peer_info(e->address, e->addrlen, &info) == AOO_OK){
+                    aoo_send_doaddsink(x, addr, e->id, info.flags);
+                } else {
+                    aoo_send_doaddsink(x, addr, e->id, 0);
+                }
             } else {
                 t_atom msg[3];
                 if (x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
