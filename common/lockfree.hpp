@@ -471,8 +471,9 @@ public:
         emplace_front(std::move(v));
     }
 
+    // NOTE: don't call concurrently!
     void pop_front(){
-        T head = head_.load(std::memory_order_relaxed);
+        T *head = head_.load(std::memory_order_relaxed);
         T *next;
         do {
             next = head->next_.load(std::memory_order_relaxed);
