@@ -22,7 +22,35 @@
 #include "oscpack/osc/OscOutboundPacketStream.h"
 #include "oscpack/osc/OscReceivedElements.h"
 
+#ifndef DEBUG_MEMORY
+#define DEBUG_MEMORY 1
+#endif
+
 namespace aoo {
+
+struct memory_block {
+    struct {
+        memory_block *next;
+        size_t size;
+    } header;
+    char mem[1];
+
+    static memory_block * from_bytes(void *bytes){
+        return (memory_block *)((char *)bytes - sizeof(memory_block::header));
+    }
+
+    size_t full_size() const {
+        return header.size + sizeof(header);
+    }
+
+    size_t size() const {
+        return header.size;
+    }
+
+    void * data() {
+        return mem;
+    }
+};
 
 struct stream_state {
     stream_state() = default;
@@ -286,7 +314,7 @@ class sink_imp final : public sink {
 public:
     sink_imp(aoo_id id, uint32_t flags);
 
-    ~sink_imp(){}
+    ~sink_imp();
 
     aoo_error setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
@@ -384,22 +412,11 @@ private:
     void push_request(const source_request& r){
         requestqueue_.push(r);
     }
-    // queue memory deallocation
-    struct sized_deleter {
-        sized_deleter(size_t size = 0)
-            : size_(size){}
-        void operator()(void *ptr){
-            aoo::deallocate(ptr, size_);
-        }
-    private:
-        size_t size_;
-    };
-    using mem_ptr = std::unique_ptr<void, sized_deleter>;
-    lockfree::unbounded_mpsc_queue<mem_ptr, aoo::allocator<mem_ptr>> memqueue_;
+    // memory
+    mutable std::atomic<memory_block *> memlist_{nullptr};
 public:
-    void sched_free(void *ptr, size_t size){
-        memqueue_.push(mem_ptr(ptr, sized_deleter(size)));
-    }
+    memory_block* mem_alloc(size_t size) const;
+    void mem_free(memory_block* b) const;
 private:
     // helper methods
     source_desc *find_source(const ip_address& addr, aoo_id id);

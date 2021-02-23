@@ -16,13 +16,26 @@ aoo_sink * aoo_sink_new(aoo_id id, uint32_t flags) {
 aoo::sink_imp::sink_imp(aoo_id id, uint32_t flags)
     : id_(id) {
     eventqueue_.reserve(AOO_EVENTQUEUESIZE);
-    memqueue_.reserve(AOO_EVENTQUEUESIZE);
 }
 
 void aoo_sink_free(aoo_sink *sink) {
     // cast to correct type because base class
     // has no virtual destructor!
     aoo::destroy(static_cast<aoo::sink_imp *>(sink));
+}
+
+aoo::sink_imp::~sink_imp(){
+    // free memory blocks
+    auto mem = memlist_.load(std::memory_order_relaxed);
+    while (mem){
+    #if DEBUG_MEMORY
+        fprintf(stderr, "deallocate memory block (%d bytes)\n", mem->header.size);
+        fflush(stderr);
+    #endif
+        auto next = mem->header.next;
+        aoo::deallocate(mem, mem->full_size());
+        mem = next;
+    }
 }
 
 aoo_error aoo_sink_setup(aoo_sink *sink, int32_t samplerate,
@@ -375,10 +388,6 @@ aoo_error aoo_sink_send(aoo_sink *sink, aoo_sendfn fn, void *user){
 aoo_error aoo::sink_imp::send(aoo_sendfn fn, void *user){
     sendfn reply(fn, user);
 
-    // deallocate memory
-    mem_ptr m;
-    while (memqueue_.try_pop(m)) ;
-
     // handle requests
     source_request r;
     while (requestqueue_.try_pop(r)){
@@ -611,9 +620,53 @@ void sink_imp::call_event(const event &e, aoo_thread_level level) const {
     eventhandler_(eventcontext_, &e.event_, level);
     // some events use dynamic memory
     if (e.type_ == AOO_FORMAT_CHANGE_EVENT){
-        auto fmt = e.format.format;
-        aoo::deallocate((void *)fmt, fmt->size);
+        mem_free(memory_block::from_bytes((void *)e.format.format));
     }
+}
+
+memory_block* sink_imp::mem_alloc(size_t size) const {
+    for (;;){
+        // try to pop existing block
+        auto head = memlist_.load(std::memory_order_relaxed);
+        if (head){
+            auto next = head->header.next;
+            if (memlist_.compare_exchange_weak(head, next, std::memory_order_acq_rel)){
+                if (head->header.size >= size){
+                #if DEBUG_MEMORY
+                    fprintf(stderr, "reuse memory block (%d bytes)\n", head->header.size);
+                    fflush(stderr);
+                #endif
+                    return head;
+                } else {
+                    // free block
+                    aoo::deallocate(head, head->full_size());
+                }
+            } else {
+                // try again
+                continue;
+            }
+        }
+        // allocate new block
+        auto fullsize = sizeof(memory_block::header) + size;
+        auto mem = (memory_block *)aoo::allocate(fullsize);
+        mem->header.next = nullptr;
+        mem->header.size = size;
+    #if DEBUG_MEMORY
+        fprintf(stderr, "allocate memory block (%d bytes)\n", size);
+        fflush(stderr);
+    #endif
+        return mem;
+    }
+}
+void sink_imp::mem_free(memory_block* b) const {
+    b->header.next = memlist_.load(std::memory_order_relaxed);
+    // check if the head has changed and update it atomically.
+    // (if the CAS fails, 'next' is updated to the current head)
+    while (!memlist_.compare_exchange_weak(b->header.next, b, std::memory_order_acq_rel)) ;
+#if DEBUG_MEMORY
+    fprintf(stderr, "return memory block (%d bytes)\n", b->header.size);
+    fflush(stderr);
+#endif
 }
 
 // must be called with source_mutex_ locked!
@@ -779,8 +832,12 @@ source_desc::~source_desc(){
     event e;
     while (eventqueue_.try_pop(e)){
         if (e.type_ == AOO_FORMAT_CHANGE_EVENT){
-            auto fmt = e.format.format;
-            deallocate((void *)fmt, fmt->size);
+            auto mem = memory_block::from_bytes((void *)e.format.format);
+        #if DEBUG_MEMORY
+            fprintf(stderr, "deallocate memory block (%d bytes)\n", mem->header.size);
+            fflush(stderr);
+        #endif
+            aoo::deallocate(mem, mem->full_size());
         }
     }
     LOG_DEBUG("~source_desc");
@@ -975,11 +1032,11 @@ aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_
 
     // send format event
     // NOTE: we could just allocate 'aoo_format_storage', but it would be wasteful.
-    auto fs = aoo::allocate(fmt.header.size);
-    memcpy(fs, &fmt, fmt.header.size);
+    auto mem = s.mem_alloc(fmt.header.size);
+    memcpy(mem->data(), &fmt, fmt.header.size);
 
     event e(AOO_FORMAT_CHANGE_EVENT, *this);
-    e.format.format = (const aoo_format *)fs;
+    e.format.format = (const aoo_format *)mem->data();
 
     send_event(s, e, AOO_THREAD_NETWORK);
 
@@ -1239,8 +1296,8 @@ int32_t source_desc::poll_events(sink_imp& s, aoo_eventhandler fn, void *user){
         fn(user, &e.event_, AOO_THREAD_UNKNOWN);
         // some events use dynamic memory
         if (e.type_ == AOO_FORMAT_CHANGE_EVENT){
-            auto fmt = e.format.format;
-            s.sched_free((void *)fmt, fmt->size);
+            auto mem = memory_block::from_bytes((void *)e.format.format);
+            s.mem_free(mem);
         }
         count++;
     }
