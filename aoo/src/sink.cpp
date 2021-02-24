@@ -7,6 +7,32 @@
 #include <algorithm>
 #include <cmath>
 
+/*//////////////////// memory_block /////////////////*/
+
+namespace aoo {
+
+memory_block * memory_block::allocate(size_t size){
+    auto fullsize = sizeof(memory_block::header) + size;
+    auto mem = (memory_block *)aoo::allocate(fullsize);
+    mem->header.next = nullptr;
+    mem->header.size = size;
+#if DEBUG_MEMORY
+    fprintf(stderr, "allocate memory block (%d bytes)\n", size);
+    fflush(stderr);
+#endif
+    return mem;
+}
+
+void memory_block::free(memory_block *mem){
+#if DEBUG_MEMORY
+    fprintf(stderr, "deallocate memory block (%d bytes)\n", mem->size());
+    fflush(stderr);
+#endif
+    aoo::deallocate(mem, mem->full_size());
+}
+
+} // aoo
+
 /*//////////////////// aoo_sink /////////////////////*/
 
 aoo_sink * aoo_sink_new(aoo_id id, uint32_t flags) {
@@ -28,12 +54,8 @@ aoo::sink_imp::~sink_imp(){
     // free memory blocks
     auto mem = memlist_.load(std::memory_order_relaxed);
     while (mem){
-    #if DEBUG_MEMORY
-        fprintf(stderr, "deallocate memory block (%d bytes)\n", mem->header.size);
-        fflush(stderr);
-    #endif
         auto next = mem->header.next;
-        aoo::deallocate(mem, mem->full_size());
+        memory_block::free(mem);
         mem = next;
     }
 }
@@ -639,7 +661,7 @@ memory_block* sink_imp::mem_alloc(size_t size) const {
                     return head;
                 } else {
                     // free block
-                    aoo::deallocate(head, head->full_size());
+                    memory_block::free(head);
                 }
             } else {
                 // try again
@@ -647,15 +669,7 @@ memory_block* sink_imp::mem_alloc(size_t size) const {
             }
         }
         // allocate new block
-        auto fullsize = sizeof(memory_block::header) + size;
-        auto mem = (memory_block *)aoo::allocate(fullsize);
-        mem->header.next = nullptr;
-        mem->header.size = size;
-    #if DEBUG_MEMORY
-        fprintf(stderr, "allocate memory block (%d bytes)\n", size);
-        fflush(stderr);
-    #endif
-        return mem;
+        return memory_block::allocate(size);
     }
 }
 void sink_imp::mem_free(memory_block* b) const {

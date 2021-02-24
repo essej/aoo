@@ -35,6 +35,10 @@ struct memory_block {
     } header;
     char mem[1];
 
+    static memory_block * allocate(size_t size);
+
+    static void free(memory_block *mem);
+
     static memory_block * from_bytes(void *bytes){
         return (memory_block *)((char *)bytes - sizeof(memory_block::header));
     }
