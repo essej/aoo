@@ -108,10 +108,14 @@ typedef struct aoo_sink aoo_sink;
 
 typedef struct aoo_allocator
 {
-    void* (*alloc)(size_t, void *);        // args: size, context
-    void* (*realloc)(void *, size_t);      // args: ptr, old size, new size, context
-    void (*free)(void *, size_t, void *);  // args: ptr, size, context
-    void* context;                         // context passed to functions
+    // args: size, context
+    void* (*alloc)(size_t, void *);
+    // args: ptr, old size, new size, context
+    void* (*realloc)(void *, size_t, size_t, void *);
+    // args: ptr, size, context
+    void (*free)(void *, size_t, void *);
+    // context passed to functions
+    void* context;
 } aoo_allocator;
 
 // logging

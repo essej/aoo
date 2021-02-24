@@ -76,15 +76,13 @@ public:
 };
 
 template <class T, class U>
-bool
-    operator==(allocator<T> const&, allocator<U> const&) noexcept
+bool operator==(allocator<T> const&, allocator<U> const&) noexcept
 {
     return true;
 }
 
 template <class T, class U>
-bool
-    operator!=(allocator<T> const& x, allocator<U> const& y) noexcept
+bool operator!=(allocator<T> const& x, allocator<U> const& y) noexcept
 {
     return !(x == y);
 }
