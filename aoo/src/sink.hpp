@@ -57,55 +57,10 @@ struct memory_block {
 };
 
 struct stream_state {
-    stream_state() = default;
-    stream_state(stream_state&& other) = delete;
-    stream_state& operator=(stream_state&& other) = delete;
-
-    void reset(){
-        lost_ = 0;
-        reordered_ = 0;
-        resent_ = 0;
-        gap_ = 0;
-        state_ = AOO_STREAM_STATE_STOP;
-        underrun_ = false;
-        xrun_ = 0;
-    }
-
-    void add_lost(int32_t n) { lost_ += n; lost_since_ping_ += n; }
-    int32_t get_lost() { return lost_.exchange(0); }
-    int32_t get_lost_since_ping() { return lost_since_ping_.exchange(0); }
-
-    void add_reordered(int32_t n) { reordered_ += n; }
-    int32_t get_reordered() { return reordered_.exchange(0); }
-
-    void add_resent(int32_t n) { resent_ += n; }
-    int32_t get_resent() { return resent_.exchange(0); }
-
-    void add_gap(int32_t n) { gap_ += n; }
-    int32_t get_gap() { return gap_.exchange(0); }
-
-    bool update_state(aoo_stream_state state){
-        auto last = state_.exchange(state);
-        return state != last;
-    }
-    aoo_stream_state get_state(){
-        return state_;
-    }
-
-    void add_xrun(int32_t nblocks) { xrun_ += nblocks; }
-    int32_t get_xrun() { return xrun_.exchange(0); }
-
-    void set_underrun() { underrun_.store(true); }
-    bool have_underrun() { return underrun_.exchange(false); }
-private:
-    std::atomic<int32_t> lost_since_ping_{0};
-    std::atomic<int32_t> lost_{0};
-    std::atomic<int32_t> reordered_{0};
-    std::atomic<int32_t> resent_{0};
-    std::atomic<int32_t> gap_{0};
-    std::atomic<int32_t> xrun_{0};
-    std::atomic<aoo_stream_state> state_{AOO_STREAM_STATE_STOP};
-    std::atomic<bool> underrun_{false};
+    int32_t lost = 0;
+    int32_t reordered = 0;
+    int32_t resent = 0;
+    int32_t gap = 0;
 };
 
 class source_desc;
@@ -232,7 +187,11 @@ public:
 
     bool process(const sink_imp& s, aoo_sample *buffer, int32_t nsamples, time_tag tt);
 
-    void add_xrun(int32_t n){ streamstate_.add_xrun(n); }
+    void add_xrun(int32_t n){ xrunsamples_ += n; }
+
+    void add_lost(int32_t n) {
+        lost_since_ping_.fetch_add(n, std::memory_order_relaxed);
+    }
 
     void invite(const sink_imp& s);
 
@@ -246,13 +205,13 @@ private:
     void update(const sink_imp& s);
 
     // handle messages
-    void recover(const char *reason, int32_t n = 0);
+    int32_t recover(const char *reason, int32_t n = 0);
 
-    bool check_packet(const data_packet& d);
+    bool check_packet(const data_packet& d, stream_state& state);
 
-    bool add_packet(const data_packet& d);
+    bool add_packet(const data_packet& d, stream_state& state);
 
-    void process_blocks(const sink_imp& s);
+    void process_blocks(const sink_imp& s, stream_state& state);
 
     void check_missing_blocks(const sink_imp& s);
 
@@ -273,16 +232,19 @@ private:
     const aoo_id id_;
     uint32_t flags_ = 0;
     int32_t salt_ = -1; // start with invalid stream ID!
+    aoo_stream_state streamstate_;
+    bool underrun_ = false;
     std::atomic<source_state> state_;
     std::atomic<double> state_time_{0.0};
+    std::atomic<double> last_packet_time_{0};
+    std::atomic<int32_t> lost_since_ping_{0};
     // audio decoder
     std::unique_ptr<aoo::decoder> decoder_;
     // state
-    int32_t channel_ = 0; // recent channel onset
     double samplerate_ = 0; // recent samplerate
-    stream_state streamstate_;
+    int32_t channel_ = 0; // recent channel onset
+    int32_t xrunsamples_ = 0;
     double dropped_ = 0;
-    std::atomic<double> last_packet_time_{0};
     // resampler
     dynamic_resampler resampler_;
     // queues and buffers

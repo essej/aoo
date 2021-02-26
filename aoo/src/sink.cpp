@@ -923,10 +923,13 @@ void source_desc::update(const sink_imp& s){
         // LATER optimize max. block size
         jitterbuffer_.resize(nbuffers, nsamples * sizeof(double));
 
-        streamstate_.reset();
+        streamstate_ = AOO_STREAM_STATE_STOP;
+        lost_since_ping_.store(0);
         channel_ = 0;
         samplerate_ = decoder_->samplerate();
         dropped_ = 0;
+        xrunsamples_ = 0;
+        underrun_ = false;
     }
 }
 
@@ -1113,11 +1116,6 @@ aoo_error source_desc::handle_data(const sink_imp& s, int32_t salt, aoo::data_pa
 
 aoo_error source_desc::handle_ping(const sink_imp& s, time_tag tt){
 #if 0
-    if (streamstate_.get_state() != AOO_STREAM_STATE_PLAY){
-        return AOO_OK;
-    }
-#endif
-#if 0
     time_tag tt2 = s.absolute_time(); // use last stream time
 #else
     time_tag tt2 = aoo::time_tag::now(); // use real system time
@@ -1185,19 +1183,20 @@ bool source_desc::process(const sink_imp& s, aoo_sample *buffer,
         return false;
     }
 
+    stream_state ss;
     data_packet d;
     while (packetqueue_.try_pop(d)){
         // check data packet
         // LOG_DEBUG("check packet");
-        if (check_packet(d)){
-            add_packet(d);
+        if (check_packet(d, ss)){
+            add_packet(d, ss);
         }
         // return memory
         s.mem_free(memory_block::from_bytes((void *)d.data));
     }
 
     // process blocks and transfer to audio thread
-    process_blocks(s);
+    process_blocks(s, ss);
 
     // check and resend missing blocks
     check_missing_blocks(s);
@@ -1208,34 +1207,28 @@ bool source_desc::process(const sink_imp& s, aoo_sample *buffer,
               << ", newest: " << jitterbuffer_.last_pushed());
 #endif
 
-    // record stream state
-    int32_t lost = streamstate_.get_lost();
-    int32_t reordered = streamstate_.get_reordered();
-    int32_t resent = streamstate_.get_resent();
-    int32_t gap = streamstate_.get_gap();
-
-    if (lost > 0){
+    if (ss.lost > 0){
         // push packet loss event
         event e(AOO_BLOCK_LOST_EVENT, *this);
-        e.block_loss.count = lost;
+        e.block_loss.count = ss.lost;
         send_event(s, e, AOO_THREAD_AUDIO);
     }
-    if (reordered > 0){
+    if (ss.reordered > 0){
         // push packet reorder event
         event e(AOO_BLOCK_REORDERED_EVENT, *this);
-        e.block_reorder.count = reordered;
+        e.block_reorder.count = ss.reordered;
         send_event(s, e, AOO_THREAD_AUDIO);
     }
-    if (resent > 0){
+    if (ss.resent > 0){
         // push packet resend event
         event e(AOO_BLOCK_RESENT_EVENT, *this);
-        e.block_resend.count = resent;
+        e.block_resend.count = ss.resent;
         send_event(s, e, AOO_THREAD_AUDIO);
     }
-    if (gap > 0){
+    if (ss.gap > 0){
         // push packet gap event
         event e(AOO_BLOCK_GAP_EVENT, *this);
-        e.block_gap.count = gap;
+        e.block_gap.count = ss.gap;
         send_event(s, e, AOO_THREAD_AUDIO);
     }
 
@@ -1286,7 +1279,9 @@ bool source_desc::process(const sink_imp& s, aoo_sample *buffer,
 
         // LOG_DEBUG("read samples from source " << id_);
 
-        if (streamstate_.update_state(AOO_STREAM_STATE_PLAY)){
+        if (streamstate_ != AOO_STREAM_STATE_PLAY){
+            streamstate_ = AOO_STREAM_STATE_PLAY;
+
             // push "start" event
             event e(AOO_STREAM_STATE_EVENT, *this);
             e.source_state.state = AOO_STREAM_STATE_PLAY;
@@ -1296,12 +1291,15 @@ bool source_desc::process(const sink_imp& s, aoo_sample *buffer,
         return true;
     } else {
         // buffer ran out -> push "stop" event
-        if (streamstate_.update_state(AOO_STREAM_STATE_STOP)){
+        if (streamstate_ != AOO_STREAM_STATE_STOP){
+            streamstate_ = AOO_STREAM_STATE_STOP;
+
+            // push "stop" event
             event e(AOO_STREAM_STATE_EVENT, *this);
             e.source_state.state = AOO_STREAM_STATE_STOP;
             send_event(s, e, AOO_THREAD_AUDIO);
         }
-        streamstate_.set_underrun(); // notify network thread!
+        underrun_ = true;
 
         return false;
     }
@@ -1323,7 +1321,7 @@ int32_t source_desc::poll_events(sink_imp& s, aoo_eventhandler fn, void *user){
     return count;
 }
 
-void source_desc::recover(const char *reason, int32_t n){
+int32_t source_desc::recover(const char *reason, int32_t n){
     int32_t limit;
     if (n > 0){
         limit = std::min<int32_t>(n, jitterbuffer_.size());
@@ -1337,9 +1335,6 @@ void source_desc::recover(const char *reason, int32_t n){
         limit = jitterbuffer_.capacity();
         jitterbuffer_.clear();
     }
-
-    // record dropped blocks
-    streamstate_.add_lost(n);
 
     // push empty blocks to keep the buffer full, but leave room for one block!
     int count = 0;
@@ -1360,13 +1355,15 @@ void source_desc::recover(const char *reason, int32_t n){
         count++;
     }
 
-    if (count > 0){
+    if (n > 0 || count > 0){
         LOG_VERBOSE("dropped " << n << " blocks and wrote " << count
                     << " empty blocks for " << reason);
     }
+
+    return n;
 }
 
-bool source_desc::check_packet(const data_packet &d){
+bool source_desc::check_packet(const data_packet &d, stream_state& state){
     if (d.sequence <= jitterbuffer_.last_popped()){
         // block too old, discard!
         LOG_VERBOSE("discard old block " << d.sequence);
@@ -1378,17 +1375,19 @@ bool source_desc::check_packet(const data_packet &d){
     auto newest = jitterbuffer_.last_pushed();
     auto diff = d.sequence - newest;
     if (newest > 0 && diff > jitterbuffer_.capacity()){
-        recover("transmission gap");
+        auto lost = recover("transmission gap");
+        state.lost += lost;
+        add_lost(lost);
         // record gap (measured in blocks)
-        streamstate_.add_gap(diff - 1);
-    } else {
+        state.gap += diff - 1;
+    } else if (xrunsamples_ > 0) {
         // check for sink xruns
-        auto xrunsamples = streamstate_.get_xrun();
-        if (xrunsamples){
-            int32_t xrunblocks = xrunsamples * resampler_.ratio()
-                    / (float)decoder_->blocksize() + 0.5;
-            recover("sink xrun", xrunblocks);
-        }
+        int32_t xrunblocks = xrunsamples_ * resampler_.ratio()
+                / (float)decoder_->blocksize() + 0.5;
+        auto lost = recover("sink xrun", xrunblocks);
+        state.lost += lost;
+        add_lost(lost);
+        xrunsamples_ = 0;
     }
 
     if (newest > 0 && diff > 1){
@@ -1398,7 +1397,7 @@ bool source_desc::check_packet(const data_packet &d){
     return true;
 }
 
-bool source_desc::add_packet(const data_packet& d){
+bool source_desc::add_packet(const data_packet& d, stream_state& state){
     auto block = jitterbuffer_.find(d.sequence);
     if (!block){
         auto newest = jitterbuffer_.last_pushed();
@@ -1410,14 +1409,18 @@ bool source_desc::add_packet(const data_packet& d){
         if (newest > 0){
             for (int32_t i = newest + 1; i < d.sequence; ++i){
                 if (jitterbuffer_.full()){
-                    recover("jitter buffer overrun");
+                    auto lost = recover("jitter buffer overrun");
+                    state.lost += lost;
+                    add_lost(lost);
                 }
                 jitterbuffer_.push_back(i)->init(i, false);
             }
         }
         // add new block
         if (jitterbuffer_.full()){
-            recover("jitter buffer overrun");
+            auto lost = recover("jitter buffer overrun");
+            state.lost += lost;
+            add_lost(lost);
         }
 
         block = jitterbuffer_.push_back(d.sequence);
@@ -1457,10 +1460,10 @@ bool source_desc::add_packet(const data_packet& d){
             // out of order or resent
             if (block->resend_count() > 0){
                 LOG_VERBOSE("resent frame " << d.framenum << " of block " << d.sequence);
-                streamstate_.add_resent(1);
+                state.resent++;
             } else {
                 LOG_VERBOSE("frame " << d.framenum << " of block " << d.sequence << " out of order!");
-                streamstate_.add_reordered(1);
+                state.reordered++;
             }
         }
     }
@@ -1471,7 +1474,7 @@ bool source_desc::add_packet(const data_packet& d){
     return true;
 }
 
-void source_desc::process_blocks(const sink_imp& s){
+void source_desc::process_blocks(const sink_imp& s, stream_state& state){
     if (jitterbuffer_.empty()){
         return;
     }
@@ -1483,8 +1486,11 @@ void source_desc::process_blocks(const sink_imp& s){
     // Transfer all consecutive complete blocks
     while (!jitterbuffer_.empty() && audioqueue_.write_available()){
         // check for buffer underrun
-        if (streamstate_.have_underrun()){
-            recover("audio buffer underrun");
+        if (underrun_){
+            auto lost = recover("audio buffer underrun");
+            state.lost += lost;
+            add_lost(lost);
+            underrun_ = false;
             return;
         }
 
@@ -1524,7 +1530,8 @@ void source_desc::process_blocks(const sink_imp& s){
             size = 0;
             sr = decoder_->samplerate(); // nominal samplerate
             channel = -1; // current channel
-            streamstate_.add_lost(1);
+            state.lost++;
+            add_lost(1);
             LOG_VERBOSE("dropped block " << b.sequence);
         } else {
             // wait for block
@@ -1611,7 +1618,7 @@ resend_done:
 // called without lock!
 void source_desc::send_ping_reply(const sink_imp &s, const sendfn &fn,
                                   const request& r){
-    auto lost_blocks = streamstate_.get_lost_since_ping();
+    auto lost_blocks = lost_since_ping_.exchange(0);
 
     char buffer[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buffer, sizeof(buffer));
