@@ -8,7 +8,9 @@ namespace aoo {
 // must be larger than 2!
 #define AOO_RESAMPLER_SPACE 2.5
 
-void dynamic_resampler::setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_t srto, int32_t nchannels){
+void dynamic_resampler::setup(int32_t nfrom, int32_t nto,
+                              int32_t srfrom, int32_t srto,
+                              int32_t nchannels){
     reset();
     nchannels_ = nchannels;
     ideal_ratio_ = (double)srto / (double)srfrom;
@@ -24,7 +26,7 @@ void dynamic_resampler::setup(int32_t nfrom, int32_t nto, int32_t srfrom, int32_
     DO_LOG_DEBUG("resampler setup: nfrom: " << nfrom << ", srfrom: " << srfrom
               << ", nto: " << nto << ", srto: " << srto << ", capacity: " << blocksize);
 #endif
-    buffer_.resize(blocksize * nchannels_);
+    buffer_.resize(blocksize * nchannels);
     update(srfrom, srto);
 }
 
@@ -51,17 +53,17 @@ bool dynamic_resampler::write(const aoo_sample *data, int32_t n){
     if (buffer_.size() - balance_ < n){
         return false;
     }
+    auto buf = buffer_.data();
     auto size = (int32_t)buffer_.size();
-    auto end = wrpos_ + n;
-    int32_t split;
-    if (end > size){
-        split = size - wrpos_;
+    auto endpos = wrpos_ + n;
+    if (endpos > size){
+        auto split = size - wrpos_;
+        std::copy(data, data + split, buf + wrpos_);
+        std::copy(data + split, data + n, buf);
     } else {
-        split = n;
+        std::copy(data, data + n, buf + wrpos_);
     }
-    std::copy(data, data + split, &buffer_[wrpos_]);
-    std::copy(data + split, data + n, &buffer_[0]);
-    wrpos_ += n;
+    wrpos_ = endpos;
     if (wrpos_ >= size){
         wrpos_ -= size;
     }
