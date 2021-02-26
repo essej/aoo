@@ -479,6 +479,7 @@ aoo_error aoo_sink_process(aoo_sink *sink, aoo_sample **data,
 
 aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t){
     if (sources_.empty() && requestqueue_.empty()){
+        timer_.reset(); // !
         return AOO_ERROR_UNSPECIFIED;
     }
 
