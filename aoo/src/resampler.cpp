@@ -86,16 +86,15 @@ bool dynamic_resampler::read(aoo_sample *data, int32_t n){
             // just copy samples
             int32_t pos = intpos * nchannels_;
             int32_t end = pos + n;
-            int n1, n2;
+            auto buf = buffer_.data();
             if (end > size){
-                n1 = size - pos;
-                n2 = end - size;
+                auto n1 = size - pos;
+                auto n2 = end - size;
+                std::copy(buf + pos, buf + size, data);
+                std::copy(buf, buf + n2, data + n1);
             } else {
-                n1 = n;
-                n2 = 0;
+                std::copy(buf + pos, buf + end, data);
             }
-            std::copy(&buffer_[pos], &buffer_[pos + n1], data);
-            std::copy(&buffer_[0], &buffer_[n2], data + n1);
             pos += n;
             if (pos >= size){
                 pos -= size;
