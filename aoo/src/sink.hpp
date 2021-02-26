@@ -108,11 +108,6 @@ private:
     std::atomic<bool> underrun_{false};
 };
 
-struct block_info {
-    double sr;
-    int32_t channel;
-};
-
 class source_desc;
 
 struct event
@@ -229,7 +224,7 @@ public:
     aoo_error handle_format(const sink_imp& s, int32_t salt, const aoo_format& f,
                             const char *settings, int32_t size, uint32_t flags);
 
-    aoo_error handle_data(const sink_imp& s, int32_t salt, const aoo::data_packet& d);
+    aoo_error handle_data(const sink_imp& s, int32_t salt, aoo::data_packet& d);
 
     aoo_error handle_ping(const sink_imp& s, time_tag tt);
 
@@ -257,7 +252,7 @@ private:
 
     bool add_packet(const data_packet& d);
 
-    void process_blocks();
+    void process_blocks(const sink_imp& s);
 
     void check_missing_blocks(const sink_imp& s);
 
@@ -288,10 +283,20 @@ private:
     stream_state streamstate_;
     double dropped_ = 0;
     std::atomic<double> last_packet_time_{0};
+    // resampler
+    dynamic_resampler resampler_;
     // queues and buffers
+    struct block_data {
+        struct {
+            double samplerate;
+            int32_t channel;
+            int32_t padding;
+        } header;
+        aoo_sample data[1];
+    };
+    lockfree::spsc_queue<char, aoo::allocator<char>> audioqueue_;
+    lockfree::unbounded_mpsc_queue<data_packet, aoo::allocator<data_packet>> packetqueue_;
     jitter_buffer jitterbuffer_;
-    lockfree::spsc_queue<aoo_sample, aoo::allocator<aoo_sample>> audioqueue_;
-    lockfree::spsc_queue<block_info, aoo::allocator<block_info>> infoqueue_;
     // requests
     lockfree::unbounded_mpsc_queue<request, aoo::allocator<request>> requestqueue_;
     void push_request(const request& r){
@@ -308,8 +313,6 @@ private:
     // events
     lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
     void send_event(const sink_imp& s, const event& e, aoo_thread_level level);
-    // resampler
-    dynamic_resampler resampler_;
     // thread synchronization
     sync::shared_mutex mutex_; // LATER replace with a spinlock?
 };
