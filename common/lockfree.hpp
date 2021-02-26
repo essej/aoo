@@ -45,7 +45,7 @@ class spsc_queue {
     }
 
     void resize(int32_t blocksize, int32_t capacity) {
-    #if 1
+    #if 0
         data_.clear(); // force zero
     #endif
         data_.resize(blocksize * capacity);
