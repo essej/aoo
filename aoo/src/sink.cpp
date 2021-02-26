@@ -904,6 +904,8 @@ void source_desc::update(const sink_imp& s){
 
         // setup audio buffer
         auto nbytes = sizeof(block_data::header) + nsamples * sizeof(aoo_sample);
+        // align to 8 bytes
+        nbytes = (nbytes + 7) & ~7;
         audioqueue_.resize(nbytes, nbuffers);
         for (int i = 0; i < nbuffers; ++i){
             auto b = (block_data *)audioqueue_.write_data();

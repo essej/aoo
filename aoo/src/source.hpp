@@ -181,8 +181,11 @@ class source_imp final : public source {
     // buffers and queues
     std::vector<char, aoo::allocator<char>> sendbuffer_;
     dynamic_resampler resampler_;
-    lockfree::spsc_queue<aoo_sample, aoo::allocator<aoo_sample>> audioqueue_;
-    lockfree::spsc_queue<double, aoo::allocator<double>> srqueue_;
+    struct block_data {
+        double sr;
+        aoo_sample data[1];
+    };
+    lockfree::spsc_queue<char, aoo::allocator<char>> audioqueue_;
     history_buffer history_;
     // events
     lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;

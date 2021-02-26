@@ -483,7 +483,6 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t n, uint64_t 
         resampler_.reset();
 
         audioqueue_.reset();
-        srqueue_.reset();
 
         start_new_stream();
 
@@ -552,6 +551,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t n, uint64_t 
         }
     }
 
+    auto size = nfchannels * encoder_->blocksize();
     if (need_resampling()){
         // go through resampler
         if (!resampler_.write(buf, nsamples)){
@@ -559,26 +559,28 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t n, uint64_t 
             dropped_++;
             return AOO_ERROR_UNSPECIFIED;
         }
-        while (audioqueue_.write_available() && srqueue_.write_available()){
+        auto ratio = (double)encoder_->samplerate() / (double)samplerate_;
+        while (audioqueue_.write_available()){
             // copy audio samples
-            if (!resampler_.read(audioqueue_.write_data(), audioqueue_.blocksize())){
+            auto ptr = (block_data *)audioqueue_.write_data();
+            if (!resampler_.read(ptr->data, size)){
                 break;
             }
-            audioqueue_.write_commit();
-
             // push samplerate
-            auto ratio = (double)encoder_->samplerate() / (double)samplerate_;
-            srqueue_.write(dll_.samplerate() * ratio);
+            ptr->sr = dll_.samplerate() * ratio;
+
+            audioqueue_.write_commit();
         }
     } else {
         // bypass resampler
-        if (audioqueue_.write_available() && srqueue_.write_available()){
+        if (audioqueue_.write_available()){
+            auto ptr = (block_data *)audioqueue_.write_data();
             // copy audio samples
-            std::copy(buf, buf + audioqueue_.blocksize(), audioqueue_.write_data());
-            audioqueue_.write_commit();
-
+            std::copy(buf, buf + size, ptr->data);
             // push samplerate
-            srqueue_.write(dll_.samplerate());
+            ptr->sr = dll_.samplerate();
+
+            audioqueue_.write_commit();
         } else {
             LOG_WARNING("aoo_source: send buffer overflow");
             dropped_++;
@@ -738,9 +740,10 @@ void source_imp::update_audioqueue(){
 
         // resize audio buffer
         auto nsamples = encoder_->blocksize() * encoder_->nchannels();
-        audioqueue_.resize(nsamples, nbuffers);
-
-        srqueue_.resize(nbuffers);
+        auto nbytes = sizeof(block_data::sr) + nsamples * sizeof(aoo_sample);
+        // align to 8 bytes
+        nbytes = (nbytes + 7) & ~7;
+        audioqueue_.resize(nbytes, nbuffers);
     }
 }
 
@@ -860,25 +863,28 @@ void source_imp::send_data(const sendfn& fn){
     }
 
     // now send audio
-    while (audioqueue_.read_available() && srqueue_.read_available()){
+    while (audioqueue_.read_available()){
         shared_lock updatelock(update_mutex_); // reader lock!
         if (!encoder_){
             return;
         }
-        int32_t salt = salt_; // make snapshot
-
-        data_packet d;
-        // always read samplerate from ringbuffer!
-        srqueue_.read(d.samplerate);
 
         if (!sinks_.empty()){
+            int32_t salt = salt_; // make snapshot
+
+            auto ptr = (block_data *)audioqueue_.read_data();
+
+            data_packet d;
+            d.samplerate = ptr->sr;
+
             // copy and convert audio samples to blob data
             auto nchannels = encoder_->nchannels();
             auto blocksize = encoder_->blocksize();
-            sendbuffer_.resize(sizeof(double) * nchannels * blocksize); // overallocate
+            auto nsamples = nchannels * blocksize;
+            sendbuffer_.resize(sizeof(double) * nsamples); // overallocate
 
             d.totalsize = sendbuffer_.size();
-            auto err = encoder_->encode(audioqueue_.read_data(), audioqueue_.blocksize(),
+            auto err = encoder_->encode(ptr->data, nsamples,
                 sendbuffer_.data(), d.totalsize);
 
             audioqueue_.read_commit(); // always commit!
