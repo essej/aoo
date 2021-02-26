@@ -7,11 +7,11 @@
 
 namespace aoo {
 
-/*////////////////////////// block /////////////////////////////*/
+/*////////////////////////// sent_block /////////////////////////////*/
 
-void block::set(int32_t seq, double sr,
-                const char *data, int32_t nbytes,
-                int32_t nframes, int32_t framesize)
+void sent_block::set(int32_t seq, double sr,
+                     const char *data, int32_t nbytes,
+                     int32_t nframes, int32_t framesize)
 {
     sequence = seq;
     samplerate = sr;
@@ -20,7 +20,7 @@ void block::set(int32_t seq, double sr,
     buffer_.assign(data, data + nbytes);
 }
 
-int32_t block::get_frame(int32_t which, char *data, int32_t n){
+int32_t sent_block::get_frame(int32_t which, char *data, int32_t n){
     assert(framesize_ > 0 && numframes_ > 0);
     if (which >= 0 && which < numframes_){
         auto onset = which * framesize_;
@@ -44,7 +44,7 @@ int32_t block::get_frame(int32_t which, char *data, int32_t n){
     return 0;
 }
 
-int32_t block::frame_size(int32_t which) const {
+int32_t sent_block::frame_size(int32_t which) const {
     assert(which < numframes_);
     if (which == numframes_ - 1){ // last frame
         return size() - which * framesize_;
@@ -53,10 +53,96 @@ int32_t block::frame_size(int32_t which) const {
     }
 }
 
+/*////////////////////////// history_buffer ///////////////////////////*/
+
+void history_buffer::clear(){
+    head_ = 0;
+    size_ = 0;
+}
+
+void history_buffer::resize(int32_t n){
+    buffer_.resize(n);
+    clear();
+}
+
+sent_block * history_buffer::find(int32_t seq){
+    // the code below only works if the buffer is not empty!
+    if (size_ > 0){
+        // check if sequence number is outdated
+        // (tail always starts at buffer begin and becomes
+        // equal to head once the buffer is full)
+        auto head = buffer_.begin() + head_;
+        auto tail = (size_ == capacity()) ? head : buffer_.begin();
+        if (seq < tail->sequence){
+            LOG_DEBUG("history buffer: block " << seq << " too old");
+            return nullptr;
+        }
+
+    #if 0
+        // linear search
+        auto end = buffer_.begin() + size_;
+        for (auto it = buffer_.begin(); it != end; ++it){
+            if (it->sequence == seq){
+                return &(*it);
+            }
+        }
+    #else
+        // binary search
+        auto dofind = [&](auto begin, auto end) -> sent_block * {
+            auto result = std::lower_bound(begin, end, seq, [](auto& a, auto& b){
+                return a.sequence < b;
+            });
+            if (result != end && result->sequence == seq){
+                return &(*result);
+            } else {
+                return nullptr;
+            }
+        };
+        if (head != tail){
+            // buffer not full, just search range [tail, head]
+            auto result = dofind(tail, head);
+            if (result){
+                return result;
+            }
+        } else {
+            // blocks are always pushed in chronological order,
+            // so the ranges [begin, head] and [head, end] will always be sorted.
+            auto result = dofind(buffer_.begin(), head);
+            if (!result){
+                result = dofind(head, buffer_.end());
+            }
+            if (result){
+                return result;
+            }
+        }
+    #endif
+    }
+
+    LOG_ERROR("history buffer: couldn't find block " << seq);
+    return nullptr;
+}
+
+sent_block * history_buffer::push()
+{
+    assert(!buffer_.empty());
+    auto old = head_++;
+    if (head_ >= capacity()){
+        head_ = 0;
+    }
+    if (size_ < capacity()){
+        ++size_;
+    }
+    return &buffer_[old];
+}
+
 /*////////////////////// received_block //////////////////////*/
 
+void received_block::reserve(int32_t size){
+    buffer_.reserve(size);
+}
+
 void received_block::init(int32_t seq, double sr, int32_t chn,
-             int32_t nbytes, int32_t nframes)
+    int32_t nbytes, int32_t nframes)
 {
     assert(nbytes > 0);
     assert(nframes <= (int32_t)frames_.size());
@@ -147,88 +233,6 @@ bool received_block::update(double time, double interval){
     return true;
 }
 
-/*////////////////////////// history_buffer ///////////////////////////*/
-
-void history_buffer::clear(){
-    head_ = 0;
-    size_ = 0;
-}
-
-void history_buffer::resize(int32_t n){
-    buffer_.resize(n);
-    clear();
-}
-
-block * history_buffer::find(int32_t seq){
-    // the code below only works if the buffer is not empty!
-    if (size_ > 0){
-        // check if sequence number is outdated
-        // (tail always starts at buffer begin and becomes
-        // equal to head once the buffer is full)
-        auto head = buffer_.begin() + head_;
-        auto tail = (size_ == capacity()) ? head : buffer_.begin();
-        if (seq < tail->sequence){
-            LOG_DEBUG("history buffer: block " << seq << " too old");
-            return nullptr;
-        }
-
-    #if 0
-        // linear search
-        auto end = buffer_.begin() + size_;
-        for (auto it = buffer_.begin(); it != end; ++it){
-            if (it->sequence == seq){
-                return &(*it);
-            }
-        }
-    #else
-        // binary search
-        auto dofind = [&](auto begin, auto end) -> block * {
-            auto result = std::lower_bound(begin, end, seq, [](auto& a, auto& b){
-                return a.sequence < b;
-            });
-            if (result != end && result->sequence == seq){
-                return &(*result);
-            } else {
-                return nullptr;
-            }
-        };
-        if (head != tail){
-            // buffer not full, just search range [tail, head]
-            auto result = dofind(tail, head);
-            if (result){
-                return result;
-            }
-        } else {
-            // blocks are always pushed in chronological order,
-            // so the ranges [begin, head] and [head, end] will always be sorted.
-            auto result = dofind(buffer_.begin(), head);
-            if (!result){
-                result = dofind(head, buffer_.end());
-            }
-            if (result){
-                return result;
-            }
-        }
-    #endif
-    }
-
-    LOG_ERROR("history buffer: couldn't find block " << seq);
-    return nullptr;
-}
-
-block * history_buffer::push()
-{
-    assert(!buffer_.empty());
-    auto old = head_++;
-    if (head_ >= capacity()){
-        head_ = 0;
-    }
-    if (size_ < capacity()){
-        ++size_;
-    }
-    return &buffer_[old];
-}
-
 /*////////////////////////// jitter_buffer /////////////////////////////*/
 
 void jitter_buffer::clear(){
@@ -236,8 +240,11 @@ void jitter_buffer::clear(){
     last_popped_ = last_pushed_ = -1;
 }
 
-void jitter_buffer::resize(int32_t n){
+void jitter_buffer::resize(int32_t n, int32_t maxblocksize){
     data_.resize(n);
+    for (auto& b : data_){
+        b.reserve(maxblocksize);
+    }
     clear();
 }
 

@@ -21,20 +21,24 @@ struct data_packet {
     int32_t size;
 };
 
-class block {
+/*///////////////////// history_buffer /////////////////////////*/
+
+class sent_block {
 public:
     // methods
     void set(int32_t seq, double sr,
              const char *data, int32_t nbytes,
              int32_t nframes, int32_t framesize);
+
     const char* data() const { return buffer_.data(); }
     int32_t size() const { return buffer_.size(); }
-    int32_t get_frame(int32_t which, char * data, int32_t n);
-    int32_t frame_size(int32_t which) const;
+
     int32_t num_frames() const { return numframes_; }
+    int32_t frame_size(int32_t which) const;
+    int32_t get_frame(int32_t which, char * data, int32_t n);
+
     // data
     int32_t sequence = -1;
-    int32_t channel = 0; // for received_block
     double samplerate = 0;
 protected:
     std::vector<char, aoo::allocator<char>> buffer_;
@@ -42,19 +46,59 @@ protected:
     int32_t framesize_ = 0;
 };
 
-class received_block : public block {
+class history_buffer {
 public:
+    void clear();
+    bool empty() const {
+        return size_ == 0;
+    }
+    int32_t size() const {
+        return size_;
+    }
+    int32_t capacity() const {
+        return buffer_.size();
+    }
+    void resize(int32_t n);
+    sent_block * find(int32_t seq);
+    sent_block * push();
+private:
+    using block_buffer = std::vector<sent_block, aoo::allocator<sent_block>>;
+    block_buffer buffer_;
+    int32_t head_ = 0;
+    int32_t size_ = 0;
+};
+
+/*///////////////// jitter_buffer ///////////////////////*/
+
+class received_block {
+public:
+    void reserve(int32_t size);
+
     void init(int32_t seq, bool dropped);
     void init(int32_t seq, double sr, int32_t chn,
               int32_t nbytes, int32_t nframes);
-    int32_t resend_count() const;
-    bool dropped() const ;
-    bool complete() const;
-    int32_t count_frames() const;
+
+    const char* data() const { return buffer_.data(); }
+    int32_t size() const { return buffer_.size(); }
+
+    int32_t num_frames() const { return numframes_; }
     bool has_frame(int32_t which) const;
+    int32_t count_frames() const;
     void add_frame(int32_t which, const char *data, int32_t n);
+
+    int32_t resend_count() const;
+    bool dropped() const;
+    bool complete() const;
     bool update(double time, double interval);
+
+    // data
+    int32_t sequence = -1;
+    int32_t channel = 0;
+    double samplerate = 0;
 protected:
+    std::vector<char, aoo::allocator<char>> buffer_;
+    int32_t numframes_ = 0;
+    int32_t framesize_ = 0;
     std::bitset<256> frames_ = 0;
     double timestamp_ = 0;
     int32_t numtries_ = 0;
@@ -106,7 +150,7 @@ public:
     using const_iterator = base_iterator<const received_block, const jitter_buffer>;
 
     void clear();
-    void resize(int32_t n);
+    void resize(int32_t n, int32_t maxblocksize);
 
     bool empty() const {
         return size_ == 0;
@@ -152,26 +196,4 @@ private:
     int32_t last_popped_ = -1;
 };
 
-class history_buffer {
-public:
-    void clear();
-    bool empty() const {
-        return size_ == 0;
-    }
-    int32_t size() const {
-        return size_;
-    }
-    int32_t capacity() const {
-        return buffer_.size();
-    }
-    void resize(int32_t n);
-    block * find(int32_t seq);
-    block * push();
-private:
-    using block_buffer = std::vector<block, aoo::allocator<block>>;
-    block_buffer buffer_;
-    int32_t head_ = 0;
-    int32_t size_ = 0;
-};
-
-}
+} // aoo
