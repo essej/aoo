@@ -684,7 +684,6 @@ void sink_imp::mem_free(memory_block* b) const {
 #endif
 }
 
-// must be called with source_mutex_ locked!
 aoo::source_desc * sink_imp::find_source(const ip_address& addr, aoo_id id){
     for (auto& src : sources_){
         if (src.match(addr, id)){
@@ -1677,7 +1676,7 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
         return;
     }
 
-    unique_lock lock(mutex_);
+    shared_lock lock(mutex_);
     int32_t salt = salt_; // cache!
     lock.unlock();
 
