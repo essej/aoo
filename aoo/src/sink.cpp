@@ -881,6 +881,8 @@ void source_desc::reset(const sink_imp& s){
     update(s);
 }
 
+#define MAXHWBUFSIZE 2048
+
 void source_desc::update(const sink_imp& s){
     // resize audio ring buffer
     if (decoder_ && decoder_->blocksize() > 0 && decoder_->samplerate() > 0){
@@ -891,7 +893,7 @@ void source_desc::update(const sink_imp& s){
         // minimum buffer size increases when downsampling!
         int32_t minbuffers = std::ceil((double)decoder_->samplerate() / (double)s.samplerate());
         nbuffers = std::max<int32_t>(nbuffers, minbuffers);
-        LOG_DEBUG("source_desc: buffersize (ms): " << s.buffersize()
+        LOG_VERBOSE("source_desc: buffersize (ms): " << s.buffersize()
                   << ", samples: " << bufsize << ", nbuffers = " << nbuffers);
 
     #if 0
@@ -907,6 +909,7 @@ void source_desc::update(const sink_imp& s){
         // align to 8 bytes
         nbytes = (nbytes + 7) & ~7;
         audioqueue_.resize(nbytes, nbuffers);
+        // fill buffer
         for (int i = 0; i < nbuffers; ++i){
             auto b = (block_data *)audioqueue_.write_data();
             // push nominal samplerate, channel + silence
@@ -921,9 +924,15 @@ void source_desc::update(const sink_imp& s){
                          decoder_->samplerate(), s.samplerate(),
                          decoder_->nchannels());
 
-        // resize jitter buffer
+        // resize jitter buffer.
+        // the minimum size corresponds to the max. hardware buffer size.
+        // this makes sure that we can use a very low buffer size but still
+        // have enough space in the jitter buffer in case the source uses
+        // a larger hardware buffer size and therefore sends packets in batches.
+        auto hwbuffers = std::ceil((double)MAXHWBUFSIZE / (double)decoder_->blocksize());
         // LATER optimize max. block size
-        jitterbuffer_.resize(nbuffers, nsamples * sizeof(double));
+        jitterbuffer_.resize(std::max<int32_t>(nbuffers, hwbuffers),
+                             nsamples * sizeof(double));
 
         streamstate_ = AOO_STREAM_STATE_STOP;
         lost_since_ping_.store(0);
