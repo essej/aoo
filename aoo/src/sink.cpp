@@ -881,6 +881,7 @@ void source_desc::reset(const sink_imp& s){
 }
 
 #define MAXHWBUFSIZE 2048
+#define MINSAMPLERATE 44100
 
 void source_desc::update(const sink_imp& s){
     // resize audio ring buffer
@@ -925,15 +926,18 @@ void source_desc::update(const sink_imp& s){
                          decoder_->samplerate(), s.samplerate(),
                          decoder_->nchannels());
 
-        // resize jitter buffer.
-        // the minimum size corresponds to the max. hardware buffer size.
-        // this makes sure that we can use a very low buffer size but still
-        // have enough space in the jitter buffer in case the source uses
-        // a larger hardware buffer size and therefore sends packets in batches.
-        auto hwbuffers = std::ceil((double)MAXHWBUFSIZE / (double)decoder_->blocksize());
+        // setup jitter buffer.
+        // if we use a very small audio buffer size, we have to make sure that
+        // we have enough space in the jitter buffer in case the source uses
+        // a larger hardware buffer size and consequently sends packets in batches.
+        // we don't know the actual source samplerate and hardware buffer size,
+        // so we have to make a pessimistic guess.
+        auto hwsamples = (double)decoder_->samplerate() / MINSAMPLERATE * MAXHWBUFSIZE;
+        auto minjitterbuf = std::ceil(hwsamples / (double)decoder_->blocksize());
+        auto jitterbufsize = std::max<int32_t>(nbuffers, minjitterbuf);
         // LATER optimize max. block size
-        jitterbuffer_.resize(std::max<int32_t>(nbuffers, hwbuffers),
-                             nsamples * sizeof(double));
+        jitterbuffer_.resize(jitterbufsize, nsamples * sizeof(double));
+        LOG_DEBUG("jitter buffer: " << jitterbufsize << " blocks");
 
         streamstate_ = AOO_STREAM_STATE_STOP;
         lost_since_ping_.store(0);
