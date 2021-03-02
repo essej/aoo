@@ -76,8 +76,6 @@ aoo_error aoo::sink_imp::setup(int32_t samplerate,
             samplerate_ = samplerate;
             blocksize_ = blocksize;
 
-            buffer_.resize(blocksize_ * nchannels_);
-
             // reset timer + time DLL filter
             timer_.setup(samplerate_, blocksize_);
 
@@ -483,9 +481,12 @@ aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t
         return AOO_ERROR_UNSPECIFIED;
     }
 
-    std::fill(buffer_.begin(), buffer_.end(), 0);
+    // zero outputs
+    for (int i = 0; i < nchannels_; ++i){
+        std::fill(data[i], data[i] + nsamples, 0);
+    }
 
-    // update time DLL filter
+    // update timer
     double error;
     auto state = timer_.update(t, error);
     if (state == timer::state::reset){
@@ -513,7 +514,7 @@ aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t
 
     // no lock needed - sources are only removed in this thread!
     for (auto it = sources_.begin(); it != sources_.end();){
-        if (it->process(*this, buffer_.data(), blocksize_, t)){
+        if (it->process(*this, data, nsamples, t)){
             didsomething = true;
         } else if (!it->is_active(*this)){
             // move source to garbage list (will be freed in send())
@@ -536,19 +537,17 @@ aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t
 
     if (didsomething){
     #if AOO_CLIP_OUTPUT
-        for (auto it = buffer_.begin(); it != buffer_.end(); ++it){
-            if (*it > 1.0){
-                *it = 1.0;
-            } else if (*it < -1.0){
-                *it = -1.0;
+        for (int i = 0; i < nchannels_; ++i){
+            auto chn = data[i];
+            for (int j = 0; j < nsamples; ++j){
+                if (chn[j] > 1.0){
+                    chn[j] = 1.0;
+                } else if (chn[j] < -1.0){
+                    chn[j] = -1.0;
+                }
             }
         }
     #endif
-    }
-    // copy buffers (might be empty)
-    for (int i = 0; i < nchannels_; ++i){
-        auto buf = &buffer_[i * blocksize_];
-        std::copy(buf, buf + blocksize_, data[i]);
     }
     return AOO_OK;
 }
@@ -1181,7 +1180,7 @@ void source_desc::send(const sink_imp& s, const sendfn& fn){
     send_data_requests(s, fn);
 }
 
-bool source_desc::process(const sink_imp& s, aoo_sample *buffer,
+bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
                           int32_t nsamples, time_tag tt)
 {
 #if 1
@@ -1252,6 +1251,8 @@ bool source_desc::process(const sink_imp& s, aoo_sample *buffer,
     }
 
     // read audio queue
+    auto size = decoder_->blocksize() * decoder_->nchannels();
+
     while (audioqueue_.read_available()){
         auto d = (block_data *)audioqueue_.read_data();
 
@@ -1260,8 +1261,7 @@ bool source_desc::process(const sink_imp& s, aoo_sample *buffer,
             dropped_ -= s.real_samplerate() / samplerate_;
         } else {
             // write audio into resampler
-            auto nsamples = decoder_->blocksize() * decoder_->nchannels();
-            if (!resampler_.write(d->data, nsamples)){
+            if (!resampler_.write(d->data, size)){
                 break;
             }
         }
@@ -1280,16 +1280,17 @@ bool source_desc::process(const sink_imp& s, aoo_sample *buffer,
     resampler_.update(samplerate_, s.real_samplerate());
     // read samples from resampler
     auto nchannels = decoder_->nchannels();
-    auto readsize = s.blocksize() * nchannels;
+    auto readsize = nsamples * nchannels;
     auto readbuf = (aoo_sample *)alloca(readsize * sizeof(aoo_sample));
     if (resampler_.read(readbuf, readsize)){
         // sum source into sink (interleaved -> non-interleaved),
         // starting at the desired sink channel offset.
         // out of bound source channels are silently ignored.
+        auto realnchannels = s.nchannels();
         for (int i = 0; i < nchannels; ++i){
             auto chn = i + channel_;
-            if (chn < s.nchannels()){
-                auto out = buffer + nsamples * chn;
+            if (chn < realnchannels){
+                auto out = buffer[chn];
                 for (int j = 0; j < nsamples; ++j){
                     out[j] += readbuf[j * nchannels + i];
                 }
@@ -1533,7 +1534,12 @@ void source_desc::process_blocks(const sink_imp& s, stream_state& state){
                 // block is ready
                 data = b.data();
                 size = b.size();
-                sr = b.samplerate;
+            #if 1
+                // dynamic resampling
+                sr = b.samplerate; // real samplerate
+            #else
+                sr = decoder_->samplerate(); // nominal samplerate
+            #endif
                 channel = b.channel;
             #if AOO_DEBUG_JITTER_BUFFER
                 DO_LOG_DEBUG("jitter buffer: write samples for block ("

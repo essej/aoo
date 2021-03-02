@@ -185,7 +185,7 @@ public:
 
     void send(const sink_imp& s, const sendfn& fn);
 
-    bool process(const sink_imp& s, aoo_sample *buffer, int32_t nsamples, time_tag tt);
+    bool process(const sink_imp& s, aoo_sample **buffer, int32_t nsamples, time_tag tt);
 
     void add_xrun(int32_t n){ xrunsamples_ += n; }
 
@@ -349,8 +349,6 @@ private:
     int32_t nchannels_ = 0;
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
-    // buffer for summing source audio output
-    std::vector<aoo_sample, aoo::allocator<aoo_sample>> buffer_;
     // the sources
     using source_list = lockfree::simple_list<source_desc, aoo::allocator<source_desc>>;
     using source_lock = std::unique_lock<source_list>;

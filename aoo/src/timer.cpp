@@ -6,7 +6,7 @@ timer::timer(const timer& other){
     last_ = other.last_.load();
     elapsed_ = other.elapsed_.load();
 #if AOO_TIMEFILTER_CHECK
-    static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
+    static_assert(is_pow2(buffersize), "buffer size must be power of 2!");
     delta_ = other.delta_;
     sum_ = other.sum_;
     buffer_ = other.buffer_;
@@ -18,7 +18,7 @@ timer& timer::operator=(const timer& other){
     last_ = other.last_.load();
     elapsed_ = other.elapsed_.load();
 #if AOO_TIMEFILTER_CHECK
-    static_assert(is_pow2(buffersize_), "buffer size must be power of 2!");
+    static_assert(is_pow2(buffersize), "buffer size must be power of 2!");
     delta_ = other.delta_;
     sum_ = other.sum_;
     buffer_ = other.buffer_;
@@ -36,14 +36,6 @@ void timer::setup(int32_t sr, int32_t blocksize){
 
 void timer::reset(){
     last_.store(0, std::memory_order_relaxed);
-}
-
-double timer::get_elapsed() const {
-    return elapsed_.load(std::memory_order_relaxed);
-}
-
-time_tag timer::get_absolute() const {
-    return last_.load(std::memory_order_relaxed);
 }
 
 timer::state timer::update(time_tag t, double& error){

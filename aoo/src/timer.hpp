@@ -22,8 +22,12 @@ public:
     timer& operator=(const timer& other);
     void setup(int32_t sr, int32_t blocksize);
     void reset();
-    double get_elapsed() const;
-    time_tag get_absolute() const;
+    double get_elapsed() const {
+        return elapsed_.load(std::memory_order_relaxed);
+    }
+    time_tag get_absolute() const{
+        return last_.load(std::memory_order_relaxed);
+    }
     state update(time_tag t, double& error);
 private:
     std::atomic<uint64_t> last_;
@@ -31,11 +35,11 @@ private:
 
 #if AOO_TIMEFILTER_CHECK
     // moving average filter to detect timing issues
-    static const size_t buffersize_ = 64;
+    static const size_t buffersize = 64;
 
     double delta_ = 0;
     double sum_ = 0;
-    std::array<double, buffersize_> buffer_;
+    std::array<double, buffersize> buffer_;
     int32_t head_ = 0;
 #endif
 };

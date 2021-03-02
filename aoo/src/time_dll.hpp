@@ -18,7 +18,7 @@ namespace aoo {
 class time_dll {
 public:
     void setup(double sr, int nper, double bandwidth, double t){
-        double tper = nper / sr;
+        double tper = (double)nper / sr;
         nper_ = nper;
         // compute coefficients
         double omega = 2 * M_PI * bandwidth * (nper / sr);

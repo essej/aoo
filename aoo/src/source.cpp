@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
@@ -464,7 +464,7 @@ aoo_error aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n
     return src->process(data, n, t);
 }
 
-aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t n, uint64_t t){
+aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, uint64_t t){
     auto state = state_.load();
     if (state == stream_state::stop){
         return AOO_ERROR_UNSPECIFIED; // pausing
@@ -507,12 +507,13 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t n, uint64_t 
         return AOO_ERROR_UNSPECIFIED;
     }
 
-    // update time DLL filter
+    // update timer
     double error;
     auto timerstate = timer_.update(t, error);
     if (timerstate == timer::state::reset){
         LOG_DEBUG("setup time DLL filter for source");
-        dll_.setup(samplerate_, blocksize_, bandwidth_, 0);
+        dll_.setup(samplerate_, blocksize_,
+                   bandwidth_.load(std::memory_order_relaxed), 0);
         // it is safe to set 'lastpingtime' after updating
         // the timer, because in the worst case the ping
         // is simply sent the next time.
@@ -525,36 +526,43 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t n, uint64_t 
         dropped_ += nblocks;
         timer_.reset();
     } else {
-        auto elapsed = timer_.get_elapsed();
-        dll_.update(elapsed);
-    #if AOO_DEBUG_DLL
-        DO_LOG_DEBUG("time elapsed: " << elapsed << ", period: "
-                  << dll_.period() << ", samplerate: " << dll_.samplerate());
-    #endif
+        // update time DLL, but only if n matches blocksize!
+        if (nsamples == blocksize_){
+            auto elapsed = timer_.get_elapsed();
+            dll_.update(elapsed);
+        #if AOO_DEBUG_DLL
+            DO_LOG_DEBUG("time elapsed: " << elapsed << ", period: "
+                      << dll_.period() << ", samplerate: " << dll_.samplerate());
+        #endif
+        } else {
+            // reset time DLL with nominal samplerate
+            dll_.setup(samplerate_, blocksize_,
+                       bandwidth_.load(std::memory_order_relaxed), 0);
+        }
     }
 
     // non-interleaved -> interleaved
     // only as many channels as current format needs
     auto nfchannels = encoder_->nchannels();
-    auto nsamples = blocksize_ * nfchannels;
-    auto buf = (aoo_sample *)alloca(nsamples * sizeof(aoo_sample));
-    auto maxnchannels = std::min(nfchannels, nchannels_);
-    for (int i = 0; i < maxnchannels; ++i){
-        for (int j = 0; j < n; ++j){
-            buf[j * nfchannels + i] = data[i][j];
-        }
-    }
-    // zero remaining channels
-    for (int i = maxnchannels; i < nfchannels; ++i){
-        for (int j = 0; j < n; ++j){
-            buf[j * nfchannels + i] = 0;
+    auto insize = nsamples * nfchannels;
+    auto buf = (aoo_sample *)alloca(insize * sizeof(aoo_sample));
+    for (int i = 0; i < nfchannels; ++i){
+        if (i < nchannels_){
+            for (int j = 0; j < nsamples; ++j){
+                buf[j * nfchannels + i] = data[i][j];
+            }
+        } else {
+            // zero remaining channel
+            for (int j = 0; j < nsamples; ++j){
+                buf[j * nfchannels + i] = 0;
+            }
         }
     }
 
-    auto size = nfchannels * encoder_->blocksize();
+    auto outsize = nfchannels * encoder_->blocksize();
     if (need_resampling()){
         // go through resampler
-        if (!resampler_.write(buf, nsamples)){
+        if (!resampler_.write(buf, insize)){
             LOG_WARNING("aoo_source: send buffer overflow");
             dropped_++;
             return AOO_ERROR_UNSPECIFIED;
@@ -563,7 +571,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t n, uint64_t 
         while (audioqueue_.write_available()){
             // copy audio samples
             auto ptr = (block_data *)audioqueue_.write_data();
-            if (!resampler_.read(ptr->data, size)){
+            if (!resampler_.read(ptr->data, outsize)){
                 break;
             }
             // push samplerate
@@ -576,7 +584,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t n, uint64_t 
         if (audioqueue_.write_available()){
             auto ptr = (block_data *)audioqueue_.write_data();
             // copy audio samples
-            std::copy(buf, buf + size, ptr->data);
+            std::copy(buf, buf + outsize, ptr->data);
             // push samplerate
             ptr->sr = dll_.samplerate();
 
@@ -686,7 +694,12 @@ int32_t source_imp::make_salt(){
 }
 
 bool source_imp::need_resampling() const {
+#if 1
+    // always go through resampler, so we can use a variable block size
+    return true;
+#else
     return blocksize_ != encoder_->blocksize() || samplerate_ != encoder_->samplerate();
+#endif
 }
 
 void source_imp::send_event(const event& e, aoo_thread_level level){
