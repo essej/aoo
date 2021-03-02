@@ -889,10 +889,12 @@ void source_desc::update(const sink_imp& s){
         int32_t bufsize = (double)s.buffersize() * 0.001 * decoder_->samplerate();
         // number of buffers (round up!)
         int32_t nbuffers = std::ceil((double)bufsize / (double)decoder_->blocksize());
-        // minimum buffer size increases when downsampling!
-        int32_t minbuffers = std::ceil((double)decoder_->samplerate() / (double)s.samplerate());
+        // minimum buffer size depends on resampling + reblocking!
+        auto downsample = (double)decoder_->samplerate() / (double)s.samplerate();
+        auto reblock = (double)s.blocksize() / (double)decoder_->blocksize();
+        int32_t minbuffers = std::ceil(downsample * reblock);
         nbuffers = std::max<int32_t>(nbuffers, minbuffers);
-        LOG_VERBOSE("source_desc: buffersize (ms): " << s.buffersize()
+        LOG_DEBUG("source_desc: buffersize (ms): " << s.buffersize()
                   << ", samples: " << bufsize << ", nbuffers = " << nbuffers);
 
     #if 0
