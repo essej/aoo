@@ -35,6 +35,10 @@ AOO_API void aoo_set_allocator(const aoo_allocator *alloc);
  #define AOO_DEBUG_MEMORY 0
 #endif
 
+#ifndef AOO_DEBUG_DATA
+ #define AOO_DEBUG_DATA 0
+#endif
+
 #ifndef AOO_DEBUG_DLL
  #define AOO_DEBUG_DLL 0
 #endif

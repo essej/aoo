@@ -1059,10 +1059,11 @@ void source_imp::send_packet(const sendfn& fn, const endpoint& ep,
         << d.channel << d.totalsize << d.nframes << d.framenum << osc::Blob(d.data, d.size)
         << osc::EndMessage;
 
+#if AOO_DEBUG_DATA
     LOG_DEBUG("send block: seq = " << d.sequence << ", sr = " << d.samplerate
               << ", chn = " << d.channel << ", totalsize = " << d.totalsize
               << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
-
+#endif
     fn(msg.Data(), msg.Size(), ep.address, ep.flags);
 }
 

@@ -516,7 +516,7 @@ aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t
         if (it->process(*this, buffer_.data(), blocksize_, t)){
             didsomething = true;
         } else if (!it->is_active(*this)){
-            // move source to garbage list (will be freed in decode())
+            // move source to garbage list (will be freed in send())
             if (it->is_inviting()){
                 LOG_VERBOSE("aoo::sink: invitation for " << it->address().name()
                             << " " << it->address().port() << " timed out");
@@ -1115,9 +1115,12 @@ aoo_error source_desc::handle_data(const sink_imp& s, int32_t salt, aoo::data_pa
 #else
     assert(decoder_ != nullptr);
 #endif
+
+#if AOO_DEBUG_DATA
     LOG_DEBUG("got block: seq = " << d.sequence << ", sr = " << d.samplerate
               << ", chn = " << d.channel << ", totalsize = " << d.totalsize
               << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
+#endif
 
     // copy blob data and push to queue
     auto data = (char *)s.mem_alloc(d.size)->data();
