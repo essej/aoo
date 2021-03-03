@@ -901,6 +901,13 @@ void source_imp::send_data(const sendfn& fn){
             auto nchannels = encoder_->nchannels();
             auto blocksize = encoder_->blocksize();
             auto nsamples = nchannels * blocksize;
+        #if 0
+            Log log;
+            for (int i = 0; i < nsamples; ++i){
+                log << ptr->data[i] << " ";
+            }
+        #endif
+
             sendbuffer_.resize(sizeof(double) * nsamples); // overallocate
 
             d.totalsize = sendbuffer_.size();

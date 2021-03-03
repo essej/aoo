@@ -1579,6 +1579,13 @@ void source_desc::process_blocks(const sink_imp& s, stream_state& state){
         }
         audioqueue_.write_commit();
 
+    #if 0
+        Log log;
+        for (int i = 0; i < nsamples; ++i){
+            log << d->data[i] << " ";
+        }
+    #endif
+
         jitterbuffer_.pop_front();
     }
 }
