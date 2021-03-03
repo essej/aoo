@@ -19,6 +19,7 @@ public:
     bool write(const aoo_sample* data, int32_t n);
     bool read(aoo_sample* data, int32_t n);
 
+    int32_t balance() const { return balance_; }
     double ratio() const { return ideal_ratio_; }
 private:
     std::vector<aoo_sample, aoo::allocator<aoo_sample>> buffer_;

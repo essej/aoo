@@ -125,12 +125,12 @@ class spsc_queue {
         write_commit(1);
     }
  private:
+    std::vector<T, Alloc> data_;
     std::atomic<int32_t> balance_{0};
     int32_t rdhead_{0};
     int32_t wrhead_{0};
     int32_t blocksize_{0};
     int32_t capacity_{0};
-    std::vector<T, Alloc> data_;
 
     void read_commit(int32_t n){
         rdhead_ += n;

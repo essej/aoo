@@ -476,10 +476,12 @@ aoo_error aoo_sink_process(aoo_sink *sink, aoo_sample **data,
 #define AOO_MAXNUMEVENTS 256
 
 aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t){
+#if 1
     if (sources_.empty() && requestqueue_.empty()){
         timer_.reset(); // !
         return AOO_ERROR_UNSPECIFIED;
     }
+#endif
 
     // zero outputs
     for (int i = 0; i < nchannels_; ++i){
@@ -892,10 +894,11 @@ void source_desc::update(const sink_imp& s){
         // minimum buffer size depends on resampling + reblocking!
         auto downsample = (double)decoder_->samplerate() / (double)s.samplerate();
         auto reblock = (double)s.blocksize() / (double)decoder_->blocksize();
-        int32_t minbuffers = std::ceil(downsample * reblock);
-        nbuffers = std::max<int32_t>(nbuffers, minbuffers);
+        minblocks_ = std::ceil(downsample * reblock);
+        nbuffers = std::max<int32_t>(nbuffers, minblocks_);
         LOG_DEBUG("source_desc: buffersize (ms): " << s.buffersize()
-                  << ", samples: " << bufsize << ", nbuffers = " << nbuffers);
+                  << ", samples: " << bufsize << ", nbuffers = " << nbuffers
+                  << ", limit: " << minblocks_);
 
     #if 0
         // don't touch the event queue once constructed
@@ -932,8 +935,8 @@ void source_desc::update(const sink_imp& s){
         // we don't know the actual source samplerate and hardware buffer size,
         // so we have to make a pessimistic guess.
         auto hwsamples = (double)decoder_->samplerate() / MINSAMPLERATE * MAXHWBUFSIZE;
-        auto minjitterbuf = std::ceil(hwsamples / (double)decoder_->blocksize());
-        auto jitterbufsize = std::max<int32_t>(nbuffers, minjitterbuf);
+        auto minbuffers = std::ceil(hwsamples / (double)decoder_->blocksize());
+        auto jitterbufsize = std::max<int32_t>(nbuffers, minbuffers);
         // LATER optimize max. block size
         jitterbuffer_.resize(jitterbufsize, nsamples * sizeof(double));
         LOG_DEBUG("jitter buffer: " << jitterbufsize << " blocks");
@@ -941,7 +944,6 @@ void source_desc::update(const sink_imp& s){
         streamstate_ = AOO_STREAM_STATE_STOP;
         lost_since_ping_.store(0);
         channel_ = 0;
-        samplerate_ = decoder_->samplerate();
         dropped_ = 0;
         xrunsamples_ = 0;
         underrun_ = false;
@@ -1000,6 +1002,7 @@ void source_desc::uninvite(const sink_imp& s){
 
 aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_format& f,
                                      const char *settings, int32_t size, uint32_t flags){
+    LOG_DEBUG("handle_format");
     // ignore redundant format messages!
     // NOTE: salt_ can only change in this thread,
     // so we don't need a lock to safely *read* it!
@@ -1098,6 +1101,7 @@ aoo_error source_desc::handle_data(const sink_imp& s, int32_t salt, aoo::data_pa
 
     // the source format might have changed and we haven't noticed,
     // e.g. because of dropped UDP packets.
+    // NOTE: salt_ can only change in this thread!
     if (salt != salt_){
         push_request(request(request_type::format));
         return AOO_OK;
@@ -1201,22 +1205,38 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
         return false;
     }
 
-    stream_state ss;
-    data_packet d;
-    while (packetqueue_.try_pop(d)){
-        // check data packet
-        // LOG_DEBUG("check packet");
-        if (check_packet(d, ss)){
-            add_packet(d, ss);
-        }
-        // return memory
-        s.mem_free(memory_block::from_bytes((void *)d.data));
+    stream_state state;
+
+    // check for sink xruns
+    if (xrunsamples_ > 0) {
+        int32_t xrunblocks = xrunsamples_ * resampler_.ratio()
+                / (float)decoder_->blocksize() + 0.5;
+        auto lost = recover("sink xrun", xrunblocks);
+        state.lost += lost;
+        add_lost(lost);
+        xrunsamples_ = 0;
     }
 
-    // process blocks and transfer to audio thread
-    process_blocks(s, ss);
+    if (!packetqueue_.empty()){
+        // check for buffer underrun (only if packets arrive!)
+        if (underrun_){
+            auto lost = recover("audio buffer underrun");
+            state.lost += lost;
+            add_lost(lost);
+            underrun_ = false;
+        }
 
-    // check and resend missing blocks
+        data_packet d;
+        while (packetqueue_.try_pop(d)){
+            // check data packet
+            add_packet(d, state);
+            // return memory
+            s.mem_free(memory_block::from_bytes((void *)d.data));
+        }
+    }
+
+    process_blocks(s, state);
+
     check_missing_blocks(s);
 
 #if AOO_DEBUG_JITTER_BUFFER
@@ -1225,64 +1245,63 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
               << ", newest: " << jitterbuffer_.last_pushed());
 #endif
 
-    if (ss.lost > 0){
+    if (state.lost > 0){
         // push packet loss event
         event e(AOO_BLOCK_LOST_EVENT, *this);
-        e.block_loss.count = ss.lost;
+        e.block_loss.count = state.lost;
         send_event(s, e, AOO_THREAD_AUDIO);
     }
-    if (ss.reordered > 0){
+    if (state.reordered > 0){
         // push packet reorder event
         event e(AOO_BLOCK_REORDERED_EVENT, *this);
-        e.block_reorder.count = ss.reordered;
+        e.block_reorder.count = state.reordered;
         send_event(s, e, AOO_THREAD_AUDIO);
     }
-    if (ss.resent > 0){
+    if (state.resent > 0){
         // push packet resend event
         event e(AOO_BLOCK_RESENT_EVENT, *this);
-        e.block_resend.count = ss.resent;
+        e.block_resend.count = state.resent;
         send_event(s, e, AOO_THREAD_AUDIO);
     }
-    if (ss.gap > 0){
+    if (state.gap > 0){
         // push packet gap event
         event e(AOO_BLOCK_GAP_EVENT, *this);
-        e.block_gap.count = ss.gap;
+        e.block_gap.count = state.gap;
         send_event(s, e, AOO_THREAD_AUDIO);
     }
 
-    // read audio queue
-    auto size = decoder_->blocksize() * decoder_->nchannels();
+    auto nchannels = decoder_->nchannels();
+    auto insize = decoder_->blocksize() * nchannels;
+    auto outsize = nsamples * nchannels;
 
+    // write samples from buffer into resampler
     while (audioqueue_.read_available()){
         auto d = (block_data *)audioqueue_.read_data();
 
         if (dropped_ > 0.1){
             // skip audio and decrement block counter proportionally
-            dropped_ -= s.real_samplerate() / samplerate_;
+            dropped_ -= s.real_samplerate() / decoder_->samplerate();
         } else {
-            // write audio into resampler
-            if (!resampler_.write(d->data, size)){
+            // try to write audio into resampler
+            if (!resampler_.write(d->data, insize)){
                 break;
             }
-        }
 
-        // set current channel + samplerate
-        samplerate_ = d->header.samplerate;
-        // negative channel number: current channel
-        if (d->header.channel >= 0){
-            channel_ = d->header.channel;
+            // update resampler
+            resampler_.update(d->header.samplerate, s.real_samplerate());
+            // set channel; negative = current
+            if (d->header.channel >= 0){
+                channel_ = d->header.channel;
+            }
         }
 
         audioqueue_.read_commit();
     }
 
-    // update resampler
-    resampler_.update(samplerate_, s.real_samplerate());
-    // read samples from resampler
-    auto nchannels = decoder_->nchannels();
-    auto readsize = nsamples * nchannels;
-    auto readbuf = (aoo_sample *)alloca(readsize * sizeof(aoo_sample));
-    if (resampler_.read(readbuf, readsize)){
+    // try to read samples from resampler
+    auto buf = (aoo_sample *)alloca(outsize * sizeof(aoo_sample));
+
+    if (resampler_.read(buf, outsize)){
         // sum source into sink (interleaved -> non-interleaved),
         // starting at the desired sink channel offset.
         // out of bound source channels are silently ignored.
@@ -1292,7 +1311,7 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
             if (chn < realnchannels){
                 auto out = buffer[chn];
                 for (int j = 0; j < nsamples; ++j){
-                    out[j] += readbuf[j * nchannels + i];
+                    out[j] += buf[j * nchannels + i];
                 }
             }
         }
@@ -1388,10 +1407,11 @@ int32_t source_desc::recover(const char *reason, int32_t n){
     return n;
 }
 
-bool source_desc::check_packet(const data_packet &d, stream_state& state){
+bool source_desc::add_packet(const data_packet& d, stream_state& state){
     if (d.sequence <= jitterbuffer_.last_popped()){
         // block too old, discard!
         LOG_VERBOSE("discard old block " << d.sequence);
+        LOG_DEBUG("oldest: " << jitterbuffer_.last_popped());
         return false;
     }
 
@@ -1399,55 +1419,46 @@ bool source_desc::check_packet(const data_packet &d, stream_state& state){
     // (either network problem or stream has temporarily stopped.)
     auto newest = jitterbuffer_.last_pushed();
     auto diff = d.sequence - newest;
-    if (newest > 0 && diff > jitterbuffer_.capacity()){
+    if (newest >= 0 && diff > jitterbuffer_.capacity()){
         auto lost = recover("transmission gap");
         state.lost += lost;
         add_lost(lost);
         // record gap (measured in blocks)
         state.gap += diff - 1;
-    } else if (xrunsamples_ > 0) {
-        // check for sink xruns
-        int32_t xrunblocks = xrunsamples_ * resampler_.ratio()
-                / (float)decoder_->blocksize() + 0.5;
-        auto lost = recover("sink xrun", xrunblocks);
-        state.lost += lost;
-        add_lost(lost);
-        xrunsamples_ = 0;
     }
 
-    if (newest > 0 && diff > 1){
-        LOG_VERBOSE("skipped " << (diff - 1) << " blocks");
-    }
-
-    return true;
-}
-
-bool source_desc::add_packet(const data_packet& d, stream_state& state){
     auto block = jitterbuffer_.find(d.sequence);
     if (!block){
-        auto newest = jitterbuffer_.last_pushed();
+    #if 1
+        // can this ever happen!?
         if (d.sequence <= newest){
             LOG_VERBOSE("discard outdated block " << d.sequence);
+            LOG_DEBUG("newest: " << newest);
             return false;
         }
-        // fill gaps with empty blocks
-        if (newest > 0){
+    #endif
+
+        if (newest >= 0){
+            // check for jitter buffer overrun (shouldn't really happen)
+            auto space = jitterbuffer_.capacity() - jitterbuffer_.size();
+            if (diff > space){
+                auto lost = recover("jitter buffer overrun");
+                state.lost += lost;
+                add_lost(lost);
+            }
+
+            // notify for gap
+            if (diff > 1){
+                LOG_VERBOSE("skipped " << (diff - 1) << " blocks");
+            }
+
+            // fill gaps with empty blocks
             for (int32_t i = newest + 1; i < d.sequence; ++i){
-                if (jitterbuffer_.full()){
-                    auto lost = recover("jitter buffer overrun");
-                    state.lost += lost;
-                    add_lost(lost);
-                }
                 jitterbuffer_.push_back(i)->init(i, false);
             }
         }
-        // add new block
-        if (jitterbuffer_.full()){
-            auto lost = recover("jitter buffer overrun");
-            state.lost += lost;
-            add_lost(lost);
-        }
 
+        // add new block
         block = jitterbuffer_.push_back(d.sequence);
 
         if (d.totalsize == 0){
@@ -1481,7 +1492,7 @@ bool source_desc::add_packet(const data_packet& d, stream_state& state){
             return false;
         }
 
-        if (d.sequence != jitterbuffer_.last_pushed()){
+        if (d.sequence != newest){
             // out of order or resent
             if (block->resend_count() > 0){
                 LOG_VERBOSE("resent frame " << d.framenum << " of block " << d.sequence);
@@ -1504,21 +1515,10 @@ void source_desc::process_blocks(const sink_imp& s, stream_state& state){
         return;
     }
 
-    int32_t limit = (double)s.blocksize() / (double)decoder_->blocksize()
-            * resampler_.ratio() + 0.5;
     auto nsamples = decoder_->blocksize() * decoder_->nchannels();
 
     // Transfer all consecutive complete blocks
     while (!jitterbuffer_.empty() && audioqueue_.write_available()){
-        // check for buffer underrun
-        if (underrun_){
-            auto lost = recover("audio buffer underrun");
-            state.lost += lost;
-            add_lost(lost);
-            underrun_ = false;
-            return;
-        }
-
         const char *data;
         int32_t size;
         double sr;
@@ -1551,24 +1551,27 @@ void source_desc::process_blocks(const sink_imp& s, stream_state& state){
                           << b.sequence << ")");
             #endif
             }
-        } else if (jitterbuffer_.size() > 1 && audioqueue_.read_available() < limit){
-            LOG_DEBUG("remaining: " << audioqueue_.read_available() << " / " << audioqueue_.capacity()
-                      << ", limit: " << limit);
-            // we need audio, so we have to drop a block - but only if it is not
-            // the last one (which is expected to be incomplete)
-            data = nullptr;
-            size = 0;
-            sr = decoder_->samplerate(); // nominal samplerate
-            channel = -1; // current channel
-            state.lost++;
-            add_lost(1);
-            LOG_VERBOSE("dropped block " << b.sequence);
         } else {
-            // wait for block
-        #if AOO_DEBUG_JITTER_BUFFER
-            DO_LOG_DEBUG("jitter buffer: wait");
-        #endif
-            break;
+            // we also have to consider the content of the resampler!
+            auto remaining = audioqueue_.read_available() + resampler_.balance() / nsamples;
+            if (remaining < minblocks_){
+                // we need audio, so we have to drop a block
+                LOG_DEBUG("remaining: " << remaining << " / " << audioqueue_.capacity()
+                          << ", limit: " << minblocks_);
+                data = nullptr;
+                size = 0;
+                sr = decoder_->samplerate(); // nominal samplerate
+                channel = -1; // current channel
+                state.lost++;
+                add_lost(1);
+                LOG_VERBOSE("dropped block " << b.sequence);
+            } else {
+                // wait for block
+            #if AOO_DEBUG_JITTER_BUFFER
+                DO_LOG_DEBUG("jitter buffer: wait");
+            #endif
+                break;
+            }
         }
 
         // push samples and channel

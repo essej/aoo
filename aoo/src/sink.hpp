@@ -207,8 +207,6 @@ private:
     // handle messages
     int32_t recover(const char *reason, int32_t n = 0);
 
-    bool check_packet(const data_packet& d, stream_state& state);
-
     bool add_packet(const data_packet& d, stream_state& state);
 
     void process_blocks(const sink_imp& s, stream_state& state);
@@ -241,7 +239,6 @@ private:
     // audio decoder
     std::unique_ptr<aoo::decoder> decoder_;
     // state
-    double samplerate_ = 0; // recent samplerate
     int32_t channel_ = 0; // recent channel onset
     int32_t xrunsamples_ = 0;
     double dropped_ = 0;
@@ -257,6 +254,7 @@ private:
         aoo_sample data[1];
     };
     lockfree::spsc_queue<char, aoo::allocator<char>> audioqueue_;
+    int32_t minblocks_ = 0;
     lockfree::unbounded_mpsc_queue<data_packet, aoo::allocator<data_packet>> packetqueue_;
     jitter_buffer jitterbuffer_;
     // requests
