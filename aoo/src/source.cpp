@@ -465,6 +465,13 @@ aoo_error aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n
 }
 
 aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, uint64_t t){
+#if 1
+    if (sinks_.empty()){
+        timer_.reset(); // !
+        return AOO_ERROR_UNSPECIFIED;
+    }
+#endif
+
     auto state = state_.load();
     if (state == stream_state::stop){
         return AOO_ERROR_UNSPECIFIED; // pausing
