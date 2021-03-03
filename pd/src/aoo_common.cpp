@@ -179,6 +179,23 @@ bool format_parse(t_pd *x, aoo_format_storage &f, int argc, t_atom *argv,
         } else {
             fmt.signal_type = OPUS_AUTO;
         }
+        // application type ("auto", "audio", "voip", "lowdelay"
+        if (argc > 7){
+            t_symbol *type = atom_getsymbol(argv + 7);
+            if (type == gensym("auto") || type == gensym("audio")){
+                fmt.application_type = OPUS_APPLICATION_AUDIO;
+            } else if (type == gensym("voip")){
+                fmt.application_type = OPUS_APPLICATION_VOIP;
+            } else if (type == gensym("lowdelay")){
+                fmt.application_type = OPUS_APPLICATION_RESTRICTED_LOWDELAY;
+            } else {
+                pd_error(x,"%s: unsupported application type '%s'",
+                         classname(x), type->s_name);
+                return false;
+            }
+        } else {
+            fmt.application_type = OPUS_APPLICATION_AUDIO;
+        }
     }
 #endif
     else {
@@ -229,8 +246,8 @@ int format_to_atoms(const aoo_format &f, int argc, t_atom *argv)
     }
 #if USE_CODEC_OPUS
     else if (codec == gensym(AOO_CODEC_OPUS)){
-        // opus <blocksize> <samplerate> <channels> <bitrate> <complexity> <signaltype>
-        if (argc < 7){
+        // opus <blocksize> <samplerate> <channels> <bitrate> <complexity> <signaltype> <application>
+        if (argc < 8){
             error("format_to_atoms: too few atoms for opus format!");
             return 0;
         }
@@ -254,7 +271,9 @@ int format_to_atoms(const aoo_format &f, int argc, t_atom *argv)
             break;
         }
     #endif
+        // complexity
         SETFLOAT(argv + 5, fmt.complexity);
+        // signal type
         t_symbol *signaltype;
         switch (fmt.signal_type){
         case OPUS_SIGNAL_MUSIC:
@@ -268,7 +287,21 @@ int format_to_atoms(const aoo_format &f, int argc, t_atom *argv)
             break;
         }
         SETSYMBOL(argv + 6, signaltype);
-        return 7;
+        // application type
+        t_symbol *apptype;
+        switch (fmt.application_type){
+        case OPUS_APPLICATION_VOIP:
+            apptype = gensym("voip");
+            break;
+        case OPUS_APPLICATION_RESTRICTED_LOWDELAY:
+            apptype = gensym("lowdelay");
+            break;
+        default:
+            apptype = gensym("audio");
+            break;
+        }
+        SETSYMBOL(argv + 7, apptype);
+        return 8;
     }
 #endif
     else {

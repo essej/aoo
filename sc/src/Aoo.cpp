@@ -393,6 +393,22 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
         } else {
             fmt.signal_type = OPUS_AUTO;
         }
+        // application type ("auto", "audio", "voip", "lowdelay")
+        if (args->remain() > 0){
+            auto type = args->gets("");
+            if (!strcmp(type, "auto") || !strcmp(type, "audio")){
+                fmt.application_type = OPUS_APPLICATION_AUDIO;
+            } else if (!strcmp(type, "voip")){
+                fmt.application_type = OPUS_APPLICATION_VOIP;
+            } else if (!strcmp(type, "lowdelay")){
+                fmt.application_type = OPUS_APPLICATION_RESTRICTED_LOWDELAY;
+            } else {
+                LOG_ERROR("aoo: unsupported application type '" << type << "'");
+                return false;
+            }
+        } else {
+            fmt.application_type = OPUS_APPLICATION_AUDIO;
+        }
     }
 #endif
     else {
@@ -428,10 +444,11 @@ void serializeFormat(osc::OutboundPacketStream& msg, const aoo_format& f)
         }
         msg << nbits;
     }
-#if USE_CODEC_OPUS || 1
+#if USE_CODEC_OPUS
     else if (!strcmp(f.codec, AOO_CODEC_OPUS)){
-        // opus <blocksize> <samplerate> <bitrate> <complexity> <signaltype>
+        // opus <blocksize> <samplerate> <bitrate> <complexity> <signaltype> <application>
         auto& fmt = (aoo_format_opus &)f;
+        // bitrate
     #if 0
         msg << fmt.bitrate;
     #else
@@ -451,7 +468,9 @@ void serializeFormat(osc::OutboundPacketStream& msg, const aoo_format& f)
             break;
         }
     #endif
+        // complexity
         msg << fmt.complexity;
+        // signal type
         switch (fmt.signal_type){
         case OPUS_SIGNAL_MUSIC:
             msg << "music";
@@ -461,6 +480,18 @@ void serializeFormat(osc::OutboundPacketStream& msg, const aoo_format& f)
             break;
         default:
             msg << "auto";
+            break;
+        }
+        // application type
+        switch (fmt.application_type){
+        case OPUS_APPLICATION_VOIP:
+            msg << "voip";
+            break;
+        case OPUS_APPLICATION_RESTRICTED_LOWDELAY:
+            msg << "lowdelay";
+            break;
+        default:
+            msg << "audio";
             break;
         }
     }

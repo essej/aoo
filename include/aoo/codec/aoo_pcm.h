@@ -27,7 +27,7 @@ enum aoo_pcm_bitdepth
 typedef struct aoo_format_pcm
 {
     aoo_format header;
-    int32_t bitdepth;
+    int32_t bitdepth; // aoo_pcm_bitdepth
 } aoo_format_pcm;
 
 #ifdef __cplusplus

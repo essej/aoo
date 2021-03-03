@@ -27,7 +27,20 @@ void deallocate(void *ptr, size_t n){
 }
 
 void print_settings(const aoo_format_opus& f){
-    const char *type;
+    const char *application, *type;
+
+    switch (f.application_type){
+    case OPUS_APPLICATION_VOIP:
+        application = "VOIP";
+        break;
+    case OPUS_APPLICATION_RESTRICTED_LOWDELAY:
+        application = "low delay";
+        break;
+    default:
+        application = "audio";
+        break;
+    }
+
     switch (f.signal_type){
     case OPUS_SIGNAL_MUSIC:
         type = "music";
@@ -44,6 +57,7 @@ void print_settings(const aoo_format_opus& f){
                 << "nchannels = " << f.header.nchannels
                 << ", blocksize = " << f.header.blocksize
                 << ", samplerate = " << f.header.samplerate
+                << ", application = " << application
                 << ", bitrate = " << f.bitrate
                 << ", complexity = " << f.complexity
                 << ", signal type = " << type);
@@ -97,6 +111,14 @@ void validate_format(aoo_format_opus& f)
             result *= 2;
         }
         f.header.blocksize = result / 2;
+    }
+    // validate application type
+    if (f.application_type != OPUS_APPLICATION_VOIP
+            && f.application_type != OPUS_APPLICATION_AUDIO
+            && f.application_type != OPUS_APPLICATION_RESTRICTED_LOWDELAY)
+    {
+        LOG_WARNING("Opus: bad application type, using OPUS_APPLICATION_AUDIO");
+        f.application_type = OPUS_APPLICATION_AUDIO;
     }
     // bitrate, complexity and signal type should be validated by opus
 }
@@ -191,7 +213,7 @@ aoo_error encoder_setformat(void *enc, aoo_format *f){
         return AOO_ERROR_UNSPECIFIED;
     }
     auto error = opus_multistream_encoder_init(state, fmt->header.samplerate,
-        nchannels, nchannels, 0, mapping, OPUS_APPLICATION_AUDIO);
+        nchannels, nchannels, 0, mapping, fmt->application_type);
     if (error == OPUS_OK){
         c->state = state;
         c->size = size;
@@ -260,7 +282,7 @@ aoo_error decoder_decode(void *dec,
         if (result > 0){
             *n = result;
             return AOO_OK;
-        } else {
+        } else if (result < 0) {
             LOG_VERBOSE("Opus: opus_decode_float() failed with error code " << result);
         }
     }
@@ -305,7 +327,7 @@ aoo_error decoder_setformat(void *dec, aoo_format *f)
     if (error == OPUS_OK){
         c->state = state;
         c->size = size;
-        // these are actually encoder settings and do anything on the decoder
+        // these are actually encoder settings and don't do anything on the decoder
     #if 0
         // complexity
         opus_multistream_decoder_ctl(c->state, OPUS_SET_COMPLEXITY(fmt->complexity));
@@ -332,12 +354,13 @@ aoo_error decoder_setformat(void *dec, aoo_format *f)
 /*////////////////////// codec ////////////////////*/
 
 aoo_error serialize(const aoo_format *f, char *buf, int32_t *size){
-    if (*size >= 12){
+    if (*size >= 16){
         auto fmt = (const aoo_format_opus *)f;
-        aoo::to_bytes<int32_t>(fmt->bitrate, buf);
-        aoo::to_bytes<int32_t>(fmt->complexity, buf + 4);
-        aoo::to_bytes<int32_t>(fmt->signal_type, buf + 8);
-        *size = 12;
+        aoo::to_bytes<int32_t>(fmt->application_type, buf);
+        aoo::to_bytes<int32_t>(fmt->bitrate, buf + 4);
+        aoo::to_bytes<int32_t>(fmt->complexity, buf + 8);
+        aoo::to_bytes<int32_t>(fmt->signal_type, buf + 12);
+        *size = 16;
 
         return AOO_OK;
     } else {
@@ -348,7 +371,7 @@ aoo_error serialize(const aoo_format *f, char *buf, int32_t *size){
 
 aoo_error deserialize(const aoo_format *header, const char *buf,
                       int32_t size, aoo_format *f){
-    if (size < 12){
+    if (size < 16){
         LOG_ERROR("Opus: couldn't read format - not enough data!");
         return AOO_ERROR_UNSPECIFIED;
     }
@@ -364,9 +387,10 @@ aoo_error deserialize(const aoo_format *header, const char *buf,
     fmt->header.nchannels = header->nchannels;
     fmt->header.samplerate = header->samplerate;
     // options
-    fmt->bitrate = aoo::from_bytes<int32_t>(buf);
-    fmt->complexity = aoo::from_bytes<int32_t>(buf + 4);
-    fmt->signal_type = aoo::from_bytes<int32_t>(buf + 8);
+    fmt->application_type = aoo::from_bytes<int32_t>(buf);
+    fmt->bitrate = aoo::from_bytes<int32_t>(buf + 4);
+    fmt->complexity = aoo::from_bytes<int32_t>(buf + 8);
+    fmt->signal_type = aoo::from_bytes<int32_t>(buf + 12);
 
     return AOO_OK;
 }

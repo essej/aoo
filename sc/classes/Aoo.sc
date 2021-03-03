@@ -143,9 +143,10 @@ AooFormatOpus : AooFormat {
 	var <>bitRate;
 	var <>complexity;
 	var <>signalType;
+	var <>applicationType;
 
-	*new { arg channels, blockSize, sampleRate, bitRate, complexity, signalType;
-		^super.newCopyArgs(channels, blockSize, sampleRate, bitRate, complexity, signalType);
+	*new { arg channels, blockSize, sampleRate, bitRate, complexity, signalType, applicationType;
+		^super.newCopyArgs(channels, blockSize, sampleRate, bitRate, complexity, signalType, applicationType);
 	}
 }
 

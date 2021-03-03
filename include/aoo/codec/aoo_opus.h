@@ -20,8 +20,14 @@ extern "C"
 typedef struct aoo_format_opus
 {
     aoo_format header;
-    int32_t bitrate; // 0: default
-    int32_t complexity; // 0: default
+    // OPUS_APPLICATION_VOIP, OPUS_APPLICATION_AUDIO or
+    // OPUS_APPLICATION_RESTRICTED_LOWDELAY
+    int32_t application_type;
+    // bitrate in bits/s, OPUS_BITRATE_MAX or OPUS_AUTO
+    int32_t bitrate;
+    // complexity 0-10 or OPUS_AUTO
+    int32_t complexity;
+    // OPUS_SIGNAL_VOICE, OPUS_SIGNAL_MUSIC or OPUS_AUTO
     int32_t signal_type;
 } aoo_format_opus;
 
