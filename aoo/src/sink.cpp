@@ -498,12 +498,19 @@ aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t
         }
         timer_.reset();
     } else {
+        // update time DLL, but only if n matches blocksize!
         auto elapsed = timer_.get_elapsed();
-        dll_.update(elapsed);
-    #if AOO_DEBUG_DLL
-        DO_LOG_DEBUG("time elapsed: " << elapsed << ", period: "
-                  << dll_.period() << ", samplerate: " << dll_.samplerate());
-    #endif
+        if (nsamples == blocksize_){
+            dll_.update(elapsed);
+        #if AOO_DEBUG_DLL
+            DO_LOG_DEBUG("time elapsed: " << elapsed << ", period: "
+                      << dll_.period() << ", samplerate: " << dll_.samplerate());
+        #endif
+        } else {
+            // reset time DLL with nominal samplerate
+            dll_.setup(samplerate_, blocksize_,
+                       bandwidth_.load(std::memory_order_relaxed), elapsed);
+        }
     }
 
     bool didsomething = false;

@@ -515,8 +515,8 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         timer_.reset();
     } else {
         // update time DLL, but only if n matches blocksize!
+        auto elapsed = timer_.get_elapsed();
         if (nsamples == blocksize_){
-            auto elapsed = timer_.get_elapsed();
             dll_.update(elapsed);
         #if AOO_DEBUG_DLL
             DO_LOG_DEBUG("time elapsed: " << elapsed << ", period: "
@@ -525,7 +525,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         } else {
             // reset time DLL with nominal samplerate
             dll_.setup(samplerate_, blocksize_,
-                       bandwidth_.load(std::memory_order_relaxed), 0);
+                       bandwidth_.load(std::memory_order_relaxed), elapsed);
         }
     }
 
