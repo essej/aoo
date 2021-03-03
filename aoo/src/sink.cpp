@@ -1342,6 +1342,8 @@ int32_t source_desc::poll_events(sink_imp& s, aoo_eventhandler fn, void *user){
 }
 
 int32_t source_desc::recover(const char *reason, int32_t n){
+    LOG_VERBOSE("recovering from " << reason);
+
     int32_t limit;
     if (n > 0){
         limit = std::min<int32_t>(n, jitterbuffer_.size());
@@ -1356,11 +1358,16 @@ int32_t source_desc::recover(const char *reason, int32_t n){
         jitterbuffer_.clear();
     }
 
-    // push empty blocks to keep the buffer full, but leave room for one block!
-    int count = 0;
+
     double sr = decoder_->samplerate();
     auto nsamples = decoder_->blocksize() * decoder_->nchannels();
-    for (int i = 0; i < limit && audioqueue_.write_available() > 1; ++i){
+
+    // reduce limit by blocks in resampler!
+    limit -= resampler_.balance() / nsamples;
+
+    // push empty blocks to keep the buffer full!
+    int count = 0;
+    for (int i = 0; i < limit && audioqueue_.write_available(); ++i){
         auto b = (block_data *)audioqueue_.write_data();
         // push nominal samplerate, channel + silence
         b->header.samplerate = sr;
@@ -1375,10 +1382,8 @@ int32_t source_desc::recover(const char *reason, int32_t n){
         count++;
     }
 
-    if (n > 0 || count > 0){
-        LOG_VERBOSE("dropped " << n << " blocks and wrote " << count
-                    << " empty blocks for " << reason);
-    }
+    LOG_VERBOSE("dropped " << n << " blocks and wrote " << count
+                << " empty blocks");
 
     return n;
 }
