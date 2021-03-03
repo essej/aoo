@@ -754,11 +754,14 @@ void source_imp::update_audioqueue(){
         int32_t bufsize = (double)buffersize_.load() * 0.001 * encoder_->samplerate();
         auto d = div(bufsize, encoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
-        // minimum buffer size increases when upsampling!
-        int32_t minbuffers = std::ceil((double)encoder_->samplerate() / (double)samplerate_);
-        nbuffers = std::max<int32_t>(nbuffers, minbuffers);
+        // minimum buffer size depends on resampling and reblocking!
+        auto downsample = (double)encoder_->samplerate() / (double)samplerate_;
+        auto reblock = (double)encoder_->blocksize() / (double)blocksize_;
+        int32_t minblocks = std::ceil(downsample * reblock);
+        nbuffers = std::max<int32_t>(nbuffers, minblocks);
         LOG_DEBUG("aoo_source: buffersize (ms): " << buffersize_.load()
-                  << ", samples: " << bufsize << ", nbuffers = " << nbuffers);
+                  << ", samples: " << bufsize << ", nbuffers: " << nbuffers
+                  << ", minimum: " << minblocks);
 
         // resize audio buffer
         auto nsamples = encoder_->blocksize() * encoder_->nchannels();
@@ -785,7 +788,7 @@ void source_imp::update_historybuffer(){
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         history_.resize(nbuffers);
         LOG_DEBUG("aoo_source: history buffersize (ms): " << resend_buffersize_.load()
-                  << ", samples: " << bufsize << ", nbuffers = " << nbuffers);
+                  << ", samples: " << bufsize << ", nbuffers: " << nbuffers);
 
     }
 }

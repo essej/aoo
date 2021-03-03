@@ -885,14 +885,14 @@ void source_desc::update(const sink_imp& s){
         int32_t bufsize = (double)s.buffersize() * 0.001 * decoder_->samplerate();
         // number of buffers (round up!)
         int32_t nbuffers = std::ceil((double)bufsize / (double)decoder_->blocksize());
-        // minimum buffer size depends on resampling + reblocking!
+        // minimum buffer size depends on resampling and reblocking!
         auto downsample = (double)decoder_->samplerate() / (double)s.samplerate();
         auto reblock = (double)s.blocksize() / (double)decoder_->blocksize();
         minblocks_ = std::ceil(downsample * reblock);
         nbuffers = std::max<int32_t>(nbuffers, minblocks_);
         LOG_DEBUG("source_desc: buffersize (ms): " << s.buffersize()
-                  << ", samples: " << bufsize << ", nbuffers = " << nbuffers
-                  << ", limit: " << minblocks_);
+                  << ", samples: " << bufsize << ", nbuffers: " << nbuffers
+                  << ", minimum: " << minblocks_);
 
     #if 0
         // don't touch the event queue once constructed
