@@ -205,7 +205,7 @@ std::shared_ptr<user> server_imp::get_user(const std::string& name,
     } else {
         // create new user (LATER add option to disallow this)
         if (true){
-            auto id = next_user_id_++;
+            auto id = get_next_user_id();
             usr = std::make_shared<user>(name, pwd, id, version);
             users_.push_back(usr);
             e = error::none;
@@ -381,6 +381,11 @@ void server_imp::send_event(std::unique_ptr<ievent> e){
     default:
         break;
     }
+}
+
+int32_t server_imp::get_next_user_id(){
+    // LATER make random user ID
+    return next_user_id_++;
 }
 
 bool server_imp::receive(){

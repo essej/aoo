@@ -1761,14 +1761,13 @@ void peer::send(const sendfn& reply, time_tag now){
         if (delta >= client_->request_interval()){
             char buf[64];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
-            // Include group+name+id, so peers can identify us even
+            // Include user ID, so peers can identify us even
             // if we're behind a symmetric NAT.
             // NOTE: This trick doesn't work if both parties are
             // behind a symmetrict NAT; in that case, UDP hole punching
             // simply doesn't work.
             msg << osc::BeginMessage(AOO_NET_MSG_PEER_PING)
-                << group_.c_str() << user_.c_str() << (int32_t)id_
-                << osc::EndMessage;
+                << (int32_t)id_ << osc::EndMessage;
 
             for (auto& addr : addresses_){
                 client_->udp().send_peer_message(msg.Data(), msg.Size(),
@@ -1801,17 +1800,15 @@ bool peer::handle_first_message(const osc::ReceivedMessage &msg, int onset,
     }
 
     // We might get a message from a peer behind a symmetric NAT.
-    // To be sure, check group, user and ID, but only if
-    // provided (for backwards compatibility with older AOO clients)
+    // To be sure, check user ID, but only if provided
+    // (for backwards compatibility with older AOO clients)
     auto pattern = msg.AddressPattern() + onset;
     if (!strcmp(pattern, AOO_NET_MSG_PING)){
-        if (msg.ArgumentCount() >= 3){
+        if (msg.ArgumentCount() > 0){
             try {
                 auto it = msg.ArgumentsBegin();
-                std::string group = (it++)->AsString();
-                std::string user = (it++)->AsString();
-                int32_t id = (it++)->AsInt32();
-                if (group == group_ && user == user_ && id == id_){
+                int32_t id = it->AsInt32();
+                if (id == id_){
                     real_address_ = addr;
                     connected_.store(true);
                     LOG_WARNING("aoo_client: peer " << *this

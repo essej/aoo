@@ -281,6 +281,8 @@ private:
 
     void send_event(std::unique_ptr<ievent> e);
 
+    int32_t get_next_user_id();
+
     // signal
     std::atomic<bool> quit_{false};
 
