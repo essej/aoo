@@ -18,6 +18,8 @@ message(STATUS "time filter check: ${TIMEFILTER_CHECK}")
 # compile time debugging options
 option(DEBUG_MEMORY "debug memory usage" OFF)
 
+option(DEBUG_DATA "debug memory usage" OFF)
+
 option(DEBUG_TIMEFILTER "debug time filter" OFF)
 
 option(DEBUG_DLL "debug delay locked loop" OFF)
@@ -34,6 +36,7 @@ set(OPTIONS
     "-DAOO_TIMEFILTER_TOLERANCE=${TIMEFILTER_TOLERANCE}"
     "-DAOO_TIMEFILTER_CHECK=$<BOOL:${TIMEFILTER_CHECK}>"
     "-DAOO_DEBUG_MEMORY=$<BOOL:${DEBUG_MEMORY}>"
+    "-DAOO_DEBUG_DATA=$<BOOL:${DEBUG_DATA}>"
     "-DAOO_DEBUG_TIMEFILTER=$<BOOL:${DEBUG_TIMEFILTER}>"
     "-DAOO_DEBUG_DLL=$<BOOL:${DEBUG_DLL}>"
     "-DAOO_DEBUG_RESAMPLING=$<BOOL:${DEBUG_RESAMPLING}>"
