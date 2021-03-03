@@ -852,10 +852,13 @@ void source_imp::send_format(const sendfn& fn){
 void source_imp::send_data(const sendfn& fn){
     int32_t last_sequence = 0;
 
+    // NOTE: we have to lock *before* calling 'read_available'
+    // on the audio queue!
+    shared_lock updatelock(update_mutex_); // reader lock
+
     // *first* check for dropped blocks
     auto dropped = dropped_.exchange(0, std::memory_order_relaxed);
     while (dropped--){
-        shared_lock updatelock(update_mutex_); // reader lock!
         if (!encoder_){
             return;
         }
@@ -886,11 +889,12 @@ void source_imp::send_data(const sendfn& fn){
             d.channel = sink.channel.load(std::memory_order_relaxed); // !
             send_packet(fn, sink, salt, d);
         }
+
+        updatelock.lock();
     }
 
     // now send audio
     while (audioqueue_.read_available()){
-        shared_lock updatelock(update_mutex_); // reader lock!
         if (!encoder_){
             return;
         }
@@ -977,6 +981,8 @@ void source_imp::send_data(const sendfn& fn){
                     dosend(dv.quot, ptr, dv.rem);
                 }
             }
+
+            updatelock.lock();
         } else {
             // drain buffer anyway
             audioqueue_.read_commit();
@@ -986,6 +992,8 @@ void source_imp::send_data(const sendfn& fn){
     // handle overflow (with 64 samples @ 44.1 kHz this happens every 36 days)
     // for now just force a reset by changing the salt, LATER think how to handle this better
     if (last_sequence == INT32_MAX){
+        updatelock.unlock();
+        // not perfectly thread-safe, but shouldn't cause problems AFAICT....
         scoped_lock lock(update_mutex_);
         sequence_ = 0;
         salt_ = make_salt();
