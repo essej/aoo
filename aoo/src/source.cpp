@@ -465,13 +465,6 @@ aoo_error aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n
 }
 
 aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, uint64_t t){
-#if 1
-    if (sinks_.empty()){
-        timer_.reset(); // !
-        return AOO_ERROR_UNSPECIFIED;
-    }
-#endif
-
     auto state = state_.load();
     if (state == stream_state::stop){
         return AOO_ERROR_UNSPECIFIED; // pausing
@@ -500,21 +493,9 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         }
     }
 
-    // the mutex should be available most of the time.
-    // it is only locked exclusively when setting certain options,
-    // e.g. changing the buffer size.
-    shared_lock lock(update_mutex_, std::try_to_lock); // reader lock!
-    if (!lock.owns_lock()){
-        LOG_VERBOSE("aoo_source: process would block");
-        dropped_++;
-        return AOO_ERROR_UNSPECIFIED; // ?
-    }
-
-    if (!encoder_){
-        return AOO_ERROR_UNSPECIFIED;
-    }
-
     // update timer
+    // always do this, even if there are no sinks.
+    // do it *before* trying to lock the mutex
     double error;
     auto timerstate = timer_.update(t, error);
     if (timerstate == timer::state::reset){
@@ -547,6 +528,27 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
                        bandwidth_.load(std::memory_order_relaxed), 0);
         }
     }
+
+    // the mutex should be available most of the time.
+    // it is only locked exclusively when setting certain options,
+    // e.g. changing the buffer size.
+    shared_lock lock(update_mutex_, std::try_to_lock); // reader lock!
+    if (!lock.owns_lock()){
+        LOG_VERBOSE("aoo_source: process would block");
+        dropped_++;
+        return AOO_ERROR_UNSPECIFIED; // ?
+    }
+
+    if (!encoder_){
+        return AOO_ERROR_UNSPECIFIED;
+    }
+
+#if 1
+    if (sinks_.empty()){
+        // nothing to do
+        return AOO_OK;
+    }
+#endif
 
     // non-interleaved -> interleaved
     // only as many channels as current format needs
@@ -655,21 +657,21 @@ sink_desc * source_imp::find_sink(const ip_address& addr, aoo_id id){
 
 aoo_error source_imp::set_format(aoo_format &f){
     std::unique_ptr<encoder> new_encoder;
-    {
-        // create a new encoder if necessary
-        scoped_shared_lock lock(update_mutex_); // reader lock!
-        if (!encoder_ || strcmp(encoder_->name(), f.codec)){
-            auto codec = aoo::find_codec(f.codec);
-            if (codec){
-                new_encoder = codec->create_encoder();
-                if (!new_encoder){
-                    LOG_ERROR("couldn't create encoder!");
-                    return AOO_ERROR_UNSPECIFIED;
-                }
-            } else {
-                LOG_ERROR("codec '" << f.codec << "' not supported!");
+
+    // create a new encoder if necessary
+    // This is the only thread where the decoder can possibly
+    // change, so we don't need a lock to safely *read* it!
+    if (!encoder_ || strcmp(encoder_->name(), f.codec)){
+        auto codec = aoo::find_codec(f.codec);
+        if (codec){
+            new_encoder = codec->create_encoder();
+            if (!new_encoder){
+                LOG_ERROR("couldn't create encoder!");
                 return AOO_ERROR_UNSPECIFIED;
             }
+        } else {
+            LOG_ERROR("codec '" << f.codec << "' not supported!");
+            return AOO_ERROR_UNSPECIFIED;
         }
     }
 
@@ -770,7 +772,8 @@ void source_imp::update_audioqueue(){
 void source_imp::update_resampler(){
     if (encoder_){
         resampler_.setup(blocksize_, encoder_->blocksize(),
-                         samplerate_, encoder_->samplerate(), encoder_->nchannels());
+                         samplerate_, encoder_->samplerate(),
+                         encoder_->nchannels());
     }
 }
 

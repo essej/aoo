@@ -476,19 +476,13 @@ aoo_error aoo_sink_process(aoo_sink *sink, aoo_sample **data,
 #define AOO_MAXNUMEVENTS 256
 
 aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t){
-#if 1
-    if (sources_.empty() && requestqueue_.empty()){
-        timer_.reset(); // !
-        return AOO_ERROR_UNSPECIFIED;
-    }
-#endif
-
     // zero outputs
     for (int i = 0; i < nchannels_; ++i){
         std::fill(data[i], data[i] + nsamples, 0);
     }
 
     // update timer
+    // always do this, even if there are no sources!
     double error;
     auto state = timer_.update(t, error);
     if (state == timer::state::reset){
