@@ -222,6 +222,8 @@ aoo_error encode(void *enc,
     auto nbytes = samplesize * n;
 
     if (*size < nbytes){
+        LOG_WARNING("PCM: size mismatch! input bytes: "
+                    << nbytes << ", output bytes " << *size);
         return AOO_ERROR_UNSPECIFIED;
     }
 
@@ -282,6 +284,8 @@ aoo_error decode(void *dec,
     auto nsamples = size / samplesize;
 
     if (*n < nsamples){
+        LOG_WARNING("PCM: size mismatch! input samples: "
+                    << nsamples << ", output samples " << *n);
         return AOO_ERROR_UNSPECIFIED;
     }
 
