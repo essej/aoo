@@ -87,7 +87,7 @@ namespace aoo {
 
 class Log {
 public:
-    Log(int level)
+    Log(int level = AOO_LOGLEVEL_DEBUG)
         : level_(level){}
     ~Log();
     template<typename T>
