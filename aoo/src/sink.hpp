@@ -365,6 +365,7 @@ private:
     std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
     std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT * 0.001 };
     std::atomic<bool> resend_{AOO_RESEND_DATA};
+    std::atomic<bool> timer_check_{ AOO_TIMER_CHECK };
     // events
     lockfree::unbounded_mpsc_queue<source_event, aoo::allocator<source_event>> eventqueue_;
     void send_event(const source_event& e, aoo_thread_level level);

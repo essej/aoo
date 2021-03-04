@@ -205,6 +205,7 @@ class source_imp final : public source {
     std::atomic<int32_t> redundancy_{ AOO_SEND_REDUNDANCY };
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
     std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };
+    std::atomic<bool> timer_check_{ AOO_TIMER_CHECK };
 
     // helper methods
     aoo_error set_format(aoo_format& f);

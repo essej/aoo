@@ -80,11 +80,12 @@ aoo_error aoo::sink_imp::setup(int32_t samplerate,
         }
 
         // always reset timer + time DLL filter
-        timer_.setup(samplerate_, blocksize_);
+        timer_.setup(samplerate_, blocksize_, timer_check_.load());
 
         return AOO_OK;
+    } else {
+        return AOO_ERROR_UNSPECIFIED;
     }
-    return AOO_ERROR_UNSPECIFIED;
 }
 
 aoo_error aoo_sink_invite_source(aoo_sink *sink, const void *address,
@@ -171,6 +172,11 @@ aoo_error aoo::sink_imp::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
+    // timer check
+    case AOO_OPT_TIMER_CHECK:
+        CHECKARG(aoo_bool);
+        timer_check_.store(as<aoo_bool>(ptr));
+        break;
     // timefilter bandwidth
     case AOO_OPT_DLL_BANDWIDTH:
     {
@@ -250,6 +256,11 @@ aoo_error aoo::sink_imp::get_option(int32_t opt, void *ptr, int32_t size)
     case AOO_OPT_BUFFERSIZE:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = buffersize_.load();
+        break;
+    // timer check
+    case AOO_OPT_TIMER_CHECK:
+        CHECKARG(aoo_bool);
+        as<aoo_bool>(ptr) = timer_check_.load();
         break;
     // timefilter bandwidth
     case AOO_OPT_DLL_BANDWIDTH:

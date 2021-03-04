@@ -74,6 +74,11 @@ AOO_API void aoo_set_allocator(const aoo_allocator *alloc);
 #ifndef AOO_SINK_BUFFERSIZE
  #define AOO_SINK_BUFFERSIZE 50
 #endif
+
+// enable/disable dynamic resampling
+#ifndef AOO_TIMER_CHECK
+ #define AOO_TIMER_CHECK 1
+#endif
 #endif
 
 // time DLL filter bandwidth
@@ -314,6 +319,14 @@ typedef enum aoo_option
     // and is used to compensate clock drift via dynamic resampling.
     // See the paper "Using a DLL to filter time" by Fons Adriaensen.
     AOO_OPT_DLL_BANDWIDTH,
+    // Enable/disable timer check (aoo_bool)
+    // ---
+    // Enable to catch timing problems, e.g. when the host accidentally
+    // blocks the audio callback, which would confuse the time DLL filter.
+    // Also, timing gaps are handled by sending empty blocks at the source
+    // resp. dropping blocks at the sink.
+    // NOTE: only takes effect on source/sink setup!
+    AOO_OPT_TIMER_CHECK,
     // Sink channel onset (int32_t)
     // ---
     // The channel onset of the sink where a given source
@@ -493,6 +506,14 @@ static inline aoo_error aoo_source_get_buffersize(aoo_source *src, int32_t *n) {
     return aoo_source_get_option(src, AOO_OPT_BUFFERSIZE, AOO_ARG(*n));
 }
 
+static inline aoo_error aoo_source_set_timer_check(aoo_source *src, aoo_bool b) {
+    return aoo_source_set_option(src, AOO_OPT_TIMER_CHECK, AOO_ARG(b));
+}
+
+static inline aoo_error aoo_source_get_timer_check(aoo_source *src, aoo_bool *b) {
+    return aoo_source_set_option(src, AOO_OPT_TIMER_CHECK, AOO_ARG(*b));
+}
+
 static inline aoo_error aoo_source_set_dll_bandwidth(aoo_source *src, float n) {
     return aoo_source_set_option(src, AOO_OPT_DLL_BANDWIDTH, AOO_ARG(n));
 }
@@ -624,6 +645,15 @@ static inline aoo_error aoo_sink_set_buffersize(aoo_sink *sink, int32_t n) {
 static inline aoo_error aoo_sink_get_buffersize(aoo_sink *sink, int32_t *n) {
     return aoo_sink_get_option(sink, AOO_OPT_BUFFERSIZE, AOO_ARG(*n));
 }
+
+static inline aoo_error aoo_sink_set_timer_check(aoo_sink *sink, aoo_bool b) {
+    return aoo_sink_set_option(sink, AOO_OPT_TIMER_CHECK, AOO_ARG(b));
+}
+
+static inline aoo_error aoo_sink_get_timer_check(aoo_sink *sink, aoo_bool *b) {
+    return aoo_sink_set_option(sink, AOO_OPT_TIMER_CHECK, AOO_ARG(*b));
+}
+
 
 static inline aoo_error aoo_sink_set_dll_bandwith(aoo_sink *sink, float n) {
     return aoo_sink_set_option(sink, AOO_OPT_DLL_BANDWIDTH, AOO_ARG(n));

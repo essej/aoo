@@ -18,9 +18,10 @@ public:
         error
     };
     timer() = default;
-    timer(const timer& other);
-    timer& operator=(const timer& other);
-    void setup(int32_t sr, int32_t blocksize);
+    timer(timer&& other);
+    timer& operator=(timer&& other);
+
+    void setup(int32_t sr, int32_t blocksize, bool check);
     void reset();
     double get_elapsed() const {
         return elapsed_.load(std::memory_order_relaxed);
@@ -33,15 +34,26 @@ private:
     std::atomic<uint64_t> last_;
     std::atomic<double> elapsed_{0};
 
-#if AOO_TIMEFILTER_CHECK
     // moving average filter to detect timing issues
-    static const size_t buffersize = 64;
+    struct moving_average_check {
+        static const size_t buffersize = 64;
 
-    double delta_ = 0;
-    double sum_ = 0;
-    std::array<double, buffersize> buffer_;
-    int32_t head_ = 0;
-#endif
+        moving_average_check(double delta)
+            : delta_(delta) {
+            static_assert(is_pow2(buffersize),
+                          "buffer size must be power of 2!");
+        }
+
+        state check(double delta, double& error);
+        void reset();
+
+        double delta_ = 0;
+        double sum_ = 0;
+        std::array<double, buffersize> buffer_;
+        int32_t head_ = 0;
+    };
+
+    std::unique_ptr<moving_average_check> mavg_check_;
 };
 
 }

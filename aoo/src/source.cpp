@@ -104,6 +104,11 @@ aoo_error aoo::source_imp::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
+    // timer check
+    case AOO_OPT_TIMER_CHECK:
+        CHECKARG(aoo_bool);
+        timer_check_.store(as<aoo_bool>(ptr));
+        break;
     // timefilter bandwidth
     case AOO_OPT_DLL_BANDWIDTH:
         CHECKARG(float);
@@ -179,6 +184,11 @@ aoo_error aoo::source_imp::get_option(int32_t opt, void *ptr, int32_t size)
     case AOO_OPT_BUFFERSIZE:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = buffersize_.load();
+        break;
+    // timer check
+    case AOO_OPT_TIMER_CHECK:
+        CHECKARG(aoo_bool);
+        as<aoo_bool>(ptr) = timer_check_.load();
         break;
     // time filter bandwidth
     case AOO_OPT_DLL_BANDWIDTH:
@@ -289,8 +299,8 @@ aoo_error aoo_source_setup(aoo_source *src, int32_t samplerate,
     return src->setup(samplerate, blocksize, nchannels);
 }
 
-aoo_error aoo::source_imp::setup(int32_t samplerate,
-                                 int32_t blocksize, int32_t nchannels){
+aoo_error aoo::source_imp::setup(int32_t samplerate, int32_t blocksize,
+                                 int32_t nchannels){
     scoped_lock lock(update_mutex_); // writer lock!
     if (samplerate > 0 && blocksize > 0 && nchannels > 0)
     {
@@ -315,7 +325,7 @@ aoo_error aoo::source_imp::setup(int32_t samplerate,
         }
 
         // always reset timer + time DLL filter
-        timer_.setup(samplerate_, blocksize_);
+        timer_.setup(samplerate_, blocksize_, timer_check_.load());
 
         return AOO_OK;
     } else {
