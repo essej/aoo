@@ -76,11 +76,12 @@ aoo_error aoo::sink_imp::setup(int32_t samplerate,
             samplerate_ = samplerate;
             blocksize_ = blocksize;
 
-            // reset timer + time DLL filter
-            timer_.setup(samplerate_, blocksize_);
-
             reset_sources();
         }
+
+        // always reset timer + time DLL filter
+        timer_.setup(samplerate_, blocksize_);
+
         return AOO_OK;
     }
     return AOO_ERROR_UNSPECIFIED;

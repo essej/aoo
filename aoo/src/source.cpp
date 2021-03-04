@@ -311,12 +311,11 @@ aoo_error aoo::source_imp::setup(int32_t samplerate,
                 update_historybuffer();
             }
 
-            // this will also implicitly reset the time DLL filter (see process())
-            timer_.setup(samplerate_, blocksize_);
-
-            // always start new stream
             start_new_stream();
         }
+
+        // always reset timer + time DLL filter
+        timer_.setup(samplerate_, blocksize_);
 
         return AOO_OK;
     } else {
