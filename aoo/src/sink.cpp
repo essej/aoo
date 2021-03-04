@@ -1333,11 +1333,7 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
 
         if (dropped_ > 0.1){
             // skip audio and decrement block counter proportionally
-            if (dynamic_resampling){
-                dropped_ -= sr / decoder_->samplerate();
-            } else {
-                dropped_ -= 1.0;
-            }
+            dropped_ -= sr / decoder_->samplerate();
         } else {
             // try to write audio into resampler
             if (!resampler_.write(d->data, insize)){
