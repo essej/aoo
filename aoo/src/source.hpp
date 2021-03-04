@@ -176,6 +176,7 @@ class source_imp final : public source {
     };
     std::atomic<stream_state> state_{stream_state::stop};
     // timing
+    std::atomic<double> realsr_{0};
     time_dll dll_;
     timer timer_;
     // buffers and queues

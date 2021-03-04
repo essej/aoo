@@ -201,6 +201,11 @@ aoo_error aoo::source_imp::get_option(int32_t opt, void *ptr, int32_t size)
         CHECKARG(aoo_bool);
         as<aoo_bool>(ptr) = dynamic_resampling_.load();
         break;
+    // real samplerate
+    case AOO_OPT_REAL_SAMPLERATE:
+        CHECKARG(double);
+        as<double>(ptr) = realsr_.load(std::memory_order_relaxed);
+        break;
     // time DLL filter bandwidth
     case AOO_OPT_DLL_BANDWIDTH:
         CHECKARG(float);
@@ -321,6 +326,8 @@ aoo_error aoo::source_imp::setup(int32_t samplerate, int32_t blocksize,
             nchannels_ = nchannels;
             samplerate_ = samplerate;
             blocksize_ = blocksize;
+
+            realsr_.store(samplerate);
 
             if (encoder_){
                 update_audioqueue();
@@ -523,6 +530,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         LOG_DEBUG("setup time DLL filter for source");
         auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
         dll_.setup(samplerate_, blocksize_, bw, 0);
+        realsr_.store(samplerate_, std::memory_order_relaxed);
         // it is safe to set 'lastpingtime' after updating
         // the timer, because in the worst case the ping
         // is simply sent the next time.
@@ -548,6 +556,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
             auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
             dll_.setup(samplerate_, blocksize_, bw, elapsed);
         }
+        realsr_.store(dll_.samplerate(), std::memory_order_relaxed);
     }
 
     // the mutex should be available most of the time.
@@ -591,7 +600,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
 
     double sr;
     if (dynamic_resampling){
-        sr = dll_.samplerate() / (double)samplerate_
+        sr = realsr_.load(std::memory_order_relaxed) / (double)samplerate_
                 * (double)encoder_->samplerate();
     } else {
         sr = encoder_->samplerate();

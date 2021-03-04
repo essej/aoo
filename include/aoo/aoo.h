@@ -326,6 +326,10 @@ typedef enum aoo_option
     // can be fine-tuned with the AOO_OPT_DLL_BANDWIDTH option.
     // See the paper "Using a DLL to filter time" by Fons Adriaensen.
     AOO_OPT_DYNAMIC_RESAMPLING,
+    // Real samplerate (double)
+    // ---
+    // Get effective samplerate as estimated by DLL.
+    AOO_OPT_REAL_SAMPLERATE,
     // DLL filter bandwidth (float)
     // ---
     // Used for dynamic resampling, see AOO_OPT_DYNAMIC_RESAMPLING.
@@ -533,6 +537,10 @@ static inline aoo_error aoo_source_get_dynamic_resampling(aoo_source *src, aoo_b
     return aoo_source_get_option(src, AOO_OPT_DYNAMIC_RESAMPLING, AOO_ARG(*b));
 }
 
+static inline aoo_error aoo_source_get_real_samplerate(aoo_source *src, double *sr) {
+    return aoo_source_get_option(src, AOO_OPT_REAL_SAMPLERATE, AOO_ARG(*sr));
+}
+
 static inline aoo_error aoo_source_set_dll_bandwidth(aoo_source *src, float n) {
     return aoo_source_set_option(src, AOO_OPT_DLL_BANDWIDTH, AOO_ARG(n));
 }
@@ -679,6 +687,10 @@ static inline aoo_error aoo_sink_set_dynamic_resampling(aoo_sink *sink, aoo_bool
 
 static inline aoo_error aoo_sink_get_dynamic_resampling(aoo_sink *sink, aoo_bool *b) {
     return aoo_sink_get_option(sink, AOO_OPT_DYNAMIC_RESAMPLING, AOO_ARG(*b));
+}
+
+static inline aoo_error aoo_sink_get_real_samplerate(aoo_sink *sink, double *sr) {
+    return aoo_sink_get_option(sink, AOO_OPT_REAL_SAMPLERATE, AOO_ARG(*sr));
 }
 
 static inline aoo_error aoo_sink_set_dll_bandwith(aoo_sink *sink, float n) {

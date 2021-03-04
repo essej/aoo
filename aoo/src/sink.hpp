@@ -322,7 +322,7 @@ public:
 
     int32_t samplerate() const { return samplerate_; }
 
-    double real_samplerate() const { return dll_.samplerate(); }
+    double real_samplerate() const { return realsr_.load(std::memory_order_relaxed); }
 
     bool dynamic_resampling() const { return dynamic_resampling_.load(std::memory_order_relaxed);}
 
@@ -357,7 +357,7 @@ private:
     source_list sources_;
     sync::mutex source_mutex_;
     // timing
-    std::atomic<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
+    std::atomic<double> realsr_{0};
     time_dll dll_;
     timer timer_;
     // options
@@ -366,6 +366,7 @@ private:
     std::atomic<float> resend_interval_{ AOO_RESEND_INTERVAL * 0.001 };
     std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
     std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT * 0.001 };
+    std::atomic<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
     std::atomic<bool> resend_{AOO_RESEND_DATA};
     std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
     std::atomic<bool> timer_check_{ AOO_TIMER_CHECK };

@@ -76,6 +76,8 @@ aoo_error aoo::sink_imp::setup(int32_t samplerate,
             samplerate_ = samplerate;
             blocksize_ = blocksize;
 
+            realsr_.store(samplerate);
+
             reset_sources();
         }
 
@@ -272,6 +274,11 @@ aoo_error aoo::sink_imp::get_option(int32_t opt, void *ptr, int32_t size)
     case AOO_OPT_DYNAMIC_RESAMPLING:
         CHECKARG(aoo_bool);
         as<aoo_bool>(ptr) = dynamic_resampling_.load();
+        break;
+    // real samplerate
+    case AOO_OPT_REAL_SAMPLERATE:
+        CHECKARG(double);
+        as<double>(ptr) = realsr_.load(std::memory_order_relaxed);
         break;
     // time DLL filter bandwidth
     case AOO_OPT_DLL_BANDWIDTH:
@@ -517,6 +524,7 @@ aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t
         LOG_DEBUG("setup time DLL filter for sink");
         auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
         dll_.setup(samplerate_, blocksize_, bw, 0);
+        realsr_.store(samplerate_, std::memory_order_relaxed);
     } else if (state == timer::state::error){
         // recover sources
         int32_t xrunsamples = error * samplerate_ + 0.5;
@@ -540,6 +548,7 @@ aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t
             auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
             dll_.setup(samplerate_, blocksize_, bw, elapsed);
         }
+        realsr_.store(dll_.samplerate(), std::memory_order_relaxed);
     }
 
     bool didsomething = false;
@@ -1324,8 +1333,7 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
     auto outsize = nsamples * nchannels;
     // if dynamic resampling is disabled, this will simply
     // return the nominal samplerate
-    bool dynamic_resampling = s.dynamic_resampling();
-    double sr = dynamic_resampling ? s.real_samplerate() : s.samplerate();
+    double sr = s.real_samplerate();
 
     // write samples from buffer into resampler
     while (audioqueue_.read_available()){
