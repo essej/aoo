@@ -1,4 +1,4 @@
-#N canvas 387 24 652 559 12;
+#N canvas 715 143 652 559 12;
 #X declare -lib aoo;
 #X text 276 275 creation arguments:;
 #X msg 78 230 bufsize \$1;
@@ -21,8 +21,6 @@
 #X obj 37 80 outlet;
 #X msg 37 117 source_add <host> <port> <ID>;
 #X msg 37 166 source_state <host> <port> <ID> <state>;
-#X msg 36 218 source_format <host> <port> <ID> <codec> <blocksize>
-<samplerate> <channels> ...;
 #X msg 38 335 block_lost <host> <port> <ID> <count>;
 #X msg 39 391 block_reordered <host> <port> <ID> <count>;
 #X msg 39 446 block_resent <host> <port> <ID> <count>;
@@ -34,13 +32,15 @@
 #X text 65 586 a periodic message coming from the source. The sink
 automatically replies with another ping message to tell the source
 that it is actively listening., f 54;
+#X msg 36 218 source_format <host> <port> <ID> <codec> <channels> <blocksize>
+<samplerate> <channels> ..., f 53;
 #X connect 0 0 10 0;
 #X connect 10 0 11 0;
 #X connect 10 1 1 0;
 #X restore 182 324 pd events;
 #X text 35 24 aoo_receive~: receive one or more AoO audio streams;
 #X msg 521 468 \; pd dsp \$1;
-#X obj 521 445 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X obj 521 445 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
 1;
 #X msg 38 75 list_sources;
 #X text 138 66 list sources. This will output a message [source <host>
@@ -67,21 +67,21 @@ ID);
 #X text 199 445 the same port can also be used by sources;
 #X msg 70 175 uninvite;
 #X text 141 174 uninvite all AoO sources;
-#N canvas 816 170 712 528 advanced 0;
-#X obj 39 487 outlet;
-#X msg 60 142 timefilter \$1;
-#X obj 60 122 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#N canvas 763 168 527 586 advanced 0;
+#X obj 39 536 outlet;
+#X msg 71 190 timefilter \$1;
+#X obj 71 170 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X text 163 142 time DLL filter bandwidth (default: 0.0001);
-#X obj 69 175 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X text 174 190 time DLL filter bandwidth (default: 0.0001);
+#X obj 80 223 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X msg 69 199 packetsize \$1;
-#X text 175 197 max. UDP packet size (default: 512 bytes);
-#X msg 76 237 reset;
-#X text 133 230 reset all sources (e.g. if the stream seems to be broken
+#X msg 80 247 packetsize \$1;
+#X text 186 245 max. UDP packet size (default: 512 bytes);
+#X msg 87 285 reset;
+#X text 144 278 reset all sources (e.g. if the stream seems to be broken
 or out of sync), f 47;
-#X text 251 271 reset individual source;
-#X msg 82 270 reset localhost 9998 1;
+#X text 262 319 reset individual source;
+#X msg 93 318 reset localhost 9998 1;
 #X obj 39 18 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
 -262144 -1 -1 0 256;
 #X msg 99 18 0;
@@ -92,22 +92,26 @@ or out of sync), f 47;
 #X obj 49 73 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
 -262144 -1 -1 0 256;
 #X text 103 91 change AoO sink ID;
-#X msg 94 346 resend \$1;
-#X obj 94 324 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X msg 105 394 resend \$1;
+#X obj 105 372 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
-#X msg 99 401 resend_limit \$1;
-#X obj 99 380 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X msg 110 449 resend_limit \$1;
+#X obj 110 428 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X obj 105 431 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X obj 116 479 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X msg 105 452 resend_interval \$1;
-#X text 223 401 max. number of frames to request per message (default:
+#X msg 116 500 resend_interval \$1;
+#X text 234 449 max. number of frames to request per message (default:
 16), f 34;
-#X text 243 450 time interval (ms) between resend requests (default:
+#X text 254 498 time interval (ms) between resend requests (default:
 10 ms), f 34;
-#X text 175 340 enable/disable resending of lost packets (enabled by
+#X text 186 388 enable/disable resending of lost packets (enabled by
 default), f 40;
-#X text 91 300 packet resending:;
+#X text 102 348 packet resending:;
+#X text 268 119 get the current buffer fill ratio of the given source
+, f 27;
+#X text 269 152 0: empty \, 1: full;
+#X msg 59 125 fill_ratio localhost 9998 1;
 #X connect 1 0 0 0;
 #X connect 2 0 1 0;
 #X connect 4 0 5 0;
@@ -125,6 +129,7 @@ default), f 40;
 #X connect 22 0 21 0;
 #X connect 23 0 24 0;
 #X connect 24 0 0 0;
+#X connect 31 0 0 0;
 #X restore 89 262 pd advanced;
 #X text 37 509 see also;
 #X obj 107 509 aoo_send~;

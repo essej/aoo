@@ -32,11 +32,9 @@
 #X text 246 434 individual arguments can be "auto";
 #X obj 31 156 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X text 29 132 channels;
+#X text 29 133 channels;
 #X obj 101 281 t b f;
 #X obj 31 314 pack 2 64 44100 4;
-#X text 39 344 [format pcm <nchannels> <blocksize> <samplerate> <bitdepth>(
-;
 #X msg 31 372 format pcm \$1 \$2 \$3 \$4;
 #X msg 46 433 format pcm auto 256 auto 4;
 #X text 27 52 PCM gives you maximum audio quality at the cost of high
@@ -46,6 +44,8 @@ silence)., f 71;
 #X text 27 87 It is a good choice for LANs or inter-app streaming \,
 but for unreliable networks (like the internet) the "opus" codec should
 be preferred., f 72;
+#X msg 43 343 [format pcm <nchannels> <blocksize> <samplerate> <bitdepth>(
+;
 #X connect 1 0 5 0;
 #X connect 2 0 5 0;
 #X connect 3 0 5 0;
@@ -67,12 +67,12 @@ be preferred., f 72;
 #X connect 26 0 29 0;
 #X connect 28 0 29 0;
 #X connect 28 1 29 1;
-#X connect 29 0 31 0;
+#X connect 29 0 30 0;
+#X connect 30 0 0 0;
 #X connect 31 0 0 0;
-#X connect 32 0 0 0;
 #X restore 99 378 pd pcm;
-#N canvas 555 165 703 594 opus 0;
-#X obj 37 546 outlet;
+#N canvas 553 120 750 614 opus 0;
+#X obj 37 567 outlet;
 #X msg 208 201 48000;
 #X obj 113 151 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
@@ -82,20 +82,20 @@ be preferred., f 72;
 #X obj 278 151 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X msg 294 201 max;
-#X obj 359 256 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X obj 350 256 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X msg 50 474 format opus;
-#X text 140 474 all arguments are optional!;
+#X msg 50 495 format opus;
+#X text 140 495 all arguments are optional!;
 #X msg 287 175 auto;
-#X text 353 197 complexity (0 - 10);
+#X text 344 197 complexity (0 - 10);
 #X text 277 129 bitrate (bit/s);
-#X msg 368 277 auto;
-#X text 437 262 signal type;
-#X msg 440 305 auto;
-#X msg 482 306 music;
-#X msg 532 303 voice;
-#X obj 37 411 list prepend format opus;
-#X obj 37 441 list trim;
+#X msg 359 277 auto;
+#X text 423 262 signal type;
+#X msg 426 305 auto;
+#X msg 468 306 music;
+#X msg 518 307 voice;
+#X obj 37 432 list prepend format opus;
+#X obj 37 462 list trim;
 #X text 108 129 blocksize;
 #X msg 213 225 24000;
 #X msg 127 200 128;
@@ -105,7 +105,7 @@ be preferred., f 72;
 #X msg 143 298 2048;
 #X msg 120 173 auto;
 #X msg 202 174 auto;
-#N canvas 107 95 595 368 pack 0;
+#N canvas 107 95 739 368 pack 0;
 #X obj 36 40 inlet;
 #X obj 101 40 inlet;
 #X obj 163 41 inlet;
@@ -135,7 +135,11 @@ be preferred., f 72;
 #X obj 378 68 list;
 #X obj 378 92 t b a;
 #X obj 410 151 text set \$0-opus 0 5;
-#X msg 167 282 set auto auto auto auto auto auto;
+#X msg 167 282 set auto auto auto auto auto auto auto;
+#X obj 461 43 inlet;
+#X obj 461 67 list;
+#X obj 461 91 t b a;
+#X obj 493 120 text set \$0-opus 0 6;
 #X connect 0 0 15 0;
 #X connect 1 0 16 0;
 #X connect 2 0 17 0;
@@ -164,35 +168,46 @@ be preferred., f 72;
 #X connect 27 0 22 0;
 #X connect 27 1 28 0;
 #X connect 29 0 6 0;
+#X connect 30 0 31 0;
+#X connect 31 0 32 0;
+#X connect 32 0 22 0;
+#X connect 32 1 33 0;
 #X restore 37 355 pd pack;
-#X f 58;
-#X text 437 280 optimize for music or speech;
-#X text 355 218 higher values give better quality but need more CPU
+#X f 67;
+#X text 423 280 optimize for music or speech;
+#X text 346 218 higher values give better quality but need more CPU
 power. the default is 9, f 38;
-#X text 288 508 individual arguments can be "auto";
+#X text 288 529 individual arguments can be "auto";
 #X msg 218 250 16000;
 #X msg 222 275 12000;
 #X msg 229 300 8000;
 #X obj 278 326 t a, f 4;
-#X obj 359 326 t a;
-#X obj 440 329 t a;
+#X obj 350 326 t a;
+#X obj 426 329 t a;
 #X obj 37 152 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X text 31 129 channels;
 #X obj 113 327 t a;
 #X obj 195 327 t a;
-#X text 43 381 [format opus <nchannels> <blocksize> <samplerate> <bitrate>
-<complexity> <signaltype>(, f 88;
 #X text 395 129 NOTE: this is the *total* bitrate!;
-#X text 347 153 64000 bit/s per channel is considered to be transparent.
+#X text 343 151 64000 bit/s per channel is considered to be transparent.
 , f 41;
-#X msg 55 508 format opus auto 512 auto 64000;
+#X msg 55 529 format opus auto 512 auto 64000;
 #X text 31 23 Opus codec (compressed);
 #X text 31 50 Opus is a low latency codec explicitly designed for streaming
 audio over the internet \, see http://opus-codec.org/, f 86;
 #X text 30 86 It offers good audio quality even at low data rates and
 does packet loss concealment to hide the effects of packet loss in
 unreliable networks., f 85;
+#X text 524 336 application type;
+#X text 527 356 default is "audio";
+#X msg 52 386 format opus <nchannels> <blocksize> <samplerate> <bitrate>
+<complexity> <signaltype> <application>, f 52;
+#X msg 527 379 auto;
+#X obj 527 414 t a;
+#X msg 569 380 audio;
+#X msg 617 381 voip;
+#X msg 659 381 lowdelay;
 #X connect 1 0 42 0;
 #X connect 2 0 41 0;
 #X connect 3 0 42 0;
@@ -225,7 +240,12 @@ unreliable networks., f 85;
 #X connect 39 0 29 0;
 #X connect 41 0 29 1;
 #X connect 42 0 29 2;
-#X connect 46 0 0 0;
+#X connect 45 0 0 0;
+#X connect 52 0 53 0;
+#X connect 53 0 29 6;
+#X connect 54 0 53 0;
+#X connect 55 0 53 0;
+#X connect 56 0 53 0;
 #X restore 154 379 pd opus;
 #X text 97 354 set format:;
 #X obj 83 271 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
@@ -246,7 +266,7 @@ sinks;
 onset]);
 #X text 211 82 with optional channel onset;
 #X msg 543 299 \; pd dsp \$1;
-#X obj 543 275 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
+#X obj 543 275 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
 1;
 #X msg 60 172 list_sinks;
 #X text 147 169 list all sinks. This will output a message [sink <host>
