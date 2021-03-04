@@ -203,8 +203,9 @@ class source_imp final : public source {
     std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
     std::atomic<int32_t> resend_buffersize_{ AOO_RESEND_BUFFERSIZE };
     std::atomic<int32_t> redundancy_{ AOO_SEND_REDUNDANCY };
-    std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
+    std::atomic<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
     std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };
+    std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
     std::atomic<bool> timer_check_{ AOO_TIMER_CHECK };
 
     // helper methods

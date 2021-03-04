@@ -127,6 +127,15 @@ public:
     aoo_error get_timer_check(aoo_bool b){
         return get_option(AOO_OPT_TIMER_CHECK, AOO_ARG(b));
     }
+
+    aoo_error set_dynamic_resampling(aoo_bool b){
+        return set_option(AOO_OPT_DYNAMIC_RESAMPLING, AOO_ARG(b));
+    }
+
+    aoo_error get_dynamic_resampling(aoo_bool b){
+        return get_option(AOO_OPT_DYNAMIC_RESAMPLING, AOO_ARG(b));
+    }
+
     aoo_error set_dll_bandwidth(float f){
         return set_option(AOO_OPT_DLL_BANDWIDTH, AOO_ARG(f));
     }
@@ -281,6 +290,15 @@ public:
     aoo_error get_timer_check(aoo_bool b){
         return get_option(AOO_OPT_TIMER_CHECK, AOO_ARG(b));
     }
+
+    aoo_error set_dynamic_resampling(aoo_bool b){
+        return set_option(AOO_OPT_DYNAMIC_RESAMPLING, AOO_ARG(b));
+    }
+
+    aoo_error get_dynamic_resampling(aoo_bool b){
+        return get_option(AOO_OPT_DYNAMIC_RESAMPLING, AOO_ARG(b));
+    }
+
     aoo_error set_dll_bandwidth(float f){
         return set_option(AOO_OPT_DLL_BANDWIDTH, AOO_ARG(f));
     }

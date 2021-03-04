@@ -79,6 +79,10 @@ AOO_API void aoo_set_allocator(const aoo_allocator *alloc);
 #ifndef AOO_TIMER_CHECK
  #define AOO_TIMER_CHECK 1
 #endif
+
+// enable/disable dynamic resampling
+#ifndef AOO_DYNAMIC_RESAMPLING
+ #define AOO_DYNAMIC_RESAMPLING 1
 #endif
 
 // time DLL filter bandwidth
@@ -313,11 +317,18 @@ typedef enum aoo_option
     // but for unreliable/unpredictable networks
     // you might need to increased it significantly.
     AOO_OPT_BUFFERSIZE,
-    // Time filter DLL bandwidth (float)
+    // Enable/disable dynamic resampling (aoo_bool)
     // ---
-    // The time DLL filter estimates the effective samplerate
-    // and is used to compensate clock drift via dynamic resampling.
+    // Dynamic resampling attempts to mitigate CPU clock drift
+    // between two different machines.
+    // A DLL filter estimates the effective samplerate on both sides,
+    // and the audio data is resampled accordingly. The behavior
+    // can be fine-tuned with the AOO_OPT_DLL_BANDWIDTH option.
     // See the paper "Using a DLL to filter time" by Fons Adriaensen.
+    AOO_OPT_DYNAMIC_RESAMPLING,
+    // DLL filter bandwidth (float)
+    // ---
+    // Used for dynamic resampling, see AOO_OPT_DYNAMIC_RESAMPLING.
     AOO_OPT_DLL_BANDWIDTH,
     // Enable/disable timer check (aoo_bool)
     // ---
@@ -514,6 +525,14 @@ static inline aoo_error aoo_source_get_timer_check(aoo_source *src, aoo_bool *b)
     return aoo_source_set_option(src, AOO_OPT_TIMER_CHECK, AOO_ARG(*b));
 }
 
+static inline aoo_error aoo_source_set_dynamic_resampling(aoo_source *src, aoo_bool b) {
+    return aoo_source_set_option(src, AOO_OPT_DYNAMIC_RESAMPLING, AOO_ARG(b));
+}
+
+static inline aoo_error aoo_source_get_dynamic_resampling(aoo_source *src, aoo_bool *b) {
+    return aoo_source_get_option(src, AOO_OPT_DYNAMIC_RESAMPLING, AOO_ARG(*b));
+}
+
 static inline aoo_error aoo_source_set_dll_bandwidth(aoo_source *src, float n) {
     return aoo_source_set_option(src, AOO_OPT_DLL_BANDWIDTH, AOO_ARG(n));
 }
@@ -654,6 +673,13 @@ static inline aoo_error aoo_sink_get_timer_check(aoo_sink *sink, aoo_bool *b) {
     return aoo_sink_set_option(sink, AOO_OPT_TIMER_CHECK, AOO_ARG(*b));
 }
 
+static inline aoo_error aoo_sink_set_dynamic_resampling(aoo_sink *sink, aoo_bool b) {
+    return aoo_sink_set_option(sink, AOO_OPT_DYNAMIC_RESAMPLING, AOO_ARG(b));
+}
+
+static inline aoo_error aoo_sink_get_dynamic_resampling(aoo_sink *sink, aoo_bool *b) {
+    return aoo_sink_get_option(sink, AOO_OPT_DYNAMIC_RESAMPLING, AOO_ARG(*b));
+}
 
 static inline aoo_error aoo_sink_set_dll_bandwith(aoo_sink *sink, float n) {
     return aoo_sink_set_option(sink, AOO_OPT_DLL_BANDWIDTH, AOO_ARG(n));

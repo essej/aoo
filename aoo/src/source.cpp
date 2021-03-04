@@ -109,11 +109,17 @@ aoo_error aoo::source_imp::set_option(int32_t opt, void *ptr, int32_t size)
         CHECKARG(aoo_bool);
         timer_check_.store(as<aoo_bool>(ptr));
         break;
-    // timefilter bandwidth
+    // dynamic resampling
+    case AOO_OPT_DYNAMIC_RESAMPLING:
+        CHECKARG(aoo_bool);
+        dynamic_resampling_.store(as<aoo_bool>(ptr));
+        timer_.reset(); // !
+        break;
+    // time DLL filter bandwidth
     case AOO_OPT_DLL_BANDWIDTH:
         CHECKARG(float);
         // time filter
-        bandwidth_.store(as<float>(ptr));
+        dll_bandwidth_.store(as<float>(ptr));
         timer_.reset(); // will update
         break;
     // ping interval
@@ -190,10 +196,15 @@ aoo_error aoo::source_imp::get_option(int32_t opt, void *ptr, int32_t size)
         CHECKARG(aoo_bool);
         as<aoo_bool>(ptr) = timer_check_.load();
         break;
-    // time filter bandwidth
+    // dynamic resampling
+    case AOO_OPT_DYNAMIC_RESAMPLING:
+        CHECKARG(aoo_bool);
+        as<aoo_bool>(ptr) = dynamic_resampling_.load();
+        break;
+    // time DLL filter bandwidth
     case AOO_OPT_DLL_BANDWIDTH:
         CHECKARG(float);
-        as<float>(ptr) = bandwidth_.load();
+        as<float>(ptr) = dll_bandwidth_.load();
         break;
     // resend buffer size
     case AOO_OPT_RESEND_BUFFERSIZE:
@@ -505,12 +516,13 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
     // update timer
     // always do this, even if there are no sinks.
     // do it *before* trying to lock the mutex
+    bool dynamic_resampling = dynamic_resampling_.load(std::memory_order_relaxed);
     double error;
     auto timerstate = timer_.update(t, error);
     if (timerstate == timer::state::reset){
         LOG_DEBUG("setup time DLL filter for source");
-        dll_.setup(samplerate_, blocksize_,
-                   bandwidth_.load(std::memory_order_relaxed), 0);
+        auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
+        dll_.setup(samplerate_, blocksize_, bw, 0);
         // it is safe to set 'lastpingtime' after updating
         // the timer, because in the worst case the ping
         // is simply sent the next time.
@@ -522,7 +534,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         LOG_VERBOSE("aoo_source: skip " << nblocks << " blocks");
         dropped_ += nblocks;
         timer_.reset();
-    } else {
+    } else if (dynamic_resampling){
         // update time DLL, but only if n matches blocksize!
         auto elapsed = timer_.get_elapsed();
         if (nsamples == blocksize_){
@@ -533,8 +545,8 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         #endif
         } else {
             // reset time DLL with nominal samplerate
-            dll_.setup(samplerate_, blocksize_,
-                       bandwidth_.load(std::memory_order_relaxed), elapsed);
+            auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
+            dll_.setup(samplerate_, blocksize_, bw, elapsed);
         }
     }
 
@@ -577,6 +589,14 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         }
     }
 
+    double sr;
+    if (dynamic_resampling){
+        sr = dll_.samplerate() / (double)samplerate_
+                * (double)encoder_->samplerate();
+    } else {
+        sr = encoder_->samplerate();
+    }
+
     auto outsize = nfchannels * encoder_->blocksize();
     if (need_resampling()){
         // go through resampler
@@ -585,7 +605,6 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
             dropped_++;
             return AOO_ERROR_UNSPECIFIED;
         }
-        auto ratio = (double)encoder_->samplerate() / (double)samplerate_;
         while (audioqueue_.write_available()){
             // copy audio samples
             auto ptr = (block_data *)audioqueue_.write_data();
@@ -593,7 +612,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
                 break;
             }
             // push samplerate
-            ptr->sr = dll_.samplerate() * ratio;
+            ptr->sr = sr;
 
             audioqueue_.write_commit();
         }
@@ -604,7 +623,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
             // copy audio samples
             std::copy(buf, buf + outsize, ptr->data);
             // push samplerate
-            ptr->sr = dll_.samplerate();
+            ptr->sr = sr;
 
             audioqueue_.write_commit();
         } else {

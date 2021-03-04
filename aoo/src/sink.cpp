@@ -177,12 +177,18 @@ aoo_error aoo::sink_imp::set_option(int32_t opt, void *ptr, int32_t size)
         CHECKARG(aoo_bool);
         timer_check_.store(as<aoo_bool>(ptr));
         break;
-    // timefilter bandwidth
+    // dynamic resampling
+    case AOO_OPT_DYNAMIC_RESAMPLING:
+        CHECKARG(aoo_bool);
+        dynamic_resampling_.store(as<aoo_bool>(ptr));
+        timer_.reset(); // !
+        break;
+    // time DLL filter bandwidth
     case AOO_OPT_DLL_BANDWIDTH:
     {
         CHECKARG(float);
         auto bw = std::max<double>(0, std::min<double>(1, as<float>(ptr)));
-        bandwidth_.store(bw);
+        dll_bandwidth_.store(bw);
         timer_.reset(); // will update time DLL and reset timer
         break;
     }
@@ -262,10 +268,15 @@ aoo_error aoo::sink_imp::get_option(int32_t opt, void *ptr, int32_t size)
         CHECKARG(aoo_bool);
         as<aoo_bool>(ptr) = timer_check_.load();
         break;
-    // timefilter bandwidth
+    // dynamic resampling
+    case AOO_OPT_DYNAMIC_RESAMPLING:
+        CHECKARG(aoo_bool);
+        as<aoo_bool>(ptr) = dynamic_resampling_.load();
+        break;
+    // time DLL filter bandwidth
     case AOO_OPT_DLL_BANDWIDTH:
         CHECKARG(float);
-        as<float>(ptr) = bandwidth_.load();
+        as<float>(ptr) = dll_bandwidth_.load();
         break;
     // resend packetsize
     case AOO_OPT_PACKETSIZE:
@@ -499,11 +510,13 @@ aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t
 
     // update timer
     // always do this, even if there are no sources!
+    bool dynamic_resampling = dynamic_resampling_.load(std::memory_order_relaxed);
     double error;
     auto state = timer_.update(t, error);
     if (state == timer::state::reset){
         LOG_DEBUG("setup time DLL filter for sink");
-        dll_.setup(samplerate_, blocksize_, bandwidth_, 0);
+        auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
+        dll_.setup(samplerate_, blocksize_, bw, 0);
     } else if (state == timer::state::error){
         // recover sources
         int32_t xrunsamples = error * samplerate_ + 0.5;
@@ -513,7 +526,7 @@ aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t
             s.add_xrun(xrunsamples);
         }
         timer_.reset();
-    } else {
+    } else if (dynamic_resampling) {
         // update time DLL, but only if n matches blocksize!
         auto elapsed = timer_.get_elapsed();
         if (nsamples == blocksize_){
@@ -524,8 +537,8 @@ aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t
         #endif
         } else {
             // reset time DLL with nominal samplerate
-            dll_.setup(samplerate_, blocksize_,
-                       bandwidth_.load(std::memory_order_relaxed), elapsed);
+            auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
+            dll_.setup(samplerate_, blocksize_, bw, elapsed);
         }
     }
 
@@ -1309,6 +1322,10 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
     auto nchannels = decoder_->nchannels();
     auto insize = decoder_->blocksize() * nchannels;
     auto outsize = nsamples * nchannels;
+    // if dynamic resampling is disabled, this will simply
+    // return the nominal samplerate
+    bool dynamic_resampling = s.dynamic_resampling();
+    double sr = dynamic_resampling ? s.real_samplerate() : s.samplerate();
 
     // write samples from buffer into resampler
     while (audioqueue_.read_available()){
@@ -1316,7 +1333,11 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
 
         if (dropped_ > 0.1){
             // skip audio and decrement block counter proportionally
-            dropped_ -= s.real_samplerate() / decoder_->samplerate();
+            if (dynamic_resampling){
+                dropped_ -= sr / decoder_->samplerate();
+            } else {
+                dropped_ -= 1.0;
+            }
         } else {
             // try to write audio into resampler
             if (!resampler_.write(d->data, insize)){
@@ -1324,7 +1345,7 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
             }
 
             // update resampler
-            resampler_.update(d->header.samplerate, s.real_samplerate());
+            resampler_.update(d->header.samplerate, sr);
             // set channel; negative = current
             if (d->header.channel >= 0){
                 channel_ = d->header.channel;

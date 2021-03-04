@@ -324,6 +324,8 @@ public:
 
     double real_samplerate() const { return dll_.samplerate(); }
 
+    bool dynamic_resampling() const { return dynamic_resampling_.load(std::memory_order_relaxed);}
+
     int32_t blocksize() const { return blocksize_; }
 
     int32_t buffersize() const { return buffersize_.load(std::memory_order_relaxed); }
@@ -355,7 +357,7 @@ private:
     source_list sources_;
     sync::mutex source_mutex_;
     // timing
-    std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
+    std::atomic<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
     time_dll dll_;
     timer timer_;
     // options
@@ -365,6 +367,7 @@ private:
     std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
     std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT * 0.001 };
     std::atomic<bool> resend_{AOO_RESEND_DATA};
+    std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
     std::atomic<bool> timer_check_{ AOO_TIMER_CHECK };
     // events
     lockfree::unbounded_mpsc_queue<source_event, aoo::allocator<source_event>> eventqueue_;
