@@ -13,11 +13,22 @@
 // for spinlock
 // Intel
 #if defined(__i386__) || defined(_M_IX86) || defined(__x86_64__) || defined(_M_X64)
-  #define CPU_INTEL
+  #define HAVE_PAUSE
   #include <immintrin.h>
 // ARM
-#elif defined(__arm__) || defined(_M_ARM) || defined(__aarch64__)
-  #define CPU_ARM
+#elif (defined(__ARM_ARCH_6K__) || \
+       defined(__ARM_ARCH_6Z__) || \
+       defined(__ARM_ARCH_6ZK__) || \
+       defined(__ARM_ARCH_6T2__) || \
+       defined(__ARM_ARCH_7__) || \
+       defined(__ARM_ARCH_7A__) || \
+       defined(__ARM_ARCH_7R__) || \
+       defined(__ARM_ARCH_7M__) || \
+       defined(__ARM_ARCH_7S__) || \
+       defined(__ARM_ARCH_8A__) || \
+       defined(__aarch64__))
+// mnemonic 'yield' is supported from ARMv6k onwards
+  #define HAVE_YIELD
 #else
 // fallback
   #include <thread>
@@ -27,12 +38,17 @@ namespace aoo {
 namespace sync {
 
 void pause_cpu(){
-#if defined(CPU_INTEL)
+#if defined(HAVE_PAUSE)
     _mm_pause();
-#elif defined(CPU_ARM)
+#elif defined(HAVE_YIELD)
     __asm__ __volatile__("yield");
 #else // fallback
+  #warning "architecture does not support yield/pause instruction"
+  #if 0
     std::this_thread::sleep_for(std::chrono::microseconds(0));
+  #else
+    std::this_thread::yield();
+  #endif
 #endif
 }
 
