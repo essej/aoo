@@ -1399,7 +1399,7 @@ int32_t source_desc::recover(const char *reason, int32_t n){
     auto nsamples = decoder_->blocksize() * decoder_->nchannels();
 
     // reduce limit by blocks in resampler!
-    limit -= resampler_.balance() / nsamples;
+    limit -= resampler_.size() / nsamples;
 
     // push empty blocks to keep the buffer full!
     int count = 0;
@@ -1570,7 +1570,7 @@ void source_desc::process_blocks(const sink_imp& s, stream_state& state){
             }
         } else {
             // we also have to consider the content of the resampler!
-            auto remaining = audioqueue_.read_available() + resampler_.balance() / nsamples;
+            auto remaining = audioqueue_.read_available() + resampler_.size() / nsamples;
             if (remaining < minblocks_){
                 // we need audio, so we have to drop a block
                 LOG_DEBUG("remaining: " << remaining << " / " << audioqueue_.capacity()

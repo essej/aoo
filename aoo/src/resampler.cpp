@@ -50,7 +50,7 @@ void dynamic_resampler::update(double srfrom, double srto){
 }
 
 bool dynamic_resampler::write(const aoo_sample *data, int32_t n){
-    if (buffer_.size() - balance_ < n){
+    if ((buffer_.size() - balance_) < n){
         return false;
     }
     auto buf = buffer_.data();
