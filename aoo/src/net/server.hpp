@@ -73,7 +73,7 @@ public:
 
     int socket() const { return socket_; }
 
-    void close();
+    void close(bool notify = true);
 
     bool active() const { return socket_ >= 0; }
 
@@ -288,6 +288,7 @@ private:
 
     // options
     std::atomic<bool> allow_relay_{AOO_NET_RELAY_ENABLE};
+    std::atomic<bool> notify_on_shutdown_{AOO_NET_NOTIFY_ON_SHUTDOWN};
 
     bool receive();
 

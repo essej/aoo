@@ -41,7 +41,11 @@ extern "C"
 /*////////// default values ////////////*/
 
 #ifndef AOO_NET_RELAY_ENABLE
-#define AOO_NET_RELAY_ENABLE 1
+ #define AOO_NET_RELAY_ENABLE 1
+#endif
+
+#ifndef AOO_NET_NOTIFY_ON_SHUTDOWN
+ #define AOO_NET_NOTIFY_ON_SHUTDOWN 0
 #endif
 
 /*///////////////////////// OSC ////////////////////////////////*/

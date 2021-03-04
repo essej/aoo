@@ -112,6 +112,15 @@ aoo_error aoo::net::server_imp::run(){
         }
     }
 
+    if (!notify_on_shutdown_.load()){
+        // JC: need to close all the clients sockets without
+        // having them send anything out, so that active communication
+        // between connected peers can continue if the server goes down for maintainence
+        for (auto& client : clients_){
+            client.close(false);
+        }
+    }
+
     return AOO_OK;
 }
 
@@ -760,14 +769,14 @@ bool client_endpoint::match(const ip_address& addr) const {
     return false;
 }
 
-void client_endpoint::close(){
+void client_endpoint::close(bool notify){
     if (socket_ >= 0){
         LOG_VERBOSE("aoo_server: close client endpoint "
                     << addr_.name() << " " << addr_.port());
         socket_close(socket_);
         socket_ = -1;
 
-        if (user_){
+        if (user_ && notify){
             user_->on_close(*server_);
         }
     }
