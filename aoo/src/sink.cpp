@@ -199,8 +199,8 @@ aoo_error aoo::sink_imp::set_option(int32_t opt, void *ptr, int32_t size)
     }
     // resend limit
     case AOO_OPT_RESEND_DATA:
-        CHECKARG(int32_t);
-        resend_.store(as<int32_t>(ptr));
+        CHECKARG(aoo_bool);
+        resend_.store(as<aoo_bool>(ptr));
         break;
     // resend interval
     case AOO_OPT_RESEND_INTERVAL:
@@ -263,8 +263,8 @@ aoo_error aoo::sink_imp::get_option(int32_t opt, void *ptr, int32_t size)
         break;
     // resend limit
     case AOO_OPT_RESEND_DATA:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = resend_.load();
+        CHECKARG(aoo_bool);
+        as<aoo_bool>(ptr) = resend_.load();
         break;
     // resend interval
     case AOO_OPT_RESEND_INTERVAL:

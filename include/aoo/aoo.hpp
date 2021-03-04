@@ -283,11 +283,11 @@ public:
         return get_option(AOO_OPT_PACKETSIZE, AOO_ARG(n));
     }
 
-    aoo_error set_resend_data(bool b){
+    aoo_error set_resend_data(aoo_bool b){
         return set_option(AOO_OPT_RESEND_DATA, AOO_ARG(b));
     }
 
-    aoo_error get_resend_data(bool& b){
+    aoo_error get_resend_data(aoo_bool& b){
         return get_option(AOO_OPT_RESEND_DATA, AOO_ARG(b));
     }
 

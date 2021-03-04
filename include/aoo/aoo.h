@@ -339,7 +339,7 @@ typedef enum aoo_option
     // a sink after the source hasn't received a ping
     // for a certain amount of time.
     AOO_OPT_PING_INTERVAL,
-    // Enable/disable resending (int32_t)
+    // Enable/disable resending (aoo_bool)
     AOO_OPT_RESEND_DATA,
     // Resend buffer size in ms (int32_t).
     // ---
@@ -641,11 +641,11 @@ static inline aoo_error aoo_sink_get_packetsize(aoo_sink *sink, int32_t *n) {
     return aoo_sink_get_option(sink, AOO_OPT_PACKETSIZE, AOO_ARG(*n));
 }
 
-static inline aoo_error aoo_sink_set_resend_data(aoo_sink *sink, int32_t b) {
+static inline aoo_error aoo_sink_set_resend_data(aoo_sink *sink, aoo_bool b) {
     return aoo_sink_set_option(sink, AOO_OPT_RESEND_DATA, AOO_ARG(b));
 }
 
-static inline aoo_error aoo_sink_get_resend_data(aoo_sink *sink, int32_t *b) {
+static inline aoo_error aoo_sink_get_resend_data(aoo_sink *sink, aoo_bool *b) {
     return aoo_sink_get_option(sink, AOO_OPT_RESEND_DATA, AOO_ARG(*b));
 }
 
