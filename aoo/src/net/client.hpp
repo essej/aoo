@@ -27,9 +27,17 @@
 #include <vector>
 #include <functional>
 
-#define AOO_NET_CLIENT_PING_INTERVAL 5000
-#define AOO_NET_CLIENT_REQUEST_INTERVAL 100
-#define AOO_NET_CLIENT_REQUEST_TIMEOUT 5000
+#ifndef AOO_NET_CLIENT_PING_INTERVAL
+ #define AOO_NET_CLIENT_PING_INTERVAL 5000
+#endif
+
+#ifndef AOO_NET_CLIENT_REQUEST_INTERVAL
+ #define AOO_NET_CLIENT_REQUEST_INTERVAL 100
+#endif
+
+#ifndef AOO_NET_CLIENT_REQUEST_TIMEOUT
+ #define AOO_NET_CLIENT_REQUEST_TIMEOUT 5000
+#endif
 
 namespace aoo {
 namespace net {
@@ -55,7 +63,7 @@ public:
         return connected_.load(std::memory_order_acquire);
     }
 
-    bool match(const ip_address& addr) const;
+    bool match(const ip_address& addr, bool unconnected = false) const;
 
     bool match(const std::string& group) const;
 

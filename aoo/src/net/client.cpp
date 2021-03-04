@@ -627,7 +627,7 @@ bool client_imp::handle_peer_message(const osc::ReceivedMessage& msg, int onset,
     peer_lock lock(peers_);
     for (auto& p : peers_){
         // forward to matching or unconnected peers!
-        if (!p.connected() || p.match(addr)){
+        if (p.match(addr, true)){
             p.handle_message(msg, onset, addr);
             success = true;
         }
@@ -1674,11 +1674,11 @@ peer::~peer(){
     LOG_DEBUG("destroy peer " << *this);
 }
 
-bool peer::match(const ip_address& addr) const {
+bool peer::match(const ip_address& addr, bool unconnected) const {
     if (connected()){
         return real_address_ == addr;
     } else {
-        return false;
+        return unconnected;
     }
 }
 

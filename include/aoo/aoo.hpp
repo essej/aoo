@@ -283,14 +283,6 @@ public:
         return get_option(AOO_OPT_PACKETSIZE, AOO_ARG(n));
     }
 
-    aoo_error set_ping_interval(int32_t n){
-        return set_option(AOO_OPT_PING_INTERVAL, AOO_ARG(n));
-    }
-
-    aoo_error get_ping_interval(int32_t& n){
-        return get_option(AOO_OPT_PING_INTERVAL, AOO_ARG(n));
-    }
-
     aoo_error set_resend_enable(bool b){
         return set_option(AOO_OPT_RESEND_ENABLE, AOO_ARG(b));
     }
