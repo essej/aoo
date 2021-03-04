@@ -340,6 +340,10 @@ aoo_error aoo::sink_imp::get_source_option(const void *address, int32_t addrlen,
             fmt.size = size; // !
             return src->get_format(fmt);
         }
+        case AOO_OPT_BUFFER_FILL_RATIO:
+            CHECKARG(float);
+            as<float>(ptr) = src->get_buffer_fill_ratio();
+            break;
         // unsupported
         default:
             LOG_WARNING("aoo_sink: unsupported source option " << opt);
@@ -997,6 +1001,18 @@ void source_desc::uninvite(const sink_imp& s){
         }
     }
     LOG_WARNING("aoo: couldn't uninvite source - not active");
+}
+
+float source_desc::get_buffer_fill_ratio(){
+    scoped_shared_lock lock(mutex_);
+    if (decoder_){
+        // consider samples in resampler!
+        auto available = audioqueue_.read_available() +
+                (double)resampler_.balance() / (double)audioqueue_.blocksize();
+        return available / (double)audioqueue_.capacity();
+    } else {
+        return 0.0;
+    }
 }
 
 // /aoo/sink/<id>/format <src> <salt> <numchannels> <samplerate> <blocksize> <codec> <settings...>

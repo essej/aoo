@@ -196,6 +196,8 @@ public:
     void invite(const sink_imp& s);
 
     void uninvite(const sink_imp& s);
+
+    float get_buffer_fill_ratio();
 private:
     using shared_lock = sync::shared_lock<sync::shared_mutex>;
     using unique_lock = sync::unique_lock<sync::shared_mutex>;

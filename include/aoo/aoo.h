@@ -367,7 +367,13 @@ typedef enum aoo_option
     // Source timeout in ms (int32_t)
     // ---
     // Time to wait before removing inactive source.
-    AOO_OPT_SOURCE_TIMEOUT
+    AOO_OPT_SOURCE_TIMEOUT,
+    // Buffer fill ratio (float)
+    // ---
+    // This is a read-only option for aoo_sink_get_source_option,
+    // giving a ratio of how full the buffer is;
+    // 0.0 is empty and 1.0 is full
+    AOO_OPT_BUFFER_FILL_RATIO
 } aoo_option;
 
 #define AOO_ARG(x) ((void *)&x), sizeof(x)
@@ -674,6 +680,11 @@ static inline aoo_error aoo_sink_reset_source(aoo_sink *sink, const void *addres
 static inline aoo_error aoo_sink_get_source_format(aoo_sink *sink, const void *address,
                                                    int32_t addrlen, aoo_id id, aoo_format_storage *f) {
     return aoo_sink_get_source_option(sink, address, addrlen, id, AOO_OPT_FORMAT, AOO_ARG(*f));
+}
+
+static inline aoo_error aoo_sink_get_buffer_fill_ratio(aoo_sink *sink, const void *address,
+                                                       int32_t addrlen, aoo_id id, float *n) {
+    return aoo_sink_get_source_option(sink, address, addrlen, id, AOO_OPT_BUFFER_FILL_RATIO, AOO_ARG(*n));
 }
 
 /*//////////////////// Codec API //////////////////////////*/

@@ -339,6 +339,11 @@ public:
         return get_source_option(address, addrlen, id, AOO_OPT_FORMAT, AOO_ARG(f));
     }
 
+    aoo_error get_buffer_fill_ratio(const void *address, int32_t addrlen, aoo_id id,
+                                    float& ratio){
+        return get_source_option(address, addrlen, id, AOO_OPT_BUFFER_FILL_RATIO, AOO_ARG(ratio));
+    }
+
     virtual aoo_error set_source_option(const void *address, int32_t addrlen, aoo_id id,
                                         int32_t opt, void *ptr, int32_t size) = 0;
 

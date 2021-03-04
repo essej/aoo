@@ -143,6 +143,24 @@ static void aoo_receive_reset(t_aoo_receive *x, t_symbol *s, int argc, t_atom *a
     }
 }
 
+static void aoo_receive_fill_ratio(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv){
+    // reset specific source
+    t_source *source = aoo_receive_findsource(x, argc, argv);
+    if (source){
+        auto& addr = source->s_address;
+        auto id = source->s_id;
+
+        float ratio = 0;
+        x->x_sink->get_buffer_fill_ratio(addr.address(), addr.length(), id, ratio);
+
+        t_atom msg[4];
+        if (x->x_node->resolve_endpoint(addr, id, 3, msg)){
+            SETFLOAT(msg + 3, ratio);
+            outlet_anything(x->x_msgout, gensym("fill_ratio"), 4, msg);
+        }
+    }
+}
+
 static void aoo_receive_resend(t_aoo_receive *x, t_floatarg f)
 {
     x->x_sink->set_resend_enable(f != 0);
@@ -549,4 +567,6 @@ void aoo_receive_tilde_setup(void)
                     gensym("list_sources"), A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_reset,
                     gensym("reset"), A_GIMME, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_fill_ratio,
+                    gensym("fill_ratio"), A_GIMME, A_NULL);
 }
