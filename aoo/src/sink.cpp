@@ -812,7 +812,7 @@ aoo_error sink_imp::handle_ping_message(const osc::ReceivedMessage& msg,
     if (src){
         return src->handle_ping(*this, tt);
     } else {
-        LOG_WARNING("couldn't find source for " << AOO_MSG_PING << " message");
+        LOG_WARNING("couldn't find source " << id << " for " << AOO_MSG_PING << " message");
         return AOO_ERROR_UNSPECIFIED;
     }
 }
@@ -1014,7 +1014,9 @@ float source_desc::get_buffer_fill_ratio(){
         LOG_DEBUG("fill ratio: audioqueue: " << audioqueue_.read_available()
                   << ", resampler: " << (double)resampler_.size() / (double)nsamples);
 
-        return available / (double)audioqueue_.capacity();
+        auto ratio = available / (double)audioqueue_.capacity();
+        // FIXME sometimes the result is bigger than 1.0
+        return std::min<float>(1.0, ratio);
     } else {
         return 0.0;
     }
