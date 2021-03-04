@@ -1385,46 +1385,42 @@ int32_t source_desc::poll_events(sink_imp& s, aoo_eventhandler fn, void *user){
 int32_t source_desc::recover(const char *reason, int32_t n){
     LOG_VERBOSE("recovering from " << reason);
 
-    int32_t limit;
     if (n > 0){
-        limit = std::min<int32_t>(n, jitterbuffer_.size());
+        auto size = std::min<int32_t>(n, jitterbuffer_.size());
         // drop blocks
-        for (int i = 0; i < limit; ++i){
+        for (int i = 0; i < size; ++i){
             jitterbuffer_.pop_front();
         }
     } else {
         // clear buffer
         n = jitterbuffer_.size(); // for logging
-        limit = jitterbuffer_.capacity();
         jitterbuffer_.clear();
     }
-
 
     double sr = decoder_->samplerate();
     auto nsamples = decoder_->blocksize() * decoder_->nchannels();
 
-    // reduce limit by blocks in resampler!
-    limit -= resampler_.size() / nsamples;
+    int32_t numblocks = std::min<int32_t>(n, audioqueue_.write_available());
+    // reduce by blocks in resampler!
+    numblocks -= static_cast<int32_t>((double)resampler_.size() / (double)nsamples + 0.5);
 
     // push empty blocks to keep the buffer full!
-    int count = 0;
-    for (int i = 0; i < limit && audioqueue_.write_available(); ++i){
+    for (int i = 0; i < numblocks; ++i){
         auto b = (block_data *)audioqueue_.write_data();
         // push nominal samplerate, channel + silence
         b->header.samplerate = sr;
         b->header.channel = -1; // last channel
         int32_t size = nsamples;
         if (decoder_->decode(nullptr, 0, b->data, size) != AOO_OK){
+            LOG_WARNING("aoo_sink: couldn't decode block!");
             // fill with zeros
             std::fill(b->data, b->data + nsamples, 0);
         }
         audioqueue_.write_commit();
-
-        count++;
     }
 
-    LOG_VERBOSE("dropped " << n << " blocks and wrote " << count
-                << " empty blocks");
+    LOG_VERBOSE("dropped " << n << " blocks and wrote "
+                << std::max<int32_t>(0, numblocks) << " empty blocks");
 
     return n;
 }
