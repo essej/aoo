@@ -83,9 +83,9 @@ static void aoo_unpack_buffersize(t_aoo_unpack *x, t_floatarg f)
     x->x_sink->set_buffersize(f);
 }
 
-static void aoo_unpack_timefilter(t_aoo_unpack *x, t_floatarg f)
+static void aoo_unpack_dll_bandwidth(t_aoo_unpack *x, t_floatarg f)
 {
-    x->x_sink->set_timefilter_bandwidth(f);
+    x->x_sink->set_dll_bandwidth(f);
 }
 
 static void aoo_unpack_reset(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)
@@ -107,7 +107,7 @@ static void aoo_unpack_packetsize(t_aoo_unpack *x, t_floatarg f)
 
 static void aoo_unpack_resend(t_aoo_unpack *x, t_floatarg f)
 {
-    x->x_sink->set_resend_enable(f != 0);
+    x->x_sink->set_resend_data(f != 0);
 }
 
 static void aoo_unpack_resend_limit(t_aoo_unpack *x, t_floatarg f)
@@ -327,8 +327,8 @@ void aoo_unpack_tilde_setup(void)
                     gensym("uninvite"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_buffersize,
                     gensym("bufsize"), A_FLOAT, A_NULL);
-    class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_timefilter,
-                    gensym("timefilter"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_dll_bandwidth,
+                    gensym("dll_bandwidth"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_packetsize,
                     gensym("packetsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_unpack_class, (t_method)aoo_unpack_resend,

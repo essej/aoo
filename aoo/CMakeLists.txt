@@ -6,25 +6,28 @@ option(USE_AOO_NET "build with networking support" ON)
 # compile time options
 option(CUSTOM_ALLOCATOR "build with custom allocator support" OFF)
 
-set(TIMEFILTER_BANDWIDTH 0.0001 CACHE STRING "default time filter bandwidth")
-message(STATUS "default time filter bandwidth: ${TIMEFILTER_BANDWIDTH}")
+option(DYNAMIC_RESAMPLING "enable/disable dynamic resampling" ON)
+message(STATUS "use dynamic resampling: ${DYNAMIC_RESAMPLING}")
 
-set(TIMEFILTER_TOLERANCE 0.25 CACHE STRING "default time filter tolerance")
-message(STATUS "default time filter tolerance: ${TIMEFILTER_TOLERANCE}")
+set(DLL_BANDWIDTH 0.0001 CACHE STRING "default DLL filter bandwidth")
+message(STATUS "default DLL filter bandwidth: ${DLL_BANDWIDTH}")
 
-option(TIMEFILTER_CHECK "use time filter check" ON)
-message(STATUS "time filter check: ${TIMEFILTER_CHECK}")
+option(TIMER_CHECK "use timer check" ON)
+message(STATUS "timer check: ${TIMER_CHECK}")
+
+set(TIMER_TOLERANCE 0.25 CACHE STRING "default timer check tolerance")
+message(STATUS "default timer check tolerance: ${TIMER_TOLERANCE}")
 
 # compile time debugging options
 option(DEBUG_MEMORY "debug memory usage" OFF)
 
 option(DEBUG_DATA "debug memory usage" OFF)
 
-option(DEBUG_TIMEFILTER "debug time filter" OFF)
+option(DEBUG_DLL "debug time DLL filter" OFF)
 
-option(DEBUG_DLL "debug delay locked loop" OFF)
+option(DEBUG_TIMER "debug timer" OFF)
 
-option(DEBUG_RESAMPLING "debug resampling" OFF)
+option(DEBUG_RESAMPLER "debug resampler" OFF)
 
 option(DEBUG_AUDIO_BUFFER "debug audio buffer" OFF)
 
@@ -32,14 +35,15 @@ option(DEBUG_JITTER_BUFFER "debug jitter buffer" OFF)
 
 set(OPTIONS
     "-DAOO_CUSTOM_ALLOCATOR=$<BOOL:${CUSTOM_ALLOCATOR}>"
-    "-DAOO_TIMEFILTER_BANDWIDTH=${TIMEFILTER_BANDWIDTH}"
-    "-DAOO_TIMEFILTER_TOLERANCE=${TIMEFILTER_TOLERANCE}"
-    "-DAOO_TIMEFILTER_CHECK=$<BOOL:${TIMEFILTER_CHECK}>"
+    "-DAOO_DYNAMIC_RESAMPLING=$<BOOL:${DYNAMIC_RESAMPLING}>"
+    "-DAOO_DLL_BANDWIDTH=${DLL_BANDWIDTH}"
+    "-DAOO_TIMER_CHECK=$<BOOL:${TIMER_CHECK}>"
+    "-DAOO_TIMER_TOLERANCE=${TIMER_TOLERANCE}"
     "-DAOO_DEBUG_MEMORY=$<BOOL:${DEBUG_MEMORY}>"
     "-DAOO_DEBUG_DATA=$<BOOL:${DEBUG_DATA}>"
-    "-DAOO_DEBUG_TIMEFILTER=$<BOOL:${DEBUG_TIMEFILTER}>"
     "-DAOO_DEBUG_DLL=$<BOOL:${DEBUG_DLL}>"
-    "-DAOO_DEBUG_RESAMPLING=$<BOOL:${DEBUG_RESAMPLING}>"
+    "-DAOO_DEBUG_TIMER=$<BOOL:${DEBUG_TIMER}>"
+    "-DAOO_DEBUG_RESAMPLER=$<BOOL:${DEBUG_RESAMPLER}>"
     "-DAOO_DEBUG_AUDIO_BUFFER=$<BOOL:${DEBUG_AUDIO_BUFFER}>"
     "-DAOO_DEBUG_JITTER_BUFFER=$<BOOL:${DEBUG_JITTER_BUFFER}>"
 )

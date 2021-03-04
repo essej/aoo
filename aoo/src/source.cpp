@@ -105,7 +105,7 @@ aoo_error aoo::source_imp::set_option(int32_t opt, void *ptr, int32_t size)
         break;
     }
     // timefilter bandwidth
-    case AOO_OPT_TIMEFILTER_BANDWIDTH:
+    case AOO_OPT_DLL_BANDWIDTH:
         CHECKARG(float);
         // time filter
         bandwidth_.store(as<float>(ptr));
@@ -181,7 +181,7 @@ aoo_error aoo::source_imp::get_option(int32_t opt, void *ptr, int32_t size)
         as<int32_t>(ptr) = buffersize_.load();
         break;
     // time filter bandwidth
-    case AOO_OPT_TIMEFILTER_BANDWIDTH:
+    case AOO_OPT_DLL_BANDWIDTH:
         CHECKARG(float);
         as<float>(ptr) = bandwidth_.load();
         break;
@@ -229,7 +229,7 @@ aoo_error aoo::source_imp::set_sinkoption(const void *address, int32_t addrlen, 
     if (sink){
         switch (opt){
         // channel onset
-        case AOO_OPT_CHANNELONSET:
+        case AOO_OPT_CHANNEL_ONSET:
         {
             CHECKARG(int32_t);
             auto chn = as<int32_t>(ptr);
@@ -267,7 +267,7 @@ aoo_error aoo::source_imp::get_sinkoption(const void *address, int32_t addrlen, 
     if (sink){
         switch (opt){
         // channel onset
-        case AOO_OPT_CHANNELONSET:
+        case AOO_OPT_CHANNEL_ONSET:
             CHECKARG(int32_t);
             as<int32_t>(p) = sink->channel.load();
             break;

@@ -330,7 +330,7 @@ public:
 
     int32_t packetsize() const { return packetsize_.load(std::memory_order_relaxed); }
 
-    bool resend_enabled() const { return resend_enabled_.load(std::memory_order_relaxed); }
+    bool resend_enabled() const { return resend_.load(std::memory_order_relaxed); }
 
     float resend_interval() const { return resend_interval_.load(std::memory_order_relaxed); }
 
@@ -359,12 +359,12 @@ private:
     time_dll dll_;
     timer timer_;
     // options
-    std::atomic<int32_t> buffersize_{ AOO_SINK_BUFSIZE };
+    std::atomic<int32_t> buffersize_{ AOO_SINK_BUFFERSIZE };
     std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
     std::atomic<float> resend_interval_{ AOO_RESEND_INTERVAL * 0.001 };
     std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
     std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT * 0.001 };
-    std::atomic<bool> resend_enabled_{AOO_RESEND_ENABLE};
+    std::atomic<bool> resend_{AOO_RESEND_DATA};
     // events
     lockfree::unbounded_mpsc_queue<source_event, aoo::allocator<source_event>> eventqueue_;
     void send_event(const source_event& e, aoo_thread_level level);

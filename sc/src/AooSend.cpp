@@ -169,8 +169,8 @@ bool AooSend::addSink(const aoo::ip_address& addr, aoo_id id,
                       int32_t channelOnset){
     if (source()->add_sink(addr.address(), addr.length(), id, 0) == AOO_OK){
         if (channelOnset > 0){
-            source()->set_sink_channelonset(addr.address(), addr.length(),
-                                            id, channelOnset);
+            source()->set_sink_channel_onset(addr.address(), addr.length(),
+                                             id, channelOnset);
         }
         return true;
     } else {
@@ -374,7 +374,7 @@ void aoo_send_channel(AooSendUnit *unit, sc_msg_iter* args){
             aoo_id id;
             if (owner.node()->getSinkArg(&args, addr, flags, id)){
                 auto channelOnset = args.geti();
-                owner.source()->set_sink_channelonset(
+                owner.source()->set_sink_channel_onset(
                     addr.address(), addr.length(), id, channelOnset);
             }
 
@@ -410,8 +410,8 @@ void aoo_send_redundancy(AooSendUnit *unit, sc_msg_iter* args){
     unit->delegate().source()->set_redundancy(args->geti());
 }
 
-void aoo_send_timefilter(AooSendUnit *unit, sc_msg_iter* args){
-    unit->delegate().source()->set_timefilter_bandwidth(args->getf());
+void aoo_send_dll_bw(AooSendUnit *unit, sc_msg_iter* args){
+    unit->delegate().source()->set_dll_bandwidth(args->getf());
 }
 
 using AooSendUnitCmdFunc = void (*)(AooSendUnit*, sc_msg_iter*);
@@ -448,5 +448,5 @@ void AooSendLoad(InterfaceTable *inTable){
     AooUnitCmd(ping);
     AooUnitCmd(resend);
     AooUnitCmd(redundancy);
-    AooUnitCmd(timefilter);
+    AooUnitCmd(dll_bw);
 }

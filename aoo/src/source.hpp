@@ -199,9 +199,9 @@ class source_imp final : public source {
     // thread synchronization
     sync::shared_mutex update_mutex_;
     // options
-    std::atomic<int32_t> buffersize_{ AOO_SOURCE_BUFSIZE };
+    std::atomic<int32_t> buffersize_{ AOO_SOURCE_BUFFERSIZE };
     std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
-    std::atomic<int32_t> resend_buffersize_{ AOO_RESEND_BUFSIZE };
+    std::atomic<int32_t> resend_buffersize_{ AOO_RESEND_BUFFERSIZE };
     std::atomic<int32_t> redundancy_{ AOO_SEND_REDUNDANCY };
     std::atomic<float> bandwidth_{ AOO_TIMEFILTER_BANDWIDTH };
     std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };

@@ -261,7 +261,7 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             return;
         }
     #endif
-        x->x_source->set_sink_channelonset(addr.address(), addr.length(), id, chn);
+        x->x_source->set_sink_channel_onset(addr.address(), addr.length(), id, chn);
     }
 }
 
@@ -285,9 +285,9 @@ static void aoo_send_redundancy(t_aoo_send *x, t_floatarg f)
     x->x_source->set_redundancy(f);
 }
 
-static void aoo_send_timefilter(t_aoo_send *x, t_floatarg f)
+static void aoo_send_dll_bandwidth(t_aoo_send *x, t_floatarg f)
 {
-    x->x_source->set_timefilter_bandwidth(f);
+    x->x_source->set_dll_bandwidth(f);
 }
 
 static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
@@ -326,8 +326,8 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         aoo_send_doaddsink(x, addr, id, flags);
 
         if (argc > 3){
-            x->x_source->set_sink_channelonset(addr.address(), addr.length(),
-                                               id, atom_getfloat(argv + 3));
+            x->x_source->set_sink_channel_onset(addr.address(), addr.length(),
+                                                id, atom_getfloat(argv + 3));
         }
 
         // print message (use actual IP address)
@@ -605,8 +605,8 @@ void aoo_send_tilde_setup(void)
                     gensym("resend"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_redundancy,
                     gensym("redundancy"), A_FLOAT, A_NULL);
-    class_addmethod(aoo_send_class, (t_method)aoo_send_timefilter,
-                    gensym("timefilter"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_dll_bandwidth,
+                    gensym("dll_bandwidth"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_listsinks,
                     gensym("list_sinks"), A_NULL);
 }

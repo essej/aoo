@@ -172,7 +172,7 @@ aoo_error aoo::sink_imp::set_option(int32_t opt, void *ptr, int32_t size)
         break;
     }
     // timefilter bandwidth
-    case AOO_OPT_TIMEFILTER_BANDWIDTH:
+    case AOO_OPT_DLL_BANDWIDTH:
     {
         CHECKARG(float);
         auto bw = std::max<double>(0, std::min<double>(1, as<float>(ptr)));
@@ -198,9 +198,9 @@ aoo_error aoo::sink_imp::set_option(int32_t opt, void *ptr, int32_t size)
         break;
     }
     // resend limit
-    case AOO_OPT_RESEND_ENABLE:
+    case AOO_OPT_RESEND_DATA:
         CHECKARG(int32_t);
-        resend_enabled_.store(as<int32_t>(ptr));
+        resend_.store(as<int32_t>(ptr));
         break;
     // resend interval
     case AOO_OPT_RESEND_INTERVAL:
@@ -252,7 +252,7 @@ aoo_error aoo::sink_imp::get_option(int32_t opt, void *ptr, int32_t size)
         as<int32_t>(ptr) = buffersize_.load();
         break;
     // timefilter bandwidth
-    case AOO_OPT_TIMEFILTER_BANDWIDTH:
+    case AOO_OPT_DLL_BANDWIDTH:
         CHECKARG(float);
         as<float>(ptr) = bandwidth_.load();
         break;
@@ -262,9 +262,9 @@ aoo_error aoo::sink_imp::get_option(int32_t opt, void *ptr, int32_t size)
         as<int32_t>(ptr) = packetsize_.load();
         break;
     // resend limit
-    case AOO_OPT_RESEND_ENABLE:
+    case AOO_OPT_RESEND_DATA:
         CHECKARG(int32_t);
-        as<int32_t>(ptr) = resend_enabled_.load();
+        as<int32_t>(ptr) = resend_.load();
         break;
     // resend interval
     case AOO_OPT_RESEND_INTERVAL:

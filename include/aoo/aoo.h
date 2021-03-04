@@ -43,12 +43,12 @@ AOO_API void aoo_set_allocator(const aoo_allocator *alloc);
  #define AOO_DEBUG_DLL 0
 #endif
 
-#ifndef AOO_DEBUG_TIMEFILTER
- #define AOO_DEBUG_TIMEFILTER 0
+#ifndef AOO_DEBUG_TIMER
+ #define AOO_DEBUG_TIMER 0
 #endif
 
-#ifndef AOO_DEBUG_RESAMPLING
- #define AOO_DEBUG_RESAMPLING 0
+#ifndef AOO_DEBUG_RESAMPLER
+ #define AOO_DEBUG_RESAMPLER 0
 #endif
 
 #ifndef AOO_DEBUG_AUDIO_BUFFER
@@ -66,28 +66,30 @@ AOO_API void aoo_set_allocator(const aoo_allocator *alloc);
 /*////////// default values ////////////*/
 
 // source buffer size in ms
-#ifndef AOO_SOURCE_BUFSIZE
- #define AOO_SOURCE_BUFSIZE 25
+#ifndef AOO_SOURCE_BUFFERSIZE
+ #define AOO_SOURCE_BUFFERSIZE 25
 #endif
 
 // sink buffer size in ms
-#ifndef AOO_SINK_BUFSIZE
- #define AOO_SINK_BUFSIZE 100
+#ifndef AOO_SINK_BUFFERSIZE
+ #define AOO_SINK_BUFFERSIZE 50
+#endif
 #endif
 
 // time DLL filter bandwidth
-#ifndef AOO_TIMEFILTER_BANDWIDTH
- #define AOO_TIMEFILTER_BANDWIDTH 0.012
+#ifndef AOO_DLL_BANDWIDTH
+ #define AOO_DLL_BANDWIDTH 0.012
 #endif
 
-// try to catch timing issues (e.g. blocking audio thread)
-#ifndef AOO_TIMEFILTER_CHECK
- #define AOO_TIMEFILTER_CHECK 1
+// enable/disable timer check to
+// catch timing issues (e.g. blocking audio thread)
+#ifndef AOO_TIMER_CHECK
+ #define AOO_TIMER_CHECK 1
 #endif
 
 // the tolerance for deviations from the nominal block period
-#ifndef AOO_TIMEFILTER_TOLERANCE
- #define AOO_TIMEFILTER_TOLERANCE 0.25
+#ifndef AOO_TIMER_TOLERANCE
+ #define AOO_TIMER_TOLERANCE 0.25
 #endif
 
 // ping interval (sink to source) in ms
@@ -96,8 +98,8 @@ AOO_API void aoo_set_allocator(const aoo_allocator *alloc);
 #endif
 
 // resend buffer size in ms
-#ifndef AOO_RESEND_BUFSIZE
- #define AOO_RESEND_BUFSIZE 1000
+#ifndef AOO_RESEND_BUFFERSIZE
+ #define AOO_RESEND_BUFFERSIZE 1000
 #endif
 
 // send redundancy
@@ -106,8 +108,8 @@ AOO_API void aoo_set_allocator(const aoo_allocator *alloc);
 #endif
 
 // enable/disable packet resending
-#ifndef AOO_RESEND_ENABLE
- #define AOO_RESEND_ENABLE 1
+#ifndef AOO_RESEND_DATA
+ #define AOO_RESEND_DATA 1
 #endif
 
 // interval between resend attempts in ms
@@ -279,8 +281,7 @@ typedef enum aoo_option
     // Stream format (aoo_format)
     // ---
     // Set the format by passing a pointer to the format header ('aoo_format').
-    // The format must be non-const because it is validated and updated on success!
-    // This is only works with aoo_source.
+    // The format is validated and updated on success! Only works with aoo_source.
     //
     // Get the format by passing a pointer to an instance of 'aoo_format_storage' or
     // similar struct that is large enough to hold any codec format.
@@ -312,14 +313,14 @@ typedef enum aoo_option
     // The time DLL filter estimates the effective samplerate
     // and is used to compensate clock drift via dynamic resampling.
     // See the paper "Using a DLL to filter time" by Fons Adriaensen.
-    AOO_OPT_TIMEFILTER_BANDWIDTH,
+    AOO_OPT_DLL_BANDWIDTH,
     // Sink channel onset (int32_t)
     // ---
     // The channel onset of the sink where a given source
     // should be received. For example, if the channel onset
     // is 5, a 2-channel source will be summed into sink
     // channels 5 and 6. The default is 0 (= the first channel).
-    AOO_OPT_CHANNELONSET,
+    AOO_OPT_CHANNEL_ONSET,
     // Max. UDP packet size in bytes (int32_t)
     // ---
     // The default value of 512 should work across most
@@ -339,7 +340,7 @@ typedef enum aoo_option
     // for a certain amount of time.
     AOO_OPT_PING_INTERVAL,
     // Enable/disable resending (int32_t)
-    AOO_OPT_RESEND_ENABLE,
+    AOO_OPT_RESEND_DATA,
     // Resend buffer size in ms (int32_t).
     // ---
     // The source keeps the last N ms of audio in a buffer,
@@ -492,12 +493,12 @@ static inline aoo_error aoo_source_get_buffersize(aoo_source *src, int32_t *n) {
     return aoo_source_get_option(src, AOO_OPT_BUFFERSIZE, AOO_ARG(*n));
 }
 
-static inline aoo_error aoo_source_set_timefilter_bandwidth(aoo_source *src, float n) {
-    return aoo_source_set_option(src, AOO_OPT_TIMEFILTER_BANDWIDTH, AOO_ARG(n));
+static inline aoo_error aoo_source_set_dll_bandwidth(aoo_source *src, float n) {
+    return aoo_source_set_option(src, AOO_OPT_DLL_BANDWIDTH, AOO_ARG(n));
 }
 
-static inline aoo_error aoo_source_get_timefilter_bandwidth(aoo_source *src, float *n) {
-    return aoo_source_get_option(src, AOO_OPT_TIMEFILTER_BANDWIDTH, AOO_ARG(*n));
+static inline aoo_error aoo_source_get_dll_bandwidth(aoo_source *src, float *n) {
+    return aoo_source_get_option(src, AOO_OPT_DLL_BANDWIDTH, AOO_ARG(*n));
 }
 
 static inline aoo_error aoo_source_set_packetsize(aoo_source *src, int32_t n) {
@@ -532,14 +533,14 @@ static inline aoo_error aoo_source_get_redundancy(aoo_source *src, int32_t *n) {
     return aoo_source_get_option(src, AOO_OPT_REDUNDANCY, AOO_ARG(*n));
 }
 
-static inline aoo_error aoo_source_set_sink_channelonset(aoo_source *src, const void *address,
+static inline aoo_error aoo_source_set_sink_channel_onset(aoo_source *src, const void *address,
                                                          int32_t addrlen, aoo_id id, int32_t onset) {
-    return aoo_source_set_sinkoption(src, address, addrlen, id, AOO_OPT_CHANNELONSET, AOO_ARG(onset));
+    return aoo_source_set_sinkoption(src, address, addrlen, id, AOO_OPT_CHANNEL_ONSET, AOO_ARG(onset));
 }
 
-static inline aoo_error aoo_source_get_sink_channelonset(aoo_source *src, const void *address,
+static inline aoo_error aoo_source_get_sink_channel_onset(aoo_source *src, const void *address,
                                                          int32_t addrlen, aoo_id id, int32_t *onset) {
-    return aoo_source_get_sinkoption(src, address, addrlen, id, AOO_OPT_CHANNELONSET, AOO_ARG(*onset));
+    return aoo_source_get_sinkoption(src, address, addrlen, id, AOO_OPT_CHANNEL_ONSET, AOO_ARG(*onset));
 }
 
 /*//////////////////// AoO sink /////////////////////*/
@@ -624,12 +625,12 @@ static inline aoo_error aoo_sink_get_buffersize(aoo_sink *sink, int32_t *n) {
     return aoo_sink_get_option(sink, AOO_OPT_BUFFERSIZE, AOO_ARG(*n));
 }
 
-static inline aoo_error aoo_sink_set_timefilter_bandwith(aoo_sink *sink, float n) {
-    return aoo_sink_set_option(sink, AOO_OPT_TIMEFILTER_BANDWIDTH, AOO_ARG(n));
+static inline aoo_error aoo_sink_set_dll_bandwith(aoo_sink *sink, float n) {
+    return aoo_sink_set_option(sink, AOO_OPT_DLL_BANDWIDTH, AOO_ARG(n));
 }
 
-static inline aoo_error aoo_sink_get_timefilter_bandwidth(aoo_sink *sink, float *n) {
-    return aoo_sink_get_option(sink, AOO_OPT_TIMEFILTER_BANDWIDTH, AOO_ARG(*n));
+static inline aoo_error aoo_sink_get_dll_bandwidth(aoo_sink *sink, float *n) {
+    return aoo_sink_get_option(sink, AOO_OPT_DLL_BANDWIDTH, AOO_ARG(*n));
 }
 
 static inline aoo_error aoo_sink_set_packetsize(aoo_sink *sink, int32_t n) {
@@ -640,12 +641,12 @@ static inline aoo_error aoo_sink_get_packetsize(aoo_sink *sink, int32_t *n) {
     return aoo_sink_get_option(sink, AOO_OPT_PACKETSIZE, AOO_ARG(*n));
 }
 
-static inline aoo_error aoo_sink_set_resend_enable(aoo_sink *sink, int32_t b) {
-    return aoo_sink_set_option(sink, AOO_OPT_RESEND_ENABLE, AOO_ARG(b));
+static inline aoo_error aoo_sink_set_resend_data(aoo_sink *sink, int32_t b) {
+    return aoo_sink_set_option(sink, AOO_OPT_RESEND_DATA, AOO_ARG(b));
 }
 
-static inline aoo_error aoo_sink_get_resend_enable(aoo_sink *sink, int32_t *b) {
-    return aoo_sink_get_option(sink, AOO_OPT_RESEND_ENABLE, AOO_ARG(*b));
+static inline aoo_error aoo_sink_get_resend_data(aoo_sink *sink, int32_t *b) {
+    return aoo_sink_get_option(sink, AOO_OPT_RESEND_DATA, AOO_ARG(*b));
 }
 
 static inline aoo_error aoo_sink_set_resend_interval(aoo_sink *sink, int32_t n) {

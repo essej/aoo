@@ -313,8 +313,8 @@ void aoo_recv_bufsize(AooReceiveUnit *unit, sc_msg_iter *args){
         });
 }
 
-void aoo_recv_timefilter(AooReceiveUnit *unit, sc_msg_iter *args){
-    unit->delegate().sink()->set_timefilter_bandwidth(args->getf());
+void aoo_recv_dll_bw(AooReceiveUnit *unit, sc_msg_iter *args){
+    unit->delegate().sink()->set_dll_bandwidth(args->getf());
 }
 
 void aoo_recv_packetsize(AooReceiveUnit *unit, sc_msg_iter *args){
@@ -322,7 +322,7 @@ void aoo_recv_packetsize(AooReceiveUnit *unit, sc_msg_iter *args){
 }
 
 void aoo_recv_resend(AooReceiveUnit *unit, sc_msg_iter *args){
-    unit->delegate().sink()->set_resend_enable(args->geti());
+    unit->delegate().sink()->set_resend_data(args->geti());
 }
 
 void aoo_recv_resend_limit(AooReceiveUnit *unit, sc_msg_iter *args){
@@ -386,7 +386,7 @@ void AooReceiveLoad(InterfaceTable* inTable) {
     AooUnitCmd(invite);
     AooUnitCmd(uninvite);
     AooUnitCmd(bufsize);
-    AooUnitCmd(timefilter);
+    AooUnitCmd(dll_bw);
     AooUnitCmd(packetsize);
     AooUnitCmd(resend);
     AooUnitCmd(resend_limit);

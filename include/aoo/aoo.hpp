@@ -120,12 +120,12 @@ public:
         return get_option(AOO_OPT_BUFFERSIZE, AOO_ARG(n));
     }
 
-    aoo_error set_timefilter_bandwidth(float f){
-        return set_option(AOO_OPT_TIMEFILTER_BANDWIDTH, AOO_ARG(f));
+    aoo_error set_dll_bandwidth(float f){
+        return set_option(AOO_OPT_DLL_BANDWIDTH, AOO_ARG(f));
     }
 
-    aoo_error get_timefilter_bandwidth(float& f){
-        return get_option(AOO_OPT_TIMEFILTER_BANDWIDTH, AOO_ARG(f));
+    aoo_error get_dll_bandwidth(float& f){
+        return get_option(AOO_OPT_DLL_BANDWIDTH, AOO_ARG(f));
     }
 
     aoo_error set_packetsize(int32_t n){
@@ -166,13 +166,13 @@ public:
     //--------------------- sink options --------------------------//
     // set/get sink options (always threadsafe)
 
-    aoo_error set_sink_channelonset(const void *address, int32_t addrlen,
+    aoo_error set_sink_channel_onset(const void *address, int32_t addrlen,
                                   aoo_id id, int32_t onset){
-        return set_sinkoption(address, addrlen, id, AOO_OPT_CHANNELONSET, AOO_ARG(onset));
+        return set_sinkoption(address, addrlen, id, AOO_OPT_CHANNEL_ONSET, AOO_ARG(onset));
     }
 
-    aoo_error get_sink_channelonset(const void *address, int32_t addrlen, aoo_id id, int32_t& onset){
-        return get_sinkoption(address, addrlen, id, AOO_OPT_CHANNELONSET, AOO_ARG(onset));
+    aoo_error get_sink_channel_onset(const void *address, int32_t addrlen, aoo_id id, int32_t& onset){
+        return get_sinkoption(address, addrlen, id, AOO_OPT_CHANNEL_ONSET, AOO_ARG(onset));
     }
 
     virtual aoo_error set_sinkoption(const void *address, int32_t addrlen, aoo_id id,
@@ -267,12 +267,12 @@ public:
         return get_option(AOO_OPT_BUFFERSIZE, AOO_ARG(n));
     }
 
-    aoo_error set_timefilter_bandwidth(float f){
-        return set_option(AOO_OPT_TIMEFILTER_BANDWIDTH, AOO_ARG(f));
+    aoo_error set_dll_bandwidth(float f){
+        return set_option(AOO_OPT_DLL_BANDWIDTH, AOO_ARG(f));
     }
 
-    aoo_error get_timefilter_bandwidth(float& f){
-        return get_option(AOO_OPT_TIMEFILTER_BANDWIDTH, AOO_ARG(f));
+    aoo_error get_dll_bandwidth(float& f){
+        return get_option(AOO_OPT_DLL_BANDWIDTH, AOO_ARG(f));
     }
 
     aoo_error set_packetsize(int32_t n){
@@ -283,12 +283,12 @@ public:
         return get_option(AOO_OPT_PACKETSIZE, AOO_ARG(n));
     }
 
-    aoo_error set_resend_enable(bool b){
-        return set_option(AOO_OPT_RESEND_ENABLE, AOO_ARG(b));
+    aoo_error set_resend_data(bool b){
+        return set_option(AOO_OPT_RESEND_DATA, AOO_ARG(b));
     }
 
-    aoo_error get_resend_enable(bool& b){
-        return get_option(AOO_OPT_RESEND_ENABLE, AOO_ARG(b));
+    aoo_error get_resend_data(bool& b){
+        return get_option(AOO_OPT_RESEND_DATA, AOO_ARG(b));
     }
 
     aoo_error set_resend_interval(int32_t n){

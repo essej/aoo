@@ -161,7 +161,7 @@ static void aoo_pack_channel(t_aoo_pack *x, t_floatarg f)
 {
     x->x_sink_chn = f > 0 ? f : 0;
     if (x->x_sink_id != AOO_ID_NONE){
-        x->x_source->set_sink_channelonset(x->x_address.address(), x->x_address.length(),
+        x->x_source->set_sink_channel_onset(x->x_address.address(), x->x_address.length(),
                                            x->x_sink_id, x->x_sink_chn);
     }
 }
@@ -186,9 +186,9 @@ static void aoo_pack_redundancy(t_aoo_pack *x, t_floatarg f)
     x->x_source->set_redundancy(f);
 }
 
-static void aoo_pack_timefilter(t_aoo_pack *x, t_floatarg f)
+static void aoo_pack_dll_bandwidth(t_aoo_pack *x, t_floatarg f)
 {
-    x->x_source->set_timefilter_bandwidth(f);
+    x->x_source->set_dll_bandwidth(f);
 }
 
 static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -332,7 +332,7 @@ t_aoo_pack::t_aoo_pack(int argc, t_atom *argv)
     if (x_sink_id != AOO_ID_NONE){
         x_source->add_sink(x_address.address(), x_address.length(), x_sink_id, 0);
         // set channel
-        x_source->set_sink_channelonset(x_address.address(), x_address.length(),
+        x_source->set_sink_channel_onset(x_address.address(), x_address.length(),
                                         x_sink_id, x_sink_chn);
     }
 
@@ -375,5 +375,5 @@ void aoo_pack_tilde_setup(void)
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_ping, gensym("ping"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_resend, gensym("resend"), A_FLOAT, A_NULL);
     class_addmethod(aoo_pack_class, (t_method)aoo_pack_redundancy, gensym("redundancy"), A_FLOAT, A_NULL);
-    class_addmethod(aoo_pack_class, (t_method)aoo_pack_timefilter, gensym("timefilter"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_pack_class, (t_method)aoo_pack_dll_bandwidth, gensym("dll_bandwidth"), A_FLOAT, A_NULL);
 }
