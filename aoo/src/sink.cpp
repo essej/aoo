@@ -1007,8 +1007,13 @@ float source_desc::get_buffer_fill_ratio(){
     scoped_shared_lock lock(mutex_);
     if (decoder_){
         // consider samples in resampler!
+        auto nsamples = decoder_->nchannels() * decoder_->blocksize();
         auto available = audioqueue_.read_available() +
-                (double)resampler_.balance() / (double)audioqueue_.blocksize();
+                (double)resampler_.size() / (double)nsamples;
+
+        LOG_DEBUG("fill ratio: audioqueue: " << audioqueue_.read_available()
+                  << ", resampler: " << (double)resampler_.size() / (double)nsamples);
+
         return available / (double)audioqueue_.capacity();
     } else {
         return 0.0;
