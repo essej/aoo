@@ -786,7 +786,7 @@ void source_imp::start_new_stream(){
 }
 
 void source_imp::update_audioqueue(){
-    if (encoder_){
+    if (encoder_ && samplerate_ > 0){
         // recalculate buffersize from ms to samples
         int32_t bufsize = (double)buffersize_.load() * 0.001 * encoder_->samplerate();
         auto d = div(bufsize, encoder_->blocksize());
@@ -810,7 +810,7 @@ void source_imp::update_audioqueue(){
 }
 
 void source_imp::update_resampler(){
-    if (encoder_){
+    if (encoder_ && samplerate_ > 0){
         resampler_.setup(blocksize_, encoder_->blocksize(),
                          samplerate_, encoder_->samplerate(),
                          encoder_->nchannels());
