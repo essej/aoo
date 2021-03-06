@@ -43,9 +43,6 @@ extern "C"
 #define AOO_VERSION_PATCH 0
 #define AOO_VERSION_PRERELEASE 3 // 0: no pre-release
 
-#define AOO_MSG_DOMAIN "/aoo"
-#define AOO_MSG_DOMAIN_LEN 4
-
 typedef int32_t aoo_id;
 #define AOO_ID_NONE INT32_MIN
 
@@ -92,6 +89,24 @@ enum aoo_error_codes
 {
     AOO_ERROR_UNSPECIFIED = -1,
     AOO_OK = 0
+};
+
+// OSC messages:
+#define AOO_MSG_DOMAIN "/aoo"
+#define AOO_MSG_DOMAIN_LEN 4
+
+// binary message: domain (int32), aoo_type (int16), msg_type (int16), aoo_id(int32)
+#define AOO_BIN_MSG_HEADER_SIZE 12
+
+#define AOO_BIN_MSG_DOMAIN "\0aoo"
+#define AOO_BIN_MSG_DOMAIN_SIZE 4
+
+#define AOO_BIN_MSG_CMD_DATA 0
+
+enum aoo_bin_msg_data_flags
+{
+    AOO_BIN_MSG_DATA_SAMPLERATE = 1 << 0,
+    AOO_BIN_MSG_DATA_FRAMES = 1 << 1
 };
 
 #ifdef __cplusplus

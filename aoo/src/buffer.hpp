@@ -12,13 +12,13 @@ namespace aoo {
 
 struct data_packet {
     int32_t sequence;
-    double samplerate;
     int32_t channel;
     int32_t totalsize;
     int32_t nframes;
-    int32_t framenum;
-    const char *data;
+    int32_t frame;
     int32_t size;
+    const char *data;
+    double samplerate;
 };
 
 /*///////////////////// history_buffer /////////////////////////*/

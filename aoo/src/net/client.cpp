@@ -93,10 +93,19 @@ void copy_string(const std::string& src, char *dst, int32_t size){
 
 /*//////////////////// OSC ////////////////////////////*/
 
+// optimized version of aoo_parse_pattern() for client/server
 aoo_error parse_pattern(const char *msg, int32_t n, aoo_type& type, int32_t& offset)
 {
     int32_t count = 0;
-    if (n >= AOO_MSG_DOMAIN_LEN
+    if (n >= AOO_BIN_MSG_HEADER_SIZE &&
+        !memcmp(msg, AOO_BIN_MSG_DOMAIN, AOO_BIN_MSG_DOMAIN_SIZE))
+    {
+        // domain (int32), type (int16), cmd (int16), id (int32) ...
+        type = aoo::from_bytes<int16_t>(msg + 4);
+        offset = 12;
+
+        return AOO_OK;
+    } else if (n >= AOO_MSG_DOMAIN_LEN
             && !memcmp(msg, AOO_MSG_DOMAIN, AOO_MSG_DOMAIN_LEN))
     {
         count += AOO_MSG_DOMAIN_LEN;

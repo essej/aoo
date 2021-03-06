@@ -180,6 +180,14 @@ public:
         return get_option(AOO_OPT_PING_INTERVAL, AOO_ARG(ms));
     }
 
+    aoo_error set_binary_data_msg(aoo_bool b) {
+        return set_option(AOO_OPT_BINARY_DATA_MSG, AOO_ARG(b));
+    }
+
+    aoo_error get_binary_data_msg(aoo_bool& b) {
+        return get_option(AOO_OPT_BINARY_DATA_MSG, AOO_ARG(b));
+    }
+
     virtual aoo_error set_option(int32_t opt, void *ptr, int32_t size) = 0;
     virtual aoo_error get_option(int32_t opt, void *ptr, int32_t size) = 0;
 

@@ -122,6 +122,13 @@ T from_bytes(const char *b){
 }
 
 template<typename T>
+T read_bytes(const char *& b){
+    auto pos = b;
+    b += sizeof(T);
+    return aoo::from_bytes<T>(pos);
+}
+
+template<typename T>
 void to_bytes(T v, char *b){
     union {
         T t;
@@ -135,6 +142,12 @@ void to_bytes(T v, char *b){
         b[i] = c.b[sizeof(T) - i - 1];
     }
 #endif
+}
+
+template<typename T>
+void write_bytes(T v, char *& b){
+    aoo::to_bytes<T>(v, b);
+    b += sizeof(T);
 }
 
 } // aoo

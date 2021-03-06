@@ -11,10 +11,16 @@
 
 /*//////////////////// AoO source /////////////////////*/
 
-#define AOO_DATA_HEADERSIZE 80
+// OSC data message
 // address pattern string: max 32 bytes
 // typetag string: max. 12 bytes
 // args (without blob data): 36 bytes
+#define AOO_MSG_DATA_HEADERSIZE 80
+
+// binary data message:
+// header: 12 bytes
+// args: 48 bytes (max.)
+#define AOO_BIN_MSG_DATA_HEADERSIZE 48
 
 aoo_source * aoo_source_new(aoo_id id, uint32_t flags) {
     return aoo::construct<aoo::source_imp>(id, flags);
@@ -91,7 +97,7 @@ aoo_error aoo::source_imp::set_option(int32_t opt, void *ptr, int32_t size)
     case AOO_OPT_PACKETSIZE:
     {
         CHECKARG(int32_t);
-        const int32_t minpacketsize = AOO_DATA_HEADERSIZE + 64;
+        const int32_t minpacketsize = AOO_MSG_DATA_HEADERSIZE + 64;
         auto packetsize = as<int32_t>(ptr);
         if (packetsize < minpacketsize){
             LOG_WARNING("packet size too small! setting to " << minpacketsize);
@@ -910,7 +916,7 @@ void source_imp::send_data(const sendfn& fn){
         d.channel = 0;
         d.totalsize = 0;
         d.nframes = 0;
-        d.framenum = 0;
+        d.frame = 0;
         d.data = nullptr;
         d.size = 0;
         // now we can unlock
@@ -922,10 +928,8 @@ void source_imp::send_data(const sendfn& fn){
         sink_lock lock(sinks_);
     #endif
         // send block to sinks
-        for (auto& sink : sinks_){
-            d.channel = sink.channel.load(std::memory_order_relaxed); // !
-            send_packet(fn, sink, salt, d);
-        }
+        // send block to all sinks
+        send_packet(fn, salt, d, binary_.load(std::memory_order_relaxed));
 
         updatelock.lock();
     }
@@ -973,7 +977,10 @@ void source_imp::send_data(const sendfn& fn){
             d.sequence = last_sequence = sequence_++;
 
             // calculate number of frames
-            auto maxpacketsize = packetsize_ - AOO_DATA_HEADERSIZE;
+            bool binary = binary_.load(std::memory_order_relaxed);
+            auto packetsize = packetsize_.load(std::memory_order_relaxed);
+            auto maxpacketsize = packetsize -
+                    (binary ? AOO_BIN_MSG_DATA_HEADERSIZE : AOO_MSG_DATA_HEADERSIZE);
             auto dv = div(d.totalsize, maxpacketsize);
             d.nframes = dv.quot + (dv.rem != 0);
 
@@ -991,19 +998,11 @@ void source_imp::send_data(const sendfn& fn){
             // send a single frame to all sinks
             // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
             auto dosend = [&](int32_t frame, const char* data, auto n){
-                d.framenum = frame;
+                d.frame = frame;
                 d.data = data;
                 d.size = n;
-                // we only free sources in this thread, so we don't have to lock
-            #if 0
-                // this is not a real lock, so we don't have worry about dead locks
-                sink_lock lock(sinks_);
-            #endif
-                // send block to sinks
-                for (auto& sink : sinks_){
-                    d.channel = sink.channel.load(std::memory_order_relaxed); // !
-                    send_packet(fn, sink, salt, d);
-                }
+                // send block to all sinks
+                send_packet(fn, salt, d, binary);
             };
 
             auto ntimes = redundancy_.load();
@@ -1055,6 +1054,8 @@ void source_imp::resend_data(const sendfn &fn){
         while (sink.data_requests.try_pop(request)){
             auto block = history_.find(request.sequence);
             if (block){
+                bool binary = binary_.load(std::memory_order_relaxed);
+
                 aoo::data_packet d;
                 d.sequence = block->sequence;
                 d.samplerate = block->samplerate;
@@ -1086,10 +1087,14 @@ void source_imp::resend_data(const sendfn &fn){
 
                     // send frames to sink
                     for (int i = 0; i < d.nframes; ++i){
-                        d.framenum = i;
+                        d.frame = i;
                         d.data = frameptr[i];
                         d.size = framesize[i];
-                        send_packet(fn, sink, salt, d);
+                        if (binary){
+                            send_packet_bin(fn, sink, salt, d);
+                        } else {
+                            send_packet_osc(fn, sink, salt, d);
+                        }
                     }
 
                     // lock again
@@ -1104,10 +1109,14 @@ void source_imp::resend_data(const sendfn &fn){
                         updatelock.unlock();
 
                         // send frame to sink
-                        d.framenum = request.frame;
+                        d.frame = request.frame;
                         d.data = sendbuffer_.data();
                         d.size = size;
-                        send_packet(fn, sink, salt, d);
+                        if (binary){
+                            send_packet_bin(fn, sink, salt, d);
+                        } else {
+                            send_packet_osc(fn, sink, salt, d);
+                        }
 
                         // lock again
                         updatelock.lock();
@@ -1120,10 +1129,52 @@ void source_imp::resend_data(const sendfn &fn){
     }
 }
 
+void source_imp::send_packet(const sendfn &fn, int32_t salt,
+                             data_packet& d, bool binary) {
+    if (binary){
+        char buf[AOO_MAXPACKETSIZE];
+        size_t size;
+
+        write_bin_data(nullptr, salt, d, buf, size);
+
+        // we only free sources in this thread, so we don't have to lock
+    #if 0
+        // this is not a real lock, so we don't have worry about dead locks
+        sink_lock lock(sinks_);
+    #endif
+        for (auto& sink : sinks_){
+            // overwrite id and channel!
+            aoo::to_bytes(sink.id, buf + 8);
+
+            auto channel = sink.channel.load(std::memory_order_relaxed);
+            aoo::to_bytes<int16_t>(channel, buf + AOO_BIN_MSG_HEADER_SIZE + 12);
+
+        #if AOO_DEBUG_DATA
+            LOG_DEBUG("send block: seq = " << d.sequence << ", sr = "
+                      << d.samplerate << ", chn = " << channel << ", totalsize = "
+                      << d.totalsize << ", nframes = " << d.nframes
+                      << ", frame = " << d.frame << ", size " << d.size);
+        #endif
+            fn(buf, size, sink.address, sink.flags);
+        }
+    } else {
+        // we only free sources in this thread, so we don't have to lock
+    #if 0
+        // this is not a real lock, so we don't have worry about dead locks
+        sink_lock lock(sinks_);
+    #endif
+        for (auto& sink : sinks_){
+            // set channel!
+            d.channel = sink.channel.load(std::memory_order_relaxed);
+            send_packet_osc(fn, sink, salt, d);
+        }
+    }
+}
+
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
-void source_imp::send_packet(const sendfn& fn, const endpoint& ep,
-                             int32_t salt, const aoo::data_packet& d) const {
+void source_imp::send_packet_osc(const sendfn& fn, const endpoint& ep,
+                                 int32_t salt, const aoo::data_packet& d) const {
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
@@ -1134,15 +1185,83 @@ void source_imp::send_packet(const sendfn& fn, const endpoint& ep,
              AOO_MSG_DOMAIN, AOO_MSG_SINK, ep.id, AOO_MSG_DATA);
 
     msg << osc::BeginMessage(address) << id() << salt << d.sequence << d.samplerate
-        << d.channel << d.totalsize << d.nframes << d.framenum << osc::Blob(d.data, d.size)
+        << d.channel << d.totalsize << d.nframes << d.frame << osc::Blob(d.data, d.size)
         << osc::EndMessage;
 
 #if AOO_DEBUG_DATA
-    LOG_DEBUG("send block: seq = " << d.sequence << ", sr = " << d.samplerate
-              << ", chn = " << d.channel << ", totalsize = " << d.totalsize
-              << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
+    LOG_DEBUG("send block: seq = " << d.sequence << ", sr = "
+              << d.samplerate << ", chn = " << d.channel << ", totalsize = "
+              << d.totalsize << ", nframes = " << d.nframes
+              << ", frame = " << d.frame << ", size " << d.size);
 #endif
     fn(msg.Data(), msg.Size(), ep.address, ep.flags);
+}
+
+// binary data message:
+// id (int32), salt (int32), seq (int32), channel (int16), flags (int16),
+// [total (int32), nframes (int16), frame (int16)],  [sr (float64)],
+// size (int32), data...
+
+void source_imp::write_bin_data(const endpoint* ep, int32_t salt,
+                                const data_packet& d, char *buf, size_t& size) const
+{
+    int16_t flags = 0;
+    if (d.samplerate != 0){
+        flags |= AOO_BIN_MSG_DATA_SAMPLERATE;
+    }
+    if (d.nframes > 1){
+        flags |= AOO_BIN_MSG_DATA_FRAMES;
+    }
+
+    auto it = buf;
+    // write header
+    memcpy(it, AOO_BIN_MSG_DOMAIN, AOO_BIN_MSG_DOMAIN_SIZE);
+    it += AOO_BIN_MSG_DOMAIN_SIZE;
+    aoo::write_bytes<int16_t>(AOO_TYPE_SINK, it);
+    aoo::write_bytes<int16_t>(AOO_BIN_MSG_CMD_DATA, it);
+    if (ep){
+        aoo::write_bytes<int32_t>(ep->id, it);
+    } else {
+        // skip
+        it += sizeof(int32_t);
+    }
+    // write arguments
+    aoo::write_bytes<int32_t>(id(), it);
+    aoo::write_bytes<int32_t>(salt, it);
+    aoo::write_bytes<int32_t>(d.sequence, it);
+    aoo::write_bytes<int16_t>(d.channel, it);
+    aoo::write_bytes<int16_t>(flags, it);
+    if (flags & AOO_BIN_MSG_DATA_FRAMES){
+        aoo::write_bytes<int32_t>(d.totalsize, it);
+        aoo::write_bytes<int16_t>(d.nframes, it);
+        aoo::write_bytes<int16_t>(d.frame, it);
+    }
+    if (flags & AOO_BIN_MSG_DATA_SAMPLERATE){
+         aoo::write_bytes<double>(d.samplerate, it);
+    }
+    aoo::write_bytes<int32_t>(d.size, it);
+    // write audio data
+    memcpy(it, d.data, d.size);
+    it += d.size;
+
+    size = it - buf;
+}
+
+void source_imp::send_packet_bin(const sendfn& fn, const endpoint& ep,
+                                 int32_t salt, const aoo::data_packet& d) const {
+    char buf[AOO_MAXPACKETSIZE];
+    size_t size;
+
+    write_bin_data(&ep, salt, d, buf, size);
+
+#if AOO_DEBUG_DATA
+    LOG_DEBUG("send block: seq = " << d.sequence << ", sr = "
+              << d.samplerate << ", chn = " << d.channel << ", totalsize = "
+              << d.totalsize << ", nframes = " << d.nframes
+              << ", frame = " << d.frame << ", size " << d.size);
+#endif
+
+    fn(buf, size, ep.address, ep.flags);
 }
 
 void source_imp::send_ping(const sendfn& fn){
@@ -1227,6 +1346,44 @@ void source_imp::handle_data_request(const osc::ReceivedMessage& msg,
         while (npairs--){
             int32_t sequence = (it++)->AsInt32();
             int32_t frame = (it++)->AsInt32();
+            sink->data_requests.push(sequence, frame);
+        }
+    } else {
+        LOG_VERBOSE("ignoring '" << AOO_MSG_DATA << "' message: sink not found");
+    }
+}
+
+// (header), id (int32), salt (int32), count (int32),
+// seq1 (int32), frame1(int32), seq2(int32), frame2(seq), etc.
+
+void source_imp::handle_data_request(const char *msg, int32_t n,
+                                     const ip_address& addr)
+{
+    // check size (id, salt, count)
+    if (n < 12){
+        LOG_ERROR("handle_data_request: header too small!");
+        return;
+    }
+
+    auto it = msg;
+
+    auto id = aoo::read_bytes<int32_t>(it);
+    auto salt = aoo::read_bytes<int32_t>(it); // we can ignore the salt
+
+    LOG_DEBUG("handle data request");
+
+    sink_lock lock(sinks_);
+    auto sink = find_sink(addr, id);
+    if (sink){
+        // get pairs of sequence + frame
+        int count = aoo::read_bytes<int32_t>(it);
+        if (n < (12 + count * sizeof(int32_t) * 2)){
+            LOG_ERROR("handle_data_request: bad 'count' argument!");
+            return;
+        }
+        while (count--){
+            int32_t sequence = aoo::read_bytes<int32_t>(it);
+            int32_t frame = aoo::read_bytes<int32_t>(it);
             sink->data_requests.push(sequence, frame);
         }
     } else {

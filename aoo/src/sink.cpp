@@ -392,47 +392,60 @@ aoo_error aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_t n,
 
 aoo_error aoo::sink_imp::handle_message(const char *data, int32_t n,
                                         const void *address, int32_t addrlen) {
-    try {
-        ip_address addr((const sockaddr *)address, addrlen);
-
-        osc::ReceivedPacket packet(data, n);
-        osc::ReceivedMessage msg(packet);
-
-        if (samplerate_ == 0){
-            return AOO_ERROR_UNSPECIFIED; // not setup yet
-        }
-
-        aoo_type type;
-        aoo_id sinkid;
-        int32_t onset;
-        auto err = aoo_parse_pattern(data, n, &type, &sinkid, &onset);
-        if (err != AOO_OK){
-            LOG_WARNING("not an AoO message!");
-            return AOO_ERROR_UNSPECIFIED;
-        }
-        if (type != AOO_TYPE_SINK){
-            LOG_WARNING("not a sink message!");
-            return AOO_ERROR_UNSPECIFIED;
-        }
-        if (sinkid != id()){
-            LOG_WARNING("wrong sink ID!");
-            return AOO_ERROR_UNSPECIFIED;
-        }
-
-        auto pattern = msg.AddressPattern() + onset;
-        if (!strcmp(pattern, AOO_MSG_FORMAT)){
-            return handle_format_message(msg, addr);
-        } else if (!strcmp(pattern, AOO_MSG_DATA)){
-            return handle_data_message(msg, addr);
-        } else if (!strcmp(pattern, AOO_MSG_PING)){
-            return handle_ping_message(msg, addr);
-        } else {
-            LOG_WARNING("unknown message " << pattern);
-        }
-    } catch (const osc::Exception& e){
-        LOG_ERROR("aoo_sink: exception in handle_message: " << e.what());
+    if (samplerate_ == 0){
+        return AOO_ERROR_UNSPECIFIED; // not setup yet
     }
-    return AOO_ERROR_UNSPECIFIED;
+
+    ip_address addr((const sockaddr *)address, addrlen);
+
+    aoo_type type;
+    aoo_id sinkid;
+    int32_t onset;
+    auto err = aoo_parse_pattern(data, n, &type, &sinkid, &onset);
+    if (err != AOO_OK){
+        LOG_WARNING("not an AoO message!");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+
+    if (type != AOO_TYPE_SINK){
+        LOG_WARNING("not a sink message!");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    if (sinkid != id()){
+        LOG_WARNING("wrong sink ID!");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+
+    if (data[0] == 0){
+        // binary message
+        auto cmd = aoo::from_bytes<int16_t>(data + AOO_BIN_MSG_DOMAIN_SIZE + 2);
+        switch (cmd){
+        case AOO_BIN_MSG_CMD_DATA:
+            return handle_data_message(data + onset, n - onset, addr);
+        default:
+            return AOO_ERROR_UNSPECIFIED;
+        }
+    } else {
+        // OSC message
+        try {
+            osc::ReceivedPacket packet(data, n);
+            osc::ReceivedMessage msg(packet);
+
+            auto pattern = msg.AddressPattern() + onset;
+            if (!strcmp(pattern, AOO_MSG_FORMAT)){
+                return handle_format_message(msg, addr);
+            } else if (!strcmp(pattern, AOO_MSG_DATA)){
+                return handle_data_message(msg, addr);
+            } else if (!strcmp(pattern, AOO_MSG_PING)){
+                return handle_ping_message(msg, addr);
+            } else {
+                LOG_WARNING("unknown message " << pattern);
+            }
+        } catch (const osc::Exception& e){
+            LOG_ERROR("aoo_sink: exception in handle_message: " << e.what());
+        }
+        return AOO_ERROR_UNSPECIFIED;
+    }
 }
 
 aoo_error aoo_sink_send(aoo_sink *sink, aoo_sendfn fn, void *user){
@@ -805,13 +818,72 @@ aoo_error sink_imp::handle_data_message(const osc::ReceivedMessage& msg,
     d.channel = (it++)->AsInt32();
     d.totalsize = (it++)->AsInt32();
     d.nframes = (it++)->AsInt32();
-    d.framenum = (it++)->AsInt32();
+    d.frame = (it++)->AsInt32();
     const void *blobdata;
     osc::osc_bundle_element_size_t blobsize;
     (it++)->AsBlob(blobdata, blobsize);
     d.data = (const char *)blobdata;
     d.size = blobsize;
 
+    return handle_data_packet(d, salt, addr, id, false);
+}
+
+// binary data message:
+// id (int32), salt (int32), seq (int32), channel (int16), flags (int16),
+// [total (int32), nframes (int16), frame (int16)],  [sr (float64)],
+// size (int32), data...
+
+aoo_error sink_imp::handle_data_message(const char *msg, int32_t n,
+                                        const ip_address& addr)
+{
+    // check size (excluding samplerate, frames and data)
+    if (n < 20){
+        LOG_ERROR("handle_data_message: header too small!");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+
+    auto it = msg;
+
+    auto id = aoo::read_bytes<int32_t>(it);
+    auto salt = aoo::read_bytes<int32_t>(it);
+
+    aoo::data_packet d;
+    d.sequence = aoo::read_bytes<int32_t>(it);
+    d.channel = aoo::read_bytes<int16_t>(it);
+    auto flags = aoo::read_bytes<int16_t>(it);
+    if (flags & AOO_BIN_MSG_DATA_FRAMES){
+        d.totalsize = aoo::read_bytes<int32_t>(it);
+        d.nframes = aoo::read_bytes<int16_t>(it);
+        d.frame = aoo::read_bytes<int16_t>(it);
+    } else {
+        d.totalsize = 0;
+        d.nframes = 1;
+        d.frame = 0;
+    }
+    if (flags & AOO_BIN_MSG_DATA_SAMPLERATE){
+        d.samplerate = aoo::read_bytes<double>(it);
+    } else {
+        d.samplerate = 0;
+    }
+
+    d.size = aoo::read_bytes<int32_t>(it);
+    if (d.totalsize == 0){
+        d.totalsize = d.size;
+    }
+
+    if (n < ((it - msg) + d.size)){
+        LOG_ERROR("handle_data_bin_message: wrong data size!");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+
+    d.data = it;
+
+    return handle_data_packet(d, salt, addr, id, true);
+}
+
+aoo_error sink_imp::handle_data_packet(data_packet& d, int32_t salt,
+                                       const ip_address& addr, aoo_id id, bool binary)
+{
     if (id < 0){
         LOG_WARNING("bad ID for " << AOO_MSG_DATA << " message");
         return AOO_ERROR_UNSPECIFIED;
@@ -825,7 +897,7 @@ aoo_error sink_imp::handle_data_message(const osc::ReceivedMessage& msg,
     if (!src){
         src = add_source(addr, id);
     }
-    return src->handle_data(*this, salt, d);
+    return src->handle_data(*this, salt, d, binary);
 }
 
 aoo_error sink_imp::handle_ping_message(const osc::ReceivedMessage& msg,
@@ -1142,7 +1214,11 @@ aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_
 
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
 
-aoo_error source_desc::handle_data(const sink_imp& s, int32_t salt, aoo::data_packet& d){
+aoo_error source_desc::handle_data(const sink_imp& s, int32_t salt,
+                                   data_packet& d, bool binary)
+{
+    binary_.store(binary, std::memory_order_relaxed);
+
     // always update packet time to signify that we're receiving packets
     last_packet_time_.store(s.elapsed_time(), std::memory_order_relaxed);
 
@@ -1176,18 +1252,24 @@ aoo_error source_desc::handle_data(const sink_imp& s, int32_t salt, aoo::data_pa
 #else
     assert(decoder_ != nullptr);
 #endif
-
-#if AOO_DEBUG_DATA
-    LOG_DEBUG("got block: seq = " << d.sequence << ", sr = " << d.samplerate
-              << ", chn = " << d.channel << ", totalsize = " << d.totalsize
-              << ", nframes = " << d.nframes << ", frame = " << d.framenum << ", size " << d.size);
-#endif
+    // check and fix up samplerate
+    if (d.samplerate == 0){
+        // no dynamic resampling, just use nominal samplerate
+        d.samplerate = decoder_->samplerate();
+    }
 
     // copy blob data and push to queue
     auto data = (char *)s.mem_alloc(d.size)->data();
     memcpy(data, d.data, d.size);
     d.data = data;
+
     packetqueue_.push(d);
+
+#if AOO_DEBUG_DATA
+    LOG_DEBUG("got block: seq = " << d.sequence << ", sr = " << d.samplerate
+              << ", chn = " << d.channel << ", totalsize = " << d.totalsize
+              << ", nframes = " << d.nframes << ", frame = " << d.frame << ", size " << d.size);
+#endif
 
     return AOO_OK;
 }
@@ -1543,26 +1625,26 @@ bool source_desc::add_packet(const data_packet& d, stream_state& state){
             // placeholder block
             block->init(d.sequence, d.samplerate,
                         d.channel, d.totalsize, d.nframes);
-        } else if (block->has_frame(d.framenum)){
+        } else if (block->has_frame(d.frame)){
             // frame already received
-            LOG_VERBOSE("frame " << d.framenum << " of block " << d.sequence << " already received");
+            LOG_VERBOSE("frame " << d.frame << " of block " << d.sequence << " already received");
             return false;
         }
 
         if (d.sequence != newest){
             // out of order or resent
             if (block->resend_count() > 0){
-                LOG_VERBOSE("resent frame " << d.framenum << " of block " << d.sequence);
+                LOG_VERBOSE("resent frame " << d.frame << " of block " << d.sequence);
                 state.resent++;
             } else {
-                LOG_VERBOSE("frame " << d.framenum << " of block " << d.sequence << " out of order!");
+                LOG_VERBOSE("frame " << d.frame << " of block " << d.sequence << " out of order!");
                 state.reordered++;
             }
         }
     }
 
     // add frame to block
-    block->add_frame(d.framenum, (const char *)d.data, d.size);
+    block->add_frame(d.frame, (const char *)d.data, d.size);
 
     return true;
 }
@@ -1596,12 +1678,7 @@ void source_desc::process_blocks(const sink_imp& s, stream_state& state){
                 // block is ready
                 data = b.data();
                 size = b.size();
-            #if 1
-                // dynamic resampling
                 sr = b.samplerate; // real samplerate
-            #else
-                sr = decoder_->samplerate(); // nominal samplerate
-            #endif
                 channel = b.channel;
             #if AOO_DEBUG_JITTER_BUFFER
                 DO_LOG_DEBUG("jitter buffer: write samples for block ("
@@ -1758,6 +1835,11 @@ void source_desc::send_format_request(const sink_imp& s, const sendfn& fn) {
     fn(msg.Data(), msg.Size(), addr_, flags_);
 }
 
+// /aoo/src/<id>/data <id> <salt> <seq1> <frame1> <seq2> <frame2> etc.
+// or
+// (header), id (int32), salt (int32), count (int32),
+// seq1 (int32), frame1(int32), seq2(int32), frame2(seq), etc.
+
 void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
     if (!datarequestqueue_.empty()){
         return;
@@ -1768,46 +1850,92 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
     lock.unlock();
 
     char buf[AOO_MAXPACKETSIZE];
-    osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-    // make OSC address pattern
-    const int32_t maxaddrsize = AOO_MSG_DOMAIN_LEN +
-            AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_DATA_LEN;
-    char pattern[maxaddrsize];
-    snprintf(pattern, sizeof(pattern), "%s%s/%d%s",
-             AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_DATA);
+    if (binary_.load(std::memory_order_relaxed)){
+        const int32_t maxdatasize = s.packetsize()
+                - (AOO_BIN_MSG_HEADER_SIZE + 8); // id + salt
+        const int32_t maxrequests = maxdatasize / 8; // 2 * int32
+        int32_t numrequests = 0;
 
-    const int32_t maxdatasize = s.packetsize() - maxaddrsize - 16; // id + salt + padding
-    const int32_t maxrequests = maxdatasize / 10; // 2 * (int32_t + typetag)
-    int32_t numrequests = 0;
+        auto it = buf;
+        // write header
+        memcpy(it, AOO_BIN_MSG_DOMAIN, AOO_BIN_MSG_DOMAIN_SIZE);
+        it += AOO_BIN_MSG_DOMAIN_SIZE;
+        aoo::write_bytes<int16_t>(AOO_TYPE_SINK, it);
+        aoo::write_bytes<int16_t>(AOO_BIN_MSG_CMD_DATA, it);
+        aoo::write_bytes<int32_t>(id(), it);
+        // write first 2 args (constant)
+        aoo::write_bytes<int32_t>(s.id(), it);
+        aoo::write_bytes<int32_t>(salt, it);
+        // skip 'count' field
+        it += sizeof(int32_t);
 
-    msg << osc::BeginMessage(pattern) << s.id() << salt;
+        auto head = it;
 
-    data_request r;
-    while (datarequestqueue_.try_pop(r)){
-        msg << r.sequence << r.frame;
-        if (++numrequests >= maxrequests){
+        data_request r;
+        while (datarequestqueue_.try_pop(r)){
+            aoo::write_bytes<int32_t>(r.sequence, it);
+            aoo::write_bytes<int32_t>(r.frame, it);
+            if (++numrequests >= maxrequests){
+                // write 'count' field
+                aoo::to_bytes(numrequests, head - sizeof(int32_t));
+                // send it off
+                fn(buf, it - buf, address(), flags_);
+                // prepare next message (just rewind)
+                it = head;
+                numrequests = 0;
+            }
+        }
+
+        if (numrequests > 0){
+            // write 'count' field
+            aoo::to_bytes(numrequests, head - sizeof(int32_t));
+            // send it off
+            fn(buf, it - buf, address(), flags_);
+        }
+    } else {
+        char buf[AOO_MAXPACKETSIZE];
+        osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+        // make OSC address pattern
+        const int32_t maxaddrsize = AOO_MSG_DOMAIN_LEN +
+                AOO_MSG_SOURCE_LEN + 16 + AOO_MSG_DATA_LEN;
+        char pattern[maxaddrsize];
+        snprintf(pattern, sizeof(pattern), "%s%s/%d%s",
+                 AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_DATA);
+
+        const int32_t maxdatasize = s.packetsize() - maxaddrsize - 16; // id + salt + padding
+        const int32_t maxrequests = maxdatasize / 10; // 2 * (int32_t + typetag)
+        int32_t numrequests = 0;
+
+        msg << osc::BeginMessage(pattern) << s.id() << salt;
+
+        data_request r;
+        while (datarequestqueue_.try_pop(r)){
+            msg << r.sequence << r.frame;
+            if (++numrequests >= maxrequests){
+                // send it off
+                msg << osc::EndMessage;
+
+                fn(msg.Data(), msg.Size(), address(), flags_);
+
+                // prepare next message
+                msg.Clear();
+                msg << osc::BeginMessage(pattern) << s.id() << salt;
+                numrequests = 0;
+            }
+        }
+
+        if (numrequests > 0){
             // send it off
             msg << osc::EndMessage;
 
             fn(msg.Data(), msg.Size(), address(), flags_);
-
-            // prepare next message
-            msg.Clear();
-            msg << osc::BeginMessage(pattern) << s.id() << salt;
-            numrequests = 0;
         }
-    }
-
-    if (numrequests > 0){
-        // send it off
-        msg << osc::EndMessage;
-
-        fn(msg.Data(), msg.Size(), address(), flags_);
     }
 }
 
-// AoO/<id>/invite <sink>
+// /aoo/src/<id>/invite <sink>
 
 // only send every 50 ms! LATER we might make this settable
 #define INVITE_INTERVAL 0.05

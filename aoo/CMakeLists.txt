@@ -18,6 +18,9 @@ message(STATUS "timer check: ${TIMER_CHECK}")
 set(TIMER_TOLERANCE 0.25 CACHE STRING "default timer check tolerance")
 message(STATUS "default timer check tolerance: ${TIMER_TOLERANCE}")
 
+option(BINARY_DATA_MSG "use timer check" ON)
+message(STATUS "send binary data message: ${BINARY_DATA_MSG}")
+
 # compile time debugging options
 option(DEBUG_MEMORY "debug memory usage" OFF)
 
@@ -39,6 +42,7 @@ set(OPTIONS
     "-DAOO_DLL_BANDWIDTH=${DLL_BANDWIDTH}"
     "-DAOO_TIMER_CHECK=$<BOOL:${TIMER_CHECK}>"
     "-DAOO_TIMER_TOLERANCE=${TIMER_TOLERANCE}"
+    "-DAOO_BINARY_DATA_MSG=$<BOOL:${BINARY_DATA_MSG}>"
     "-DAOO_DEBUG_MEMORY=$<BOOL:${DEBUG_MEMORY}>"
     "-DAOO_DEBUG_DATA=$<BOOL:${DEBUG_DATA}>"
     "-DAOO_DEBUG_DLL=$<BOOL:${DEBUG_DLL}>"

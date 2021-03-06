@@ -208,6 +208,7 @@ class source_imp final : public source {
     std::atomic<float> ping_interval_{ AOO_PING_INTERVAL * 0.001 };
     std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
     std::atomic<bool> timer_check_{ AOO_TIMER_CHECK };
+    std::atomic<bool> binary_{ AOO_BINARY_DATA_MSG };
 
     // helper methods
     aoo_error set_format(aoo_format& f);
@@ -236,8 +237,17 @@ class source_imp final : public source {
 
     void resend_data(const sendfn& fn);
 
-    void send_packet(const sendfn& fn, const endpoint& ep,
-                     int32_t salt, const aoo::data_packet& d) const;
+    void send_packet(const sendfn& fn, int32_t salt,
+                     data_packet& d, bool binary);
+
+    void send_packet_osc(const sendfn& fn, const endpoint& ep,
+                         int32_t salt, const data_packet& d) const;
+
+    void send_packet_bin(const sendfn& fn, const endpoint& ep,
+                         int32_t salt, const data_packet& d) const;
+
+    void write_bin_data(const endpoint* ep, int32_t salt,
+                        const data_packet& d, char *buf, size_t& size) const;
 
     void send_ping(const sendfn& fn);
 
@@ -245,6 +255,9 @@ class source_imp final : public source {
                                const ip_address& addr);
 
     void handle_data_request(const osc::ReceivedMessage& msg,
+                             const ip_address& addr);
+
+    void handle_data_request(const char * msg, int32_t n,
                              const ip_address& addr);
 
     void handle_ping(const osc::ReceivedMessage& msg,

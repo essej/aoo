@@ -81,6 +81,11 @@ AOO_API void aoo_set_allocator(const aoo_allocator *alloc);
 #endif
 
 // enable/disable dynamic resampling
+#ifndef AOO_BINARY_DATA_MSG
+ #define AOO_BINARY_DATA_MSG 1
+#endif
+
+// enable/disable dynamic resampling
 #ifndef AOO_DYNAMIC_RESAMPLING
  #define AOO_DYNAMIC_RESAMPLING 1
 #endif
@@ -402,7 +407,12 @@ typedef enum aoo_option
     // This is a read-only option for aoo_sink_get_source_option,
     // giving a ratio of how full the buffer is;
     // 0.0 is empty and 1.0 is full
-    AOO_OPT_BUFFER_FILL_RATIO
+    AOO_OPT_BUFFER_FILL_RATIO,
+    // Binary data message
+    // ---
+    // Use a more compact (and faster) binary format
+    // for the audio data message
+    AOO_OPT_BINARY_DATA_MSG
 } aoo_option;
 
 #define AOO_ARG(x) ((void *)&x), sizeof(x)
@@ -579,6 +589,14 @@ static inline aoo_error aoo_source_set_redundancy(aoo_source *src, int32_t n) {
 
 static inline aoo_error aoo_source_get_redundancy(aoo_source *src, int32_t *n) {
     return aoo_source_get_option(src, AOO_OPT_REDUNDANCY, AOO_ARG(*n));
+}
+
+static inline aoo_error aoo_source_set_binary_data_msg(aoo_source *src, aoo_bool b) {
+    return aoo_source_set_option(src, AOO_OPT_BINARY_DATA_MSG, AOO_ARG(b));
+}
+
+static inline aoo_error aoo_source_get_binary_data_msg(aoo_source *src, aoo_bool *b) {
+    return aoo_source_get_option(src, AOO_OPT_BINARY_DATA_MSG, AOO_ARG(*b));
 }
 
 static inline aoo_error aoo_source_set_sink_channel_onset(aoo_source *src, const void *address,
