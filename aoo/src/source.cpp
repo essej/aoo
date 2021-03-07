@@ -183,11 +183,9 @@ aoo_error aoo::source_imp::get_option(int32_t opt, void *ptr, int32_t size)
     case AOO_OPT_FORMAT:
     {
         assert(size >= sizeof(aoo_format));
-        auto& fmt = as<aoo_format>(ptr);
-        fmt.size = size; // !
         shared_lock lock(update_mutex_); // read lock!
         if (encoder_){
-            return encoder_->get_format(fmt);
+            return encoder_->get_format(as<aoo_format>(ptr), size);
         } else {
             return AOO_ERROR_UNSPECIFIED;
         }
@@ -850,8 +848,7 @@ void source_imp::send_format(const sendfn& fn){
     int32_t salt = salt_;
 
     aoo_format_storage f;
-    f.header.size = sizeof(aoo_format_storage); // !
-    if (encoder_->get_format(f.header) != AOO_OK){
+    if (encoder_->get_format(f.header, sizeof(aoo_format_storage)) != AOO_OK){
         return;
     }
 
@@ -1353,8 +1350,8 @@ void source_imp::handle_format_request(const osc::ReceivedMessage& msg,
             auto c = aoo::find_codec(f.codec);
             if (c){
                 aoo_format_storage fmt;
-                fmt.header.size = sizeof(aoo_format_storage); // !
-                if (c->deserialize(f, (const char *)settings, size, fmt.header) == AOO_OK){
+                if (c->deserialize(f, (const char *)settings, size, fmt.header,
+                                   sizeof(aoo_format_storage)) == AOO_OK){
                     // send format event
                     // NOTE: we could just allocate 'aoo_format_storage', but it would be wasteful.
                     auto mem = memory_.alloc(fmt.header.size);

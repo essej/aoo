@@ -5,6 +5,7 @@
 #endif
 
 #include "imp.hpp"
+#include "codec.hpp"
 
 #include "common/sync.hpp"
 #include "common/time.hpp"
@@ -18,6 +19,7 @@
 #include <iostream>
 #include <sstream>
 #include <atomic>
+#include <unordered_map>
 
 namespace aoo {
 
@@ -373,6 +375,34 @@ void memory_list::free(memory_block* b) {
 }
 
 } // aoo
+
+/*//////////////////// codec //////////////////*/
+
+
+namespace aoo {
+
+static std::unordered_map<std::string, std::unique_ptr<aoo::codec>> g_codec_dict;
+
+const aoo::codec * find_codec(const char * name){
+    auto it = g_codec_dict.find(name);
+    if (it != g_codec_dict.end()){
+        return it->second.get();
+    } else {
+        return nullptr;
+    }
+}
+
+} // aoo
+
+aoo_error aoo_register_codec(const char *name, const aoo_codec *codec){
+    if (aoo::g_codec_dict.count(name) != 0){
+        LOG_WARNING("aoo: codec " << name << " already registered!");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    aoo::g_codec_dict[name] = std::make_unique<aoo::codec>(codec);
+    LOG_VERBOSE("aoo: registered codec '" << name << "'");
+    return AOO_OK;
+}
 
 /*/////////////// (de)initialize //////////////////*/
 

@@ -144,7 +144,7 @@ public:
 
     int32_t poll_events(sink_imp& s, aoo_eventhandler fn, void *user);
 
-    aoo_error get_format(aoo_format& format);
+    aoo_error get_format(aoo_format& format, size_t size);
 
     // methods
     void reset(const sink_imp& s);

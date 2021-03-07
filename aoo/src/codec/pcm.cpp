@@ -141,16 +141,14 @@ struct codec {
     aoo_format_pcm format;
 };
 
-aoo_error setformat(void *enc, aoo_format *f)
+aoo_error set_format(codec *c, aoo_format_pcm *fmt)
 {
-    if (strcmp(f->codec, AOO_CODEC_PCM)){
+    if (strcmp(fmt->header.codec, AOO_CODEC_PCM)){
         return AOO_ERROR_UNSPECIFIED;
     }
-    if (f->size < sizeof(aoo_format_pcm)){
+    if (fmt->header.size < sizeof(aoo_format_pcm)){
         return AOO_ERROR_UNSPECIFIED;
     }
-    auto c = static_cast<codec *>(enc);
-    auto fmt = reinterpret_cast<aoo_format_pcm *>(f);
 
     fmt->header.codec = AOO_CODEC_PCM; // static string!
     fmt->header.size = sizeof(aoo_format_pcm); // actual size!
@@ -186,18 +184,33 @@ aoo_error setformat(void *enc, aoo_format *f)
     return AOO_OK;
 }
 
-aoo_error getformat(void *x, aoo_format *f)
+aoo_error get_format(codec *c, aoo_format *f, size_t size)
 {
-    auto c = static_cast<codec *>(x);
     // check if format has been set
     if (c->format.header.codec){
-        if (f->size >= c->format.header.size){
+        if (size >= c->format.header.size){
             memcpy(f, &c->format, sizeof(aoo_format_pcm));
             return AOO_OK;
         } else {
             return AOO_ERROR_UNSPECIFIED;
         }
     } else {
+        return AOO_ERROR_UNSPECIFIED;
+    }
+}
+
+aoo_error pcm_ctl(void *x, int32_t ctl, void *ptr, int32_t size){
+    switch (ctl){
+    case AOO_CODEC_SET_FORMAT:
+        assert(size >= sizeof(aoo_format));
+        return set_format((codec *)x, (aoo_format_pcm *)ptr);
+    case AOO_CODEC_GET_FORMAT:
+        return get_format((codec *)x, (aoo_format *)ptr, size);
+    case AOO_CODEC_RESET:
+        // no op
+        return AOO_OK;
+    default:
+        LOG_WARNING("PCM: unsupported codec ctl " << ctl);
         return AOO_ERROR_UNSPECIFIED;
     }
 }
@@ -334,13 +347,13 @@ aoo_error serialize(const aoo_format *f, char *buf, int32_t *size)
 }
 
 aoo_error deserialize(const aoo_format *header, const char *buf,
-                      int32_t size, aoo_format *f)
+                      int32_t nbytes, aoo_format *f, int32_t size)
 {
-    if (size < 4){
+    if (nbytes < 4){
         LOG_ERROR("PCM: couldn't read format - not enough data!");
         return AOO_ERROR_UNSPECIFIED;
     }
-    if (f->size < sizeof(aoo_format_pcm)){
+    if (size < sizeof(aoo_format_pcm)){
         LOG_ERROR("PCM: output format storage too small");
         return AOO_ERROR_UNSPECIFIED;
     }
@@ -362,14 +375,12 @@ aoo_codec codec_class = {
     // encoder
     encoder_new,
     encoder_free,
-    setformat,
-    getformat,
+    pcm_ctl,
     encode,
     // decoder
     decoder_new,
     decoder_free,
-    setformat,
-    getformat,
+    pcm_ctl,
     decode,
     // helper
     serialize,

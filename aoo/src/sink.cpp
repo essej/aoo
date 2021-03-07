@@ -224,6 +224,7 @@ aoo_error aoo::sink_imp::get_option(int32_t opt, void *ptr, int32_t size)
     switch (opt){
     // id
     case AOO_OPT_ID:
+        CHECKARG(aoo_id);
         as<aoo_id>(ptr) = id();
         break;
     // buffer size
@@ -334,12 +335,8 @@ aoo_error aoo::sink_imp::get_source_option(const void *address, int32_t addrlen,
         switch (opt){
         // format
         case AOO_OPT_FORMAT:
-        {
             assert(size >= sizeof(aoo_format));
-            auto& fmt = as<aoo_format>(ptr);
-            fmt.size = size; // !
-            return src->get_format(fmt);
-        }
+            return src->get_format(as<aoo_format>(ptr), size);
         case AOO_OPT_BUFFER_FILL_RATIO:
             CHECKARG(float);
             as<float>(ptr) = src->get_buffer_fill_ratio();
@@ -908,11 +905,11 @@ bool source_desc::is_active(const sink_imp& s) const {
     return (s.elapsed_time() - last) < s.source_timeout();
 }
 
-aoo_error source_desc::get_format(aoo_format &format){
+aoo_error source_desc::get_format(aoo_format &format, size_t size){
     // synchronize with handle_format() and update()!
     scoped_shared_lock lock(mutex_);
     if (decoder_){
-        return decoder_->get_format(format);
+        return decoder_->get_format(format, size);
     } else {
         return AOO_ERROR_UNSPECIFIED;
     }
@@ -1136,8 +1133,8 @@ aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_
 
     // read format
     aoo_format_storage fmt;
-    fmt.header.size = sizeof(aoo_format_storage); // !
-    if (decoder_->deserialize(f, settings, size, fmt.header) != AOO_OK){
+    if (decoder_->deserialize(f, settings, size, fmt.header,
+                              sizeof(aoo_format_storage)) != AOO_OK){
         return AOO_ERROR_UNSPECIFIED;
     }
     // set format

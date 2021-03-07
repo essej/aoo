@@ -803,18 +803,13 @@ typedef void* (*aoo_codec_new)(void);
 
 typedef void (*aoo_codec_free)(void *);
 
-// set the codec format.
-typedef aoo_error (*aoo_codec_setformat)(
-        void *,         // the encoder/decoder instance
-        aoo_format *    // the format (validated and updated on success)
-);
-
-// get the codec format.
-typedef aoo_error (*aoo_codec_getformat)(
-        void *,         // the encoder/decoder instance
-        aoo_format *    // format buffer large enough to hold the codec format.
-                        // NOTE: the 'size' field must be initialized to the
-                        // buffer size and is updated to the actual size.
+// codec control
+typedef aoo_error (*aoo_codec_ctlfn)
+(
+        void *, // the encoder/decoder instance
+        int32_t, // the ctl number
+        void *, // pointer to value
+        int32_t // the value size
 );
 
 // encode samples to bytes
@@ -848,10 +843,29 @@ typedef aoo_error (*aoo_codec_deserialize)(
         const aoo_format *, // format header
         const char *,       // option buffer
         int32_t,            // buffer size
-        aoo_format *        // format buffer large enough to hold the codec format.
-                            // NOTE: the 'size' field must be initialized to the
-                            // buffer size and is updated to the actual size.
+        aoo_format *,       // format buffer large enough to hold the codec format.
+        int32_t             // size of the format buffer
 );
+
+// NOTE: generic codec controls are negative, so you can also pass
+// codec specific controls (which are assumed to be positiv, e.g. OPUS_SET_BITRATE)
+typedef enum aoo_codec_ctl
+{
+    // reset the codec state (NULL)
+    AOO_CODEC_RESET = -1000,
+    // set the codec format (aoo_format)
+    // ---
+    // Set the format by passing a pointer to the format header.
+    // The format struct is validated and updated on success!
+    AOO_CODEC_SET_FORMAT,
+    // set the codec format (aoo_format)
+    // ---
+    // Get the format by passing a pointer to an instance of
+    // 'aoo_format_storage' or a similar struct that is large enough
+    // to hold any format. On success, the actual format size will be
+    // contained in the 'size' member of the format header.
+    AOO_CODEC_GET_FORMAT
+} aoo_codec_ctl;
 
 typedef struct aoo_codec
 {
@@ -859,20 +873,17 @@ typedef struct aoo_codec
     // encoder
     aoo_codec_new encoder_new;
     aoo_codec_free encoder_free;
-    aoo_codec_setformat encoder_setformat;
-    aoo_codec_getformat encoder_getformat;
+    aoo_codec_ctlfn encoder_ctl;
     aoo_codec_encode encoder_encode;
     // decoder
     aoo_codec_new decoder_new;
     aoo_codec_free decoder_free;
-    aoo_codec_setformat decoder_setformat;
-    aoo_codec_getformat decoder_getformat;
+    aoo_codec_ctlfn decoder_ctl;
     aoo_codec_decode decoder_decode;
     // helpers
     aoo_codec_serialize serialize;
     aoo_codec_deserialize deserialize;
     void *reserved[18];
-
 } aoo_codec;
 
 // register an external codec plugin
