@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <utility>
 #include <memory>
+#include <atomic>
 
 namespace aoo {
 
@@ -111,5 +112,51 @@ template<typename T>
 using allocator = std::allocator<T>;
 
 #endif
+
+/*////////////// memory //////////////*/
+
+struct memory_block {
+    struct {
+        memory_block *next;
+        size_t size;
+    } header;
+    char mem[1];
+
+    static memory_block * allocate(size_t size);
+
+    static void free(memory_block *mem);
+
+    static memory_block * from_bytes(void *bytes){
+        return (memory_block *)((char *)bytes - sizeof(memory_block::header));
+    }
+
+    size_t full_size() const {
+        return header.size + sizeof(header);
+    }
+
+    size_t size() const {
+        return header.size;
+    }
+
+    void * data() {
+        return mem;
+    }
+};
+
+class memory_list {
+public:
+    memory_list() = default;
+    ~memory_list();
+    memory_list(memory_list&& other)
+        : memlist_(other.memlist_.exchange(nullptr)){}
+    memory_list& operator=(memory_list&& other){
+        memlist_.store(other.memlist_.exchange(nullptr));
+        return *this;
+    }
+    memory_block* alloc(size_t size);
+    void free(memory_block* b);
+private:
+    std::atomic<memory_block *> memlist_{nullptr};
+};
 
 } // aoo

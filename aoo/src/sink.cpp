@@ -7,32 +7,6 @@
 #include <algorithm>
 #include <cmath>
 
-/*//////////////////// memory_block /////////////////*/
-
-namespace aoo {
-
-memory_block * memory_block::allocate(size_t size){
-    auto fullsize = sizeof(memory_block::header) + size;
-    auto mem = (memory_block *)aoo::allocate(fullsize);
-    mem->header.next = nullptr;
-    mem->header.size = size;
-#if DEBUG_MEMORY
-    fprintf(stderr, "allocate memory block (%d bytes)\n", size);
-    fflush(stderr);
-#endif
-    return mem;
-}
-
-void memory_block::free(memory_block *mem){
-#if DEBUG_MEMORY
-    fprintf(stderr, "deallocate memory block (%d bytes)\n", mem->size());
-    fflush(stderr);
-#endif
-    aoo::deallocate(mem, mem->full_size());
-}
-
-} // aoo
-
 /*//////////////////// aoo_sink /////////////////////*/
 
 aoo_sink * aoo_sink_new(aoo_id id, uint32_t flags) {
@@ -50,15 +24,7 @@ void aoo_sink_free(aoo_sink *sink) {
     aoo::destroy(static_cast<aoo::sink_imp *>(sink));
 }
 
-aoo::sink_imp::~sink_imp(){
-    // free memory blocks
-    auto mem = memlist_.load(std::memory_order_relaxed);
-    while (mem){
-        auto next = mem->header.next;
-        memory_block::free(mem);
-        mem = next;
-    }
-}
+aoo::sink_imp::~sink_imp(){}
 
 aoo_error aoo_sink_setup(aoo_sink *sink, int32_t samplerate,
                          int32_t blocksize, int32_t nchannels) {
@@ -696,45 +662,8 @@ void sink_imp::call_event(const event &e, aoo_thread_level level) const {
     eventhandler_(eventcontext_, &e.event_, level);
     // some events use dynamic memory
     if (e.type_ == AOO_FORMAT_CHANGE_EVENT){
-        mem_free(memory_block::from_bytes((void *)e.format.format));
+        memory.free(memory_block::from_bytes((void *)e.format.format));
     }
-}
-
-memory_block* sink_imp::mem_alloc(size_t size) const {
-    for (;;){
-        // try to pop existing block
-        auto head = memlist_.load(std::memory_order_relaxed);
-        if (head){
-            auto next = head->header.next;
-            if (memlist_.compare_exchange_weak(head, next, std::memory_order_acq_rel)){
-                if (head->header.size >= size){
-                #if DEBUG_MEMORY
-                    fprintf(stderr, "reuse memory block (%d bytes)\n", head->header.size);
-                    fflush(stderr);
-                #endif
-                    return head;
-                } else {
-                    // free block
-                    memory_block::free(head);
-                }
-            } else {
-                // try again
-                continue;
-            }
-        }
-        // allocate new block
-        return memory_block::allocate(size);
-    }
-}
-void sink_imp::mem_free(memory_block* b) const {
-    b->header.next = memlist_.load(std::memory_order_relaxed);
-    // check if the head has changed and update it atomically.
-    // (if the CAS fails, 'next' is updated to the current head)
-    while (!memlist_.compare_exchange_weak(b->header.next, b, std::memory_order_acq_rel)) ;
-#if DEBUG_MEMORY
-    fprintf(stderr, "return memory block (%d bytes)\n", b->header.size);
-    fflush(stderr);
-#endif
 }
 
 aoo::source_desc * sink_imp::find_source(const ip_address& addr, aoo_id id){
@@ -1201,7 +1130,7 @@ aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_
 
     // send format event
     // NOTE: we could just allocate 'aoo_format_storage', but it would be wasteful.
-    auto mem = s.mem_alloc(fmt.header.size);
+    auto mem = s.memory.alloc(fmt.header.size);
     memcpy(mem->data(), &fmt, fmt.header.size);
 
     event e(AOO_FORMAT_CHANGE_EVENT, *this);
@@ -1259,7 +1188,7 @@ aoo_error source_desc::handle_data(const sink_imp& s, int32_t salt,
     }
 
     // copy blob data and push to queue
-    auto data = (char *)s.mem_alloc(d.size)->data();
+    auto data = (char *)s.memory.alloc(d.size)->data();
     memcpy(data, d.data, d.size);
     d.data = data;
 
@@ -1371,7 +1300,7 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
             // check data packet
             add_packet(d, state);
             // return memory
-            s.mem_free(memory_block::from_bytes((void *)d.data));
+            s.memory.free(memory_block::from_bytes((void *)d.data));
         }
     }
 
@@ -1496,7 +1425,7 @@ int32_t source_desc::poll_events(sink_imp& s, aoo_eventhandler fn, void *user){
         // some events use dynamic memory
         if (e.type_ == AOO_FORMAT_CHANGE_EVENT){
             auto mem = memory_block::from_bytes((void *)e.format.format);
-            s.mem_free(mem);
+            s.memory.free(mem);
         }
         count++;
     }

@@ -28,34 +28,6 @@
 
 namespace aoo {
 
-struct memory_block {
-    struct {
-        memory_block *next;
-        size_t size;
-    } header;
-    char mem[1];
-
-    static memory_block * allocate(size_t size);
-
-    static void free(memory_block *mem);
-
-    static memory_block * from_bytes(void *bytes){
-        return (memory_block *)((char *)bytes - sizeof(memory_block::header));
-    }
-
-    size_t full_size() const {
-        return header.size + sizeof(header);
-    }
-
-    size_t size() const {
-        return header.size;
-    }
-
-    void * data() {
-        return mem;
-    }
-};
-
 struct stream_state {
     int32_t lost = 0;
     int32_t reordered = 0;
@@ -386,11 +358,9 @@ private:
     void push_request(const source_request& r){
         requestqueue_.push(r);
     }
-    // memory
-    mutable std::atomic<memory_block *> memlist_{nullptr};
 public:
-    memory_block* mem_alloc(size_t size) const;
-    void mem_free(memory_block* b) const;
+    // memory
+    mutable memory_list memory;
 private:
     // helper methods
     source_desc *find_source(const ip_address& addr, aoo_id id);

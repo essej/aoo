@@ -303,6 +303,75 @@ uint32_t make_version(){
             | ((uint32_t)AOO_VERSION_PATCH << 8);
 }
 
+/*//////////////////// memory /////////////////*/
+
+memory_block * memory_block::allocate(size_t size){
+    auto fullsize = sizeof(memory_block::header) + size;
+    auto mem = (memory_block *)aoo::allocate(fullsize);
+    mem->header.next = nullptr;
+    mem->header.size = size;
+#if DEBUG_MEMORY
+    fprintf(stderr, "allocate memory block (%d bytes)\n", size);
+    fflush(stderr);
+#endif
+    return mem;
+}
+
+void memory_block::free(memory_block *mem){
+#if DEBUG_MEMORY
+    fprintf(stderr, "deallocate memory block (%d bytes)\n", mem->size());
+    fflush(stderr);
+#endif
+    aoo::deallocate(mem, mem->full_size());
+}
+
+memory_list::~memory_list(){
+    // free memory blocks
+    auto mem = memlist_.load(std::memory_order_relaxed);
+    while (mem){
+        auto next = mem->header.next;
+        memory_block::free(mem);
+        mem = next;
+    }
+}
+
+memory_block* memory_list::alloc(size_t size) {
+    for (;;){
+        // try to pop existing block
+        auto head = memlist_.load(std::memory_order_relaxed);
+        if (head){
+            auto next = head->header.next;
+            if (memlist_.compare_exchange_weak(head, next, std::memory_order_acq_rel)){
+                if (head->header.size >= size){
+                #if DEBUG_MEMORY
+                    fprintf(stderr, "reuse memory block (%d bytes)\n", head->header.size);
+                    fflush(stderr);
+                #endif
+                    return head;
+                } else {
+                    // free block
+                    memory_block::free(head);
+                }
+            } else {
+                // try again
+                continue;
+            }
+        }
+        // allocate new block
+        return memory_block::allocate(size);
+    }
+}
+void memory_list::free(memory_block* b) {
+    b->header.next = memlist_.load(std::memory_order_relaxed);
+    // check if the head has changed and update it atomically.
+    // (if the CAS fails, 'next' is updated to the current head)
+    while (!memlist_.compare_exchange_weak(b->header.next, b, std::memory_order_acq_rel)) ;
+#if DEBUG_MEMORY
+    fprintf(stderr, "return memory block (%d bytes)\n", b->header.size);
+    fflush(stderr);
+#endif
+}
+
 } // aoo
 
 /*/////////////// (de)initialize //////////////////*/
