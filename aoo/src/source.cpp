@@ -781,6 +781,9 @@ void source_imp::start_new_stream(){
 
     history_.clear(); // !
 
+    // reset encoder to avoid garbage from previous stream
+    encoder_->reset();
+
     sink_lock lock(sinks_);
     for (auto& s : sinks_){
         s.reset();

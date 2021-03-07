@@ -987,6 +987,9 @@ void source_desc::update(const sink_imp& s){
         dropped_ = 0;
         xrunsamples_ = 0;
         underrun_ = false;
+
+        // reset decoder to avoid garbage from previous stream
+        decoder_->reset();
     }
 }
 
