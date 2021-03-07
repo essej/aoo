@@ -183,7 +183,7 @@ aoo_error aoo::source_imp::get_option(int32_t opt, void *ptr, int32_t size)
     case AOO_OPT_FORMAT:
     {
         assert(size >= sizeof(aoo_format));
-        auto fmt = as<aoo_format>(ptr);
+        auto& fmt = as<aoo_format>(ptr);
         fmt.size = size; // !
         shared_lock lock(update_mutex_); // read lock!
         if (encoder_){
@@ -870,7 +870,8 @@ void source_imp::send_format(const sendfn& fn){
 #endif
     for (auto& s : sinks_){
         if (s.need_format()){
-            // /aoo/sink/<id>/format <src> <version> <salt> <numchannels> <samplerate> <blocksize> <codec> <options> <flags>
+            // /aoo/sink/<id>/format <src> <version> <salt>
+            // <numchannels> <samplerate> <blocksize> <codec> <options> <flags>
 
             LOG_DEBUG("send format to " << s.id << " (salt = " << salt << ")");
 
@@ -1322,8 +1323,57 @@ void source_imp::handle_format_request(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
 
     if (sink){
-        sink->request_format();
-        needformat_.store(true, std::memory_order_release);
+        if (it != msg.ArgumentsEnd()){
+            // requested another format
+            int32_t salt = (it++)->AsInt32();
+            // ignore outdated requests
+            // this can happen because format requests are sent repeatedly
+            // by the sink until a) the source replies or b) the timeout is reached.
+            // if the network latency is high, the sink might sent a format request
+            // right before receiving a /format message (as a result of the previous request).
+            // until the source re
+            shared_lock lock(update_mutex_);
+            if (salt != salt_){
+                LOG_DEBUG("ignoring outdated format request");
+                return;
+            }
+            lock.unlock();
+
+            // get format from arguments
+            aoo_format f;
+            f.nchannels = (it++)->AsInt32();
+            f.samplerate = (it++)->AsInt32();
+            f.blocksize = (it++)->AsInt32();
+            f.codec = (it++)->AsString();
+            f.size = sizeof(aoo_format);
+            const void *settings;
+            osc::osc_bundle_element_size_t size;
+            (it++)->AsBlob(settings, size);
+
+            auto c = aoo::find_codec(f.codec);
+            if (c){
+                aoo_format_storage fmt;
+                fmt.header.size = sizeof(aoo_format_storage); // !
+                if (c->deserialize(f, (const char *)settings, size, fmt.header) == AOO_OK){
+                    // send format event
+                    // NOTE: we could just allocate 'aoo_format_storage', but it would be wasteful.
+                    auto mem = memory_.alloc(fmt.header.size);
+                    memcpy(mem->data(), &fmt, fmt.header.size);
+
+                    event e(AOO_FORMAT_REQUEST_EVENT, addr, id);
+                    e.format.format = (const aoo_format *)mem->data();
+
+                    send_event(e, AOO_THREAD_NETWORK);
+                }
+            } else {
+                LOG_WARNING("handle_format_request: codec '"
+                            << f.codec << "' not supported");
+            }
+        } else {
+            // resend current format
+            sink->request_format();
+            needformat_.store(true, std::memory_order_release);
+        }
     } else {
         LOG_VERBOSE("ignoring '" << AOO_MSG_FORMAT << "' message: sink not found");
     }

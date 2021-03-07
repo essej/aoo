@@ -195,6 +195,8 @@ typedef enum aoo_event_type
     AOO_INVITE_EVENT,
     // source: uninvited by sink
     AOO_UNINVITE_EVENT,
+    // source: format request by sink
+    AOO_FORMAT_REQUEST_EVENT,
     // sink: source added
     AOO_SOURCE_ADD_EVENT,
     // sink: source removed
@@ -213,6 +215,8 @@ typedef enum aoo_event_type
     AOO_BLOCK_GAP_EVENT,
     // sink: source invitation timed out
     AOO_INVITE_TIMEOUT_EVENT,
+    // sink: format request timed out
+    AOO_FORMAT_REQUEST_TIMEOUT_EVENT,
 } aoo_event_type;
 
 typedef struct aoo_error_event
@@ -280,11 +284,14 @@ typedef struct aoo_ping_event
 } aoo_ping_event;
 
 // format event
-typedef struct aoo_format_change_event
+typedef struct aoo_format_event
 {
     AOO_ENDPOINT_EVENT
     const struct aoo_format *format;
-} aoo_format_change_event;
+} aoo_format_event;
+
+typedef aoo_format_event aoo_format_change_event;
+typedef aoo_format_event aoo_format_request_event;
 
 /*//////////////////// AoO options ////////////////////*/
 
@@ -294,13 +301,21 @@ typedef enum aoo_option
     AOO_OPT_ID = 0,
     // Stream format (aoo_format)
     // ---
-    // Set the format by passing a pointer to the format header ('aoo_format').
-    // The format is validated and updated on success! Only works with aoo_source.
+    // Set the format by passing a pointer to the format header.
+    // The format struct is validated and updated on success!
     //
-    // Get the format by passing a pointer to an instance of 'aoo_format_storage' or
-    // similar struct that is large enough to hold any codec format.
-    // On success, the actual format size will be contained in the 'size' member
-    // of the format header.
+    // aoo_source: this will change the streaming format and
+    // consequently start a new stream. The sink(s) will receive
+    // a AOO_FORMAT_CHANGE event.
+    //
+    // aoo_sink: A sink can request the streaming format for a
+    // specific source, which can choose to accept or decline the request.
+    // The sink will receive one or more AOO_FORMAT_REQUEST events.
+    //
+    // Get the format by passing a pointer to an instance of
+    // 'aoo_format_storage' or a similar struct that is large enough
+    // to hold any format. On success, the actual format size will be
+    // contained in the 'size' member of the format header.
     AOO_OPT_FORMAT,
     // Reset the source/sink (NULL)
     AOO_OPT_RESET,
@@ -762,6 +777,11 @@ static inline aoo_error aoo_sink_get_source_timeout(aoo_sink *sink, int32_t *n) 
 static inline aoo_error aoo_sink_reset_source(aoo_sink *sink, const void *address,
                                               int32_t addrlen, aoo_id id) {
     return aoo_sink_set_source_option(sink, address, addrlen, id, AOO_OPT_RESET, AOO_ARG_NULL);
+}
+
+static inline aoo_error aoo_sink_set_source_format(aoo_sink *sink, const void *address,
+                                                   int32_t addrlen, aoo_id id, const aoo_format *f) {
+    return aoo_sink_set_source_option(sink, address, addrlen, id, AOO_OPT_FORMAT, AOO_ARG(*f));
 }
 
 static inline aoo_error aoo_sink_get_source_format(aoo_sink *sink, const void *address,

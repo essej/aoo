@@ -373,9 +373,13 @@ public:
         return set_source_option(address, addrlen, id, AOO_OPT_RESET, AOO_ARG_NULL);
     }
 
-    aoo_error get_source_format(const void *address, int32_t addrlen, aoo_id id,
-                                aoo_format_storage& f)
-    {
+    aoo_error set_source_format(const void *address, int32_t addrlen,
+                                aoo_id id, const aoo_format& f) {
+        return set_source_option(address, addrlen, id, AOO_OPT_FORMAT, AOO_ARG(f));
+    }
+
+    aoo_error get_source_format(const void *address, int32_t addrlen,
+                                aoo_id id, aoo_format_storage& f) {
         return get_source_option(address, addrlen, id, AOO_OPT_FORMAT, AOO_ARG(f));
     }
 

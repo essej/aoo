@@ -108,6 +108,7 @@ class source_imp final : public source {
             aoo_event event_;
             aoo_sink_event sink;
             aoo_ping_event ping;
+            aoo_format_event format;
         };
     private:
         char addr_[ip_address::max_length];
@@ -197,6 +198,8 @@ class source_imp final : public source {
     using sink_list = lockfree::simple_list<sink_desc, aoo::allocator<sink_desc>>;
     using sink_lock = std::unique_lock<sink_list>;
     sink_list sinks_;
+    // memory
+    memory_list memory_;
     // thread synchronization
     sync::shared_mutex update_mutex_;
     // options

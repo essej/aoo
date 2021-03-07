@@ -298,6 +298,10 @@ aoo_error aoo::sink_imp::set_source_option(const void *address, int32_t addrlen,
     auto src = find_source(addr, id);
     if (src){
         switch (opt){
+        // format request
+        case AOO_OPT_FORMAT:
+            CHECKARG(aoo_format);
+            return src->request_format(*this, as<aoo_format>(ptr));
         // reset
         case AOO_OPT_RESET:
             src->reset(*this);
@@ -332,7 +336,7 @@ aoo_error aoo::sink_imp::get_source_option(const void *address, int32_t addrlen,
         case AOO_OPT_FORMAT:
         {
             assert(size >= sizeof(aoo_format));
-            auto fmt = as<aoo_format>(ptr);
+            auto& fmt = as<aoo_format>(ptr);
             fmt.size = size; // !
             return src->get_format(fmt);
         }
@@ -872,8 +876,7 @@ source_event::source_event(aoo_event_type _type, const source_desc &desc)
 /*////////////////////////// source_desc /////////////////////////////*/
 
 source_desc::source_desc(const ip_address& addr, aoo_id id, double time)
-    : addr_(addr), id_(id), state_(source_state::idle),
-      last_packet_time_(time)
+    : addr_(addr), id_(id), last_packet_time_(time)
 {
     // reserve some memory, so we don't have to allocate memory
     // when pushing events in the audio thread.
@@ -1038,6 +1041,39 @@ void source_desc::uninvite(const sink_imp& s){
     LOG_WARNING("aoo: couldn't uninvite source - not active");
 }
 
+aoo_error source_desc::request_format(const sink_imp& s, const aoo_format &f){
+    if (state_.load(std::memory_order_relaxed) == source_state::uninvite){
+        // requesting a format during uninvite doesn't make sense.
+        // also, we couldn't use 'state_time', because it has a different
+        // meaning during the uninvite phase.
+        return AOO_ERROR_UNSPECIFIED;
+    }
+
+    if (!aoo::find_codec(f.codec)){
+        LOG_WARNING("request_format: codec '" << f.codec << "' not supported");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+
+    // copy format
+    auto fmt = (aoo_format *)aoo::allocate(f.size);
+    memcpy(fmt, &f, f.size);
+
+    LOG_DEBUG("source_desc: request format");
+
+    scoped_lock lock(mutex_); // writer lock!
+
+    format_request_.reset(fmt);
+
+    format_time_ = s.elapsed_time();
+#if 1
+    state_time_.store(0.0); // start immediately
+#else
+    state_time_.store(s.elapsed_time()); // wait
+#endif
+
+    return AOO_OK;
+}
+
 float source_desc::get_buffer_fill_ratio(){
     scoped_shared_lock lock(mutex_);
     if (decoder_){
@@ -1095,8 +1131,8 @@ aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_
 
     auto oldsalt = salt_;
     salt_ = salt;
-
     flags_ = flags;
+    format_request_ = nullptr;
 
     // read format
     aoo_format_storage fmt;
@@ -1228,6 +1264,9 @@ aoo_error source_desc::handle_ping(const sink_imp& s, time_tag tt){
     return AOO_OK;
 }
 
+// only send every 50 ms! LATER we might make this settable
+#define INVITE_INTERVAL 0.05
+
 void source_desc::send(const sink_imp& s, const sendfn& fn){
     request r;
     while (requestqueue_.try_pop(r)){
@@ -1245,9 +1284,21 @@ void source_desc::send(const sink_imp& s, const sendfn& fn){
             break;
         }
     }
-    // send invitations
-    if (state_.load(std::memory_order_acquire) == source_state::invite){
-        send_invitation(s, fn);
+
+    auto now = s.elapsed_time();
+    if ((now - state_time_.load(std::memory_order_relaxed)) >= INVITE_INTERVAL){
+        // send invitations
+        if (state_.load(std::memory_order_acquire) == source_state::invite){
+            send_invitation(s, fn);
+        }
+
+        // the check is not really threadsafe, but it's safe because we only
+        // dereference the pointer later after grabbing the mutex
+        if (format_request_){
+            send_format_request(s, fn, true);
+        }
+
+        state_time_.store(now);
     }
 
     send_data_requests(s, fn);
@@ -1744,9 +1795,11 @@ void source_desc::send_ping_reply(const sink_imp &s, const sendfn &fn,
     LOG_DEBUG("send /ping to source " << id_);
 }
 
-// /aoo/src/<id>/format <version> <sink>
+// /aoo/src/<id>/format <sink> <version>
+// [<salt> <numchannels> <samplerate> <blocksize> <codec> <options>]
 // called without lock!
-void source_desc::send_format_request(const sink_imp& s, const sendfn& fn) {
+void source_desc::send_format_request(const sink_imp& s, const sendfn& fn,
+                                      bool format) {
     LOG_VERBOSE("request format for source " << id_);
     char buf[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -1758,8 +1811,49 @@ void source_desc::send_format_request(const sink_imp& s, const sendfn& fn) {
     snprintf(address, sizeof(address), "%s%s/%d%s",
              AOO_MSG_DOMAIN, AOO_MSG_SOURCE, id_, AOO_MSG_FORMAT);
 
-    msg << osc::BeginMessage(address) << s.id() << (int32_t)make_version()
-        << osc::EndMessage;
+    msg << osc::BeginMessage(address) << s.id() << (int32_t)make_version();
+
+    if (format){
+        scoped_shared_lock lock(mutex_); // !
+        // check again!
+        if (!format_request_){
+            return;
+        }
+
+        auto delta = s.elapsed_time() - format_time_;
+        // for now just reuse source timeout
+        if (delta < s.source_timeout()){
+            auto salt = salt_;
+
+            auto& f = *format_request_;
+
+            auto c = aoo::find_codec(f.codec);
+            assert(c != nullptr);
+
+            char buf[AOO_CODEC_MAXSETTINGSIZE];
+            int32_t size;
+            if (c->serialize(f, buf, size) == AOO_OK){
+                LOG_DEBUG("codec = " << f.codec << ", nchannels = "
+                          << f.nchannels << ", sr = " << f.samplerate
+                          << ", blocksize = " << f.blocksize
+                          << ", option size = " << size);
+
+                msg << salt << f.nchannels << f.samplerate
+                    << f.blocksize << f.codec << osc::Blob(buf, size);
+            }
+        } else {
+            // TODO timeout event
+            LOG_DEBUG("format request timeout");
+
+            // clear request
+            // this is safe even with a reader lock, because
+            // elsewhere format_request_ is always set with a
+            // writer lock, see request_format() and handle_format().
+            format_request_ = nullptr;
+        }
+    }
+
+    msg << osc::EndMessage;
 
     fn(msg.Data(), msg.Size(), addr_, flags_);
 }
@@ -1866,17 +1960,8 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
 
 // /aoo/src/<id>/invite <sink>
 
-// only send every 50 ms! LATER we might make this settable
-#define INVITE_INTERVAL 0.05
-
 // called without lock!
 void source_desc::send_invitation(const sink_imp& s, const sendfn& fn){
-    auto now = s.elapsed_time();
-    if ((now - state_time_.load()) < INVITE_INTERVAL){
-        return;
-    }
-    state_time_.store(now);
-
     char buffer[AOO_MAXPACKETSIZE];
     osc::OutboundPacketStream msg(buffer, sizeof(buffer));
 

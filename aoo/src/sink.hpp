@@ -170,6 +170,8 @@ public:
 
     void uninvite(const sink_imp& s);
 
+    aoo_error request_format(const sink_imp& s, const aoo_format& f);
+
     float get_buffer_fill_ratio();
 private:
     using shared_lock = sync::shared_lock<sync::shared_mutex>;
@@ -192,7 +194,8 @@ private:
     void send_ping_reply(const sink_imp& s, const sendfn& fn,
                          const request& r);
 
-    void send_format_request(const sink_imp& s, const sendfn& fn);
+    void send_format_request(const sink_imp& s, const sendfn& fn,
+                             bool format = false);
 
     void send_data_requests(const sink_imp& s, const sendfn& fn);
 
@@ -205,10 +208,22 @@ private:
     const aoo_id id_;
     uint32_t flags_ = 0;
     int32_t salt_ = -1; // start with invalid stream ID!
+
     aoo_stream_state streamstate_;
-    bool underrun_ = false;
+    bool underrun_{false};
     std::atomic<bool> binary_{false};
-    std::atomic<source_state> state_;
+
+    std::atomic<source_state> state_{source_state::idle};
+
+    struct format_deleter {
+        void operator() (void *x) const {
+            auto f = static_cast<aoo_format *>(x);
+            aoo::deallocate(x, f->size);
+        }
+    };
+    std::unique_ptr<aoo_format, format_deleter> format_request_;
+    double format_time_ = 0;
+
     std::atomic<double> state_time_{0.0};
     std::atomic<double> last_packet_time_{0};
     std::atomic<int32_t> lost_since_ping_{0};
