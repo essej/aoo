@@ -48,6 +48,7 @@ struct event
         aoo_event event_;
         aoo_source_event source;
         aoo_format_change_event format;
+        aoo_format_timeout_event format_timeout;
         aoo_ping_event ping;
         aoo_stream_state_event source_state;
         aoo_block_lost_event block_loss;

@@ -216,7 +216,7 @@ typedef enum aoo_event_type
     // sink: source invitation timed out
     AOO_INVITE_TIMEOUT_EVENT,
     // sink: format request timed out
-    AOO_FORMAT_REQUEST_TIMEOUT_EVENT,
+    AOO_FORMAT_TIMEOUT_EVENT
 } aoo_event_type;
 
 typedef struct aoo_error_event
@@ -272,6 +272,7 @@ typedef struct _aoo_block_event aoo_block_gap_event;
 typedef aoo_sink_event aoo_invite_event;
 typedef aoo_sink_event aoo_uninvite_event;
 typedef aoo_source_event aoo_invite_timeout_event;
+typedef aoo_source_event aoo_format_timeout_event;
 
 // ping event
 typedef struct aoo_ping_event

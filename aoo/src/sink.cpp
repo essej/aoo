@@ -1842,13 +1842,17 @@ void source_desc::send_format_request(const sink_imp& s, const sendfn& fn,
                     << f.blocksize << f.codec << osc::Blob(buf, size);
             }
         } else {
-            // TODO timeout event
             LOG_DEBUG("format request timeout");
 
+            event e(AOO_FORMAT_TIMEOUT_EVENT, *this);
+
+            send_event(s, e, AOO_THREAD_NETWORK);
+
             // clear request
-            // this is safe even with a reader lock, because
-            // elsewhere format_request_ is always set with a
-            // writer lock, see request_format() and handle_format().
+            // this is safe even with a reader lock,
+            // because elsewhere it is always read/written
+            // with a writer lock, see request_format()
+            // and handle_format().
             format_request_ = nullptr;
         }
     }
