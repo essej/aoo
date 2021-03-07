@@ -86,6 +86,17 @@ public:
     std::unique_ptr<encoder> create_encoder() const;
 
     std::unique_ptr<decoder> create_decoder() const;
+
+    aoo_error serialize(const aoo_format& f,
+                        char *buf, int32_t &n) const {
+        return codec_->serialize(&f, buf, &n);
+    }
+
+    aoo_error deserialize(const aoo_format& header,
+                          const char *data, int32_t n,
+                          aoo_format& f) const {
+        return codec_->deserialize(&header, data, n, &f);
+    }
 private:
     const aoo_codec *codec_;
 };
