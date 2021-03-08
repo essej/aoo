@@ -1282,7 +1282,10 @@ void client_imp::handle_peer_add(const osc::ReceivedMessage& msg){
     }
     peers_.emplace_front(*this, id, group, user, std::move(addrlist));
 
-    // don't handle event yet, wait for ping handshake
+    auto e = std::make_unique<peer_event>(
+                AOO_NET_PEER_HANDSHAKE_EVENT,
+                group.c_str(), user.c_str(), id);
+    send_event(std::move(e));
 
     LOG_VERBOSE("aoo_client: new peer " << peers_.front());
 }
@@ -1402,10 +1405,10 @@ client_imp::error_event::~error_event()
     free_string((char *)error_event_.error_message);
 }
 
-client_imp::ping_event::ping_event(const ip_address& addr, uint64_t tt1,
-                                   uint64_t tt2, uint64_t tt3)
+client_imp::ping_event::ping_event(int32_t type, const ip_address& addr,
+                                   uint64_t tt1, uint64_t tt2, uint64_t tt3)
 {
-    ping_event_.type = AOO_NET_PING_EVENT;
+    ping_event_.type = type;
     ping_event_.address = copy_sockaddr(addr.address(), addr.length());
     ping_event_.addrlen = addr.length();
     ping_event_.tt1 = tt1;
@@ -1430,6 +1433,19 @@ client_imp::peer_event::peer_event(int32_t type, const ip_address& addr,
     peer_event_.user_id = id;
     peer_event_.flags = flags;
 }
+
+client_imp::peer_event::peer_event(int32_t type, const char *group,
+                                   const char *user, int32_t id)
+{
+    peer_event_.type = type;
+    peer_event_.address = nullptr;
+    peer_event_.addrlen = 0;
+    peer_event_.group_name = aoo::copy_string(group);
+    peer_event_.user_name = aoo::copy_string(user);
+    peer_event_.user_id = id;
+    peer_event_.flags = 0;
+}
+
 
 client_imp::peer_event::~peer_event()
 {
@@ -1758,8 +1774,13 @@ void peer::send(const sendfn& reply, time_tag now){
             std::stringstream ss;
             ss << "couldn't establish connection with peer " << *this;
 
-            auto e = std::make_unique<client_imp::error_event>(0, ss.str().c_str());
-            client_->send_event(std::move(e));
+            auto e1 = std::make_unique<client_imp::error_event>(0, ss.str().c_str());
+            client_->send_event(std::move(e1));
+
+            auto e2 = std::make_unique<client_imp::peer_event>(
+                        AOO_NET_PEER_TIMEOUT_EVENT,
+                        group().c_str(), user().c_str(), id());
+            client_->send_event(std::move(e2));
 
             timeout_ = true;
 

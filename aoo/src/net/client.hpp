@@ -93,10 +93,10 @@ public:
     friend std::ostream& operator << (std::ostream& os, const peer& p);
 private:
     client_imp *client_;
-    int32_t id_;
+    const int32_t id_;
     uint32_t flags_ = 0;
-    std::string group_;
-    std::string user_;
+    const std::string group_;
+    const std::string user_;
     ip_address_list addresses_;
     ip_address real_address_;
     time_tag start_time_;
@@ -393,8 +393,8 @@ public:
 
     struct ping_event : ievent
     {
-        ping_event(const ip_address& addr, uint64_t tt1,
-                   uint64_t tt2, uint64_t tt3);
+        ping_event(int32_t type, const ip_address& addr,
+                   uint64_t tt1, uint64_t tt2, uint64_t tt3);
         ~ping_event();
     };
 
@@ -403,6 +403,8 @@ public:
         peer_event(int32_t type, const ip_address& addr,
                    const char *group, const char *user,
                    int32_t id, uint32_t flags);
+        peer_event(int32_t type, const char *group,
+                   const char *user, int32_t id);
         ~peer_event();
     };
 
