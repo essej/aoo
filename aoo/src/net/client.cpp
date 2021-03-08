@@ -1441,7 +1441,7 @@ client_imp::peer_event::~peer_event()
 client_imp::message_event::message_event(const char *data, int32_t size,
                                          const ip_address& addr)
 {
-    message_event_.type = AOO_NET_MESSAGE_EVENT;
+    message_event_.type = AOO_NET_PEER_MESSAGE_EVENT;
     message_event_.address = copy_sockaddr(addr.address(), addr.length());
     message_event_.addrlen = addr.length();
     auto msg = (char *)aoo::allocate(size);

@@ -398,7 +398,7 @@ void t_aoo_client::handle_peer_bundle(const osc::ReceivedBundle& bundle,
 void aoo_client_handle_event(t_aoo_client *x, const aoo_event *event, int32_t level)
 {
     switch (event->type){
-    case AOO_NET_MESSAGE_EVENT:
+    case AOO_NET_PEER_MESSAGE_EVENT:
     {
         auto e = (const aoo_net_message_event *)event;
 

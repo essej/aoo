@@ -166,7 +166,7 @@ void AooClient::handleEvent(const aoo_event* event) {
     msg << osc::BeginMessage("/aoo/client/event") << node_->port();
 
     switch (event->type) {
-    case AOO_NET_MESSAGE_EVENT:
+    case AOO_NET_PEER_MESSAGE_EVENT:
     {
         auto e = (const aoo_net_message_event *)event;
 
