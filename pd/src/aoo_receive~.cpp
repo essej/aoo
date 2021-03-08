@@ -66,6 +66,36 @@ static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *arg
     return 0;
 }
 
+static void aoo_receive_format(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (!x->x_node){
+        pd_error(x, "%s: can't request format - no socket!", classname(x));
+        return;
+    }
+
+    // host, ip, id, codec ...
+    if (argc < 4){
+        pd_error(x, "%s: too few arguments for 'format' message", classname(x));
+        return;
+    }
+
+    ip_address addr;
+    aoo_id id = 0;
+    if (!x->x_node->get_source_arg((t_pd *)x, argc, argv, addr, id)){
+        return;
+    }
+
+    aoo_format_storage f;
+    if (format_parse((t_pd *)x, f, argc - 3, argv + 3, x->x_nchannels)){
+        // don't use more channels than we actually have
+        if (f.header.nchannels > x->x_nchannels){
+            f.header.nchannels = x->x_nchannels;
+        }
+
+        x->x_sink->set_source_format(addr.address(), addr.length(), id, f.header);
+    }
+}
+
 static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (!x->x_node){
@@ -264,6 +294,18 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         outlet_anything(x->x_msgout, gensym("invite_timeout"), 3, msg);
         break;
     }
+    case AOO_FORMAT_TIMEOUT_EVENT:
+    {
+        auto e = (const aoo_source_event *)event;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+
+        // output event
+        if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
+            return;
+        }
+        outlet_anything(x->x_msgout, gensym("format_timeout"), 3, msg);
+        break;
+    }
     case AOO_FORMAT_CHANGE_EVENT:
     {
         auto e = (const aoo_format_change_event *)event;
@@ -272,8 +314,8 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
             return;
         }
-        int fsize = format_to_atoms(*e->format, 29, msg + 3); // skip first three atoms
-        outlet_anything(x->x_msgout, gensym("source_format"), fsize + 3, msg);
+        int n = format_to_atoms(*e->format, 29, msg + 3); // skip first three atoms
+        outlet_anything(x->x_msgout, gensym("source_format"), n + 3, msg);
         break;
     }
     case AOO_STREAM_STATE_EVENT:
@@ -547,6 +589,8 @@ void aoo_receive_tilde_setup(void)
                     gensym("port"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_id,
                     gensym("id"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_format,
+                    gensym("format"), A_GIMME, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_invite,
                     gensym("invite"), A_GIMME, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_uninvite,

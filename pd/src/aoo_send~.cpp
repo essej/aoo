@@ -135,6 +135,27 @@ static t_sink *aoo_send_findsink(t_aoo_send *x, const ip_address& addr, aoo_id i
     return nullptr;
 }
 
+static void aoo_send_setformat(t_aoo_send *x, aoo_format& f)
+{
+    // Prevent user from accidentally creating huge number of channels.
+    // This also helps to catch an issue with old patches (before 2.0-pre3),
+    // which would pass the block size as the channel count, because the
+    // "channel" argument hasn't been added yet.
+    if (f.nchannels > x->x_nchannels){
+        pd_error(x, "%s: 'channel' argument (%d) in 'format' message out of range!",
+                 classname(x), f.nchannels);
+        f.nchannels = x->x_nchannels;
+    }
+
+    x->x_source->set_format(f);
+    // output actual format
+    t_atom msg[16];
+    int n = format_to_atoms(f, 16, msg);
+    if (n > 0){
+        outlet_anything(x->x_msgout, gensym("format"), n, msg);
+    }
+}
+
 static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t)
 {
     switch (event->type){
@@ -155,6 +176,29 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t
             outlet_anything(x->x_msgout, gensym("ping"), 7, msg);
         } else {
             bug("t_node::resolve_endpoint");
+        }
+        break;
+    }
+    case AOO_FORMAT_REQUEST_EVENT:
+    {
+        auto e = (const aoo_format_request_event *)event;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+
+        if (aoo_send_findsink(x, addr, e->id)){
+            if (x->x_accept){
+                // make copy, because format will be updated!
+                aoo_format_storage f;
+                memcpy(&f, e->format, e->format->size);
+                aoo_send_setformat(x, f.header);
+            } else {
+                t_atom msg[32];
+                if (x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
+                    int n = format_to_atoms(*e->format, 29, msg + 3); // skip first three atoms
+                    outlet_anything(x->x_msgout, gensym("format_request"), n + 3, msg);
+                } else {
+                    bug("t_node::resolve_endpoint");
+                }
+            }
         }
         break;
     }
@@ -219,23 +263,7 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     aoo_format_storage f;
     if (format_parse((t_pd *)x, f, argc, argv, x->x_nchannels)){
-        // Prevent user from accidentally creating huge number of channels.
-        // This also helps to catch an issue with old patches (before 2.0-pre3),
-        // which would pass the block size as the channel count, because the
-        // "channel" argument hasn't been added yet.
-        if (f.header.nchannels > x->x_nchannels){
-            pd_error(x, "%s: 'channel' argument (%d) in 'format' message out of range!",
-                     classname(x), f.header.nchannels);
-            f.header.nchannels = x->x_nchannels;
-        }
-
-        x->x_source->set_format(f.header);
-        // output actual format
-        t_atom msg[16];
-        int n = format_to_atoms(f.header, 16, msg);
-        if (n > 0){
-            outlet_anything(x->x_msgout, gensym("format"), n, msg);
-        }
+        aoo_send_setformat(x, f.header);
     }
 }
 
