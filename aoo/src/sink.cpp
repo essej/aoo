@@ -490,7 +490,7 @@ aoo_error aoo_sink_process(aoo_sink *sink, aoo_sample **data,
 #define AOO_MAXNUMEVENTS 256
 
 aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t){
-    // zero outputs
+    // clear outputs
     for (int i = 0; i < nchannels_; ++i){
         std::fill(data[i], data[i] + nsamples, 0);
     }
@@ -513,6 +513,11 @@ aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t
         for (auto& s : sources_){
             s.add_xrun(xrunsamples);
         }
+
+        sink_event e(AOO_XRUN_EVENT);
+        e.count = (float)xrunsamples / (float)blocksize_;
+        send_event(e, AOO_THREAD_AUDIO);
+
         timer_.reset();
     } else if (dynamic_resampling) {
         // update time DLL, but only if n matches blocksize!
@@ -542,12 +547,12 @@ aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t
             if (it->is_inviting()){
                 LOG_VERBOSE("aoo::sink: invitation for " << it->address().name()
                             << " " << it->address().port() << " timed out");
-                source_event e(AOO_INVITE_TIMEOUT_EVENT, *it);
+                sink_event e(AOO_INVITE_TIMEOUT_EVENT, *it);
                 send_event(e, AOO_THREAD_AUDIO);
             } else {
                 LOG_VERBOSE("aoo::sink: removed inactive source " << it->address().name()
                             << " " << it->address().port());
-                source_event e(AOO_SOURCE_REMOVE_EVENT, *it);
+                sink_event e(AOO_SOURCE_REMOVE_EVENT, *it);
                 send_event(e, AOO_THREAD_AUDIO);
             }
             it = sources_.erase(it);
@@ -614,15 +619,24 @@ aoo_error aoo_sink_poll_events(aoo_sink *sink){
 
 aoo_error aoo::sink_imp::poll_events(){
     int total = 0;
-    source_event e;
+    sink_event e;
     while (eventqueue_.try_pop(e)){
-        aoo_source_event se;
-        se.type = e.type;
-        se.address = e.address.address();
-        se.addrlen = e.address.length();
-        se.id = e.id;
-        eventhandler_(eventcontext_, (const aoo_event *)&se,
-                      AOO_THREAD_UNKNOWN);
+        if (e.type == AOO_XRUN_EVENT){
+            aoo_xrun_event xe;
+            xe.type = e.type;
+            xe.count = e.count;
+            eventhandler_(eventcontext_, (const aoo_event *)&xe,
+                          AOO_THREAD_UNKNOWN);
+        } else {
+            aoo_source_event se;
+            se.type = e.type;
+            se.address = e.address.address();
+            se.addrlen = e.address.length();
+            se.id = e.id;
+            eventhandler_(eventcontext_, (const aoo_event *)&se,
+                          AOO_THREAD_UNKNOWN);
+        }
+
         total++;
     }
     // we only need to protect against source removal
@@ -638,14 +652,14 @@ aoo_error aoo::sink_imp::poll_events(){
 
 namespace aoo {
 
-void sink_imp::send_event(const source_event &e, aoo_thread_level level) {
+void sink_imp::send_event(const sink_event &e, aoo_thread_level level) {
     switch (eventmode_){
     case AOO_EVENT_POLL:
         eventqueue_.push(e);
         break;
     case AOO_EVENT_CALLBACK:
     {
-        aoo_source_event se;
+        aoo_sink_event se;
         se.type = e.type;
         se.address = e.address.address();
         se.addrlen = e.address.length();
@@ -859,6 +873,8 @@ aoo_error sink_imp::handle_ping_message(const osc::ReceivedMessage& msg,
 // 'event' is always used inside 'source_desc', so we can safely
 // store a pointer to the sockaddr. the ip_address itself
 // never changes during lifetime of the 'source_desc'!
+// NOTE: this assumes that the event queue is polled regularly,
+// i.e. before a source_desc can be possibly autoremoved.
 event::event(aoo_event_type type, const source_desc& desc){
     source.type = type;
     source.address = desc.address().address();
@@ -866,9 +882,9 @@ event::event(aoo_event_type type, const source_desc& desc){
     source.id = desc.id();
 }
 
-// 'source_event' is used in 'sink' for source events that can outlive
-// its corresponding 'source_desc'. therefore the ip_address is copied!
-source_event::source_event(aoo_event_type _type, const source_desc &desc)
+// 'sink_event' is used in 'sink' for source events that can outlive
+// its corresponding 'source_desc', therefore the ip_address is copied!
+sink_event::sink_event(aoo_event_type _type, const source_desc &desc)
     : type(_type), address(desc.address()), id(desc.id()) {}
 
 /*////////////////////////// source_desc /////////////////////////////*/
@@ -985,9 +1001,8 @@ void source_desc::update(const sink_imp& s){
         streamstate_ = AOO_STREAM_STATE_STOP;
         lost_since_ping_.store(0);
         channel_ = 0;
-        dropped_ = 0;
-        xrunsamples_ = 0;
         underrun_ = false;
+        didupdate_ = true;
 
         // reset decoder to avoid garbage from previous stream
         decoder_->reset();
@@ -1316,7 +1331,7 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
     // the mutex should be uncontended most of the time.
     shared_lock lock(mutex_, std::try_to_lock_t{});
     if (!lock.owns_lock()){
-        dropped_ += 1.0;
+        xrun_ += 1.0;
         LOG_VERBOSE("aoo::sink: source_desc::process() would block");
         return false;
     }
@@ -1328,12 +1343,12 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
     stream_state state;
 
     // check for sink xruns
-    if (xrunsamples_ > 0) {
-        int32_t xrunblocks = xrunsamples_ * resampler_.ratio()
-                / (float)decoder_->blocksize() + 0.5;
-        auto lost = recover("sink xrun", xrunblocks);
-        state.lost += lost;
-        add_lost(lost);
+    if (didupdate_){
+        xrunsamples_ = 0;
+        xrun_ = 0;
+    } else if (xrunsamples_ > 0) {
+        auto xrunblocks = (float)xrunsamples_ / (float)decoder_->blocksize();
+        xrun_ += xrunblocks;
         xrunsamples_ = 0;
     }
 
@@ -1401,9 +1416,9 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
     while (audioqueue_.read_available()){
         auto d = (block_data *)audioqueue_.read_data();
 
-        if (dropped_ > 0.1){
-            // skip audio and decrement block counter proportionally
-            dropped_ -= sr / decoder_->samplerate();
+        if (xrun_ > 0.1){
+            // skip audio and decrement xrun counter proportionally
+            xrun_ -= sr / decoder_->samplerate();
         } else {
             // try to write audio into resampler
             if (!resampler_.write(d->data, insize)){

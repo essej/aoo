@@ -148,7 +148,7 @@ aoo_error aoo::source_imp::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
-    // ping interval
+    // redundancy
     case AOO_OPT_REDUNDANCY:
     {
         CHECKARG(int32_t);
@@ -507,7 +507,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         unique_lock lock(update_mutex_, std::try_to_lock_t{}); // writer lock!
         if (!lock.owns_lock()){
             LOG_VERBOSE("aoo_source: process would block");
-            dropped_++;
+            add_xrun(1);
             return AOO_ERROR_UNSPECIFIED; // ?
         }
 
@@ -540,11 +540,9 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         // is simply sent the next time.
         lastpingtime_.store(-1e007); // force first ping
     } else if (timerstate == timer::state::error){
-        // skip blocks
-        double period = (double)blocksize_ / (double)samplerate_;
-        int nblocks = error / period + 0.5;
-        LOG_VERBOSE("aoo_source: skip " << nblocks << " blocks");
-        dropped_ += nblocks;
+        // calculate xrun blocks
+        double nblocks = error * (double)samplerate_ / (double)blocksize_;
+        add_xrun(nblocks);
         timer_.reset();
     } else if (dynamic_resampling){
         // update time DLL, but only if n matches blocksize!
@@ -569,7 +567,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
     shared_lock lock(update_mutex_, std::try_to_lock); // reader lock!
     if (!lock.owns_lock()){
         LOG_VERBOSE("aoo_source: process would block");
-        dropped_++;
+        add_xrun(1);
         return AOO_ERROR_UNSPECIFIED; // ?
     }
 
@@ -615,7 +613,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         // go through resampler
         if (!resampler_.write(buf, insize)){
             LOG_WARNING("aoo_source: send buffer overflow");
-            dropped_++;
+            add_xrun(1);
             return AOO_ERROR_UNSPECIFIED;
         }
         while (audioqueue_.write_available()){
@@ -641,7 +639,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
             audioqueue_.write_commit();
         } else {
             LOG_WARNING("aoo_source: send buffer overflow");
-            dropped_++;
+            add_xrun(1);
             return AOO_ERROR_UNSPECIFIED;
         }
     }
@@ -777,7 +775,7 @@ void source_imp::start_new_stream(){
     // any timing gaps.
     salt_ = make_salt();
     sequence_ = 0;
-    dropped_ = 0;
+    xrun_.store(0.0); // !
 
     history_.clear(); // !
 
@@ -790,6 +788,16 @@ void source_imp::start_new_stream(){
         s.request_format();
     }
     needformat_.store(true, std::memory_order_release); // !
+}
+
+void source_imp::add_xrun(float n){
+    // add with CAS loop
+    auto current = xrun_.load(std::memory_order_relaxed);
+    while (!xrun_.compare_exchange_weak(current, current + n))
+        ;
+    event e(AOO_XRUN_EVENT);
+    e.xrun.count = (int)(n + 0.5); // ?
+    send_event(e, AOO_THREAD_AUDIO);
 }
 
 void source_imp::update_audioqueue(){
@@ -901,38 +909,51 @@ void source_imp::send_data(const sendfn& fn){
     shared_lock updatelock(update_mutex_); // reader lock
 
     // *first* check for dropped blocks
-    auto dropped = dropped_.exchange(0, std::memory_order_relaxed);
-    while (dropped--){
-        if (!encoder_){
-            return;
+    if (xrun_.load(std::memory_order_relaxed) > 0.1){
+        // calculate number of xrun blocks (after resampling)
+        float drop = xrun_.exchange(0.0) * (float)resampler_.ratio();
+        int nblocks = std::floor(drop);
+        float rem = drop - (float)nblocks;
+        // return remainder with a CAS loop
+        auto current = xrun_.load(std::memory_order_relaxed);
+        while (!xrun_.compare_exchange_weak(current, current + rem))
+            ;
+        // drop blocks
+        LOG_DEBUG("aoo_source: send " << nblocks << " empty blocks for "
+                  "xrun (" << (int)drop << " blocks)");
+        while (nblocks--){
+            // check the encoder and make snapshost of salt
+            // in every iteration because we release the lock
+            if (!encoder_){
+                return;
+            }
+            int32_t salt = salt_;
+            // send empty block
+            // NOTE: we're the only thread reading 'sequence_', so we can increment
+            // it even while holding a reader lock!
+            data_packet d;
+            d.sequence = last_sequence = sequence_++;
+            d.samplerate = encoder_->samplerate(); // use nominal samplerate
+            d.channel = 0;
+            d.totalsize = 0;
+            d.nframes = 0;
+            d.frame = 0;
+            d.data = nullptr;
+            d.size = 0;
+            // now we can unlock
+            updatelock.unlock();
+
+            // we only free sources in this thread, so we don't have to lock
+        #if 0
+            // this is not a real lock, so we don't have worry about dead locks
+            sink_lock lock(sinks_);
+        #endif
+            // send block to sinks
+            // send block to all sinks
+            send_packet(fn, salt, d, binary_.load(std::memory_order_relaxed));
+
+            updatelock.lock();
         }
-        int32_t salt = salt_; // make snapshot
-
-        // send empty block
-        // NOTE: we're the only thread reading 'sequence_', so we can increment
-        // it even while holding a reader lock!
-        data_packet d;
-        d.sequence = last_sequence = sequence_++;
-        d.samplerate = encoder_->samplerate(); // use nominal samplerate
-        d.channel = 0;
-        d.totalsize = 0;
-        d.nframes = 0;
-        d.frame = 0;
-        d.data = nullptr;
-        d.size = 0;
-        // now we can unlock
-        updatelock.unlock();
-
-        // we only free sources in this thread, so we don't have to lock
-    #if 0
-        // this is not a real lock, so we don't have worry about dead locks
-        sink_lock lock(sinks_);
-    #endif
-        // send block to sinks
-        // send block to all sinks
-        send_packet(fn, salt, d, binary_.load(std::memory_order_relaxed));
-
-        updatelock.lock();
     }
 
     // now send audio

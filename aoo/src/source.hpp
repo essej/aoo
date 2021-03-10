@@ -83,6 +83,8 @@ class source_imp final : public source {
     struct event {
         event() = default;
 
+        event(aoo_event_type type) : type_(type){}
+
         event(aoo_event_type type, const ip_address& addr, aoo_id id){
             memcpy(&addr_, addr.address(), addr.length());
             sink.type = type;
@@ -108,6 +110,7 @@ class source_imp final : public source {
             aoo_event event_;
             aoo_sink_event sink;
             aoo_ping_event ping;
+            aoo_xrun_event xrun;
             aoo_format_event format;
         };
     private:
@@ -167,7 +170,7 @@ class source_imp final : public source {
     std::unique_ptr<encoder> encoder_;
     // state
     int32_t sequence_ = 0;
-    std::atomic<int32_t> dropped_{0};
+    std::atomic<float> xrun_{0};
     std::atomic<float> lastpingtime_{0};
     std::atomic<bool> needformat_{false};
     enum class stream_state {
@@ -226,7 +229,7 @@ class source_imp final : public source {
 
     void start_new_stream();
 
-    void update_timer();
+    void add_xrun(float n);
 
     void update_audioqueue();
 

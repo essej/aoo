@@ -76,11 +76,6 @@ AOO_API void aoo_set_allocator(const aoo_allocator *alloc);
 #endif
 
 // enable/disable dynamic resampling
-#ifndef AOO_TIMER_CHECK
- #define AOO_TIMER_CHECK 1
-#endif
-
-// enable/disable dynamic resampling
 #ifndef AOO_BINARY_DATA_MSG
  #define AOO_BINARY_DATA_MSG 1
 #endif
@@ -191,6 +186,8 @@ typedef enum aoo_event_type
     AOO_ERROR_EVENT = 0,
     // sink/source: received a ping from source/sink
     AOO_PING_EVENT,
+    // source/sink: xruns occurred
+    AOO_XRUN_EVENT,
     // source: invited by sink
     AOO_INVITE_EVENT,
     // source: uninvited by sink
@@ -225,6 +222,12 @@ typedef struct aoo_error_event
     int32_t error_code;
     const char *error_message;
 } aoo_error_event;
+
+typedef struct aoo_xrun_event
+{
+    int32_t type;
+    int32_t count;
+} aoo_xrun_event;
 
 #define AOO_ENDPOINT_EVENT  \
     int32_t type;           \
@@ -662,7 +665,7 @@ AOO_API aoo_error aoo_sink_send(aoo_sink *sink, aoo_sendfn fn, void *user);
 AOO_API aoo_error aoo_sink_process(aoo_sink *sink, aoo_sample **data,
                                    int32_t nsamples, uint64_t t);
 
-// set event handler callback + mode
+// set event handler callback + aoo_event_mode
 AOO_API aoo_error aoo_sink_set_eventhandler(aoo_sink *sink, aoo_eventhandler fn,
                                             void *user, int32_t mode);
 

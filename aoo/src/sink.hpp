@@ -41,6 +41,8 @@ struct event
 {
     event() = default;
 
+    event(aoo_event_type type) : type_(type) {}
+
     event(aoo_event_type type, const source_desc& desc);
 
     union {
@@ -58,14 +60,16 @@ struct event
     };
 };
 
-struct source_event {
-    source_event() = default;
+struct sink_event {
+    sink_event() = default;
 
-    source_event(aoo_event_type _type, const source_desc& desc);
+    sink_event(aoo_event_type _type) : type(_type) {}
+    sink_event(aoo_event_type _type, const source_desc& desc);
 
     aoo_event_type type;
     ip_address address;
     aoo_id id;
+    int32_t count; // for xrun event
 };
 
 enum class request_type {
@@ -164,8 +168,6 @@ public:
 
     bool process(const sink_imp& s, aoo_sample **buffer, int32_t nsamples, time_tag tt);
 
-    void add_xrun(int32_t n){ xrunsamples_ += n; }
-
     void add_lost(int32_t n) {
         lost_since_ping_.fetch_add(n, std::memory_order_relaxed);
     }
@@ -177,6 +179,10 @@ public:
     aoo_error request_format(const sink_imp& s, const aoo_format& f);
 
     float get_buffer_fill_ratio();
+
+    void add_xrun(int32_t nsamples){
+        xrunsamples_ += nsamples;
+    }
 private:
     using shared_lock = sync::shared_lock<sync::shared_mutex>;
     using unique_lock = sync::unique_lock<sync::shared_mutex>;
@@ -216,6 +222,7 @@ private:
 
     aoo_stream_state streamstate_;
     bool underrun_{false};
+    bool didupdate_{false};
     std::atomic<bool> binary_{false};
 
     std::atomic<source_state> state_{source_state::idle};
@@ -236,8 +243,8 @@ private:
     std::unique_ptr<aoo::decoder> decoder_;
     // state
     int32_t channel_ = 0; // recent channel onset
+    float xrun_ = 0;
     int32_t xrunsamples_ = 0;
-    double dropped_ = 0;
     // resampler
     dynamic_resampler resampler_;
     // queues and buffers
@@ -366,8 +373,8 @@ private:
     std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
     std::atomic<bool> timer_check_{ AOO_TIMER_CHECK };
     // events
-    lockfree::unbounded_mpsc_queue<source_event, aoo::allocator<source_event>> eventqueue_;
-    void send_event(const source_event& e, aoo_thread_level level);
+    lockfree::unbounded_mpsc_queue<sink_event, aoo::allocator<sink_event>> eventqueue_;
+    void send_event(const sink_event& e, aoo_thread_level level);
 public:
     void call_event(const event& e, aoo_thread_level level) const;
 private:
