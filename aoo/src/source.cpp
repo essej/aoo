@@ -414,52 +414,60 @@ aoo_error aoo_source_handle_message(aoo_source *src, const char *data, int32_t n
 // /aoo/src/<id>/format <sink>
 aoo_error aoo::source_imp::handle_message(const char *data, int32_t n,
                                           const void *address, int32_t addrlen){
-    if (!data){
-        return AOO_OK; // nothing to update
+    aoo_type type;
+    aoo_id src;
+    int32_t onset;
+    auto err = aoo_parse_pattern(data, n, &type, &src, &onset);
+    if (err != AOO_OK){
+        LOG_WARNING("aoo_source: not an AoO message!");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    if (type != AOO_TYPE_SOURCE){
+        LOG_WARNING("aoo_source: not a source message!");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    if (src != id()){
+        LOG_WARNING("aoo_source: wrong source ID!");
+        return AOO_ERROR_UNSPECIFIED;
     }
 
-    try {
-        ip_address addr((const sockaddr *)address, addrlen);
+    ip_address addr((const sockaddr *)address, addrlen);
 
-        osc::ReceivedPacket packet(data, n);
-        osc::ReceivedMessage msg(packet);
+    if (data[0] == 0){
+        // binary message
+        auto cmd = aoo::from_bytes<int16_t>(data + AOO_BIN_MSG_DOMAIN_SIZE + 2);
+        switch (cmd){
+        case AOO_BIN_MSG_CMD_DATA:
+            handle_data_request(data + onset, n - onset, addr);
+            return AOO_OK;
+        default:
+            return AOO_ERROR_UNSPECIFIED;
+        }
+    } else {
+        try {
+            osc::ReceivedPacket packet(data, n);
+            osc::ReceivedMessage msg(packet);
 
-        aoo_type type;
-        aoo_id src;
-        int32_t onset;
-        auto err = aoo_parse_pattern(data, n, &type, &src, &onset);
-        if (err != AOO_OK){
-            LOG_WARNING("aoo_source: not an AoO message!");
+            auto pattern = msg.AddressPattern() + onset;
+            if (!strcmp(pattern, AOO_MSG_FORMAT)){
+                handle_format_request(msg, addr);
+            } else if (!strcmp(pattern, AOO_MSG_DATA)){
+                handle_data_request(msg, addr);
+            } else if (!strcmp(pattern, AOO_MSG_INVITE)){
+                handle_invite(msg, addr);
+            } else if (!strcmp(pattern, AOO_MSG_UNINVITE)){
+                handle_uninvite(msg, addr);
+            } else if (!strcmp(pattern, AOO_MSG_PING)){
+                handle_ping(msg, addr);
+            } else {
+                LOG_WARNING("unknown message " << pattern);
+                return AOO_ERROR_UNSPECIFIED;
+            }
+            return AOO_OK;
+        } catch (const osc::Exception& e){
+            LOG_ERROR("aoo_source: exception in handle_message: " << e.what());
             return AOO_ERROR_UNSPECIFIED;
         }
-        if (type != AOO_TYPE_SOURCE){
-            LOG_WARNING("aoo_source: not a source message!");
-            return AOO_ERROR_UNSPECIFIED;
-        }
-        if (src != id()){
-            LOG_WARNING("aoo_source: wrong source ID!");
-            return AOO_ERROR_UNSPECIFIED;
-        }
-
-        auto pattern = msg.AddressPattern() + onset;
-        if (!strcmp(pattern, AOO_MSG_FORMAT)){
-            handle_format_request(msg, addr);
-        } else if (!strcmp(pattern, AOO_MSG_DATA)){
-            handle_data_request(msg, addr);
-        } else if (!strcmp(pattern, AOO_MSG_INVITE)){
-            handle_invite(msg, addr);
-        } else if (!strcmp(pattern, AOO_MSG_UNINVITE)){
-            handle_uninvite(msg, addr);
-        } else if (!strcmp(pattern, AOO_MSG_PING)){
-            handle_ping(msg, addr);
-        } else {
-            LOG_WARNING("unknown message " << pattern);
-            return AOO_ERROR_UNSPECIFIED;
-        }
-        return AOO_OK;
-    } catch (const osc::Exception& e){
-        LOG_ERROR("aoo_source: exception in handle_message: " << e.what());
-        return AOO_ERROR_UNSPECIFIED;
     }
 }
 
