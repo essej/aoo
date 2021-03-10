@@ -1347,17 +1347,8 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
     if (didupdate_){
         xrunsamples_ = 0;
         xrun_ = 0;
-        // make sure that underrun and skipblocks is false
-        // TODO find out why they sometimes would be 'true',
-        // although they are set to 'false' resp. 0 in update()
-        if (underrun_){
-            LOG_DEBUG("bug: underrun after update()!");
-            underrun_ = false;
-        }
-        if (skipblocks_ > 0){
-            LOG_DEBUG("bug: skip blocks after update()!");
-            skipblocks_ = false;
-        }
+        assert(underrun_ == false);
+        assert(skipblocks_ == 0);
         didupdate_ = false;
     } else if (xrunsamples_ > 0) {
         auto xrunblocks = (float)xrunsamples_ / (float)decoder_->blocksize();
@@ -1518,6 +1509,7 @@ void source_desc::add_lost(stream_state& state, int32_t n) {
 }
 
 #define SILENT_REFILL 0
+#define SKIP_BLOCKS 0
 
 void source_desc::handle_underrun(const sink_imp& s){
     LOG_VERBOSE("audio buffer underrun");
@@ -1554,7 +1546,7 @@ void source_desc::handle_underrun(const sink_imp& s){
 
         LOG_DEBUG("write " << n << " empty blocks to audio buffer");
 
-    #if 0
+    #if SKIP_BLOCKS
         skipblocks_ += n;
 
         LOG_DEBUG("skip next " << n << " blocks");
