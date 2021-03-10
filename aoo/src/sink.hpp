@@ -32,7 +32,7 @@ struct stream_state {
     int32_t lost = 0;
     int32_t reordered = 0;
     int32_t resent = 0;
-    int32_t gap = 0;
+    int32_t dropped = 0;
 };
 
 class source_desc;
@@ -56,6 +56,7 @@ struct event
         aoo_block_lost_event block_loss;
         aoo_block_reordered_event block_reorder;
         aoo_block_resent_event block_resend;
+        aoo_block_dropped_event block_dropped;
         aoo_block_gap_event block_gap;
     };
 };
@@ -168,10 +169,6 @@ public:
 
     bool process(const sink_imp& s, aoo_sample **buffer, int32_t nsamples, time_tag tt);
 
-    void add_lost(int32_t n) {
-        lost_since_ping_.fetch_add(n, std::memory_order_relaxed);
-    }
-
     void invite(const sink_imp& s);
 
     void uninvite(const sink_imp& s);
@@ -191,8 +188,9 @@ private:
 
     void update(const sink_imp& s);
 
-    // handle messages
-    int32_t recover(const char *reason, int32_t n = 0);
+    void add_lost(stream_state& state, int32_t n);
+
+    void handle_underrun(const sink_imp& s);
 
     bool add_packet(const sink_imp& s, const net_packet& d,
                     stream_state& state);

@@ -202,6 +202,8 @@ typedef enum aoo_event_type
     AOO_FORMAT_CHANGE_EVENT,
     // sink: source changed state
     AOO_STREAM_STATE_EVENT,
+    // sink: buffer underrun
+    AOO_BUFFER_UNDERRUN_EVENT,
     // sink: blocks have been lost
     AOO_BLOCK_LOST_EVENT,
     // sink: blocks arrived out of order
@@ -210,6 +212,8 @@ typedef enum aoo_event_type
     AOO_BLOCK_RESENT_EVENT,
     // sink: large gap between blocks
     AOO_BLOCK_GAP_EVENT,
+    // sink: block has been dropped by source
+    AOO_BLOCK_DROPPED_EVENT,
     // sink: source invitation timed out
     AOO_INVITE_TIMEOUT_EVENT,
     // sink: format request timed out
@@ -271,11 +275,13 @@ typedef struct _aoo_block_event aoo_block_lost_event;
 typedef struct _aoo_block_event aoo_block_reordered_event;
 typedef struct _aoo_block_event aoo_block_resent_event;
 typedef struct _aoo_block_event aoo_block_gap_event;
+typedef struct _aoo_block_event aoo_block_dropped_event;
 
 typedef aoo_sink_event aoo_invite_event;
 typedef aoo_sink_event aoo_uninvite_event;
 typedef aoo_source_event aoo_invite_timeout_event;
 typedef aoo_source_event aoo_format_timeout_event;
+typedef aoo_source_event aoo_buffer_underrun_event;
 
 // ping event
 typedef struct aoo_ping_event

@@ -1095,13 +1095,11 @@ float source_desc::get_buffer_fill_ratio(){
     if (decoder_){
         // consider samples in resampler!
         auto nsamples = decoder_->nchannels() * decoder_->blocksize();
-        auto available = audioqueue_.read_available() +
+        auto available = (double)audioqueue_.read_available() +
                 (double)resampler_.size() / (double)nsamples;
-
-        LOG_DEBUG("fill ratio: audioqueue: " << audioqueue_.read_available()
-                  << ", resampler: " << (double)resampler_.size() / (double)nsamples);
-
         auto ratio = available / (double)audioqueue_.capacity();
+        LOG_DEBUG("fill ratio: " << ratio << ", audioqueue: " << audioqueue_.read_available()
+                  << ", resampler: " << (double)resampler_.size() / (double)nsamples);
         // FIXME sometimes the result is bigger than 1.0
         return std::min<float>(1.0, ratio);
     } else {
@@ -1319,6 +1317,8 @@ void source_desc::send(const sink_imp& s, const sendfn& fn){
     send_data_requests(s, fn);
 }
 
+#define SILENT_ON_UNDERRUN
+
 bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
                           int32_t nsamples, time_tag tt)
 {
@@ -1346,6 +1346,13 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
     if (didupdate_){
         xrunsamples_ = 0;
         xrun_ = 0;
+        // make sure that underrun is false
+        // TODO find out why it sometimes would be 'true',
+        // although it's set to 'false' in update()
+        if (underrun_){
+            LOG_DEBUG("bug: underrun after update()!");
+            underrun_ = false;
+        }
     } else if (xrunsamples_ > 0) {
         auto xrunblocks = (float)xrunsamples_ / (float)decoder_->blocksize();
         xrun_ += xrunblocks;
@@ -1355,10 +1362,7 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
     if (!packetqueue_.empty()){
         // check for buffer underrun (only if packets arrive!)
         if (underrun_){
-            auto lost = recover("audio buffer underrun");
-            state.lost += lost;
-            add_lost(lost);
-            underrun_ = false;
+            handle_underrun(s);
         }
 
         net_packet d;
@@ -1398,10 +1402,10 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
         e.block_resend.count = state.resent;
         send_event(s, e, AOO_THREAD_AUDIO);
     }
-    if (state.gap > 0){
-        // push packet gap event
-        event e(AOO_BLOCK_GAP_EVENT, *this);
-        e.block_gap.count = state.gap;
+    if (state.dropped > 0){
+        // push packet resend event
+        event e(AOO_BLOCK_DROPPED_EVENT, *this);
+        e.block_dropped.count = state.dropped;
         send_event(s, e, AOO_THREAD_AUDIO);
     }
 
@@ -1498,47 +1502,54 @@ int32_t source_desc::poll_events(sink_imp& s, aoo_eventhandler fn, void *user){
     return count;
 }
 
-int32_t source_desc::recover(const char *reason, int32_t n){
-    LOG_VERBOSE("recovering from " << reason);
+void source_desc::add_lost(stream_state& state, int32_t n) {
+    state.lost += n;
+    lost_since_ping_.fetch_add(n, std::memory_order_relaxed);
+}
+
+#define SILENT_REFILL 0
+
+void source_desc::handle_underrun(const sink_imp& s){
+    LOG_VERBOSE("audio buffer underrun");
+
+    int32_t n = audioqueue_.write_available();
+    auto nsamples = decoder_->blocksize() * decoder_->nchannels();
+    // reduce by blocks in resampler!
+    n -= static_cast<int32_t>((double)resampler_.size() / (double)nsamples + 0.5);
+
+    LOG_DEBUG("audioqueue: " << audioqueue_.read_available()
+              << ", resampler: " << (double)resampler_.size() / (double)nsamples);
 
     if (n > 0){
-        auto size = std::min<int32_t>(n, jitterbuffer_.size());
-        // drop blocks
-        for (int i = 0; i < size; ++i){
-            jitterbuffer_.pop_front();
-        }
-    } else {
-        // clear buffer
-        n = jitterbuffer_.size(); // for logging
-        jitterbuffer_.clear();
-    }
-
-    double sr = decoder_->samplerate();
-    auto nsamples = decoder_->blocksize() * decoder_->nchannels();
-
-    int32_t numblocks = std::min<int32_t>(n, audioqueue_.write_available());
-    // reduce by blocks in resampler!
-    numblocks -= static_cast<int32_t>((double)resampler_.size() / (double)nsamples + 0.5);
-
-    // push empty blocks to keep the buffer full!
-    for (int i = 0; i < numblocks; ++i){
-        auto b = (block_data *)audioqueue_.write_data();
-        // push nominal samplerate, channel + silence
-        b->header.samplerate = sr;
-        b->header.channel = -1; // last channel
-        int32_t size = nsamples;
-        if (decoder_->decode(nullptr, 0, b->data, size) != AOO_OK){
-            LOG_WARNING("aoo_sink: couldn't decode block!");
-            // fill with zeros
+        double sr = decoder_->samplerate();
+        for (int i = 0; i < n; ++i){
+            auto b = (block_data *)audioqueue_.write_data();
+            // push nominal samplerate, channel + silence
+            b->header.samplerate = sr;
+            b->header.channel = -1; // last channel
+        #if SILENT_REFILL
+            // push silence
             std::fill(b->data, b->data + nsamples, 0);
+        #else
+            // use packet loss concealment
+            int32_t size = nsamples;
+            if (decoder_->decode(nullptr, 0, b->data, size) != AOO_OK){
+                LOG_WARNING("aoo_sink: couldn't decode block!");
+                // fill with zeros
+                std::fill(b->data, b->data + nsamples, 0);
+            }
+        #endif
+            audioqueue_.write_commit();
         }
-        audioqueue_.write_commit();
+
+        LOG_DEBUG("write " << n << " empty blocks to audio buffer");
+
     }
 
-    LOG_VERBOSE("dropped " << n << " blocks and wrote "
-                << std::max<int32_t>(0, numblocks) << " empty blocks");
+    event e(AOO_BUFFER_UNDERRUN_EVENT, *this);
+    send_event(s, e, AOO_THREAD_AUDIO);
 
-    return n;
+    underrun_ = false;
 }
 
 bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
@@ -1562,11 +1573,21 @@ bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
     auto newest = jitterbuffer_.last_pushed();
     auto diff = d.sequence - newest;
     if (newest >= 0 && diff > jitterbuffer_.capacity()){
-        auto lost = recover("transmission gap");
-        state.lost += lost;
-        add_lost(lost);
-        // record gap (measured in blocks)
-        state.gap += diff - 1;
+        // jitter buffer should be empty.
+        if (!jitterbuffer_.empty()){
+            LOG_VERBOSE("source_desc: transmission gap, but jitter buffer is not empty");
+            jitterbuffer_.clear();
+        }
+        // No need to refill, because audio buffer should have ran out.
+        if (audioqueue_.write_available()){
+            LOG_VERBOSE("source_desc: transmission gap, but audio buffer is not empty");
+        }
+        // report gap to source
+        lost_since_ping_.fetch_add(diff - 1);
+        // send event
+        event e(AOO_BLOCK_GAP_EVENT, *this);
+        e.block_gap.count = diff - 1;
+        send_event(s, e, AOO_THREAD_AUDIO);
     }
 
     auto block = jitterbuffer_.find(d.sequence);
@@ -1581,12 +1602,15 @@ bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
     #endif
 
         if (newest >= 0){
-            // check for jitter buffer overrun (shouldn't really happen)
+            // check for jitter buffer overrun
+            // can happen if the sink blocks for a longer time
+            // or with extreme network jitter (packets have piled up)
             auto space = jitterbuffer_.capacity() - jitterbuffer_.size();
             if (diff > space){
-                auto lost = recover("jitter buffer overrun");
-                state.lost += lost;
-                add_lost(lost);
+                    // for now, just clear the jitter buffer and let the
+                    // audio buffer underrun.
+                    LOG_VERBOSE("jitter buffer overrun!");
+                    jitterbuffer_.clear();
             }
 
             // notify for gap
@@ -1677,6 +1701,8 @@ void source_desc::process_blocks(const sink_imp& s, stream_state& state){
                 DO_LOG_DEBUG("jitter buffer: write empty block ("
                           << b.sequence << ") for source xrun");
             #endif
+                // record dropped block
+                state.dropped++;
             } else {
                 // block is ready
                 data = b.data();
@@ -1699,8 +1725,7 @@ void source_desc::process_blocks(const sink_imp& s, stream_state& state){
                 size = 0;
                 sr = decoder_->samplerate(); // nominal samplerate
                 channel = -1; // current channel
-                state.lost++;
-                add_lost(1);
+                add_lost(state, 1);
                 LOG_VERBOSE("dropped block " << b.sequence);
             } else {
                 // wait for block
