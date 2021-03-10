@@ -363,8 +363,6 @@ aoo_error aoo::sink_imp::handle_message(const char *data, int32_t n,
         return AOO_ERROR_UNSPECIFIED; // not setup yet
     }
 
-    ip_address addr((const sockaddr *)address, addrlen);
-
     aoo_type type;
     aoo_id sinkid;
     int32_t onset;
@@ -382,6 +380,8 @@ aoo_error aoo::sink_imp::handle_message(const char *data, int32_t n,
         LOG_WARNING("wrong sink ID!");
         return AOO_ERROR_UNSPECIFIED;
     }
+
+    ip_address addr((const sockaddr *)address, addrlen);
 
     if (data[0] == 0){
         // binary message
@@ -1947,7 +1947,7 @@ void source_desc::send_format_request(const sink_imp& s, const sendfn& fn,
 // seq1 (int32), frame1(int32), seq2(int32), frame2(seq), etc.
 
 void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
-    if (!datarequestqueue_.empty()){
+    if (datarequestqueue_.empty()){
         return;
     }
 
@@ -1967,7 +1967,7 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
         // write header
         memcpy(it, AOO_BIN_MSG_DOMAIN, AOO_BIN_MSG_DOMAIN_SIZE);
         it += AOO_BIN_MSG_DOMAIN_SIZE;
-        aoo::write_bytes<int16_t>(AOO_TYPE_SINK, it);
+        aoo::write_bytes<int16_t>(AOO_TYPE_SOURCE, it);
         aoo::write_bytes<int16_t>(AOO_BIN_MSG_CMD_DATA, it);
         aoo::write_bytes<int32_t>(id(), it);
         // write first 2 args (constant)
@@ -1980,6 +1980,9 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
 
         data_request r;
         while (datarequestqueue_.try_pop(r)){
+            LOG_DEBUG("send binary data request ("
+                      << r.sequence << " " << r.frame << ")");
+
             aoo::write_bytes<int32_t>(r.sequence, it);
             aoo::write_bytes<int32_t>(r.frame, it);
             if (++numrequests >= maxrequests){
@@ -2018,6 +2021,9 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
 
         data_request r;
         while (datarequestqueue_.try_pop(r)){
+            LOG_DEBUG("send data request (" << r.sequence
+                      << " " << r.frame << ")");
+
             msg << r.sequence << r.frame;
             if (++numrequests >= maxrequests){
                 // send it off
