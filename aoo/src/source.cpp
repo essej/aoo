@@ -782,6 +782,9 @@ void source_imp::start_new_stream(){
     sequence_ = 0;
     xrun_.store(0.0); // !
 
+    // remove audio from previous stream
+    resampler_.reset();
+
     history_.clear(); // !
 
     // reset encoder to avoid garbage from previous stream
