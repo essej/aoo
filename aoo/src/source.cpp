@@ -729,7 +729,12 @@ aoo_error source_imp::set_format(aoo_format &f){
 
         update_historybuffer();
 
-        start_new_stream();
+        // if we're already playing, set state to "start",
+        // so a new stream will be started in the next process() call.
+        // we don't do it here to avoid possible race conditions
+        // with the xrun compensation mechanism.
+        auto expected = stream_state::play;
+        state_.compare_exchange_strong(expected, stream_state::start);
     }
     return err;
 }
