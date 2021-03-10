@@ -35,7 +35,7 @@ endif()
 # logging
 set(LOGLEVEL "WARNING" CACHE STRING "LOGLEVEL")
 message(STATUS "LOGLEVEL: ${LOGLEVEL}")
-add_definitions("-DLOGLEVEL=AOO_LOGLEVEL_${LOGLEVEL}")
+add_definitions("-DAOO_LOGLEVEL=AOO_LOGLEVEL_${LOGLEVEL}")
 
 # Windows paths
 if (WIN32 OR MINGW)

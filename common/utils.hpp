@@ -22,8 +22,8 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
-#ifndef LOGLEVEL
- #define LOGLEVEL AOO_LOGLEVEL_WARNING
+#ifndef AOO_LOGLEVEL
+ #define AOO_LOGLEVEL AOO_LOGLEVEL_WARNING
 #endif
 
 #define DO_LOG(level, msg)(aoo::Log(level) << msg)
@@ -32,25 +32,25 @@
 #define DO_LOG_VERBOSE(msg) DO_LOG(AOO_LOGLEVEL_VERBOSE, msg)
 #define DO_LOG_DEBUG(msg) DO_LOG(AOO_LOGLEVEL_DEBUG, msg)
 
-#if LOGLEVEL >= AOO_LOGLEVEL_ERROR
+#if AOO_LOGLEVEL >= AOO_LOGLEVEL_ERROR
  #define LOG_ERROR(x) DO_LOG_ERROR(x)
 #else
  #define LOG_ERROR(x)
 #endif
 
-#if LOGLEVEL >= AOO_LOGLEVEL_WARNING
+#if AOO_LOGLEVEL >= AOO_LOGLEVEL_WARNING
  #define LOG_WARNING(x) DO_LOG_WARNING(x)
 #else
  #define LOG_WARNING(x)
 #endif
 
-#if LOGLEVEL >= AOO_LOGLEVEL_VERBOSE
+#if AOO_LOGLEVEL >= AOO_LOGLEVEL_VERBOSE
  #define LOG_VERBOSE(x) DO_LOG_VERBOSE(x)
 #else
  #define LOG_VERBOSE(x)
 #endif
 
-#if LOGLEVEL >= AOO_LOGLEVEL_DEBUG
+#if AOO_LOGLEVEL >= AOO_LOGLEVEL_DEBUG
  #define LOG_DEBUG(x) DO_LOG_DEBUG(x)
 #else
  #define LOG_DEBUG(x)
