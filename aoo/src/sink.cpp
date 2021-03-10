@@ -1554,9 +1554,11 @@ void source_desc::handle_underrun(const sink_imp& s){
 
         LOG_DEBUG("write " << n << " empty blocks to audio buffer");
 
+    #if 0
         skipblocks_ += n;
 
         LOG_DEBUG("skip next " << n << " blocks");
+    #endif
     }
 
     event e(AOO_BUFFER_UNDERRUN_EVENT, *this);
