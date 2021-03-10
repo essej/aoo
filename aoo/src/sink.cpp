@@ -1616,6 +1616,11 @@ bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
     #endif
 
         if (newest >= 0){
+            // notify for gap
+            if (diff > 1){
+                LOG_VERBOSE("skipped " << (diff - 1) << " blocks");
+            }
+
             // check for jitter buffer overrun
             // can happen if the sink blocks for a longer time
             // or with extreme network jitter (packets have piled up)
@@ -1631,12 +1636,9 @@ bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
                     // audio buffer underrun.
                     LOG_VERBOSE("jitter buffer overrun!");
                     jitterbuffer_.clear();
-                }
-            }
 
-            // notify for gap
-            if (diff > 1){
-                LOG_VERBOSE("skipped " << (diff - 1) << " blocks");
+                    newest = d.sequence; // !
+                }
             }
 
             // fill gaps with empty blocks
