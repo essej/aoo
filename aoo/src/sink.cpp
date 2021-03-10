@@ -1358,6 +1358,7 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
             LOG_DEBUG("bug: skip blocks after update()!");
             skipblocks_ = false;
         }
+        didupdate_ = false;
     } else if (xrunsamples_ > 0) {
         auto xrunblocks = (float)xrunsamples_ / (float)decoder_->blocksize();
         xrun_ += xrunblocks;
