@@ -1001,6 +1001,7 @@ void source_desc::update(const sink_imp& s){
         streamstate_ = AOO_STREAM_STATE_STOP;
         lost_since_ping_.store(0);
         channel_ = 0;
+        skipblocks_ = 0;
         underrun_ = false;
         didupdate_ = true;
 
@@ -1346,12 +1347,16 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
     if (didupdate_){
         xrunsamples_ = 0;
         xrun_ = 0;
-        // make sure that underrun is false
-        // TODO find out why it sometimes would be 'true',
-        // although it's set to 'false' in update()
+        // make sure that underrun and skipblocks is false
+        // TODO find out why they sometimes would be 'true',
+        // although they are set to 'false' resp. 0 in update()
         if (underrun_){
             LOG_DEBUG("bug: underrun after update()!");
             underrun_ = false;
+        }
+        if (skipblocks_ > 0){
+            LOG_DEBUG("bug: skip blocks after update()!");
+            skipblocks_ = false;
         }
     } else if (xrunsamples_ > 0) {
         auto xrunblocks = (float)xrunsamples_ / (float)decoder_->blocksize();
@@ -1372,6 +1377,10 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
             // return memory
             s.memory.free(memory_block::from_bytes((void *)d.data));
         }
+    }
+
+    if (skipblocks_ > 0){
+        skip_blocks(s);
     }
 
     process_blocks(s, state);
@@ -1544,6 +1553,9 @@ void source_desc::handle_underrun(const sink_imp& s){
 
         LOG_DEBUG("write " << n << " empty blocks to audio buffer");
 
+        skipblocks_ += n;
+
+        LOG_DEBUG("skip next " << n << " blocks");
     }
 
     event e(AOO_BUFFER_UNDERRUN_EVENT, *this);
@@ -1578,6 +1590,8 @@ bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
             LOG_VERBOSE("source_desc: transmission gap, but jitter buffer is not empty");
             jitterbuffer_.clear();
         }
+        // we don't need to skip blocks!
+        skipblocks_ = 0;
         // No need to refill, because audio buffer should have ran out.
         if (audioqueue_.write_available()){
             LOG_VERBOSE("source_desc: transmission gap, but audio buffer is not empty");
@@ -1605,12 +1619,19 @@ bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
             // check for jitter buffer overrun
             // can happen if the sink blocks for a longer time
             // or with extreme network jitter (packets have piled up)
+        try_again:
             auto space = jitterbuffer_.capacity() - jitterbuffer_.size();
             if (diff > space){
+                if (skipblocks_ > 0){
+                    LOG_DEBUG("jitter buffer would overrun!");
+                    skip_blocks(s);
+                    goto try_again;
+                } else {
                     // for now, just clear the jitter buffer and let the
                     // audio buffer underrun.
                     LOG_VERBOSE("jitter buffer overrun!");
                     jitterbuffer_.clear();
+                }
             }
 
             // notify for gap
@@ -1756,6 +1777,14 @@ void source_desc::process_blocks(const sink_imp& s, stream_state& state){
         }
     #endif
 
+        jitterbuffer_.pop_front();
+    }
+}
+
+void source_desc::skip_blocks(const sink_imp& s){
+    auto n = std::min<int>(skipblocks_, jitterbuffer_.size());
+    LOG_VERBOSE("skip " << n << " blocks");
+    while (n--){
         jitterbuffer_.pop_front();
     }
 }

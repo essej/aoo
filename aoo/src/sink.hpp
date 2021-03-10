@@ -127,6 +127,7 @@ struct net_packet : data_packet {
 class source_desc {
 public:
     source_desc(const ip_address& addr, aoo_id id, double time);
+
     source_desc(const source_desc& other) = delete;
     source_desc& operator=(const source_desc& other) = delete;
 
@@ -197,6 +198,8 @@ private:
 
     void process_blocks(const sink_imp& s, stream_state& state);
 
+    void skip_blocks(const sink_imp& s);
+
     void check_missing_blocks(const sink_imp& s);
 
     // send messages
@@ -241,6 +244,7 @@ private:
     std::unique_ptr<aoo::decoder> decoder_;
     // state
     int32_t channel_ = 0; // recent channel onset
+    int32_t skipblocks_ = 0;
     float xrun_ = 0;
     int32_t xrunsamples_ = 0;
     // resampler
