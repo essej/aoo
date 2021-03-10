@@ -741,8 +741,9 @@ aoo_error sink_imp::handle_data_message(const osc::ReceivedMessage& msg,
     auto it = msg.ArgumentsBegin();
 
     auto id = (it++)->AsInt32();
-    auto salt = (it++)->AsInt32();
-    aoo::data_packet d;
+
+    aoo::net_packet d;
+    d.salt = (it++)->AsInt32();
     d.sequence = (it++)->AsInt32();
     d.samplerate = (it++)->AsDouble();
     d.channel = (it++)->AsInt32();
@@ -755,7 +756,7 @@ aoo_error sink_imp::handle_data_message(const osc::ReceivedMessage& msg,
     d.data = (const char *)blobdata;
     d.size = blobsize;
 
-    return handle_data_packet(d, salt, addr, id, false);
+    return handle_data_packet(d, false, addr, id);
 }
 
 // binary data message:
@@ -775,9 +776,9 @@ aoo_error sink_imp::handle_data_message(const char *msg, int32_t n,
     auto it = msg;
 
     auto id = aoo::read_bytes<int32_t>(it);
-    auto salt = aoo::read_bytes<int32_t>(it);
 
-    aoo::data_packet d;
+    aoo::net_packet d;
+    d.salt = aoo::read_bytes<int32_t>(it);
     d.sequence = aoo::read_bytes<int32_t>(it);
     d.channel = aoo::read_bytes<int16_t>(it);
     auto flags = aoo::read_bytes<int16_t>(it);
@@ -808,11 +809,11 @@ aoo_error sink_imp::handle_data_message(const char *msg, int32_t n,
 
     d.data = it;
 
-    return handle_data_packet(d, salt, addr, id, true);
+    return handle_data_packet(d, true, addr, id);
 }
 
-aoo_error sink_imp::handle_data_packet(data_packet& d, int32_t salt,
-                                       const ip_address& addr, aoo_id id, bool binary)
+aoo_error sink_imp::handle_data_packet(net_packet& d, bool binary,
+                                       const ip_address& addr, aoo_id id)
 {
     if (id < 0){
         LOG_WARNING("bad ID for " << AOO_MSG_DATA << " message");
@@ -827,7 +828,7 @@ aoo_error sink_imp::handle_data_packet(data_packet& d, int32_t salt,
     if (!src){
         src = add_source(addr, id);
     }
-    return src->handle_data(*this, salt, d, binary);
+    return src->handle_data(*this, d, binary);
 }
 
 aoo_error sink_imp::handle_ping_message(const osc::ReceivedMessage& msg,
@@ -892,7 +893,7 @@ source_desc::~source_desc(){
         }
     }
     // flush packet queue
-    data_packet d;
+    net_packet d;
     while (packetqueue_.try_pop(d)){
         auto mem = memory_block::from_bytes((void *)d.data);
         memory_block::free(mem);
@@ -1179,8 +1180,7 @@ aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_
 
 // /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
 
-aoo_error source_desc::handle_data(const sink_imp& s, int32_t salt,
-                                   data_packet& d, bool binary)
+aoo_error source_desc::handle_data(const sink_imp& s, net_packet& d, bool binary)
 {
     binary_.store(binary, std::memory_order_relaxed);
 
@@ -1201,7 +1201,7 @@ aoo_error source_desc::handle_data(const sink_imp& s, int32_t salt,
     // the source format might have changed and we haven't noticed,
     // e.g. because of dropped UDP packets.
     // NOTE: salt_ can only change in this thread!
-    if (salt != salt_){
+    if (d.salt != salt_){
         push_request(request(request_type::format));
         return AOO_OK;
     }
@@ -1346,10 +1346,10 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
             underrun_ = false;
         }
 
-        data_packet d;
+        net_packet d;
         while (packetqueue_.try_pop(d)){
             // check data packet
-            add_packet(d, state);
+            add_packet(s, d, state);
             // return memory
             s.memory.free(memory_block::from_bytes((void *)d.data));
         }
@@ -1526,7 +1526,15 @@ int32_t source_desc::recover(const char *reason, int32_t n){
     return n;
 }
 
-bool source_desc::add_packet(const data_packet& d, stream_state& state){
+bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
+                             stream_state& state){
+    // we have to check the salt (again) because the stream
+    // might have changed in between!
+    if (d.salt != salt_){
+        LOG_DEBUG("ignore data packet from previous stream");
+        return false;
+    }
+
     if (d.sequence <= jitterbuffer_.last_popped()){
         // block too old, discard!
         LOG_VERBOSE("discard old block " << d.sequence);

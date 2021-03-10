@@ -115,6 +115,10 @@ enum class source_state {
     uninvite
 };
 
+struct net_packet : data_packet {
+    int32_t salt;
+};
+
 class source_desc {
 public:
     source_desc(const ip_address& addr, aoo_id id, double time);
@@ -152,8 +156,7 @@ public:
     aoo_error handle_format(const sink_imp& s, int32_t salt, const aoo_format& f,
                             const char *settings, int32_t size, uint32_t flags);
 
-    aoo_error handle_data(const sink_imp& s, int32_t salt,
-                          data_packet& d, bool binary);
+    aoo_error handle_data(const sink_imp& s, net_packet& d, bool binary);
 
     aoo_error handle_ping(const sink_imp& s, time_tag tt);
 
@@ -185,7 +188,8 @@ private:
     // handle messages
     int32_t recover(const char *reason, int32_t n = 0);
 
-    bool add_packet(const data_packet& d, stream_state& state);
+    bool add_packet(const sink_imp& s, const net_packet& d,
+                    stream_state& state);
 
     void process_blocks(const sink_imp& s, stream_state& state);
 
@@ -247,7 +251,8 @@ private:
     };
     lockfree::spsc_queue<char, aoo::allocator<char>> audioqueue_;
     int32_t minblocks_ = 0;
-    lockfree::unbounded_mpsc_queue<data_packet, aoo::allocator<data_packet>> packetqueue_;
+    // packet queue and jitter buffer
+    lockfree::unbounded_mpsc_queue<net_packet, aoo::allocator<net_packet>> packetqueue_;
     jitter_buffer jitterbuffer_;
     // requests
     lockfree::unbounded_mpsc_queue<request, aoo::allocator<request>> requestqueue_;
@@ -394,8 +399,8 @@ private:
     aoo_error handle_data_message(const char *msg, int32_t n,
                                   const ip_address& addr);
 
-    aoo_error handle_data_packet(data_packet& d, int32_t salt,
-                                 const ip_address& addr, aoo_id id, bool binary);
+    aoo_error handle_data_packet(net_packet& d, bool binary,
+                                 const ip_address& addr, aoo_id id);
 
     aoo_error handle_ping_message(const osc::ReceivedMessage& msg,
                                   const ip_address& addr);
