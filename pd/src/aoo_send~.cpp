@@ -159,6 +159,15 @@ static void aoo_send_setformat(t_aoo_send *x, aoo_format& f)
 static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t)
 {
     switch (event->type){
+    case AOO_XRUN_EVENT:
+    {
+        auto e = (const aoo_xrun_event *)event;
+
+        t_atom msg;
+        SETFLOAT(&msg, e->count);
+        outlet_anything(x->x_msgout, gensym("xrun"), 1, &msg);
+        break;
+    }
     case AOO_PING_EVENT:
     {
         auto e = (const aoo_ping_event *)event;

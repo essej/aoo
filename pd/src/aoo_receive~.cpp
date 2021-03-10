@@ -246,6 +246,13 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
 {
     t_atom msg[32];
     switch (event->type){
+    case AOO_XRUN_EVENT:
+    {
+        auto e = (const aoo_xrun_event *)event;
+        SETFLOAT(msg, e->count);
+        outlet_anything(x->x_msgout, gensym("xrun"), 1, msg);
+        break;
+    }
     case AOO_SOURCE_ADD_EVENT:
     {
         auto e = (const aoo_source_event *)event;
@@ -306,6 +313,18 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         outlet_anything(x->x_msgout, gensym("format_timeout"), 3, msg);
         break;
     }
+    case AOO_BUFFER_UNDERRUN_EVENT:
+    {
+        auto e = (const aoo_buffer_underrun_event *)event;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+
+        // output event
+        if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
+            return;
+        }
+        outlet_anything(x->x_msgout, gensym("underrun"), 3, msg);
+        break;
+    }
     case AOO_FORMAT_CHANGE_EVENT:
     {
         auto e = (const aoo_format_change_event *)event;
@@ -364,6 +383,18 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const aoo_event *event, i
         }
         SETFLOAT(&msg[3], e->count);
         outlet_anything(x->x_msgout, gensym("block_resent"), 4, msg);
+        break;
+    }
+    case AOO_BLOCK_DROPPED_EVENT:
+    {
+        auto e = (const aoo_block_gap_event *)event;
+        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+
+        if (!x->x_node->resolve_endpoint(addr, e->id, 3, msg)){
+            return;
+        }
+        SETFLOAT(&msg[3], e->count);
+        outlet_anything(x->x_msgout, gensym("block_dropped"), 4, msg);
         break;
     }
     case AOO_BLOCK_GAP_EVENT:
