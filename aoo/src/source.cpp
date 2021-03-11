@@ -761,12 +761,16 @@ aoo_error source_imp::set_format(aoo_format &f){
 
         update_historybuffer();
 
-        // if we're already playing, set state to "start",
-        // so a new stream will be started in the next process() call.
-        // we don't do it here to avoid possible race conditions
-        // with the xrun compensation mechanism.
-        auto expected = stream_state::play;
-        state_.compare_exchange_strong(expected, stream_state::start);
+        // we need to start a new stream while holding the lock.
+        // it might be tempting to just (atomically) set 'state_'
+        // to 'stream_start::start', but then the send() method
+        // could a format request by an existing stream with the
+        // wrong format, before process() starts the new stream.
+        //
+        // NOTE: there's a slight race condition in that 'xrun_'
+        // might be incremented right afterwards, but I'm not
+        // sure if this could cause any real problems..
+        start_new_stream();
     }
     return err;
 }
