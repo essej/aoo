@@ -637,14 +637,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
               << ", capacity: " << audioqueue_.capacity() / resampler_.ratio());
 #endif
     if (need_resampling()){
-        // go through resampler
-        if (!resampler_.write(buf, insize)){
-            LOG_WARNING("aoo_source: send buffer overflow");
-            add_xrun(1);
-            // don't return AOO_ERROR_IDLE, otherwise the send thread
-            // wouldn't drain the buffer.
-            return AOO_ERROR_UNSPECIFIED;
-        }
+        // *first* try to move samples from resampler to audiobuffer
         while (audioqueue_.write_available()){
             // copy audio samples
             auto ptr = (block_data *)audioqueue_.write_data();
@@ -655,6 +648,14 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
             ptr->sr = sr;
 
             audioqueue_.write_commit();
+        }
+        // now try to write to resampler
+        if (!resampler_.write(buf, insize)){
+            LOG_WARNING("aoo_source: send buffer overflow");
+            add_xrun(1);
+            // don't return AOO_ERROR_IDLE, otherwise the send thread
+            // wouldn't drain the buffer.
+            return AOO_ERROR_UNSPECIFIED;
         }
     } else {
         // bypass resampler
