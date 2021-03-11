@@ -551,6 +551,10 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         // calculate xrun blocks
         double nblocks = error * (double)samplerate_ / (double)blocksize_;
         add_xrun(nblocks);
+        event e(AOO_XRUN_EVENT);
+        e.xrun.count = nblocks + 0.5; // ?
+        send_event(e, AOO_THREAD_AUDIO);
+
         timer_.reset();
     } else if (dynamic_resampling){
         // update time DLL, but only if n matches blocksize!
@@ -811,9 +815,6 @@ void source_imp::add_xrun(float n){
     auto current = xrun_.load(std::memory_order_relaxed);
     while (!xrun_.compare_exchange_weak(current, current + n))
         ;
-    event e(AOO_XRUN_EVENT);
-    e.xrun.count = (int)(n + 0.5); // ?
-    send_event(e, AOO_THREAD_AUDIO);
 }
 
 void source_imp::update_audioqueue(){
@@ -917,6 +918,8 @@ void source_imp::send_format(const sendfn& fn){
     }
 }
 
+#define XRUN_THRESHOLD 0.1
+
 void source_imp::send_data(const sendfn& fn){
     int32_t last_sequence = 0;
 
@@ -925,14 +928,15 @@ void source_imp::send_data(const sendfn& fn){
     shared_lock updatelock(update_mutex_); // reader lock
 
     // *first* check for dropped blocks
-    if (xrun_.load(std::memory_order_relaxed) > 0.1){
+    if (xrun_.load(std::memory_order_relaxed) > XRUN_THRESHOLD){
         // calculate number of xrun blocks (after resampling)
         float drop = xrun_.exchange(0.0) * (float)resampler_.ratio();
-        int nblocks = std::floor(drop);
-        float rem = drop - (float)nblocks;
-        // return remainder with a CAS loop
+        // round up
+        int nblocks = std::ceil(drop);
+        // subtract diff with a CAS loop
+        float diff = (float)nblocks - drop;
         auto current = xrun_.load(std::memory_order_relaxed);
-        while (!xrun_.compare_exchange_weak(current, current + rem))
+        while (!xrun_.compare_exchange_weak(current, current - diff))
             ;
         // drop blocks
         LOG_DEBUG("aoo_source: send " << nblocks << " empty blocks for "
@@ -964,7 +968,6 @@ void source_imp::send_data(const sendfn& fn){
             // this is not a real lock, so we don't have worry about dead locks
             sink_lock lock(sinks_);
         #endif
-            // send block to sinks
             // send block to all sinks
             send_packet(fn, salt, d, binary_.load(std::memory_order_relaxed));
 

@@ -1317,7 +1317,7 @@ void source_desc::send(const sink_imp& s, const sendfn& fn){
     send_data_requests(s, fn);
 }
 
-#define SILENT_ON_UNDERRUN
+#define XRUN_THRESHOLD 0.1
 
 bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
                           int32_t nsamples, time_tag tt)
