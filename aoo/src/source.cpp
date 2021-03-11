@@ -503,6 +503,8 @@ aoo_error aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n
     return src->process(data, n, t);
 }
 
+#define NO_SINKS_IDLE 1
+
 aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, uint64_t t){
     auto state = state_.load();
     if (state == stream_state::stop){
@@ -546,7 +548,14 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
     } else if (timerstate == timer::state::error){
         // calculate xrun blocks
         double nblocks = error * (double)samplerate_ / (double)blocksize_;
-        add_xrun(nblocks);
+    #if NO_SINKS_IDLE
+        // only when we have sinks, to avoid accumulating empty blocks
+        if (!sinks_.empty())
+    #endif
+        {
+            add_xrun(nblocks);
+        }
+
         event e(AOO_XRUN_EVENT);
         e.xrun.count = nblocks + 0.5; // ?
         send_event(e, AOO_THREAD_AUDIO);
@@ -568,6 +577,17 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         }
         realsr_.store(dll_.samplerate(), std::memory_order_relaxed);
     }
+
+#if NO_SINKS_IDLE
+    // users might run the source passively (= waiting for invitations),
+    // so there's a good chance that the start will be active, but
+    // without sinks. we can save some CPU by returning early.
+    if (sinks_.empty()){
+        // nothing to do. users still have to check for pending events,
+        // but there is no reason to call send()
+        return AOO_ERROR_IDLE;
+    }
+#endif
 
     // the mutex should be available most of the time.
     // it is only locked exclusively when setting certain options,
