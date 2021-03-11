@@ -1044,8 +1044,7 @@ void source_desc::invite(const sink_imp& s){
 
 // called from the network thread
 void source_desc::uninvite(const sink_imp& s){
-    // NOTE: state can only change in this thread (= send thread),
-    // so we don't need a CAS loop.
+    // state can change in different threads, so we need a CAS loop
     auto state = state_.load(std::memory_order_relaxed);
     while (state != source_state::idle){
         // update start time for uninvite phase, see handle_data()
@@ -1324,7 +1323,17 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
                           int32_t nsamples, time_tag tt)
 {
 #if 1
-    if (state_.load(std::memory_order_acquire) != source_state::stream){
+    auto current = state_.load(std::memory_order_acquire);
+    if (current != source_state::stream){
+        if (current == source_state::uninvite
+                && streamstate_ != AOO_STREAM_STATE_STOP){
+            streamstate_ = AOO_STREAM_STATE_STOP;
+
+            // push "stop" event
+            event e(AOO_STREAM_STATE_EVENT, *this);
+            e.source_state.state = AOO_STREAM_STATE_STOP;
+            send_event(s, e, AOO_THREAD_AUDIO);
+        }
         return false;
     }
 #endif
