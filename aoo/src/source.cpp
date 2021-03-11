@@ -617,6 +617,12 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
     }
 
     auto outsize = nfchannels * encoder_->blocksize();
+#if AOO_DEBUG_AUDIO_BUFFER
+    auto resampler_size = resampler_.size() / (double)(nchannels_ * blocksize_);
+    LOG_DEBUG("audioqueue: " << audioqueue_.read_available() / resampler_.ratio()
+              << ", resampler: " << resampler_size / resampler_.ratio()
+              << ", capacity: " << audioqueue_.capacity() / resampler_.ratio());
+#endif
     if (need_resampling()){
         // go through resampler
         if (!resampler_.write(buf, insize)){
