@@ -87,8 +87,10 @@ typedef int32_t aoo_error;
 
 enum aoo_error_codes
 {
-    AOO_ERROR_UNSPECIFIED = -1,
-    AOO_OK = 0
+    AOO_OK = 0,
+    AOO_ERROR_UNSPECIFIED,
+    AOO_ERROR_IDLE,
+    AOO_ERROR_WOULDBLOCK
 };
 
 // OSC messages:

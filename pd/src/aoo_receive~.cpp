@@ -437,20 +437,13 @@ static t_int * aoo_receive_perform(t_int *w)
     t_aoo_receive *x = (t_aoo_receive *)(w[1]);
     int n = (int)(w[2]);
 
-    auto bypass = [&](){
-        for (int i = 0; i < x->x_nchannels; ++i){
-            std::fill(x->x_vec[i], x->x_vec[i] + n, 0);
-        }
-    };
-
     if (x->x_node){
         auto t = aoo::get_osctime();
         auto vec = x->x_vec.get();
 
-        if (x->x_sink->process(vec, n, t) == AOO_OK){
+        auto err = x->x_sink->process(vec, n, t);
+        if (err != AOO_ERROR_IDLE){
             x->x_node->notify();
-        } else {
-            bypass();
         }
 
         // handle events
@@ -458,7 +451,10 @@ static t_int * aoo_receive_perform(t_int *w)
             clock_delay(x->x_clock, 0);
         }
     } else {
-        bypass();
+        // zero outputs
+        for (int i = 0; i < x->x_nchannels; ++i){
+            std::fill(x->x_vec[i], x->x_vec[i] + n, 0);
+        }
     }
 
     return w + 3;

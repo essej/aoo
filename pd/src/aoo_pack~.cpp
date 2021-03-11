@@ -116,7 +116,9 @@ static void aoo_pack_tick(t_aoo_pack *x)
 {
     x->x_source->send((aoo_sendfn)aoo_pack_send, x);
 
-    x->x_source->poll_events();
+    if (x->x_source->events_available()){
+        x->x_source->poll_events();
+    }
 }
 
 static void aoo_pack_list(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
@@ -233,9 +235,9 @@ static t_int * aoo_pack_perform(t_int *w)
     assert(sizeof(t_sample) == sizeof(aoo_sample));
 
     uint64_t t = aoo_osctime_now();
-    if (x->x_source->process((const aoo_sample **)x->x_vec.get(), n, t) == AOO_OK){
-        clock_delay(x->x_clock, 0);
-    }
+    x->x_source->process((const aoo_sample **)x->x_vec.get(), n, t);
+
+    clock_delay(x->x_clock, 0);
 
     return w + 3;
 }

@@ -447,7 +447,8 @@ static t_int * aoo_send_perform(t_int *w)
         auto t = aoo::get_osctime();
         auto vec = (const aoo_sample **)x->x_vec.get();
 
-        if (x->x_source->process(vec, n, t) == AOO_OK){
+        auto err = x->x_source->process(vec, n, t);
+        if (err != AOO_ERROR_IDLE){
             x->x_node->notify();
         }
 

@@ -506,7 +506,7 @@ aoo_error aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n
 aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, uint64_t t){
     auto state = state_.load();
     if (state == stream_state::stop){
-        return AOO_ERROR_UNSPECIFIED; // pausing
+        return AOO_ERROR_IDLE; // pausing
     } else if (state == stream_state::start){
         // start -> play
         // the mutex should be uncontended most of the time.
@@ -515,8 +515,8 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         unique_lock lock(update_mutex_, std::try_to_lock_t{}); // writer lock!
         if (!lock.owns_lock()){
             LOG_VERBOSE("aoo_source: process would block");
-            add_xrun(1);
-            return AOO_ERROR_UNSPECIFIED; // ?
+            // no need to call xrun()!
+            return AOO_ERROR_WOULDBLOCK;
         }
 
         start_new_stream();
@@ -524,7 +524,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         // check if we have been stopped in the meantime
         auto expected = stream_state::start;
         if (!state_.compare_exchange_strong(expected, stream_state::play)){
-            return AOO_ERROR_UNSPECIFIED; // pausing
+            return AOO_ERROR_IDLE; // pausing
         }
     }
 
@@ -576,19 +576,12 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
     if (!lock.owns_lock()){
         LOG_VERBOSE("aoo_source: process would block");
         add_xrun(1);
-        return AOO_ERROR_UNSPECIFIED; // ?
+        return AOO_ERROR_WOULDBLOCK; // ?
     }
 
     if (!encoder_){
-        return AOO_ERROR_UNSPECIFIED;
+        return AOO_ERROR_IDLE;
     }
-
-#if 1
-    if (sinks_.empty()){
-        // nothing to do
-        return AOO_OK;
-    }
-#endif
 
     // non-interleaved -> interleaved
     // only as many channels as current format needs
@@ -628,6 +621,8 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         if (!resampler_.write(buf, insize)){
             LOG_WARNING("aoo_source: send buffer overflow");
             add_xrun(1);
+            // don't return AOO_ERROR_IDLE, otherwise the send thread
+            // wouldn't drain the buffer.
             return AOO_ERROR_UNSPECIFIED;
         }
         while (audioqueue_.write_available()){
@@ -654,6 +649,8 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         } else {
             LOG_WARNING("aoo_source: send buffer overflow");
             add_xrun(1);
+            // don't return AOO_ERROR_IDLE, otherwise the send thread
+            // wouldn't drain the buffer.
             return AOO_ERROR_UNSPECIFIED;
         }
     }

@@ -217,7 +217,9 @@ static void aoo_unpack_tick(t_aoo_unpack *x)
     // send outgoing messages
     x->x_sink->send((aoo_sendfn)aoo_unpack_send, x);
     // poll events
-    x->x_sink->poll_events();
+    if (x->x_sink->events_available()){
+        x->x_sink->poll_events();
+    }
 }
 
 uint64_t aoo_pd_osctime(int n, t_float sr);
@@ -228,17 +230,9 @@ static t_int * aoo_unpack_perform(t_int *w)
     int n = (int)(w[2]);
 
     uint64_t t = aoo_osctime_now();
-    if (x->x_sink->process(x->x_vec.get(), n, t) != AOO_OK){
-        // output zeros
-        for (int i = 0; i < x->x_nchannels; ++i){
-            memset(x->x_vec[i], 0, sizeof(t_sample) * n);
-        }
-    }
+    x->x_sink->process(x->x_vec.get(), n, t);
 
-    // handle events
-    if (x->x_sink->events_available()){
-        clock_delay(x->x_clock, 0);
-    }
+    clock_delay(x->x_clock, 0);
 
     return w + 3;
 }
