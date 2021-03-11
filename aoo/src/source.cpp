@@ -519,10 +519,6 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
             return AOO_ERROR_UNSPECIFIED; // ?
         }
 
-        resampler_.reset();
-
-        audioqueue_.reset();
-
         start_new_stream();
 
         // check if we have been stopped in the meantime
@@ -796,6 +792,8 @@ void source_imp::start_new_stream(){
 
     // remove audio from previous stream
     resampler_.reset();
+
+    audioqueue_.reset();
 
     history_.clear(); // !
 
