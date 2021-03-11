@@ -998,7 +998,7 @@ void source_desc::update(const sink_imp& s){
         jitterbuffer_.resize(jitterbufsize, nsamples * sizeof(double));
         LOG_DEBUG("jitter buffer: " << jitterbufsize << " blocks");
 
-        streamstate_ = AOO_STREAM_STATE_STOP;
+        streamstate_ = AOO_STREAM_STATE_INIT;
         lost_since_ping_.store(0);
         channel_ = 0;
         skipblocks_ = 0;
@@ -1417,74 +1417,80 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
     // return the nominal samplerate
     double sr = s.real_samplerate();
 
-    // write samples from buffer into resampler
-    while (audioqueue_.read_available()){
-        auto d = (block_data *)audioqueue_.read_data();
-
-        if (xrun_ > 0.1){
-            // skip audio and decrement xrun counter proportionally
-            xrun_ -= sr / decoder_->samplerate();
-        } else {
-            // try to write audio into resampler
-            if (!resampler_.write(d->data, insize)){
-                break;
-            }
-
-            // update resampler
-            resampler_.update(d->header.samplerate, sr);
-            // set channel; negative = current
-            if (d->header.channel >= 0){
-                channel_ = d->header.channel;
-            }
-        }
-
-        audioqueue_.read_commit();
-    }
+#if AOO_DEBUG_AUDIO_BUFFER
+    // will print audio buffer and resampler balance
+    get_buffer_fill_ratio();
+#endif
 
     // try to read samples from resampler
     auto buf = (aoo_sample *)alloca(outsize * sizeof(aoo_sample));
 
-    if (resampler_.read(buf, outsize)){
-        // sum source into sink (interleaved -> non-interleaved),
-        // starting at the desired sink channel offset.
-        // out of bound source channels are silently ignored.
-        auto realnchannels = s.nchannels();
-        for (int i = 0; i < nchannels; ++i){
-            auto chn = i + channel_;
-            if (chn < realnchannels){
-                auto out = buffer[chn];
-                for (int j = 0; j < nsamples; ++j){
-                    out[j] += buf[j * nchannels + i];
+    while (!resampler_.read(buf, outsize)){
+        // try to write samples from buffer into resampler
+        if (audioqueue_.read_available()){
+            auto d = (block_data *)audioqueue_.read_data();
+
+            if (xrun_ > XRUN_THRESHOLD){
+                // skip audio and decrement xrun counter proportionally
+                xrun_ -= sr / decoder_->samplerate();
+            } else {
+                // try to write audio into resampler
+                if (resampler_.write(d->data, insize)){
+                    // update resampler
+                    resampler_.update(d->header.samplerate, sr);
+                    // set channel; negative = current
+                    if (d->header.channel >= 0){
+                        channel_ = d->header.channel;
+                    }
+                } else {
+                    LOG_ERROR("bug: couldn't write to resampler");
+                    // let the buffer run out
                 }
             }
+
+            audioqueue_.read_commit();
+        } else {
+            // buffer ran out -> push "stop" event
+            if (streamstate_ != AOO_STREAM_STATE_STOP){
+                streamstate_ = AOO_STREAM_STATE_STOP;
+
+                // push "stop" event
+                event e(AOO_STREAM_STATE_EVENT, *this);
+                e.source_state.state = AOO_STREAM_STATE_STOP;
+                send_event(s, e, AOO_THREAD_AUDIO);
+            }
+            underrun_ = true;
+
+            return false;
         }
-
-        // LOG_DEBUG("read samples from source " << id_);
-
-        if (streamstate_ != AOO_STREAM_STATE_PLAY){
-            streamstate_ = AOO_STREAM_STATE_PLAY;
-
-            // push "start" event
-            event e(AOO_STREAM_STATE_EVENT, *this);
-            e.source_state.state = AOO_STREAM_STATE_PLAY;
-            send_event(s, e, AOO_THREAD_AUDIO);
-        }
-
-        return true;
-    } else {
-        // buffer ran out -> push "stop" event
-        if (streamstate_ != AOO_STREAM_STATE_STOP){
-            streamstate_ = AOO_STREAM_STATE_STOP;
-
-            // push "stop" event
-            event e(AOO_STREAM_STATE_EVENT, *this);
-            e.source_state.state = AOO_STREAM_STATE_STOP;
-            send_event(s, e, AOO_THREAD_AUDIO);
-        }
-        underrun_ = true;
-
-        return false;
     }
+
+    // sum source into sink (interleaved -> non-interleaved),
+    // starting at the desired sink channel offset.
+    // out of bound source channels are silently ignored.
+    auto realnchannels = s.nchannels();
+    for (int i = 0; i < nchannels; ++i){
+        auto chn = i + channel_;
+        if (chn < realnchannels){
+            auto out = buffer[chn];
+            for (int j = 0; j < nsamples; ++j){
+                out[j] += buf[j * nchannels + i];
+            }
+        }
+    }
+
+    // LOG_DEBUG("read samples from source " << id_);
+
+    if (streamstate_ != AOO_STREAM_STATE_PLAY){
+        streamstate_ = AOO_STREAM_STATE_PLAY;
+
+        // push "start" event
+        event e(AOO_STREAM_STATE_EVENT, *this);
+        e.source_state.state = AOO_STREAM_STATE_PLAY;
+        send_event(s, e, AOO_THREAD_AUDIO);
+    }
+
+    return true;
 }
 
 int32_t source_desc::poll_events(sink_imp& s, aoo_eventhandler fn, void *user){

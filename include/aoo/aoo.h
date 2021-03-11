@@ -254,8 +254,9 @@ typedef struct aoo_sink_event
 // source state event
 typedef enum aoo_stream_state
 {
-    AOO_STREAM_STATE_STOP,
-    AOO_STREAM_STATE_PLAY
+    AOO_STREAM_STATE_INIT = -1,
+    AOO_STREAM_STATE_STOP = 0,
+    AOO_STREAM_STATE_PLAY = 1
 } aoo_stream_state;
 
 typedef struct aoo_stream_state_event
