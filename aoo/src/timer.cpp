@@ -96,7 +96,7 @@ timer::state timer::moving_average_check::check(double delta, double& error){
                     << " ms, average period: " << (average * 1000.0)
                     << " ms, error: " << (last_error * 1000.0)
                     << " ms, average error: " << (average_error * 1000.0) << " ms");
-        auto error = std::max<double>(0, delta - delta_);
+        error = std::max<double>(0, delta - delta_);
         return state::error;
     } else {
     #if AOO_DEBUG_TIMER
