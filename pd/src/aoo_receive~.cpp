@@ -91,7 +91,7 @@ static void aoo_receive_format(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
         if (f.header.nchannels > x->x_nchannels){
             f.header.nchannels = x->x_nchannels;
         }
-        aoo_endpoint ep { addr.address(), addr.length(), id };
+        aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
         x->x_sink->request_source_format(ep, f.header);
     }
 }

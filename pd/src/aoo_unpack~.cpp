@@ -97,7 +97,8 @@ static void aoo_unpack_reset(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *arg
     if (argc){
         // reset specific source
         int32_t id = atom_getfloat(argv);
-        x->x_sink->reset_source({ x->x_addr.address(), x->x_addr.length(), id });
+        aoo_endpoint ep { x->x_addr.address(), (int32_t)x->x_addr.length(), id };
+        x->x_sink->reset_source(ep);
     } else {
         // reset all sources
         x->x_sink->reset();
