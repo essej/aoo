@@ -1119,23 +1119,35 @@ aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_
         return AOO_ERROR_UNSPECIFIED;
     }
 
+    // look up codec
+    auto c = aoo::find_codec(f.codec);
+    if (!c){
+        LOG_ERROR("codec '" << f.codec << "' not supported!");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+
+    // try to deserialize format
+    aoo_format_storage fmt;
+    if (c->deserialize(f, settings, size,
+                       fmt.header, sizeof(fmt)) != AOO_OK){
+        return AOO_ERROR_UNSPECIFIED;
+    }
+
     // Create a new decoder if necessary.
     // This is the only thread where the decoder can possibly
     // change, so we don't need a lock to safely *read* it!
     std::unique_ptr<decoder> new_decoder;
+    bool changed = false;
 
     if (!decoder_ || strcmp(decoder_->name(), f.codec)){
-        auto c = aoo::find_codec(f.codec);
-        if (c){
-            new_decoder = c->create_decoder();
-            if (!new_decoder){
-                LOG_ERROR("couldn't create decoder!");
-                return AOO_ERROR_UNSPECIFIED;
-            }
-        } else {
-            LOG_ERROR("codec '" << f.codec << "' not supported!");
+        new_decoder = c->create_decoder();
+        if (!new_decoder){
+            LOG_ERROR("couldn't create decoder!");
             return AOO_ERROR_UNSPECIFIED;
         }
+        changed = true;
+    } else {
+        changed = !decoder_->compare(fmt.header); // thread-safe
     }
 
     unique_lock lock(mutex_); // writer lock!
@@ -1148,17 +1160,12 @@ aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_
     flags_ = flags;
     format_request_ = nullptr;
 
-    // read format
-    aoo_format_storage fmt;
-    if (decoder_->deserialize(f, settings, size, fmt.header,
-                              sizeof(aoo_format_storage)) != AOO_OK){
-        return AOO_ERROR_UNSPECIFIED;
-    }
-    // set format
-    if (decoder_->set_format(fmt.header) != AOO_OK){
+    // set format (if changed)
+    if (changed && decoder_->set_format(fmt.header) != AOO_OK){
         return AOO_ERROR_UNSPECIFIED;
     }
 
+    // always update!
     update(s);
 
     lock.unlock();
@@ -1178,15 +1185,17 @@ aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_
         }
     }
 
-    // send format event
+    // send format event (if changed)
     // NOTE: we could just allocate 'aoo_format_storage', but it would be wasteful.
-    auto mem = s.memory.alloc(fmt.header.size);
-    memcpy(mem->data(), &fmt, fmt.header.size);
+    if (changed){
+        auto mem = s.memory.alloc(fmt.header.size);
+        memcpy(mem->data(), &fmt, fmt.header.size);
 
-    event e(AOO_FORMAT_CHANGE_EVENT, *this);
-    e.format.format = (const aoo_format *)mem->data();
+        event e(AOO_FORMAT_CHANGE_EVENT, *this);
+        e.format.format = (const aoo_format *)mem->data();
 
-    send_event(s, e, AOO_THREAD_NETWORK);
+        send_event(s, e, AOO_THREAD_NETWORK);
+    }
 
     return AOO_OK;
 }
