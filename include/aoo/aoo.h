@@ -874,7 +874,11 @@ typedef enum aoo_codec_ctl
     // 'aoo_format_storage' or a similar struct that is large enough
     // to hold any format. On success, the actual format size will be
     // contained in the 'size' member of the format header.
-    AOO_CODEC_GET_FORMAT
+    AOO_CODEC_GET_FORMAT,
+    // check if the format is equal (aoo_format)
+    // ---
+    // returns AOO_TRUE or AOO_FALSE
+    AOO_CODEC_FORMAT_EQUAL
 } aoo_codec_ctl;
 
 typedef struct aoo_codec

@@ -141,6 +141,68 @@ struct codec {
     aoo_format_pcm format;
 };
 
+void validate_format(aoo_format_pcm& f, bool loud = true)
+{
+    f.header.codec = AOO_CODEC_PCM; // static string!
+    f.header.size = sizeof(aoo_format_pcm); // actual size!
+
+    // validate blocksize
+    if (f.header.blocksize <= 0){
+        if (loud){
+            LOG_WARNING("PCM: bad blocksize " << f.header.blocksize
+                        << ", using 64 samples");
+        }
+        f.header.blocksize = 64;
+    }
+    // validate samplerate
+    if (f.header.samplerate <= 0){
+        if (loud){
+            LOG_WARNING("PCM: bad samplerate " << f.header.samplerate
+                        << ", using 44100");
+        }
+        f.header.samplerate = 44100;
+    }
+    // validate channels
+    if (f.header.nchannels <= 0 || f.header.nchannels > 255){
+        if (loud){
+            LOG_WARNING("PCM: bad channel count " << f.header.nchannels
+                        << ", using 1 channel");
+        }
+        f.header.nchannels = 1;
+    }
+    // validate bitdepth
+    if (f.bitdepth < 0 || f.bitdepth > AOO_PCM_BITDEPTH_SIZE){
+        if (loud){
+            LOG_WARNING("PCM: bad bitdepth, using 32bit float");
+        }
+        f.bitdepth = AOO_PCM_FLOAT32;
+    }
+}
+
+aoo_error compare(codec *c, const aoo_format_pcm *fmt)
+{
+    // copy and validate!
+    aoo_format_pcm f1;
+    memcpy(&f1, fmt, sizeof(aoo_format_pcm));
+
+    auto& f2 = c->format;
+    auto& h1 = f1.header;
+    auto& h2 = f2.header;
+
+    // check before validate()!
+    if (strcmp(h1.codec, h2.codec) ||
+            h1.size != h2.size) {
+        return false;
+    }
+
+    validate_format(f1, false);
+
+    return h1.blocksize == h2.blocksize &&
+            h1.samplerate == h2.samplerate &&
+            h1.nchannels == h2.nchannels &&
+            f1.bitdepth == f2.bitdepth;
+}
+
 aoo_error set_format(codec *c, aoo_format_pcm *fmt)
 {
     if (strcmp(fmt->header.codec, AOO_CODEC_PCM)){
@@ -150,32 +212,7 @@ aoo_error set_format(codec *c, aoo_format_pcm *fmt)
         return AOO_ERROR_UNSPECIFIED;
     }
 
-    fmt->header.codec = AOO_CODEC_PCM; // static string!
-    fmt->header.size = sizeof(aoo_format_pcm); // actual size!
-
-    // validate blocksize
-    if (fmt->header.blocksize <= 0){
-        LOG_WARNING("PCM: bad blocksize " << fmt->header.blocksize
-                    << ", using 64 samples");
-        fmt->header.blocksize = 64;
-    }
-    // validate samplerate
-    if (fmt->header.samplerate <= 0){
-        LOG_WARNING("PCM: bad samplerate " << fmt->header.samplerate
-                    << ", using 44100");
-        fmt->header.samplerate = 44100;
-    }
-    // validate channels
-    if (fmt->header.nchannels <= 0 || fmt->header.nchannels > 255){
-        LOG_WARNING("PCM: bad channel count " << fmt->header.nchannels
-                    << ", using 1 channel");
-        fmt->header.nchannels = 1;
-    }
-    // validate bitdepth
-    if (fmt->bitdepth < 0 || fmt->bitdepth > AOO_PCM_BITDEPTH_SIZE){
-        LOG_WARNING("PCM: bad bitdepth, using 32bit float");
-        fmt->bitdepth = AOO_PCM_FLOAT32;
-    }
+    validate_format(*fmt);
 
     // save and print settings
     memcpy(&c->format, fmt, sizeof(aoo_format_pcm));
@@ -209,6 +246,9 @@ aoo_error pcm_ctl(void *x, int32_t ctl, void *ptr, int32_t size){
     case AOO_CODEC_RESET:
         // no op
         return AOO_OK;
+    case AOO_CODEC_FORMAT_EQUAL:
+        assert(size >= sizeof(aoo_format));
+        return compare((codec *)x, (aoo_format_pcm *)ptr);
     default:
         LOG_WARNING("PCM: unsupported codec ctl " << ctl);
         return AOO_ERROR_UNSPECIFIED;

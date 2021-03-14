@@ -1,6 +1,7 @@
 #pragma once
 
 #include "aoo/aoo.h"
+#include "imp.hpp"
 
 #include <memory>
 
@@ -52,6 +53,12 @@ protected:
     int32_t nchannels_ = 0;
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
+
+    void save_format(const aoo_format& f){
+        nchannels_ = f.nchannels;
+        samplerate_ = f.samplerate;
+        blocksize_ = f.blocksize;
+    }
 };
 
 class encoder : public base_codec {
@@ -66,10 +73,7 @@ public:
         auto result = codec_->encoder_ctl(obj_,
             AOO_CODEC_SET_FORMAT, &fmt, sizeof(aoo_format));
         if (result == AOO_OK){
-            // assign after validation!
-            nchannels_ = fmt.nchannels;
-            samplerate_ = fmt.samplerate;
-            blocksize_ = fmt.blocksize;
+            save_format(fmt); // after validation!
         }
         return result;
     }
@@ -77,6 +81,11 @@ public:
     aoo_error get_format(aoo_format& fmt, size_t size) const {
         return codec_->encoder_ctl(obj_, AOO_CODEC_GET_FORMAT,
                                    &fmt, size);
+    }
+
+    bool compare(const aoo_format& fmt) const {
+        return codec_->encoder_ctl(obj_, AOO_CODEC_FORMAT_EQUAL,
+                                   (void *)&fmt, fmt.size);
     }
 
     aoo_error reset() {
@@ -103,10 +112,7 @@ public:
         auto result = codec_->decoder_ctl(obj_,
             AOO_CODEC_SET_FORMAT, &fmt, sizeof(aoo_format));
         if (result == AOO_OK){
-            // assign after validation!
-            nchannels_ = fmt.nchannels;
-            samplerate_ = fmt.samplerate;
-            blocksize_ = fmt.blocksize;
+            save_format(fmt); // after validation!
         }
         return result;
     }
@@ -114,6 +120,11 @@ public:
     aoo_error get_format(aoo_format& fmt, size_t size) const {
         return codec_->decoder_ctl(obj_, AOO_CODEC_GET_FORMAT,
                                    &fmt, size);
+    }
+
+    bool compare(const aoo_format& fmt) const {
+        return codec_->decoder_ctl(obj_, AOO_CODEC_FORMAT_EQUAL,
+                                   (void *)&fmt, fmt.size);
     }
 
     aoo_error reset() {

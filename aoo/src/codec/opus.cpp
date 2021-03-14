@@ -72,7 +72,7 @@ struct codec {
     aoo_format_opus format;
 };
 
-void validate_format(aoo_format_opus& f)
+void validate_format(aoo_format_opus& f, bool loud = true)
 {
     f.header.codec = AOO_CODEC_OPUS; // static string!
     f.header.size = sizeof(aoo_format_opus); // actual size!
@@ -85,15 +85,19 @@ void validate_format(aoo_format_opus& f)
     case 48000:
         break;
     default:
-        LOG_VERBOSE("Opus: samplerate " << f.header.samplerate
-                    << " not supported - using 48000");
+        if (loud){
+            LOG_VERBOSE("Opus: samplerate " << f.header.samplerate
+                        << " not supported - using 48000");
+        }
         f.header.samplerate = 48000;
         break;
     }
     // validate channels (LATER support multichannel!)
     if (f.header.nchannels < 1 || f.header.nchannels > 255){
-        LOG_WARNING("Opus: channel count " << f.header.nchannels <<
-                    " out of range - using 1 channels");
+        if (loud){
+            LOG_WARNING("Opus: channel count " << f.header.nchannels <<
+                        " out of range - using 1 channels");
+        }
         f.header.nchannels = 1;
     }
     // validate blocksize
@@ -117,10 +121,39 @@ void validate_format(aoo_format_opus& f)
             && f.application_type != OPUS_APPLICATION_AUDIO
             && f.application_type != OPUS_APPLICATION_RESTRICTED_LOWDELAY)
     {
-        LOG_WARNING("Opus: bad application type, using OPUS_APPLICATION_AUDIO");
+        if (loud){
+            LOG_WARNING("Opus: bad application type, using OPUS_APPLICATION_AUDIO");
+        }
         f.application_type = OPUS_APPLICATION_AUDIO;
     }
     // bitrate, complexity and signal type should be validated by opus
+}
+
+aoo_error compare(codec *c, const aoo_format_opus *fmt)
+{
+    // copy and validate!
+    aoo_format_opus f1;
+    memcpy(&f1, fmt, sizeof(aoo_format_opus));
+
+    auto& f2 = c->format;
+    auto& h1 = f1.header;
+    auto& h2 = f2.header;
+
+    // check before validate()!
+    if (strcmp(h1.codec, h2.codec) ||
+            h1.size != h2.size) {
+        return false;
+    }
+
+    validate_format(f1, false);
+
+    return h1.blocksize == h2.blocksize &&
+            h1.samplerate == h2.samplerate &&
+            h1.nchannels == h2.nchannels &&
+            f1.application_type == f2.application_type &&
+            f1.bitrate == f2.bitrate &&
+            f1.complexity == f2.complexity &&
+            f1.signal_type == f2.signal_type;
 }
 
 aoo_error get_format(codec *c, aoo_format *f, size_t size)
@@ -190,6 +223,8 @@ aoo_error encoder_set_format(encoder *c, aoo_format_opus *f){
 
     validate_format(*f);
 
+    // LATER only deallocate if channels, sr and application type
+    // have changed, otherwise simply reset the encoder.
     if (c->state){
         deallocate(c->state, c->size);
         c->state = nullptr;
@@ -211,30 +246,30 @@ aoo_error encoder_set_format(encoder *c, aoo_format_opus *f){
     }
     auto error = opus_multistream_encoder_init(state, f->header.samplerate,
         nchannels, nchannels, 0, mapping, f->application_type);
-    if (error == OPUS_OK){
-        c->state = state;
-        c->size = size;
-        // apply settings
-        // complexity
-        opus_multistream_encoder_ctl(c->state, OPUS_SET_COMPLEXITY(f->complexity));
-        opus_multistream_encoder_ctl(c->state, OPUS_GET_COMPLEXITY(&f->complexity));
-        // bitrate
-        opus_multistream_encoder_ctl(c->state, OPUS_SET_BITRATE(f->bitrate));
-    #if 0
-        // This control is broken in opus_multistream_encoder (as of opus v1.3.2)
-        // because it would always return the default bitrate.
-        // The only thing we can do is omit the function and just keep the input value.
-        // This means that clients have to explicitly check for OPUS_AUTO and
-        // OPUS_BITRATE_MAX when reading the 'bitrate' value after encoder_setformat().
-        opus_multistream_encoder_ctl(c->state, OPUS_GET_BITRATE(&f->bitrate));
-    #endif
-        // signal type
-        opus_multistream_encoder_ctl(c->state, OPUS_SET_SIGNAL(f->signal_type));
-        opus_multistream_encoder_ctl(c->state, OPUS_GET_SIGNAL(&f->signal_type));
-    } else {
+    if (error != OPUS_OK){
         LOG_ERROR("Opus: opus_encoder_create() failed with error code " << error);
         return AOO_ERROR_UNSPECIFIED;
     }
+    c->state = state;
+    c->size = size;
+    // apply settings
+    // complexity
+    opus_multistream_encoder_ctl(c->state, OPUS_SET_COMPLEXITY(f->complexity));
+    opus_multistream_encoder_ctl(c->state, OPUS_GET_COMPLEXITY(&f->complexity));
+    // bitrate
+    opus_multistream_encoder_ctl(c->state, OPUS_SET_BITRATE(f->bitrate));
+#if 0
+    // This control is broken in opus_multistream_encoder (as of opus v1.3.2)
+    // because it would always return the default bitrate.
+    // The only thing we can do is omit the function and just keep the input value.
+    // This means that clients have to explicitly check for OPUS_AUTO and
+    // OPUS_BITRATE_MAX when reading the 'bitrate' value after encoder_setformat().
+    opus_multistream_encoder_ctl(c->state, OPUS_GET_BITRATE(&f->bitrate));
+#endif
+    // signal type
+    opus_multistream_encoder_ctl(c->state, OPUS_SET_SIGNAL(f->signal_type));
+    opus_multistream_encoder_ctl(c->state, OPUS_GET_SIGNAL(&f->signal_type));
+
     // save and print settings
     memcpy(&c->format, f, sizeof(aoo_format_opus));
     print_settings(c->format);
@@ -256,6 +291,9 @@ aoo_error encoder_ctl(void *x, int32_t ctl, void *ptr, int32_t size){
         } else {
             return AOO_ERROR_UNSPECIFIED;
         }
+    case AOO_CODEC_FORMAT_EQUAL:
+        assert(size >= sizeof(aoo_format));
+        return compare((codec *)x, (const aoo_format_opus *)ptr);
     default:
         LOG_WARNING("Opus: unsupported codec ctl " << ctl);
         return AOO_ERROR_UNSPECIFIED;
@@ -317,6 +355,8 @@ aoo_error decoder_set_format(decoder *c, aoo_format *f)
 
     validate_format(*fmt);
 
+    // LATER only deallocate if channels and sr have changed,
+    // otherwise simply reset the decoder.
     if (c->state){
         deallocate(c->state, c->size);
         c->state = nullptr;
@@ -338,29 +378,30 @@ aoo_error decoder_set_format(decoder *c, aoo_format *f)
     }
     auto error = opus_multistream_decoder_init(state, fmt->header.samplerate,
                                                nchannels, nchannels, 0, mapping);
-    if (error == OPUS_OK){
-        c->state = state;
-        c->size = size;
-        // these are actually encoder settings and don't do anything on the decoder
-    #if 0
-        // complexity
-        opus_multistream_decoder_ctl(c->state, OPUS_SET_COMPLEXITY(f->complexity));
-        opus_multistream_decoder_ctl(c->state, OPUS_GET_COMPLEXITY(&f->complexity));
-        // bitrate
-        opus_multistream_decoder_ctl(c->state, OPUS_SET_BITRATE(f->bitrate));
-        opus_multistream_decoder_ctl(c->state, OPUS_GET_BITRATE(&f->bitrate));
-        // signal type
-        opus_multistream_decoder_ctl(c->state, OPUS_SET_SIGNAL(f->signal_type));
-        opus_multistream_decoder_ctl(c->state, OPUS_GET_SIGNAL(&f->signal_type));
-    #endif
-        // save and print settings
-        memcpy(&c->format, fmt, sizeof(aoo_format_opus));
-        print_settings(c->format);
-        return AOO_OK;
-    } else {
+    if (error != OPUS_OK){
         LOG_ERROR("Opus: opus_decoder_create() failed with error code " << error);
         return AOO_ERROR_UNSPECIFIED;
     }
+    c->state = state;
+    c->size = size;
+    // these are actually encoder settings and don't do anything on the decoder
+#if 0
+    // complexity
+    opus_multistream_decoder_ctl(c->state, OPUS_SET_COMPLEXITY(f->complexity));
+    opus_multistream_decoder_ctl(c->state, OPUS_GET_COMPLEXITY(&f->complexity));
+    // bitrate
+    opus_multistream_decoder_ctl(c->state, OPUS_SET_BITRATE(f->bitrate));
+    opus_multistream_decoder_ctl(c->state, OPUS_GET_BITRATE(&f->bitrate));
+    // signal type
+    opus_multistream_decoder_ctl(c->state, OPUS_SET_SIGNAL(f->signal_type));
+    opus_multistream_decoder_ctl(c->state, OPUS_GET_SIGNAL(&f->signal_type));
+#endif
+
+    // save and print settings
+    memcpy(&c->format, fmt, sizeof(aoo_format_opus));
+    print_settings(c->format);
+
+    return AOO_OK;
 }
 
 aoo_error decoder_ctl(void *x, int32_t ctl, void *ptr, int32_t size){
@@ -377,6 +418,9 @@ aoo_error decoder_ctl(void *x, int32_t ctl, void *ptr, int32_t size){
         } else {
             return AOO_ERROR_UNSPECIFIED;
         }
+    case AOO_CODEC_FORMAT_EQUAL:
+        assert(size >= sizeof(aoo_format));
+        return compare((codec *)x, (const aoo_format_opus *)ptr);
     default:
         LOG_WARNING("Opus: unsupported codec ctl " << ctl);
         return AOO_ERROR_UNSPECIFIED;
