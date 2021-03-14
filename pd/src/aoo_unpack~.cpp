@@ -66,7 +66,8 @@ static void aoo_unpack_list(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv
 
 static void aoo_unpack_invite(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_endpoint ep { x->x_addr.address(), x->x_addr.length(), (aoo_id)f };
+    aoo_endpoint ep { x->x_addr.address(),
+        (int32_t)x->x_addr.length(), (aoo_id)f };
     x->x_sink->invite_source(ep);
     // send outgoing messages
     x->x_sink->send((aoo_sendfn)aoo_unpack_send, x);
@@ -74,7 +75,8 @@ static void aoo_unpack_invite(t_aoo_unpack *x, t_floatarg f)
 
 static void aoo_unpack_uninvite(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_endpoint ep { x->x_addr.address(), x->x_addr.length(), (aoo_id)f };
+    aoo_endpoint ep { x->x_addr.address(),
+        (int32_t)x->x_addr.length(), (aoo_id)f };
     x->x_sink->uninvite_source(ep);
     // send outgoing messages
     x->x_sink->send((aoo_sendfn)aoo_unpack_send, x);

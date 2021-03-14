@@ -63,7 +63,7 @@ struct t_aoo_send
 static void aoo_send_doaddsink(t_aoo_send *x, const aoo::ip_address& addr,
                                aoo_id id, uint32_t flags)
 {
-    aoo_endpoint ep { addr.address(), addr.length(), id };
+    aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
     x->x_source->add_sink(ep, flags);
 
     // add sink to list
@@ -106,7 +106,7 @@ static void aoo_send_doremoveall(t_aoo_send *x)
 
 static void aoo_send_doremovesink(t_aoo_send *x, const ip_address& addr, aoo_id id)
 {
-    aoo_endpoint ep { addr.address(), addr.length(), id };
+    aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
     x->x_source->remove_sink(ep);
 
     // remove the sink matching endpoint and id
@@ -300,7 +300,7 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             return;
         }
     #endif
-        aoo_endpoint ep { addr.address(), addr.length(), id };
+        aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
         x->x_source->set_sink_channel_onset(ep, chn);
     }
 }
@@ -366,7 +366,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         aoo_send_doaddsink(x, addr, id, flags);
 
         if (argc > 3){
-            aoo_endpoint ep { addr.address(), addr.length(), id };
+            aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
             x->x_source->set_sink_channel_onset(ep, atom_getfloat(argv + 3));
         }
 

@@ -111,7 +111,7 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
     ip_address addr;
     aoo_id id = 0;
     if (x->x_node->get_source_arg((t_pd *)x, argc, argv, addr, id)){
-        aoo_endpoint ep { addr.address(), addr.length(), id };
+        aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
         x->x_sink->invite_source(ep);
         // notify send thread
         x->x_node->notify();
@@ -138,7 +138,7 @@ static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom
     t_source *src = aoo_receive_findsource(x, argc, argv);
     if (src){
         aoo_endpoint ep { src->s_address.address(),
-            src->s_address.length(), src->s_id };
+            (int32_t)src->s_address.length(), src->s_id };
         x->x_sink->uninvite_source(ep);
         // notify send thread
         x->x_node->notify();
@@ -167,7 +167,7 @@ static void aoo_receive_reset(t_aoo_receive *x, t_symbol *s, int argc, t_atom *a
         t_source *source = aoo_receive_findsource(x, argc, argv);
         if (source){
             aoo_endpoint ep { source->s_address.address(),
-                source->s_address.length(), source->s_id };
+                (int32_t)source->s_address.length(), source->s_id };
             x->x_sink->reset_source(ep);
         }
     } else {
@@ -181,7 +181,7 @@ static void aoo_receive_fill_ratio(t_aoo_receive *x, t_symbol *s, int argc, t_at
     t_source *source = aoo_receive_findsource(x, argc, argv);
     if (source){
         aoo_endpoint ep { source->s_address.address(),
-            source->s_address.length(), source->s_id };
+            (int32_t)source->s_address.length(), source->s_id };
         float ratio = 0;
         x->x_sink->get_buffer_fill_ratio(ep, ratio);
 

@@ -249,7 +249,8 @@ void aoo_recv_invite(AooReceiveUnit *unit, sc_msg_iter *args){
             aoo::ip_address addr;
             aoo_id id;
             if (owner.node()->getSourceArg(&args, addr, id)){
-                aoo_endpoint ep { addr.address(), addr.length(), id };
+                aoo_endpoint ep { addr.address(),
+                            (int32_t)addr.length(), id };
                 if (owner.sink()->invite_source(ep) == AOO_OK) {
                     // only send IP address on success
                     msg << addr.name() << addr.port() << id;
@@ -282,7 +283,8 @@ void aoo_recv_uninvite(AooReceiveUnit *unit, sc_msg_iter *args){
                 aoo::ip_address addr;
                 aoo_id id;
                 if (owner.node()->getSourceArg(&args, addr, id)){
-                    aoo_endpoint ep { addr.address(), addr.length(), id };
+                    aoo_endpoint ep { addr.address(),
+                                (int32_t)addr.length(), id };
                     if (owner.sink()->uninvite_source(ep) == AOO_OK) {
                         // only send IP address on success
                         msg << addr.name() << addr.port() << id;
@@ -348,7 +350,8 @@ void aoo_recv_reset(AooReceiveUnit *unit, sc_msg_iter *args){
                 aoo::ip_address addr;
                 aoo_id id;
                 if (owner.node()->getSourceArg(&args, addr, id)){
-                    aoo_endpoint ep { addr.address(), addr.length(), id };
+                    aoo_endpoint ep { addr.address(),
+                                (int32_t)addr.length(), id };
                     owner.sink()->reset_source(ep);
                 }
             } else {

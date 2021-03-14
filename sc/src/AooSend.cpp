@@ -167,7 +167,7 @@ void AooSend::addSinkEvent(const aoo::ip_address& addr, aoo_id id,
 
 bool AooSend::addSink(const aoo::ip_address& addr, aoo_id id,
                       int32_t channelOnset){
-    aoo_endpoint ep { addr.address(), addr.length(), id };
+    aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
     if (source()->add_sink(ep) == AOO_OK){
         if (channelOnset > 0){
             source()->set_sink_channel_onset(ep, channelOnset);
@@ -201,7 +201,7 @@ void AooSend::removeSinkEvent(const aoo::ip_address& addr, aoo_id id){
 }
 
 bool AooSend::removeSink(const aoo::ip_address& addr, aoo_id id){
-    aoo_endpoint ep { addr.address(), addr.length(), id };
+    aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
     return source()->remove_sink(ep) == AOO_OK;
 }
 
@@ -375,7 +375,7 @@ void aoo_send_channel(AooSendUnit *unit, sc_msg_iter* args){
             aoo_id id;
             if (owner.node()->getSinkArg(&args, addr, flags, id)){
                 auto channelOnset = args.geti();
-                aoo_endpoint ep { addr.address(), addr.length(), id };
+                aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
                 owner.source()->set_sink_channel_onset(ep, channelOnset);
             }
 
