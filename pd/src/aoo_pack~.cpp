@@ -67,7 +67,7 @@ static void aoo_pack_handle_event(t_aoo_pack *x, const aoo_event *event, int32_t
         double rtt = aoo_osctime_duration(e->tt1, e->tt3) * 1000.0;
 
         t_atom msg[5];
-        SETFLOAT(msg, e->id);
+        SETFLOAT(msg, e->ep.id);
         SETFLOAT(msg + 1, diff1);
         SETFLOAT(msg + 2, diff2);
         SETFLOAT(msg + 3, rtt);
@@ -80,10 +80,10 @@ static void aoo_pack_handle_event(t_aoo_pack *x, const aoo_event *event, int32_t
         auto e = (const aoo_sink_event *)event;
 
         t_atom msg;
-        SETFLOAT(&msg, e->id);
+        SETFLOAT(&msg, e->ep.id);
 
         if (x->x_accept){
-            x->x_source->add_sink(e->address, e->addrlen, e->id, 0);
+            x->x_source->add_sink(e->ep);
 
             outlet_anything(x->x_msgout, gensym("sink_add"), 1, &msg);
         } else {
@@ -96,10 +96,10 @@ static void aoo_pack_handle_event(t_aoo_pack *x, const aoo_event *event, int32_t
         auto e = (const aoo_sink_event *)event;
 
         t_atom msg;
-        SETFLOAT(&msg, e->id);
+        SETFLOAT(&msg, e->ep.id);
 
         if (x->x_accept){
-            x->x_source->remove_sink(e->address, e->addrlen, e->id);
+            x->x_source->remove_sink(e->ep);
 
             outlet_anything(x->x_msgout, gensym("sink_remove"), 1, &msg);
         } else {
@@ -163,8 +163,9 @@ static void aoo_pack_channel(t_aoo_pack *x, t_floatarg f)
 {
     x->x_sink_chn = f > 0 ? f : 0;
     if (x->x_sink_id != AOO_ID_NONE){
-        x->x_source->set_sink_channel_onset(x->x_address.address(), x->x_address.length(),
-                                           x->x_sink_id, x->x_sink_chn);
+        aoo_endpoint ep { x->x_address.address(),
+            x->x_address.length(), x->x_sink_id };
+        x->x_source->set_sink_channel_onset(ep, x->x_sink_chn);
     }
 }
 
@@ -200,7 +201,8 @@ static void aoo_pack_set(t_aoo_pack *x, t_symbol *s, int argc, t_atom *argv)
         x->x_source->remove_all();
         // add new sink
         aoo_id id = atom_getfloat(argv);
-        x->x_source->add_sink(x->x_address.address(), x->x_address.length(), id, 0);
+        aoo_endpoint ep { x->x_address.address(), x->x_address.length(), id };
+        x->x_source->add_sink(ep, 0);
         x->x_sink_id = id;
         // set channel (if provided)
         if (argc > 1){
@@ -332,10 +334,10 @@ t_aoo_pack::t_aoo_pack(int argc, t_atom *argv)
 
     // add sink
     if (x_sink_id != AOO_ID_NONE){
-        x_source->add_sink(x_address.address(), x_address.length(), x_sink_id, 0);
+        aoo_endpoint ep { x_address.address(), x_address.length(), x_sink_id };
+        x_source->add_sink(ep);
         // set channel
-        x_source->set_sink_channel_onset(x_address.address(), x_address.length(),
-                                        x_sink_id, x_sink_chn);
+        x_source->set_sink_channel_onset(ep, x_sink_chn);
     }
 
     // default format

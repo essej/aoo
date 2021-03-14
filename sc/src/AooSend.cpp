@@ -95,12 +95,12 @@ void AooSend::handleEvent(const aoo_event *event){
     case AOO_PING_EVENT:
     {
         auto e = (const aoo_ping_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
         double diff1 = aoo_osctime_duration(e->tt1, e->tt2);
         double diff2 = aoo_osctime_duration(e->tt2, e->tt3);
         double rtt = aoo_osctime_duration(e->tt1, e->tt3);
 
-        beginEvent(msg, "/ping", addr, e->id);
+        beginEvent(msg, "/ping", addr, e->ep.id);
         msg << diff1 << diff2 << rtt << e->lost_blocks;
         sendMsgRT(msg);
         break;
@@ -108,17 +108,17 @@ void AooSend::handleEvent(const aoo_event *event){
     case AOO_INVITE_EVENT:
     {
         auto e = (const aoo_invite_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
 
         if (accept_){
             aoo_net_peer_info info;
-            if (node()->client()->get_peer_info(e->address, e->addrlen, &info) == AOO_OK){
-                addSinkEvent(addr, e->id, info.flags);
+            if (node()->client()->get_peer_info(e->ep.address, e->ep.addrlen, &info) == AOO_OK){
+                addSinkEvent(addr, e->ep.id, info.flags);
             } else {
-                addSinkEvent(addr, e->id, 0);
+                addSinkEvent(addr, e->ep.id, 0);
             }
         } else {
-            beginEvent(msg, "/invite", addr, e->id);
+            beginEvent(msg, "/invite", addr, e->ep.id);
             sendMsgRT(msg);
         }
         break;
@@ -126,12 +126,12 @@ void AooSend::handleEvent(const aoo_event *event){
     case AOO_UNINVITE_EVENT:
     {
         auto e = (const aoo_sink_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
 
         if (accept_){
-            removeSinkEvent(addr, e->id);
+            removeSinkEvent(addr, e->ep.id);
         } else {
-            beginEvent(msg, "/uninvite", addr, e->id);
+            beginEvent(msg, "/uninvite", addr, e->ep.id);
             sendMsgRT(msg);
         }
         break;
@@ -167,10 +167,10 @@ void AooSend::addSinkEvent(const aoo::ip_address& addr, aoo_id id,
 
 bool AooSend::addSink(const aoo::ip_address& addr, aoo_id id,
                       int32_t channelOnset){
-    if (source()->add_sink(addr.address(), addr.length(), id, 0) == AOO_OK){
+    aoo_endpoint ep { addr.address(), addr.length(), id };
+    if (source()->add_sink(ep) == AOO_OK){
         if (channelOnset > 0){
-            source()->set_sink_channel_onset(addr.address(), addr.length(),
-                                             id, channelOnset);
+            source()->set_sink_channel_onset(ep, channelOnset);
         }
         return true;
     } else {
@@ -201,7 +201,8 @@ void AooSend::removeSinkEvent(const aoo::ip_address& addr, aoo_id id){
 }
 
 bool AooSend::removeSink(const aoo::ip_address& addr, aoo_id id){
-    return source()->remove_sink(addr.address(), addr.length(), id) == AOO_OK;
+    aoo_endpoint ep { addr.address(), addr.length(), id };
+    return source()->remove_sink(ep) == AOO_OK;
 }
 
 void AooSend::removeAll(){
@@ -374,8 +375,8 @@ void aoo_send_channel(AooSendUnit *unit, sc_msg_iter* args){
             aoo_id id;
             if (owner.node()->getSinkArg(&args, addr, flags, id)){
                 auto channelOnset = args.geti();
-                owner.source()->set_sink_channel_onset(
-                    addr.address(), addr.length(), id, channelOnset);
+                aoo_endpoint ep { addr.address(), addr.length(), id };
+                owner.source()->set_sink_channel_onset(ep, channelOnset);
             }
 
             return false; // done

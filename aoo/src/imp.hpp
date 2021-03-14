@@ -159,4 +159,13 @@ private:
     std::atomic<memory_block *> memlist_{nullptr};
 };
 
+/*///////////////// misc ///////////////////*/
+
+struct format_deleter {
+    void operator() (void *x) const {
+        auto f = static_cast<aoo_format *>(x);
+        aoo::deallocate(x, f->size);
+    }
+};
+
 } // aoo

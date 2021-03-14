@@ -88,19 +88,23 @@ class source_imp final : public source {
         event(aoo_event_type type, const ip_address& addr, aoo_id id){
             memcpy(&addr_, addr.address(), addr.length());
             sink.type = type;
-            sink.address = &addr_;
-            sink.addrlen = addr.length();
-            sink.id = id;
+            sink.ep.address = &addr_;
+            sink.ep.addrlen = addr.length();
+            sink.ep.id = id;
         }
 
         event(const event& other){
             memcpy(this, &other, sizeof(event)); // ugh
-            sink.address = addr_;
+            if (type_ != AOO_XRUN_EVENT){
+                sink.ep.address = &addr_;
+            }
         }
 
         event& operator=(const event& other){
             memcpy(this, &other, sizeof(event)); // ugh
-            sink.address = addr_;
+            if (type_ != AOO_XRUN_EVENT){
+                sink.ep.address = &addr_;
+            }
             return *this;
         }
 
@@ -125,13 +129,6 @@ class source_imp final : public source {
 
     aoo_error setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
-    aoo_error add_sink(const void *address, int32_t addrlen,
-                     aoo_id id, uint32_t flags) override;
-
-    aoo_error remove_sink(const void *address, int32_t addrlen, aoo_id id) override;
-
-    void remove_all() override;
-
     aoo_error handle_message(const char *data, int32_t n,
                              const void *address, int32_t addrlen) override;
 
@@ -145,15 +142,7 @@ class source_imp final : public source {
 
     aoo_error poll_events() override;
 
-    aoo_error set_option(int32_t opt, void *ptr, int32_t size) override;
-
-    aoo_error get_option(int32_t opt, void *ptr, int32_t size) override;
-
-    aoo_error set_sinkoption(const void *address, int32_t addrlen, aoo_id id,
-                             int32_t opt, void *ptr, int32_t size) override;
-
-    aoo_error get_sinkoption(const void *address, int32_t addrlen, aoo_id id,
-                             int32_t opt, void *ptr, int32_t size) override;
+    aoo_error control(int32_t ctl, intptr_t index, void *ptr, size_t size) override;
  private:
     using shared_lock = sync::shared_lock<sync::shared_mutex>;
     using unique_lock = sync::unique_lock<sync::shared_mutex>;
@@ -217,9 +206,15 @@ class source_imp final : public source {
     std::atomic<bool> binary_{ AOO_BINARY_DATA_MSG };
 
     // helper methods
+    aoo_error add_sink(const aoo_endpoint& ep, uint32_t flags);
+
+    aoo_error remove_sink(const aoo_endpoint& ep);
+
     aoo_error set_format(aoo_format& f);
 
     sink_desc * find_sink(const ip_address& addr, aoo_id id);
+
+    sink_desc *get_sink_arg(intptr_t index);
 
     static int32_t make_salt();
 

@@ -213,7 +213,7 @@ public:
     aoo_error send_request(aoo_net_request_type request, void *data,
                            aoo_net_callback callback, void *user) override;
 
-    aoo_error send_message(const char *data, int32_t n,
+    aoo_error send_message(const char *data, int32_t size,
                            const void *addr, int32_t len, int32_t flags) override;
 
     template<typename T>
@@ -233,6 +233,8 @@ public:
     aoo_bool events_available() override;
 
     aoo_error poll_events() override;
+
+    aoo_error control(int32_t ctl, intptr_t index, void *ptr, size_t size) override;
 
     void do_connect(const char *host, int port,
                     const char *name, const char *pwd,

@@ -95,36 +95,36 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_SOURCE_ADD_EVENT:
     {
         auto e = (const aoo_source_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
 
-        beginEvent(msg, "/add", addr, e->id);
+        beginEvent(msg, "/add", addr, e->ep.id);
         sendMsgRT(msg);
         break;
     }
     case AOO_SOURCE_REMOVE_EVENT:
     {
         auto e = (const aoo_source_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
 
-        beginEvent(msg, "/remove", addr, e->id);
+        beginEvent(msg, "/remove", addr, e->ep.id);
         sendMsgRT(msg);
         break;
     }
     case AOO_INVITE_TIMEOUT_EVENT:
     {
         auto e = (const aoo_source_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
 
-        beginEvent(msg, "/invite/timeout", addr, e->id);
+        beginEvent(msg, "/invite/timeout", addr, e->ep.id);
         sendMsgRT(msg);
         break;
     }
     case AOO_FORMAT_CHANGE_EVENT:
     {
         auto e = (const aoo_format_change_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
 
-        beginEvent(msg, "/format", addr, e->id);
+        beginEvent(msg, "/format", addr, e->ep.id);
         serializeFormat(msg, *e->format);
         sendMsgRT(msg);
         break;
@@ -132,9 +132,9 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_STREAM_STATE_EVENT:
     {
         auto e = (const aoo_stream_state_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
 
-        beginEvent(msg, "/state", addr, e->id);
+        beginEvent(msg, "/state", addr, e->ep.id);
         msg << e->state;
         sendMsgRT(msg);
         break;
@@ -142,9 +142,9 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_BLOCK_LOST_EVENT:
     {
         auto e = (const aoo_block_lost_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
 
-        beginEvent(msg, "/block/lost", addr, e->id);
+        beginEvent(msg, "/block/lost", addr, e->ep.id);
         msg << e->count;
         sendMsgRT(msg);
         break;
@@ -152,9 +152,9 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_BLOCK_REORDERED_EVENT:
     {
         auto e = (const aoo_block_reordered_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
 
-        beginEvent(msg, "/block/reordered", addr, e->id);
+        beginEvent(msg, "/block/reordered", addr, e->ep.id);
         msg << e->count;
         sendMsgRT(msg);
         break;
@@ -162,9 +162,9 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_BLOCK_RESENT_EVENT:
     {
         auto e = (const aoo_block_resent_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
 
-        beginEvent(msg, "/block/resent", addr, e->id);
+        beginEvent(msg, "/block/resent", addr, e->ep.id);
         msg << e->count;
         sendMsgRT(msg);
         break;
@@ -172,9 +172,9 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_BLOCK_GAP_EVENT:
     {
         auto e = (const aoo_block_gap_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
 
-        beginEvent(msg, "/block/gap", addr, e->id);
+        beginEvent(msg, "/block/gap", addr, e->ep.id);
         msg << e->count;
         sendMsgRT(msg);
         break;
@@ -182,11 +182,11 @@ void AooReceive::handleEvent(const aoo_event *event){
     case AOO_PING_EVENT:
     {
         auto e = (const aoo_ping_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->address, e->addrlen);
+        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
 
         double diff = aoo_osctime_duration(e->tt1, e->tt2);
 
-        beginEvent(msg, "/ping", addr, e->id);
+        beginEvent(msg, "/ping", addr, e->ep.id);
         msg << diff;
         sendMsgRT(msg);
         break;
@@ -249,8 +249,8 @@ void aoo_recv_invite(AooReceiveUnit *unit, sc_msg_iter *args){
             aoo::ip_address addr;
             aoo_id id;
             if (owner.node()->getSourceArg(&args, addr, id)){
-                if (owner.sink()->invite_source(
-                    addr.address(), addr.length(), id) == AOO_OK) {
+                aoo_endpoint ep { addr.address(), addr.length(), id };
+                if (owner.sink()->invite_source(ep) == AOO_OK) {
                     // only send IP address on success
                     msg << addr.name() << addr.port() << id;
                 }
@@ -282,8 +282,8 @@ void aoo_recv_uninvite(AooReceiveUnit *unit, sc_msg_iter *args){
                 aoo::ip_address addr;
                 aoo_id id;
                 if (owner.node()->getSourceArg(&args, addr, id)){
-                    if (owner.sink()->uninvite_source(
-                        addr.address(), addr.length(), id) == AOO_OK) {
+                    aoo_endpoint ep { addr.address(), addr.length(), id };
+                    if (owner.sink()->uninvite_source(ep) == AOO_OK) {
                         // only send IP address on success
                         msg << addr.name() << addr.port() << id;
                     }
@@ -326,7 +326,7 @@ void aoo_recv_resend(AooReceiveUnit *unit, sc_msg_iter *args){
 }
 
 void aoo_recv_resend_limit(AooReceiveUnit *unit, sc_msg_iter *args){
-    unit->delegate().sink()->set_resend_maxnumframes(args->geti());
+    unit->delegate().sink()->set_resend_limit(args->geti());
 }
 
 void aoo_recv_resend_interval(AooReceiveUnit *unit, sc_msg_iter *args){
@@ -348,7 +348,8 @@ void aoo_recv_reset(AooReceiveUnit *unit, sc_msg_iter *args){
                 aoo::ip_address addr;
                 aoo_id id;
                 if (owner.node()->getSourceArg(&args, addr, id)){
-                    owner.sink()->reset_source(addr.address(), addr.length(), id);
+                    aoo_endpoint ep { addr.address(), addr.length(), id };
+                    owner.sink()->reset_source(ep);
                 }
             } else {
                 owner.sink()->reset();

@@ -176,6 +176,19 @@ aoo_error aoo::net::server_imp::poll_events(){
     return AOO_OK;
 }
 
+aoo_error aoo_net_server_ctl(aoo_net_server *server, int32_t ctl,
+                             intptr_t index, void *p, size_t size)
+{
+    return server->control(ctl, index, p, size);
+}
+
+aoo_error aoo::net::server_imp::control(int32_t ctl, intptr_t index,
+                                        void *ptr, size_t size)
+{
+    LOG_WARNING("aoo_server: unsupported control " << ctl);
+    return AOO_ERROR_UNSPECIFIED;
+}
+
 namespace aoo {
 namespace net {
 

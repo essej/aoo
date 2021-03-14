@@ -144,6 +144,14 @@ typedef struct aoo_allocator
 
 typedef void (*aoo_logfunction)(const char *msg, int32_t level, void *context);
 
+// endpoint
+typedef struct aoo_endpoint
+{
+    const void *address;
+    int32_t addrlen;
+    aoo_id id;
+} aoo_endpoint;
+
 // reply function
 typedef int32_t (*aoo_sendfn)(
         void *,         // user

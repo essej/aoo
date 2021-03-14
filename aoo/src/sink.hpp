@@ -228,12 +228,6 @@ private:
 
     std::atomic<source_state> state_{source_state::idle};
 
-    struct format_deleter {
-        void operator() (void *x) const {
-            auto f = static_cast<aoo_format *>(x);
-            aoo::deallocate(x, f->size);
-        }
-    };
     std::unique_ptr<aoo_format, format_deleter> format_request_;
     double format_time_ = 0;
 
@@ -291,12 +285,6 @@ public:
 
     aoo_error setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
 
-    aoo_error invite_source(const void *address, int32_t addrlen, aoo_id id) override;
-
-    aoo_error uninvite_source(const void *address, int32_t addrlen, aoo_id id) override;
-
-    aoo_error uninvite_all() override;
-
     aoo_error handle_message(const char *data, int32_t n,
                              const void *address, int32_t addrlen) override;
 
@@ -310,15 +298,8 @@ public:
 
     aoo_error poll_events() override;
 
-    aoo_error set_option(int32_t opt, void *ptr, int32_t size) override;
+    aoo_error control(int32_t ctl, intptr_t index, void *ptr, size_t size) override;
 
-    aoo_error get_option(int32_t opt, void *ptr, int32_t size) override;
-
-    aoo_error set_source_option(const void *address, int32_t addrlen, aoo_id id,
-                             int32_t opt, void *ptr, int32_t size) override;
-
-    aoo_error get_source_option(const void *address, int32_t addrlen, aoo_id id,
-                             int32_t opt, void *ptr, int32_t size) override;
     // getters
     aoo_id id() const { return id_.load(std::memory_order_relaxed); }
 
@@ -340,7 +321,7 @@ public:
 
     float resend_interval() const { return resend_interval_.load(std::memory_order_relaxed); }
 
-    int32_t resend_maxnumframes() const { return resend_maxnumframes_.load(std::memory_order_relaxed); }
+    int32_t resend_limit() const { return resend_limit_.load(std::memory_order_relaxed); }
 
     float source_timeout() const { return source_timeout_.load(std::memory_order_relaxed); }
 
@@ -368,7 +349,7 @@ private:
     std::atomic<int32_t> buffersize_{ AOO_SINK_BUFFERSIZE };
     std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
     std::atomic<float> resend_interval_{ AOO_RESEND_INTERVAL * 0.001 };
-    std::atomic<int32_t> resend_maxnumframes_{ AOO_RESEND_MAXNUMFRAMES };
+    std::atomic<int32_t> resend_limit_{ AOO_RESEND_LIMIT };
     std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT * 0.001 };
     std::atomic<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
     std::atomic<bool> resend_{AOO_RESEND_DATA};
@@ -393,7 +374,10 @@ public:
     mutable memory_list memory;
 private:
     // helper methods
+
     source_desc *find_source(const ip_address& addr, aoo_id id);
+
+    source_desc *get_source_arg(intptr_t index);
 
     source_desc *add_source(const ip_address& addr, aoo_id id);
 

@@ -236,6 +236,8 @@ public:
 
     aoo_error poll_events() override;
 
+    aoo_error control(int32_t ctl, intptr_t index, void *ptr, size_t size) override;
+
     std::shared_ptr<user> get_user(const std::string& name,
                                    const std::string& pwd,
                                    uint32_t version, error& e);

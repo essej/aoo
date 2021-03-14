@@ -11,17 +11,15 @@
 namespace aoo {
 namespace net {
 
-// NOTE: aoo::server and aoo::client don't define virtual destructors
-// and have to be destroyed with their respective destroy() method.
-// We provide a custom deleter and shared pointer to automate this task.
+// NOTE: aoo::server and aoo::client don't have public virtual
+// destructors and have to be freed with the destroy() method.
+// We provide a custom deleter and shared pointer to simplify this task.
 //
-// The absence of a virtual destructor allows for ABI independent
-// C++ interfaces on Windows (where the vtable layout is stable
-// because of COM) and usually also on other platforms.
-// (Compilers use different strategies for virtual destructors,
-// some even put more than 1 entry in the vtable.)
-// Also, we only use standard C types as function parameters
-// and return types.
+// By following certain COM conventions (no virtual destructors,
+// no method overloading, only POD parameters and return types),
+// we get ABI independent C++ interfaces on Windows and all other
+// platforms where the vtable layout for such classes is stable
+// (generally true for Linux and macOS, in my experience).
 //
 // In practice this means you only have to build 'aoo' once as a
 // shared library and can then use its C++ interface in applications
@@ -65,8 +63,13 @@ public:
     // will call the event handler function one or more times
     virtual aoo_error poll_events() = 0;
 
-    // LATER add methods to add/remove users and groups
-    // and set/get server options, group options and user options
+    // server controls (threadsafe, but not reentrant)
+    virtual aoo_error control(int32_t ctl, intptr_t index, void *ptr, size_t size) = 0;
+
+    // ----------------------------------------------------------
+    // type-safe convenience methods for frequently used controls
+
+    // *none*
 protected:
     ~server(){} // non-virtual!
 };
@@ -161,10 +164,16 @@ public:
     // will call the event handler function one or more times
     virtual aoo_error poll_events() = 0;
 
-    // LATER add API functions to set options and do additional
-    // peer communication (chat, OSC messages, etc.)
+    // client controls (threadsafe, but not reentrant)
+    virtual aoo_error control(int32_t ctl, intptr_t index, void *ptr, size_t size) = 0;
 
-    //------------------------------ requests ---------------------------//
+    // ----------------------------------------------------------
+    // type-safe convenience methods for frequently used controls
+
+    // *none*
+
+    // ----------------------------------------------------------
+    // type-safe convenience methods for frequently used requests
 
     // connect to AOO server (always thread safe)
     aoo_error connect(const char *host, int port,

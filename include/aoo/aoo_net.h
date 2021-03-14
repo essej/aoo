@@ -201,8 +201,14 @@ AOO_API aoo_bool aoo_net_server_events_available(aoo_net_server *server);
 // will call the event handler function one or more times
 AOO_API aoo_error aoo_net_server_poll_events(aoo_net_server *server);
 
-// LATER add methods to add/remove users and groups
-// and set/get server options, group options and user options
+AOO_API aoo_error aoo_net_server_ctl(aoo_net_server *server, int32_t ctl,
+                                     intptr_t index, void *p, size_t size);
+
+// ------------------------------------------------------------
+// type-safe convenience functions for frequently used controls
+
+// *none*
+
 
 /*///////////////////////// AOO client /////////////////////////*/
 
@@ -285,7 +291,7 @@ AOO_API aoo_error aoo_net_client_request(aoo_net_client *client,
 // c) 'NULL' + 0: send to all peers
 // the 'flags' parameter allows for (future) additional settings
 AOO_API aoo_error aoo_net_client_send_message(aoo_net_client *client,
-                                              const char *data, int32_t n,
+                                              const char *data, int32_t size,
                                               const void *addr, int32_t len, int32_t flags);
 
 // handle messages from peers (threadsafe, called from a network thread)
@@ -309,10 +315,17 @@ AOO_API aoo_bool aoo_net_client_events_available(aoo_net_client *client);
 // will call the event handler function one or more times
 AOO_API aoo_error aoo_net_client_poll_events(aoo_net_client *client);
 
-// LATER add API functions to set options and do additional
-// peer communication (chat, OSC messages, etc.)
+// client controls (always threadsafe)
+AOO_API aoo_error aoo_net_client_ctl(aoo_net_server *server, int32_t ctl,
+                                     intptr_t index, void *p, size_t size);
 
-// wrapper functions for frequently used requests
+// ------------------------------------------------------------
+// type-safe convenience functions for frequently used controls
+
+// *none*
+
+// ------------------------------------------------------------
+// type-safe convenience functions for frequently used requests
 
 // connect to AOO server (always thread safe)
 static inline aoo_error aoo_net_client_connect(aoo_net_client *client,

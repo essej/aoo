@@ -56,44 +56,6 @@ aoo_error aoo::sink_imp::setup(int32_t samplerate,
     }
 }
 
-aoo_error aoo_sink_invite_source(aoo_sink *sink, const void *address,
-                                 int32_t addrlen, aoo_id id)
-{
-    return sink->invite_source(address, addrlen, id);
-}
-
-aoo_error aoo::sink_imp::invite_source(const void *address, int32_t addrlen, aoo_id id){
-    ip_address addr((const sockaddr *)address, addrlen);
-
-    push_request(source_request { request_type::invite, addr, id });
-
-    return AOO_OK;
-}
-
-aoo_error aoo_sink_uninvite_source(aoo_sink *sink, const void *address,
-                                   int32_t addrlen, aoo_id id)
-{
-    return sink->uninvite_source(address, addrlen, id);
-}
-
-aoo_error aoo::sink_imp::uninvite_source(const void *address, int32_t addrlen, aoo_id id){
-    ip_address addr((const sockaddr *)address, addrlen);
-
-    push_request(source_request { request_type::uninvite, addr, id });
-
-    return AOO_OK;
-}
-
-aoo_error aoo_sink_uninvite_all(aoo_sink *sink){
-    return sink->uninvite_all();
-}
-
-aoo_error aoo::sink_imp::uninvite_all(){
-    push_request(source_request { request_type::uninvite_all });
-
-    return AOO_OK;
-}
-
 namespace aoo {
 
 template<typename T>
@@ -105,16 +67,53 @@ T& as(void *p){
 
 #define CHECKARG(type) assert(size == sizeof(type))
 
-aoo_error aoo_sink_set_option(aoo_sink *sink, int32_t opt, void *p, int32_t size)
+#define GETSOURCEARG \
+    source_lock lock(sources_);         \
+    auto src = get_source_arg(index);   \
+    if (!src) {                         \
+        return AOO_ERROR_UNSPECIFIED;   \
+    }                                   \
+
+aoo_error aoo_sink_ctl(aoo_sink *sink, int32_t ctl,
+                       intptr_t index, void *p, size_t size)
 {
-    return sink->set_option(opt, p, size);
+    return sink->control(ctl, index, p, size);
 }
 
-aoo_error aoo::sink_imp::set_option(int32_t opt, void *ptr, int32_t size)
+aoo_error aoo::sink_imp::control(int32_t ctl, intptr_t index,
+                                 void *ptr, size_t size)
 {
-    switch (opt){
+    switch (ctl){
+    // invite source
+    case AOO_CTL_INVITE_SOURCE:
+    {
+        auto ep = (const aoo_endpoint *)index;
+        if (!ep){
+            return AOO_ERROR_UNSPECIFIED;
+        }
+        ip_address addr((const sockaddr *)ep->address, ep->addrlen);
+
+        push_request(source_request { request_type::invite, addr, ep->id });
+
+        break;
+    }
+    // uninvite source(s)
+    case AOO_CTL_UNINVITE_SOURCE:
+    {
+        auto ep = (const aoo_endpoint *)index;
+        if (ep){
+            // single source
+            ip_address addr((const sockaddr *)ep->address, ep->addrlen);
+
+            push_request(source_request { request_type::invite, addr, ep->id });
+        } else {
+            // all sources
+            push_request(source_request { request_type::uninvite_all });
+        }
+        break;
+    }
     // id
-    case AOO_OPT_ID:
+    case AOO_CTL_SET_ID:
     {
         CHECKARG(int32_t);
         auto newid = as<int32_t>(ptr);
@@ -123,14 +122,40 @@ aoo_error aoo::sink_imp::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
-    // reset
-    case AOO_OPT_RESET:
-        reset_sources();
-        // reset time DLL
-        timer_.reset();
+    case AOO_CTL_GET_ID:
+        CHECKARG(aoo_id);
+        as<aoo_id>(ptr) = id();
         break;
+    // reset
+    case AOO_CTL_RESET:
+    {
+        if (index != 0){
+            GETSOURCEARG;
+            src->reset(*this);
+        } else {
+            // reset all sources
+            reset_sources();
+            // reset time DLL
+            timer_.reset();
+        }
+        break;
+    }
+    // request format
+    case AOO_CTL_REQUEST_FORMAT:
+    {
+        CHECKARG(aoo_format);
+        GETSOURCEARG;
+        return src->request_format(*this, as<aoo_format>(ptr));
+    }
+    // get format
+    case AOO_CTL_GET_FORMAT:
+    {
+        assert(size >= sizeof(aoo_format));
+        GETSOURCEARG;
+        return src->get_format(as<aoo_format>(ptr), size);
+    }
     // buffer size
-    case AOO_OPT_BUFFERSIZE:
+    case AOO_CTL_SET_BUFFERSIZE:
     {
         CHECKARG(int32_t);
         auto bufsize = std::max<int32_t>(0, as<int32_t>(ptr));
@@ -140,19 +165,39 @@ aoo_error aoo::sink_imp::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
+    case AOO_CTL_GET_BUFFERSIZE:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = buffersize_.load();
+        break;
+    // get buffer fill ratio
+    case AOO_CTL_GET_BUFFER_FILL_RATIO:
+    {
+        CHECKARG(float);
+        GETSOURCEARG;
+        as<float>(ptr) = src->get_buffer_fill_ratio();
+        break;
+    }
     // timer check
-    case AOO_OPT_TIMER_CHECK:
+    case AOO_CTL_SET_TIMER_CHECK:
         CHECKARG(aoo_bool);
         timer_check_.store(as<aoo_bool>(ptr));
         break;
+    case AOO_CTL_GET_TIMER_CHECK:
+        CHECKARG(aoo_bool);
+        as<aoo_bool>(ptr) = timer_check_.load();
+        break;
     // dynamic resampling
-    case AOO_OPT_DYNAMIC_RESAMPLING:
+    case AOO_CTL_SET_DYNAMIC_RESAMPLING:
         CHECKARG(aoo_bool);
         dynamic_resampling_.store(as<aoo_bool>(ptr));
         timer_.reset(); // !
         break;
+    case AOO_CTL_GET_DYNAMIC_RESAMPLING:
+        CHECKARG(aoo_bool);
+        as<aoo_bool>(ptr) = dynamic_resampling_.load();
+        break;
     // time DLL filter bandwidth
-    case AOO_OPT_DLL_BANDWIDTH:
+    case AOO_CTL_SET_DLL_BANDWIDTH:
     {
         CHECKARG(float);
         auto bw = std::max<double>(0, std::min<double>(1, as<float>(ptr)));
@@ -160,8 +205,17 @@ aoo_error aoo::sink_imp::set_option(int32_t opt, void *ptr, int32_t size)
         timer_.reset(); // will update time DLL and reset timer
         break;
     }
+    case AOO_CTL_GET_DLL_BANDWIDTH:
+        CHECKARG(float);
+        as<float>(ptr) = dll_bandwidth_.load();
+        break;
+    // real samplerate
+    case AOO_CTL_GET_REAL_SAMPLERATE:
+        CHECKARG(double);
+        as<double>(ptr) = realsr_.load(std::memory_order_relaxed);
+        break;
     // packetsize
-    case AOO_OPT_PACKETSIZE:
+    case AOO_CTL_SET_PACKETSIZE:
     {
         CHECKARG(int32_t);
         const int32_t minpacketsize = 64;
@@ -177,179 +231,61 @@ aoo_error aoo::sink_imp::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
-    // resend limit
-    case AOO_OPT_RESEND_DATA:
+    case AOO_CTL_GET_PACKETSIZE:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = packetsize_.load();
+        break;
+    // resend data
+    case AOO_CTL_SET_RESEND_DATA:
         CHECKARG(aoo_bool);
         resend_.store(as<aoo_bool>(ptr));
         break;
+    case AOO_CTL_GET_RESEND_DATA:
+        CHECKARG(aoo_bool);
+        as<aoo_bool>(ptr) = resend_.load();
+        break;
     // resend interval
-    case AOO_OPT_RESEND_INTERVAL:
+    case AOO_CTL_SET_RESEND_INTERVAL:
     {
         CHECKARG(int32_t);
         auto interval = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
         resend_interval_.store(interval);
         break;
     }
-    // resend maxnumframes
-    case AOO_OPT_RESEND_MAXNUMFRAMES:
+    case AOO_CTL_GET_RESEND_INTERVAL:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = resend_interval_.load() * 1000.0;
+        break;
+    // resend limit
+    case AOO_CTL_SET_RESEND_LIMIT:
     {
         CHECKARG(int32_t);
-        auto maxnumframes = std::max<int32_t>(1, as<int32_t>(ptr));
-        resend_maxnumframes_.store(maxnumframes);
+        auto limit = std::max<int32_t>(1, as<int32_t>(ptr));
+        resend_limit_.store(limit);
         break;
     }
+    case AOO_CTL_GET_RESEND_LIMIT:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = resend_limit_.load();
+        break;
     // source timeout
-    case AOO_OPT_SOURCE_TIMEOUT:
+    case AOO_CTL_SET_SOURCE_TIMEOUT:
     {
         CHECKARG(int32_t);
         auto timeout = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
         source_timeout_.store(timeout);
         break;
     }
-    // unknown
-    default:
-        LOG_WARNING("aoo_sink: unsupported option " << opt);
-        return AOO_ERROR_UNSPECIFIED;
-    }
-    return AOO_OK;
-}
-
-aoo_error aoo_sink_get_option(aoo_sink *sink, int32_t opt, void *p, int32_t size)
-{
-    return sink->get_option(opt, p, size);
-}
-
-aoo_error aoo::sink_imp::get_option(int32_t opt, void *ptr, int32_t size)
-{
-    switch (opt){
-    // id
-    case AOO_OPT_ID:
-        CHECKARG(aoo_id);
-        as<aoo_id>(ptr) = id();
-        break;
-    // buffer size
-    case AOO_OPT_BUFFERSIZE:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = buffersize_.load();
-        break;
-    // timer check
-    case AOO_OPT_TIMER_CHECK:
-        CHECKARG(aoo_bool);
-        as<aoo_bool>(ptr) = timer_check_.load();
-        break;
-    // dynamic resampling
-    case AOO_OPT_DYNAMIC_RESAMPLING:
-        CHECKARG(aoo_bool);
-        as<aoo_bool>(ptr) = dynamic_resampling_.load();
-        break;
-    // real samplerate
-    case AOO_OPT_REAL_SAMPLERATE:
-        CHECKARG(double);
-        as<double>(ptr) = realsr_.load(std::memory_order_relaxed);
-        break;
-    // time DLL filter bandwidth
-    case AOO_OPT_DLL_BANDWIDTH:
-        CHECKARG(float);
-        as<float>(ptr) = dll_bandwidth_.load();
-        break;
-    // resend packetsize
-    case AOO_OPT_PACKETSIZE:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = packetsize_.load();
-        break;
-    // resend limit
-    case AOO_OPT_RESEND_DATA:
-        CHECKARG(aoo_bool);
-        as<aoo_bool>(ptr) = resend_.load();
-        break;
-    // resend interval
-    case AOO_OPT_RESEND_INTERVAL:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = resend_interval_.load() * 1000.0;
-        break;
-    // resend maxnumframes
-    case AOO_OPT_RESEND_MAXNUMFRAMES:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = resend_maxnumframes_.load();
-        break;
-    case AOO_OPT_SOURCE_TIMEOUT:
+    case AOO_CTL_GET_SOURCE_TIMEOUT:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = source_timeout_.load() * 1000.0;
         break;
     // unknown
     default:
-        LOG_WARNING("aoo_sink: unsupported option " << opt);
+        LOG_WARNING("aoo_sink: unsupported control " << ctl);
         return AOO_ERROR_UNSPECIFIED;
     }
     return AOO_OK;
-}
-
-aoo_error aoo_sink_set_source_option(aoo_sink *sink, const void *address, int32_t addrlen,
-                                     aoo_id id, int32_t opt, void *p, int32_t size)
-{
-    return sink->set_source_option(address, addrlen, id, opt, p, size);
-}
-
-aoo_error aoo::sink_imp::set_source_option(const void *address, int32_t addrlen, aoo_id id,
-                                           int32_t opt, void *ptr, int32_t size)
-{
-    ip_address addr((const sockaddr *)address, addrlen);
-
-    source_lock lock(sources_);
-    auto src = find_source(addr, id);
-    if (src){
-        switch (opt){
-        // format request
-        case AOO_OPT_FORMAT:
-            CHECKARG(aoo_format);
-            return src->request_format(*this, as<aoo_format>(ptr));
-        // reset
-        case AOO_OPT_RESET:
-            src->reset(*this);
-            break;
-        // unsupported
-        default:
-            LOG_WARNING("aoo_sink: unsupported source option " << opt);
-            return AOO_ERROR_UNSPECIFIED;
-        }
-        return AOO_OK;
-    } else {
-        return AOO_ERROR_UNSPECIFIED;
-    }
-}
-
-aoo_error aoo_sink_get_source_option(aoo_sink *sink, const void *address, int32_t addrlen,
-                                     aoo_id id, int32_t opt, void *p, int32_t size)
-{
-    return sink->get_source_option(address, addrlen, id, opt, p, size);
-}
-
-aoo_error aoo::sink_imp::get_source_option(const void *address, int32_t addrlen, aoo_id id,
-                                           int32_t opt, void *ptr, int32_t size)
-{
-    ip_address addr((const sockaddr *)address, addrlen);
-
-    source_lock lock(sources_);
-    auto src = find_source(addr, id);
-    if (src){
-        switch (opt){
-        // format
-        case AOO_OPT_FORMAT:
-            assert(size >= sizeof(aoo_format));
-            return src->get_format(as<aoo_format>(ptr), size);
-        case AOO_OPT_BUFFER_FILL_RATIO:
-            CHECKARG(float);
-            as<float>(ptr) = src->get_buffer_fill_ratio();
-            break;
-        // unsupported
-        default:
-            LOG_WARNING("aoo_sink: unsupported source option " << opt);
-            return AOO_ERROR_UNSPECIFIED;
-        }
-        return AOO_OK;
-    } else {
-        return AOO_ERROR_UNSPECIFIED;
-    }
 }
 
 aoo_error aoo_sink_handle_message(aoo_sink *sink, const char *data, int32_t n,
@@ -630,9 +566,9 @@ aoo_error aoo::sink_imp::poll_events(){
         } else {
             aoo_source_event se;
             se.type = e.type;
-            se.address = e.address.address();
-            se.addrlen = e.address.length();
-            se.id = e.id;
+            se.ep.address = e.address.address();
+            se.ep.addrlen = e.address.length();
+            se.ep.id = e.id;
             eventhandler_(eventcontext_, (const aoo_event *)&se,
                           AOO_THREAD_UNKNOWN);
         }
@@ -661,9 +597,9 @@ void sink_imp::send_event(const sink_event &e, aoo_thread_level level) {
     {
         aoo_sink_event se;
         se.type = e.type;
-        se.address = e.address.address();
-        se.addrlen = e.address.length();
-        se.id = e.id;
+        se.ep.address = e.address.address();
+        se.ep.addrlen = e.address.length();
+        se.ep.id = e.id;
         eventhandler_(eventcontext_, (const aoo_event *)&se, level);
         break;
     }
@@ -688,6 +624,20 @@ aoo::source_desc * sink_imp::find_source(const ip_address& addr, aoo_id id){
         }
     }
     return nullptr;
+}
+
+aoo::source_desc * sink_imp::get_source_arg(intptr_t index){
+    auto ep = (const aoo_endpoint *)index;
+    if (!ep){
+        LOG_ERROR("aoo_sink: missing source argument");
+        return nullptr;
+    }
+    ip_address addr((const sockaddr *)ep->address, ep->addrlen);
+    auto src = find_source(addr, ep->id);
+    if (!src){
+        LOG_ERROR("aoo_sink: couldn't find source");
+    }
+    return src;
 }
 
 source_desc * sink_imp::add_source(const ip_address& addr, aoo_id id){
@@ -877,9 +827,9 @@ aoo_error sink_imp::handle_ping_message(const osc::ReceivedMessage& msg,
 // i.e. before a source_desc can be possibly autoremoved.
 event::event(aoo_event_type type, const source_desc& desc){
     source.type = type;
-    source.address = desc.address().address();
-    source.addrlen = desc.address().length();
-    source.id = desc.id();
+    source.ep.address = desc.address().address();
+    source.ep.addrlen = desc.address().length();
+    source.ep.id = desc.id();
 }
 
 // 'sink_event' is used in 'sink' for source events that can outlive
@@ -1819,7 +1769,7 @@ void source_desc::check_missing_blocks(const sink_imp& s){
         return;
     }
     int32_t resent = 0;
-    int32_t maxnumframes = s.resend_maxnumframes();
+    int32_t maxnumframes = s.resend_limit();
     double interval = s.resend_interval();
     double elapsed = s.elapsed_time();
 

@@ -51,16 +51,88 @@ T& as(void *p){
 
 #define CHECKARG(type) assert(size == sizeof(type))
 
-aoo_error aoo_source_set_option(aoo_source *src, int32_t opt, void *p, int32_t size)
+#define GETSINKARG \
+    sink_lock lock(sinks_);             \
+    auto sink = get_sink_arg(index);    \
+    if (!sink) {                        \
+        return AOO_ERROR_UNSPECIFIED;   \
+    }                                   \
+
+aoo_error aoo_source_ctl(aoo_source *src, int32_t ctl,
+                         intptr_t index, void *p, int32_t size)
 {
-    return src->set_option(opt, p, size);
+    return src->control(ctl, index, p, size);
 }
 
-aoo_error aoo::source_imp::set_option(int32_t opt, void *ptr, int32_t size)
+aoo_error aoo::source_imp::control(int32_t ctl, intptr_t index,
+                                   void *ptr, size_t size)
 {
-    switch (opt){
+    switch (ctl){
+    // add sink
+    case AOO_CTL_ADD_SINK:
+    {
+        auto ep = (const aoo_endpoint *)index;
+        if (!ep){
+            return AOO_ERROR_UNSPECIFIED;
+        }
+        return add_sink(*ep, 0); // ignore flags
+    }
+    // remove sink(s)
+    case AOO_CTL_REMOVE_SINK:
+    {
+        auto ep = (const aoo_endpoint *)index;
+        if (ep){
+            // single sink
+            return remove_sink(*ep);
+        } else {
+            // all sinks
+            sink_lock lock(sinks_);
+            sinks_.clear();
+            return AOO_OK;
+        }
+    }
+    // start
+    case AOO_CTL_START:
+        state_.store(stream_state::start);
+        break;
+    // stop
+    case AOO_CTL_STOP:
+        state_.store(stream_state::stop);
+        break;
+    // set/get format
+    case AOO_CTL_SET_FORMAT:
+        CHECKARG(aoo_format);
+        return set_format(as<aoo_format>(ptr));
+    case AOO_CTL_GET_FORMAT:
+    {
+        assert(size >= sizeof(aoo_format));
+        shared_lock lock(update_mutex_); // read lock!
+        if (encoder_){
+            return encoder_->get_format(as<aoo_format>(ptr), size);
+        } else {
+            return AOO_ERROR_UNSPECIFIED;
+        }
+    }
+    // set/get channel onset
+    case AOO_CTL_SET_CHANNEL_ONSET:
+    {
+        CHECKARG(int32_t);
+        GETSINKARG;
+        auto chn = as<int32_t>(ptr);
+        sink->channel.store(chn);
+        LOG_VERBOSE("aoo_source: send to sink " << sink->id
+                    << " on channel " << chn);
+        break;
+    }
+    case AOO_CTL_GET_CHANNEL_ONSET:
+    {
+        CHECKARG(int32_t);
+        GETSINKARG;
+        as<int32_t>(ptr) = sink->channel.load();
+        break;
+    }
     // id
-    case AOO_OPT_ID:
+    case AOO_CTL_SET_ID:
     {
         auto newid = as<int32_t>(ptr);
         if (id_.exchange(newid) != newid){
@@ -70,20 +142,12 @@ aoo_error aoo::source_imp::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
-    // stop
-    case AOO_OPT_STOP:
-        state_.store(stream_state::stop);
+    case AOO_CTL_GET_ID:
+        CHECKARG(int32_t);
+        as<aoo_id>(ptr) = id();
         break;
-    // resume
-    case AOO_OPT_START:
-        state_.store(stream_state::start);
-        break;
-    // format
-    case AOO_OPT_FORMAT:
-        CHECKARG(aoo_format);
-        return set_format(as<aoo_format>(ptr));
-    // buffersize
-    case AOO_OPT_BUFFERSIZE:
+    // set/get buffersize
+    case AOO_CTL_SET_BUFFERSIZE:
     {
         CHECKARG(int32_t);
         auto bufsize = std::max<int32_t>(as<int32_t>(ptr), 0);
@@ -93,8 +157,12 @@ aoo_error aoo::source_imp::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
-    // packetsize
-    case AOO_OPT_PACKETSIZE:
+    case AOO_CTL_GET_BUFFERSIZE:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = buffersize_.load();
+        break;
+    // set/get packetsize
+    case AOO_CTL_SET_PACKETSIZE:
     {
         CHECKARG(int32_t);
         const int32_t minpacketsize = AOO_MSG_DATA_HEADERSIZE + 64;
@@ -110,34 +178,59 @@ aoo_error aoo::source_imp::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
-    // timer check
-    case AOO_OPT_TIMER_CHECK:
+    case AOO_CTL_GET_PACKETSIZE:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = packetsize_.load();
+        break;
+    // set/get timer check
+    case AOO_CTL_SET_TIMER_CHECK:
         CHECKARG(aoo_bool);
         timer_check_.store(as<aoo_bool>(ptr));
         break;
-    // dynamic resampling
-    case AOO_OPT_DYNAMIC_RESAMPLING:
+    case AOO_CTL_GET_TIMER_CHECK:
+        CHECKARG(aoo_bool);
+        as<aoo_bool>(ptr) = timer_check_.load();
+        break;
+    // set/get dynamic resampling
+    case AOO_CTL_SET_DYNAMIC_RESAMPLING:
         CHECKARG(aoo_bool);
         dynamic_resampling_.store(as<aoo_bool>(ptr));
         timer_.reset(); // !
         break;
-    // time DLL filter bandwidth
-    case AOO_OPT_DLL_BANDWIDTH:
+    case AOO_CTL_GET_DYNAMIC_RESAMPLING:
+        CHECKARG(aoo_bool);
+        as<aoo_bool>(ptr) = dynamic_resampling_.load();
+        break;
+    // set/get time DLL filter bandwidth
+    case AOO_CTL_SET_DLL_BANDWIDTH:
         CHECKARG(float);
         // time filter
         dll_bandwidth_.store(as<float>(ptr));
         timer_.reset(); // will update
         break;
-    // ping interval
-    case AOO_OPT_PING_INTERVAL:
+    case AOO_CTL_GET_DLL_BANDWIDTH:
+        CHECKARG(float);
+        as<float>(ptr) = dll_bandwidth_.load();
+        break;
+    // get real samplerate
+    case AOO_CTL_GET_REAL_SAMPLERATE:
+        CHECKARG(double);
+        as<double>(ptr) = realsr_.load(std::memory_order_relaxed);
+        break;
+    // set/get ping interval
+    case AOO_CTL_SET_PING_INTERVAL:
     {
         CHECKARG(int32_t);
         auto interval = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
         ping_interval_.store(interval);
         break;
     }
-    // resend buffer size
-    case AOO_OPT_RESEND_BUFFERSIZE:
+    case AOO_CTL_GET_PING_INTERVAL:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = ping_interval_.load() * 1000.0;
+        break;
+    // set/get resend buffer size
+    case AOO_CTL_SET_RESEND_BUFFERSIZE:
     {
         CHECKARG(int32_t);
         // empty buffer is allowed! (no resending)
@@ -148,8 +241,12 @@ aoo_error aoo::source_imp::set_option(int32_t opt, void *ptr, int32_t size)
         }
         break;
     }
-    // redundancy
-    case AOO_OPT_REDUNDANCY:
+    case AOO_CTL_GET_RESEND_BUFFERSIZE:
+        CHECKARG(int32_t);
+        as<int32_t>(ptr) = resend_buffersize_.load();
+        break;
+    // set/get redundancy
+    case AOO_CTL_SET_REDUNDANCY:
     {
         CHECKARG(int32_t);
         // limit it somehow, 16 times is already very high
@@ -157,161 +254,16 @@ aoo_error aoo::source_imp::set_option(int32_t opt, void *ptr, int32_t size)
         redundancy_.store(redundancy);
         break;
     }
-    // unknown
-    default:
-        LOG_WARNING("aoo_source: unsupported option " << opt);
-        return AOO_ERROR_UNSPECIFIED;
-    }
-    return AOO_OK;
-}
-
-aoo_error aoo_source_get_option(aoo_source *src, int32_t opt,
-                              void *p, int32_t size)
-{
-    return src->get_option(opt, p, size);
-}
-
-aoo_error aoo::source_imp::get_option(int32_t opt, void *ptr, int32_t size)
-{
-    switch (opt){
-    // id
-    case AOO_OPT_ID:
-        CHECKARG(int32_t);
-        as<aoo_id>(ptr) = id();
-        break;
-    // format
-    case AOO_OPT_FORMAT:
-    {
-        assert(size >= sizeof(aoo_format));
-        shared_lock lock(update_mutex_); // read lock!
-        if (encoder_){
-            return encoder_->get_format(as<aoo_format>(ptr), size);
-        } else {
-            return AOO_ERROR_UNSPECIFIED;
-        }
-    }
-    // buffer size
-    case AOO_OPT_BUFFERSIZE:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = buffersize_.load();
-        break;
-    // timer check
-    case AOO_OPT_TIMER_CHECK:
-        CHECKARG(aoo_bool);
-        as<aoo_bool>(ptr) = timer_check_.load();
-        break;
-    // dynamic resampling
-    case AOO_OPT_DYNAMIC_RESAMPLING:
-        CHECKARG(aoo_bool);
-        as<aoo_bool>(ptr) = dynamic_resampling_.load();
-        break;
-    // real samplerate
-    case AOO_OPT_REAL_SAMPLERATE:
-        CHECKARG(double);
-        as<double>(ptr) = realsr_.load(std::memory_order_relaxed);
-        break;
-    // time DLL filter bandwidth
-    case AOO_OPT_DLL_BANDWIDTH:
-        CHECKARG(float);
-        as<float>(ptr) = dll_bandwidth_.load();
-        break;
-    // resend buffer size
-    case AOO_OPT_RESEND_BUFFERSIZE:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = resend_buffersize_.load();
-        break;
-    // packetsize
-    case AOO_OPT_PACKETSIZE:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = packetsize_.load();
-        break;
-    // ping interval
-    case AOO_OPT_PING_INTERVAL:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = ping_interval_.load() * 1000.0;
-        break;
-    // ping interval
-    case AOO_OPT_REDUNDANCY:
+    case AOO_CTL_GET_REDUNDANCY:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = redundancy_.load();
         break;
     // unknown
     default:
-        LOG_WARNING("aoo_source: unsupported option " << opt);
+        LOG_WARNING("aoo_source: unsupported control " << ctl);
         return AOO_ERROR_UNSPECIFIED;
     }
     return AOO_OK;
-}
-
-aoo_error aoo_source_set_sinkoption(aoo_source *src, const void *address, int32_t addrlen,
-                                    aoo_id id, int32_t opt, void *p, int32_t size)
-{
-    return src->set_sinkoption(address, addrlen, id, opt, p, size);
-}
-
-aoo_error aoo::source_imp::set_sinkoption(const void *address, int32_t addrlen, aoo_id id,
-                                          int32_t opt, void *ptr, int32_t size)
-{
-    ip_address addr((const sockaddr *)address, addrlen);
-
-    sink_lock lock(sinks_);
-    auto sink = find_sink(addr, id);
-    if (sink){
-        switch (opt){
-        // channel onset
-        case AOO_OPT_CHANNEL_ONSET:
-        {
-            CHECKARG(int32_t);
-            auto chn = as<int32_t>(ptr);
-            sink->channel.store(chn);
-            LOG_VERBOSE("aoo_source: send to sink " << sink->id
-                        << " on channel " << chn);
-            break;
-        }
-        // unknown
-        default:
-            LOG_WARNING("aoo_source: unknown sink option " << opt);
-            return AOO_ERROR_UNSPECIFIED;
-        }
-        return AOO_OK;
-    } else {
-        LOG_ERROR("aoo_source: couldn't set option " << opt
-                  << " - sink not found!");
-        return AOO_ERROR_UNSPECIFIED;
-    }
-}
-
-aoo_error aoo_source_get_sinkoption(aoo_source *src, const void *address, int32_t addrlen,
-                                    aoo_id id, int32_t opt, void *p, int32_t size)
-{
-    return src->get_sinkoption(address, addrlen, id, opt, p, size);
-}
-
-aoo_error aoo::source_imp::get_sinkoption(const void *address, int32_t addrlen, aoo_id id,
-                                          int32_t opt, void *p, int32_t size)
-{
-    ip_address addr((const sockaddr *)address, addrlen);
-
-    sink_lock lock(sinks_);
-    auto sink = find_sink(addr, id);
-    if (sink){
-        switch (opt){
-        // channel onset
-        case AOO_OPT_CHANNEL_ONSET:
-            CHECKARG(int32_t);
-            as<int32_t>(p) = sink->channel.load();
-            break;
-        // unknown
-        default:
-            LOG_WARNING("aoo_source: unsupported sink option " << opt);
-            return AOO_ERROR_UNSPECIFIED;
-        }
-        return AOO_OK;
-    } else {
-        LOG_ERROR("aoo_source: couldn't get option " << opt
-                  << " - sink " << id << " not found!");
-        return AOO_ERROR_UNSPECIFIED;
-    }
 }
 
 aoo_error aoo_source_setup(aoo_source *src, int32_t samplerate,
@@ -353,57 +305,6 @@ aoo_error aoo::source_imp::setup(int32_t samplerate, int32_t blocksize,
     } else {
         return AOO_ERROR_UNSPECIFIED;
     }
-}
-
-aoo_error aoo_source_add_sink(aoo_source *src, const void *address,
-                              int32_t addrlen, aoo_id id, uint32_t flags) {
-    return src->add_sink(address, addrlen, id, flags);
-}
-
-aoo_error aoo::source_imp::add_sink(const void *address, int32_t addrlen,
-                                    aoo_id id, uint32_t flags)
-{
-    ip_address addr((const sockaddr *)address, addrlen);
-
-    sink_lock lock(sinks_);
-    // check if sink exists!
-    if (find_sink(addr, id)){
-        LOG_WARNING("aoo_source: sink already added!");
-        return AOO_ERROR_UNSPECIFIED;
-    }
-    // add sink descriptor
-    sinks_.emplace_front(addr, id, flags);
-    needformat_.store(true, std::memory_order_release); // !
-
-    return AOO_OK;
-}
-
-aoo_error aoo_source_remove_sink(aoo_source *src, const void *address,
-                                 int32_t addrlen, aoo_id id) {
-    return src->remove_sink(address, addrlen, id);
-}
-
-aoo_error aoo::source_imp::remove_sink(const void *address, int32_t addrlen, aoo_id id){
-    ip_address addr((const sockaddr *)address, addrlen);
-
-    sink_lock lock(sinks_);
-    for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
-        if (it->address == addr && it->id == id){
-            sinks_.erase(it);
-            return AOO_OK;
-        }
-    }
-    LOG_WARNING("aoo_source: sink not found!");
-    return AOO_ERROR_UNSPECIFIED;
-}
-
-void aoo_source_remove_all(aoo_source *src) {
-    src->remove_all();
-}
-
-void aoo::source_imp::remove_all(){
-    sink_lock lock(sinks_);
-    sinks_.clear();
 }
 
 aoo_error aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
@@ -555,6 +456,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         {
             add_xrun(nblocks);
         }
+        LOG_DEBUG("xrun: " << nblocks << " blocks");
 
         event e(AOO_XRUN_EVENT);
         e.xrun.count = nblocks + 0.5; // ?
@@ -726,6 +628,51 @@ sink_desc * source_imp::find_sink(const ip_address& addr, aoo_id id){
     return nullptr;
 }
 
+aoo::sink_desc * source_imp::get_sink_arg(intptr_t index){
+    auto ep = (const aoo_endpoint *)index;
+    if (!ep){
+        LOG_ERROR("aoo_sink: missing sink argument");
+        return nullptr;
+    }
+    ip_address addr((const sockaddr *)ep->address, ep->addrlen);
+    auto sink = find_sink(addr, ep->id);
+    if (!sink){
+        LOG_ERROR("aoo_sink: couldn't find sink");
+    }
+    return sink;
+}
+
+aoo_error source_imp::add_sink(const aoo_endpoint& ep, uint32_t flags)
+{
+    ip_address addr((const sockaddr *)ep.address, ep.addrlen);
+
+    sink_lock lock(sinks_);
+    // check if sink exists!
+    if (find_sink(addr, ep.id)){
+        LOG_WARNING("aoo_source: sink already added!");
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    // add sink descriptor
+    sinks_.emplace_front(addr, ep.id, flags);
+    needformat_.store(true, std::memory_order_release); // !
+
+    return AOO_OK;
+}
+
+aoo_error source_imp::remove_sink(const aoo_endpoint& ep){
+    ip_address addr((const sockaddr *)ep.address, ep.addrlen);
+
+    sink_lock lock(sinks_);
+    for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
+        if (it->address == addr && it->id == ep.id){
+            sinks_.erase(it);
+            return AOO_OK;
+        }
+    }
+    LOG_WARNING("aoo_source: sink not found!");
+    return AOO_ERROR_UNSPECIFIED;
+}
+
 aoo_error source_imp::set_format(aoo_format &f){
     std::unique_ptr<encoder> new_encoder;
 
@@ -751,6 +698,7 @@ aoo_error source_imp::set_format(aoo_format &f){
         encoder_ = std::move(new_encoder);
     }
 
+    // always set the format
     auto err = encoder_->set_format(f);
     if (err == AOO_OK){
         update_audioqueue();
@@ -767,7 +715,7 @@ aoo_error source_imp::set_format(aoo_format &f){
         // could a format request by an existing stream with the
         // wrong format, before process() starts the new stream.
         //
-        // NOTE: there's a slight race condition in that 'xrun_'
+        // NOTE: there's a slight race condition because 'xrun_'
         // might be incremented right afterwards, but I'm not
         // sure if this could cause any real problems..
         start_new_stream();
@@ -906,6 +854,7 @@ void source_imp::send_format(const sendfn& fn){
         return;
     }
 
+    // serialize format
     char options[AOO_CODEC_MAXSETTINGSIZE];
     int32_t size = sizeof(options);
     if (encoder_->serialize(f.header, options, size) != AOO_OK){

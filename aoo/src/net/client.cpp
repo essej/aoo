@@ -440,13 +440,13 @@ aoo_error aoo::net::client_imp::send_request(aoo_net_request_type request, void 
     return AOO_OK;
 }
 
-aoo_error aoo_net_client_send_message(aoo_net_client *client, const char *data, int32_t n,
+aoo_error aoo_net_client_send_message(aoo_net_client *client, const char *data, int32_t size,
                                       const void *addr, int32_t len, int32_t flags)
 {
-    return client->send_message(data, n, addr, len, flags);
+    return client->send_message(data, size, addr, len, flags);
 }
 
-aoo_error aoo::net::client_imp::send_message(const char *data, int32_t n,
+aoo_error aoo::net::client_imp::send_message(const char *data, int32_t size,
                                              const void *addr, int32_t len, int32_t flags)
 {
     // for now, we simply achieve 'reliable' messages by relaying over TCP
@@ -458,14 +458,14 @@ aoo_error aoo::net::client_imp::send_message(const char *data, int32_t n,
         if (len > 0){
             // peer message
             msg = std::make_unique<peer_message>(
-                        data, n, (const sockaddr *)addr, len, flags);
+                        data, size, (const sockaddr *)addr, len, flags);
         } else {
             // group message
             msg = std::make_unique<group_message>(
-                        data, n, (const char *)addr, flags);
+                        data, size, (const char *)addr, flags);
         }
     } else {
-        msg = std::make_unique<message>(data, n, flags);
+        msg = std::make_unique<message>(data, size, flags);
     }
 
     if (reliable){
@@ -619,6 +619,19 @@ aoo_error aoo::net::client_imp::poll_events(){
         eventhandler_(eventcontext_, &e->event_, AOO_THREAD_UNKNOWN);
     }
     return AOO_OK;
+}
+
+aoo_error aoo_net_client_ctl(aoo_net_client *client, int32_t ctl,
+                             intptr_t index, void *p, size_t size)
+{
+    return client->control(ctl, index, p, size);
+}
+
+aoo_error aoo::net::client_imp::control(int32_t ctl, intptr_t index,
+                                        void *ptr, size_t size)
+{
+    LOG_WARNING("aoo_client: unsupported control " << ctl);
+    return AOO_ERROR_UNSPECIFIED;
 }
 
 namespace aoo {
