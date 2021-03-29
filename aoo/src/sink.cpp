@@ -611,10 +611,6 @@ void sink_imp::send_event(const sink_event &e, aoo_thread_level level) {
 // only called if mode is AOO_EVENT_CALLBACK
 void sink_imp::call_event(const event &e, aoo_thread_level level) const {
     eventhandler_(eventcontext_, &e.event_, level);
-    // some events use dynamic memory
-    if (e.type_ == AOO_FORMAT_CHANGE_EVENT){
-        memory.free(memory_block::from_bytes((void *)e.format.format));
-    }
 }
 
 aoo::source_desc * sink_imp::find_source(const ip_address& addr, aoo_id id){
@@ -1136,13 +1132,19 @@ aoo_error source_desc::handle_format(const sink_imp& s, int32_t salt, const aoo_
     }
 
     // send format event (if changed)
-    // NOTE: we could just allocate 'aoo_format_storage', but it would be wasteful.
     if (changed){
-        auto mem = s.memory.alloc(fmt.header.size);
-        memcpy(mem->data(), &fmt, fmt.header.size);
-
         event e(AOO_FORMAT_CHANGE_EVENT, *this);
-        e.format.format = (const aoo_format *)mem->data();
+
+        auto mode = s.event_mode();
+        if (mode == AOO_EVENT_CALLBACK){
+            // use stack
+            e.format.format = &fmt.header;
+        } else if (AOO_EVENT_POLL){
+            // use heap
+            auto mem = memory_.alloc(fmt.header.size);
+            memcpy(mem->data(), &fmt, fmt.header.size);
+            e.format.format = (const aoo_format *)mem->data();
+        }
 
         send_event(s, e, AOO_THREAD_NETWORK);
     }
@@ -1196,7 +1198,7 @@ aoo_error source_desc::handle_data(const sink_imp& s, net_packet& d, bool binary
     }
 
     // copy blob data and push to queue
-    auto data = (char *)s.memory.alloc(d.size)->data();
+    auto data = (char *)memory_.alloc(d.size)->data();
     memcpy(data, d.data, d.size);
     d.data = data;
 
@@ -1335,7 +1337,7 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
             // check data packet
             add_packet(s, d, state);
             // return memory
-            s.memory.free(memory_block::from_bytes((void *)d.data));
+            memory_.free(memory_block::from_bytes((void *)d.data));
         }
     }
 
@@ -1470,7 +1472,7 @@ int32_t source_desc::poll_events(sink_imp& s, aoo_eventhandler fn, void *user){
         // some events use dynamic memory
         if (e.type_ == AOO_FORMAT_CHANGE_EVENT){
             auto mem = memory_block::from_bytes((void *)e.format.format);
-            s.memory.free(mem);
+            memory_.free(mem);
         }
         count++;
     }

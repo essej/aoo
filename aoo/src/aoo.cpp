@@ -307,6 +307,8 @@ uint32_t make_version(){
 
 /*//////////////////// memory /////////////////*/
 
+#define DEBUG_MEMORY 0
+
 memory_block * memory_block::allocate(size_t size){
     auto fullsize = sizeof(memory_block::header) + size;
     auto mem = (memory_block *)aoo::allocate(fullsize);

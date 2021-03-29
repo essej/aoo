@@ -273,6 +273,8 @@ private:
     // events
     lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
     void send_event(const sink_imp& s, const event& e, aoo_thread_level level);
+    // memory
+    aoo::memory_list memory_;
     // thread synchronization
     sync::shared_mutex mutex_; // LATER replace with a spinlock?
 };
@@ -330,6 +332,8 @@ public:
     time_tag absolute_time() const { return timer_.get_absolute(); }
 
     aoo_event_mode event_mode() const { return eventmode_; }
+
+    void call_event(const event& e, aoo_thread_level level) const;
 private:
     // settings
     std::atomic<aoo_id> id_;
@@ -358,9 +362,6 @@ private:
     // events
     lockfree::unbounded_mpsc_queue<sink_event, aoo::allocator<sink_event>> eventqueue_;
     void send_event(const sink_event& e, aoo_thread_level level);
-public:
-    void call_event(const event& e, aoo_thread_level level) const;
-private:
     aoo_eventhandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;
     aoo_event_mode eventmode_ = AOO_EVENT_NONE;
@@ -369,10 +370,6 @@ private:
     void push_request(const source_request& r){
         requestqueue_.push(r);
     }
-public:
-    // memory
-    mutable memory_list memory;
-private:
     // helper methods
 
     source_desc *find_source(const ip_address& addr, aoo_id id);
