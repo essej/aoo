@@ -26,7 +26,7 @@
  #define AOO_LOGLEVEL AOO_LOGLEVEL_WARNING
 #endif
 
-#define DO_LOG(level, msg)(aoo::Log(level) << msg)
+#define DO_LOG(level, msg) do { aoo::Log(level) << msg; } while (false)
 #define DO_LOG_ERROR(msg) DO_LOG(AOO_LOGLEVEL_ERROR, msg)
 #define DO_LOG_WARNING(msg) DO_LOG(AOO_LOGLEVEL_WARNING, msg)
 #define DO_LOG_VERBOSE(msg) DO_LOG(AOO_LOGLEVEL_VERBOSE, msg)
