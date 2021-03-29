@@ -42,7 +42,16 @@ void aoo_source_free(aoo_source *src){
     aoo::destroy(static_cast<aoo::source_imp *>(src));
 }
 
-aoo::source_imp::~source_imp() {}
+aoo::source_imp::~source_imp() {
+    // flush event queue
+    event e;
+    while (eventqueue_.try_pop(e)){
+        if (e.type_ == AOO_FORMAT_REQUEST_EVENT){
+            auto mem = memory_block::from_bytes((void *)e.format.format);
+            memory_block::free(mem);
+        }
+    }
+}
 
 template<typename T>
 T& as(void *p){
@@ -611,6 +620,10 @@ aoo_error aoo::source_imp::poll_events(){
     event e;
     while (eventqueue_.try_pop(e) > 0){
         eventhandler_(eventcontext_, &e.event_, AOO_THREAD_UNKNOWN);
+        // some memory use extra memory
+        if (e.type_ == AOO_FORMAT_REQUEST_EVENT){
+            memory_.free(memory_block::from_bytes((void *)e.format.format));
+        }
     }
     return AOO_OK;
 }
@@ -1371,13 +1384,17 @@ void source_imp::handle_format_request(const osc::ReceivedMessage& msg,
                 if (c->deserialize(f, (const char *)settings, size, fmt.header,
                                    sizeof(aoo_format_storage)) == AOO_OK){
                     // send format event
-                    // NOTE: we could just allocate 'aoo_format_storage', but it would be wasteful.
-                    auto mem = memory_.alloc(fmt.header.size);
-                    memcpy(mem->data(), &fmt, fmt.header.size);
-
                     event e(AOO_FORMAT_REQUEST_EVENT, addr, id);
-                    e.format.format = (const aoo_format *)mem->data();
 
+                    if (eventmode_ == AOO_EVENT_CALLBACK){
+                        // synchronous: use stack
+                        e.format.format = &fmt.header;
+                    } if (eventmode_ == AOO_EVENT_POLL){
+                        // asynchronous: use heap
+                        auto mem = memory_.alloc(fmt.header.size);
+                        memcpy(mem->data(), &fmt, fmt.header.size);
+                        e.format.format = (const aoo_format *)mem->data();
+                    }
                     send_event(e, AOO_THREAD_NETWORK);
                 }
             } else {
