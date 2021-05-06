@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
+#include <ostream>
 
 #ifdef _WIN32
 typedef int socklen_t;
@@ -60,15 +61,21 @@ public:
     const struct sockaddr *address() const {
         return (const struct sockaddr *)&address_;
     }
+
     struct sockaddr *address_ptr() {
         return (struct sockaddr *)&address_;
     }
+
     socklen_t length() const {
         return length_;
     }
+
     socklen_t *length_ptr() {
         return &length_;
     }
+
+    friend std::ostream& operator<<(std::ostream& os, const ip_address& addr);
+
     static const socklen_t max_length = 32;
 private:
     static const char *get_name(const struct sockaddr *addr);

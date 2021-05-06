@@ -241,6 +241,15 @@ bool ip_address::operator==(const ip_address& other) const {
     return false;
 }
 
+std::ostream& operator<<(std::ostream& os, const ip_address& addr) {
+    if (addr.address()->sa_family == AF_INET6){
+        os << "[" << addr.name() << "]:" << addr.port();
+    } else {
+        os << addr.name() << ":" << addr.port();
+    }
+    return os;
+}
+
 const char * ip_address::get_name(const sockaddr *addr){
 #if AOO_NET_USE_IPv6
     thread_local char buf[INET6_ADDRSTRLEN];
