@@ -372,12 +372,29 @@ int socket_errno()
 int socket_strerror(int err, char *buf, int size)
 {
 #ifdef _WIN32
-    buf[0] = 0;
-    return FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0,
-                          err, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT), buf,
-                          size, NULL);
+    wchar_t wbuf[1024];
+    auto wlen = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0,
+                               err, MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT), wbuf,
+                               sizeof(wbuf), NULL);
+    if (wlen <= 0){
+        return -1;
+    }
+    // convert to unicode
+    auto len = WideCharToMultiByte(CP_UTF8, 0, wbuf, wlen, buf, size, NULL, NULL);
+    if (len == 0){
+        return -1;
+    }
+    // remove trailing newlines
+    auto ptr = buf + (len - 1);
+    while (*ptr == '\n' || *ptr == '\r'){
+        *ptr-- = '\0';
+        len--;
+    }
+    // add error number
+    len += snprintf(buf + len, size - len, " [%d]", err);
+    return len;
 #else
-    return snprintf(buf, size, "%s", strerror(err));
+    return snprintf(buf, size, "%s [%d]", strerror(err), err);
 #endif
 }
 
