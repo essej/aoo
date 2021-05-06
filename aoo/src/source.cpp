@@ -1478,8 +1478,7 @@ void source_imp::handle_invite(const osc::ReceivedMessage& msg,
 {
     auto id = msg.ArgumentsBegin()->AsInt32();
 
-    LOG_DEBUG("handle invitation by " << addr.name()
-              << " " << addr.port() << " " << id);
+    LOG_DEBUG("handle invitation by " << addr << " " << id);
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     sink_lock lock(sinks_);

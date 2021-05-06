@@ -675,7 +675,7 @@ void client_imp::perform_send_message(const char *data, int32_t size, int32_t fl
             if (filter(peer)){
                 auto& addr = peer.address();
                 LOG_DEBUG("aoo_client: send message " << data
-                          << " to " << addr.name() << ":" << addr.port());
+                          << " to " << addr);
                 // Note: reliable messages are dispatched in the TCP network thread,
                 // unreliable messages are dispatched in the UDP network thread.
                 if (reliable){
@@ -764,17 +764,18 @@ int client_imp::try_connect(const std::string &host, int port){
 
     LOG_DEBUG("aoo_client: server address list:");
     for (auto& addr : result){
-        LOG_DEBUG("\t" << addr.name() << " " << addr.port());
+        LOG_DEBUG("\t" << addr);
     }
 
     // for actual TCP connection, just pick the first result
     auto& remote = result.front();
-    LOG_VERBOSE("try to connect to " << remote.name() << "/" << port);
+    LOG_VERBOSE("try to connect to " << remote);
 
     // try to connect (LATER make timeout configurable)
     if (socket_connect(socket_, remote, 5) < 0){
         int err = socket_errno();
-        LOG_ERROR("aoo_client: couldn't connect (" << err << ")");
+        LOG_ERROR("aoo_client: couldn't connect to " << remote << ": "
+                  << socket_strerror(err));
         return err;
     }
 
@@ -782,14 +783,14 @@ int client_imp::try_connect(const std::string &host, int port){
     ip_address temp;
     if (socket_address(socket_, temp) < 0){
         int err = socket_errno();
-        LOG_ERROR("aoo_client: couldn't get socket name (" << err << ")");
+        LOG_ERROR("aoo_client: couldn't get socket name: "
+                  << socket_strerror(err));
         return err;
     }
     ip_address local(temp.name(), udp_client_->port(), type_);
 
-    LOG_VERBOSE("aoo_client: successfully connected to "
-                << remote.name() << " on port " << remote.port());
-    LOG_VERBOSE("aoo_client: local address: " << local.name());
+    LOG_VERBOSE("aoo_client: successfully connected to " << remote);
+    LOG_VERBOSE("aoo_client: local address: " << local);
 
     udp_client_->start_handshake(local, std::move(result));
 
@@ -1255,14 +1256,15 @@ void client_imp::handle_relay_message(const osc::ReceivedMessage &msg){
         relayMsg.ArgumentsBegin()->AsBlob(data, size);
 
         LOG_DEBUG("aoo_client: got relayed peer message " << (const char *)data
-                  << " from " << addr.name() << ":" << addr.port());
+                  << " from " << addr);
 
         auto e = std::make_unique<client_imp::message_event>(
                     (const char *)data, size, addr);
 
         send_event(std::move(e));
     } else {
-        LOG_WARNING("aoo_client: got unexpected relay message " << relayMsg.AddressPattern());
+        LOG_WARNING("aoo_client: got unexpected relay message "
+                    << relayMsg.AddressPattern());
     }
 }
 
@@ -1542,7 +1544,7 @@ aoo_error udp_client::handle_message(const char *data, int32_t n,
         osc::ReceivedMessage msg(packet);
 
         LOG_DEBUG("aoo_client: handle UDP message " << msg.AddressPattern()
-            << " from " << addr.name() << ":" << addr.port());
+            << " from " << addr);
 
         if (type == AOO_TYPE_PEER){
             // peer message
@@ -1553,15 +1555,14 @@ aoo_error udp_client::handle_message(const char *data, int32_t n,
             // b) pings sent to alternative endpoint addresses
             if (!client_->handle_peer_message(msg, onset, addr)){
                 LOG_VERBOSE("aoo_client: ignoring UDP message "
-                            << msg.AddressPattern() << " from endpoint "
-                            << addr.name() << ":" << addr.port());
+                            << msg.AddressPattern() << " from endpoint " << addr);
             }
         } else if (type == AOO_TYPE_CLIENT){
             // server message
             if (is_server_address(addr)){
                 handle_server_message(msg, onset);
             } else {
-                LOG_WARNING("aoo_client: got message from unknown server " << addr.name());
+                LOG_WARNING("aoo_client: got message from unknown server " << addr);
             }
         } else if (type == AOO_TYPE_RELAY){
             handle_relay_message(msg);
@@ -1646,14 +1647,13 @@ void udp_client::handle_server_message(const osc::ReceivedMessage& msg, int onse
                 scoped_lock lock(mutex_);
                 for (auto& a : public_addrlist_){
                     if (a == addr){
-                        LOG_DEBUG("aoo_client: public address " << addr.name()
+                        LOG_DEBUG("aoo_client: public address " << addr
                                   << " already received");
                         return; // already received
                     }
                 }
                 public_addrlist_.push_back(addr);
-                LOG_VERBOSE("aoo_client: got public address "
-                            << addr.name() << " " << addr.port());
+                LOG_VERBOSE("aoo_client: got public address " << addr);
 
                 // check if we got all public addresses
                 // LATER improve this
@@ -1888,8 +1888,7 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
         client_->send_event(std::move(e));
 
         LOG_VERBOSE("aoo_client: successfully established connection with "
-                  << *this << " [" << addr.name() << "]:" << addr.port()
-                    << (relay() ? " (relayed)" : ""));
+                  << *this << " " << addr << (relay() ? " (relayed)" : ""));
     }
 
     auto pattern = msg.AddressPattern() + onset;
@@ -1906,7 +1905,7 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
             msg.ArgumentsBegin()->AsBlob(data, size);
 
             LOG_DEBUG("aoo_client: got message " << (const char *)data
-                      << " from " << addr.name() << ":" << addr.port());
+                      << " from " << addr);
 
             auto e = std::make_unique<client_imp::message_event>(
                         (const char *)data, size, addr);

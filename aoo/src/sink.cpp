@@ -481,13 +481,12 @@ aoo_error aoo::sink_imp::process(aoo_sample **data, int32_t nsamples, uint64_t t
         } else if (!it->is_active(*this)){
             // move source to garbage list (will be freed in send())
             if (it->is_inviting()){
-                LOG_VERBOSE("aoo::sink: invitation for " << it->address().name()
-                            << " " << it->address().port() << " timed out");
+                LOG_VERBOSE("aoo::sink: invitation for " << it->address()
+                            << " timed out");
                 sink_event e(AOO_INVITE_TIMEOUT_EVENT, *it);
                 send_event(e, AOO_THREAD_AUDIO);
             } else {
-                LOG_VERBOSE("aoo::sink: removed inactive source " << it->address().name()
-                            << " " << it->address().port());
+                LOG_VERBOSE("aoo::sink: removed inactive source " << it->address());
                 sink_event e(AOO_SOURCE_REMOVE_EVENT, *it);
                 send_event(e, AOO_THREAD_AUDIO);
             }

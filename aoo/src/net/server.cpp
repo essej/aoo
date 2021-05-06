@@ -460,11 +460,11 @@ bool server_imp::receive(){
         auto sock = accept(tcpsocket_, addr.address_ptr(), addr.length_ptr());
         if (sock >= 0){
             clients_.emplace_back(*this, sock, addr);
-            LOG_VERBOSE("aoo_server: accepted client (IP: "
-                        << addr.name() << ", port: " << addr.port() << ")");
+            LOG_VERBOSE("aoo_server: accepted client " << addr);
         } else {
             int err = socket_errno();
-            LOG_ERROR("aoo_server: couldn't accept client (" << err << ")");
+            LOG_ERROR("aoo_server: couldn't accept client " << addr
+                      << ": " << socket_strerror(err));
         }
     }
 
@@ -784,8 +784,7 @@ bool client_endpoint::match(const ip_address& addr) const {
 
 void client_endpoint::close(bool notify){
     if (socket_ >= 0){
-        LOG_VERBOSE("aoo_server: close client endpoint "
-                    << addr_.name() << " " << addr_.port());
+        LOG_VERBOSE("aoo_server: close client endpoint " << addr_);
         socket_close(socket_);
         socket_ = -1;
 
