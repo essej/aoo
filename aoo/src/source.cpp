@@ -267,6 +267,11 @@ aoo_error aoo::source_imp::control(int32_t ctl, intptr_t index,
         CHECKARG(int32_t);
         as<int32_t>(ptr) = redundancy_.load();
         break;
+#if USE_AOO_NET
+    case AOO_CTL_SET_CLIENT:
+        client_ = reinterpret_cast<aoo::net::client *>(index);
+        break;
+#endif
     // unknown
     default:
         LOG_WARNING("aoo_source: unsupported control " << ctl);
@@ -666,6 +671,21 @@ aoo_error source_imp::add_sink(const aoo_endpoint& ep, uint32_t flags)
         return AOO_ERROR_UNSPECIFIED;
     }
     // add sink descriptor
+#if USE_AOO_NET
+    // check if the peer needs to be relayed
+    if (client_){
+        aoo_bool relay;
+        if (client_->control(AOO_CTL_NEED_RELAY,
+                             reinterpret_cast<intptr_t>(&ep),
+                             &relay, sizeof(relay)) == AOO_OK)
+        {
+            if (relay == AOO_TRUE){
+                LOG_DEBUG("sink " << addr << " needs to be relayed");
+                flags |= AOO_ENDPOINT_RELAY;
+            }
+        }
+    }
+#endif
     sinks_.emplace_front(addr, ep.id, flags);
     needformat_.store(true, std::memory_order_release); // !
 
@@ -899,7 +919,8 @@ void source_imp::send_format(const sendfn& fn){
 
             msg << osc::BeginMessage(address) << id() << (int32_t)make_version()
                 << salt << f.header.nchannels << f.header.samplerate << f.header.blocksize
-                << f.header.codec << osc::Blob(options, size) << (int32_t)s.flags << osc::EndMessage;
+                << f.header.codec << osc::Blob(options, size) << (int32_t)s.flags
+                << osc::EndMessage;
 
             fn(msg.Data(), msg.Size(), s.address, s.flags);
         }

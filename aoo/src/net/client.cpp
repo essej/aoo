@@ -284,6 +284,8 @@ aoo_error aoo::net::client_imp::add_source(source *src, aoo_id id)
     }
 #endif
     sources_.push_back({ src, id });
+    src->control(AOO_CTL_SET_CLIENT,
+                 reinterpret_cast<intptr_t>(this), nullptr, 0);
     return AOO_OK;
 }
 
@@ -293,11 +295,12 @@ aoo_error aoo_net_client_remove_source(aoo_net_client *client,
     return client->remove_source(src);
 }
 
-aoo_error aoo::net::client_imp::remove_source(source *src)
+aoo_error aoo::net::client_imp::remove_source(aoo_source *src)
 {
     for (auto it = sources_.begin(); it != sources_.end(); ++it){
         if (it->source == src){
             sources_.erase(it);
+            src->control(AOO_CTL_SET_CLIENT, 0, nullptr, 0);
             return AOO_OK;
         }
     }
@@ -311,7 +314,7 @@ aoo_error aoo_net_client_add_sink(aoo_net_client *client,
     return client->add_sink(sink, id);
 }
 
-aoo_error aoo::net::client_imp::add_sink(sink *sink, aoo_id id)
+aoo_error aoo::net::client_imp::add_sink(aoo_sink *sink, aoo_id id)
 {
 #if 1
     for (auto& s : sinks_){
@@ -326,6 +329,8 @@ aoo_error aoo::net::client_imp::add_sink(sink *sink, aoo_id id)
     }
 #endif
     sinks_.push_back({ sink, id });
+    sink->control(AOO_CTL_SET_CLIENT,
+                  reinterpret_cast<intptr_t>(this), nullptr, 0);
     return AOO_OK;
 }
 
@@ -335,11 +340,12 @@ aoo_error aoo_net_client_remove_sink(aoo_net_client *client,
     return client->remove_sink(sink);
 }
 
-aoo_error aoo::net::client_imp::remove_sink(sink *sink)
+aoo_error aoo::net::client_imp::remove_sink(aoo_sink *sink)
 {
     for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
         if (it->sink == sink){
             sinks_.erase(it);
+            sink->control(AOO_CTL_SET_CLIENT, 0, nullptr, 0);
             return AOO_OK;
         }
     }
@@ -347,15 +353,15 @@ aoo_error aoo::net::client_imp::remove_sink(sink *sink)
     return AOO_ERROR_UNSPECIFIED;
 }
 
-aoo_error aoo_net_client_get_peer_address(aoo_net_client *client,
+aoo_error aoo_net_client_get_peer_by_name(aoo_net_client *client,
                                           const char *group, const char *user,
-                                          void *address, int32_t *addrlen, uint32_t *flags)
+                                          void *address, int32_t *addrlen)
 {
-    return client->get_peer_address(group, user, address, addrlen, flags);
+    return client->get_peer_by_name(group, user, address, addrlen);
 }
 
-aoo_error aoo::net::client_imp::get_peer_address(const char *group, const char *user,
-                                                 void *address, int32_t *addrlen, uint32_t *flags)
+aoo_error aoo::net::client_imp::get_peer_by_name(const char *group, const char *user,
+                                                  void *address, int32_t *addrlen)
 {
     peer_lock lock(peers_);
     for (auto& p : peers_){
@@ -369,34 +375,6 @@ aoo_error aoo::net::client_imp::get_peer_address(const char *group, const char *
                 memcpy(address, addr.address(), addr.length());
                 *addrlen = addr.length();
             }
-            if (flags){
-                *flags = p.flags();
-            }
-            return AOO_OK;
-        }
-    }
-    return AOO_ERROR_UNSPECIFIED;
-}
-
-aoo_error aoo_net_client_get_peer_info(aoo_net_client *client,
-                                       const void *address, int32_t addrlen,
-                                       aoo_net_peer_info *info)
-{
-    return client->get_peer_info(address, addrlen, info);
-}
-
-aoo_error aoo::net::client_imp::get_peer_info(const void *address, int32_t addrlen,
-                                              aoo_net_peer_info *info)
-{
-    peer_lock lock(peers_);
-    for (auto& p : peers_){
-        ip_address addr((const sockaddr *)address, addrlen);
-        if (p.match(addr)){
-            aoo::net::copy_string(p.group(), info->group_name, sizeof(info->group_name));
-            aoo::net::copy_string(p.user(), info->user_name, sizeof(info->user_name));
-            info->user_id = p.id();
-            info->flags = p.flags();
-
             return AOO_OK;
         }
     }
@@ -533,22 +511,22 @@ aoo_error aoo::net::client_imp::send(aoo_sendfn fn, void *user){
     };
 
     auto proxy = [](void *x, const char *data, int32_t n,
-            const void *address, int32_t addrlen, uint32_t flags){
-        auto y = static_cast<proxy_data *>(x);
+            const void *address, int32_t addrlen, uint32_t flags) -> int32_t {
+        auto p = static_cast<proxy_data *>(x);
 
         bool relay = flags & AOO_ENDPOINT_RELAY;
         if (relay){
             // relay via server
             ip_address addr((const sockaddr *)address, addrlen);
 
-            sendfn reply(y->fn, y->user);
+            sendfn reply(p->fn, p->user);
 
-            y->self->udp().send_peer_message(data, n, addr, reply, true);
+            p->self->udp().send_peer_message(data, n, addr, reply, true);
 
-            return (int32_t)0;
+            return AOO_OK;
         } else {
             // just forward
-            return y->fn(y->user, data, n, address, addrlen, flags);
+            return p->fn(p->user, data, n, address, addrlen, flags);
         }
     };
 
@@ -627,11 +605,36 @@ aoo_error aoo_net_client_ctl(aoo_net_client *client, int32_t ctl,
     return client->control(ctl, index, p, size);
 }
 
+template<typename T>
+T& as(void *p){
+    return *reinterpret_cast<T *>(p);
+}
+
+#define CHECKARG(type) assert(size == sizeof(type))
+
 aoo_error aoo::net::client_imp::control(int32_t ctl, intptr_t index,
                                         void *ptr, size_t size)
 {
-    LOG_WARNING("aoo_client: unsupported control " << ctl);
-    return AOO_ERROR_UNSPECIFIED;
+    switch(ctl){
+    case AOO_CTL_NEED_RELAY:
+    {
+        CHECKARG(aoo_bool);
+        auto ep = reinterpret_cast<const aoo_endpoint *>(index);
+        ip_address addr((sockaddr *)ep->address, ep->addrlen);
+        peer_lock lock(peers_);
+        for (auto& peer : peers_){
+            if (peer.match(addr)){
+                as<aoo_bool>(ptr) = peer.relay() ? AOO_TRUE : AOO_FALSE;
+                return AOO_OK;
+            }
+        }
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    default:
+        LOG_WARNING("aoo_client: unsupported control " << ctl);
+        return AOO_ERROR_UNSPECIFIED;
+    }
+    return AOO_OK;
 }
 
 namespace aoo {
@@ -1323,11 +1326,10 @@ void client_imp::handle_peer_remove(const osc::ReceivedMessage& msg){
     // that an AOO_NET_PEER_JOIN_EVENT has been sent.
     if (result->connected()){
         ip_address addr = result->address();
-        uint32_t flags = result->flags();
 
         auto e = std::make_unique<peer_event>(
             AOO_NET_PEER_LEAVE_EVENT, addr,
-            group.c_str(), user.c_str(), id, flags);
+            group.c_str(), user.c_str(), id);
         send_event(std::move(e));
     }
 
@@ -1438,7 +1440,7 @@ client_imp::ping_event::~ping_event()
 
 client_imp::peer_event::peer_event(int32_t type, const ip_address& addr,
                                    const char *group, const char *user,
-                                   int32_t id, uint32_t flags)
+                                   int32_t id)
 {
     peer_event_.type = type;
     peer_event_.address = copy_sockaddr(addr.address(), addr.length());
@@ -1446,7 +1448,6 @@ client_imp::peer_event::peer_event(int32_t type, const ip_address& addr,
     peer_event_.group_name = aoo::copy_string(group);
     peer_event_.user_name = aoo::copy_string(user);
     peer_event_.user_id = id;
-    peer_event_.flags = flags;
 }
 
 client_imp::peer_event::peer_event(int32_t type, const char *group,
@@ -1458,7 +1459,6 @@ client_imp::peer_event::peer_event(int32_t type, const char *group,
     peer_event_.group_name = aoo::copy_string(group);
     peer_event_.user_name = aoo::copy_string(user);
     peer_event_.user_id = id;
-    peer_event_.flags = 0;
 }
 
 
@@ -1774,7 +1774,7 @@ void peer::send(const sendfn& reply, time_tag now){
                 // try to relay traffic over server
                 start_time_ = now; // reset timer
                 last_pingtime_ = 0;
-                flags_ |= AOO_ENDPOINT_RELAY;
+                relay_ = true;
                 return;
             }
 
@@ -1883,7 +1883,7 @@ void peer::handle_message(const osc::ReceivedMessage &msg, int onset,
         // push event
         auto e = std::make_unique<client_imp::peer_event>(
                     AOO_NET_PEER_JOIN_EVENT, addr,
-                    group().c_str(), user().c_str(), id(), flags());
+                    group().c_str(), user().c_str(), id());
 
         client_->send_event(std::move(e));
 

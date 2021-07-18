@@ -59,7 +59,7 @@ public:
     virtual void unlock() = 0;
 
     virtual bool getSinkArg(sc_msg_iter *args, aoo::ip_address& addr,
-                            uint32_t &flags, aoo_id &id) const = 0;
+                            aoo_id &id) const = 0;
 
     virtual bool getSourceArg(sc_msg_iter *args, aoo::ip_address& addr,
                               aoo_id &id) const = 0;

@@ -111,12 +111,7 @@ void AooSend::handleEvent(const aoo_event *event){
         aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
 
         if (accept_){
-            aoo_net_peer_info info;
-            if (node()->client()->get_peer_info(e->ep.address, e->ep.addrlen, &info) == AOO_OK){
-                addSinkEvent(addr, e->ep.id, info.flags);
-            } else {
-                addSinkEvent(addr, e->ep.id, 0);
-            }
+            addSinkEvent(addr, e->ep.id, 0);
         } else {
             beginEvent(msg, "/invite", addr, e->ep.id);
             sendMsgRT(msg);
@@ -267,9 +262,8 @@ void aoo_send_add(AooSendUnit *unit, sc_msg_iter* args){
             owner.beginReply(msg, "/aoo/add", replyID);
 
             aoo::ip_address addr;
-            uint32_t flags;
             aoo_id id;
-            if (owner.node()->getSinkArg(&args, addr, flags, id)){
+            if (owner.node()->getSinkArg(&args, addr, id)){
                 auto channelOnset = args.geti();
 
                 // only send IP address on success
@@ -302,9 +296,8 @@ void aoo_send_remove(AooSendUnit *unit, sc_msg_iter* args){
 
             if (args.remain() > 0){
                 aoo::ip_address addr;
-                uint32_t flags;
                 aoo_id id;
-                if (owner.node()->getSinkArg(&args, addr, flags, id)){
+                if (owner.node()->getSinkArg(&args, addr, id)){
                     if (owner.removeSink(addr, id)){
                         // only send IP address on success
                         msg << addr.name() << addr.port() << id;
@@ -371,9 +364,8 @@ void aoo_send_channel(AooSendUnit *unit, sc_msg_iter* args){
             skipUnitCmd(&args);
 
             aoo::ip_address addr;
-            uint32_t flags;
             aoo_id id;
-            if (owner.node()->getSinkArg(&args, addr, flags, id)){
+            if (owner.node()->getSinkArg(&args, addr, id)){
                 auto channelOnset = args.geti();
                 aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
                 owner.source()->set_sink_channel_onset(ep, channelOnset);

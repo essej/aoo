@@ -470,7 +470,10 @@ typedef enum aoo_option
     // Use a more compact (and faster) binary format
     // for the audio data message
     AOO_CTL_SET_BINARY_DATA_MSG,
-    AOO_CTL_GET_BINARY_DATA_MSG
+    AOO_CTL_GET_BINARY_DATA_MSG,
+    // *** private ***
+    AOO_CTL_SET_CLIENT = 1000,
+    AOO_CTL_NEED_RELAY,
 } aoo_option;
 
 #define AOO_ARG(x) ((void *)&x), sizeof(x)

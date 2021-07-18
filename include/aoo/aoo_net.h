@@ -36,8 +36,6 @@ extern "C"
 {
 #endif
 
-#define AOO_NET_MAXNAMELEN 64
-
 /*////////// default values ////////////*/
 
 #ifndef AOO_NET_RELAY_ENABLE
@@ -146,7 +144,6 @@ typedef struct aoo_net_peer_event
     const char *group_name;
     const char *user_name;
     aoo_id user_id;
-    uint32_t flags;
 } aoo_net_peer_event;
 
 typedef aoo_net_peer_event aoo_net_group_event;
@@ -218,15 +215,6 @@ enum aoo_net_message_flags
     AOO_NET_MESSAGE_RELIABLE = 1
 };
 
-typedef struct aoo_net_peer_info
-{
-    char group_name[AOO_NET_MAXNAMELEN];
-    char user_name[AOO_NET_MAXNAMELEN];
-    aoo_id user_id;
-    uint32_t flags;
-    char reserved[56];
-} aoo_net_peer_info;
-
 #ifdef __cplusplus
 namespace aoo {
 namespace net {
@@ -270,14 +258,9 @@ AOO_API aoo_error aoo_net_client_remove_sink(aoo_net_client *client,
 // find peer by name and return its IP endpoint address
 // address: pointer to sockaddr_storage
 // addrlen: initialized with max. storage size, updated to actual size
-AOO_API aoo_error aoo_net_client_get_peer_address(aoo_net_client *client,
-                                                  const char *group, const char *user,
-                                                  void *address, int32_t *addrlen, uint32_t *flags);
-
-// find peer by its IP address and return additional info
-AOO_API aoo_error aoo_net_client_get_peer_info(aoo_net_client *client,
-                                               const void *address, int32_t addrlen,
-                                               aoo_net_peer_info *info);
+AOO_API aoo_error aoo_net_client_get_peer_by_name(aoo_net_client *client,
+                                                   const char *group, const char *user,
+                                                   void *address, int32_t *addrlen);
 
 // send a request to the AOO server (always thread safe)
 AOO_API aoo_error aoo_net_client_request(aoo_net_client *client,

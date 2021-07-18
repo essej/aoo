@@ -5,6 +5,9 @@
 #pragma once
 
 #include "aoo/aoo.hpp"
+#if USE_AOO_NET
+# include "aoo/aoo_net.hpp"
+#endif
 
 #include "common/lockfree.hpp"
 #include "common/net_utils.hpp"
@@ -126,7 +129,8 @@ struct net_packet : data_packet {
 
 class source_desc {
 public:
-    source_desc(const ip_address& addr, aoo_id id, double time);
+    source_desc(const ip_address& addr, aoo_id id,
+                uint32_t flags, double time);
 
     source_desc(const source_desc& other) = delete;
     source_desc& operator=(const source_desc& other) = delete;
@@ -218,7 +222,7 @@ private:
     // data
     const ip_address addr_;
     const aoo_id id_;
-    uint32_t flags_ = 0;
+    uint32_t flags_;
     int32_t salt_ = -1; // start with invalid stream ID!
 
     aoo_stream_state streamstate_;
@@ -340,6 +344,9 @@ private:
     int32_t nchannels_ = 0;
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
+#if USE_AOO_NET
+    aoo::net::client *client_ = nullptr;
+#endif
     // the sources
     using source_list = lockfree::simple_list<source_desc, aoo::allocator<source_desc>>;
     using source_lock = std::unique_lock<source_list>;

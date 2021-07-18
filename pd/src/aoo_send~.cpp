@@ -61,10 +61,10 @@ struct t_aoo_send
 };
 
 static void aoo_send_doaddsink(t_aoo_send *x, const aoo::ip_address& addr,
-                               aoo_id id, uint32_t flags)
+                               aoo_id id)
 {
     aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
-    x->x_source->add_sink(ep, flags);
+    x->x_source->add_sink(ep);
 
     // add sink to list
     x->x_sinks.push_back({addr, id});
@@ -222,12 +222,7 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t
         // because multiple invite events might get sent in a row.
         if (!aoo_send_findsink(x, addr, e->ep.id)){
             if (x->x_accept){
-                aoo_net_peer_info info;
-                if (x->x_node->client()->get_peer_info(e->ep.address, e->ep.addrlen, &info) == AOO_OK){
-                    aoo_send_doaddsink(x, addr, e->ep.id, info.flags);
-                } else {
-                    aoo_send_doaddsink(x, addr, e->ep.id, 0);
-                }
+                aoo_send_doaddsink(x, addr, e->ep.id);
             } else {
                 t_atom msg[3];
                 if (x->x_node->resolve_endpoint(addr, e->ep.id, 3, msg)){
@@ -286,13 +281,12 @@ static void aoo_send_accept(t_aoo_send *x, t_floatarg f)
 static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     ip_address addr;
-    uint32_t flags;
     aoo_id id;
     if (argc < 4){
         pd_error(x, "%s: too few arguments for 'channel' message", classname(x));
         return;
     }
-    if (x->x_node->get_sink_arg((t_pd *)x, argc, argv, addr, flags, id)){
+    if (x->x_node->get_sink_arg((t_pd *)x, argc, argv, addr, id)){
         int32_t chn = atom_getfloat(argv + 3);
     #if 1
         if (!aoo_send_findsink(x, addr, id)){
@@ -343,9 +337,8 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     }
 
     ip_address addr;
-    uint32_t flags;
     aoo_id id;
-    if (x->x_node->get_sink_arg((t_pd *)x, argc, argv, addr, flags, id)){
+    if (x->x_node->get_sink_arg((t_pd *)x, argc, argv, addr, id)){
         // check if sink exists
         if (aoo_send_findsink(x, addr, id)){
             if (argv[1].a_type == A_SYMBOL){
@@ -363,7 +356,7 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             return;
         }
 
-        aoo_send_doaddsink(x, addr, id, flags);
+        aoo_send_doaddsink(x, addr, id);
 
         if (argc > 3){
             aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
@@ -393,9 +386,8 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     }
 
     ip_address addr;
-    uint32_t flags;
     aoo_id id;
-    if (x->x_node->get_sink_arg((t_pd *)x, argc, argv, addr, flags, id)){
+    if (x->x_node->get_sink_arg((t_pd *)x, argc, argv, addr, id)){
         if (aoo_send_findsink(x, addr, id)){
             aoo_send_doremovesink(x, addr, id);
             verbose(0, "removed sink %s %d %d", addr.name(), addr.port(), id);

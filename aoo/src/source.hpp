@@ -5,6 +5,9 @@
 #pragma once
 
 #include "aoo/aoo.hpp"
+#if USE_AOO_NET
+# include "aoo/aoo_net.hpp"
+#endif
 
 #include "common/lockfree.hpp"
 #include "common/net_utils.hpp"
@@ -155,6 +158,9 @@ class source_imp final : public source {
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
     int32_t samplerate_ = 0;
+#if USE_AOO_NET
+    aoo::net::client *client_ = nullptr;
+#endif
     // audio encoder
     std::unique_ptr<encoder> encoder_;
     // state

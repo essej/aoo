@@ -280,6 +280,11 @@ aoo_error aoo::sink_imp::control(int32_t ctl, intptr_t index,
         CHECKARG(int32_t);
         as<int32_t>(ptr) = source_timeout_.load() * 1000.0;
         break;
+#if USE_AOO_NET
+    case AOO_CTL_SET_CLIENT:
+        client_ = reinterpret_cast<aoo::net::client *>(index);
+        break;
+#endif
     // unknown
     default:
         LOG_WARNING("aoo_sink: unsupported control " << ctl);
@@ -637,7 +642,24 @@ aoo::source_desc * sink_imp::get_source_arg(intptr_t index){
 
 source_desc * sink_imp::add_source(const ip_address& addr, aoo_id id){
     // add new source
-    sources_.emplace_front(addr, id, elapsed_time());
+    uint32_t flags = 0;
+#if USE_AOO_NET
+    // check if the peer needs to be relayed
+    if (client_){
+        aoo_endpoint ep { addr.address(), addr.length(), id };
+        aoo_bool relay;
+        if (client_->control(AOO_CTL_NEED_RELAY,
+                             reinterpret_cast<intptr_t>(&ep),
+                             &relay, sizeof(relay)) == AOO_OK)
+        {
+            if (relay == AOO_TRUE){
+                LOG_DEBUG("source " << addr << " needs to be relayed");
+                flags |= AOO_ENDPOINT_RELAY;
+            }
+        }
+    }
+#endif
+    sources_.emplace_front(addr, id, flags, elapsed_time());
     return &sources_.front();
 }
 
@@ -834,8 +856,9 @@ sink_event::sink_event(aoo_event_type _type, const source_desc &desc)
 
 /*////////////////////////// source_desc /////////////////////////////*/
 
-source_desc::source_desc(const ip_address& addr, aoo_id id, double time)
-    : addr_(addr), id_(id), last_packet_time_(time)
+source_desc::source_desc(const ip_address& addr, aoo_id id,
+                         uint32_t flags, double time)
+    : addr_(addr), id_(id), flags_(flags), last_packet_time_(time)
 {
     // reserve some memory, so we don't have to allocate memory
     // when pushing events in the audio thread.

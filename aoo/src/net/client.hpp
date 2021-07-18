@@ -73,9 +73,7 @@ public:
 
     int32_t id() const { return id_; }
 
-    uint32_t flags() const { return flags_; }
-
-    bool relay() const { return flags_ & AOO_ENDPOINT_RELAY; }
+    bool relay() const { return relay_; }
 
     const std::string& group() const { return group_; }
 
@@ -94,7 +92,7 @@ public:
 private:
     client_imp *client_;
     const int32_t id_;
-    uint32_t flags_ = 0;
+    bool relay_ = false;
     const std::string group_;
     const std::string user_;
     ip_address_list addresses_;
@@ -204,11 +202,8 @@ public:
 
     aoo_error remove_sink(sink *sink) override;
 
-    aoo_error get_peer_address(const char *group, const char *user,
-                               void *address, int32_t *addrlen, uint32_t *flags) override;
-
-    aoo_error get_peer_info(const void *address, int32_t addrlen,
-                            aoo_net_peer_info *info) override;
+    aoo_error get_peer_by_name(const char *group, const char *user,
+                                void *address, int32_t *addrlen) override;
 
     aoo_error send_request(aoo_net_request_type request, void *data,
                            aoo_net_callback callback, void *user) override;
@@ -404,7 +399,7 @@ public:
     {
         peer_event(int32_t type, const ip_address& addr,
                    const char *group, const char *user,
-                   int32_t id, uint32_t flags);
+                   int32_t id);
         peer_event(int32_t type, const char *group,
                    const char *user, int32_t id);
         ~peer_event();
