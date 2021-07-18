@@ -646,7 +646,7 @@ source_desc * sink_imp::add_source(const ip_address& addr, aoo_id id){
 #if USE_AOO_NET
     // check if the peer needs to be relayed
     if (client_){
-        aoo_endpoint ep { addr.address(), addr.length(), id };
+        aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
         aoo_bool relay;
         if (client_->control(AOO_CTL_NEED_RELAY,
                              reinterpret_cast<intptr_t>(&ep),

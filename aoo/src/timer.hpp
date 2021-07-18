@@ -5,6 +5,7 @@
 #include "common/sync.hpp"
 #include "common/time.hpp"
 
+#include <memory>
 #include <atomic>
 #include <array>
 
