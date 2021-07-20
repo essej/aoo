@@ -99,6 +99,14 @@ typedef struct aoo_net_group_request {
     const char *group_pwd;
 } aoo_net_group_request;
 
+/*////////////  server/client options/controls ///////////  */
+
+typedef enum aoo_net_option
+{
+    AOO_NET_CTL_GET_GROUP_COUNT = 0,
+    AOO_NET_CTL_GET_USER_COUNT
+} aoo_net_option;
+
 /*///////////////////////// events ///////////////////////////*/
 
 typedef enum aoo_net_event_type

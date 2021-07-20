@@ -10,6 +10,13 @@
 #include <algorithm>
 #include <iostream>
 
+#define CHECKARG(type) assert(size == sizeof(type))
+
+template<typename T>
+T& as(void *p){
+    return *reinterpret_cast<T *>(p);
+}
+
 #define AOO_NET_MSG_CLIENT_PING \
     AOO_MSG_DOMAIN AOO_NET_MSG_CLIENT AOO_NET_MSG_PING
 
@@ -49,9 +56,15 @@ aoo_net_server * aoo_net_server_new(int port, uint32_t flags, aoo_error *err) {
         return nullptr;
     }
 
-    // increase UDP receive buffer size to 16 MB
-    if (aoo::socket_setrecvbufsize(udpsocket, 1<<24) < 0){
-        aoo::socket_error_print("setrecvbufsize");
+    // try to increase UDP receive buffer size to 16 MB, but fallback to smaller if not possible
+    for (int shift=24; shift >= 20; --shift) {
+        if (aoo::socket_setrecvbufsize(udpsocket, 1 << shift) < 0){
+            //aoo::socket_error_print("setrecvbufsize");
+            LOG_VERBOSE("aoo_server: failed to set UDP recvbufsize to: " << (1<<shift));
+            continue;
+        }
+        LOG_VERBOSE("aoo_server: set UDP recvbufsize to: " << (1<<shift));
+        break;
     }
 
     // create TCP socket
@@ -185,8 +198,24 @@ aoo_error aoo_net_server_ctl(aoo_net_server *server, int32_t ctl,
 aoo_error aoo::net::server_imp::control(int32_t ctl, intptr_t index,
                                         void *ptr, size_t size)
 {
-    LOG_WARNING("aoo_server: unsupported control " << ctl);
-    return AOO_ERROR_UNSPECIFIED;
+    switch (ctl){
+        case AOO_NET_CTL_GET_GROUP_COUNT:
+        {
+            CHECKARG(int32_t);
+            as<int32_t>(ptr) = groups_.size();
+            break;
+        }
+        case AOO_NET_CTL_GET_USER_COUNT:
+        {
+            CHECKARG(int32_t);
+            as<int32_t>(ptr) = users_.size();
+            break;
+        }
+        default:
+            LOG_WARNING("aoo_server: unsupported control " << ctl);
+            return AOO_ERROR_UNSPECIFIED;
+    }
+    return AOO_OK;
 }
 
 namespace aoo {

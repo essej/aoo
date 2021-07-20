@@ -69,6 +69,20 @@ public:
     // ----------------------------------------------------------
     // type-safe convenience methods for frequently used controls
 
+    // get number of currently active groups
+    virtual int32_t get_group_count() {
+        int32_t cnt = 0;
+        control(AOO_NET_CTL_GET_GROUP_COUNT, 0, &cnt, sizeof(cnt));
+        return cnt;
+    }
+
+    // get number of currently active users
+    virtual int32_t get_user_count() {
+        int32_t cnt = 0;
+        control(AOO_NET_CTL_GET_USER_COUNT, 0, &cnt, sizeof(cnt));
+        return cnt;
+    }
+
     // *none*
 protected:
     ~server(){} // non-virtual!
