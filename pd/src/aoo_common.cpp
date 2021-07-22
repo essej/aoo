@@ -16,11 +16,9 @@
 
 #define CLAMP(x, a, b) ((x) < (a) ? (a) : (x) > (b) ? (b) : (x))
 
-namespace aoo {
-
 /*/////////////////////////// helper functions ///////////////////////////////////////*/
 
-int address_to_atoms(const ip_address& addr, int argc, t_atom *a)
+int address_to_atoms(const aoo::ip_address& addr, int argc, t_atom *a)
 {
     if (argc < 2){
         return 0;
@@ -30,7 +28,7 @@ int address_to_atoms(const ip_address& addr, int argc, t_atom *a)
     return 2;
 }
 
-int endpoint_to_atoms(const ip_address& addr, aoo_id id, int argc, t_atom *argv)
+int endpoint_to_atoms(const aoo::ip_address& addr, AooId id, int argc, t_atom *argv)
 {
     if (argc < 3 || !addr.valid()){
         return 0;
@@ -62,15 +60,15 @@ static bool getarg(const char *name, void *x, int which,
     return true;
 }
 
-void format_makedefault(aoo_format_storage &f, int nchannels)
+void format_makedefault(AooFormatStorage &f, int nchannels)
 {
-    auto& fmt = (aoo_format_pcm &)f;
-    fmt.header.codec = AOO_CODEC_PCM;
-    fmt.header.size = sizeof(aoo_format_pcm);
-    fmt.header.blocksize = 64;
-    fmt.header.samplerate = sys_getsr();
-    fmt.header.nchannels = nchannels;
-    fmt.bitdepth = AOO_PCM_FLOAT32;
+    auto& fmt = (AooFormatPcm &)f;
+    fmt.header.codec = kAooCodecPcm;
+    fmt.header.size = sizeof(AooFormatPcm);
+    fmt.header.blockSize = 64;
+    fmt.header.sampleRate = sys_getsr();
+    fmt.header.numChannels = nchannels;
+    fmt.bitDepth = kAooPcmFloat32;
 }
 
 static int32_t format_getparam(void *x, int argc, t_atom *argv, int which,
@@ -90,32 +88,32 @@ static int32_t format_getparam(void *x, int argc, t_atom *argv, int which,
     return def;
 }
 
-bool format_parse(t_pd *x, aoo_format_storage &f, int argc, t_atom *argv,
+bool format_parse(t_pd *x, AooFormatStorage &f, int argc, t_atom *argv,
                   int maxnumchannels)
 {
     t_symbol *codec = atom_getsymbolarg(0, argc, argv);
 
-    if (codec == gensym(AOO_CODEC_PCM)){
-        auto& fmt = (aoo_format_pcm &)f;
-        fmt.header.codec = AOO_CODEC_PCM;
-        fmt.header.size = sizeof(aoo_format_pcm);
-        fmt.header.nchannels = format_getparam(x, argc, argv, 1, "channels", maxnumchannels);
-        fmt.header.blocksize = format_getparam(x, argc, argv, 2, "blocksize", 64);
-        fmt.header.samplerate = format_getparam(x, argc, argv, 3, "samplerate", sys_getsr());
+    if (codec == gensym(kAooCodecPcm)){
+        auto& fmt = (AooFormatPcm &)f;
+        fmt.header.codec = kAooCodecPcm;
+        fmt.header.size = sizeof(AooFormatPcm);
+        fmt.header.numChannels = format_getparam(x, argc, argv, 1, "channels", maxnumchannels);
+        fmt.header.blockSize = format_getparam(x, argc, argv, 2, "blocksize", 64);
+        fmt.header.sampleRate = format_getparam(x, argc, argv, 3, "samplerate", sys_getsr());
 
         int bitdepth = format_getparam(x, argc, argv, 4, "bitdepth", 4);
         switch (bitdepth){
         case 2:
-            fmt.bitdepth = AOO_PCM_INT16;
+            fmt.bitDepth = kAooPcmInt16;
             break;
         case 3:
-            fmt.bitdepth = AOO_PCM_INT24;
+            fmt.bitDepth = kAooPcmInt24;
             break;
         case 4:
-            fmt.bitdepth = AOO_PCM_FLOAT32;
+            fmt.bitDepth = kAooPcmFloat32;
             break;
         case 8:
-            fmt.bitdepth = AOO_PCM_FLOAT64;
+            fmt.bitDepth = kAooPcmFloat64;
             break;
         default:
             pd_error(x, "%s: bad bitdepth argument %d", classname(x), bitdepth);
@@ -123,13 +121,13 @@ bool format_parse(t_pd *x, aoo_format_storage &f, int argc, t_atom *argv,
         }
     }
 #if USE_CODEC_OPUS
-    else if (codec == gensym(AOO_CODEC_OPUS)){
-        auto &fmt = (aoo_format_opus &)f;
-        fmt.header.codec = AOO_CODEC_OPUS;
-        fmt.header.size = sizeof(aoo_format_opus);
-        fmt.header.nchannels = format_getparam(x, argc, argv, 1, "channels", maxnumchannels);
-        fmt.header.blocksize = format_getparam(x, argc, argv, 2, "blocksize", 480); // 10ms
-        fmt.header.samplerate = format_getparam(x, argc, argv, 3, "samplerate", 48000);
+    else if (codec == gensym(kAooCodecOpus)){
+        auto &fmt = (AooFormatOpus &)f;
+        fmt.header.codec = kAooCodecOpus;
+        fmt.header.size = sizeof(AooFormatOpus);
+        fmt.header.numChannels = format_getparam(x, argc, argv, 1, "channels", maxnumchannels);
+        fmt.header.blockSize = format_getparam(x, argc, argv, 2, "blocksize", 480); // 10ms
+        fmt.header.sampleRate = format_getparam(x, argc, argv, 3, "samplerate", 48000);
 
         // bitrate ("auto", "max" or float)
         if (argc > 4){
@@ -166,35 +164,35 @@ bool format_parse(t_pd *x, aoo_format_storage &f, int argc, t_atom *argv,
         if (argc > 6){
             t_symbol *type = atom_getsymbol(argv + 6);
             if (type == gensym("auto")){
-                fmt.signal_type = OPUS_AUTO;
+                fmt.signalType = OPUS_AUTO;
             } else if (type == gensym("music")){
-                fmt.signal_type = OPUS_SIGNAL_MUSIC;
+                fmt.signalType = OPUS_SIGNAL_MUSIC;
             } else if (type == gensym("voice")){
-                fmt.signal_type = OPUS_SIGNAL_VOICE;
+                fmt.signalType = OPUS_SIGNAL_VOICE;
             } else {
                 pd_error(x,"%s: unsupported signal type '%s'",
                          classname(x), type->s_name);
                 return false;
             }
         } else {
-            fmt.signal_type = OPUS_AUTO;
+            fmt.signalType = OPUS_AUTO;
         }
         // application type ("auto", "audio", "voip", "lowdelay"
         if (argc > 7){
             t_symbol *type = atom_getsymbol(argv + 7);
             if (type == gensym("auto") || type == gensym("audio")){
-                fmt.application_type = OPUS_APPLICATION_AUDIO;
+                fmt.applicationType = OPUS_APPLICATION_AUDIO;
             } else if (type == gensym("voip")){
-                fmt.application_type = OPUS_APPLICATION_VOIP;
+                fmt.applicationType = OPUS_APPLICATION_VOIP;
             } else if (type == gensym("lowdelay")){
-                fmt.application_type = OPUS_APPLICATION_RESTRICTED_LOWDELAY;
+                fmt.applicationType = OPUS_APPLICATION_RESTRICTED_LOWDELAY;
             } else {
                 pd_error(x,"%s: unsupported application type '%s'",
                          classname(x), type->s_name);
                 return false;
             }
         } else {
-            fmt.application_type = OPUS_APPLICATION_AUDIO;
+            fmt.applicationType = OPUS_APPLICATION_AUDIO;
         }
     }
 #endif
@@ -205,37 +203,37 @@ bool format_parse(t_pd *x, aoo_format_storage &f, int argc, t_atom *argv,
     return true;
 }
 
-int format_to_atoms(const aoo_format &f, int argc, t_atom *argv)
+int format_to_atoms(const AooFormat &f, int argc, t_atom *argv)
 {
     if (argc < 3){
-        error("aoo_format_toatoms: too few atoms!");
+        error("AooFormat_toatoms: too few atoms!");
         return 0;
     }
     t_symbol *codec = gensym(f.codec);
     SETSYMBOL(argv, codec);
-    SETFLOAT(argv + 1, f.nchannels);
-    SETFLOAT(argv + 2, f.blocksize);
-    SETFLOAT(argv + 3, f.samplerate);
+    SETFLOAT(argv + 1, f.numChannels);
+    SETFLOAT(argv + 2, f.blockSize);
+    SETFLOAT(argv + 3, f.sampleRate);
 
-    if (codec == gensym(AOO_CODEC_PCM)){
+    if (codec == gensym(kAooCodecPcm)){
         // pcm <blocksize> <samplerate> <channels> <bitdepth>
         if (argc < 5){
             error("format_to_atoms: too few atoms for pcm format!");
             return 0;
         }
-        auto& fmt = (aoo_format_pcm &)f;
+        auto& fmt = (AooFormatPcm &)f;
         int nbits;
-        switch (fmt.bitdepth){
-        case AOO_PCM_INT16:
+        switch (fmt.bitDepth){
+        case kAooPcmInt16:
             nbits = 2;
             break;
-        case AOO_PCM_INT24:
+        case kAooPcmInt24:
             nbits = 3;
             break;
-        case AOO_PCM_FLOAT32:
+        case kAooPcmFloat32:
             nbits = 4;
             break;
-        case AOO_PCM_FLOAT64:
+        case kAooPcmFloat64:
             nbits = 8;
             break;
         default:
@@ -245,13 +243,13 @@ int format_to_atoms(const aoo_format &f, int argc, t_atom *argv)
         return 5;
     }
 #if USE_CODEC_OPUS
-    else if (codec == gensym(AOO_CODEC_OPUS)){
+    else if (codec == gensym(kAooCodecOpus)){
         // opus <blocksize> <samplerate> <channels> <bitrate> <complexity> <signaltype> <application>
         if (argc < 8){
             error("format_to_atoms: too few atoms for opus format!");
             return 0;
         }
-        auto& fmt = (aoo_format_opus &)f;
+        auto& fmt = (AooFormatOpus &)f;
     #if 0
         SETFLOAT(argv + 4, fmt.bitrate);
     #else
@@ -275,7 +273,7 @@ int format_to_atoms(const aoo_format &f, int argc, t_atom *argv)
         SETFLOAT(argv + 5, fmt.complexity);
         // signal type
         t_symbol *signaltype;
-        switch (fmt.signal_type){
+        switch (fmt.signalType){
         case OPUS_SIGNAL_MUSIC:
             signaltype = gensym("music");
             break;
@@ -289,7 +287,7 @@ int format_to_atoms(const aoo_format &f, int argc, t_atom *argv)
         SETSYMBOL(argv + 6, signaltype);
         // application type
         t_symbol *apptype;
-        switch (fmt.application_type){
+        switch (fmt.applicationType){
         case OPUS_APPLICATION_VOIP:
             apptype = gensym("voip");
             break;
@@ -309,5 +307,3 @@ int format_to_atoms(const aoo_format &f, int argc, t_atom *argv)
     }
     return 0;
 }
-
-} // aoo

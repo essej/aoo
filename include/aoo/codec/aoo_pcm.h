@@ -4,32 +4,33 @@
 
 #pragma once
 
-#include "aoo/aoo.h"
+#include "aoo/aoo_defines.h"
 
-#ifdef __cplusplus
-extern "C"
+AOO_PACK_BEGIN
+
+//--------------------------------//
+
+// PCM codec
+
+#define kAooCodecPcm "pcm"
+
+typedef AooInt32 AooPcmBitDepth;
+
+enum AooPcmBitDepthValues
 {
-#endif
-
-/*/////////////////// PCM codec ////////////////////////*/
-
-#define AOO_CODEC_PCM "pcm"
-
-enum aoo_pcm_bitdepth
-{
-    AOO_PCM_INT16,
-    AOO_PCM_INT24,
-    AOO_PCM_FLOAT32,
-    AOO_PCM_FLOAT64,
-    AOO_PCM_BITDEPTH_SIZE
+    kAooPcmInt16 = 0,
+    kAooPcmInt24,
+    kAooPcmFloat32,
+    kAooPcmFloat64,
+    kAooPcmBitDepthSize
 };
 
-typedef struct aoo_format_pcm
+typedef AOO_STRUCT AooFormatPcm
 {
-    aoo_format header;
-    int32_t bitdepth; // aoo_pcm_bitdepth
-} aoo_format_pcm;
+    AooFormat header;
+    AooPcmBitDepth bitDepth;
+} AooFormatPcm;
 
-#ifdef __cplusplus
-} // extern "C"
-#endif
+//--------------------------------//
+
+AOO_PACK_END

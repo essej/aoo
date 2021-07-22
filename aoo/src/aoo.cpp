@@ -1,7 +1,7 @@
 #include "aoo/aoo.h"
 #if USE_AOO_NET
-#include "aoo/aoo_net.h"
-#include "common/net_utils.hpp"
+# include "aoo/aoo_net.h"
+# include "common/net_utils.hpp"
 #endif
 
 #include "imp.hpp"
@@ -13,7 +13,7 @@
 
 #include "aoo/codec/aoo_pcm.h"
 #if USE_CODEC_OPUS
-#include "aoo/codec/aoo_opus.h"
+# include "aoo/codec/aoo_opus.h"
 #endif
 
 #include <iostream>
@@ -71,7 +71,7 @@ namespace aoo {
 std::atomic<int64_t> total_memory{0};
 #endif
 
-static aoo_allocator g_allocator {
+static AooAllocator g_allocator {
     [](size_t n, void *){
     #if AOO_DEBUG_MEMORY
         auto total = total_memory.fetch_add(n, std::memory_order_relaxed) + n;
@@ -104,21 +104,17 @@ void deallocate(void *ptr, size_t size){
 
 #endif
 
-#if AOO_CUSTOM_ALLOCATOR
-void aoo_set_allocator(const aoo_allocator *alloc){
-    aoo::g_allocator = *alloc;
-}
-#endif
-
 /*//////////////////// Log ////////////////////////////*/
 
 #define LOG_MUTEX 1
+
+namespace aoo {
 
 #if LOG_MUTEX
 static aoo::sync::mutex g_log_mutex;
 #endif
 
-static void cerr_logfunction(const char *msg, int32_t level, void *ctx){
+static void cerr_logfunction(AooLogLevel level, const char *msg, ...){
 #if LOG_MUTEX
     aoo::sync::scoped_lock<aoo::sync::mutex> lock(g_log_mutex);
 #endif
@@ -126,45 +122,39 @@ static void cerr_logfunction(const char *msg, int32_t level, void *ctx){
     std::flush(std::cerr);
 }
 
-static aoo_logfunction g_logfunction = cerr_logfunction;
-static void *g_logcontext = nullptr;
+static AooLogFunc g_logfunction = cerr_logfunction;
 
-void aoo_set_logfunction(aoo_logfunction f, void *context){
-    g_logfunction = f;
-    g_logcontext = context;
+void log_message(AooLogLevel level, const std::string &msg){
+    g_logfunction(level, msg.c_str());
 }
 
-static const char *errmsg[] = {
+} // aoo
+
+static std::vector<const char *> errmsg = {
     // TODO
-    "undefined"
+    "unknown error",    // -1
+    "no error",         // 0
+    "not implemented",
+    "bad argument"
 };
 
-const char *aoo_error_string(aoo_error e){
-    if (e == AOO_OK){
-        return "no error";
+const char *aoo_strerror(AooError e){
+    if (e >= 0 && e < (AooError)errmsg.size()){
+        return errmsg[e + 1];
     } else {
-        return "unspecified error"; // TODO
+        return errmsg[0];
     }
-}
-
-namespace aoo {
-
-Log::~Log(){
-    stream_ << "\n";
-    std::string msg = stream_.str();
-    g_logfunction(msg.c_str(), level_, g_logcontext);
-}
-
 }
 
 /*//////////////////// OSC ////////////////////////////*/
 
-aoo_error aoo_parse_pattern(const char *msg, int32_t n,
-                            aoo_type *type, aoo_id *id, int32_t *offset)
+AooError AOO_CALL aoo_parsePattern(
+        const AooByte *msg, AooInt32 size,
+        AooType *type, AooId *id, AooInt32 *offset)
 {
     int32_t count = 0;
-    if (n >= AOO_BIN_MSG_HEADER_SIZE &&
-        !memcmp(msg, AOO_BIN_MSG_DOMAIN, AOO_BIN_MSG_DOMAIN_SIZE))
+    if (size >= kAooBinMsgHeaderSize &&
+        !memcmp(msg, kAooBinMsgDomain, kAooBinMsgDomainSize))
     {
         // domain (int32), type (int16), cmd (int16), id (int32) ...
         *type = aoo::from_bytes<int16_t>(msg + 4);
@@ -172,45 +162,45 @@ aoo_error aoo_parse_pattern(const char *msg, int32_t n,
         *id = aoo::from_bytes<int32_t>(msg + 8);
         *offset = 12;
 
-        return AOO_OK;
-    } else if (n >= AOO_MSG_DOMAIN_LEN
-        && !memcmp(msg, AOO_MSG_DOMAIN, AOO_MSG_DOMAIN_LEN))
+        return kAooOk;
+    } else if (size >= kAooMsgDomainLen
+        && !memcmp(msg, kAooMsgDomain, kAooMsgDomainLen))
     {
-        count += AOO_MSG_DOMAIN_LEN;
-        if (n >= (count + AOO_MSG_SOURCE_LEN)
-            && !memcmp(msg + count, AOO_MSG_SOURCE, AOO_MSG_SOURCE_LEN))
+        count += kAooMsgDomainLen;
+        if (size >= (count + kAooMsgSourceLen)
+            && !memcmp(msg + count, kAooMsgSource, kAooMsgSourceLen))
         {
-            *type = AOO_TYPE_SOURCE;
-            count += AOO_MSG_SOURCE_LEN;
-        } else if (n >= (count + AOO_MSG_SINK_LEN)
-            && !memcmp(msg + count, AOO_MSG_SINK, AOO_MSG_SINK_LEN))
+            *type = kAooTypeSource;
+            count += kAooMsgSourceLen;
+        } else if (size >= (count + kAooMsgSinkLen)
+            && !memcmp(msg + count, kAooMsgSink, kAooMsgSinkLen))
         {
-            *type = AOO_TYPE_SINK;
-            count += AOO_MSG_SINK_LEN;
+            *type = kAooTypeSink;
+            count += kAooMsgSinkLen;
         } else {
         #if USE_AOO_NET
-            if (n >= (count + AOO_NET_MSG_CLIENT_LEN)
-                && !memcmp(msg + count, AOO_NET_MSG_CLIENT, AOO_NET_MSG_CLIENT_LEN))
+            if (size >= (count + kAooNetMsgClientLen)
+                && !memcmp(msg + count, kAooNetMsgClient, kAooNetMsgClientLen))
             {
-                *type = AOO_TYPE_CLIENT;
-                count += AOO_NET_MSG_CLIENT_LEN;
-            } else if (n >= (count + AOO_NET_MSG_SERVER_LEN)
-                && !memcmp(msg + count, AOO_NET_MSG_SERVER, AOO_NET_MSG_SERVER_LEN))
+                *type = kAooTypeClient;
+                count += kAooNetMsgClientLen;
+            } else if (size >= (count + kAooNetMsgServerLen)
+                && !memcmp(msg + count, kAooNetMsgServer, kAooNetMsgServerLen))
             {
-                *type = AOO_TYPE_SERVER;
-                count += AOO_NET_MSG_SERVER_LEN;
-            } else if (n >= (count + AOO_NET_MSG_PEER_LEN)
-                && !memcmp(msg + count, AOO_NET_MSG_PEER, AOO_NET_MSG_PEER_LEN))
+                *type = kAooTypeServer;
+                count += kAooNetMsgServerLen;
+            } else if (size >= (count + kAooNetMsgPeerLen)
+                && !memcmp(msg + count, kAooNetMsgPeer, kAooNetMsgPeerLen))
             {
-                *type = AOO_TYPE_PEER;
-                count += AOO_NET_MSG_PEER_LEN;
-            } else if (n >= (count + AOO_NET_MSG_RELAY_LEN)
-                && !memcmp(msg + count, AOO_NET_MSG_RELAY, AOO_NET_MSG_RELAY_LEN))
+                *type = kAooTypePeer;
+                count += kAooNetMsgPeerLen;
+            } else if (size >= (count + kAooNetMsgRelayLen)
+                && !memcmp(msg + count, kAooNetMsgRelay, kAooNetMsgRelayLen))
             {
-                *type = AOO_TYPE_RELAY;
-                count += AOO_NET_MSG_RELAY_LEN;
+                *type = kAooTypeRelay;
+                count += kAooNetMsgRelayLen;
             } else {
-                return AOO_ERROR_UNSPECIFIED;
+                return kAooErrorUnknown;
             }
 
             if (offset){
@@ -218,69 +208,69 @@ aoo_error aoo_parse_pattern(const char *msg, int32_t n,
             }
         #endif // USE_AOO_NET
 
-            return AOO_OK;
+            return kAooOk;
         }
 
         // /aoo/source or /aoo/sink
         if (id){
             int32_t skip = 0;
-            if (sscanf(msg + count, "/%d%n", id, &skip) > 0){
+            if (sscanf((const char *)(msg + count), "/%d%n", id, &skip) > 0){
                 count += skip;
             } else {
                 // TODO only print relevant part of OSC address string
                 LOG_ERROR("aoo_parse_pattern: bad ID " << (msg + count));
-                return AOO_ERROR_UNSPECIFIED;
+                return kAooErrorUnknown;
             }
         } else {
-            return AOO_ERROR_UNSPECIFIED;
+            return kAooErrorUnknown;
         }
 
         if (offset){
             *offset = count;
         }
-        return AOO_OK;
+        return kAooOk;
     } else {
-        return AOO_ERROR_UNSPECIFIED; // not an AoO message
+        return kAooErrorUnknown; // not an AoO message
     }
 }
 
 // OSC time stamp (NTP time)
-uint64_t aoo_osctime_now(void){
+uint64_t AOO_CALL aoo_getCurrentNtpTime(void){
     return aoo::time_tag::now();
 }
 
-double aoo_osctime_to_seconds(uint64_t t){
+double AOO_CALL aoo_osctime_to_seconds(uint64_t t){
     return aoo::time_tag(t).to_seconds();
 }
 
-uint64_t aoo_osctime_from_seconds(double s){
+uint64_t AOO_CALL aoo_osctime_from_seconds(double s){
     return aoo::time_tag::from_seconds(s);
 }
 
-double aoo_osctime_duration(uint64_t t1, uint64_t t2){
+double AOO_CALL aoo_ntpTimeDuration(uint64_t t1, uint64_t t2){
     return aoo::time_tag::duration(t1, t2);
 }
 
 /*/////////////// version ////////////////////*/
 
-void aoo_version(int32_t *major, int32_t *minor,
-                 int32_t *patch, int32_t *pre){
-    if (major) *major = AOO_VERSION_MAJOR;
-    if (minor) *minor = AOO_VERSION_MINOR;
-    if (patch) *patch = AOO_VERSION_PATCH;
-    if (pre) *pre = AOO_VERSION_PRERELEASE;
+void aoo_getVersion(int32_t *major, int32_t *minor,
+                    int32_t *patch, int32_t *test){
+    if (major) *major = kAooVersionMajor;
+    if (minor) *minor = kAooVersionMinor;
+    if (patch) *patch = kAooVersionPatch;
+    if (test) *test = kAooVersionTest;
 }
 
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)
 
-const char *aoo_version_string(){
-    return STR(AOO_VERSION_MAJOR) "." STR(AOO_VERSION_MINOR)
-    #if AOO_VERSION_PATCH > 0
-        "." STR(AOO_VERSION_PATCH)
+const char *aoo_getVersionString() {
+    return STR(kAooVersionMajor) "." STR(kAooVersionMinor)
+    #if kAooVersionPatch > 0
+        "." STR(kAooVersionPatch)
     #endif
-    #if AOO_VERSION_PRERELEASE > 0
-       "-pre" STR(AOO_VERSION_PRERELEASE)
+    #if kAooVersionTest > 0
+       "-test" STR(kAooVersionTest)
     #endif
         ;
 }
@@ -292,7 +282,7 @@ bool check_version(uint32_t version){
     auto minor = (version >> 16) & 255;
     auto bugfix = (version >> 8) & 255;
 
-    if (major != AOO_VERSION_MAJOR){
+    if (major != kAooVersionMajor){
         return false;
     }
 
@@ -301,8 +291,9 @@ bool check_version(uint32_t version){
 
 uint32_t make_version(){
     // make version: major, minor, bugfix, [protocol]
-    return ((uint32_t)AOO_VERSION_MAJOR << 24) | ((uint32_t)AOO_VERSION_MINOR << 16)
-            | ((uint32_t)AOO_VERSION_PATCH << 8);
+    return ((uint32_t)kAooVersionMajor << 24)
+            | ((uint32_t)kAooVersionMinor << 16)
+            | ((uint32_t)kAooVersionPatch << 8);
 }
 
 /*//////////////////// memory /////////////////*/
@@ -396,21 +387,21 @@ const aoo::codec * find_codec(const char * name){
 
 } // aoo
 
-aoo_error aoo_register_codec(const char *name, const aoo_codec *codec){
+AooError AOO_CALL aoo_registerCodec(const char *name, const AooCodecInterface *codec){
     if (aoo::g_codec_dict.count(name) != 0){
         LOG_WARNING("aoo: codec " << name << " already registered!");
-        return AOO_ERROR_UNSPECIFIED;
+        return kAooErrorUnknown;
     }
-    aoo::g_codec_dict[name] = std::make_unique<aoo::codec>(codec);
+    aoo::g_codec_dict[name] = std::make_unique<aoo::codec>(name, codec);
     LOG_VERBOSE("aoo: registered codec '" << name << "'");
-    return AOO_OK;
+    return kAooOk;
 }
 
 /*/////////////// (de)initialize //////////////////*/
 
-void aoo_codec_pcm_setup(aoo_codec_registerfn fn, const aoo_allocator *alloc);
+void aoo_pcmCodecSetup(AooCodecRegisterFunc fn, AooLogFunc log, const AooAllocator *alloc);
 #if USE_CODEC_OPUS
-void aoo_codec_opus_setup(aoo_codec_registerfn fn, const aoo_allocator *alloc);
+void aoo_opusCodecSetup(AooCodecRegisterFunc fn, AooLogFunc log, const AooAllocator *alloc);
 #endif
 
 #if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
@@ -419,7 +410,7 @@ void aoo_codec_opus_setup(aoo_codec_registerfn fn, const aoo_allocator *alloc);
 #define ALLOCATOR nullptr
 #endif
 
-void aoo_initialize(){
+void AOO_CALL aoo_initialize(){
     static bool initialized = false;
     if (!initialized){
     #if USE_AOO_NET
@@ -427,16 +418,28 @@ void aoo_initialize(){
     #endif
 
         // register codecs
-        aoo_codec_pcm_setup(aoo_register_codec, ALLOCATOR);
+        aoo_pcmCodecSetup(aoo_registerCodec, aoo::g_logfunction, ALLOCATOR);
 
     #if USE_CODEC_OPUS
-        aoo_codec_opus_setup(aoo_register_codec, ALLOCATOR);
+        aoo_opusCodecSetup(aoo_registerCodec, aoo::g_logfunction, ALLOCATOR);
     #endif
 
         initialized = true;
     }
 }
 
-void aoo_terminate() {}
+void AOO_CALL aoo_initializeEx(AooLogFunc log, const AooAllocator *alloc) {
+    if (log) {
+        aoo::g_logfunction = log;
+    }
+#if AOO_CUSTOM_ALLOCATOR
+    if (alloc) {
+        aoo::g_allocator = *alloc;
+    }
+#endif
+    aoo_initialize();
+}
+
+void AOO_CALL aoo_terminate() {}
 
 

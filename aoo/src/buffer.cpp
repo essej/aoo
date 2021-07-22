@@ -10,7 +10,7 @@ namespace aoo {
 /*////////////////////////// sent_block /////////////////////////////*/
 
 void sent_block::set(int32_t seq, double sr,
-                     const char *data, int32_t nbytes,
+                     const AooByte *data, int32_t nbytes,
                      int32_t nframes, int32_t framesize)
 {
     sequence = seq;
@@ -20,7 +20,7 @@ void sent_block::set(int32_t seq, double sr,
     buffer_.assign(data, data + nbytes);
 }
 
-int32_t sent_block::get_frame(int32_t which, char *data, int32_t n){
+int32_t sent_block::get_frame(int32_t which, AooByte *data, int32_t n){
     assert(framesize_ > 0 && numframes_ > 0);
     if (which >= 0 && which < numframes_){
         auto onset = which * framesize_;
@@ -198,7 +198,8 @@ int32_t received_block::resend_count() const {
     return numtries_;
 }
 
-void received_block::add_frame(int32_t which, const char *data, int32_t n){
+void received_block::add_frame(int32_t which,
+                               const AooByte *data, int32_t n){
     assert(!buffer_.empty());
     assert(which < numframes_);
     if (which == numframes_ - 1){
@@ -208,7 +209,8 @@ void received_block::add_frame(int32_t which, const char *data, int32_t n){
         std::copy(data, data + n, buffer_.end() - n);
     } else {
     #if AOO_DEBUG_JITTER_BUFFER
-        DO_LOG_DEBUG("jitter buffer: copy frame " << which << " with " << n << " bytes");
+        DO_LOG_DEBUG("jitter buffer: copy frame " << which
+                     << " with " << n << " bytes");
     #endif
         std::copy(data, data + n, buffer_.data() + (which * n));
         framesize_ = n; // LATER allow varying framesizes

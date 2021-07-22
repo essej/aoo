@@ -57,7 +57,8 @@ set(COMMON "../common")
 
 file(GLOB AOO_HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp"
      "${INCLUDE}/codec/aoo_pcm.h" "src/*.hpp" "${COMMON}/*.hpp")
-file(GLOB AOO_SRC "src/*.cpp" "src/codec/pcm.cpp" "${COMMON}/*.cpp")
+
+ file(GLOB AOO_SRC "src/*.cpp" "src/codec/pcm.cpp" "${COMMON}/*.cpp")
 
 if (CODEC_OPUS)
     list(APPEND AOO_HEADERS "${INCLUDE}/codec/aoo_opus.h")
@@ -83,7 +84,7 @@ if (BUILD_AOO_SHARED)
     add_library(${AOO_SHARED} SHARED ${AOO_HEADERS} ${AOO_SRC})
 
     target_compile_definitions(${AOO_SHARED} PUBLIC "-DAOO_BUILD" ${OPTIONS})
-    if (WIN32 OR MINGW)
+    if (WIN32)
         target_compile_definitions(${AOO_SHARED} PUBLIC "-DDLL_EXPORT")
         target_link_libraries(${AOO_SHARED} "ws2_32")
     endif()

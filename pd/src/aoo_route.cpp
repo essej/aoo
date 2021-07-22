@@ -4,8 +4,6 @@
 
 #include "aoo_common.hpp"
 
-using namespace aoo;
-
 static t_class *aoo_route_class;
 
 struct t_desc {
@@ -26,7 +24,7 @@ struct t_aoo_route
 static void aoo_route_list(t_aoo_route *x, t_symbol *s, int argc, t_atom *argv)
 {
     // copy address pattern string
-    char buf[64];
+    AooByte buf[64];
     int count = 0;
     for (; count < argc && count < 63; ++count){
         char c = (int)atom_getfloat(argv + count);
@@ -41,12 +39,12 @@ static void aoo_route_list(t_aoo_route *x, t_symbol *s, int argc, t_atom *argv)
     bool success = false;
 
     // parse address pattern
-    aoo_type type;
-    aoo_id id;
-    int32_t onset;
-    if (aoo_parse_pattern(buf, count, &type, &id, &onset) == AOO_OK){
-        t_symbol *sym = (type == AOO_TYPE_SOURCE) ? gensym("source") :
-                        (type == AOO_TYPE_SINK) ? gensym("sink") : gensym("");
+    AooType type;
+    AooId id;
+    AooInt32 onset;
+    if (aoo_parsePattern(buf, count, &type, &id, &onset) == kAooOk){
+        t_symbol *sym = (type == kAooTypeSource) ? gensym("source") :
+                        (type == kAooTypeSink) ? gensym("sink") : gensym("");
 
         for (int i = 0; i < x->x_n; ++i){
             auto& sel = x->x_vec[i].sel;
@@ -79,7 +77,7 @@ t_aoo_route::t_aoo_route(int argc, t_atom *argv)
         if (argc){
             x_vec[i].sel = argv[i];
         } else {
-            SETFLOAT(&x_vec[i].sel, AOO_ID_NONE);
+            SETFLOAT(&x_vec[i].sel, kAooIdNone);
         }
         x_vec[i].outlet = outlet_new(&x_obj, 0);
     }

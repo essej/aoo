@@ -4,14 +4,13 @@
 
 #pragma once
 
-#include "aoo/aoo_net.hpp"
+#include "aoo/aoo_server.hpp"
 
 #include "common/sync.hpp"
 #include "common/utils.hpp"
 #include "common/lockfree.hpp"
 #include "common/net_utils.hpp"
 
-#include "commands.hpp"
 #include "../imp.hpp"
 #include "SLIP.hpp"
 
@@ -90,7 +89,7 @@ private:
     SLIP<aoo::allocator<uint8_t>> sendbuffer_;
     SLIP<aoo::allocator<uint8_t>> recvbuffer_;
 
-    bool handle_message(const char *data, int32_t n);
+    bool handle_message(const AooByte *data, int32_t n);
 
     bool handle_bundle(const osc::ReceivedBundle& bundle);
 
@@ -174,7 +173,7 @@ private:
     std::thread workerthread_;
 
     struct udp_packet {
-        std::vector<char> data;
+        std::vector<AooByte> data;
         ip_address address;
     };
     using packet_queue = lockfree::unbounded_mpsc_queue<udp_packet, aoo::allocator<udp_packet>>;
@@ -189,16 +188,16 @@ private:
 
     void handle_packets();
 
-    void handle_packet(const char *data, int32_t n, const ip_address& addr);
+    void handle_packet(const AooByte *data, int32_t n, const ip_address& addr);
 
     void handle_message(const osc::ReceivedMessage& msg, int onset, const ip_address& addr);
 
     void handle_relay_message(const osc::ReceivedMessage& msg, const ip_address& src);
 
-    void send_message(const char *data, int32_t n, const ip_address& addr);
+    void send_message(const AooByte *data, int32_t n, const ip_address& addr);
 };
 
-class server_imp final : public server {
+class server_imp final : public AooServer {
 public:
     enum class error {
         none,
@@ -213,10 +212,10 @@ public:
         virtual ~ievent(){}
 
         union {
-            aoo_event event_;
-            aoo_net_error_event error_event_;
-            aoo_net_user_event user_event_;
-            aoo_net_group_event group_event_;
+            AooEvent event_;
+            AooNetEventError error_event_;
+            AooNetEventUser user_event_;
+            AooNetEventUserGroup user_group_event_;
         };
     };
 
@@ -226,17 +225,19 @@ public:
 
     ip_address::ip_type type() const { return type_; }
 
-    aoo_error run() override;
+    AooError AOO_CALL run() override;
 
-    aoo_error quit() override;
+    AooError AOO_CALL quit() override;
 
-    aoo_error set_eventhandler(aoo_eventhandler fn, void *user, int32_t mode) override;
+    AooError AOO_CALL setEventHandler(AooEventHandler fn, void *user,
+                                      AooEventMode mode) override;
 
-    aoo_bool events_available() override;
+    AooBool AOO_CALL eventsAvailable() override;
 
-    aoo_error poll_events() override;
+    AooError AOO_CALL pollEvents() override;
 
-    aoo_error control(int32_t ctl, intptr_t index, void *ptr, size_t size) override;
+    AooError AOO_CALL control(AooCtl ctl, intptr_t index,
+                              void *ptr, size_t size) override;
 
     std::shared_ptr<user> get_user(const std::string& name,
                                    const std::string& pwd,
@@ -277,9 +278,9 @@ private:
     using ievent_ptr = std::unique_ptr<ievent>;
     using event_queue = lockfree::unbounded_mpsc_queue<ievent_ptr, aoo::allocator<ievent_ptr>>;
     event_queue events_;
-    aoo_eventhandler eventhandler_ = nullptr;
+    AooEventHandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;
-    aoo_event_mode eventmode_ = AOO_EVENT_NONE;
+    AooEventMode eventmode_ = kAooEventModeNone;
 
     void send_event(std::unique_ptr<ievent> e);
 
@@ -311,11 +312,11 @@ private:
         ~user_event();
     };
 
-    struct group_event : ievent
+    struct user_group_event : ievent
     {
-        group_event(int32_t type, const char *group,
-                    const char *user, int32_t id);
-        ~group_event();
+        user_group_event(int32_t type, const char *group,
+                         const char *user, int32_t id);
+        ~user_group_event();
     };
 };
 

@@ -4,6 +4,8 @@
 
 #include "aoo_common.hpp"
 
+#include "aoo/aoo_sink.hpp"
+
 #include <string.h>
 #include <assert.h>
 
@@ -18,8 +20,6 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
-using namespace aoo;
-
 #define DEFBUFSIZE 20
 
 static t_class *aoo_unpack_class;
@@ -32,7 +32,7 @@ struct t_aoo_unpack
     t_object x_obj;
 
     t_float x_f = 0;
-    aoo::sink::pointer x_sink;
+    AooSink::Ptr x_sink;
     aoo::ip_address x_addr; // fake address
     int32_t x_samplerate = 0;
     int32_t x_blocksize = 0;
@@ -56,49 +56,49 @@ static int32_t aoo_unpack_send(t_aoo_unpack *x, const char *data, int32_t n,
 
 static void aoo_unpack_list(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)
 {
-    char *msg = (char *)alloca(argc);
+    auto msg = (AooByte *)alloca(argc);
     for (int i = 0; i < argc; ++i){
         msg[i] = (int)(argv[i].a_type == A_FLOAT ? argv[i].a_w.w_float : 0.f);
     }
     // handle incoming message
-    x->x_sink->handle_message(msg, argc, x->x_addr.address(), x->x_addr.length());
+    x->x_sink->handleMessage(msg, argc, x->x_addr.address(), x->x_addr.length());
 }
 
 static void aoo_unpack_invite(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_endpoint ep { x->x_addr.address(),
-        (int32_t)x->x_addr.length(), (aoo_id)f };
-    x->x_sink->invite_source(ep);
+    AooEndpoint ep { x->x_addr.address(),
+        (AooAddrSize)x->x_addr.length(), (AooId)f };
+    x->x_sink->inviteSource(ep);
     // send outgoing messages
-    x->x_sink->send((aoo_sendfn)aoo_unpack_send, x);
+    x->x_sink->send((AooSendFunc)aoo_unpack_send, x);
 }
 
 static void aoo_unpack_uninvite(t_aoo_unpack *x, t_floatarg f)
 {
-    aoo_endpoint ep { x->x_addr.address(),
-        (int32_t)x->x_addr.length(), (aoo_id)f };
-    x->x_sink->uninvite_source(ep);
+    AooEndpoint ep { x->x_addr.address(),
+        (AooAddrSize)x->x_addr.length(), (AooId)f };
+    x->x_sink->uninviteSource(ep);
     // send outgoing messages
-    x->x_sink->send((aoo_sendfn)aoo_unpack_send, x);
+    x->x_sink->send((AooSendFunc)aoo_unpack_send, x);
 }
 
 static void aoo_unpack_buffersize(t_aoo_unpack *x, t_floatarg f)
 {
-    x->x_sink->set_buffersize(f);
+    x->x_sink->setBufferSize(f * 0.001);
 }
 
 static void aoo_unpack_dll_bandwidth(t_aoo_unpack *x, t_floatarg f)
 {
-    x->x_sink->set_dll_bandwidth(f);
+    x->x_sink->setDllBandwidth(f);
 }
 
 static void aoo_unpack_reset(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (argc){
         // reset specific source
-        int32_t id = atom_getfloat(argv);
-        aoo_endpoint ep { x->x_addr.address(), (int32_t)x->x_addr.length(), id };
-        x->x_sink->reset_source(ep);
+        AooId id = atom_getfloat(argv);
+        AooEndpoint ep { x->x_addr.address(), (AooAddrSize)x->x_addr.length(), id };
+        x->x_sink->resetSource(ep);
     } else {
         // reset all sources
         x->x_sink->reset();
@@ -107,107 +107,107 @@ static void aoo_unpack_reset(t_aoo_unpack *x, t_symbol *s, int argc, t_atom *arg
 
 static void aoo_unpack_packetsize(t_aoo_unpack *x, t_floatarg f)
 {
-    x->x_sink->set_packetsize(f);
+    x->x_sink->setPacketSize(f);
 }
 
 static void aoo_unpack_resend(t_aoo_unpack *x, t_floatarg f)
 {
-    x->x_sink->set_resend_data(f != 0);
+    x->x_sink->setResendData(f != 0);
 }
 
 static void aoo_unpack_resend_limit(t_aoo_unpack *x, t_floatarg f)
 {
-    x->x_sink->set_resend_limit(f);
+    x->x_sink->setResendLimit(f);
 }
 
 static void aoo_unpack_resend_interval(t_aoo_unpack *x, t_floatarg f)
 {
-    x->x_sink->set_resend_interval(f);
+    x->x_sink->setResendInterval(f * 0.001);
 }
 
-static void aoo_unpack_handle_event(t_aoo_unpack *x, const aoo_event *event, int32_t)
+static void aoo_unpack_handle_event(t_aoo_unpack *x, const AooEvent *event, int32_t)
 {
     // handle events
     t_atom msg[32];
     switch (event->type){
-    case AOO_SOURCE_ADD_EVENT:
+    case kAooEventSourceAdd:
     {
-        auto e = (const aoo_source_event *)event;
-        SETFLOAT(&msg[0], e->ep.id);
+        auto e = (const AooEventSourceAdd *)event;
+        SETFLOAT(&msg[0], e->endpoint.id);
         outlet_anything(x->x_msgout, gensym("source_add"), 1, msg);
         break;
     }
-    case AOO_SOURCE_REMOVE_EVENT:
+    case kAooEventSourceRemove:
     {
-        auto e = (const aoo_source_event *)event;
-        SETFLOAT(&msg[0], e->ep.id);
+        auto e = (const AooEventSourceRemove *)event;
+        SETFLOAT(&msg[0], e->endpoint.id);
         outlet_anything(x->x_msgout, gensym("source_remove"), 1, msg);
         break;
     }
-    case AOO_INVITE_TIMEOUT_EVENT:
+    case kAooEventInviteTimeout:
     {
-        auto e = (const aoo_source_event *)event;
-        SETFLOAT(&msg[0], e->ep.id);
+        auto e = (const AooEventInviteTimeout *)event;
+        SETFLOAT(&msg[0], e->endpoint.id);
         outlet_anything(x->x_msgout, gensym("invite_timeout"), 1, msg);
         break;
     }
-    case AOO_FORMAT_CHANGE_EVENT:
+    case kAooEventFormatChange:
     {
-        auto e = (const aoo_format_change_event *)event;
-        aoo_format_storage f;
-        SETFLOAT(&msg[0], e->ep.id);
+        auto e = (const AooEventFormatChange *)event;
+        AooFormatStorage f;
+        SETFLOAT(&msg[0], e->endpoint.id);
         int fsize = format_to_atoms(*e->format, 31, msg + 1); // skip first atom
         outlet_anything(x->x_msgout, gensym("source_format"), fsize + 1, msg);
         break;
     }
-    case AOO_STREAM_STATE_EVENT:
+    case kAooEventStreamState:
     {
-        auto e = (const aoo_stream_state_event *)event;
-        SETFLOAT(&msg[0], e->ep.id);
+        auto e = (const AooEventStreamState *)event;
+        SETFLOAT(&msg[0], e->endpoint.id);
         SETFLOAT(&msg[1], e->state);
         outlet_anything(x->x_msgout, gensym("source_state"), 2, msg);
         break;
     }
-    case AOO_BLOCK_LOST_EVENT:
+    case kAooEventBlockLost:
     {
-        auto e = (const aoo_block_lost_event *)event;
-        SETFLOAT(&msg[0], e->ep.id);
+        auto e = (const AooEventBlockLost *)event;
+        SETFLOAT(&msg[0], e->endpoint.id);
         SETFLOAT(&msg[1], e->count);
         outlet_anything(x->x_msgout, gensym("block_lost"), 2, msg);
         break;
     }
-    case AOO_BLOCK_REORDERED_EVENT:
+    case kAooEventBlockReordered:
     {
-        auto e = (const aoo_block_reordered_event *)event;
-        SETFLOAT(&msg[0], e->ep.id);
+        auto e = (const AooEventBlockReordered *)event;
+        SETFLOAT(&msg[0], e->endpoint.id);
         SETFLOAT(&msg[1], e->count);
         outlet_anything(x->x_msgout, gensym("block_reordered"), 2, msg);
         break;
     }
-    case AOO_BLOCK_RESENT_EVENT:
+    case kAooEventBlockResent:
     {
-        auto e = (const aoo_block_resent_event *)event;
-        SETFLOAT(&msg[0], e->ep.id);
+        auto e = (const AooEventBlockResent *)event;
+        SETFLOAT(&msg[0], e->endpoint.id);
         SETFLOAT(&msg[1], e->count);
         outlet_anything(x->x_msgout, gensym("block_resent"), 2, msg);
         break;
     }
-    case AOO_BLOCK_GAP_EVENT:
+    case kAooEventBlockGap:
     {
-        auto e = (const aoo_block_gap_event *)event;
-        SETFLOAT(&msg[0], e->ep.id);
+        auto e = (const AooEventBlockGap *)event;
+        SETFLOAT(&msg[0], e->endpoint.id);
         SETFLOAT(&msg[1], e->count);
         outlet_anything(x->x_msgout, gensym("block_gap"), 2, msg);
         break;
     }
-    case AOO_PING_EVENT:
+    case kAooEventPing:
     {
-        auto e = (const aoo_ping_event *)event;
+        auto e = (const AooEventPing *)event;
         uint64_t t1 = e->tt1;
         uint64_t t2 = e->tt2;
-        double diff = aoo_osctime_duration(t1, t2) * 1000.0;
+        double diff = aoo_ntpTimeDuration(t1, t2) * 1000.0;
 
-        SETFLOAT(msg, e->ep.id);
+        SETFLOAT(msg, e->endpoint.id);
         SETFLOAT(msg + 1, diff);
         outlet_anything(x->x_msgout, gensym("ping"), 2, msg);
         break;
@@ -220,10 +220,10 @@ static void aoo_unpack_handle_event(t_aoo_unpack *x, const aoo_event *event, int
 static void aoo_unpack_tick(t_aoo_unpack *x)
 {
     // send outgoing messages
-    x->x_sink->send((aoo_sendfn)aoo_unpack_send, x);
+    x->x_sink->send((AooSendFunc)aoo_unpack_send, x);
     // poll events
-    if (x->x_sink->events_available()){
-        x->x_sink->poll_events();
+    if (x->x_sink->eventsAvailable()){
+        x->x_sink->pollEvents();
     }
 }
 
@@ -234,8 +234,8 @@ static t_int * aoo_unpack_perform(t_int *w)
     t_aoo_unpack *x = (t_aoo_unpack *)(w[1]);
     int n = (int)(w[2]);
 
-    uint64_t t = aoo_osctime_now();
-    x->x_sink->process(x->x_vec.get(), n, t);
+    x->x_sink->process(x->x_vec.get(), n,
+                       aoo_getCurrentNtpTime());
 
     clock_delay(x->x_clock, 0);
 
@@ -272,7 +272,7 @@ t_aoo_unpack::t_aoo_unpack(int argc, t_atom *argv)
     x_clock = clock_new(this, (t_method)aoo_unpack_tick);
 
     // arg #1: ID
-    aoo_id id = atom_getfloatarg(0, argc, argv);
+    AooId id = atom_getfloatarg(0, argc, argv);
 
     // arg #2: num channels
     int nchannels = atom_getfloatarg(1, argc, argv);
@@ -282,7 +282,7 @@ t_aoo_unpack::t_aoo_unpack(int argc, t_atom *argv)
     x_nchannels = nchannels;
 
     // arg #3: buffer size (ms)
-    int buffersize = argc > 2 ? atom_getfloat(argv + 2) : DEFBUFSIZE;
+    float buffersize = argc > 2 ? atom_getfloat(argv + 2) : DEFBUFSIZE;
 
     // make signal outlets
     for (int i = 0; i < nchannels; ++i){
@@ -294,14 +294,13 @@ t_aoo_unpack::t_aoo_unpack(int argc, t_atom *argv)
     // event outlet
     x_msgout = outlet_new(&x_obj, 0);
 
-    // create and initialize aoo_sink object
-    auto sink = aoo::sink::create(id >= 0 ? id : 0, 0);
-    x_sink.reset(sink);
+    // create and initialize AooSink object
+    x_sink = AooSink::create(id, 0, nullptr);
 
-    x_sink->set_eventhandler((aoo_eventhandler)aoo_unpack_handle_event,
-                             this, AOO_EVENT_POLL);
+    x_sink->setEventHandler((AooEventHandler)aoo_unpack_handle_event,
+                            this, kAooEventModePoll);
 
-    x_sink->set_buffersize(buffersize);
+    x_sink->setBufferSize(buffersize * 0.001);
 }
 
 static void aoo_unpack_free(t_aoo_unpack *x)

@@ -9,34 +9,37 @@
 #include <random>
 #include <cmath>
 
+const size_t kAooEventQueueSize = 8;
+
 /*//////////////////// AoO source /////////////////////*/
 
 // OSC data message
 // address pattern string: max 32 bytes
 // typetag string: max. 12 bytes
 // args (without blob data): 36 bytes
-#define AOO_MSG_DATA_HEADERSIZE 80
+#define kAooMsgDataHeaderSize 80
 
 // binary data message:
 // header: 12 bytes
 // args: 48 bytes (max.)
-#define AOO_BIN_MSG_DATA_HEADERSIZE 48
+#define kAooBinMsgDataHeaderSize 48
 
-aoo_source * aoo_source_new(aoo_id id, uint32_t flags) {
-    return aoo::construct<aoo::source_imp>(id, flags);
+AOO_API AooSource * AOO_CALL AooSource_new(
+        AooId id, AooFlag flags, AooError *err) {
+    return aoo::construct<aoo::source_imp>(id, flags, err);
 }
 
-aoo::source_imp::source_imp(aoo_id id, uint32_t flags)
+aoo::source_imp::source_imp(AooId id, AooFlag flags, AooError *err)
     : id_(id)
 {
     // event queue
-    eventqueue_.reserve(AOO_EVENTQUEUESIZE);
+    eventqueue_.reserve(kAooEventQueueSize);
     // request queues
     // formatrequestqueue_.resize(64);
     // datarequestqueue_.resize(1024);
 }
 
-void aoo_source_free(aoo_source *src){
+AOO_API void AOO_CALL AooSource_free(AooSource *src){
     // cast to correct type because base class
     // has no virtual destructor!
     aoo::destroy(static_cast<aoo::source_imp *>(src));
@@ -46,7 +49,7 @@ aoo::source_imp::~source_imp() {
     // flush event queue
     event e;
     while (eventqueue_.try_pop(e)){
-        if (e.type_ == AOO_FORMAT_REQUEST_EVENT){
+        if (e.type_ == kAooEventFormatRequest){
             auto mem = memory_block::from_bytes((void *)e.format.format);
             memory_block::free(mem);
         }
@@ -64,32 +67,32 @@ T& as(void *p){
     sink_lock lock(sinks_);             \
     auto sink = get_sink_arg(index);    \
     if (!sink) {                        \
-        return AOO_ERROR_UNSPECIFIED;   \
+        return kAooErrorUnknown;   \
     }                                   \
 
-aoo_error aoo_source_ctl(aoo_source *src, int32_t ctl,
-                         intptr_t index, void *p, int32_t size)
+AOO_API AooError AOO_CALL AooSource_control(
+        AooSource *src, AooCtl ctl, AooIntPtr index, void *ptr, AooSize size)
 {
-    return src->control(ctl, index, p, size);
+    return src->control(ctl, index, ptr, size);
 }
 
-aoo_error aoo::source_imp::control(int32_t ctl, intptr_t index,
-                                   void *ptr, size_t size)
+AooError AOO_CALL aoo::source_imp::control(
+        AooCtl ctl, AooIntPtr index, void *ptr, AooSize size)
 {
     switch (ctl){
     // add sink
-    case AOO_CTL_ADD_SINK:
+    case kAooCtlAddSink:
     {
-        auto ep = (const aoo_endpoint *)index;
+        auto ep = (const AooEndpoint *)index;
         if (!ep){
-            return AOO_ERROR_UNSPECIFIED;
+            return kAooErrorUnknown;
         }
         return add_sink(*ep, 0); // ignore flags
     }
     // remove sink(s)
-    case AOO_CTL_REMOVE_SINK:
+    case kAooCtlRemoveSink:
     {
-        auto ep = (const aoo_endpoint *)index;
+        auto ep = (const AooEndpoint *)index;
         if (ep){
             // single sink
             return remove_sink(*ep);
@@ -97,33 +100,33 @@ aoo_error aoo::source_imp::control(int32_t ctl, intptr_t index,
             // all sinks
             sink_lock lock(sinks_);
             sinks_.clear();
-            return AOO_OK;
+            return kAooOk;
         }
     }
     // start
-    case AOO_CTL_START:
+    case kAooCtlStartStream:
         state_.store(stream_state::start);
         break;
     // stop
-    case AOO_CTL_STOP:
+    case kAooCtlStopStream:
         state_.store(stream_state::stop);
         break;
     // set/get format
-    case AOO_CTL_SET_FORMAT:
-        CHECKARG(aoo_format);
-        return set_format(as<aoo_format>(ptr));
-    case AOO_CTL_GET_FORMAT:
+    case kAooCtlSetFormat:
+        CHECKARG(AooFormat);
+        return set_format(as<AooFormat>(ptr));
+    case kAooCtlGetFormat:
     {
-        assert(size >= sizeof(aoo_format));
+        assert(size >= sizeof(AooFormat));
         shared_lock lock(update_mutex_); // read lock!
         if (encoder_){
-            return encoder_->get_format(as<aoo_format>(ptr), size);
+            return encoder_->get_format(as<AooFormat>(ptr), size);
         } else {
-            return AOO_ERROR_UNSPECIFIED;
+            return kAooErrorUnknown;
         }
     }
     // set/get channel onset
-    case AOO_CTL_SET_CHANNEL_ONSET:
+    case kAooCtlSetChannelOnset:
     {
         CHECKARG(int32_t);
         GETSINKARG;
@@ -133,7 +136,7 @@ aoo_error aoo::source_imp::control(int32_t ctl, intptr_t index,
                     << " on channel " << chn);
         break;
     }
-    case AOO_CTL_GET_CHANNEL_ONSET:
+    case kAooCtlGetChannelOnset:
     {
         CHECKARG(int32_t);
         GETSINKARG;
@@ -141,7 +144,7 @@ aoo_error aoo::source_imp::control(int32_t ctl, intptr_t index,
         break;
     }
     // id
-    case AOO_CTL_SET_ID:
+    case kAooCtlSetId:
     {
         auto newid = as<int32_t>(ptr);
         if (id_.exchange(newid) != newid){
@@ -151,111 +154,111 @@ aoo_error aoo::source_imp::control(int32_t ctl, intptr_t index,
         }
         break;
     }
-    case AOO_CTL_GET_ID:
+    case kAooCtlGetId:
         CHECKARG(int32_t);
-        as<aoo_id>(ptr) = id();
+        as<AooId>(ptr) = id();
         break;
     // set/get buffersize
-    case AOO_CTL_SET_BUFFERSIZE:
+    case kAooCtlSetBufferSize:
     {
-        CHECKARG(int32_t);
-        auto bufsize = std::max<int32_t>(as<int32_t>(ptr), 0);
+        CHECKARG(AooSeconds);
+        auto bufsize = std::max<AooSeconds>(as<AooSeconds>(ptr), 0);
         if (buffersize_.exchange(bufsize) != bufsize){
             scoped_lock lock(update_mutex_); // writer lock!
             update_audioqueue();
         }
         break;
     }
-    case AOO_CTL_GET_BUFFERSIZE:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = buffersize_.load();
+    case kAooCtlGetBufferSize:
+        CHECKARG(AooSeconds);
+        as<AooSeconds>(ptr) = buffersize_.load();
         break;
     // set/get packetsize
-    case AOO_CTL_SET_PACKETSIZE:
+    case kAooCtlSetPacketSize:
     {
         CHECKARG(int32_t);
-        const int32_t minpacketsize = AOO_MSG_DATA_HEADERSIZE + 64;
+        const int32_t minpacketsize = kAooMsgDataHeaderSize + 64;
         auto packetsize = as<int32_t>(ptr);
         if (packetsize < minpacketsize){
             LOG_WARNING("packet size too small! setting to " << minpacketsize);
             packetsize_.store(minpacketsize);
-        } else if (packetsize > AOO_MAXPACKETSIZE){
-            LOG_WARNING("packet size too large! setting to " << AOO_MAXPACKETSIZE);
-            packetsize_.store(AOO_MAXPACKETSIZE);
+        } else if (packetsize > AOO_MAX_PACKET_SIZE){
+            LOG_WARNING("packet size too large! setting to " << AOO_MAX_PACKET_SIZE);
+            packetsize_.store(AOO_MAX_PACKET_SIZE);
         } else {
             packetsize_.store(packetsize);
         }
         break;
     }
-    case AOO_CTL_GET_PACKETSIZE:
+    case kAooCtlGetPacketSize:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = packetsize_.load();
         break;
     // set/get timer check
-    case AOO_CTL_SET_TIMER_CHECK:
-        CHECKARG(aoo_bool);
-        timer_check_.store(as<aoo_bool>(ptr));
+    case kAooCtlSetTimerCheck:
+        CHECKARG(AooBool);
+        timer_check_.store(as<AooBool>(ptr));
         break;
-    case AOO_CTL_GET_TIMER_CHECK:
-        CHECKARG(aoo_bool);
-        as<aoo_bool>(ptr) = timer_check_.load();
+    case kAooCtlGetTimerCheck:
+        CHECKARG(AooBool);
+        as<AooBool>(ptr) = timer_check_.load();
         break;
     // set/get dynamic resampling
-    case AOO_CTL_SET_DYNAMIC_RESAMPLING:
-        CHECKARG(aoo_bool);
-        dynamic_resampling_.store(as<aoo_bool>(ptr));
+    case kAooCtlSetDynamicResampling:
+        CHECKARG(AooBool);
+        dynamic_resampling_.store(as<AooBool>(ptr));
         timer_.reset(); // !
         break;
-    case AOO_CTL_GET_DYNAMIC_RESAMPLING:
-        CHECKARG(aoo_bool);
-        as<aoo_bool>(ptr) = dynamic_resampling_.load();
+    case kAooCtlGetDynamicResampling:
+        CHECKARG(AooBool);
+        as<AooBool>(ptr) = dynamic_resampling_.load();
         break;
     // set/get time DLL filter bandwidth
-    case AOO_CTL_SET_DLL_BANDWIDTH:
+    case kAooCtlSetDllBandwidth:
         CHECKARG(float);
         // time filter
         dll_bandwidth_.store(as<float>(ptr));
         timer_.reset(); // will update
         break;
-    case AOO_CTL_GET_DLL_BANDWIDTH:
+    case kAooCtlGetDllBandwidth:
         CHECKARG(float);
         as<float>(ptr) = dll_bandwidth_.load();
         break;
     // get real samplerate
-    case AOO_CTL_GET_REAL_SAMPLERATE:
+    case kAooCtlGetRealSampleRate:
         CHECKARG(double);
         as<double>(ptr) = realsr_.load(std::memory_order_relaxed);
         break;
     // set/get ping interval
-    case AOO_CTL_SET_PING_INTERVAL:
+    case kAooCtlSetPingInterval:
     {
-        CHECKARG(int32_t);
-        auto interval = std::max<int32_t>(0, as<int32_t>(ptr)) * 0.001;
+        CHECKARG(AooSeconds);
+        auto interval = std::max<AooSeconds>(0, as<AooSeconds>(ptr));
         ping_interval_.store(interval);
         break;
     }
-    case AOO_CTL_GET_PING_INTERVAL:
+    case kAooCtlGetPingInterval:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = ping_interval_.load() * 1000.0;
         break;
     // set/get resend buffer size
-    case AOO_CTL_SET_RESEND_BUFFERSIZE:
+    case kAooCtlSetResendBufferSize:
     {
-        CHECKARG(int32_t);
+        CHECKARG(AooSeconds);
         // empty buffer is allowed! (no resending)
-        auto bufsize = std::max<int32_t>(as<int32_t>(ptr), 0);
+        auto bufsize = std::max<AooSeconds>(as<AooSeconds>(ptr), 0);
         if (resend_buffersize_.exchange(bufsize) != bufsize){
             scoped_lock lock(update_mutex_); // writer lock!
             update_historybuffer();
         }
         break;
     }
-    case AOO_CTL_GET_RESEND_BUFFERSIZE:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = resend_buffersize_.load();
+    case kAooCtlGetResendBufferSize:
+        CHECKARG(AooSeconds);
+        as<AooSeconds>(ptr) = resend_buffersize_.load();
         break;
     // set/get redundancy
-    case AOO_CTL_SET_REDUNDANCY:
+    case kAooCtlSetRedundancy:
     {
         CHECKARG(int32_t);
         // limit it somehow, 16 times is already very high
@@ -263,30 +266,31 @@ aoo_error aoo::source_imp::control(int32_t ctl, intptr_t index,
         redundancy_.store(redundancy);
         break;
     }
-    case AOO_CTL_GET_REDUNDANCY:
+    case kAooCtlGetRedundancy:
         CHECKARG(int32_t);
         as<int32_t>(ptr) = redundancy_.load();
         break;
 #if USE_AOO_NET
-    case AOO_CTL_SET_CLIENT:
-        client_ = reinterpret_cast<aoo::net::client *>(index);
+    case kAooCtlSetClient:
+        client_ = reinterpret_cast<AooClient *>(index);
         break;
 #endif
     // unknown
     default:
         LOG_WARNING("aoo_source: unsupported control " << ctl);
-        return AOO_ERROR_UNSPECIFIED;
+        return kAooErrorNotImplemented;
     }
-    return AOO_OK;
+    return kAooOk;
 }
 
-aoo_error aoo_source_setup(aoo_source *src, int32_t samplerate,
-                           int32_t blocksize, int32_t nchannels){
+AOO_API AooError AOO_CALL AooSource_setup(
+        AooSource *src, AooSampleRate samplerate,
+        AooInt32 blocksize, AooInt32 nchannels){
     return src->setup(samplerate, blocksize, nchannels);
 }
 
-aoo_error aoo::source_imp::setup(int32_t samplerate, int32_t blocksize,
-                                 int32_t nchannels){
+AooError AOO_CALL aoo::source_imp::setup(
+        AooSampleRate samplerate, AooInt32 blocksize, AooInt32 nchannels){
     scoped_lock lock(update_mutex_); // writer lock!
     if (samplerate > 0 && blocksize > 0 && nchannels > 0)
     {
@@ -315,86 +319,89 @@ aoo_error aoo::source_imp::setup(int32_t samplerate, int32_t blocksize,
         // always reset timer + time DLL filter
         timer_.setup(samplerate_, blocksize_, timer_check_.load());
 
-        return AOO_OK;
+        return kAooOk;
     } else {
-        return AOO_ERROR_UNSPECIFIED;
+        return kAooErrorUnknown;
     }
 }
 
-aoo_error aoo_source_handle_message(aoo_source *src, const char *data, int32_t n,
-                                    const void *address, int32_t addrlen) {
-    return src->handle_message(data, n, address, addrlen);
+AOO_API AooError AOO_CALL AooSource_handleMessage(
+        AooSource *src, const AooByte *data, AooInt32 size,
+        const void *address, AooAddrSize addrlen) {
+    return src->handleMessage(data, size, address, addrlen);
 }
 
 // /aoo/src/<id>/format <sink>
-aoo_error aoo::source_imp::handle_message(const char *data, int32_t n,
-                                          const void *address, int32_t addrlen){
-    aoo_type type;
-    aoo_id src;
-    int32_t onset;
-    auto err = aoo_parse_pattern(data, n, &type, &src, &onset);
-    if (err != AOO_OK){
+AooError AOO_CALL aoo::source_imp::handleMessage(
+        const AooByte *data, AooInt32 size,
+        const void *address, AooAddrSize addrlen){
+    AooType type;
+    AooId src;
+    AooInt32 onset;
+    auto err = aoo_parsePattern(data, size, &type, &src, &onset);
+    if (err != kAooOk){
         LOG_WARNING("aoo_source: not an AoO message!");
-        return AOO_ERROR_UNSPECIFIED;
+        return kAooErrorBadArgument;
     }
-    if (type != AOO_TYPE_SOURCE){
+    if (type != kAooTypeSource){
         LOG_WARNING("aoo_source: not a source message!");
-        return AOO_ERROR_UNSPECIFIED;
+        return kAooErrorBadArgument;
     }
     if (src != id()){
         LOG_WARNING("aoo_source: wrong source ID!");
-        return AOO_ERROR_UNSPECIFIED;
+        return kAooErrorBadArgument;
     }
 
     ip_address addr((const sockaddr *)address, addrlen);
 
     if (data[0] == 0){
         // binary message
-        auto cmd = aoo::from_bytes<int16_t>(data + AOO_BIN_MSG_DOMAIN_SIZE + 2);
+        auto cmd = aoo::from_bytes<int16_t>(data + kAooBinMsgDomainSize + 2);
         switch (cmd){
-        case AOO_BIN_MSG_CMD_DATA:
-            handle_data_request(data + onset, n - onset, addr);
-            return AOO_OK;
+        case kAooBinMsgCmdData:
+            handle_data_request(data + onset, size - onset, addr);
+            return kAooOk;
         default:
-            return AOO_ERROR_UNSPECIFIED;
+            return kAooErrorBadArgument;
         }
     } else {
         try {
-            osc::ReceivedPacket packet(data, n);
+            osc::ReceivedPacket packet((const char *)data, size);
             osc::ReceivedMessage msg(packet);
 
             auto pattern = msg.AddressPattern() + onset;
-            if (!strcmp(pattern, AOO_MSG_FORMAT)){
+            if (!strcmp(pattern, kAooMsgFormat)){
                 handle_format_request(msg, addr);
-            } else if (!strcmp(pattern, AOO_MSG_DATA)){
+            } else if (!strcmp(pattern, kAooMsgData)){
                 handle_data_request(msg, addr);
-            } else if (!strcmp(pattern, AOO_MSG_INVITE)){
+            } else if (!strcmp(pattern, kAooMsgInvite)){
                 handle_invite(msg, addr);
-            } else if (!strcmp(pattern, AOO_MSG_UNINVITE)){
+            } else if (!strcmp(pattern, kAooMsgUninvite)){
                 handle_uninvite(msg, addr);
-            } else if (!strcmp(pattern, AOO_MSG_PING)){
+            } else if (!strcmp(pattern, kAooMsgPing)){
                 handle_ping(msg, addr);
             } else {
                 LOG_WARNING("unknown message " << pattern);
-                return AOO_ERROR_UNSPECIFIED;
+                return kAooErrorUnknown;
             }
-            return AOO_OK;
+            return kAooOk;
         } catch (const osc::Exception& e){
             LOG_ERROR("aoo_source: exception in handle_message: " << e.what());
-            return AOO_ERROR_UNSPECIFIED;
+            return kAooErrorUnknown;
         }
     }
 }
 
-aoo_error aoo_source_send(aoo_source *src, aoo_sendfn fn, void *user) {
+AOO_API AooError AOO_CALL AooSource_send(
+        AooSource *src, AooSendFunc fn, void *user) {
     return src->send(fn, user);
 }
 
 // This method reads audio samples from the ringbuffer,
 // encodes them and sends them to all sinks.
-aoo_error aoo::source_imp::send(aoo_sendfn fn, void *user){
+AooError AOO_CALL aoo::source_imp::send(AooSendFunc fn, void *user) {
     if (state_.load() != stream_state::play){
-        return AOO_OK; // nothing to do
+        return kAooOk; // nothing to do
     }
 
     sendfn reply(fn, user);
@@ -408,22 +415,24 @@ aoo_error aoo::source_imp::send(aoo_sendfn fn, void *user){
     send_ping(reply);
 
     if (!sinks_.try_free()){
-        // LOG_DEBUG("aoo::source: try_free() would block");
+        // LOG_DEBUG("AooSource: try_free() would block");
     }
 
-    return AOO_OK;
+    return kAooOk;
 }
 
-aoo_error aoo_source_process(aoo_source *src, const aoo_sample **data, int32_t n, uint64_t t) {
+AOO_API AooError AOO_CALL AooSource_process(
+        AooSource *src, const AooSample **data, AooInt32 n, AooNtpTime t) {
     return src->process(data, n, t);
 }
 
 #define NO_SINKS_IDLE 1
 
-aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, uint64_t t){
+AooError AOO_CALL aoo::source_imp::process(
+        const AooSample **data, AooInt32 nsamples, AooNtpTime t) {
     auto state = state_.load();
     if (state == stream_state::stop){
-        return AOO_ERROR_IDLE; // pausing
+        return kAooErrorIdle; // pausing
     } else if (state == stream_state::start){
         // start -> play
         // the mutex should be uncontended most of the time.
@@ -433,7 +442,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         if (!lock.owns_lock()){
             LOG_VERBOSE("aoo_source: process would block");
             // no need to call xrun()!
-            return AOO_ERROR_WOULDBLOCK;
+            return kAooErrorWouldBlock;
         }
 
         start_new_stream();
@@ -441,7 +450,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         // check if we have been stopped in the meantime
         auto expected = stream_state::start;
         if (!state_.compare_exchange_strong(expected, stream_state::play)){
-            return AOO_ERROR_IDLE; // pausing
+            return kAooErrorIdle; // pausing
         }
     }
 
@@ -472,9 +481,9 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         }
         LOG_DEBUG("xrun: " << nblocks << " blocks");
 
-        event e(AOO_XRUN_EVENT);
+        event e(kAooEventXRun);
         e.xrun.count = nblocks + 0.5; // ?
-        send_event(e, AOO_THREAD_AUDIO);
+        send_event(e, kAooThreadLevelAudio);
 
         timer_.reset();
     } else if (dynamic_resampling){
@@ -501,7 +510,7 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
     if (sinks_.empty()){
         // nothing to do. users still have to check for pending events,
         // but there is no reason to call send()
-        return AOO_ERROR_IDLE;
+        return kAooErrorIdle;
     }
 #endif
 
@@ -512,18 +521,18 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
     if (!lock.owns_lock()){
         LOG_VERBOSE("aoo_source: process would block");
         add_xrun(1);
-        return AOO_ERROR_WOULDBLOCK; // ?
+        return kAooErrorWouldBlock; // ?
     }
 
     if (!encoder_){
-        return AOO_ERROR_IDLE;
+        return kAooErrorIdle;
     }
 
     // non-interleaved -> interleaved
     // only as many channels as current format needs
     auto nfchannels = encoder_->nchannels();
     auto insize = nsamples * nfchannels;
-    auto buf = (aoo_sample *)alloca(insize * sizeof(aoo_sample));
+    auto buf = (AooSample *)alloca(insize * sizeof(AooSample));
     for (int i = 0; i < nfchannels; ++i){
         if (i < nchannels_){
             for (int j = 0; j < nsamples; ++j){
@@ -569,9 +578,9 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         if (!resampler_.write(buf, insize)){
             LOG_WARNING("aoo_source: send buffer overflow");
             add_xrun(1);
-            // don't return AOO_ERROR_IDLE, otherwise the send thread
+            // don't return kAooErrorIdle, otherwise the send thread
             // wouldn't drain the buffer.
-            return AOO_ERROR_UNSPECIFIED;
+            return kAooErrorUnknown;
         }
     } else {
         // bypass resampler
@@ -586,58 +595,59 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
         } else {
             LOG_WARNING("aoo_source: send buffer overflow");
             add_xrun(1);
-            // don't return AOO_ERROR_IDLE, otherwise the send thread
+            // don't return kAooErrorIdle, otherwise the send thread
             // wouldn't drain the buffer.
-            return AOO_ERROR_UNSPECIFIED;
+            return kAooErrorUnknown;
         }
     }
-    return AOO_OK;
+    return kAooOk;
 }
 
-aoo_error aoo_source_set_eventhandler(aoo_source *src, aoo_eventhandler fn,
-                                      void *user, int32_t mode)
+AOO_API AooError AOO_CALL AooSource_setEventHandler(
+        AooSource *src, AooEventHandler fn,
+        void *user, AooEventMode mode)
 {
-    return src->set_eventhandler(fn, user, mode);
+    return src->setEventHandler(fn, user, mode);
 }
 
-aoo_error aoo::source_imp::set_eventhandler(aoo_eventhandler fn, void *user,
-                                            int32_t mode){
+AooError AOO_CALL aoo::source_imp::setEventHandler(
+        AooEventHandler fn, void *user, AooEventMode mode){
     eventhandler_ = fn;
     eventcontext_ = user;
-    eventmode_ = (aoo_event_mode)mode;
-    return AOO_OK;
+    eventmode_ = mode;
+    return kAooOk;
 }
 
-aoo_bool aoo_source_events_available(aoo_source *src){
-    return src->events_available();
+AOO_API AooBool AOO_CALL AooSource_eventsAvailable(AooSource *src){
+    return src->eventsAvailable();
 }
 
-aoo_bool aoo::source_imp::events_available(){
+AooBool AOO_CALL aoo::source_imp::eventsAvailable(){
     return !eventqueue_.empty();
 }
 
-aoo_error aoo_source_poll_events(aoo_source *src){
-    return src->poll_events();
+AOO_API AooError AOO_CALL AooSource_pollEvents(AooSource *src){
+    return src->pollEvents();
 }
 
-aoo_error aoo::source_imp::poll_events(){
+AooError AOO_CALL aoo::source_imp::pollEvents(){
     // always thread-safe
     event e;
-    while (eventqueue_.try_pop(e) > 0){
-        eventhandler_(eventcontext_, &e.event_, AOO_THREAD_UNKNOWN);
+    while (eventqueue_.try_pop(e)) {
+        eventhandler_(eventcontext_, &e.event_, kAooThreadLevelUnknown);
         // some memory use extra memory
-        if (e.type_ == AOO_FORMAT_REQUEST_EVENT){
+        if (e.type_ == kAooEventFormatRequest){
             memory_.free(memory_block::from_bytes((void *)e.format.format));
         }
     }
-    return AOO_OK;
+    return kAooOk;
 }
 
 namespace aoo {
 
 /*///////////////////////// source ////////////////////////////////*/
 
-sink_desc * source_imp::find_sink(const ip_address& addr, aoo_id id){
+sink_desc * source_imp::find_sink(const ip_address& addr, AooId id){
     for (auto& sink : sinks_){
         if (sink.address == addr && sink.id == id){
             return &sink;
@@ -647,20 +657,20 @@ sink_desc * source_imp::find_sink(const ip_address& addr, aoo_id id){
 }
 
 aoo::sink_desc * source_imp::get_sink_arg(intptr_t index){
-    auto ep = (const aoo_endpoint *)index;
+    auto ep = (const AooEndpoint *)index;
     if (!ep){
-        LOG_ERROR("aoo_sink: missing sink argument");
+        LOG_ERROR("AooSink: missing sink argument");
         return nullptr;
     }
     ip_address addr((const sockaddr *)ep->address, ep->addrlen);
     auto sink = find_sink(addr, ep->id);
     if (!sink){
-        LOG_ERROR("aoo_sink: couldn't find sink");
+        LOG_ERROR("AooSink: couldn't find sink");
     }
     return sink;
 }
 
-aoo_error source_imp::add_sink(const aoo_endpoint& ep, uint32_t flags)
+AooError source_imp::add_sink(const AooEndpoint& ep, uint32_t flags)
 {
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
 
@@ -668,20 +678,20 @@ aoo_error source_imp::add_sink(const aoo_endpoint& ep, uint32_t flags)
     // check if sink exists!
     if (find_sink(addr, ep.id)){
         LOG_WARNING("aoo_source: sink already added!");
-        return AOO_ERROR_UNSPECIFIED;
+        return kAooErrorUnknown;
     }
     // add sink descriptor
 #if USE_AOO_NET
     // check if the peer needs to be relayed
     if (client_){
-        aoo_bool relay;
-        if (client_->control(AOO_CTL_NEED_RELAY,
+        AooBool relay;
+        if (client_->control(kAooCtlNeedRelay,
                              reinterpret_cast<intptr_t>(&ep),
-                             &relay, sizeof(relay)) == AOO_OK)
+                             &relay, sizeof(relay)) == kAooOk)
         {
-            if (relay == AOO_TRUE){
+            if (relay == kAooTrue){
                 LOG_DEBUG("sink " << addr << " needs to be relayed");
-                flags |= AOO_ENDPOINT_RELAY;
+                flags |= kAooEndpointRelay;
             }
         }
     }
@@ -689,24 +699,24 @@ aoo_error source_imp::add_sink(const aoo_endpoint& ep, uint32_t flags)
     sinks_.emplace_front(addr, ep.id, flags);
     needformat_.store(true, std::memory_order_release); // !
 
-    return AOO_OK;
+    return kAooOk;
 }
 
-aoo_error source_imp::remove_sink(const aoo_endpoint& ep){
+AooError source_imp::remove_sink(const AooEndpoint& ep){
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
 
     sink_lock lock(sinks_);
     for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
         if (it->address == addr && it->id == ep.id){
             sinks_.erase(it);
-            return AOO_OK;
+            return kAooOk;
         }
     }
     LOG_WARNING("aoo_source: sink not found!");
-    return AOO_ERROR_UNSPECIFIED;
+    return kAooErrorUnknown;
 }
 
-aoo_error source_imp::set_format(aoo_format &f){
+AooError source_imp::set_format(AooFormat &f){
     std::unique_ptr<encoder> new_encoder;
 
     // create a new encoder if necessary
@@ -715,14 +725,14 @@ aoo_error source_imp::set_format(aoo_format &f){
     if (!encoder_ || strcmp(encoder_->name(), f.codec)){
         auto codec = aoo::find_codec(f.codec);
         if (codec){
-            new_encoder = codec->create_encoder();
+            new_encoder = codec->create_encoder(nullptr);
             if (!new_encoder){
                 LOG_ERROR("couldn't create encoder!");
-                return AOO_ERROR_UNSPECIFIED;
+                return kAooErrorUnknown;
             }
         } else {
             LOG_ERROR("codec '" << f.codec << "' not supported!");
-            return AOO_ERROR_UNSPECIFIED;
+            return kAooErrorUnknown;
         }
     }
 
@@ -733,7 +743,7 @@ aoo_error source_imp::set_format(aoo_format &f){
 
     // always set the format
     auto err = encoder_->set_format(f);
-    if (err == AOO_OK){
+    if (err == kAooOk){
         update_audioqueue();
 
         if (need_resampling()){
@@ -772,12 +782,12 @@ bool source_imp::need_resampling() const {
 #endif
 }
 
-void source_imp::send_event(const event& e, aoo_thread_level level){
+void source_imp::send_event(const event& e, AooThreadLevel level){
     switch (eventmode_){
-    case AOO_EVENT_POLL:
+    case kAooEventModePoll:
         eventqueue_.push(e);
         break;
-    case AOO_EVENT_CALLBACK:
+    case kAooEventModeCallback:
         eventhandler_(eventcontext_, &e.event_, level);
         break;
     default:
@@ -826,8 +836,8 @@ void source_imp::add_xrun(float n){
 
 void source_imp::update_audioqueue(){
     if (encoder_ && samplerate_ > 0){
-        // recalculate buffersize from ms to samples
-        int32_t bufsize = (double)buffersize_.load() * 0.001 * encoder_->samplerate();
+        // recalculate buffersize from seconds to samples
+        int32_t bufsize = buffersize_.load() * encoder_->samplerate();
         auto d = div(bufsize, encoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         // minimum buffer size depends on resampling and reblocking!
@@ -835,13 +845,13 @@ void source_imp::update_audioqueue(){
         auto reblock = (double)encoder_->blocksize() / (double)blocksize_;
         int32_t minblocks = std::ceil(downsample * reblock);
         nbuffers = std::max<int32_t>(nbuffers, minblocks);
-        LOG_DEBUG("aoo_source: buffersize (ms): " << buffersize_.load()
+        LOG_DEBUG("aoo_source: buffersize (ms): " << (buffersize_.load() * 1000.0)
                   << ", samples: " << bufsize << ", nbuffers: " << nbuffers
                   << ", minimum: " << minblocks);
 
         // resize audio buffer
         auto nsamples = encoder_->blocksize() * encoder_->nchannels();
-        auto nbytes = sizeof(block_data::sr) + nsamples * sizeof(aoo_sample);
+        auto nbytes = sizeof(block_data::sr) + nsamples * sizeof(AooSample);
         // align to 8 bytes
         nbytes = (nbytes + 7) & ~7;
         audioqueue_.resize(nbytes, nbuffers);
@@ -859,11 +869,12 @@ void source_imp::update_resampler(){
 void source_imp::update_historybuffer(){
     if (encoder_){
         // bufsize can also be 0 (= don't resend)!
-        int32_t bufsize = (double)resend_buffersize_.load() * 0.001 * encoder_->samplerate();
+        int32_t bufsize = resend_buffersize_.load() * encoder_->samplerate();
         auto d = div(bufsize, encoder_->blocksize());
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         history_.resize(nbuffers);
-        LOG_DEBUG("aoo_source: history buffersize (ms): " << resend_buffersize_.load()
+        LOG_DEBUG("aoo_source: history buffersize (ms): "
+                  << (resend_buffersize_.load() * 1000.0)
                   << ", samples: " << bufsize << ", nbuffers: " << nbuffers);
 
     }
@@ -882,15 +893,15 @@ void source_imp::send_format(const sendfn& fn){
 
     int32_t salt = salt_;
 
-    aoo_format_storage f;
-    if (encoder_->get_format(f.header, sizeof(aoo_format_storage)) != AOO_OK){
+    AooFormatStorage f;
+    if (encoder_->get_format(f.header, sizeof(AooFormatStorage)) != kAooOk){
         return;
     }
 
     // serialize format
-    char options[AOO_CODEC_MAXSETTINGSIZE];
-    int32_t size = sizeof(options);
-    if (encoder_->serialize(f.header, options, size) != AOO_OK){
+    AooByte options[kAooCodecMaxSettingSize];
+    AooInt32 size = sizeof(options);
+    if (encoder_->serialize(f.header, options, size) != kAooOk){
         return;
     }
 
@@ -908,21 +919,21 @@ void source_imp::send_format(const sendfn& fn){
 
             LOG_DEBUG("send format to " << s.id << " (salt = " << salt << ")");
 
-            char buf[AOO_MAXPACKETSIZE];
+            char buf[AOO_MAX_PACKET_SIZE];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-            const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                    + AOO_MSG_SINK_LEN + 16 + AOO_MSG_FORMAT_LEN;
+            const int32_t max_addr_size = kAooMsgDomainLen
+                    + kAooMsgSinkLen + 16 + kAooMsgFormatLen;
             char address[max_addr_size];
             snprintf(address, sizeof(address), "%s%s/%d%s",
-                     AOO_MSG_DOMAIN, AOO_MSG_SINK, s.id, AOO_MSG_FORMAT);
+                     kAooMsgDomain, kAooMsgSink, s.id, kAooMsgFormat);
 
             msg << osc::BeginMessage(address) << id() << (int32_t)make_version()
-                << salt << f.header.nchannels << f.header.samplerate << f.header.blocksize
-                << f.header.codec << osc::Blob(options, size) << (int32_t)s.flags
-                << osc::EndMessage;
+                << salt << (int32_t)f.header.numChannels << (int32_t)f.header.sampleRate
+                << (int32_t)f.header.blockSize << f.header.codec << osc::Blob(options, size)
+                << (int32_t)s.flags << osc::EndMessage;
 
-            fn(msg.Data(), msg.Size(), s.address, s.flags);
+            fn((const AooByte *)msg.Data(), msg.Size(), s.address, s.flags);
         }
     }
 }
@@ -1011,13 +1022,14 @@ void source_imp::send_data(const sendfn& fn){
 
             sendbuffer_.resize(sizeof(double) * nsamples); // overallocate
 
-            d.totalsize = sendbuffer_.size();
+            AooInt32 size = sendbuffer_.size();
             auto err = encoder_->encode(ptr->data, nsamples,
-                sendbuffer_.data(), d.totalsize);
+                sendbuffer_.data(), size);
+            d.totalsize = size;
 
             audioqueue_.read_commit(); // always commit!
 
-            if (err != AOO_OK){
+            if (err != kAooOk){
                 LOG_WARNING("aoo_source: couldn't encode audio data!");
                 return;
             }
@@ -1030,7 +1042,7 @@ void source_imp::send_data(const sendfn& fn){
             bool binary = binary_.load(std::memory_order_relaxed);
             auto packetsize = packetsize_.load(std::memory_order_relaxed);
             auto maxpacketsize = packetsize -
-                    (binary ? AOO_BIN_MSG_DATA_HEADERSIZE : AOO_MSG_DATA_HEADERSIZE);
+                    (binary ? kAooBinMsgDataHeaderSize : kAooMsgDataHeaderSize);
             auto dv = div(d.totalsize, maxpacketsize);
             d.nframes = dv.quot + (dv.rem != 0);
 
@@ -1047,7 +1059,7 @@ void source_imp::send_data(const sendfn& fn){
 
             // send a single frame to all sinks
             // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
-            auto dosend = [&](int32_t frame, const char* data, auto n){
+            auto dosend = [&](int32_t frame, const AooByte* data, auto n){
                 d.frame = frame;
                 d.data = data;
                 d.size = n;
@@ -1117,8 +1129,8 @@ void source_imp::resend_data(const sendfn &fn){
                 if (request.frame < 0){
                     // Copy whole block and save frame pointers.
                     sendbuffer_.resize(d.totalsize);
-                    char *buf = sendbuffer_.data();
-                    char *frameptr[256];
+                    AooByte *buf = sendbuffer_.data();
+                    AooByte *frameptr[256];
                     int32_t framesize[256];
                     int32_t onset = 0;
 
@@ -1182,8 +1194,8 @@ void source_imp::resend_data(const sendfn &fn){
 void source_imp::send_packet(const sendfn &fn, int32_t salt,
                              data_packet& d, bool binary) {
     if (binary){
-        char buf[AOO_MAXPACKETSIZE];
-        size_t size;
+        AooByte buf[AOO_MAX_PACKET_SIZE];
+        int32_t size;
 
         write_bin_data(nullptr, salt, d, buf, size);
 
@@ -1197,7 +1209,7 @@ void source_imp::send_packet(const sendfn &fn, int32_t salt,
             aoo::to_bytes(sink.id, buf + 8);
 
             auto channel = sink.channel.load(std::memory_order_relaxed);
-            aoo::to_bytes<int16_t>(channel, buf + AOO_BIN_MSG_HEADER_SIZE + 12);
+            aoo::to_bytes<int16_t>(channel, buf + kAooBinMsgHeaderSize + 12);
 
         #if AOO_DEBUG_DATA
             LOG_DEBUG("send block: seq = " << d.sequence << ", sr = "
@@ -1225,14 +1237,14 @@ void source_imp::send_packet(const sendfn &fn, int32_t salt,
 
 void source_imp::send_packet_osc(const sendfn& fn, const endpoint& ep,
                                  int32_t salt, const aoo::data_packet& d) const {
-    char buf[AOO_MAXPACKETSIZE];
+    char buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-    const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-            + AOO_MSG_SINK_LEN + 16 + AOO_MSG_DATA_LEN;
+    const int32_t max_addr_size = kAooMsgDomainLen
+            + kAooMsgSinkLen + 16 + kAooMsgDataLen;
     char address[max_addr_size];
     snprintf(address, sizeof(address), "%s%s/%d%s",
-             AOO_MSG_DOMAIN, AOO_MSG_SINK, ep.id, AOO_MSG_DATA);
+             kAooMsgDomain, kAooMsgSink, ep.id, kAooMsgData);
 
     msg << osc::BeginMessage(address) << id() << salt << d.sequence << d.samplerate
         << d.channel << d.totalsize << d.nframes << d.frame << osc::Blob(d.data, d.size)
@@ -1244,7 +1256,7 @@ void source_imp::send_packet_osc(const sendfn& fn, const endpoint& ep,
               << d.totalsize << ", nframes = " << d.nframes
               << ", frame = " << d.frame << ", size " << d.size);
 #endif
-    fn(msg.Data(), msg.Size(), ep.address, ep.flags);
+    fn((const AooByte *)msg.Data(), msg.Size(), ep.address, ep.flags);
 }
 
 // binary data message:
@@ -1253,22 +1265,22 @@ void source_imp::send_packet_osc(const sendfn& fn, const endpoint& ep,
 // size (int32), data...
 
 void source_imp::write_bin_data(const endpoint* ep, int32_t salt,
-                                const data_packet& d, char *buf, size_t& size) const
+                                const data_packet& d, AooByte *buf, int32_t& size) const
 {
     int16_t flags = 0;
     if (d.samplerate != 0){
-        flags |= AOO_BIN_MSG_DATA_SAMPLERATE;
+        flags |= kAooBinMsgDataSampleRate;
     }
     if (d.nframes > 1){
-        flags |= AOO_BIN_MSG_DATA_FRAMES;
+        flags |= kAooBinMsgDataFrames;
     }
 
     auto it = buf;
     // write header
-    memcpy(it, AOO_BIN_MSG_DOMAIN, AOO_BIN_MSG_DOMAIN_SIZE);
-    it += AOO_BIN_MSG_DOMAIN_SIZE;
-    aoo::write_bytes<int16_t>(AOO_TYPE_SINK, it);
-    aoo::write_bytes<int16_t>(AOO_BIN_MSG_CMD_DATA, it);
+    memcpy(it, kAooBinMsgDomain, kAooBinMsgDomainSize);
+    it += kAooBinMsgDomainSize;
+    aoo::write_bytes<int16_t>(kAooTypeSink, it);
+    aoo::write_bytes<int16_t>(kAooBinMsgCmdData, it);
     if (ep){
         aoo::write_bytes<int32_t>(ep->id, it);
     } else {
@@ -1281,12 +1293,12 @@ void source_imp::write_bin_data(const endpoint* ep, int32_t salt,
     aoo::write_bytes<int32_t>(d.sequence, it);
     aoo::write_bytes<int16_t>(d.channel, it);
     aoo::write_bytes<int16_t>(flags, it);
-    if (flags & AOO_BIN_MSG_DATA_FRAMES){
+    if (flags & kAooBinMsgDataFrames){
         aoo::write_bytes<int32_t>(d.totalsize, it);
         aoo::write_bytes<int16_t>(d.nframes, it);
         aoo::write_bytes<int16_t>(d.frame, it);
     }
-    if (flags & AOO_BIN_MSG_DATA_SAMPLERATE){
+    if (flags & kAooBinMsgDataSampleRate){
          aoo::write_bytes<double>(d.samplerate, it);
     }
     aoo::write_bytes<int32_t>(d.size, it);
@@ -1299,8 +1311,8 @@ void source_imp::write_bin_data(const endpoint* ep, int32_t salt,
 
 void source_imp::send_packet_bin(const sendfn& fn, const endpoint& ep,
                                  int32_t salt, const aoo::data_packet& d) const {
-    char buf[AOO_MAXPACKETSIZE];
-    size_t size;
+    AooByte buf[AOO_MAX_PACKET_SIZE];
+    int32_t size;
 
     write_bin_data(&ep, salt, d, buf, size);
 
@@ -1311,7 +1323,7 @@ void source_imp::send_packet_bin(const sendfn& fn, const endpoint& ep,
               << ", frame = " << d.frame << ", size " << d.size);
 #endif
 
-    fn(buf, size, ep.address, ep.flags);
+    fn((const AooByte *)buf, size, ep.address, ep.flags);
 }
 
 void source_imp::send_ping(const sendfn& fn){
@@ -1331,19 +1343,19 @@ void source_imp::send_ping(const sendfn& fn){
             // /aoo/sink/<id>/ping <src> <time>
             LOG_DEBUG("send ping to " << sink.id);
 
-            char buf[AOO_MAXPACKETSIZE];
+            char buf[AOO_MAX_PACKET_SIZE];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-            const int32_t max_addr_size = AOO_MSG_DOMAIN_LEN
-                    + AOO_MSG_SINK_LEN + 16 + AOO_MSG_PING_LEN;
+            const int32_t max_addr_size = kAooMsgDomainLen
+                    + kAooMsgSinkLen + 16 + kAooMsgPingLen;
             char address[max_addr_size];
             snprintf(address, sizeof(address), "%s%s/%d%s",
-                     AOO_MSG_DOMAIN, AOO_MSG_SINK, sink.id, AOO_MSG_PING);
+                     kAooMsgDomain, kAooMsgSink, sink.id, kAooMsgPing);
 
             msg << osc::BeginMessage(address) << id() << osc::TimeTag(tt)
                 << osc::EndMessage;
 
-            fn(msg.Data(), msg.Size(), sink.address, sink.flags);
+            fn((const AooByte *)msg.Data(), msg.Size(), sink.address, sink.flags);
         }
 
         lastpingtime_.store(elapsed);
@@ -1389,34 +1401,34 @@ void source_imp::handle_format_request(const osc::ReceivedMessage& msg,
             lock.unlock();
 
             // get format from arguments
-            aoo_format f;
-            f.nchannels = (it++)->AsInt32();
-            f.samplerate = (it++)->AsInt32();
-            f.blocksize = (it++)->AsInt32();
+            AooFormat f;
+            f.numChannels = (it++)->AsInt32();
+            f.sampleRate = (it++)->AsInt32();
+            f.blockSize = (it++)->AsInt32();
             f.codec = (it++)->AsString();
-            f.size = sizeof(aoo_format);
+            f.size = sizeof(AooFormat);
             const void *settings;
             osc::osc_bundle_element_size_t size;
             (it++)->AsBlob(settings, size);
 
             auto c = aoo::find_codec(f.codec);
             if (c){
-                aoo_format_storage fmt;
-                if (c->deserialize(f, (const char *)settings, size, fmt.header,
-                                   sizeof(aoo_format_storage)) == AOO_OK){
+                AooFormatStorage fmt;
+                if (c->deserialize(f, (const AooByte *)settings, size, fmt.header,
+                                   sizeof(AooFormatStorage)) == kAooOk){
                     // send format event
-                    event e(AOO_FORMAT_REQUEST_EVENT, addr, id);
+                    event e(kAooEventFormatRequest, addr, id);
 
-                    if (eventmode_ == AOO_EVENT_CALLBACK){
+                    if (eventmode_ == kAooEventModeCallback){
                         // synchronous: use stack
                         e.format.format = &fmt.header;
-                    } if (eventmode_ == AOO_EVENT_POLL){
+                    } if (eventmode_ == kAooEventModePoll){
                         // asynchronous: use heap
                         auto mem = memory_.alloc(fmt.header.size);
                         memcpy(mem->data(), &fmt, fmt.header.size);
-                        e.format.format = (const aoo_format *)mem->data();
+                        e.format.format = (const AooFormat *)mem->data();
                     }
-                    send_event(e, AOO_THREAD_NETWORK);
+                    send_event(e, kAooThreadLevelAudio);
                 }
             } else {
                 LOG_WARNING("handle_format_request: codec '"
@@ -1428,7 +1440,7 @@ void source_imp::handle_format_request(const osc::ReceivedMessage& msg,
             needformat_.store(true, std::memory_order_release);
         }
     } else {
-        LOG_VERBOSE("ignoring '" << AOO_MSG_FORMAT << "' message: sink not found");
+        LOG_VERBOSE("ignoring '" << kAooMsgFormat << "' message: sink not found");
     }
 }
 
@@ -1452,14 +1464,14 @@ void source_imp::handle_data_request(const osc::ReceivedMessage& msg,
             sink->data_requests.push(sequence, frame);
         }
     } else {
-        LOG_VERBOSE("ignoring '" << AOO_MSG_DATA << "' message: sink not found");
+        LOG_VERBOSE("ignoring '" << kAooMsgData << "' message: sink not found");
     }
 }
 
 // (header), id (int32), salt (int32), count (int32),
 // seq1 (int32), frame1(int32), seq2(int32), frame2(seq), etc.
 
-void source_imp::handle_data_request(const char *msg, int32_t n,
+void source_imp::handle_data_request(const AooByte *msg, int32_t n,
                                      const ip_address& addr)
 {
     // check size (id, salt, count)
@@ -1490,7 +1502,7 @@ void source_imp::handle_data_request(const char *msg, int32_t n,
             sink->data_requests.push(sequence, frame);
         }
     } else {
-        LOG_VERBOSE("ignoring '" << AOO_MSG_DATA << "' message: sink not found");
+        LOG_VERBOSE("ignoring '" << kAooMsgData << "' message: sink not found");
     }
 }
 
@@ -1506,10 +1518,10 @@ void source_imp::handle_invite(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
     if (!sink){
         // push "invite" event
-        event e(AOO_INVITE_EVENT, addr, id);
-        send_event(e, AOO_THREAD_NETWORK);
+        event e(kAooEventInvite, addr, id);
+        send_event(e, kAooThreadLevelAudio);
     } else {
-        LOG_VERBOSE("ignoring '" << AOO_MSG_INVITE << "' message: sink already added");
+        LOG_VERBOSE("ignoring '" << kAooMsgInvite << "' message: sink already added");
     }
 }
 
@@ -1525,10 +1537,10 @@ void source_imp::handle_uninvite(const osc::ReceivedMessage& msg,
     sink_lock lock(sinks_);
     if (find_sink(addr, id)){
         // push "uninvite" event
-        event e(AOO_UNINVITE_EVENT, addr, id);
-        send_event(e, AOO_THREAD_NETWORK);
+        event e(kAooEventUninvite, addr, id);
+        send_event(e, kAooThreadLevelAudio);
     } else {
-        LOG_VERBOSE("ignoring '" << AOO_MSG_UNINVITE << "' message: sink not found");
+        LOG_VERBOSE("ignoring '" << kAooMsgUninvite << "' message: sink not found");
     }
 }
 
@@ -1536,7 +1548,7 @@ void source_imp::handle_ping(const osc::ReceivedMessage& msg,
                              const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
-    aoo_id id = (it++)->AsInt32();
+    AooId id = (it++)->AsInt32();
     time_tag tt1 = (it++)->AsTimeTag();
     time_tag tt2 = (it++)->AsTimeTag();
     int32_t lost_blocks = (it++)->AsInt32();
@@ -1547,18 +1559,18 @@ void source_imp::handle_ping(const osc::ReceivedMessage& msg,
     sink_lock lock(sinks_);
     if (find_sink(addr, id)){
         // push "ping" event
-        event e(AOO_PING_EVENT, addr, id);
+        event e(kAooEventPing, addr, id);
         e.ping.tt1 = tt1;
         e.ping.tt2 = tt2;
-        e.ping.lost_blocks = lost_blocks;
+        e.ping.lostBlocks = lost_blocks;
     #if 0
         e.ping.tt3 = timer_.get_absolute(); // use last stream time
     #else
         e.ping.tt3 = aoo::time_tag::now(); // use real system time
     #endif
-        send_event(e, AOO_THREAD_NETWORK);
+        send_event(e, kAooThreadLevelAudio);
     } else {
-        LOG_VERBOSE("ignoring '" << AOO_MSG_PING << "' message: sink not found");
+        LOG_VERBOSE("ignoring '" << kAooMsgPing << "' message: sink not found");
     }
 }
 

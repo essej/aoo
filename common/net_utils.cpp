@@ -4,7 +4,7 @@
 
 #include "net_utils.hpp"
 
-#include "aoo/aoo_types.h"
+#include "aoo/aoo_defines.h"
 
 #ifdef _WIN32
 #include <ws2tcpip.h>
@@ -556,12 +556,12 @@ int socket_close(int socket)
 #endif
 }
 
-int socket_sendto(int socket, const char *buf, int size, const ip_address& addr)
+int socket_sendto(int socket, const void *buf, int size, const ip_address& addr)
 {
-    return sendto(socket, buf, size, 0, addr.address(), addr.length());
+    return sendto(socket, (const char *)buf, size, 0, addr.address(), addr.length());
 }
 
-int socket_receive(int socket, char *buf, int size,
+int socket_receive(int socket, void *buf, int size,
                    ip_address* addr, int32_t timeout)
 {
     if (timeout >= 0){
@@ -584,10 +584,10 @@ int socket_receive(int socket, char *buf, int size,
         }
     }
     if (addr){
-        return recvfrom(socket, buf, size, 0,
+        return recvfrom(socket, (char *)buf, size, 0,
                         addr->address_ptr(), addr->length_ptr());
     } else {
-        return recv(socket, buf, size, 0);
+        return recv(socket, (char *)buf, size, 0);
     }
 }
 

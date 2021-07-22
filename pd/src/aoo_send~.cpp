@@ -4,6 +4,8 @@
 
 #include "aoo_common.hpp"
 
+#include "aoo/aoo_source.hpp"
+
 #include <vector>
 #include <string.h>
 #include <assert.h>
@@ -20,8 +22,6 @@
 #else
 # include <stdlib.h> // BSDs for example
 #endif
-
-using namespace aoo;
 
 // for hardware buffer sizes up to 1024 @ 44.1 kHz
 #define DEFBUFSIZE 25
@@ -43,12 +43,12 @@ struct t_aoo_send
     t_object x_obj;
 
     t_float x_f = 0;
-    aoo::source::pointer x_source;
+    AooSource::Ptr x_source;
     int32_t x_samplerate = 0;
     int32_t x_blocksize = 0;
     int32_t x_nchannels = 0;
     int32_t x_port = 0;
-    aoo_id x_id = 0;
+    AooId x_id = 0;
     std::unique_ptr<t_float *[]> x_vec;
     // sinks
     std::vector<t_sink> x_sinks;
@@ -61,10 +61,10 @@ struct t_aoo_send
 };
 
 static void aoo_send_doaddsink(t_aoo_send *x, const aoo::ip_address& addr,
-                               aoo_id id)
+                               AooId id)
 {
-    aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
-    x->x_source->add_sink(ep);
+    AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
+    x->x_source->addSink(ep);
 
     // add sink to list
     x->x_sinks.push_back({addr, id});
@@ -80,7 +80,7 @@ static void aoo_send_doaddsink(t_aoo_send *x, const aoo::ip_address& addr,
 
 static void aoo_send_doremoveall(t_aoo_send *x)
 {
-    x->x_source->remove_all();
+    x->x_source->removeAllSinks();
 
     int numsinks = x->x_sinks.size();
     if (!numsinks){
@@ -104,10 +104,10 @@ static void aoo_send_doremoveall(t_aoo_send *x)
     }
 }
 
-static void aoo_send_doremovesink(t_aoo_send *x, const ip_address& addr, aoo_id id)
+static void aoo_send_doremovesink(t_aoo_send *x, const aoo::ip_address& addr, AooId id)
 {
-    aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
-    x->x_source->remove_sink(ep);
+    AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
+    x->x_source->removeSink(ep);
 
     // remove the sink matching endpoint and id
     for (auto it = x->x_sinks.begin(); it != x->x_sinks.end(); ++it){
@@ -127,7 +127,7 @@ static void aoo_send_doremovesink(t_aoo_send *x, const ip_address& addr, aoo_id 
     bug("aoo_send_doremovesink");
 }
 
-static t_sink *aoo_send_findsink(t_aoo_send *x, const ip_address& addr, aoo_id id)
+static t_sink *aoo_send_findsink(t_aoo_send *x, const aoo::ip_address& addr, AooId id)
 {
     for (auto& sink : x->x_sinks){
         if (sink.s_address == addr && sink.s_id == id){
@@ -137,19 +137,19 @@ static t_sink *aoo_send_findsink(t_aoo_send *x, const ip_address& addr, aoo_id i
     return nullptr;
 }
 
-static void aoo_send_setformat(t_aoo_send *x, aoo_format& f)
+static void aoo_send_setformat(t_aoo_send *x, AooFormat& f)
 {
     // Prevent user from accidentally creating huge number of channels.
     // This also helps to catch an issue with old patches (before 2.0-pre3),
     // which would pass the block size as the channel count, because the
     // "channel" argument hasn't been added yet.
-    if (f.nchannels > x->x_nchannels){
+    if (f.numChannels > x->x_nchannels){
         pd_error(x, "%s: 'channel' argument (%d) in 'format' message out of range!",
-                 classname(x), f.nchannels);
-        f.nchannels = x->x_nchannels;
+                 classname(x), f.numChannels);
+        f.numChannels = x->x_nchannels;
     }
 
-    x->x_source->set_format(f);
+    x->x_source->setFormat(f);
     // output actual format
     t_atom msg[16];
     int n = format_to_atoms(f, 16, msg);
@@ -158,52 +158,53 @@ static void aoo_send_setformat(t_aoo_send *x, aoo_format& f)
     }
 }
 
-static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t)
+static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
 {
     switch (event->type){
-    case AOO_XRUN_EVENT:
+    case kAooEventXRun:
     {
-        auto e = (const aoo_xrun_event *)event;
+        auto e = (const AooEventXRun *)event;
 
         t_atom msg;
         SETFLOAT(&msg, e->count);
         outlet_anything(x->x_msgout, gensym("xrun"), 1, &msg);
         break;
     }
-    case AOO_PING_EVENT:
+    case kAooEventPing:
     {
-        auto e = (const aoo_ping_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
-        double diff1 = aoo_osctime_duration(e->tt1, e->tt2) * 1000.0;
-        double diff2 = aoo_osctime_duration(e->tt2, e->tt3) * 1000.0;
-        double rtt = aoo_osctime_duration(e->tt1, e->tt3) * 1000.0;
+        auto e = (const AooEventPing *)event;
+        aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
+        double diff1 = aoo_ntpTimeDuration(e->tt1, e->tt2) * 1000.0;
+        double diff2 = aoo_ntpTimeDuration(e->tt2, e->tt3) * 1000.0;
+        double rtt = aoo_ntpTimeDuration(e->tt1, e->tt3) * 1000.0;
 
         t_atom msg[7];
-        if (x->x_node->resolve_endpoint(addr, e->ep.id, 3, msg)){
+        if (x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
             SETFLOAT(msg + 3, diff1);
             SETFLOAT(msg + 4, diff2);
             SETFLOAT(msg + 5, rtt);
-            SETFLOAT(msg + 6, e->lost_blocks);
+            SETFLOAT(msg + 6, e->lostBlocks);
             outlet_anything(x->x_msgout, gensym("ping"), 7, msg);
         } else {
             bug("t_node::resolve_endpoint");
         }
         break;
     }
-    case AOO_FORMAT_REQUEST_EVENT:
+    case kAooEventFormatRequest:
     {
-        auto e = (const aoo_format_request_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
+        auto e = (const AooEventFormatRequest *)event;
+        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
+                             e->endpoint.addrlen);
 
-        if (aoo_send_findsink(x, addr, e->ep.id)){
+        if (aoo_send_findsink(x, addr, e->endpoint.id)){
             if (x->x_accept){
                 // make copy, because format will be updated!
-                aoo_format_storage f;
+                AooFormatStorage f;
                 memcpy(&f, e->format, e->format->size);
                 aoo_send_setformat(x, f.header);
             } else {
                 t_atom msg[32];
-                if (x->x_node->resolve_endpoint(addr, e->ep.id, 3, msg)){
+                if (x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
                     int n = format_to_atoms(*e->format, 29, msg + 3); // skip first three atoms
                     outlet_anything(x->x_msgout, gensym("format_request"), n + 3, msg);
                 } else {
@@ -213,19 +214,19 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t
         }
         break;
     }
-    case AOO_INVITE_EVENT:
+    case kAooEventInvite:
     {
-        auto e = (const aoo_invite_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
+        auto e = (const AooEventInvite *)event;
+        aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
 
         // silently ignore invite events for existing sink,
         // because multiple invite events might get sent in a row.
-        if (!aoo_send_findsink(x, addr, e->ep.id)){
+        if (!aoo_send_findsink(x, addr, e->endpoint.id)){
             if (x->x_accept){
-                aoo_send_doaddsink(x, addr, e->ep.id);
+                aoo_send_doaddsink(x, addr, e->endpoint.id);
             } else {
                 t_atom msg[3];
-                if (x->x_node->resolve_endpoint(addr, e->ep.id, 3, msg)){
+                if (x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
                     outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
                 } else {
                     bug("t_node::resolve_endpoint");
@@ -234,19 +235,19 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t
         }
         break;
     }
-    case AOO_UNINVITE_EVENT:
+    case kAooEventUninvite:
     {
-        auto e = (const aoo_uninvite_event *)event;
-        aoo::ip_address addr((const sockaddr *)e->ep.address, e->ep.addrlen);
+        auto e = (const AooEventUninvite *)event;
+        aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
 
         // ignore uninvite event for non-existing sink, because
         // multiple uninvite events might get sent in a row.
-        if (aoo_send_findsink(x, addr, e->ep.id)){
+        if (aoo_send_findsink(x, addr, e->endpoint.id)){
             if (x->x_accept){
-                aoo_send_doremovesink(x, addr, e->ep.id);
+                aoo_send_doremovesink(x, addr, e->endpoint.id);
             } else {
                 t_atom msg[3];
-                if (x->x_node->resolve_endpoint(addr, e->ep.id, 3, msg)){
+                if (x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
                     outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
                 } else {
                     bug("t_node::resolve_endpoint");
@@ -262,12 +263,12 @@ static void aoo_send_handle_event(t_aoo_send *x, const aoo_event *event, int32_t
 
 static void aoo_send_tick(t_aoo_send *x)
 {
-    x->x_source->poll_events();
+    x->x_source->pollEvents();
 }
 
 static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
-    aoo_format_storage f;
+    AooFormatStorage f;
     if (format_parse((t_pd *)x, f, argc, argv, x->x_nchannels)){
         aoo_send_setformat(x, f.header);
     }
@@ -280,8 +281,8 @@ static void aoo_send_accept(t_aoo_send *x, t_floatarg f)
 
 static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
-    ip_address addr;
-    aoo_id id;
+    aoo::ip_address addr;
+    AooId id;
     if (argc < 4){
         pd_error(x, "%s: too few arguments for 'channel' message", classname(x));
         return;
@@ -294,34 +295,34 @@ static void aoo_send_channel(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             return;
         }
     #endif
-        aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
-        x->x_source->set_sink_channel_onset(ep, chn);
+        AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
+        x->x_source->setSinkChannelOnset(ep, chn);
     }
 }
 
 static void aoo_send_packetsize(t_aoo_send *x, t_floatarg f)
 {
-    x->x_source->set_packetsize(f);
+    x->x_source->setPacketSize(f);
 }
 
 static void aoo_send_ping(t_aoo_send *x, t_floatarg f)
 {
-    x->x_source->set_ping_interval(f);
+    x->x_source->setPingInterval(f * 0.001);
 }
 
 static void aoo_send_resend(t_aoo_send *x, t_floatarg f)
 {
-    x->x_source->set_resend_buffersize(f);
+    x->x_source->setResendBufferSize(f * 0.001);
 }
 
 static void aoo_send_redundancy(t_aoo_send *x, t_floatarg f)
 {
-    x->x_source->set_redundancy(f);
+    x->x_source->setRedundancy(f);
 }
 
 static void aoo_send_dll_bandwidth(t_aoo_send *x, t_floatarg f)
 {
-    x->x_source->set_dll_bandwidth(f);
+    x->x_source->setDllBandwidth(f);
 }
 
 static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
@@ -336,8 +337,8 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         return;
     }
 
-    ip_address addr;
-    aoo_id id;
+    aoo::ip_address addr;
+    AooId id;
     if (x->x_node->get_sink_arg((t_pd *)x, argc, argv, addr, id)){
         // check if sink exists
         if (aoo_send_findsink(x, addr, id)){
@@ -359,8 +360,8 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         aoo_send_doaddsink(x, addr, id);
 
         if (argc > 3){
-            aoo_endpoint ep { addr.address(), (int32_t)addr.length(), id };
-            x->x_source->set_sink_channel_onset(ep, atom_getfloat(argv + 3));
+            AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
+            x->x_source->setSinkChannelOnset(ep, atom_getfloat(argv + 3));
         }
 
         // print message (use actual IP address)
@@ -385,8 +386,8 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         return;
     }
 
-    ip_address addr;
-    aoo_id id;
+    aoo::ip_address addr;
+    AooId id;
     if (x->x_node->get_sink_arg((t_pd *)x, argc, argv, addr, id)){
         if (aoo_send_findsink(x, addr, id)){
             aoo_send_doremovesink(x, addr, id);
@@ -410,12 +411,12 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_send_start(t_aoo_send *x)
 {
-    x->x_source->start();
+    x->x_source->startStream();
 }
 
 static void aoo_send_stop(t_aoo_send *x)
 {
-    x->x_source->stop();
+    x->x_source->stopStream();
 }
 
 static void aoo_send_listsinks(t_aoo_send *x)
@@ -435,19 +436,19 @@ static t_int * aoo_send_perform(t_int *w)
     t_aoo_send *x = (t_aoo_send *)(w[1]);
     int n = (int)(w[2]);
 
-    static_assert(sizeof(t_sample) == sizeof(aoo_sample),
-                  "aoo_sample size must match t_sample");
+    static_assert(sizeof(t_sample) == sizeof(AooSample),
+                  "AooSample size must match t_sample");
 
     if (x->x_node){
-        auto t = aoo::get_osctime();
-        auto vec = (const aoo_sample **)x->x_vec.get();
+        auto t = get_osctime();
+        auto vec = (const AooSample **)x->x_vec.get();
 
         auto err = x->x_source->process(vec, n, t);
-        if (err != AOO_ERROR_IDLE){
+        if (err != kAooErrorIdle){
             x->x_node->notify();
         }
 
-        if (x->x_source->events_available()){
+        if (x->x_source->eventsAvailable()){
             clock_delay(x->x_clock, 0);
         }
     }
@@ -505,7 +506,7 @@ static void aoo_send_port(t_aoo_send *x, t_floatarg f)
 
 static void aoo_send_id(t_aoo_send *x, t_floatarg f)
 {
-    aoo_id id = f;
+    AooId id = f;
 
     if (id == x->x_id){
         return;
@@ -520,7 +521,7 @@ static void aoo_send_id(t_aoo_send *x, t_floatarg f)
         x->x_node->release((t_pd *)x, x->x_source.get());
     }
 
-    x->x_source->set_id(id);
+    x->x_source->setId(id);
 
     if (x->x_port){
         x->x_node = t_node::get((t_pd *)x, x->x_port, x->x_source.get(), x->x_id);
@@ -546,7 +547,7 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
     x_port = atom_getfloatarg(0, argc, argv);
 
     // arg #2: ID
-    aoo_id id = atom_getfloatarg(1, argc, argv);
+    AooId id = atom_getfloatarg(1, argc, argv);
     if (id < 0){
         pd_error(this, "%s: bad id % d, setting to 0", classname(this), id);
         id = 0;
@@ -572,19 +573,18 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
     // make event outlet
     x_msgout = outlet_new(&x_obj, 0);
 
-    // create and initialize aoo_source object
-    auto src = aoo::source::create(x_id, 0);
-    x_source.reset(src);
+    // create and initialize AooSource object
+    x_source = AooSource::create(x_id, 0, nullptr);
 
     // set event handler
-    x_source->set_eventhandler((aoo_eventhandler)aoo_send_handle_event,
-                               this, AOO_EVENT_POLL);
+    x_source->setEventHandler((AooEventHandler)aoo_send_handle_event,
+                              this, kAooEventModePoll);
 
-    aoo_format_storage fmt;
+    AooFormatStorage fmt;
     format_makedefault(fmt, nchannels);
-    x_source->set_format(fmt.header);
+    x_source->setFormat(fmt.header);
 
-    x_source->set_buffersize(DEFBUFSIZE);
+    x_source->setBufferSize(DEFBUFSIZE * 0.001);
 
     // finally we're ready to receive messages
     aoo_send_port(this, x_port);

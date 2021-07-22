@@ -13,6 +13,12 @@ if(UNIX AND NOT APPLE AND NOT MINGW)
 	set(LINUX TRUE)
 endif()
 
+# some MinGW setups don't define WIN32!
+if (MINGW AND NOT WIN32)
+    message(WARNING "Your MinGW setup doesn't define WIN32")
+    set(WIN32 TRUE)
+endif()
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 	set(CMAKE_COMPILER_IS_CLANG 1)
 endif()
@@ -33,12 +39,12 @@ if(MINGW)
 endif()
 
 # logging
-set(LOGLEVEL "WARNING" CACHE STRING "LOGLEVEL")
-message(STATUS "LOGLEVEL: ${LOGLEVEL}")
-add_definitions("-DAOO_LOGLEVEL=AOO_LOGLEVEL_${LOGLEVEL}")
+set(LOG_LEVEL "Warning" CACHE STRING "LOG_LEVEL")
+message(STATUS "LOG_LEVEL: ${LOG_LEVEL}")
+add_definitions("-DAOO_LOG_LEVEL=kAooLogLevel${LOG_LEVEL}")
 
 # Windows paths
-if (WIN32 OR MINGW)
+if (WIN32)
     # check if "Program Files (x86)" exists (64-bit Windows) and if we compile for 32-bit
     set(_pf_x86 "ProgramFiles(x86)")
     if (DEFINED ENV{${_pf_x86}} AND (CMAKE_SIZEOF_VOID_P EQUAL 4))

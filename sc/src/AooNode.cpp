@@ -23,12 +23,10 @@
 
 #define DEBUG_THREADS 0
 
-using namespace aoo;
-
 class AooNode final : public INode {
     friend class INode;
 public:
-    AooNode(World *world, int socket, const ip_address& addr);
+    AooNode(World *world, int socket, const aoo::ip_address& addr);
 
     ~AooNode() override;
 
@@ -36,13 +34,13 @@ public:
 
     int port() const override { return port_; }
 
-    aoo::net::client * client() override {
+    AooClient * client() override {
         return client_.get();
     }
 
-    bool registerClient(AooClient *c) override;
+    bool registerClient(sc::AooClient *c) override;
 
-    void unregisterClient(AooClient *c) override;
+    void unregisterClient(sc::AooClient *c) override;
 
     void notify() override {
     #if NETWORK_THREAD_POLL
@@ -61,12 +59,12 @@ public:
     }
 
     bool getSinkArg(sc_msg_iter *args, aoo::ip_address& addr,
-                    aoo_id &id) const override {
+                    AooId &id) const override {
         return getEndpointArg(args, addr, &id, "sink");
     }
 
     bool getSourceArg(sc_msg_iter *args, aoo::ip_address& addr,
-                      aoo_id &id) const override {
+                      AooId &id) const override {
         return getEndpointArg(args, addr, &id, "source");
     }
 
@@ -74,17 +72,17 @@ public:
         return getEndpointArg(args, addr, nullptr, "peer");
     }
 private:
-    using unique_lock = sync::unique_lock<sync::mutex>;
-    using scoped_lock = sync::scoped_lock<sync::mutex>;
+    using unique_lock = aoo::sync::unique_lock<aoo::sync::mutex>;
+    using scoped_lock = aoo::sync::scoped_lock<aoo::sync::mutex>;
 
     int socket_ = -1;
     int port_ = 0;
     aoo::ip_address::ip_type type_;
     // client
-    aoo::net::client::pointer client_;
+    AooClient::Ptr client_;
     aoo::sync::mutex clientMutex_;
     std::thread clientThread_;
-    AooClient *clientObject_ = nullptr;
+    sc::AooClient *clientObject_ = nullptr;
     // threading
 #if NETWORK_THREAD_POLL
     std::thread iothread_;
@@ -100,8 +98,8 @@ private:
     bool getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
                         int32_t *id, const char *what) const;
 
-    static int32_t send(void *user, const char *msg, int32_t size,
-                        const void *addr, int32_t addrlen, uint32_t flags);
+    static AooInt32 send(void *user, const AooByte *msg, AooInt32 size,
+                         const void *addr, AooAddrSize addrlen, AooFlag flags);
 
 #if NETWORK_THREAD_POLL
     void performNetworkIO();
@@ -111,34 +109,34 @@ private:
 #endif
 
     void handleClientMessage(const char *data, int32_t size,
-                             const ip_address& addr, aoo::time_tag time);
+                             const aoo::ip_address& addr, aoo::time_tag time);
 
     void handleClientBundle(const osc::ReceivedBundle& bundle,
-                            const ip_address& addr);
+                            const aoo::ip_address& addr);
 };
 
 // public methods
 
-AooNode::AooNode(World *world, int socket, const ip_address& addr)
+AooNode::AooNode(World *world, int socket, const aoo::ip_address& addr)
     : socket_(socket), port_(addr.port()), type_(addr.type())
 {
-    client_.reset(aoo::net::client::create(addr.address(), addr.length(), 0));
+    client_ = AooClient::create(addr.address(), addr.length(), 0, nullptr);
 
 #if NETWORK_THREAD_POLL
     // start network I/O thread
     iothread_ = std::thread([this](){
-        sync::lower_thread_priority();
+        aoo::sync::lower_thread_priority();
         performNetworkIO();
     });
 #else
     // start receive thread
     sendthread_ = std::thread([this](){
-        sync::lower_thread_priority();
+        aoo::sync::lower_thread_priority();
         sendPackets();
     });
     // start receive thread
     recvthread_ = std::thread([this](){
-        sync::lower_thread_priority();
+        aoo::sync::lower_thread_priority();
         receivePackets();
     });
 #endif
@@ -151,16 +149,16 @@ AooNode::~AooNode(){
     quit_ = true;
 
 #if NETWORK_THREAD_POLL
-    socket_signal(socket_); // wake perform_io()
+    aoo::socket_signal(socket_); // wake perform_io()
     iothread_.join();
 #else
     event_.set(); // wake send_packets()
-    socket_signal(socket_); // wake receive_packets()
+    aoo::socket_signal(socket_); // wake receive_packets()
     sendthread_.join();
     recvthread_.join();
 #endif
 
-    socket_close(socket_);
+    aoo::socket_close(socket_);
 
     // quit client thread
     if (clientThread_.joinable()){
@@ -194,16 +192,16 @@ INode::ptr INode::get(World *world, int port){
 
     if (!node){
         // first create socket
-        int sock = socket_udp(port);
+        int sock = aoo::socket_udp(port);
         if (sock < 0){
             LOG_ERROR("AooNode: couldn't bind to port " << port);
             return nullptr;
         }
 
-        ip_address addr;
-        if (socket_address(sock, addr) != 0){
+        aoo::ip_address addr;
+        if (aoo::socket_address(sock, addr) != 0){
             LOG_ERROR("AooNode: couldn't get socket address");
-            socket_close(sock);
+            aoo::socket_close(sock);
             return nullptr;
         }
 
@@ -214,8 +212,8 @@ INode::ptr INode::get(World *world, int port){
     #else
         const int recvbufsize = 1 << 16; // 65 KB
     #endif
-        socket_setsendbufsize(sock, sendbufsize);
-        socket_setrecvbufsize(sock, recvbufsize);
+        aoo::socket_setsendbufsize(sock, sendbufsize);
+        aoo::socket_setrecvbufsize(sock, recvbufsize);
 
         // finally create aoo node instance
         node = std::make_shared<AooNode>(world, sock, addr);
@@ -225,7 +223,7 @@ INode::ptr INode::get(World *world, int port){
     return node;
 }
 
-bool AooNode::registerClient(AooClient *c){
+bool AooNode::registerClient(sc::AooClient *c){
     scoped_lock lock(clientMutex_);
     if (clientObject_){
         LOG_ERROR("aoo client on port " << port_
@@ -239,18 +237,18 @@ bool AooNode::registerClient(AooClient *c){
         });
     }
     clientObject_ = c;
-    client_->set_eventhandler(
-        [](void *user, const aoo_event *event, int32_t) {
-            static_cast<AooClient*>(user)->handleEvent(event);
-        }, c, AOO_EVENT_CALLBACK);
+    client_->setEventHandler(
+        [](void *user, const AooEvent *event, AooEventMode) {
+            static_cast<sc::AooClient*>(user)->handleEvent(event);
+        }, c, kAooEventModeCallback);
     return true;
 }
 
-void AooNode::unregisterClient(AooClient *c){
+void AooNode::unregisterClient(sc::AooClient *c){
     scoped_lock lock(clientMutex_);
     assert(clientObject_ == c);
     clientObject_ = nullptr;
-    client_->set_eventhandler(nullptr, nullptr, AOO_EVENT_NONE);
+    client_->setEventHandler(nullptr, nullptr, kAooEventModeNone);
 }
 
 // private methods
@@ -270,8 +268,8 @@ bool AooNode::getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
         auto group = s;
         auto user = args->gets();
         // we can't use length_ptr() because socklen_t != int32_t on many platforms
-        int32_t len = aoo::ip_address::max_length;
-        if (client_->get_peer_by_name(group, user, addr.address_ptr(), &len) == AOO_OK) {
+        AooAddrSize len = aoo::ip_address::max_length;
+        if (client_->getPeerByName(group, user, addr.address_ptr(), &len) == kAooOk) {
             *addr.length_ptr() = len;
         } else {
             LOG_ERROR("aoo: couldn't find peer " << group << "|" << user);
@@ -293,7 +291,7 @@ bool AooNode::getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
 
     if (id){
         if (args->remain()){
-            aoo_id i = args->geti(-1);
+            AooId i = args->geti(-1);
             if (i >= 0){
                 *id = i;
             } else {
@@ -309,21 +307,21 @@ bool AooNode::getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
     return true;
 }
 
-int32_t AooNode::send(void *user, const char *msg, int32_t size,
-                      const void *addr, int32_t addrlen, uint32_t flags)
+AooInt32 AooNode::send(void *user, const AooByte *msg, AooInt32 size,
+                       const void *addr, AooAddrSize addrlen, AooFlag flags)
 {
     auto x = (AooNode *)user;
-    ip_address address((const sockaddr *)addr, addrlen);
-    return socket_sendto(x->socket_, msg, size, address);
+    aoo::ip_address address((const sockaddr *)addr, addrlen);
+    return aoo::socket_sendto(x->socket_, msg, size, address);
 }
 
 #if NETWORK_THREAD_POLL
 void AooNode::performNetworkIO(){
     while (!quit_.load(std::memory_order_relaxed)){
-        ip_address addr;
-        char buf[AOO_MAXPACKETSIZE];
-        int nbytes = socket_receive(socket_, buf, AOO_MAXPACKETSIZE,
-                                    &addr, POLL_INTERVAL);
+        aoo::ip_address addr;
+        char buf[AOO_MAX_PACKET_SIZE];
+        int nbytes = aoo::socket_receive(socket_, buf, AOO_MAX_PACKET_SIZE,
+                                         &addr, POLL_INTERVAL);
         if (nbytes > 0){
             scoped_lock lock(clientMutex_);
         #if DEBUG_THREADS
@@ -344,7 +342,7 @@ void AooNode::performNetworkIO(){
         } else if (nbytes < 0) {
             // ignore errors when quitting
             if (!quit_){
-                socket_error_print("recv");
+                aoo::socket_error_print("recv");
             }
             return;
         } else {
@@ -375,9 +373,9 @@ void AooNode::sendPackets(){
 
 void AooNode::receivePackets(){
     while (!quit_.load(std::memory_order_relaxed)){
-        ip_address addr;
-        char buf[AOO_MAXPACKETSIZE];
-        int nbytes = socket_receive(socket_, buf, AOO_MAXPACKETSIZE, &addr, -1);
+        aoo::ip_address addr;
+        char buf[AOO_MAX_PACKET_SIZE];
+        int nbytes = socket_receive(socket_, buf, AOO_MAX_PACKET_SIZE, &addr, -1);
         if (nbytes > 0){
             scoped_lock lock(clientMutex_);
         #if DEBUG_THREADS
@@ -398,7 +396,7 @@ void AooNode::receivePackets(){
         } else if (nbytes < 0) {
             // ignore errors when quitting
             if (!quit_){
-                socket_error_print("recv");
+                aoo::socket_error_print("recv");
             }
             return;
         } else {
@@ -409,11 +407,12 @@ void AooNode::receivePackets(){
 #endif
 
 void AooNode::handleClientMessage(const char *data, int32_t size,
-                                  const ip_address& addr, aoo::time_tag time)
+                                  const aoo::ip_address& addr, aoo::time_tag time)
 {
     if (size > 4 && !memcmp("/aoo", data, 4)){
         // AoO message
-        client_->handle_message(data, size, addr.address(), addr.length());
+        client_->handleMessage((const AooByte *)data, size,
+                               addr.address(), addr.length());
     } else if (!strncmp("/sc/msg", data, size)){
         // OSC message coming from language client
         if (clientObject_){
@@ -425,7 +424,7 @@ void AooNode::handleClientMessage(const char *data, int32_t size,
 }
 
 void AooNode::handleClientBundle(const osc::ReceivedBundle &bundle,
-                                 const ip_address& addr){
+                                 const aoo::ip_address& addr){
     auto time = bundle.TimeTag();
     auto it = bundle.ElementsBegin();
     while (it != bundle.ElementsEnd()){

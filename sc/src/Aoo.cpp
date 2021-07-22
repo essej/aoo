@@ -16,8 +16,15 @@ namespace rt {
     InterfaceTable* interfaceTable;
 }
 
-static void SCLog(const char *s, int32_t, void *){
-    Print("%s", s);
+// TODO: honor Server verbosity
+static void SCLog(AooLogLevel level, const char *s, ...) {
+    if (level == kAooLogLevelError) {
+        Print("ERROR: %s", s);
+    } else if (level == kAooLogLevelWarning) {
+        Print("WARNING: %s", s);
+    } else {
+        Print("%s", s);
+    }
 }
 
 /*////////////////// Replies //////////////////////*/
@@ -241,7 +248,7 @@ void AooDelegate::beginEvent(osc::OutboundPacketStream &msg, const char *event)
 }
 
 void AooDelegate::beginEvent(osc::OutboundPacketStream &msg, const char *event,
-                             const aoo::ip_address& addr, aoo_id id)
+                             const aoo::ip_address& addr, AooId id)
 {
     msg << osc::BeginMessage("/aoo/event")
         << owner_->mParent->mNode.mID << owner_->mParentIndex
@@ -266,26 +273,26 @@ void AooDelegate::sendMsgNRT(osc::OutboundPacketStream &msg){
 // This is certainly fine for the case of a single World,
 // and it should be more or less ok for libscsynth.
 uint64_t getOSCTime(World *world){
-    thread_local uint64_t time;
+    thread_local AooNtpTime time;
     thread_local int lastBuffer{-1};
 
     if (lastBuffer != world->mBufCounter){
-        time = aoo_osctime_now();
+        time = aoo_getCurrentNtpTime();
         lastBuffer = world->mBufCounter;
     }
     return time;
 }
 
-void makeDefaultFormat(aoo_format_storage& f, int sampleRate,
+void makeDefaultFormat(AooFormatStorage& f, int sampleRate,
                        int blockSize, int numChannels)
 {
-    auto& fmt = (aoo_format_pcm &)f;
-    fmt.header.codec = AOO_CODEC_PCM;
-    fmt.header.size = sizeof(aoo_format_pcm);
-    fmt.header.blocksize = blockSize;
-    fmt.header.samplerate = sampleRate;
-    fmt.header.nchannels = numChannels;
-    fmt.bitdepth = AOO_PCM_FLOAT32;
+    auto& fmt = (AooFormatPcm &)f;
+    fmt.header.codec = kAooCodecPcm;
+    fmt.header.size = sizeof(AooFormatPcm);
+    fmt.header.blockSize = blockSize;
+    fmt.header.sampleRate = sampleRate;
+    fmt.header.numChannels = numChannels;
+    fmt.bitDepth = kAooPcmFloat32;
 }
 
 static int32_t getFormatParam(sc_msg_iter *args, const char *name, int32_t def)
@@ -305,31 +312,31 @@ static int32_t getFormatParam(sc_msg_iter *args, const char *name, int32_t def)
 }
 
 bool parseFormat(const AooUnit& unit, int defNumChannels,
-                 sc_msg_iter *args, aoo_format_storage &f)
+                 sc_msg_iter *args, AooFormatStorage &f)
 {
     const char *codec = args->gets("");
 
-    if (!strcmp(codec, AOO_CODEC_PCM)){
-        auto& fmt = (aoo_format_pcm &)f;
-        fmt.header.codec = AOO_CODEC_PCM;
-        fmt.header.size = sizeof(aoo_format_pcm);
-        fmt.header.nchannels = getFormatParam(args, "channels", defNumChannels);
-        fmt.header.blocksize = getFormatParam(args, "blocksize", unit.bufferSize());
-        fmt.header.samplerate = getFormatParam(args, "samplerate", unit.sampleRate());
+    if (!strcmp(codec, kAooCodecPcm)){
+        auto& fmt = (AooFormatPcm &)f;
+        fmt.header.codec = kAooCodecPcm;
+        fmt.header.size = sizeof(AooFormatPcm);
+        fmt.header.numChannels = getFormatParam(args, "channels", defNumChannels);
+        fmt.header.blockSize = getFormatParam(args, "blocksize", unit.bufferSize());
+        fmt.header.sampleRate = getFormatParam(args, "samplerate", unit.sampleRate());
 
         int bitdepth = getFormatParam(args, "bitdepth", 4);
         switch (bitdepth){
         case 2:
-            fmt.bitdepth = AOO_PCM_INT16;
+            fmt.bitDepth = kAooPcmInt16;
             break;
         case 3:
-            fmt.bitdepth = AOO_PCM_INT24;
+            fmt.bitDepth = kAooPcmInt24;
             break;
         case 4:
-            fmt.bitdepth = AOO_PCM_FLOAT32;
+            fmt.bitDepth = kAooPcmFloat32;
             break;
         case 8:
-            fmt.bitdepth = AOO_PCM_FLOAT64;
+            fmt.bitDepth = kAooPcmFloat64;
             break;
         default:
             LOG_ERROR("aoo: bad bitdepth argument " << bitdepth);
@@ -337,13 +344,13 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
         }
     }
 #if USE_CODEC_OPUS
-    else if (!strcmp(codec, AOO_CODEC_OPUS)){
-        auto &fmt = (aoo_format_opus &)f;
-        fmt.header.codec = AOO_CODEC_OPUS;
-        fmt.header.size = sizeof(aoo_format_opus);
-        fmt.header.nchannels = getFormatParam(args, "channels", defNumChannels);
-        fmt.header.blocksize = getFormatParam(args, "blocksize", 480); // 10ms
-        fmt.header.samplerate = getFormatParam(args, "samplerate", 48000);
+    else if (!strcmp(codec, kAooCodecOpus)){
+        auto &fmt = (AooFormatOpus &)f;
+        fmt.header.codec = kAooCodecOpus;
+        fmt.header.size = sizeof(AooFormatOpus);
+        fmt.header.numChannels = getFormatParam(args, "channels", defNumChannels);
+        fmt.header.blockSize = getFormatParam(args, "blocksize", 480); // 10ms
+        fmt.header.sampleRate = getFormatParam(args, "samplerate", 48000);
 
         // bitrate ("auto", "max" or float)
         if (args->remain() > 0){
@@ -381,33 +388,33 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
         if (args->remain() > 0){
             auto type = args->gets("");
             if (!strcmp(type, "auto")){
-                fmt.signal_type = OPUS_AUTO;
+                fmt.signalType = OPUS_AUTO;
             } else if (!strcmp(type, "music")){
-                fmt.signal_type = OPUS_SIGNAL_MUSIC;
+                fmt.signalType = OPUS_SIGNAL_MUSIC;
             } else if (!strcmp(type, "voice")){
-                fmt.signal_type = OPUS_SIGNAL_VOICE;
+                fmt.signalType = OPUS_SIGNAL_VOICE;
             } else {
                 LOG_ERROR("aoo: unsupported signal type '" << type << "'");
                 return false;
             }
         } else {
-            fmt.signal_type = OPUS_AUTO;
+            fmt.signalType = OPUS_AUTO;
         }
         // application type ("auto", "audio", "voip", "lowdelay")
         if (args->remain() > 0){
             auto type = args->gets("");
             if (!strcmp(type, "auto") || !strcmp(type, "audio")){
-                fmt.application_type = OPUS_APPLICATION_AUDIO;
+                fmt.applicationType = OPUS_APPLICATION_AUDIO;
             } else if (!strcmp(type, "voip")){
-                fmt.application_type = OPUS_APPLICATION_VOIP;
+                fmt.applicationType = OPUS_APPLICATION_VOIP;
             } else if (!strcmp(type, "lowdelay")){
-                fmt.application_type = OPUS_APPLICATION_RESTRICTED_LOWDELAY;
+                fmt.applicationType = OPUS_APPLICATION_RESTRICTED_LOWDELAY;
             } else {
                 LOG_ERROR("aoo: unsupported application type '" << type << "'");
                 return false;
             }
         } else {
-            fmt.application_type = OPUS_APPLICATION_AUDIO;
+            fmt.applicationType = OPUS_APPLICATION_AUDIO;
         }
     }
 #endif
@@ -418,25 +425,26 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
     return true;
 }
 
-void serializeFormat(osc::OutboundPacketStream& msg, const aoo_format& f)
+void serializeFormat(osc::OutboundPacketStream& msg, const AooFormat& f)
 {
-    msg << f.codec << f.nchannels << f.blocksize << f.samplerate;
+    msg << f.codec << (int32_t)f.numChannels
+        << (int32_t)f.blockSize << (int32_t)f.sampleRate;
 
-    if (!strcmp(f.codec, AOO_CODEC_PCM)){
+    if (!strcmp(f.codec, kAooCodecPcm)){
         // pcm <blocksize> <samplerate> <bitdepth>
-        auto& fmt = (aoo_format_pcm &)f;
+        auto& fmt = (AooFormatPcm &)f;
         int nbits;
-        switch (fmt.bitdepth){
-        case AOO_PCM_INT16:
+        switch (fmt.bitDepth){
+        case kAooPcmInt16:
             nbits = 2;
             break;
-        case AOO_PCM_INT24:
+        case kAooPcmInt24:
             nbits = 3;
             break;
-        case AOO_PCM_FLOAT32:
+        case kAooPcmFloat32:
             nbits = 4;
             break;
-        case AOO_PCM_FLOAT64:
+        case kAooPcmFloat64:
             nbits = 8;
             break;
         default:
@@ -445,9 +453,9 @@ void serializeFormat(osc::OutboundPacketStream& msg, const aoo_format& f)
         msg << nbits;
     }
 #if USE_CODEC_OPUS
-    else if (!strcmp(f.codec, AOO_CODEC_OPUS)){
+    else if (!strcmp(f.codec, kAooCodecOpus)){
         // opus <blocksize> <samplerate> <bitrate> <complexity> <signaltype> <application>
-        auto& fmt = (aoo_format_opus &)f;
+        auto& fmt = (AooFormatOpus &)f;
         // bitrate
     #if 0
         msg << fmt.bitrate;
@@ -471,7 +479,7 @@ void serializeFormat(osc::OutboundPacketStream& msg, const aoo_format& f)
         // complexity
         msg << fmt.complexity;
         // signal type
-        switch (fmt.signal_type){
+        switch (fmt.signalType){
         case OPUS_SIGNAL_MUSIC:
             msg << "music";
             break;
@@ -483,7 +491,7 @@ void serializeFormat(osc::OutboundPacketStream& msg, const aoo_format& f)
             break;
         }
         // application type
-        switch (fmt.application_type){
+        switch (fmt.applicationType){
         case OPUS_APPLICATION_VOIP:
             msg << "voip";
             break;
@@ -513,11 +521,9 @@ PluginLoad(Aoo) {
     ft = inTable; // store pointer to InterfaceTable
     rt::interfaceTable = inTable; // for "rt_shared_ptr.h"
 
-    aoo_set_logfunction(SCLog, nullptr);
+    aoo_initializeEx(SCLog, nullptr),
 
-    aoo_initialize();
-
-    Print("AOO (audio over OSC) %s\n", aoo_version_string());
+    Print("AOO (audio over OSC) %s\n", aoo_getVersionString());
     Print("  (c) 2020 Christof Ressi, Winfried Ritsch, et al.\n");
 
     std::string msg;

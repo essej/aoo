@@ -20,7 +20,7 @@ include_directories(${SC_INCLUDEDIR}/common)
 
 # Installation path
 # install directory:
-if (WIN32 OR MINGW)
+if (WIN32)
     set(SC_INSTALLDIR "${LOCALAPPDATA}/SuperCollider/Extensions/" CACHE PATH "Installation directory")
 elseif(APPLE)
     set(SC_INSTALLDIR "~/Library/Application Support/SuperCollider/Extensions/" CACHE PATH "Installation directoy")
@@ -31,7 +31,7 @@ message(STATUS "SC_INSTALLDIR: ${SC_INSTALLDIR}")
 
 # plugin extension
 set(CMAKE_SHARED_MODULE_PREFIX "") # no prefix!
-if(APPLE OR MINGW OR WIN32)
+if(APPLE OR WIN32)
 set(CMAKE_SHARED_MODULE_SUFFIX ".scx")
 endif()
 
@@ -50,7 +50,7 @@ set_target_properties(${PROJECT} PROPERTIES OUTPUT_NAME ${FILENAME})
 target_compile_definitions(${PROJECT} PUBLIC "-DAOO_STATIC")
 target_link_libraries(${PROJECT} ${AOO_STATIC} ${AOONET_STATIC}
     ${MD5_LIB} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS})
-if (WIN32 OR MINGW)
+if (WIN32)
     target_link_libraries(${PROJECT} "ws2_32")
 endif()
 
@@ -60,7 +60,7 @@ if(SUPERNOVA)
     target_compile_definitions(${PROJECT}_supernova PUBLIC "-DSUPERNOVA=1" "-DAOO_STATIC")
     target_link_libraries(${PROJECT}_supernova ${AOO_STATIC} ${AOONET_STATIC}
         ${MD5_LIB} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS})
-    if (WIN32 OR MINGW)
+    if (WIN32)
         target_link_libraries(${PROJECT}_supernova "ws2_32")
     endif()
 endif()

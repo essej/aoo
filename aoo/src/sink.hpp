@@ -4,9 +4,9 @@
 
 #pragma once
 
-#include "aoo/aoo.hpp"
+#include "aoo/aoo_sink.hpp"
 #if USE_AOO_NET
-# include "aoo/aoo_net.hpp"
+# include "aoo/aoo_client.hpp"
 #endif
 
 #include "common/lockfree.hpp"
@@ -25,10 +25,6 @@
 #include "oscpack/osc/OscOutboundPacketStream.h"
 #include "oscpack/osc/OscReceivedElements.h"
 
-#ifndef DEBUG_MEMORY
-#define DEBUG_MEMORY 0
-#endif
-
 namespace aoo {
 
 struct stream_state {
@@ -44,35 +40,35 @@ struct event
 {
     event() = default;
 
-    event(aoo_event_type type) : type_(type) {}
+    event(AooEventType type) : type_(type) {}
 
-    event(aoo_event_type type, const source_desc& desc);
+    event(AooEventType type, const source_desc& desc);
 
     union {
-        aoo_event_type type_;
-        aoo_event event_;
-        aoo_source_event source;
-        aoo_format_change_event format;
-        aoo_format_timeout_event format_timeout;
-        aoo_ping_event ping;
-        aoo_stream_state_event source_state;
-        aoo_block_lost_event block_loss;
-        aoo_block_reordered_event block_reorder;
-        aoo_block_resent_event block_resend;
-        aoo_block_dropped_event block_dropped;
-        aoo_block_gap_event block_gap;
+        AooEventType type_;
+        AooEvent event_;
+        AooEventEndpoint source;
+        AooEventFormatChange format;
+        AooEventFormatTimeout format_timeout;
+        AooEventPing ping;
+        AooEventStreamState source_state;
+        AooEventBlockLost block_lost;
+        AooEventBlockReordered block_reordered;
+        AooEventBlockResent block_resent;
+        AooEventBlockDropped block_dropped;
+        AooEventBlockGap block_gap;
     };
 };
 
 struct sink_event {
     sink_event() = default;
 
-    sink_event(aoo_event_type _type) : type(_type) {}
-    sink_event(aoo_event_type _type, const source_desc& desc);
+    sink_event(AooEventType _type) : type(_type) {}
+    sink_event(AooEventType _type, const source_desc& desc);
 
-    aoo_event_type type;
+    AooEventType type;
     ip_address address;
-    aoo_id id;
+    AooId id;
     int32_t count; // for xrun event
 };
 
@@ -106,12 +102,12 @@ struct source_request {
     source_request(request_type _type)
         : type(_type) {}
 
-    source_request(request_type _type, const ip_address& _addr, aoo_id _id)
+    source_request(request_type _type, const ip_address& _addr, AooId _id)
         : type(_type), address(_addr), id(_id) {}
 
     request_type type;
     ip_address address;
-    aoo_id id = -1;
+    AooId id = -1;
 };
 
 class sink_imp;
@@ -129,7 +125,7 @@ struct net_packet : data_packet {
 
 class source_desc {
 public:
-    source_desc(const ip_address& addr, aoo_id id,
+    source_desc(const ip_address& addr, AooId id,
                 uint32_t flags, double time);
 
     source_desc(const source_desc& other) = delete;
@@ -138,11 +134,11 @@ public:
     ~source_desc();
 
     // getters
-    aoo_id id() const { return id_; }
+    AooId id() const { return id_; }
 
     const ip_address& address() const { return addr_; }
 
-    bool match(const ip_address& addr, aoo_id id) const {
+    bool match(const ip_address& addr, AooId id) const {
         return (addr_ == addr) && (id_ == id);
     }
 
@@ -156,29 +152,29 @@ public:
         return !eventqueue_.empty();
     }
 
-    int32_t poll_events(sink_imp& s, aoo_eventhandler fn, void *user);
+    int32_t poll_events(sink_imp& s, AooEventHandler fn, void *user);
 
-    aoo_error get_format(aoo_format& format, size_t size);
+    AooError get_format(AooFormat& format, size_t size);
 
     // methods
     void reset(const sink_imp& s);
 
-    aoo_error handle_format(const sink_imp& s, int32_t salt, const aoo_format& f,
-                            const char *settings, int32_t size, uint32_t flags);
+    AooError handle_format(const sink_imp& s, int32_t salt, const AooFormat& f,
+                           const AooByte *settings, int32_t size, uint32_t flags);
 
-    aoo_error handle_data(const sink_imp& s, net_packet& d, bool binary);
+    AooError handle_data(const sink_imp& s, net_packet& d, bool binary);
 
-    aoo_error handle_ping(const sink_imp& s, time_tag tt);
+    AooError handle_ping(const sink_imp& s, time_tag tt);
 
     void send(const sink_imp& s, const sendfn& fn);
 
-    bool process(const sink_imp& s, aoo_sample **buffer, int32_t nsamples, time_tag tt);
+    bool process(const sink_imp& s, AooSample **buffer, int32_t nsamples, time_tag tt);
 
     void invite(const sink_imp& s);
 
     void uninvite(const sink_imp& s);
 
-    aoo_error request_format(const sink_imp& s, const aoo_format& f);
+    AooError request_format(const sink_imp& s, const AooFormat& f);
 
     float get_buffer_fill_ratio();
 
@@ -221,18 +217,18 @@ private:
 
     // data
     const ip_address addr_;
-    const aoo_id id_;
+    const AooId id_;
     uint32_t flags_;
     int32_t salt_ = -1; // start with invalid stream ID!
 
-    aoo_stream_state streamstate_;
+    AooStreamState streamstate_;
     bool underrun_{false};
     bool didupdate_{false};
     std::atomic<bool> binary_{false};
 
     std::atomic<source_state> state_{source_state::idle};
 
-    std::unique_ptr<aoo_format, format_deleter> format_request_;
+    std::unique_ptr<AooFormat, format_deleter> format_request_;
     double format_time_ = 0;
 
     std::atomic<double> state_time_{0.0};
@@ -254,7 +250,7 @@ private:
             int32_t channel;
             int32_t padding;
         } header;
-        aoo_sample data[1];
+        AooSample data[1];
     };
     lockfree::spsc_queue<char, aoo::allocator<char>> audioqueue_;
     int32_t minblocks_ = 0;
@@ -276,76 +272,80 @@ private:
     }
     // events
     lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
-    void send_event(const sink_imp& s, const event& e, aoo_thread_level level);
+    void send_event(const sink_imp& s, const event& e, AooThreadLevel level);
     // memory
     aoo::memory_list memory_;
     // thread synchronization
     sync::shared_mutex mutex_; // LATER replace with a spinlock?
 };
 
-class sink_imp final : public sink {
+class sink_imp final : public AooSink {
 public:
-    sink_imp(aoo_id id, uint32_t flags);
+    sink_imp(AooId id, AooFlag flags, AooError *err);
 
     ~sink_imp();
 
-    aoo_error setup(int32_t samplerate, int32_t blocksize, int32_t nchannels) override;
+    AooError AOO_CALL setup(AooSampleRate samplerate,
+                            AooInt32 blocksize, AooInt32 nchannels) override;
 
-    aoo_error handle_message(const char *data, int32_t n,
-                             const void *address, int32_t addrlen) override;
+    AooError AOO_CALL handleMessage(const AooByte *data, AooInt32 n,
+                                    const void *address, AooAddrSize addrlen) override;
 
-    aoo_error send(aoo_sendfn fn, void *user) override;
+    AooError AOO_CALL send(AooSendFunc fn, void *user) override;
 
-    aoo_error process(aoo_sample **data, int32_t nsamples, uint64_t t) override;
+    AooError AOO_CALL process(AooSample **data, AooInt32 nsamples,
+                              AooNtpTime t) override;
 
-    aoo_error set_eventhandler(aoo_eventhandler fn, void *user, int32_t mode) override;
+    AooError AOO_CALL setEventHandler(AooEventHandler fn, void *user,
+                                      AooEventMode mode) override;
 
-    aoo_bool events_available() override;
+    AooBool AOO_CALL eventsAvailable() override;
 
-    aoo_error poll_events() override;
+    AooError AOO_CALL pollEvents() override;
 
-    aoo_error control(int32_t ctl, intptr_t index, void *ptr, size_t size) override;
+    AooError AOO_CALL control(AooCtl ctl, AooIntPtr index,
+                              void *ptr, AooSize size) override;
 
     // getters
-    aoo_id id() const { return id_.load(std::memory_order_relaxed); }
+    AooId id() const { return id_.load(std::memory_order_relaxed); }
 
     int32_t nchannels() const { return nchannels_; }
 
     int32_t samplerate() const { return samplerate_; }
 
-    double real_samplerate() const { return realsr_.load(std::memory_order_relaxed); }
+    AooSampleRate real_samplerate() const { return realsr_.load(std::memory_order_relaxed); }
 
     bool dynamic_resampling() const { return dynamic_resampling_.load(std::memory_order_relaxed);}
 
     int32_t blocksize() const { return blocksize_; }
 
-    int32_t buffersize() const { return buffersize_.load(std::memory_order_relaxed); }
+    AooSeconds buffersize() const { return buffersize_.load(std::memory_order_relaxed); }
 
     int32_t packetsize() const { return packetsize_.load(std::memory_order_relaxed); }
 
     bool resend_enabled() const { return resend_.load(std::memory_order_relaxed); }
 
-    float resend_interval() const { return resend_interval_.load(std::memory_order_relaxed); }
+    AooSeconds resend_interval() const { return resend_interval_.load(std::memory_order_relaxed); }
 
     int32_t resend_limit() const { return resend_limit_.load(std::memory_order_relaxed); }
 
-    float source_timeout() const { return source_timeout_.load(std::memory_order_relaxed); }
+    AooSeconds source_timeout() const { return source_timeout_.load(std::memory_order_relaxed); }
 
-    double elapsed_time() const { return timer_.get_elapsed(); }
+    AooSeconds elapsed_time() const { return timer_.get_elapsed(); }
 
     time_tag absolute_time() const { return timer_.get_absolute(); }
 
-    aoo_event_mode event_mode() const { return eventmode_; }
+    AooEventMode event_mode() const { return eventmode_; }
 
-    void call_event(const event& e, aoo_thread_level level) const;
+    void call_event(const event& e, AooThreadLevel level) const;
 private:
     // settings
-    std::atomic<aoo_id> id_;
+    std::atomic<AooId> id_;
     int32_t nchannels_ = 0;
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
 #if USE_AOO_NET
-    aoo::net::client *client_ = nullptr;
+    AooClient *client_ = nullptr;
 #endif
     // the sources
     using source_list = lockfree::simple_list<source_desc, aoo::allocator<source_desc>>;
@@ -353,54 +353,59 @@ private:
     source_list sources_;
     sync::mutex source_mutex_;
     // timing
-    std::atomic<double> realsr_{0};
+    std::atomic<AooSampleRate> realsr_{0};
     time_dll dll_;
     timer timer_;
     // options
-    std::atomic<int32_t> buffersize_{ AOO_SINK_BUFFERSIZE };
-    std::atomic<int32_t> packetsize_{ AOO_PACKETSIZE };
-    std::atomic<float> resend_interval_{ AOO_RESEND_INTERVAL * 0.001 };
+#if __cplusplus >= 201703L
+    static_assert(std::atomic<AooSeconds>::is_always_lock_free,
+                  "AooSeconds is not lockfree!");
+#endif
+
+    std::atomic<AooSeconds> buffersize_{ AOO_SINK_BUFFER_SIZE };
+    std::atomic<AooSeconds> resend_interval_{ AOO_RESEND_INTERVAL };
+    std::atomic<int32_t> packetsize_{ AOO_PACKET_SIZE };
     std::atomic<int32_t> resend_limit_{ AOO_RESEND_LIMIT };
-    std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT * 0.001 };
-    std::atomic<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
+    std::atomic<AooSeconds> source_timeout_{ AOO_SOURCE_TIMEOUT };
+    std::atomic<double> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
     std::atomic<bool> resend_{AOO_RESEND_DATA};
     std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
     std::atomic<bool> timer_check_{ AOO_TIMER_CHECK };
     // events
     lockfree::unbounded_mpsc_queue<sink_event, aoo::allocator<sink_event>> eventqueue_;
-    void send_event(const sink_event& e, aoo_thread_level level);
-    aoo_eventhandler eventhandler_ = nullptr;
+    void send_event(const sink_event& e, AooThreadLevel level);
+    AooEventHandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;
-    aoo_event_mode eventmode_ = AOO_EVENT_NONE;
+    AooEventMode eventmode_ = kAooEventModeNone;
     // requests
     lockfree::unbounded_mpsc_queue<source_request, aoo::allocator<source_request>> requestqueue_;
     void push_request(const source_request& r){
         requestqueue_.push(r);
     }
-    // helper methods
+    // helper method
 
-    source_desc *find_source(const ip_address& addr, aoo_id id);
+    source_desc *find_source(const ip_address& addr, AooId id);
 
     source_desc *get_source_arg(intptr_t index);
 
-    source_desc *add_source(const ip_address& addr, aoo_id id);
+    source_desc *add_source(const ip_address& addr, AooId id);
 
     void reset_sources();
 
-    aoo_error handle_format_message(const osc::ReceivedMessage& msg,
-                                    const ip_address& addr);
+    AooError handle_format_message(const osc::ReceivedMessage& msg,
+                                   const ip_address& addr);
 
-    aoo_error handle_data_message(const osc::ReceivedMessage& msg,
-                                  const ip_address& addr);
+    AooError handle_data_message(const osc::ReceivedMessage& msg,
+                                 const ip_address& addr);
 
-    aoo_error handle_data_message(const char *msg, int32_t n,
-                                  const ip_address& addr);
+    AooError handle_data_message(const AooByte *msg, int32_t n,
+                                 const ip_address& addr);
 
-    aoo_error handle_data_packet(net_packet& d, bool binary,
-                                 const ip_address& addr, aoo_id id);
+    AooError handle_data_packet(net_packet& d, bool binary,
+                                const ip_address& addr, AooId id);
 
-    aoo_error handle_ping_message(const osc::ReceivedMessage& msg,
-                                  const ip_address& addr);
+    AooError handle_ping_message(const osc::ReceivedMessage& msg,
+                                 const ip_address& addr);
 };
 
 } // aoo

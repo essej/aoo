@@ -17,7 +17,7 @@ struct data_packet {
     int32_t nframes;
     int32_t frame;
     int32_t size;
-    const char *data;
+    const AooByte *data;
     double samplerate;
 };
 
@@ -27,21 +27,21 @@ class sent_block {
 public:
     // methods
     void set(int32_t seq, double sr,
-             const char *data, int32_t nbytes,
+             const AooByte *data, int32_t nbytes,
              int32_t nframes, int32_t framesize);
 
-    const char* data() const { return buffer_.data(); }
+    const AooByte* data() const { return buffer_.data(); }
     int32_t size() const { return buffer_.size(); }
 
     int32_t num_frames() const { return numframes_; }
     int32_t frame_size(int32_t which) const;
-    int32_t get_frame(int32_t which, char * data, int32_t n);
+    int32_t get_frame(int32_t which, AooByte * data, int32_t n);
 
     // data
     int32_t sequence = -1;
     double samplerate = 0;
 protected:
-    std::vector<char, aoo::allocator<char>> buffer_;
+    std::vector<AooByte, aoo::allocator<AooByte>> buffer_;
     int32_t numframes_ = 0;
     int32_t framesize_ = 0;
 };
@@ -78,13 +78,13 @@ public:
     void init(int32_t seq, double sr, int32_t chn,
               int32_t nbytes, int32_t nframes);
 
-    const char* data() const { return buffer_.data(); }
+    const AooByte* data() const { return buffer_.data(); }
     int32_t size() const { return buffer_.size(); }
 
     int32_t num_frames() const { return numframes_; }
     bool has_frame(int32_t which) const;
     int32_t count_frames() const;
-    void add_frame(int32_t which, const char *data, int32_t n);
+    void add_frame(int32_t which, const AooByte *data, int32_t n);
 
     int32_t resend_count() const;
     bool dropped() const;
@@ -96,7 +96,7 @@ public:
     int32_t channel = 0;
     double samplerate = 0;
 protected:
-    std::vector<char, aoo::allocator<char>> buffer_;
+    std::vector<AooByte, aoo::allocator<AooByte>> buffer_;
     int32_t numframes_ = 0;
     int32_t framesize_ = 0;
     std::bitset<256> frames_ = 0;

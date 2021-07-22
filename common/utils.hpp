@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "aoo/aoo_types.h"
+#include "aoo/aoo_defines.h"
 
 #include <stdint.h>
 #include <cstring>
@@ -22,35 +22,31 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
-#ifndef AOO_LOGLEVEL
- #define AOO_LOGLEVEL AOO_LOGLEVEL_WARNING
-#endif
-
 #define DO_LOG(level, msg) do { aoo::Log(level) << msg; } while (false)
-#define DO_LOG_ERROR(msg) DO_LOG(AOO_LOGLEVEL_ERROR, msg)
-#define DO_LOG_WARNING(msg) DO_LOG(AOO_LOGLEVEL_WARNING, msg)
-#define DO_LOG_VERBOSE(msg) DO_LOG(AOO_LOGLEVEL_VERBOSE, msg)
-#define DO_LOG_DEBUG(msg) DO_LOG(AOO_LOGLEVEL_DEBUG, msg)
+#define DO_LOG_ERROR(msg) DO_LOG(kAooLogLevelError, msg)
+#define DO_LOG_WARNING(msg) DO_LOG(kAooLogLevelWarning, msg)
+#define DO_LOG_VERBOSE(msg) DO_LOG(kAooLogLevelVerbose, msg)
+#define DO_LOG_DEBUG(msg) DO_LOG(kAooLogLevelDebug, msg)
 
-#if AOO_LOGLEVEL >= AOO_LOGLEVEL_ERROR
+#if AOO_LOG_LEVEL >= kAooLogLevelError
  #define LOG_ERROR(x) DO_LOG_ERROR(x)
 #else
  #define LOG_ERROR(x)
 #endif
 
-#if AOO_LOGLEVEL >= AOO_LOGLEVEL_WARNING
+#if AOO_LOG_LEVEL >= kAooLogLevelWarning
  #define LOG_WARNING(x) DO_LOG_WARNING(x)
 #else
  #define LOG_WARNING(x)
 #endif
 
-#if AOO_LOGLEVEL >= AOO_LOGLEVEL_VERBOSE
+#if AOO_LOG_LEVEL >= kAooLogLevelVerbose
  #define LOG_VERBOSE(x) DO_LOG_VERBOSE(x)
 #else
  #define LOG_VERBOSE(x)
 #endif
 
-#if AOO_LOGLEVEL >= AOO_LOGLEVEL_DEBUG
+#if AOO_LOG_LEVEL >= kAooLogLevelDebug
  #define LOG_DEBUG(x) DO_LOG_DEBUG(x)
 #else
  #define LOG_DEBUG(x)
@@ -74,22 +70,32 @@
 #endif
 
 #ifdef _MSC_VER
-/* _MSVC lacks BYTE_ORDER and LITTLE_ENDIAN */
- #define LITTLE_ENDIAN 0x0001
+/* _MSVC lacks byte order macros */
+ #ifndef LITTLE_ENDIAN
+  #define LITTLE_ENDIAN 1234
+ #endif
+ #ifndef BIG_ENDIAN
+  #define BIG_ENDIAN 4321
+ #endif
  #define BYTE_ORDER LITTLE_ENDIAN
 #endif
 
-#if !defined(BYTE_ORDER) || !defined(LITTLE_ENDIAN)
+#if !defined(BYTE_ORDER)
  #error No byte order defined
 #endif
 
 namespace aoo {
 
+void log_message(AooLogLevel level, const std::string& msg);
+
 class Log {
 public:
-    Log(int level = AOO_LOGLEVEL_DEBUG)
+    Log(AooLogLevel level = kAooLogLevelDebug)
         : level_(level){}
-    ~Log();
+    ~Log() {
+        stream_ << "\n";
+        log_message(level_, stream_.str());
+    }
     template<typename T>
     Log& operator<<(T&& t) {
         stream_ << std::forward<T>(t);
@@ -97,7 +103,7 @@ public:
     }
 private:
     std::ostringstream stream_;
-    int level_;
+    AooLogLevel level_;
 };
 
 template<typename T>
@@ -105,11 +111,12 @@ constexpr bool is_pow2(T i){
     return (i & (i - 1)) == 0;
 }
 
-template<typename T>
-T from_bytes(const char *b){
+template<typename T, typename B>
+T from_bytes(const B *b){
+    static_assert(sizeof(B) == 1, "from_bytes() expects byte argument");
     union {
         T t;
-        char b[sizeof(T)];
+        AooByte b[sizeof(T)];
     } c;
 #if BYTE_ORDER == BIG_ENDIAN
     memcpy(c.b, b, sizeof(T));
@@ -121,18 +128,19 @@ T from_bytes(const char *b){
     return c.t;
 }
 
-template<typename T>
-T read_bytes(const char *& b){
+template<typename T, typename B>
+T read_bytes(const B *& b){
     auto pos = b;
     b += sizeof(T);
-    return aoo::from_bytes<T>(pos);
+    return aoo::from_bytes<T, B>(pos);
 }
 
-template<typename T>
-void to_bytes(T v, char *b){
+template<typename T, typename B>
+void to_bytes(T v, B *b){
+    static_assert(sizeof(B) == 1, "to_bytes() expects byte argument");
     union {
         T t;
-        char b[sizeof(T)];
+        AooByte b[sizeof(T)];
     } c;
     c.t = v;
 #if BYTE_ORDER == BIG_ENDIAN
@@ -144,9 +152,9 @@ void to_bytes(T v, char *b){
 #endif
 }
 
-template<typename T>
-void write_bytes(T v, char *& b){
-    aoo::to_bytes<T>(v, b);
+template<typename T, typename B>
+void write_bytes(T v, B *& b){
+    aoo::to_bytes<T, B>(v, b);
     b += sizeof(T);
 }
 

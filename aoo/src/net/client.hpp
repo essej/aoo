@@ -4,8 +4,7 @@
 
 #pragma once
 
-#include "aoo/aoo_net.hpp"
-#include "aoo/aoo.hpp"
+#include "aoo/aoo_client.hpp"
 
 #include "common/utils.hpp"
 #include "common/sync.hpp"
@@ -14,7 +13,6 @@
 #include "common/net_utils.hpp"
 
 #include "../imp.hpp"
-#include "commands.hpp"
 #include "SLIP.hpp"
 
 #include "oscpack/osc/OscOutboundPacketStream.h"
@@ -38,6 +36,9 @@
 #ifndef AOO_NET_CLIENT_REQUEST_TIMEOUT
  #define AOO_NET_CLIENT_REQUEST_TIMEOUT 5000
 #endif
+
+struct AooSource;
+struct AooSink;
 
 namespace aoo {
 namespace net {
@@ -111,22 +112,22 @@ private:
 
 class udp_client {
 public:
-    udp_client(client_imp& c, int port, uint32_t flags)
+    udp_client(client_imp& c, int port, AooFlag flags)
         : client_(&c), port_(port) {}
 
     int port() const { return port_; }
 
-    aoo_error handle_message(const char *data, int32_t n,
+    AooError handle_message(const AooByte *data, int32_t n,
                              const ip_address& addr,
-                             int32_t type, aoo_type onset);
+                             int32_t type, AooType onset);
 
     void handle_relay_message(const osc::ReceivedMessage& msg);
 
     void update(const sendfn& reply, time_tag now);
 
-    void send_server_message(const char *data, int32_t size, const sendfn& fn);
+    void send_server_message(const AooByte *data, int32_t size, const sendfn& fn);
 
-    void send_peer_message(const char *data, int32_t size,
+    void send_peer_message(const AooByte *data, int32_t size,
                            const ip_address& addr, const sendfn& fn, bool relay);
 
     void start_handshake(const ip_address& local, ip_address_list&& remote);
@@ -161,7 +162,7 @@ enum class client_state {
     connected
 };
 
-class client_imp final : public client
+class client_imp final : public AooClient
 {
 public:
     struct icommand {
@@ -178,66 +179,69 @@ public:
         virtual ~ievent(){}
 
         union {
-            aoo_event event_;
-            aoo_net_error_event error_event_;
-            aoo_net_ping_event ping_event_;
-            aoo_net_peer_event peer_event_;
-            aoo_net_message_event message_event_;
+            AooEvent event_;
+            AooNetEventError error_event_;
+            AooNetEventPing ping_event_;
+            AooNetEventPeer peer_event_;
+            AooNetEventPeerMessage message_event_;
         };
     };
 
-    client_imp(const void *address, int32_t addrlen, uint32_t flags);
+    client_imp(const void *address, AooAddrSize addrlen,
+               AooFlag flags, AooError *err);
 
     ~client_imp();
 
-    aoo_error run() override;
+    AooError AOO_CALL run() override;
 
-    aoo_error quit() override;
+    AooError AOO_CALL quit() override;
 
-    aoo_error add_source(source *src, aoo_id id) override;
+    AooError AOO_CALL addSource(AooSource *src, AooId id) override;
 
-    aoo_error remove_source(source *src) override;
+    AooError AOO_CALL removeSource(AooSource *src) override;
 
-    aoo_error add_sink(sink *sink, aoo_id id) override;
+    AooError AOO_CALL addSink(AooSink *sink, AooId id) override;
 
-    aoo_error remove_sink(sink *sink) override;
+    AooError AOO_CALL removeSink(AooSink *sink) override;
 
-    aoo_error get_peer_by_name(const char *group, const char *user,
-                                void *address, int32_t *addrlen) override;
+    AooError AOO_CALL getPeerByName(const char *group, const char *user,
+                                    void *address, AooAddrSize *addrlen) override;
 
-    aoo_error send_request(aoo_net_request_type request, void *data,
-                           aoo_net_callback callback, void *user) override;
+    AooError AOO_CALL sendRequest(AooNetRequestType request, void *data,
+                                  AooNetCallback callback, void *user) override;
 
-    aoo_error send_message(const char *data, int32_t size,
-                           const void *addr, int32_t len, int32_t flags) override;
+    AooError AOO_CALL sendPeerMessage(const AooByte *data, AooInt32 size,
+                                      const void *target, AooAddrSize len, AooFlag flags) override;
 
     template<typename T>
-    void perform_send_message(const char *data, int32_t size, int32_t flags,
+    void perform_send_message(const AooByte *data, int32_t size, int32_t flags,
                               const sendfn& fn, T&& filter);
 
-    aoo_error handle_message(const char *data, int32_t n,
-                             const void *addr, int32_t len) override;
+   AooError AOO_CALL handleMessage(const AooByte *data, AooInt32 n,
+                                   const void *addr, AooAddrSize len) override;
 
     bool handle_peer_message(const osc::ReceivedMessage& msg, int onset,
                              const ip_address& addr);
 
-    aoo_error send(aoo_sendfn fn, void *user) override;
+    AooError AOO_CALL send(AooSendFunc fn, void *user) override;
 
-    aoo_error set_eventhandler(aoo_eventhandler fn, void *user, int32_t mode) override;
+    AooError AOO_CALL setEventHandler(AooEventHandler fn, void *user,
+                                      AooEventMode mode) override;
 
-    aoo_bool events_available() override;
+    AooBool AOO_CALL eventsAvailable() override;
 
-    aoo_error poll_events() override;
+    AooError AOO_CALL pollEvents() override;
 
-    aoo_error control(int32_t ctl, intptr_t index, void *ptr, size_t size) override;
+    AooError AOO_CALL control(AooCtl ctl, intptr_t index,
+                              void *ptr, size_t size) override;
 
     void do_connect(const char *host, int port,
                     const char *name, const char *pwd,
-                    aoo_net_callback cb, void *user);
+                    AooNetCallback cb, void *user);
 
     void perform_connect(const std::string& host, int port,
                          const std::string& name, const std::string& pwd,
-                         aoo_net_callback cb, void *user);
+                         AooNetCallback cb, void *user);
 
     int try_connect(const std::string& host, int port);
 
@@ -245,20 +249,20 @@ public:
 
     void perform_timeout();
 
-    void do_disconnect(aoo_net_callback cb, void *user);
+    void do_disconnect(AooNetCallback cb, void *user);
 
-    void perform_disconnect(aoo_net_callback cb, void *user);
+    void perform_disconnect(AooNetCallback cb, void *user);
 
     void do_join_group(const char *name, const char *pwd,
-                       aoo_net_callback cb, void *user);
+                       AooNetCallback cb, void *user);
 
     void perform_join_group(const std::string& group, const std::string& pwd,
-                            aoo_net_callback cb, void *user);
+                            AooNetCallback cb, void *user);
 
-    void do_leave_group(const char *name, aoo_net_callback cb, void *user);
+    void do_leave_group(const char *name, AooNetCallback cb, void *user);
 
     void perform_leave_group(const std::string& group,
-                             aoo_net_callback cb, void *user);
+                             AooNetCallback cb, void *user);
 
     double ping_interval() const { return ping_interval_.load(std::memory_order_relaxed); }
 
@@ -289,13 +293,13 @@ private:
     ip_address::ip_type type_ = ip_address::Unspec;
     // dependants
     struct source_desc {
-        aoo::source *source;
-        aoo_id id;
+        AooSource *source;
+        AooId id;
     };
     std::vector<source_desc, aoo::allocator<source_desc>> sources_;
     struct sink_desc {
-        aoo::sink *sink;
-        aoo_id id;
+        AooSink *sink;
+        AooId id;
     };
     std::vector<sink_desc, aoo::allocator<sink_desc>> sinks_;
     // SLIP buffers
@@ -316,7 +320,7 @@ private:
     std::string username_;
     std::string password_;
     uint32_t server_flags_ = 0;
-    aoo_net_callback callback_ = nullptr;
+    AooNetCallback callback_ = nullptr;
     void *userdata_ = nullptr;   
     // commands
     using icommand_ptr = std::unique_ptr<icommand>;
@@ -334,13 +338,13 @@ private:
     using ievent_ptr = std::unique_ptr<ievent>;
     using event_queue = lockfree::unbounded_mpsc_queue<ievent_ptr, aoo::allocator<ievent_ptr>>;
     event_queue events_;
-    aoo_eventhandler eventhandler_ = nullptr;
+    AooEventHandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;
-    aoo_event_mode eventmode_ = AOO_EVENT_NONE;
+    AooEventMode eventmode_ = kAooEventModeNone;
     // options
-    std::atomic<float> ping_interval_{AOO_NET_CLIENT_PING_INTERVAL * 0.001};
-    std::atomic<float> request_interval_{AOO_NET_CLIENT_REQUEST_INTERVAL * 0.001};
-    std::atomic<float> request_timeout_{AOO_NET_CLIENT_REQUEST_TIMEOUT * 0.001};
+    std::atomic<AooSeconds> ping_interval_{AOO_NET_CLIENT_PING_INTERVAL * 0.001};
+    std::atomic<AooSeconds> request_interval_{AOO_NET_CLIENT_REQUEST_INTERVAL * 0.001};
+    std::atomic<AooSeconds> request_timeout_{AOO_NET_CLIENT_REQUEST_TIMEOUT * 0.001};
 
     // methods
     bool wait_for_event(float timeout);
@@ -349,14 +353,14 @@ private:
 
     bool signal();
 
-    void send_server_message(const char *data, int32_t size);
+    void send_server_message(const AooByte *data, int32_t size);
 
-    void send_peer_message(const char *data, int32_t size,
+    void send_peer_message(const AooByte *data, int32_t size,
                            const ip_address& addr);
 
     void handle_server_bundle(const osc::ReceivedBundle& bundle);
 
-    void handle_server_message(const char *data, int32_t n);
+    void handle_server_message(const AooByte *data, int32_t n);
 
     void handle_login(const osc::ReceivedMessage& msg);
 
@@ -415,16 +419,16 @@ public:
     /*////////////////////// commands ///////////////////*/
     struct request_cmd : icommand
     {
-        request_cmd(aoo_net_callback cb, void *user)
+        request_cmd(AooNetCallback cb, void *user)
             : cb_(cb), user_(user){}
     protected:
-        aoo_net_callback cb_;
+        AooNetCallback cb_;
         void *user_;
     };
 
     struct connect_cmd : request_cmd
     {
-        connect_cmd(aoo_net_callback cb, void *user,
+        connect_cmd(AooNetCallback cb, void *user,
                     const std::string &host, int port,
                     const std::string& name, const std::string& pwd)
             : request_cmd(cb, user), host_(host), port_(port),
@@ -442,7 +446,7 @@ public:
 
     struct disconnect_cmd : request_cmd
     {
-        disconnect_cmd(aoo_net_callback cb, void *user)
+        disconnect_cmd(AooNetCallback cb, void *user)
             : request_cmd(cb, user) {}
 
         void perform(client_imp& obj) override {
@@ -471,7 +475,7 @@ public:
 
     struct group_join_cmd : request_cmd
     {
-        group_join_cmd(aoo_net_callback cb, void *user,
+        group_join_cmd(AooNetCallback cb, void *user,
                        const std::string& group, const std::string& pwd)
             : request_cmd(cb, user), group_(group), password_(pwd){}
 
@@ -485,7 +489,7 @@ public:
 
     struct group_leave_cmd : request_cmd
     {
-        group_leave_cmd(aoo_net_callback cb, void *user,
+        group_leave_cmd(AooNetCallback cb, void *user,
                         const std::string& group)
             : request_cmd(cb, user), group_(group){}
 
@@ -499,7 +503,7 @@ public:
     /*////////////////// messages ////////////////////*/
 
     struct message : imessage {
-        message(const char *data, int32_t size, int32_t flags)
+        message(const AooByte *data, int32_t size, int32_t flags)
             : flags_(flags) {
             data_.assign(data, data + size);
         }
@@ -509,12 +513,12 @@ public:
                 flags_, fn, [](auto&){ return true; });
         }
     protected:
-        std::vector<char, aoo::allocator<char>> data_;
+        std::vector<AooByte, aoo::allocator<AooByte>> data_;
         int32_t flags_;
     };
 
     struct peer_message : message {
-        peer_message(const char *data, int32_t size,
+        peer_message(const AooByte *data, int32_t size,
                      const sockaddr *addr, int32_t len, int32_t flags)
             : message(data, size, flags), address_(addr, len) {}
 
@@ -527,7 +531,7 @@ public:
     };
 
     struct group_message : message {
-        group_message(const char *data, int32_t size,
+        group_message(const AooByte *data, int32_t size,
                       const char *group, int32_t flags)
             : message(data, size, flags), group_(group) {}
 

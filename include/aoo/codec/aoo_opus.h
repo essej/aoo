@@ -4,33 +4,32 @@
 
 #pragma once
 
-#include "aoo/aoo.h"
+#include "aoo/aoo_defines.h"
 
 #include <opus/opus_multistream.h>
 
-#ifdef __cplusplus
-extern "C"
+AOO_PACK_BEGIN
+
+//--------------------------------//
+
+// Opus codec
+
+#define kAooCodecOpus "opus"
+
+typedef AOO_STRUCT AooFormatOpus
 {
-#endif
-
-/*/////////////////// Opus codec ////////////////////////*/
-
-#define AOO_CODEC_OPUS "opus"
-
-typedef struct aoo_format_opus
-{
-    aoo_format header;
+    AooFormat header;
     // OPUS_APPLICATION_VOIP, OPUS_APPLICATION_AUDIO or
     // OPUS_APPLICATION_RESTRICTED_LOWDELAY
-    int32_t application_type;
+    opus_int32 applicationType;
     // bitrate in bits/s, OPUS_BITRATE_MAX or OPUS_AUTO
-    int32_t bitrate;
+    opus_int32 bitrate;
     // complexity 0-10 or OPUS_AUTO
-    int32_t complexity;
+    opus_int32 complexity;
     // OPUS_SIGNAL_VOICE, OPUS_SIGNAL_MUSIC or OPUS_AUTO
-    int32_t signal_type;
-} aoo_format_opus;
+    opus_int32 signalType;
+} AooFormatOpus;
 
-#ifdef __cplusplus
-} // extern "C"
-#endif
+//--------------------------------//
+
+AOO_PACK_END

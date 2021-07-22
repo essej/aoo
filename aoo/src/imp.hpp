@@ -23,7 +23,8 @@ void free_sockaddr(void *sa, int32_t len);
 
 namespace net {
 
-aoo_error parse_pattern(const char *msg, int32_t n, aoo_type& type, int32_t& offset);
+AooError parse_pattern(const AooByte *msg, int32_t n,
+                       AooType& type, int32_t& offset);
 
 } // net
 
@@ -163,7 +164,7 @@ private:
 
 struct format_deleter {
     void operator() (void *x) const {
-        auto f = static_cast<aoo_format *>(x);
+        auto f = static_cast<AooFormat *>(x);
         aoo::deallocate(x, f->size);
     }
 };

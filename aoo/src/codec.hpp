@@ -1,6 +1,6 @@
 #pragma once
 
-#include "aoo/aoo.h"
+#include "aoo/aoo_codec.h"
 #include "imp.hpp"
 
 #include <memory>
@@ -12,36 +12,36 @@ class decoder;
 
 class codec {
 public:
-    codec(const aoo_codec *c)
-        : codec_(c){}
+    codec(const char *name, const AooCodecInterface *c)
+        : name_(name), codec_(c){}
 
     const char *name() const {
-        return codec_->name;
+        return name_;
     }
 
-    std::unique_ptr<encoder> create_encoder() const;
+    std::unique_ptr<encoder> create_encoder(AooError *err) const;
 
-    std::unique_ptr<decoder> create_decoder() const;
+    std::unique_ptr<decoder> create_decoder(AooError *err) const;
 
-    aoo_error serialize(const aoo_format& f,
-                        char *buf, int32_t &n) const {
-        return codec_->serialize(&f, buf, &n);
+    AooError serialize(const AooFormat& format,
+                       AooByte *buffer, AooInt32& size) const {
+        return codec_->serialize(&format, buffer, &size);
     }
 
-    aoo_error deserialize(const aoo_format& header,
-                          const char *data, int32_t n,
-                          aoo_format& f, int32_t size) const {
-        return codec_->deserialize(&header, data, n, &f, size);
+    AooError deserialize(const AooFormat& header,
+                          const AooByte *data, AooInt32 size,
+                          AooFormat& format, AooInt32 fmtsize) const {
+        return codec_->deserialize(&header, data, size, &format, fmtsize);
     }
 protected:
-    const aoo_codec *codec_;
+    const char *name_;
+    const AooCodecInterface *codec_;
 };
 
 class base_codec : public codec {
 public:
-    base_codec(const aoo_codec *c, void *obj)
-        : codec(c), obj_(obj){}
-    base_codec(const aoo_codec&) = delete;
+    base_codec(const char *name, const AooCodecInterface *c, void *obj)
+        : codec(name, c), obj_(obj){}
 
     int32_t nchannels() const { return nchannels_; }
 
@@ -54,10 +54,10 @@ protected:
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
 
-    void save_format(const aoo_format& f){
-        nchannels_ = f.nchannels;
-        samplerate_ = f.samplerate;
-        blocksize_ = f.blocksize;
+    void save_format(const AooFormat& f){
+        nchannels_ = f.numChannels;
+        samplerate_ = f.sampleRate;
+        blocksize_ = f.blockSize;
     }
 };
 
@@ -66,78 +66,78 @@ public:
     using base_codec::base_codec;
 
     ~encoder(){
-        codec_->encoder_free(obj_);
+        codec_->encoderFree(obj_);
     }
 
-    aoo_error set_format(aoo_format& fmt){
-        auto result = codec_->encoder_ctl(obj_,
-            AOO_CODEC_SET_FORMAT, &fmt, sizeof(aoo_format));
-        if (result == AOO_OK){
+    AooError set_format(AooFormat& fmt){
+        auto result = codec_->encoderControl(obj_,
+            kAooCodecCtlSetFormat, &fmt, sizeof(AooFormat));
+        if (result == kAooOk){
             save_format(fmt); // after validation!
         }
         return result;
     }
 
-    aoo_error get_format(aoo_format& fmt, size_t size) const {
-        return codec_->encoder_ctl(obj_, AOO_CODEC_GET_FORMAT,
-                                   &fmt, size);
+    AooError get_format(AooFormat& fmt, size_t size) const {
+        return codec_->encoderControl(obj_, kAooCodecCtlGetFormat,
+                                      &fmt, size);
     }
 
-    bool compare(const aoo_format& fmt) const {
-        return codec_->encoder_ctl(obj_, AOO_CODEC_FORMAT_EQUAL,
-                                   (void *)&fmt, fmt.size);
+    bool compare(const AooFormat& fmt) const {
+        return codec_->encoderControl(obj_, kAooCodecCtlFormatEqual,
+                                      (void *)&fmt, fmt.size);
     }
 
-    aoo_error reset() {
-        return codec_->encoder_ctl(obj_, AOO_CODEC_RESET, nullptr, 0);
+    AooError reset() {
+        return codec_->encoderControl(obj_, kAooCodecCtlReset, nullptr, 0);
     }
 
-    aoo_error encode(const aoo_sample *s, int32_t n, char *buf, int32_t &size){
-        return codec_->encoder_encode(obj_, s, n, buf, &size);
+    AooError encode(const AooSample *s, AooInt32 n, AooByte *buf, AooInt32 &size){
+        return codec_->encoderEncode(obj_, s, n, buf, &size);
     }
 };
 
-inline std::unique_ptr<encoder> codec::create_encoder() const {
-    return std::make_unique<encoder>(codec_, codec_->encoder_new());
+inline std::unique_ptr<encoder> codec::create_encoder(AooError *err) const {
+    return std::make_unique<encoder>(name_, codec_, codec_->encoderNew(err));
 }
 
 class decoder : public base_codec {
 public:
     using base_codec::base_codec;
     ~decoder(){
-        codec_->decoder_free(obj_);
+        codec_->decoderFree(obj_);
     }
 
-    aoo_error set_format(aoo_format& fmt){
-        auto result = codec_->decoder_ctl(obj_,
-            AOO_CODEC_SET_FORMAT, &fmt, sizeof(aoo_format));
-        if (result == AOO_OK){
+    AooError set_format(AooFormat& fmt){
+        auto result = codec_->decoderControl(obj_,
+            kAooCodecCtlSetFormat, &fmt, sizeof(AooFormat));
+        if (result == kAooOk){
             save_format(fmt); // after validation!
         }
         return result;
     }
 
-    aoo_error get_format(aoo_format& fmt, size_t size) const {
-        return codec_->decoder_ctl(obj_, AOO_CODEC_GET_FORMAT,
-                                   &fmt, size);
+    AooError get_format(AooFormat& fmt, size_t size) const {
+        return codec_->decoderControl(obj_, kAooCodecCtlGetFormat,
+                                      &fmt, size);
     }
 
-    bool compare(const aoo_format& fmt) const {
-        return codec_->decoder_ctl(obj_, AOO_CODEC_FORMAT_EQUAL,
-                                   (void *)&fmt, fmt.size);
+    bool compare(const AooFormat& fmt) const {
+        return codec_->decoderControl(obj_, kAooCodecCtlFormatEqual,
+                                      (void *)&fmt, fmt.size);
     }
 
-    aoo_error reset() {
-        return codec_->decoder_ctl(obj_, AOO_CODEC_RESET, nullptr, 0);
+    AooError reset() {
+        return codec_->decoderControl(obj_, kAooCodecCtlReset, nullptr, 0);
     }
 
-    aoo_error decode(const char *buf, int32_t size, aoo_sample *s, int32_t &n){
-        return codec_->decoder_decode(obj_, buf, size, s, &n);
+    AooError decode(const AooByte *buf, AooInt32 size, AooSample *s, AooInt32 &n){
+        return codec_->decoderDecode(obj_, buf, size, s, &n);
     }
 };
 
-inline std::unique_ptr<decoder> codec::create_decoder() const {
-    return std::make_unique<decoder>(codec_, codec_->decoder_new());
+inline std::unique_ptr<decoder> codec::create_decoder(AooError *err) const {
+    return std::make_unique<decoder>(name_, codec_, codec_->decoderNew(err));
 }
 
 const codec * find_codec(const char * name);
