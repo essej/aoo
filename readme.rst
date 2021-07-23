@@ -97,11 +97,9 @@ Main objects
 
 * [aoo_receive~] receive one or more AoO streams (with integrated threaded network IO)
 
-Supplementary objects to use AoO with existing Pd network objects (not recommended)
-    
-* [aoo_pack~] takes audio signals and outputs OSC messages (also accepts /request messages from sinks)
-* [aoo_unpack~] takes OSC messages from several sources and turns them into audio signals
-* [aoo_route] takes OSC messages and routes them based on the type (source/sink) and ID
+* [aoo_client] connect to AoO peers over the public internet or in a local network
+
+* [aoo_server] AoO connection server
 
 todo
 ----
