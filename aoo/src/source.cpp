@@ -755,8 +755,8 @@ AooError source_imp::set_format(AooFormat &f){
         // we need to start a new stream while holding the lock.
         // it might be tempting to just (atomically) set 'state_'
         // to 'stream_start::start', but then the send() method
-        // could a format request by an existing stream with the
-        // wrong format, before process() starts the new stream.
+        // could answer a format request by an existing stream with
+        // the wrong format, before process() starts the new stream.
         //
         // NOTE: there's a slight race condition because 'xrun_'
         // might be incremented right afterwards, but I'm not
@@ -766,7 +766,7 @@ AooError source_imp::set_format(AooFormat &f){
     return err;
 }
 
-int32_t source_imp::make_salt(){
+int32_t source_imp::make_stream_id(){
     thread_local std::random_device dev;
     thread_local std::mt19937 mt(dev());
     std::uniform_int_distribution<int32_t> dist;
@@ -805,7 +805,7 @@ void source_imp::start_new_stream(){
     // We naturally want to do this when setting the format,
     // but it's good to also do it in setup() to eliminate
     // any timing gaps.
-    salt_ = make_salt();
+    stream_id_ = make_stream_id();
     sequence_ = 0;
     xrun_.store(0.0); // !
 
@@ -891,7 +891,7 @@ void source_imp::send_format(const sendfn& fn){
         return;
     }
 
-    int32_t salt = salt_;
+    int32_t stream_id = stream_id_;
 
     AooFormatStorage f;
     if (encoder_->get_format(f.header, sizeof(AooFormatStorage)) != kAooOk){
@@ -914,10 +914,10 @@ void source_imp::send_format(const sendfn& fn){
 #endif
     for (auto& s : sinks_){
         if (s.need_format()){
-            // /aoo/sink/<id>/format <src> <version> <salt>
+            // /aoo/sink/<id>/format <src> <version> <stream_id>
             // <numchannels> <samplerate> <blocksize> <codec> <options> <flags>
 
-            LOG_DEBUG("send format to " << s.id << " (salt = " << salt << ")");
+            LOG_DEBUG("send format to " << s.id << " (stream_id = " << stream_id << ")");
 
             char buf[AOO_MAX_PACKET_SIZE];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -929,8 +929,8 @@ void source_imp::send_format(const sendfn& fn){
                      kAooMsgDomain, kAooMsgSink, s.id, kAooMsgFormat);
 
             msg << osc::BeginMessage(address) << id() << (int32_t)make_version()
-                << salt << (int32_t)f.header.numChannels << (int32_t)f.header.sampleRate
-                << (int32_t)f.header.blockSize << f.header.codec << osc::Blob(options, size)
+                << stream_id << f.header.numChannels << f.header.sampleRate
+                << f.header.blockSize << f.header.codec << osc::Blob(options, size)
                 << (int32_t)s.flags << osc::EndMessage;
 
             fn((const AooByte *)msg.Data(), msg.Size(), s.address, s.flags);
@@ -962,12 +962,12 @@ void source_imp::send_data(const sendfn& fn){
         LOG_DEBUG("aoo_source: send " << nblocks << " empty blocks for "
                   "xrun (" << (int)drop << " blocks)");
         while (nblocks--){
-            // check the encoder and make snapshost of salt
+            // check the encoder and make snapshost of stream_id
             // in every iteration because we release the lock
             if (!encoder_){
                 return;
             }
-            int32_t salt = salt_;
+            int32_t stream_id = stream_id_;
             // send empty block
             // NOTE: we're the only thread reading 'sequence_', so we can increment
             // it even while holding a reader lock!
@@ -989,7 +989,7 @@ void source_imp::send_data(const sendfn& fn){
             sink_lock lock(sinks_);
         #endif
             // send block to all sinks
-            send_packet(fn, salt, d, binary_.load(std::memory_order_relaxed));
+            send_packet(fn, stream_id, d, binary_.load(std::memory_order_relaxed));
 
             updatelock.lock();
         }
@@ -1002,7 +1002,7 @@ void source_imp::send_data(const sendfn& fn){
         }
 
         if (!sinks_.empty()){
-            int32_t salt = salt_; // make snapshot
+            int32_t stream_id = stream_id_; // make snapshot
 
             auto ptr = (block_data *)audioqueue_.read_data();
 
@@ -1058,13 +1058,14 @@ void source_imp::send_data(const sendfn& fn){
             // from here on we don't hold any lock!
 
             // send a single frame to all sinks
-            // /AoO/<sink>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
+            // /AoO/<sink>/data <src> <stream_id> <seq> <sr> <channel_onset>
+            // <totalsize> <numpackets> <packetnum> <data>
             auto dosend = [&](int32_t frame, const AooByte* data, auto n){
                 d.frame = frame;
                 d.data = data;
                 d.size = n;
                 // send block to all sinks
-                send_packet(fn, salt, d, binary);
+                send_packet(fn, stream_id, d, binary);
             };
 
             auto ntimes = redundancy_.load();
@@ -1088,13 +1089,13 @@ void source_imp::send_data(const sendfn& fn){
     }
 
     // handle overflow (with 64 samples @ 44.1 kHz this happens every 36 days)
-    // for now just force a reset by changing the salt, LATER think how to handle this better
+    // for now just force a reset by changing the stream_id, LATER think how to handle this better
     if (last_sequence == INT32_MAX){
         updatelock.unlock();
         // not perfectly thread-safe, but shouldn't cause problems AFAICT....
         scoped_lock lock(update_mutex_);
         sequence_ = 0;
-        salt_ = make_salt();
+        stream_id_ = make_stream_id();
     }
 }
 
@@ -1103,7 +1104,7 @@ void source_imp::resend_data(const sendfn &fn){
     if (!history_.capacity()){
         return;
     }
-    int32_t salt = salt_; // cache salt!
+    int32_t stream_id = stream_id_; // cache stream_id!
 
     // we only free sources in this thread, so we don't have to lock
 #if 0
@@ -1153,9 +1154,9 @@ void source_imp::resend_data(const sendfn &fn){
                         d.data = frameptr[i];
                         d.size = framesize[i];
                         if (binary){
-                            send_packet_bin(fn, sink, salt, d);
+                            send_packet_bin(fn, sink, stream_id, d);
                         } else {
-                            send_packet_osc(fn, sink, salt, d);
+                            send_packet_osc(fn, sink, stream_id, d);
                         }
                     }
 
@@ -1175,9 +1176,9 @@ void source_imp::resend_data(const sendfn &fn){
                         d.data = sendbuffer_.data();
                         d.size = size;
                         if (binary){
-                            send_packet_bin(fn, sink, salt, d);
+                            send_packet_bin(fn, sink, stream_id, d);
                         } else {
-                            send_packet_osc(fn, sink, salt, d);
+                            send_packet_osc(fn, sink, stream_id, d);
                         }
 
                         // lock again
@@ -1191,13 +1192,13 @@ void source_imp::resend_data(const sendfn &fn){
     }
 }
 
-void source_imp::send_packet(const sendfn &fn, int32_t salt,
+void source_imp::send_packet(const sendfn &fn, int32_t stream_id,
                              data_packet& d, bool binary) {
     if (binary){
         AooByte buf[AOO_MAX_PACKET_SIZE];
         int32_t size;
 
-        write_bin_data(nullptr, salt, d, buf, size);
+        write_bin_data(nullptr, stream_id, d, buf, size);
 
         // we only free sources in this thread, so we don't have to lock
     #if 0
@@ -1228,15 +1229,15 @@ void source_imp::send_packet(const sendfn &fn, int32_t salt,
         for (auto& sink : sinks_){
             // set channel!
             d.channel = sink.channel.load(std::memory_order_relaxed);
-            send_packet_osc(fn, sink, salt, d);
+            send_packet_osc(fn, sink, stream_id, d);
         }
     }
 }
 
-// /aoo/sink/<id>/data <src> <salt> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
+// /aoo/sink/<id>/data <src> <stream_id> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
 void source_imp::send_packet_osc(const sendfn& fn, const endpoint& ep,
-                                 int32_t salt, const aoo::data_packet& d) const {
+                                 int32_t stream_id, const aoo::data_packet& d) const {
     char buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
@@ -1246,7 +1247,7 @@ void source_imp::send_packet_osc(const sendfn& fn, const endpoint& ep,
     snprintf(address, sizeof(address), "%s%s/%d%s",
              kAooMsgDomain, kAooMsgSink, ep.id, kAooMsgData);
 
-    msg << osc::BeginMessage(address) << id() << salt << d.sequence << d.samplerate
+    msg << osc::BeginMessage(address) << id() << stream_id << d.sequence << d.samplerate
         << d.channel << d.totalsize << d.nframes << d.frame << osc::Blob(d.data, d.size)
         << osc::EndMessage;
 
@@ -1260,11 +1261,11 @@ void source_imp::send_packet_osc(const sendfn& fn, const endpoint& ep,
 }
 
 // binary data message:
-// id (int32), salt (int32), seq (int32), channel (int16), flags (int16),
+// id (int32), stream_id (int32), seq (int32), channel (int16), flags (int16),
 // [total (int32), nframes (int16), frame (int16)],  [sr (float64)],
 // size (int32), data...
 
-void source_imp::write_bin_data(const endpoint* ep, int32_t salt,
+void source_imp::write_bin_data(const endpoint* ep, int32_t stream_id,
                                 const data_packet& d, AooByte *buf, int32_t& size) const
 {
     int16_t flags = 0;
@@ -1289,7 +1290,7 @@ void source_imp::write_bin_data(const endpoint* ep, int32_t salt,
     }
     // write arguments
     aoo::write_bytes<int32_t>(id(), it);
-    aoo::write_bytes<int32_t>(salt, it);
+    aoo::write_bytes<int32_t>(stream_id, it);
     aoo::write_bytes<int32_t>(d.sequence, it);
     aoo::write_bytes<int16_t>(d.channel, it);
     aoo::write_bytes<int16_t>(flags, it);
@@ -1310,11 +1311,11 @@ void source_imp::write_bin_data(const endpoint* ep, int32_t salt,
 }
 
 void source_imp::send_packet_bin(const sendfn& fn, const endpoint& ep,
-                                 int32_t salt, const aoo::data_packet& d) const {
+                                 int32_t stream_id, const aoo::data_packet& d) const {
     AooByte buf[AOO_MAX_PACKET_SIZE];
     int32_t size;
 
-    write_bin_data(&ep, salt, d, buf, size);
+    write_bin_data(&ep, stream_id, d, buf, size);
 
 #if AOO_DEBUG_DATA
     LOG_DEBUG("send block: seq = " << d.sequence << ", sr = "
@@ -1386,7 +1387,7 @@ void source_imp::handle_format_request(const osc::ReceivedMessage& msg,
     if (sink){
         if (it != msg.ArgumentsEnd()){
             // requested another format
-            int32_t salt = (it++)->AsInt32();
+            int32_t stream_id = (it++)->AsInt32();
             // ignore outdated requests
             // this can happen because format requests are sent repeatedly
             // by the sink until a) the source replies or b) the timeout is reached.
@@ -1394,7 +1395,7 @@ void source_imp::handle_format_request(const osc::ReceivedMessage& msg,
             // right before receiving a /format message (as a result of the previous request).
             // until the source re
             shared_lock lock(update_mutex_);
-            if (salt != salt_){
+            if (stream_id != stream_id_){
                 LOG_DEBUG("ignoring outdated format request");
                 return;
             }
@@ -1449,7 +1450,7 @@ void source_imp::handle_data_request(const osc::ReceivedMessage& msg,
 {
     auto it = msg.ArgumentsBegin();
     auto id = (it++)->AsInt32();
-    auto salt = (it++)->AsInt32(); // we can ignore the salt
+    auto stream_id = (it++)->AsInt32(); // we can ignore the stream_id
 
     LOG_DEBUG("handle data request");
 
@@ -1468,13 +1469,13 @@ void source_imp::handle_data_request(const osc::ReceivedMessage& msg,
     }
 }
 
-// (header), id (int32), salt (int32), count (int32),
+// (header), id (int32), stream_id (int32), count (int32),
 // seq1 (int32), frame1(int32), seq2(int32), frame2(seq), etc.
 
 void source_imp::handle_data_request(const AooByte *msg, int32_t n,
                                      const ip_address& addr)
 {
-    // check size (id, salt, count)
+    // check size (id, stream_id, count)
     if (n < 12){
         LOG_ERROR("handle_data_request: header too small!");
         return;
@@ -1483,7 +1484,7 @@ void source_imp::handle_data_request(const AooByte *msg, int32_t n,
     auto it = msg;
 
     auto id = aoo::read_bytes<int32_t>(it);
-    auto salt = aoo::read_bytes<int32_t>(it); // we can ignore the salt
+    auto stream_id = aoo::read_bytes<int32_t>(it); // we can ignore the stream_id
 
     LOG_DEBUG("handle data request");
 

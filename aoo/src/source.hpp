@@ -158,7 +158,7 @@ class source_imp final : public AooSource {
 
     // settings
     std::atomic<AooId> id_;
-    int32_t salt_ = 0;
+    int32_t stream_id_ = 0;
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
     int32_t samplerate_ = 0;
@@ -231,7 +231,7 @@ class source_imp final : public AooSource {
 
     sink_desc *get_sink_arg(intptr_t index);
 
-    static int32_t make_salt();
+    static int32_t make_stream_id();
 
     void send_event(const event& e, AooThreadLevel level);
 
@@ -253,16 +253,16 @@ class source_imp final : public AooSource {
 
     void resend_data(const sendfn& fn);
 
-    void send_packet(const sendfn& fn, int32_t salt,
+    void send_packet(const sendfn& fn, int32_t stream_id,
                      data_packet& d, bool binary);
 
     void send_packet_osc(const sendfn& fn, const endpoint& ep,
-                         int32_t salt, const data_packet& d) const;
+                         int32_t stream_id, const data_packet& d) const;
 
     void send_packet_bin(const sendfn& fn, const endpoint& ep,
-                         int32_t salt, const data_packet& d) const;
+                         int32_t stream_id, const data_packet& d) const;
 
-    void write_bin_data(const endpoint* ep, int32_t salt,
+    void write_bin_data(const endpoint* ep, int32_t stream_id,
                         const data_packet& d, AooByte *buf, int32_t& size) const;
 
     void send_ping(const sendfn& fn);

@@ -120,7 +120,7 @@ enum class source_state {
 };
 
 struct net_packet : data_packet {
-    int32_t salt;
+    int32_t stream_id;
 };
 
 class source_desc {
@@ -159,7 +159,7 @@ public:
     // methods
     void reset(const sink_imp& s);
 
-    AooError handle_format(const sink_imp& s, int32_t salt, const AooFormat& f,
+    AooError handle_format(const sink_imp& s, int32_t stream_id, const AooFormat& f,
                            const AooByte *settings, int32_t size, uint32_t flags);
 
     AooError handle_data(const sink_imp& s, net_packet& d, bool binary);
@@ -219,7 +219,7 @@ private:
     const ip_address addr_;
     const AooId id_;
     uint32_t flags_;
-    int32_t salt_ = -1; // start with invalid stream ID!
+    int32_t stream_id_ = -1; // start with invalid stream ID!
 
     AooStreamState streamstate_;
     bool underrun_{false};
