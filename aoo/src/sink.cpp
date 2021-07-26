@@ -492,13 +492,12 @@ AooError AOO_CALL aoo::sink_imp::process(
         } else if (!it->is_active(*this)){
             // move source to garbage list (will be freed in send())
             if (it->is_inviting()){
-                LOG_VERBOSE("AooSink: invitation for " << it->address()
-                            << " timed out");
-                sink_event e(kAooEventInviteTimeout, *it);
+                LOG_VERBOSE("AooSink: invitation for " << it->ep << " timed out");
+                sink_event e(kAooEventInviteTimeout, it->ep);
                 send_event(e, kAooThreadLevelAudio);
             } else {
-                LOG_VERBOSE("AooSink: removed inactive source " << it->address());
-                sink_event e(kAooEventSourceRemove, *it);
+                LOG_VERBOSE("AooSink: removed inactive source " << it->ep);
+                sink_event e(kAooEventSourceRemove, it->ep);
                 send_event(e, kAooThreadLevelAudio);
             }
             it = sources_.erase(it);
@@ -838,7 +837,8 @@ AooError sink_imp::handle_ping_message(const osc::ReceivedMessage& msg,
     if (src){
         return src->handle_ping(*this, tt);
     } else {
-        LOG_WARNING("couldn't find source " << id << " for " << kAooMsgPing << " message");
+        LOG_WARNING("couldn't find source " << addr << "|" << id
+                    << " for " << kAooMsgPing << " message");
         return kAooErrorUnknown;
     }
 }
@@ -850,23 +850,23 @@ AooError sink_imp::handle_ping_message(const osc::ReceivedMessage& msg,
 // never changes during lifetime of the 'source_desc'!
 // NOTE: this assumes that the event queue is polled regularly,
 // i.e. before a source_desc can be possibly autoremoved.
-event::event(AooEventType type, const source_desc& desc){
+event::event(AooEventType type, const endpoint& ep){
     source.type = type;
-    source.endpoint.address = desc.address().address();
-    source.endpoint.addrlen = desc.address().length();
-    source.endpoint.id = desc.id();
+    source.endpoint.address = ep.address.address();
+    source.endpoint.addrlen = ep.address.length();
+    source.endpoint.id = ep.id;
 }
 
 // 'sink_event' is used in 'sink' for source events that can outlive
 // its corresponding 'source_desc', therefore the ip_address is copied!
-sink_event::sink_event(AooEventType _type, const source_desc &desc)
-    : type(_type), address(desc.address()), id(desc.id()) {}
+sink_event::sink_event(AooEventType _type, const endpoint &ep)
+    : type(_type), address(ep.address), id(ep.id) {}
 
 /*////////////////////////// source_desc /////////////////////////////*/
 
 source_desc::source_desc(const ip_address& addr, AooId id,
                          uint32_t flags, double time)
-    : addr_(addr), id_(id), flags_(flags), last_packet_time_(time)
+    : ep(addr, id, flags), last_packet_time_(time)
 {
     // reserve some memory, so we don't have to allocate memory
     // when pushing events in the audio thread.
@@ -1163,7 +1163,7 @@ AooError source_desc::handle_format(const sink_imp& s, int32_t stream_id, const 
 
     // send format event (if changed)
     if (changed){
-        event e(kAooEventFormatChange, *this);
+        event e(kAooEventFormatChange, ep);
 
         auto mode = s.event_mode();
         if (mode == kAooEventModeCallback){
@@ -1259,7 +1259,7 @@ AooError source_desc::handle_ping(const sink_imp& s, time_tag tt){
     push_request(r);
 
     // push "ping" event
-    event e(kAooEventPing, *this);
+    event e(kAooEventPing, ep);
     e.ping.tt1 = tt;
     e.ping.tt2 = tt2;
     e.ping.tt3 = 0;
@@ -1387,25 +1387,25 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
 
     if (stats.lost > 0){
         // push packet loss event
-        event e(kAooEventBlockLost, *this);
+        event e(kAooEventBlockLost, ep);
         e.block_lost.count = stats.lost;
         send_event(s, e, kAooThreadLevelAudio);
     }
     if (stats.reordered > 0){
         // push packet reorder event
-        event e(kAooEventBlockReordered, *this);
+        event e(kAooEventBlockReordered, ep);
         e.block_reordered.count = stats.reordered;
         send_event(s, e, kAooThreadLevelAudio);
     }
     if (stats.resent > 0){
         // push packet resend event
-        event e(kAooEventBlockResent, *this);
+        event e(kAooEventBlockResent, ep);
         e.block_resent.count = stats.resent;
         send_event(s, e, kAooThreadLevelAudio);
     }
     if (stats.dropped > 0){
         // push packet resend event
-        event e(kAooEventBlockDropped, *this);
+        event e(kAooEventBlockDropped, ep);
         e.block_dropped.count = stats.dropped;
         send_event(s, e, kAooThreadLevelAudio);
     }
@@ -1454,8 +1454,8 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
             if (streamstate_ != kAooStreamStateStop){
                 streamstate_ = kAooStreamStateStop;
 
+                event e(kAooEventStreamState, ep);
                 // push "stop" event
-                event e(kAooEventStreamState, *this);
                 e.source_state.state = kAooStreamStateStop;
                 send_event(s, e, kAooThreadLevelAudio);
             }
@@ -1484,8 +1484,8 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
     if (streamstate_ != kAooStreamStatePlay){
         streamstate_ = kAooStreamStatePlay;
 
+        event e(kAooEventStreamState, ep);
         // push "start" event
-        event e(kAooEventStreamState, *this);
         e.source_state.state = kAooStreamStatePlay;
         send_event(s, e, kAooThreadLevelAudio);
     }
@@ -1559,7 +1559,7 @@ void source_desc::handle_underrun(const sink_imp& s){
     #endif
     }
 
-    event e(kAooEventBufferUnderrun, *this);
+    event e(kAooEventBufferUnderrun, ep);
     send_event(s, e, kAooThreadLevelAudio);
 
     underrun_ = false;
@@ -1600,7 +1600,7 @@ bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
         // report gap to source
         lost_since_ping_.fetch_add(diff - 1);
         // send event
-        event e(kAooEventBlockLost, *this);
+        event e(kAooEventBlockLost, ep);
         e.block_lost.count = diff - 1;
         send_event(s, e, kAooThreadLevelAudio);
     }
@@ -1862,7 +1862,7 @@ void source_desc::send_ping_reply(const sink_imp &s, const sendfn &fn,
             + kAooMsgSourceLen + 16 + kAooMsgPingLen;
     char address[max_addr_size];
     snprintf(address, sizeof(address), "%s%s/%d%s",
-             kAooMsgDomain, kAooMsgSource, id_, kAooMsgPing);
+             kAooMsgDomain, kAooMsgSource, ep.id, kAooMsgPing);
 
     msg << osc::BeginMessage(address) << s.id()
         << osc::TimeTag(r.ping.tt1)
@@ -1870,16 +1870,16 @@ void source_desc::send_ping_reply(const sink_imp &s, const sendfn &fn,
         << lost_blocks
         << osc::EndMessage;
 
-    fn((const AooByte *)msg.Data(), msg.Size(), addr_, flags_);
+    fn((const AooByte *)msg.Data(), msg.Size(), ep);
 
-    LOG_DEBUG("send /ping to source " << id_);
+    LOG_DEBUG("send /ping to " << ep);
 }
 
 // /aoo/src/<id>/format <sink> <version>
 // [<stream_id> <numchannels> <samplerate> <blocksize> <codec> <options>]
 // called without lock!
 void source_desc::send_format_request(const sink_imp& s, const sendfn& fn, bool format) {
-    LOG_VERBOSE("request format for source " << id_);
+void source_desc::send_start_request(const sink_imp& s, const sendfn& fn) {
     AooByte buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg((char *)buf, sizeof(buf));
 
@@ -1888,7 +1888,7 @@ void source_desc::send_format_request(const sink_imp& s, const sendfn& fn, bool 
             kAooMsgSourceLen + 16 + kAooMsgFormatLen;
     char address[max_addr_size];
     snprintf(address, sizeof(address), "%s%s/%d%s",
-             kAooMsgDomain, kAooMsgSource, id_, kAooMsgFormat);
+             kAooMsgDomain, kAooMsgSource, ep.id, kAooMsgStart);
 
     msg << osc::BeginMessage(address) << s.id() << (int32_t)make_version();
 
@@ -1969,7 +1969,7 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
         it += kAooBinMsgDomainSize;
         aoo::write_bytes<int16_t>(kAooTypeSource, it);
         aoo::write_bytes<int16_t>(kAooBinMsgCmdData, it);
-        aoo::write_bytes<int32_t>(id(), it);
+        aoo::write_bytes<int32_t>(ep.id, it);
         // write first 2 args (constant)
         aoo::write_bytes<int32_t>(s.id(), it);
         aoo::write_bytes<int32_t>(stream_id, it);
@@ -1989,7 +1989,7 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
                 // write 'count' field
                 aoo::to_bytes(numrequests, head - sizeof(int32_t));
                 // send it off
-                fn(buf, it - buf, address(), flags_);
+                fn(buf, it - buf, ep);
                 // prepare next message (just rewind)
                 it = head;
                 numrequests = 0;
@@ -2000,7 +2000,7 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
             // write 'count' field
             aoo::to_bytes(numrequests, head - sizeof(int32_t));
             // send it off
-            fn(buf, it - buf, address(), flags_);
+            fn(buf, it - buf, ep);
         }
     } else {
         char buf[AOO_MAX_PACKET_SIZE];
@@ -2011,7 +2011,7 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
                 kAooMsgSourceLen + 16 + kAooMsgDataLen;
         char pattern[maxaddrsize];
         snprintf(pattern, sizeof(pattern), "%s%s/%d%s",
-                 kAooMsgDomain, kAooMsgSource, id_, kAooMsgData);
+                 kAooMsgDomain, kAooMsgSource, ep.id, kAooMsgData);
 
         const int32_t maxdatasize = s.packetsize() - maxaddrsize - 16; // id + stream_id + padding
         const int32_t maxrequests = maxdatasize / 10; // 2 * (int32_t + typetag)
@@ -2029,7 +2029,7 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
                 // send it off
                 msg << osc::EndMessage;
 
-                fn((const AooByte *)msg.Data(), msg.Size(), address(), flags_);
+                fn((const AooByte *)msg.Data(), msg.Size(), ep);
 
                 // prepare next message
                 msg.Clear();
@@ -2042,7 +2042,7 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
             // send it off
             msg << osc::EndMessage;
 
-            fn((const AooByte *)msg.Data(), msg.Size(), address(), flags_);
+            fn((const AooByte *)msg.Data(), msg.Size(), ep);
         }
     }
 }
@@ -2059,13 +2059,13 @@ void source_desc::send_invitation(const sink_imp& s, const sendfn& fn){
             + kAooMsgSourceLen + 16 + kAooMsgInviteLen;
     char address[max_addr_size];
     snprintf(address, sizeof(address), "%s%s/%d%s",
-             kAooMsgDomain, kAooMsgSource, id_, kAooMsgInvite);
+             kAooMsgDomain, kAooMsgSource, ep.id, kAooMsgInvite);
 
     msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
 
-    fn((const AooByte *)msg.Data(), msg.Size(), addr_, flags_);
+    fn((const AooByte *)msg.Data(), msg.Size(), ep);
 
-    LOG_DEBUG("send /invite to source " << id_);
+    LOG_DEBUG("send /invite to source " << ep);
 }
 
 // called without lock!
@@ -2079,13 +2079,13 @@ void source_desc::send_uninvitation(const sink_imp& s, const sendfn &fn){
             + kAooMsgSourceLen + 16 + kAooMsgUninviteLen;
     char address[max_addr_size];
     snprintf(address, sizeof(address), "%s%s/%d%s",
-             kAooMsgDomain, kAooMsgSource, id_, kAooMsgUninvite);
+             kAooMsgDomain, kAooMsgSource, ep.id, kAooMsgUninvite);
 
     msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
 
-    fn((const AooByte *)msg.Data(), msg.Size(), addr_, flags_);
+    fn((const AooByte *)msg.Data(), msg.Size(), ep);
 
-    LOG_DEBUG("send /uninvite source " << id_);
+    LOG_DEBUG("send /uninvite source " << ep);
 }
 
 void source_desc::send_event(const sink_imp& s, const event& e,

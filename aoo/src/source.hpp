@@ -31,38 +31,19 @@ namespace aoo {
 
 class source;
 
-struct endpoint {
-    endpoint() = default;
-    endpoint(const ip_address& _address, int32_t _id, uint32_t _flags)
-        : address(_address), id(_id), flags(_flags) {}
-
-    // data
-    ip_address address;
-    AooId id = 0;
-    uint32_t flags = 0;
-};
-
 struct data_request {
     int32_t sequence;
     int32_t frame;
 };
 
-struct sink_desc : endpoint {
-    sink_desc(const ip_address& _addr, int32_t _id, uint32_t _flags)
-        : endpoint(_addr, _id, _flags), channel(0) {}
-    sink_desc(const sink_desc& other)
-        : endpoint(other.address, other.id, other.flags),
-          channel(other.channel.load()), needformat_(other.needformat_.load()) {}
-    sink_desc& operator=(const sink_desc& other){
-        address = other.address;
-        id = other.id;
-        flags = other.flags;
-        channel = other.channel.load();
-        needformat_ = other.needformat_.load();
-        return *this;
-    }
+struct sink_desc {
+    sink_desc(const ip_address& addr, int32_t id, uint32_t flags)
+        : ep(addr, id, flags), channel(0) {}
+    sink_desc(const sink_desc& other) = delete;
+    sink_desc& operator=(const sink_desc& other) = delete;
 
     // data
+    const endpoint ep;
     std::atomic<int16_t> channel;
     lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> data_requests;
 

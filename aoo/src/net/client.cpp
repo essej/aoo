@@ -1538,7 +1538,7 @@ void udp_client::update(const sendfn& reply, time_tag now){
 
             scoped_shared_lock lock(mutex_);
             for (auto& addr : server_addrlist_){
-                reply((const AooByte *)msg.Data(), msg.Size(), addr, 0);
+                reply((const AooByte *)msg.Data(), msg.Size(), addr);
             }
             last_ping_time_ = elapsed_time;
         }
@@ -1625,7 +1625,7 @@ void udp_client::send_peer_message(const AooByte *data, int32_t size,
             << osc::EndMessage;
         send_server_message((const AooByte *)msg.Data(), msg.Size(), fn);
     } else {
-        fn(data, size, addr, 0);
+        fn(data, size, addr);
     }
 }
 
@@ -1645,7 +1645,7 @@ void udp_client::send_server_message(const AooByte *data, int32_t size, const se
     if (!server_addrlist_.empty()){
         auto& remote = server_addrlist_.front();
         if (remote.valid()){
-            fn(data, size, remote, 0);
+            fn(data, size, remote);
         }
     }
 }

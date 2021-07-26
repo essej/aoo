@@ -2,10 +2,14 @@
 
 #include "aoo/aoo.h"
 
+#include "common/net_utils.hpp"
+
 #include <stdint.h>
 #include <utility>
 #include <memory>
 #include <atomic>
+
+//--------------- helper functions ----------------//
 
 namespace aoo {
 
@@ -28,7 +32,48 @@ AooError parse_pattern(const AooByte *msg, int32_t n,
 
 } // net
 
-/*///////////////////// allocator ////////////////////*/
+//---------------- endpoint ------------------------//
+
+struct endpoint {
+    endpoint() = default;
+    endpoint(const ip_address& _address, int32_t _id, uint32_t _flags)
+        : address(_address), id(_id), flags(_flags) {}
+
+    // data
+    ip_address address;
+    AooId id = 0;
+    uint32_t flags = 0;
+};
+
+inline std::ostream& operator<<(std::ostream& os, const endpoint& ep){
+    os << ep.address << "|" << ep.id;
+    return os;
+}
+
+struct sendfn {
+    sendfn(AooSendFunc fn = nullptr, void *user = nullptr)
+        : fn_(fn), user_(user) {}
+
+    void operator() (const AooByte *data, AooInt32 size,
+                      const ip_address& addr, AooFlag flags = 0) const {
+        fn_(user_, data, size, addr.address(), addr.length(), flags);
+    }
+
+    void operator() (const AooByte *data, AooInt32 size,
+                     const endpoint& ep) const {
+        fn_(user_, data, size,
+            ep.address.address(), ep.address.length(), ep.flags);
+    }
+
+    AooSendFunc fn() const { return fn_; }
+
+    void * user() const { return user_; }
+private:
+    AooSendFunc fn_;
+    void *user_;
+};
+
+//---------------- allocator -----------------------//
 
 
 #if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
@@ -114,7 +159,7 @@ using allocator = std::allocator<T>;
 
 #endif
 
-/*////////////// memory //////////////*/
+//------------------ memory --------------------//
 
 struct memory_block {
     struct {
@@ -160,7 +205,7 @@ private:
     std::atomic<memory_block *> memlist_{nullptr};
 };
 
-/*///////////////// misc ///////////////////*/
+//------------------- misc -------------------------//
 
 struct format_deleter {
     void operator() (void *x) const {

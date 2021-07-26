@@ -131,21 +131,4 @@ std::string socket_strerror(int err);
 
 void socket_error_print(const char *label = nullptr);
 
-/*//////////////////// helpers /////////////////////*/
-
-struct sendfn {
-    sendfn(AooSendFunc fn = nullptr, void *user = nullptr)
-        : fn_(fn), user_(user) {}
-    void operator () (const AooByte *data, AooInt32 nbytes,
-                      const ip_address& addr, AooFlag flags) const
-    {
-        fn_(user_, data, nbytes, addr.address(), addr.length(), flags);
-    }
-    AooSendFunc fn() const { return fn_; }
-    void * user() const { return user_; }
-private:
-    AooSendFunc fn_;
-    void *user_;
-};
-
 } // aoo

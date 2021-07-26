@@ -42,7 +42,7 @@ struct event
 
     event(AooEventType type) : type_(type) {}
 
-    event(AooEventType type, const source_desc& desc);
+    event(AooEventType type, const endpoint& ep);
 
     union {
         AooEventType type_;
@@ -63,7 +63,7 @@ struct sink_event {
     sink_event() = default;
 
     sink_event(AooEventType _type) : type(_type) {}
-    sink_event(AooEventType _type, const source_desc& desc);
+    sink_event(AooEventType _type, const endpoint& ep);
 
     AooEventType type;
     ip_address address;
@@ -106,7 +106,7 @@ struct source_request {
 
     request_type type;
     ip_address address;
-    AooId id = -1;
+    AooId id = kAooIdInvalid;
 };
 
 class sink_imp;
@@ -132,13 +132,8 @@ public:
 
     ~source_desc();
 
-    // getters
-    AooId id() const { return id_; }
-
-    const ip_address& address() const { return addr_; }
-
     bool match(const ip_address& addr, AooId id) const {
-        return (addr_ == addr) && (id_ == id);
+        return (ep.address == addr) && (ep.id == id);
     }
 
     bool is_active(const sink_imp& s) const;
@@ -215,9 +210,9 @@ private:
     void send_uninvitation(const sink_imp& s, const sendfn& fn);
 
     // data
-    const ip_address addr_;
-    const AooId id_;
-    uint32_t flags_;
+public:
+    const endpoint ep;
+private:
     AooId stream_id_ = kAooIdInvalid;
 
     AooStreamState streamstate_;

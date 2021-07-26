@@ -132,7 +132,7 @@ AooError AOO_CALL aoo::source_imp::control(
         GETSINKARG;
         auto chn = as<int32_t>(ptr);
         sink->channel.store(chn);
-        LOG_VERBOSE("aoo_source: send to sink " << sink->id
+        LOG_VERBOSE("aoo_source: send to sink " << sink->ep
                     << " on channel " << chn);
         break;
     }
@@ -649,7 +649,7 @@ namespace aoo {
 
 sink_desc * source_imp::find_sink(const ip_address& addr, AooId id){
     for (auto& sink : sinks_){
-        if (sink.address == addr && sink.id == id){
+        if (sink.ep.address == addr && sink.ep.id == id){
             return &sink;
         }
     }
@@ -690,7 +690,8 @@ AooError source_imp::add_sink(const AooEndpoint& ep, uint32_t flags)
                              &relay, sizeof(relay)) == kAooOk)
         {
             if (relay == kAooTrue){
-                LOG_DEBUG("sink " << addr << " needs to be relayed");
+                LOG_DEBUG("sink " << addr << "|" << ep.id
+                          << " needs to be relayed");
                 flags |= kAooEndpointRelay;
             }
         }
@@ -707,7 +708,7 @@ AooError source_imp::remove_sink(const AooEndpoint& ep){
 
     sink_lock lock(sinks_);
     for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
-        if (it->address == addr && it->id == ep.id){
+        if (it->ep.address == addr && it->ep.id == ep.id){
             sinks_.erase(it);
             return kAooOk;
         }
@@ -917,8 +918,6 @@ void source_imp::send_format(const sendfn& fn){
             // /aoo/sink/<id>/format <src> <version> <stream_id>
             // <numchannels> <samplerate> <blocksize> <codec> <options> <flags>
 
-            LOG_DEBUG("send format to " << s.id << " (stream_id = " << stream_id << ")");
-
             char buf[AOO_MAX_PACKET_SIZE];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
 
@@ -1090,7 +1089,7 @@ void source_imp::send_data(const sendfn& fn){
 
     // handle overflow (with 64 samples @ 44.1 kHz this happens every 36 days)
     // for now just force a reset by changing the stream_id, LATER think how to handle this better
-    if (last_sequence == INT32_MAX){
+    if (last_sequence == kAooIdMax){
         updatelock.unlock();
         // not perfectly thread-safe, but shouldn't cause problems AFAICT....
         scoped_lock lock(update_mutex_);
@@ -1154,9 +1153,9 @@ void source_imp::resend_data(const sendfn &fn){
                         d.data = frameptr[i];
                         d.size = framesize[i];
                         if (binary){
-                            send_packet_bin(fn, sink, stream_id, d);
+                            send_packet_bin(fn, sink.ep, stream_id, d);
                         } else {
-                            send_packet_osc(fn, sink, stream_id, d);
+                            send_packet_osc(fn, sink.ep, stream_id, d);
                         }
                     }
 
@@ -1176,9 +1175,9 @@ void source_imp::resend_data(const sendfn &fn){
                         d.data = sendbuffer_.data();
                         d.size = size;
                         if (binary){
-                            send_packet_bin(fn, sink, stream_id, d);
+                            send_packet_bin(fn, sink.ep, stream_id, d);
                         } else {
-                            send_packet_osc(fn, sink, stream_id, d);
+                            send_packet_osc(fn, sink.ep, stream_id, d);
                         }
 
                         // lock again
@@ -1207,7 +1206,7 @@ void source_imp::send_packet(const sendfn &fn, int32_t stream_id,
     #endif
         for (auto& sink : sinks_){
             // overwrite id and channel!
-            aoo::to_bytes(sink.id, buf + 8);
+            aoo::to_bytes(sink.ep.id, buf + 8);
 
             auto channel = sink.channel.load(std::memory_order_relaxed);
             aoo::to_bytes<int16_t>(channel, buf + kAooBinMsgHeaderSize + 12);
@@ -1218,7 +1217,7 @@ void source_imp::send_packet(const sendfn &fn, int32_t stream_id,
                       << d.totalsize << ", nframes = " << d.nframes
                       << ", frame = " << d.frame << ", size " << d.size);
         #endif
-            fn(buf, size, sink.address, sink.flags);
+            fn(buf, size, sink.ep);
         }
     } else {
         // we only free sources in this thread, so we don't have to lock
@@ -1229,7 +1228,7 @@ void source_imp::send_packet(const sendfn &fn, int32_t stream_id,
         for (auto& sink : sinks_){
             // set channel!
             d.channel = sink.channel.load(std::memory_order_relaxed);
-            send_packet_osc(fn, sink, stream_id, d);
+            send_packet_osc(fn, sink.ep, stream_id, d);
         }
     }
 }
@@ -1257,7 +1256,7 @@ void source_imp::send_packet_osc(const sendfn& fn, const endpoint& ep,
               << d.totalsize << ", nframes = " << d.nframes
               << ", frame = " << d.frame << ", size " << d.size);
 #endif
-    fn((const AooByte *)msg.Data(), msg.Size(), ep.address, ep.flags);
+    fn((const AooByte *)msg.Data(), msg.Size(), ep);
 }
 
 // binary data message:
@@ -1324,7 +1323,7 @@ void source_imp::send_packet_bin(const sendfn& fn, const endpoint& ep,
               << ", frame = " << d.frame << ", size " << d.size);
 #endif
 
-    fn((const AooByte *)buf, size, ep.address, ep.flags);
+    fn((const AooByte *)buf, size, ep);
 }
 
 void source_imp::send_ping(const sendfn& fn){
@@ -1342,7 +1341,7 @@ void source_imp::send_ping(const sendfn& fn){
         // send ping to sinks
         for (auto& sink : sinks_){
             // /aoo/sink/<id>/ping <src> <time>
-            LOG_DEBUG("send ping to " << sink.id);
+            LOG_DEBUG("send /ping to " << sink.ep);
 
             char buf[AOO_MAX_PACKET_SIZE];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -1351,12 +1350,12 @@ void source_imp::send_ping(const sendfn& fn){
                     + kAooMsgSinkLen + 16 + kAooMsgPingLen;
             char address[max_addr_size];
             snprintf(address, sizeof(address), "%s%s/%d%s",
-                     kAooMsgDomain, kAooMsgSink, sink.id, kAooMsgPing);
+                     kAooMsgDomain, kAooMsgSink, sink.ep.id, kAooMsgPing);
 
             msg << osc::BeginMessage(address) << id() << osc::TimeTag(tt)
                 << osc::EndMessage;
 
-            fn((const AooByte *)msg.Data(), msg.Size(), sink.address, sink.flags);
+            fn((const AooByte *)msg.Data(), msg.Size(), sink.ep);
         }
 
         lastpingtime_.store(elapsed);
@@ -1512,7 +1511,7 @@ void source_imp::handle_invite(const osc::ReceivedMessage& msg,
 {
     auto id = msg.ArgumentsBegin()->AsInt32();
 
-    LOG_DEBUG("handle invitation by " << addr << " " << id);
+    LOG_DEBUG("handle invitation by " << addr << "|" << id);
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     sink_lock lock(sinks_);
@@ -1531,8 +1530,7 @@ void source_imp::handle_uninvite(const osc::ReceivedMessage& msg,
 {
     auto id = msg.ArgumentsBegin()->AsInt32();
 
-    LOG_DEBUG("handle uninvitation by " << addr.name()
-              << " " << addr.port() << " " << id);
+    LOG_DEBUG("handle uninvitation by " << addr << "|" << id);
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     sink_lock lock(sinks_);
