@@ -1600,8 +1600,8 @@ bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
         // report gap to source
         lost_since_ping_.fetch_add(diff - 1);
         // send event
-        event e(kAooEventBlockGap, *this);
-        e.block_gap.count = diff - 1;
+        event e(kAooEventBlockLost, *this);
+        e.block_lost.count = diff - 1;
         send_event(s, e, kAooThreadLevelAudio);
     }
 

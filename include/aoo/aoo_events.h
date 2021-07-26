@@ -39,8 +39,6 @@ enum AooEventTypes
     kAooEventBlockReordered,
     // sink: blocks have been resent
     kAooEventBlockResent,
-    // sink: large gap between blocks
-    kAooEventBlockGap,
     // sink: block has been dropped by source
     kAooEventBlockDropped
 };

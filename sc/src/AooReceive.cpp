@@ -133,6 +133,16 @@ void AooReceive::handleEvent(const AooEvent *event){
         sendMsgRT(msg);
         break;
     }
+    case kAooEventFormatTimeout:
+    {
+        auto e = (const AooEventFormatTimeout *)event;
+        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
+                             e->endpoint.addrlen);
+
+        beginEvent(msg, "/format/timeout", addr, e->endpoint.id);
+        sendMsgRT(msg);
+        break;
+    }
     case kAooEventStreamState:
     {
         auto e = (const AooEventStreamState *)event;
@@ -155,6 +165,17 @@ void AooReceive::handleEvent(const AooEvent *event){
         sendMsgRT(msg);
         break;
     }
+    case kAooEventBlockDropped:
+    {
+        auto e = (const AooEventBlockDropped *)event;
+        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
+                             e->endpoint.addrlen);
+
+        beginEvent(msg, "/block/dropped", addr, e->endpoint.id);
+        msg << e->count;
+        sendMsgRT(msg);
+        break;
+    }
     case kAooEventBlockReordered:
     {
         auto e = (const AooEventBlockReordered *)event;
@@ -173,17 +194,6 @@ void AooReceive::handleEvent(const AooEvent *event){
                              e->endpoint.addrlen);
 
         beginEvent(msg, "/block/resent", addr, e->endpoint.id);
-        msg << e->count;
-        sendMsgRT(msg);
-        break;
-    }
-    case kAooEventBlockGap:
-    {
-        auto e = (const AooEventBlockGap *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        beginEvent(msg, "/block/gap", addr, e->endpoint.id);
         msg << e->count;
         sendMsgRT(msg);
         break;

@@ -440,10 +440,10 @@ static t_int * aoo_send_perform(t_int *w)
                   "AooSample size must match t_sample");
 
     if (x->x_node){
-        auto t = get_osctime();
-        auto vec = (const AooSample **)x->x_vec.get();
+        auto err = x->x_source->process(
+                    (const AooSample **)x->x_vec.get(), n,
+                    get_osctime());
 
-        auto err = x->x_source->process(vec, n, t);
         if (err != kAooErrorIdle){
             x->x_node->notify();
         }

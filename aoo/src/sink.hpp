@@ -56,7 +56,6 @@ struct event
         AooEventBlockReordered block_reordered;
         AooEventBlockResent block_resent;
         AooEventBlockDropped block_dropped;
-        AooEventBlockGap block_gap;
     };
 };
 

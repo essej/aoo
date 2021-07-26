@@ -363,6 +363,18 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
         outlet_anything(x->x_msgout, gensym("block_lost"), 4, msg);
         break;
     }
+    case kAooEventBlockDropped:
+    {
+        auto e = (const AooEventBlockDropped *)event;
+        aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
+
+        if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
+            return;
+        }
+        SETFLOAT(&msg[3], e->count);
+        outlet_anything(x->x_msgout, gensym("block_dropped"), 4, msg);
+        break;
+    }
     case kAooEventBlockReordered:
     {
         auto e = (const AooEventBlockReordered *)event;
@@ -385,30 +397,6 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
         }
         SETFLOAT(&msg[3], e->count);
         outlet_anything(x->x_msgout, gensym("block_resent"), 4, msg);
-        break;
-    }
-    case kAooEventBlockDropped:
-    {
-        auto e = (const AooEventBlockDropped *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
-
-        if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
-            return;
-        }
-        SETFLOAT(&msg[3], e->count);
-        outlet_anything(x->x_msgout, gensym("block_dropped"), 4, msg);
-        break;
-    }
-    case kAooEventBlockGap:
-    {
-        auto e = (const AooEventBlockGap *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
-
-        if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
-            return;
-        }
-        SETFLOAT(&msg[3], e->count);
-        outlet_anything(x->x_msgout, gensym("block_gap"), 4, msg);
         break;
     }
     case kAooEventPing:
@@ -440,10 +428,8 @@ static t_int * aoo_receive_perform(t_int *w)
     int n = (int)(w[2]);
 
     if (x->x_node){
-        auto t = get_osctime();
-        auto vec = x->x_vec.get();
-
-        auto err = x->x_sink->process(vec, n, t);
+        auto err = x->x_sink->process(x->x_vec.get(), n,
+                                      get_osctime());
         if (err != kAooErrorIdle){
             x->x_node->notify();
         }
