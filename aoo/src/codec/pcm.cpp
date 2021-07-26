@@ -8,6 +8,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <cmath>
 
 namespace {
 
@@ -48,8 +49,15 @@ int32_t bytes_per_sample(int32_t bd)
 void sample_to_int16(AooSample in, AooByte *out)
 {
     convert c;
-    int32_t temp = in * 0x7fff + 0.5f;
-    c.i16 = (temp > INT16_MAX) ? INT16_MAX : (temp < INT16_MIN) ? INT16_MIN : temp;
+    // convert to 16 bit range
+    AooSample temp = std::rint(in * INT16_MAX);
+    // check for overflow!
+    if (temp > INT16_MAX){
+        temp = INT16_MAX;
+    } else if (temp < INT16_MIN){
+        temp = INT16_MIN;
+    }
+    c.i16 = (int16_t)temp;
 #if BYTE_ORDER == BIG_ENDIAN
     memcpy(out, c.b, 2); // optimized away
 #else
@@ -61,8 +69,15 @@ void sample_to_int16(AooSample in, AooByte *out)
 void sample_to_int24(AooSample in, AooByte *out)
 {
     convert c;
-    int32_t temp = in * 0x7fffffff + 0.5f;
-    c.i32 = (temp > INT32_MAX) ? INT32_MAX : (temp < INT32_MIN) ? INT32_MIN : temp;
+    // convert to 32 bit range
+    AooSample temp = std::rint(in * INT32_MAX);
+    // check for overflow!
+    if (temp > INT32_MAX){
+        temp = INT32_MAX;
+    } else if (temp < INT32_MIN){
+        temp = INT32_MIN;
+    }
+    c.i32 = (int32_t)temp;
     // only copy the highest 3 bytes!
 #if BYTE_ORDER == BIG_ENDIAN
     out[0] = c.b[0];
@@ -93,7 +108,7 @@ AooSample int16_to_sample(const AooByte *in){
     c.b[0] = in[1];
     c.b[1] = in[0];
 #endif
-    return(AooSample)c.i16 / 32768.f;
+    return(AooSample)c.i16 / (AooSample)INT16_MAX;
 }
 
 AooSample int24_to_sample(const AooByte *in)
@@ -111,7 +126,7 @@ AooSample int24_to_sample(const AooByte *in)
     c.b[2] = in[1];
     c.b[3] = in[0];
 #endif
-    return (AooSample)c.i32 / 0x7fffffff;
+    return (AooSample)c.i32 / (AooSample)INT32_MAX;
 }
 
 AooSample float32_to_sample(const AooByte *in)
