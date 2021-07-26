@@ -1341,8 +1341,6 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
         return false;
     }
 
-    stream_state state;
-
     // check for sink xruns
     if (didupdate_){
         xrunsamples_ = 0;
@@ -1356,6 +1354,8 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
         xrunsamples_ = 0;
     }
 
+    stream_stats stats;
+
     if (!packetqueue_.empty()){
         // check for buffer underrun (only if packets arrive!)
         if (underrun_){
@@ -1365,7 +1365,7 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
         net_packet d;
         while (packetqueue_.try_pop(d)){
             // check data packet
-            add_packet(s, d, state);
+            add_packet(s, d, stats);
             // return memory
             memory_.free(memory_block::from_bytes((void *)d.data));
         }
@@ -1375,7 +1375,7 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
         skip_blocks(s);
     }
 
-    process_blocks(s, state);
+    process_blocks(s, stats);
 
     check_missing_blocks(s);
 
@@ -1385,28 +1385,28 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
               << ", newest: " << jitterbuffer_.last_pushed());
 #endif
 
-    if (state.lost > 0){
+    if (stats.lost > 0){
         // push packet loss event
         event e(kAooEventBlockLost, *this);
-        e.block_lost.count = state.lost;
+        e.block_lost.count = stats.lost;
         send_event(s, e, kAooThreadLevelAudio);
     }
-    if (state.reordered > 0){
+    if (stats.reordered > 0){
         // push packet reorder event
         event e(kAooEventBlockReordered, *this);
-        e.block_reordered.count = state.reordered;
+        e.block_reordered.count = stats.reordered;
         send_event(s, e, kAooThreadLevelAudio);
     }
-    if (state.resent > 0){
+    if (stats.resent > 0){
         // push packet resend event
         event e(kAooEventBlockResent, *this);
-        e.block_resent.count = state.resent;
+        e.block_resent.count = stats.resent;
         send_event(s, e, kAooThreadLevelAudio);
     }
-    if (state.dropped > 0){
+    if (stats.dropped > 0){
         // push packet resend event
         event e(kAooEventBlockDropped, *this);
-        e.block_dropped.count = state.dropped;
+        e.block_dropped.count = stats.dropped;
         send_event(s, e, kAooThreadLevelAudio);
     }
 
@@ -1509,8 +1509,8 @@ int32_t source_desc::poll_events(sink_imp& s, AooEventHandler fn, void *user){
     return count;
 }
 
-void source_desc::add_lost(stream_state& state, int32_t n) {
-    state.lost += n;
+void source_desc::add_lost(stream_stats& stats, int32_t n) {
+    stats.lost += n;
     lost_since_ping_.fetch_add(n, std::memory_order_relaxed);
 }
 
@@ -1566,7 +1566,7 @@ void source_desc::handle_underrun(const sink_imp& s){
 }
 
 bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
-                             stream_state& state){
+                             stream_stats& stats){
     // we have to check the stream_id (again) because the stream
     // might have changed in between!
     if (d.stream_id != stream_id_){
@@ -1686,10 +1686,10 @@ bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
             // out of order or resent
             if (block->resend_count() > 0){
                 LOG_VERBOSE("resent frame " << d.frame << " of block " << d.sequence);
-                state.resent++;
+                stats.resent++;
             } else {
                 LOG_VERBOSE("frame " << d.frame << " of block " << d.sequence << " out of order!");
-                state.reordered++;
+                stats.reordered++;
             }
         }
     }
@@ -1700,7 +1700,7 @@ bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
     return true;
 }
 
-void source_desc::process_blocks(const sink_imp& s, stream_state& state){
+void source_desc::process_blocks(const sink_imp& s, stream_stats& stats){
     if (jitterbuffer_.empty()){
         return;
     }
@@ -1726,7 +1726,7 @@ void source_desc::process_blocks(const sink_imp& s, stream_state& state){
                           << b.sequence << ") for source xrun");
             #endif
                 // record dropped block
-                state.dropped++;
+                stats.dropped++;
             } else {
                 // block is ready
                 data = b.data();
@@ -1749,7 +1749,7 @@ void source_desc::process_blocks(const sink_imp& s, stream_state& state){
                 size = 0;
                 sr = decoder_->samplerate(); // nominal samplerate
                 channel = -1; // current channel
-                add_lost(state, 1);
+                add_lost(stats, 1);
                 LOG_VERBOSE("dropped block " << b.sequence);
             } else {
                 // wait for block

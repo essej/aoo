@@ -27,7 +27,7 @@
 
 namespace aoo {
 
-struct stream_state {
+struct stream_stats {
     int32_t lost = 0;
     int32_t reordered = 0;
     int32_t resent = 0;
@@ -188,14 +188,14 @@ private:
 
     void update(const sink_imp& s);
 
-    void add_lost(stream_state& state, int32_t n);
+    void add_lost(stream_stats& stats, int32_t n);
 
     void handle_underrun(const sink_imp& s);
 
     bool add_packet(const sink_imp& s, const net_packet& d,
-                    stream_state& state);
+                    stream_stats& stats);
 
-    void process_blocks(const sink_imp& s, stream_state& state);
+    void process_blocks(const sink_imp& s, stream_stats& stats);
 
     void skip_blocks(const sink_imp& s);
 
