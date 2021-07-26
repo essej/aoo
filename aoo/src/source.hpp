@@ -158,7 +158,7 @@ class source_imp final : public AooSource {
 
     // settings
     std::atomic<AooId> id_;
-    int32_t stream_id_ = 0;
+    AooId stream_id_ = kAooIdInvalid;
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
     int32_t samplerate_ = 0;

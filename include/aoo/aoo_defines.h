@@ -131,7 +131,9 @@ typedef AOO_SAMPLE_TYPE AooSample;
 
 typedef AooInt32 AooId;
 
-#define kAooIdNone INT32_MIN
+#define kAooIdInvalid -1
+#define kAooIdMin 0
+#define kAooIdMax INT32_MAX
 
 typedef AooUInt32 AooFlag;
 

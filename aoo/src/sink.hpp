@@ -218,7 +218,7 @@ private:
     const ip_address addr_;
     const AooId id_;
     uint32_t flags_;
-    int32_t stream_id_ = -1; // start with invalid stream ID!
+    AooId stream_id_ = kAooIdInvalid;
 
     AooStreamState streamstate_;
     bool underrun_{false};
