@@ -143,6 +143,27 @@ void AooReceive::handleEvent(const AooEvent *event){
         sendMsgRT(msg);
         break;
     }
+    case kAooEventStreamStart:
+    {
+        auto e = (const AooEventStreamStart *)event;
+        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
+                             e->endpoint.addrlen);
+
+        beginEvent(msg, "/start", addr, e->endpoint.id);
+        // TODO metadata
+        sendMsgRT(msg);
+        break;
+    }
+    case kAooEventStreamStop:
+    {
+        auto e = (const AooEventStreamStop *)event;
+        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
+                             e->endpoint.addrlen);
+
+        beginEvent(msg, "/stop", addr, e->endpoint.id);
+        sendMsgRT(msg);
+        break;
+    }
     case kAooEventStreamState:
     {
         auto e = (const AooEventStreamState *)event;

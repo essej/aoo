@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
@@ -51,7 +51,9 @@ struct event
         AooEventFormatChange format;
         AooEventFormatTimeout format_timeout;
         AooEventPing ping;
-        AooEventStreamState source_state;
+        AooEventStreamStart stream_start;
+        AooEventStreamStop stream_stop;
+        AooEventStreamState stream_state;
         AooEventBlockLost block_lost;
         AooEventBlockReordered block_reordered;
         AooEventBlockResent block_resent;
@@ -73,11 +75,12 @@ struct sink_event {
 
 enum class request_type {
     unknown,
-    format,
+    start,
     ping_reply,
     invite,
     uninvite,
-    uninvite_all
+    uninvite_all,
+    // format
 };
 
 // used in 'source_desc'
@@ -113,7 +116,9 @@ class sink_imp;
 
 enum class source_state {
     idle,
-    stream,
+    run,
+    stop,
+    start,
     invite,
     uninvite
 };
@@ -153,8 +158,10 @@ public:
     // methods
     void reset(const sink_imp& s);
 
-    AooError handle_format(const sink_imp& s, int32_t stream_id, const AooFormat& f,
-                           const AooByte *settings, int32_t size, uint32_t flags);
+    AooError handle_start(const sink_imp& s, int32_t stream, uint32_t flags, int32_t lastformat,
+                          const AooFormat& f, const AooByte *settings, int32_t size);
+
+    AooError handle_stop(const sink_imp& s, int32_t stream);
 
     AooError handle_data(const sink_imp& s, net_packet& d, bool binary);
 
@@ -200,8 +207,9 @@ private:
     void send_ping_reply(const sink_imp& s, const sendfn& fn,
                          const request& r);
 
-    void send_format_request(const sink_imp& s, const sendfn& fn,
-                             bool format = false);
+    void send_start_request(const sink_imp& s, const sendfn& fn);
+
+    void send_format_request(const sink_imp& s, const sendfn& fn);
 
     void send_data_requests(const sink_imp& s, const sendfn& fn);
 
@@ -214,8 +222,9 @@ public:
     const endpoint ep;
 private:
     AooId stream_id_ = kAooIdInvalid;
+    AooId format_id_ = kAooIdInvalid;
 
-    AooStreamState streamstate_;
+    AooStreamState streamstate_{kAooStreamStateInactive};
     bool underrun_{false};
     bool didupdate_{false};
     std::atomic<bool> binary_{false};
@@ -386,8 +395,11 @@ private:
 
     void reset_sources();
 
-    AooError handle_format_message(const osc::ReceivedMessage& msg,
-                                   const ip_address& addr);
+    AooError handle_start_message(const osc::ReceivedMessage& msg,
+                                  const ip_address& addr);
+
+    AooError handle_stop_message(const osc::ReceivedMessage& msg,
+                                 const ip_address& addr);
 
     AooError handle_data_message(const osc::ReceivedMessage& msg,
                                  const ip_address& addr);

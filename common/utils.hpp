@@ -158,4 +158,11 @@ void write_bytes(T v, B *& b){
     b += sizeof(T);
 }
 
+template<typename T>
+T clamp(T in, T low, T high){
+    if (in > high) return high;
+    else if (in < low) return low;
+    else return in;
+}
+
 } // aoo

@@ -29,7 +29,11 @@ enum AooEventTypes
     kAooEventSourceAdd,
     // sink: source removed
     kAooEventSourceRemove,
-    // sink: source changed state
+    // sink: stream started
+    kAooEventStreamStart,
+    // sink: stream stopped
+    kAooEventStreamStop,
+    // sink: stream changed state
     kAooEventStreamState,
     // sink: buffer underrun
     kAooEventBufferUnderrun,
@@ -72,12 +76,22 @@ typedef AOO_STRUCT AooEventEndpoint
 #define AooEventFormatTimeout AooEventEndpoint
 #define AooEventBufferUnderrun AooEventEndpoint
 
-// source state event
+// stream start/stop event
+
+typedef AOO_STRUCT AooEventStreamStart
+{
+    AooEventType type;
+    AooEndpoint endpoint;
+    // AooStreamMetaData metadata;
+} AooEventStreamStart;
+
+#define AooEventStreamStop AooEventEndpoint
+
+// stream state event
 typedef AooInt32 AooStreamState;
 
-#define kAooStreamStateInit -1
-#define kAooStreamStateStop 0
-#define kAooStreamStatePlay 1
+#define kAooStreamStateInactive 0
+#define kAooStreamStateActive 1
 
 typedef AOO_STRUCT AooEventStreamState
 {

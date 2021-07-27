@@ -149,7 +149,7 @@ AooError AOO_CALL aoo::source_imp::control(
         auto newid = as<int32_t>(ptr);
         if (id_.exchange(newid) != newid){
             // if playing, restart
-            auto expected = stream_state::play;
+            auto expected = stream_state::run;
             state_.compare_exchange_strong(expected, stream_state::start);
         }
         break;
@@ -313,7 +313,7 @@ AooError AOO_CALL aoo::source_imp::setup(
                 update_historybuffer();
             }
 
-            start_new_stream();
+            start_new_stream(true);
         }
 
         // always reset timer + time DLL filter
@@ -370,8 +370,8 @@ AooError AOO_CALL aoo::source_imp::handleMessage(
             osc::ReceivedMessage msg(packet);
 
             auto pattern = msg.AddressPattern() + onset;
-            if (!strcmp(pattern, kAooMsgFormat)){
-                handle_format_request(msg, addr);
+            if (!strcmp(pattern, kAooMsgStart)){
+                handle_start_request(msg, addr);
             } else if (!strcmp(pattern, kAooMsgData)){
                 handle_data_request(msg, addr);
             } else if (!strcmp(pattern, kAooMsgInvite)){
@@ -400,13 +400,16 @@ AOO_API AooError AOO_CALL AooSource_send(
 // This method reads audio samples from the ringbuffer,
 // encodes them and sends them to all sinks.
 AooError AOO_CALL aoo::source_imp::send(AooSendFunc fn, void *user) {
-    if (state_.load() != stream_state::play){
+#if 0
+    // this breaks the /stop message!
+    if (state_.load() != stream_state::run){
         return kAooOk; // nothing to do
     }
+#endif
 
     sendfn reply(fn, user);
 
-    send_format(reply);
+    send_stream(reply);
 
     send_data(reply);
 
@@ -431,8 +434,21 @@ AOO_API AooError AOO_CALL AooSource_process(
 AooError AOO_CALL aoo::source_imp::process(
         const AooSample **data, AooInt32 nsamples, AooNtpTime t) {
     auto state = state_.load();
-    if (state == stream_state::stop){
+    if (state == stream_state::idle){
         return kAooErrorIdle; // pausing
+    } else if (state == stream_state::stop){
+        sink_lock lock(sinks_);
+        for (auto& s : sinks_){
+            s.notify(send_flag::stop);
+        }
+        notify(send_flag::stop);
+
+        // check if we have been started in the meantime
+        auto expected = stream_state::stop;
+        if (state_.compare_exchange_strong(expected, stream_state::idle)){
+            // don't return kAooIdle because we want to send the /stop message
+            return kAooOk;
+        }
     } else if (state == stream_state::start){
         // start -> play
         // the mutex should be uncontended most of the time.
@@ -445,11 +461,16 @@ AooError AOO_CALL aoo::source_imp::process(
             return kAooErrorWouldBlock;
         }
 
-        start_new_stream();
+        // LATER also send format if we have been idle for a long time,
+        // because the remote sink might have removed the source and
+        // therefore wouldn't have access to the format.
+        // In practice, this is not a critical issue because the sink
+        // would simply request the format, but it is not ideal...
+        start_new_stream(format_id_ == kAooIdInvalid);
 
         // check if we have been stopped in the meantime
         auto expected = stream_state::start;
-        if (!state_.compare_exchange_strong(expected, stream_state::play)){
+        if (!state_.compare_exchange_strong(expected, stream_state::run)){
             return kAooErrorIdle; // pausing
         }
     }
@@ -698,7 +719,11 @@ AooError source_imp::add_sink(const AooEndpoint& ep, uint32_t flags)
     }
 #endif
     sinks_.emplace_front(addr, ep.id, flags);
-    needformat_.store(true, std::memory_order_release); // !
+    // send /start if already running!
+    if (state_.load(std::memory_order_acquire) == stream_state::run){
+        sinks_.front().notify(send_flag::start);
+        notify(send_flag::start);
+    }
 
     return kAooOk;
 }
@@ -762,7 +787,7 @@ AooError source_imp::set_format(AooFormat &f){
         // NOTE: there's a slight race condition because 'xrun_'
         // might be incremented right afterwards, but I'm not
         // sure if this could cause any real problems..
-        start_new_stream();
+        start_new_stream(true);
     }
     return err;
 }
@@ -798,7 +823,7 @@ void source_imp::send_event(const event& e, AooThreadLevel level){
 
 // must be real-time safe because it might be called in process()!
 // always called with update lock!
-void source_imp::start_new_stream(){
+void source_imp::start_new_stream(bool format_changed){
     // implicitly reset time DLL to be on the safe side
     timer_.reset();
 
@@ -818,14 +843,20 @@ void source_imp::start_new_stream(){
     history_.clear(); // !
 
     // reset encoder to avoid garbage from previous stream
+
     encoder_->reset();
+
+    if (format_changed){
+        format_id_ = stream_id_;
+    }
 
     sink_lock lock(sinks_);
     for (auto& s : sinks_){
         s.reset();
-        s.request_format();
+        s.notify(send_flag::start);
     }
-    needformat_.store(true, std::memory_order_release); // !
+
+    notify(send_flag::start);
 }
 
 void source_imp::add_xrun(float n){
@@ -881,8 +912,56 @@ void source_imp::update_historybuffer(){
     }
 }
 
-void source_imp::send_format(const sendfn& fn){
-    if (!needformat_.exchange(false, std::memory_order_acquire)){
+// /aoo/sink/<id>/start <src> <version> <stream_id> <flags>
+// <lastformat> <nchannels> <samplerate> <blocksize> <codec> <options>
+void send_start(const sink_desc& s, int32_t id, int32_t stream, int32_t lastformat,
+                const AooFormat& f, const AooByte *options, AooInt32 size,
+                const sendfn& fn) {
+    LOG_DEBUG("send " kAooMsgStart " to " << s.ep << " (stream = " << stream << ")");
+
+    char buf[AOO_MAX_PACKET_SIZE];
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+    const int32_t max_addr_size = kAooMsgDomainLen
+            + kAooMsgSinkLen + 16 + kAooMsgStartLen;
+    char address[max_addr_size];
+    snprintf(address, sizeof(address), "%s%s/%d%s",
+             kAooMsgDomain, kAooMsgSink, s.ep.id, kAooMsgStart);
+
+    // stream specific flags (for future use)
+    AooFlag flags = 0;
+
+    msg << osc::BeginMessage(address) << id << (int32_t)make_version()
+        << stream << (int32_t)flags << lastformat
+        << f.numChannels << f.sampleRate << f.blockSize
+        << f.codec << osc::Blob(options, size)
+        << osc::EndMessage;
+
+    fn((const AooByte *)msg.Data(), msg.Size(), s.ep);
+}
+
+// /aoo/sink/<id>/stop <src> <stream_id>
+void send_stop(const sink_desc& s, int32_t id,
+               int32_t stream, const sendfn& fn) {
+    LOG_DEBUG("send " kAooMsgStop " to " << s.ep << " (stream = " << stream << ")");
+
+    char buf[AOO_MAX_PACKET_SIZE];
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+    const int32_t max_addr_size = kAooMsgDomainLen
+            + kAooMsgSinkLen + 16 + kAooMsgStopLen;
+    char address[max_addr_size];
+    snprintf(address, sizeof(address), "%s%s/%d%s",
+             kAooMsgDomain, kAooMsgSink, s.ep.id, kAooMsgStop);
+
+    msg << osc::BeginMessage(address) << id << stream << osc::EndMessage;
+
+    fn((const AooByte *)msg.Data(), msg.Size(), s.ep);
+}
+
+void source_imp::send_stream(const sendfn& fn){
+    auto what = need_send();
+    if (what == 0){
         return;
     }
 
@@ -893,15 +972,17 @@ void source_imp::send_format(const sendfn& fn){
     }
 
     int32_t stream_id = stream_id_;
+    int32_t format_id = format_id_;
 
     AooFormatStorage f;
+    AooByte options[kAooCodecMaxSettingSize];
+    AooInt32 size = sizeof(options);
+
+    // serialize format
     if (encoder_->get_format(f.header, sizeof(AooFormatStorage)) != kAooOk){
         return;
     }
 
-    // serialize format
-    AooByte options[kAooCodecMaxSettingSize];
-    AooInt32 size = sizeof(options);
     if (encoder_->serialize(f.header, options, size) != kAooOk){
         return;
     }
@@ -914,25 +995,14 @@ void source_imp::send_format(const sendfn& fn){
     sink_lock lock(sinks_);
 #endif
     for (auto& s : sinks_){
-        if (s.need_format()){
-            // /aoo/sink/<id>/format <src> <version> <stream_id>
-            // <numchannels> <samplerate> <blocksize> <codec> <options> <flags>
-
-            char buf[AOO_MAX_PACKET_SIZE];
-            osc::OutboundPacketStream msg(buf, sizeof(buf));
-
-            const int32_t max_addr_size = kAooMsgDomainLen
-                    + kAooMsgSinkLen + 16 + kAooMsgFormatLen;
-            char address[max_addr_size];
-            snprintf(address, sizeof(address), "%s%s/%d%s",
-                     kAooMsgDomain, kAooMsgSink, s.id, kAooMsgFormat);
-
-            msg << osc::BeginMessage(address) << id() << (int32_t)make_version()
-                << stream_id << f.header.numChannels << f.header.sampleRate
-                << f.header.blockSize << f.header.codec << osc::Blob(options, size)
-                << (int32_t)s.flags << osc::EndMessage;
-
-            fn((const AooByte *)msg.Data(), msg.Size(), s.address, s.flags);
+        auto what = s.need_send();
+        // first send /stop message, in case we also send a /start message
+        if (what & send_flag::stop){
+            send_stop(s, id(), stream_id, fn);
+        }
+        if (what & send_flag::start){
+            send_start(s, id(), stream_id, format_id,
+                       f.header, options, size, fn);
         }
     }
 }
@@ -1341,7 +1411,7 @@ void source_imp::send_ping(const sendfn& fn){
         // send ping to sinks
         for (auto& sink : sinks_){
             // /aoo/sink/<id>/ping <src> <time>
-            LOG_DEBUG("send /ping to " << sink.ep);
+            LOG_DEBUG("send " kAooMsgPing " to " << sink.ep);
 
             char buf[AOO_MAX_PACKET_SIZE];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -1362,7 +1432,38 @@ void source_imp::send_ping(const sendfn& fn){
     }
 }
 
-// /format <id> <version>
+// /start <id> <version>
+void source_imp::handle_start_request(const osc::ReceivedMessage& msg,
+                                      const ip_address& addr)
+{
+    LOG_DEBUG("handle start request");
+
+    auto it = msg.ArgumentsBegin();
+
+    auto id = (it++)->AsInt32();
+    auto version = (it++)->AsInt32();
+
+    // LATER handle this in the sink_desc (e.g. not sending data)
+    if (!check_version(version)){
+        LOG_ERROR("aoo_source: sink version not supported");
+        return;
+    }
+
+    // check if sink exists (not strictly necessary, but might help catch errors)
+    sink_lock lock(sinks_);
+    auto sink = find_sink(addr, id);
+
+    if (sink){
+        // resend /start message
+        sink->notify(send_flag::start);
+
+        notify(send_flag::start);
+    } else {
+        LOG_VERBOSE("ignoring '" << kAooMsgStart << "' message: sink not found");
+    }
+}
+
+// /format <id> <version> <stream> <nchannels> <samplerate> <blocksize> <codec> <options>
 void source_imp::handle_format_request(const osc::ReceivedMessage& msg,
                                        const ip_address& addr)
 {
@@ -1384,65 +1485,61 @@ void source_imp::handle_format_request(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
 
     if (sink){
-        if (it != msg.ArgumentsEnd()){
-            // requested another format
-            int32_t stream_id = (it++)->AsInt32();
-            // ignore outdated requests
-            // this can happen because format requests are sent repeatedly
-            // by the sink until a) the source replies or b) the timeout is reached.
-            // if the network latency is high, the sink might sent a format request
-            // right before receiving a /format message (as a result of the previous request).
-            // until the source re
-            shared_lock lock(update_mutex_);
-            if (stream_id != stream_id_){
-                LOG_DEBUG("ignoring outdated format request");
-                return;
-            }
-            lock.unlock();
+        // requested another format
+        int32_t stream = (it++)->AsInt32();
+        // ignore outdated requests
+        // this can happen because format requests are sent repeatedly
+        // by the sink until a) the source replies or b) the timeout is reached.
+        // if the network latency is high, the sink might sent a format request
+        // right before receiving a /format message (as a result of the previous request).
+        // until the source re
+        shared_lock lock(update_mutex_);
+        if (stream != stream_id_){
+            LOG_DEBUG("ignoring outdated format request");
+            return;
+        }
+        lock.unlock();
 
-            // get format from arguments
-            AooFormat f;
-            f.numChannels = (it++)->AsInt32();
-            f.sampleRate = (it++)->AsInt32();
-            f.blockSize = (it++)->AsInt32();
-            f.codec = (it++)->AsString();
-            f.size = sizeof(AooFormat);
-            const void *settings;
-            osc::osc_bundle_element_size_t size;
-            (it++)->AsBlob(settings, size);
+        // get format from arguments
+        AooFormat f;
+        f.numChannels = (it++)->AsInt32();
+        f.sampleRate = (it++)->AsInt32();
+        f.blockSize = (it++)->AsInt32();
+        f.codec = (it++)->AsString();
+        f.size = sizeof(AooFormat);
+        const void *settings;
+        osc::osc_bundle_element_size_t size;
+        (it++)->AsBlob(settings, size);
 
-            auto c = aoo::find_codec(f.codec);
-            if (c){
-                AooFormatStorage fmt;
-                if (c->deserialize(f, (const AooByte *)settings, size, fmt.header,
-                                   sizeof(AooFormatStorage)) == kAooOk){
-                    // send format event
-                    event e(kAooEventFormatRequest, addr, id);
+        auto c = aoo::find_codec(f.codec);
+        if (c){
+            AooFormatStorage fmt;
+            if (c->deserialize(f, (const AooByte *)settings, size, fmt.header,
+                               sizeof(AooFormatStorage)) == kAooOk){
+                // send format event
+                event e(kAooEventFormatRequest, addr, id);
 
-                    if (eventmode_ == kAooEventModeCallback){
-                        // synchronous: use stack
-                        e.format.format = &fmt.header;
-                    } if (eventmode_ == kAooEventModePoll){
-                        // asynchronous: use heap
-                        auto mem = memory_.alloc(fmt.header.size);
-                        memcpy(mem->data(), &fmt, fmt.header.size);
-                        e.format.format = (const AooFormat *)mem->data();
-                    }
-                    send_event(e, kAooThreadLevelAudio);
+                if (eventmode_ == kAooEventModeCallback){
+                    // synchronous: use stack
+                    e.format.format = &fmt.header;
+                } if (eventmode_ == kAooEventModePoll){
+                    // asynchronous: use heap
+                    auto mem = memory_.alloc(fmt.header.size);
+                    memcpy(mem->data(), &fmt, fmt.header.size);
+                    e.format.format = (const AooFormat *)mem->data();
                 }
-            } else {
-                LOG_WARNING("handle_format_request: codec '"
-                            << f.codec << "' not supported");
+                send_event(e, kAooThreadLevelAudio);
             }
         } else {
-            // resend current format
-            sink->request_format();
-            needformat_.store(true, std::memory_order_release);
+            LOG_WARNING("handle_format_request: codec '"
+                        << f.codec << "' not supported");
         }
     } else {
         LOG_VERBOSE("ignoring '" << kAooMsgFormat << "' message: sink not found");
     }
 }
+
+// /aoo/src/<id>/data <id> <stream_id> <seq1> <frame1> <seq2> <frame2> etc.
 
 void source_imp::handle_data_request(const osc::ReceivedMessage& msg,
                                      const ip_address& addr)

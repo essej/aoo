@@ -36,6 +36,11 @@ struct data_request {
     int32_t frame;
 };
 
+namespace send_flag {
+    const uint32_t start = 0x01;
+    const uint32_t stop = 0x02;
+}
+
 struct sink_desc {
     sink_desc(const ip_address& addr, int32_t id, uint32_t flags)
         : ep(addr, id, flags), channel(0) {}
@@ -47,19 +52,19 @@ struct sink_desc {
     std::atomic<int16_t> channel;
     lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> data_requests;
 
-    void request_format(){
-        needformat_.store(true, std::memory_order_release);
+    void notify(uint32_t what){
+        send_.fetch_or(what, std::memory_order_release);
     }
 
-    bool need_format() {
-        return needformat_.exchange(false, std::memory_order_acquire);
+    uint32_t need_send() {
+        return send_.exchange(0, std::memory_order_acquire);
     }
 
     void reset(){
         data_requests.clear();
     }
 private:
-    std::atomic<bool> needformat_{true}; // !
+    std::atomic<uint32_t> send_{0};
 };
 
 class source_imp final : public AooSource {
@@ -140,6 +145,7 @@ class source_imp final : public AooSource {
     // settings
     std::atomic<AooId> id_;
     AooId stream_id_ = kAooIdInvalid;
+    AooId format_id_ = kAooIdInvalid;
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
     int32_t samplerate_ = 0;
@@ -152,13 +158,14 @@ class source_imp final : public AooSource {
     int32_t sequence_ = 0;
     std::atomic<float> xrun_{0};
     std::atomic<float> lastpingtime_{0};
-    std::atomic<bool> needformat_{false};
+    std::atomic<uint32_t> needsend_{0};
     enum class stream_state {
         stop,
         start,
-        play
+        run,
+        idle
     };
-    std::atomic<stream_state> state_{stream_state::stop};
+    std::atomic<stream_state> state_{stream_state::idle};
     // timing
     std::atomic<double> realsr_{0};
     time_dll dll_;
@@ -214,11 +221,20 @@ class source_imp final : public AooSource {
 
     static int32_t make_stream_id();
 
+    void notify(uint32_t what){
+        LOG_DEBUG("notify(): " << what);
+        needsend_.fetch_or(what, std::memory_order_release);
+    }
+
+    uint32_t need_send() {
+        return needsend_.exchange(0, std::memory_order_acquire);
+    }
+
     void send_event(const event& e, AooThreadLevel level);
 
     bool need_resampling() const;
 
-    void start_new_stream();
+    void start_new_stream(bool format_changed);
 
     void add_xrun(float n);
 
@@ -228,7 +244,7 @@ class source_imp final : public AooSource {
 
     void update_historybuffer();
 
-    void send_format(const sendfn& fn);
+    void send_stream(const sendfn& fn);
 
     void send_data(const sendfn& fn);
 
@@ -247,6 +263,9 @@ class source_imp final : public AooSource {
                         const data_packet& d, AooByte *buf, int32_t& size) const;
 
     void send_ping(const sendfn& fn);
+
+    void handle_start_request(const osc::ReceivedMessage& msg,
+                              const ip_address& addr);
 
     void handle_format_request(const osc::ReceivedMessage& msg,
                                const ip_address& addr);
