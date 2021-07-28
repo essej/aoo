@@ -150,7 +150,7 @@ const char *aoo_strerror(AooError e){
 
 AooError AOO_CALL aoo_parsePattern(
         const AooByte *msg, AooInt32 size,
-        AooType *type, AooId *id, AooInt32 *offset)
+        AooMsgType *type, AooId *id, AooInt32 *offset)
 {
     int32_t count = 0;
     if (size >= kAooBinMsgHeaderSize &&

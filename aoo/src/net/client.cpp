@@ -97,7 +97,7 @@ void copy_string(const std::string& src, char *dst, int32_t size){
 /*//////////////////// OSC ////////////////////////////*/
 
 // optimized version of aoo_parse_pattern() for client/server
-AooError parse_pattern(const AooByte *msg, int32_t n, AooType& type, int32_t& offset)
+AooError parse_pattern(const AooByte *msg, int32_t n, AooMsgType& type, int32_t& offset)
 {
     int32_t count = 0;
     if (n >= kAooBinMsgHeaderSize &&
@@ -481,7 +481,7 @@ AooError AOO_CALL aoo::net::client_imp::handleMessage(
         const AooByte *data, AooInt32 size,
         const void *addr, AooAddrSize len)
 {
-    AooType type;
+    AooMsgType type;
     AooId id;
     AooInt32 onset;
     auto err = aoo_parsePattern(data, size, &type, &id, &onset);
@@ -1143,7 +1143,7 @@ void client_imp::handle_server_message(const AooByte *data, int32_t n){
     osc::ReceivedPacket packet((const char *)data, n);
     osc::ReceivedMessage msg(packet);
 
-    AooType type;
+    AooMsgType type;
     int32_t onset;
     auto err = parse_pattern(data, n, type, onset);
     if (err != kAooOk){
@@ -1558,7 +1558,7 @@ void udp_client::update(const sendfn& reply, time_tag now){
 
 AooError udp_client::handle_message(const AooByte *data, int32_t n,
                                      const ip_address &addr,
-                                     AooType type, int32_t onset){
+                                     AooMsgType type, int32_t onset){
     try {
         osc::ReceivedPacket packet((const char *)data, n);
         osc::ReceivedMessage msg(packet);

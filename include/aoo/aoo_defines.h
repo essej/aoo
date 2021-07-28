@@ -215,16 +215,16 @@ typedef AooInt32 (AOO_CALL *AooSendFunc)(
         AooFlag             // flags
 );
 
-//--------------- AoO types -----------------//
+//------------ AoO message types ---------------//
 
-typedef AooInt32 AooType;
+typedef AooInt32 AooMsgType;
 
-enum AooTypes
+enum AooMsgTypes
 {
     kAooTypeSource = 0,
     kAooTypeSink,
 #if USE_AOO_NET
-    kAooTypeServer = 1000,
+    kAooTypeServer,
     kAooTypeClient,
     kAooTypePeer,
     kAooTypeRelay

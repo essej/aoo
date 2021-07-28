@@ -335,7 +335,7 @@ AOO_API AooError AOO_CALL AooSource_handleMessage(
 AooError AOO_CALL aoo::source_imp::handleMessage(
         const AooByte *data, AooInt32 size,
         const void *address, AooAddrSize addrlen){
-    AooType type;
+    AooMsgType type;
     AooId src;
     AooInt32 onset;
     auto err = aoo_parsePattern(data, size, &type, &src, &onset);

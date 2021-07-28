@@ -310,7 +310,7 @@ AooError AOO_CALL aoo::sink_imp::handleMessage(
         return kAooErrorUnknown; // not setup yet
     }
 
-    AooType type;
+    AooMsgType type;
     AooId sinkid;
     AooInt32 onset;
     auto err = aoo_parsePattern(data, size, &type, &sinkid, &onset);

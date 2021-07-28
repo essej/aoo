@@ -28,7 +28,7 @@ void free_sockaddr(void *sa, int32_t len);
 namespace net {
 
 AooError parse_pattern(const AooByte *msg, int32_t n,
-                       AooType& type, int32_t& offset);
+                       AooMsgType& type, int32_t& offset);
 
 } // net
 

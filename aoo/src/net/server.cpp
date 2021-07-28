@@ -603,7 +603,7 @@ void udp_server::handle_packet(const AooByte *data, int32_t size, const ip_addre
         osc::ReceivedPacket packet((const char *)data, size);
         osc::ReceivedMessage msg(packet);
 
-        AooType type;
+        AooMsgType type;
         int32_t onset;
         auto err = parse_pattern(data, size, type, onset);
         if (err != kAooOk){
@@ -873,7 +873,7 @@ bool client_endpoint::handle_message(const AooByte *data, int32_t n){
     osc::ReceivedPacket packet((const char *)data, n);
     osc::ReceivedMessage msg(packet);
 
-    AooType type;
+    AooMsgType type;
     int32_t onset;
     auto err = parse_pattern(data, n, type, onset);
     if (err != kAooOk){

@@ -158,7 +158,7 @@ enum AooNetEventTypes
     kAooNetEventGroupAdd,
     kAooNetEventGroupRemove,
     kAooNetEventUserGroupJoin,
-    kAooNetEventUserGroupLeave,
+    kAooNetEventUserGroupLeave
 };
 
 // generic events
@@ -246,6 +246,20 @@ typedef AOO_STRUCT AooNetEventUserGroup
 #define AooNetEventUserGroupLeave AooNetEventUserGroup
 
 #endif // USE_AOO_NET
+
+//------------ user defined events -----------------//
+
+// User defined event types (for custom AOO versions)
+// must start from kAooEventUserDefined, for example:
+//
+// enum MyAooEventTypes
+// {
+//     kMyEvent1 = kAooEventUserDefined
+//     kMyEvent2,
+//     kMyEvent3,
+//     ...
+// };
+#define kAooEventUserDefined 10000
 
 //-------------------------------------------------//
 

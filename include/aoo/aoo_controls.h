@@ -170,7 +170,9 @@ enum AooControls
     kAooCtlGetBinaryDataMsg,
 };
 
-// User defined controls (for patched AOO versions)
+//------------- user defined controls -----------------//
+
+// User defined controls (for custom AOO versions)
 // must start from kAooCtlUserDefined, for example:
 //
 // enum MyAooControls
@@ -182,7 +184,9 @@ enum AooControls
 // };
 #define kAooCtlUserDefined 10000
 
-// private controls (TODO: move somewhere else)
+//--------------- private controls ---------------------//
+
+// Don't use! TODO: move somewhere else.
 enum AooPrivateControls
 {
     kAooCtlSetClient = -1000,

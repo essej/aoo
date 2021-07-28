@@ -188,5 +188,5 @@ AOO_API AooSeconds AOO_CALL aoo_ntpTimeDuration(AooNtpTime t1, AooNtpTime t2);
 // get the Aoo type and ID from an AoO OSC message, e.g. /aoo/src/<id>/data
 // 'offset' gives the position of the address pattern component after the ID.
 AOO_API AooError AOO_CALL aoo_parsePattern(
-        const AooByte *msg, AooInt32 size, AooType *type, AooId *id, AooInt32 *offset);
+        const AooByte *msg, AooInt32 size, AooMsgType *type, AooId *id, AooInt32 *offset);
 

@@ -119,7 +119,7 @@ public:
 
     AooError handle_message(const AooByte *data, int32_t n,
                              const ip_address& addr,
-                             int32_t type, AooType onset);
+                             int32_t type, AooMsgType onset);
 
     void handle_relay_message(const osc::ReceivedMessage& msg);
 
