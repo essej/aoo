@@ -51,8 +51,7 @@ aoo::source_imp::~source_imp() {
     event e;
     while (eventqueue_.try_pop(e)){
         if (e.type_ == kAooEventFormatRequest){
-            auto mem = memory_block::from_bytes((void *)e.format.format);
-            memory_block::free(mem);
+            memory_.deallocate((void *)e.format.format);
         }
     }
     if (metadata_){
@@ -686,7 +685,7 @@ AooError AOO_CALL aoo::source_imp::pollEvents(){
         eventhandler_(eventcontext_, &e.event_, kAooThreadLevelUnknown);
         // some memory use extra memory
         if (e.type_ == kAooEventFormatRequest){
-            memory_.free(memory_block::from_bytes((void *)e.format.format));
+            memory_.deallocate((void *)e.format.format);
         }
     }
     return kAooOk;
@@ -1684,9 +1683,9 @@ void source_imp::handle_format_request(const osc::ReceivedMessage& msg,
                     e.format.format = &fmt.header;
                 } if (eventmode_ == kAooEventModePoll){
                     // asynchronous: use heap
-                    auto mem = memory_.alloc(fmt.header.size);
-                    memcpy(mem->data(), &fmt, fmt.header.size);
-                    e.format.format = (const AooFormat *)mem->data();
+                    auto f = (AooFormat *)memory_.allocate(fmt.header.size);
+                    memcpy(f, &fmt, fmt.header.size);
+                    e.format.format = f;
                 }
                 send_event(e, kAooThreadLevelAudio);
             }

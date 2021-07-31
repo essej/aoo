@@ -923,13 +923,11 @@ source_desc::~source_desc(){
     // flush packet queue
     net_packet d;
     while (packetqueue_.try_pop(d)){
-        auto mem = memory_block::from_bytes((void *)d.data);
-        memory_block::free(mem);
+        memory_.deallocate((void *)d.data);
     }
     // free metadata
     if (metadata_){
-        auto mem = memory_block::from_bytes((void *)metadata_);
-        memory_.free(mem);
+        memory_.deallocate((void *)metadata_);
     }
     LOG_DEBUG("~source_desc");
 }
@@ -1187,7 +1185,7 @@ AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t f
                   << md.type << ", " << md.size << " bytes");
         // allocate flat metadata
         auto mdsize = flat_metadata_size(md);
-        metadata = (AooCustomData *)memory_.alloc(mdsize)->data();
+        metadata = (AooCustomData *)memory_.allocate(mdsize);
         flat_metadata_copy(md, *metadata);
     }
 
@@ -1214,8 +1212,7 @@ AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t f
 
     // free old metadata
     if (metadata_){
-        auto mem = memory_block::from_bytes((void *)metadata_);
-        memory_.free(mem);
+        memory_.deallocate((void *)metadata_);
     }
     // set new metadata (can be NULL!)
     metadata_ = metadata;
@@ -1254,9 +1251,9 @@ AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t f
             e.format.format = &fmt.header;
         } else if (kAooEventModePoll){
             // use heap
-            auto mem = memory_.alloc(fmt.header.size);
-            memcpy(mem->data(), &fmt, fmt.header.size);
-            e.format.format = (const AooFormat *)mem->data();
+            auto f = (AooFormat *)memory_.allocate(fmt.header.size);
+            memcpy(f, &fmt, fmt.header.size);
+            e.format.format = f;
         }
 
         send_event(s, e, kAooThreadLevelNetwork);
@@ -1326,7 +1323,7 @@ AooError source_desc::handle_data(const sink_imp& s, net_packet& d, bool binary)
     }
 
     // copy blob data and push to queue
-    auto data = (AooByte *)memory_.alloc(d.size)->data();
+    auto data = (AooByte *)memory_.allocate(d.size);
     memcpy(data, d.data, d.size);
     d.data = data;
 
@@ -1459,8 +1456,7 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
 
                 // deallocate metadata if we don't need it anymore, see also poll_events().
                 if (s.event_mode() != kAooEventModePoll && e.stream_start.metadata){
-                    auto mem = memory_block::from_bytes((void *)e.stream_start.metadata);
-                    memory_.free(mem);
+                    memory_.deallocate((void *)e.stream_start.metadata);
                 }
 
                 // stream state is handled at the end of the function
@@ -1530,7 +1526,7 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
             // check data packet
             add_packet(s, d, stats);
             // return memory
-            memory_.free(memory_block::from_bytes((void *)d.data));
+            memory_.deallocate((void *)d.data);
         }
     }
 
@@ -2285,12 +2281,10 @@ void source_desc::send_event(const sink_imp& s, const event& e,
 
 void source_desc::free_event_data(const event &e){
     if (e.type_ == kAooEventFormatChange){
-        auto mem = memory_block::from_bytes((void *)e.format.format);
-        memory_.free(mem);
+        memory_.deallocate((void *)e.format.format);
     } else if (e.type_ == kAooEventStreamStart){
         if (e.stream_start.metadata){
-            auto mem = memory_block::from_bytes((void *)e.stream_start.metadata);
-            memory_.free(mem);
+            memory_.deallocate((void *)e.stream_start.metadata);
         }
     }
 }

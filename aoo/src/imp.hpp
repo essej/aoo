@@ -162,48 +162,48 @@ using allocator = std::allocator<T>;
 
 //------------------ memory --------------------//
 
-struct memory_block {
-    struct {
-        memory_block *next;
-        size_t size;
-    } header;
-    char mem[1];
-
-    static memory_block * allocate(size_t size);
-
-    static void free(memory_block *mem);
-
-    static memory_block * from_bytes(void *bytes){
-        return (memory_block *)((char *)bytes - sizeof(memory_block::header));
-    }
-
-    size_t full_size() const {
-        return header.size + sizeof(header);
-    }
-
-    size_t size() const {
-        return header.size;
-    }
-
-    void * data() {
-        return mem;
-    }
-};
-
 class memory_list {
 public:
     memory_list() = default;
     ~memory_list();
     memory_list(memory_list&& other)
-        : memlist_(other.memlist_.exchange(nullptr)){}
+        : list_(other.list_.exchange(nullptr)){}
     memory_list& operator=(memory_list&& other){
-        memlist_.store(other.memlist_.exchange(nullptr));
+        list_.store(other.list_.exchange(nullptr));
         return *this;
     }
-    memory_block* alloc(size_t size);
-    void free(memory_block* b);
+    void* allocate(size_t size);
+
+    template<typename T, typename... Args>
+    T* construct(Args&&... args){
+        auto mem = allocate(sizeof(T));
+        return new (mem) T (std::forward<Args>(args)...);
+    }
+
+    void deallocate(void* b);
+
+    template<typename T>
+    void destroy(T *obj){
+        obj->~T();
+        deallocate(obj);
+    }
 private:
-    std::atomic<memory_block *> memlist_{nullptr};
+    struct block {
+        struct {
+            block *next;
+            size_t size;
+        } header;
+        char data[1];
+
+        static block * alloc(size_t size);
+
+        static void free(block *mem);
+
+        static block * from_bytes(void *bytes){
+            return (block *)((char *)bytes - sizeof(block::header));
+        }
+    };
+    std::atomic<block *> list_{nullptr};
 };
 
 //------------------- misc -------------------------//
