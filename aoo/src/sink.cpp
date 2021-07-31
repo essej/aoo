@@ -679,7 +679,8 @@ void sink_imp::reset_sources(){
 }
 
 // /aoo/sink/<id>/start <src> <version> <stream_id> <flags> <lastformat>
-// <nchannels> <samplerate> <blocksize> <codec> <options> [<mime_type> <data>]
+// <nchannels> <samplerate> <blocksize> <codec> <options>
+// [<metadata_type> <metadata_content>]
 AooError sink_imp::handle_start_message(const osc::ReceivedMessage& msg,
                                         const ip_address& addr)
 {
@@ -697,7 +698,7 @@ AooError sink_imp::handle_start_message(const osc::ReceivedMessage& msg,
     AooId stream = (it++)->AsInt32();
     AooFlag flags = (it++)->AsInt32();
     AooId lastformat = (it++)->AsInt32();
-    // get format from arguments
+    // get stream format
     AooFormat f;
     f.numChannels = (it++)->AsInt32();
     f.sampleRate = (it++)->AsInt32();
@@ -707,6 +708,20 @@ AooError sink_imp::handle_start_message(const osc::ReceivedMessage& msg,
     const void *settings;
     osc::osc_bundle_element_size_t size;
     (it++)->AsBlob(settings, size);
+    // get stream metadata
+    AooCustomData md;
+    if (msg.ArgumentCount() >= 12) {
+        md.type = (it++)->AsString();
+        const void *md_data;
+        osc::osc_bundle_element_size_t md_size;
+        (it++)->AsBlob(md_data, md_size);
+        md.data = (const AooByte *)md_data;
+        md.size = md_size;
+    } else {
+        md.type = kAooCustomDataInvalid;
+        md.data = nullptr;
+        md.size = 0;
+    }
 
     if (id < 0){
         LOG_WARNING("bad ID for " << kAooMsgFormat << " message");
@@ -722,7 +737,7 @@ AooError sink_imp::handle_start_message(const osc::ReceivedMessage& msg,
         src = add_source(addr, id);
     }
     return src->handle_start(*this, stream, flags, lastformat, f,
-                             (const AooByte *)settings, size);
+                             (const AooByte *)settings, size, md);
 }
 
 // /aoo/sink/<id>/stop <src> <stream>
@@ -903,16 +918,18 @@ source_desc::~source_desc(){
     // flush event queue
     event e;
     while (eventqueue_.try_pop(e)){
-        if (e.type_ == kAooEventFormatChange){
-            auto mem = memory_block::from_bytes((void *)e.format.format);
-            memory_block::free(mem);
-        }
+        free_event_data(e);
     }
     // flush packet queue
     net_packet d;
     while (packetqueue_.try_pop(d)){
         auto mem = memory_block::from_bytes((void *)d.data);
         memory_block::free(mem);
+    }
+    // free metadata
+    if (metadata_){
+        auto mem = memory_block::from_bytes((void *)metadata_);
+        memory_.free(mem);
     }
     LOG_DEBUG("~source_desc");
 }
@@ -1109,7 +1126,8 @@ float source_desc::get_buffer_fill_ratio(){
 
 AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t flags,
                                    int32_t lastformat, const AooFormat& f,
-                                   const AooByte *settings, int32_t size) {
+                                   const AooByte *settings, int32_t size,
+                                   const AooCustomData& md) {
     LOG_DEBUG("handle start");
     // if we're in 'uninvite' state, ignore /start message, see also handle_data().
     if (state_.load(std::memory_order_acquire) == source_state::uninvite){
@@ -1161,6 +1179,18 @@ AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t f
         }
     }
 
+    // copy metadata
+    AooCustomData *metadata = nullptr;
+    if (md.data){
+        assert(md.size > 0);
+        LOG_DEBUG("stream metadata: "
+                  << md.type << ", " << md.size << " bytes");
+        // allocate flat metadata
+        auto mdsize = flat_metadata_size(md);
+        metadata = (AooCustomData *)memory_.alloc(mdsize)->data();
+        flat_metadata_copy(md, *metadata);
+    }
+
     unique_lock lock(mutex_); // writer lock!
 
     bool first_stream = stream_id_ == kAooIdInvalid;
@@ -1181,6 +1211,14 @@ AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t f
             return kAooErrorUnknown;
         }
     }
+
+    // free old metadata
+    if (metadata_){
+        auto mem = memory_block::from_bytes((void *)metadata_);
+        memory_.free(mem);
+    }
+    // set new metadata (can be NULL!)
+    metadata_ = metadata;
 
     // always update!
     update(s);
@@ -1380,6 +1418,22 @@ void source_desc::send(const sink_imp& s, const sendfn& fn){
 bool source_desc::process(const sink_imp& s, AooSample **buffer,
                           int32_t nsamples, time_tag tt)
 {
+    // synchronize with update()!
+    // the mutex should be uncontended most of the time.
+    shared_lock lock(mutex_, std::try_to_lock_t{});
+    if (!lock.owns_lock()) {
+        if (streamstate_ == kAooStreamStateActive) {
+            xrun_ += 1.0;
+            LOG_VERBOSE("AooSink: source_desc::process() would block");
+        } else {
+            // I'm not sure if this can happen...
+        }
+        return false;
+    }
+
+    if (!decoder_){
+        return false;
+    }
 
     auto state = state_.load(std::memory_order_acquire);
     // handle state transitions in a CAS loop
@@ -1397,7 +1451,17 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
                 }
 
                 event e(kAooEventStreamStart, ep);
+                // move metadata into event
+                e.stream_start.metadata = metadata_;
+                metadata_ = nullptr;
+
                 send_event(s, e, kAooThreadLevelAudio);
+
+                // deallocate metadata if we don't need it anymore, see also poll_events().
+                if (s.event_mode() != kAooEventModePoll && e.stream_start.metadata){
+                    auto mem = memory_block::from_bytes((void *)e.stream_start.metadata);
+                    memory_.free(mem);
+                }
 
                 // stream state is handled at the end of the function
 
@@ -1406,6 +1470,8 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
         } else if (state == source_state::stop){
             // stop -> idle
             if (state_.compare_exchange_weak(state, source_state::idle)) {
+                lock.unlock(); // !
+
                 if (streamstate_ != kAooStreamStateInactive){
                     streamstate_ = kAooStreamStateInactive;
 
@@ -1422,6 +1488,8 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
         } else if (state == source_state::uninvite){
             // don't transition into "stop" state!
             if (streamstate_ != kAooStreamStateInactive){
+                lock.unlock(); // !
+
                 streamstate_ = kAooStreamStateInactive;
 
                 event e(kAooEventStreamState, ep);
@@ -1434,18 +1502,6 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
             // invite, uninvite or idle
             return false;
         }
-    }
-    // synchronize with update()!
-    // the mutex should be uncontended most of the time.
-    shared_lock lock(mutex_, std::try_to_lock_t{});
-    if (!lock.owns_lock()){
-        xrun_ += 1.0;
-        LOG_VERBOSE("AooSink: source_desc::process() would block");
-        return false;
-    }
-
-    if (!decoder_){
-        return false;
     }
 
     // check for sink xruns
@@ -1605,10 +1661,7 @@ int32_t source_desc::poll_events(sink_imp& s, AooEventHandler fn, void *user){
     while (eventqueue_.try_pop(e)){
         fn(user, &e.event_, kAooThreadLevelUnknown);
         // some events use dynamic memory
-        if (e.type_ == kAooEventFormatChange){
-            auto mem = memory_block::from_bytes((void *)e.format.format);
-            memory_.free(mem);
-        }
+        free_event_data(e);
         count++;
     }
     return count;
@@ -2227,6 +2280,18 @@ void source_desc::send_event(const sink_imp& s, const event& e,
         break;
     default:
         break;
+    }
+}
+
+void source_desc::free_event_data(const event &e){
+    if (e.type_ == kAooEventFormatChange){
+        auto mem = memory_block::from_bytes((void *)e.format.format);
+        memory_.free(mem);
+    } else if (e.type_ == kAooEventStreamStart){
+        if (e.stream_start.metadata){
+            auto mem = memory_block::from_bytes((void *)e.stream_start.metadata);
+            memory_.free(mem);
+        }
     }
 }
 

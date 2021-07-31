@@ -44,7 +44,7 @@ enum AooEventTypes
     // sink: blocks have been resent
     kAooEventBlockResent,
     // sink: block has been dropped by source
-    kAooEventBlockDropped
+    kAooEventBlockDropped,
 };
 
 typedef AOO_STRUCT AooEventError
@@ -82,7 +82,7 @@ typedef AOO_STRUCT AooEventStreamStart
 {
     AooEventType type;
     AooEndpoint endpoint;
-    // AooStreamMetaData metadata;
+    const AooCustomData * metadata;
 } AooEventStreamStart;
 
 #define AooEventStreamStop AooEventEndpoint

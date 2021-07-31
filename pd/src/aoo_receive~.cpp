@@ -344,11 +344,26 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
         auto e = (const AooEventStreamStart *)event;
         aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
 
-        if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
-            return;
+        if (e->metadata){
+            auto total = e->metadata->size + 4;
+            t_atom *vec = (t_atom *)alloca(total * sizeof(t_atom));
+            // endpoint
+            if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, vec)){
+                return;
+            }
+            // type
+            SETSYMBOL(vec + 3, gensym(e->metadata->type));
+            // data
+            for (int i = 0; i < e->metadata->size; ++i){
+                SETFLOAT(vec + 4 + i, (uint8_t)e->metadata->data[i]);
+            }
+            outlet_anything(x->x_msgout, gensym("start"), total, vec);
+        } else {
+            if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
+                return;
+            }
+            outlet_anything(x->x_msgout, gensym("start"), 3, msg);
         }
-        // TODO metadata
-        outlet_anything(x->x_msgout, gensym("start"), 3, msg);
         break;
     }
     case kAooEventStreamStop:

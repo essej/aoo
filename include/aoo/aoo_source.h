@@ -53,14 +53,16 @@ AOO_API AooError AOO_CALL AooSource_control(
 // ------------------------------------------------------------
 // type-safe convenience functions for frequently used controls
 
-static inline AooError AooSource_startStream(AooSource *source)
+static inline AooError AooSource_startStream(
+        AooSource *source, const AooCustomData *metadata)
 {
-    return AooSource_control(source, 0, kAooCtlStartStream, 0, 0);
+    return AooSource_control(source, kAooCtlStartStream, 0,
+                             (void *)metadata, metadata ? sizeof(AooCustomData) : 0);
 }
 
 static inline AooError AooSource_stopStream(AooSource *source)
 {
-    return AooSource_control(source, 0, kAooCtlStopStream, 0, 0);
+    return AooSource_control(source, kAooCtlStopStream, 0, 0, 0);
 }
 
 static inline AooError AooSource_addSink(
@@ -193,6 +195,16 @@ static inline AooError AooSource_setBinaryDataMsg(AooSource *source, AooBool b)
 static inline AooError AooSource_getBinaryDataMsg(AooSource *source, AooBool *b)
 {
     return AooSource_control(source, kAooCtlGetBinaryDataMsg, 0, AOO_ARG(*b));
+}
+
+static inline AooError AooSource_setStreamMetadataSize(AooSource *source, AooInt32 size)
+{
+    return AooSource_control(source, kAooCtlSetStreamMetadataSize, 0, AOO_ARG(size));
+}
+
+static inline AooError AooSource_getStreamMetadataSize(AooSource *source, AooInt32 *size)
+{
+    return AooSource_control(source, kAooCtlGetStreamMetadataSize, 0, AOO_ARG(*size));
 }
 
 static inline AooError AooSource_setSinkChannelOnset(

@@ -1,6 +1,6 @@
 #N canvas 234 73 682 631 12;
 #X declare -lib aoo;
-#X text 247 341 creation arguments:;
+#X text 247 371 creation arguments:;
 #N canvas 489 105 551 520 pcm 0;
 #X obj 31 463 outlet;
 #X msg 256 158 2;
@@ -70,7 +70,7 @@ be preferred., f 72;
 #X connect 29 0 30 0;
 #X connect 30 0 0 0;
 #X connect 31 0 0 0;
-#X restore 99 378 pd pcm;
+#X restore 99 408 pd pcm;
 #N canvas 553 120 750 614 opus 0;
 #X obj 37 567 outlet;
 #X msg 208 201 48000;
@@ -246,38 +246,38 @@ unreliable networks., f 85;
 #X connect 54 0 53 0;
 #X connect 55 0 53 0;
 #X connect 56 0 53 0;
-#X restore 154 379 pd opus;
-#X text 97 354 set format:;
-#X obj 83 271 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X restore 154 409 pd opus;
+#X text 97 384 set format:;
+#X obj 83 266 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X obj 48 417 osc~ 440;
-#X obj 152 418 osc~ 220;
-#X obj 48 443 *~ 0.25;
-#X obj 152 444 *~ 0.25;
+#X obj 48 447 osc~ 440;
+#X obj 152 448 osc~ 220;
+#X obj 48 473 *~ 0.25;
+#X obj 152 474 *~ 0.25;
 #X msg 29 52 add localhost 9999 1;
 #X text 26 19 aoo_send~: send an AoO audio stream to one or more AoO
 sinks;
 #X msg 43 109 remove localhost 9999 1;
 #X text 222 108 remove an AoO sink (hostname \, port \, sink ID);
 #X text 106 141 remove all AoO sinks;
-#X msg 83 293 channel localhost 9999 1 \$1;
-#X text 290 294 set sink channel onset;
+#X msg 83 288 channel localhost 9999 1 \$1;
+#X text 290 289 set sink channel onset;
 #X text 185 52 add an AoO sink (hostname \, port \, sink ID \, [channel
 onset]);
 #X text 211 82 with optional channel onset;
-#X msg 543 299 \; pd dsp \$1;
-#X obj 543 275 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
+#X msg 543 329 \; pd dsp \$1;
+#X obj 543 305 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X msg 60 172 list_sinks;
 #X text 147 169 list all sinks. This will output a message [sink <host>
 <port> <id>( for each sink., f 44;
-#X obj 29 531 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
+#X obj 29 561 bng 15 250 50 0 empty empty empty 17 7 0 10 -262144 -1
 -1;
 #X msg 36 82 add localhost 9999 1 1;
 #X msg 77 239 stop;
 #X msg 68 211 start;
 #X obj 478 19 declare -lib aoo;
-#X obj 29 471 aoo_send~ 9998 1 2;
+#X obj 29 501 aoo_send~ 9998 1 2;
 #N canvas 681 50 632 660 events 0;
 #X obj 37 26 inlet;
 #X obj 37 120 outlet;
@@ -325,21 +325,21 @@ ignore it., f 62;
 #X connect 16 1 17 0;
 #X connect 17 0 14 0;
 #X connect 18 0 17 1;
-#X restore 29 500 pd events;
-#X text 50 529 ping;
+#X restore 29 530 pd events;
+#X text 50 559 ping;
 #X text 252 212 Note: you can use these two methods to send "audio
 events" instead of continuous streams., f 36;
 #X text 117 212 start streaming;
 #X text 123 239 stop streaming;
-#X text 246 394 2) the source ID \, must be unique for all;
-#X text 264 414 [aoo_send~] instances on this port.;
-#X obj 121 505 aoo_send~ 9998 2 2;
-#X text 262 505 another source on the same port;
-#X obj 121 536 aoo_receive~ 9998 1 2;
-#X text 245 440 3) number of channels (default: 1);
-#X text 246 368 1) port number for incoming messages \, e.g. invitations
+#X text 246 424 2) the source ID \, must be unique for all;
+#X text 264 444 [aoo_send~] instances on this port.;
+#X obj 121 535 aoo_send~ 9998 2 2;
+#X text 262 535 another source on the same port;
+#X obj 121 566 aoo_receive~ 9998 1 2;
+#X text 245 470 3) number of channels (default: 1);
+#X text 246 398 1) port number for incoming messages \, e.g. invitations
 ;
-#X text 283 536 the same port can also be used by sinks;
+#X text 283 566 the same port can also be used by sinks;
 #X msg 53 140 remove;
 #N canvas 705 62 666 488 advanced 0;
 #X obj 80 234 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
@@ -399,11 +399,50 @@ cost of increased network traffic., f 44;
 #X connect 23 0 11 0;
 #X connect 24 0 11 0;
 #X connect 25 0 24 0;
-#X restore 97 324 pd advanced;
-#X text 25 576 see also;
-#X obj 98 576 aoo_receive~;
-#X obj 201 576 aoo_client;
-#X obj 287 576 aoo_server;
+#X restore 97 354 pd advanced;
+#X text 25 606 see also;
+#X obj 98 606 aoo_receive~;
+#X obj 201 606 aoo_client;
+#X obj 287 606 aoo_server;
+#N canvas 595 120 529 559 metadata 0;
+#X obj 31 502 outlet;
+#X msg 31 325 metadata <type> <data...>;
+#X msg 46 354 metadata;
+#X text 30 143 The metadata consists of a 'type' symbol \, followed
+by a list of bytes. 'type' can be either a user-defined name or one
+of the following pre-defined names:;
+#X text 39 197 "text": UTF-8 encoded plain text;
+#X text 41 216 "json": UTF-8 encoded JSON;
+#X text 42 238 "xml": UTF-8 encoded XML;
+#X text 43 261 "osc": an OSC message;
+#X text 120 354 unset metadata;
+#X obj 62 414 oscformat;
+#X text 30 71 The metadata will be output in the [aoo_receive~] object
+as part of the 'start' event message., f 60;
+#X text 31 35 Users can add stream metadata to inform the other end
+about properties like channel layout \, musical information \, etc.
+, f 60;
+#X msg 62 385 set /foo \, 1 2 3;
+#X obj 62 443 list prepend metadata osc;
+#X text 30 108 The actual content and its interpretation is user-defined
+and will be different for each application., f 58;
+#X obj 251 413 fudiformat;
+#X text 139 414 "osc";
+#X text 333 414 "fudi";
+#X text 42 285 "fudi": a FUDI message;
+#X obj 62 471 list trim;
+#X obj 251 443 list prepend metadata fudi;
+#X msg 251 385 /foo 1 2 3;
+#X connect 1 0 0 0;
+#X connect 2 0 0 0;
+#X connect 9 0 13 0;
+#X connect 12 0 9 0;
+#X connect 13 0 19 0;
+#X connect 15 0 20 0;
+#X connect 19 0 0 0;
+#X connect 20 0 19 0;
+#X connect 21 0 15 0;
+#X restore 90 321 pd metadata;
 #X connect 1 0 27 0;
 #X connect 2 0 27 0;
 #X connect 4 0 14 0;
@@ -423,3 +462,4 @@ cost of increased network traffic., f 44;
 #X connect 28 0 22 0;
 #X connect 41 0 27 0;
 #X connect 42 0 27 0;
+#X connect 47 0 27 0;

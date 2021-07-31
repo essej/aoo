@@ -46,9 +46,14 @@ enum AooControls
     kAooCtlRequestFormat,
     // Reset the source/sink (none)
     kAooCtlReset,
-    // Start a new stream (none)
+    // Start a new stream ([optional] arg: AooCustomData)
+    // ---
+    // Can be called from any thread. Realtime safe!
+    // You can pass a AooCustomData structure which will be sent as additional
+    // stream metadata. For example, it could contain information about the
+    // channel layout, the musical content, etc.
     kAooCtlStartStream,
-    // Stop the source/sink (none)
+    // Stop the stream (none)
     kAooCtlStopStream,
     // Set/get buffer size in seconds (arg: AooSeconds)
     // ---
@@ -168,6 +173,13 @@ enum AooControls
     // for the audio data message
     kAooCtlSetBinaryDataMsg,
     kAooCtlGetBinaryDataMsg,
+    // Set/get max. size of stream meta data (arg: AooInt32)
+    // ---
+    // Setting this property will allocate enough memory to
+    // hold any stream metadata up to the given size.
+    // Use this to avoid allocating memory in kAooCtlStartStream.
+    kAooCtlSetStreamMetadataSize,
+    kAooCtlGetStreamMetadataSize
 };
 
 //------------- user defined controls -----------------//

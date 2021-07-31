@@ -50,6 +50,9 @@ struct t_aoo_send
     int32_t x_port = 0;
     AooId x_id = 0;
     std::unique_ptr<t_float *[]> x_vec;
+    // metadata
+    t_symbol *x_metadata_type;
+    std::vector<AooByte> x_metadata;
     // sinks
     std::vector<t_sink> x_sinks;
     // node
@@ -411,12 +414,58 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_send_start(t_aoo_send *x)
 {
-    x->x_source->startStream();
+    if (x->x_metadata_type){
+        AooCustomData md;
+        md.type = x->x_metadata_type->s_name;
+        md.data = x->x_metadata.data();
+        md.size = x->x_metadata.size();
+
+        x->x_source->startStream(&md);
+    } else {
+        x->x_source->startStream();
+    }
 }
 
 static void aoo_send_stop(t_aoo_send *x)
 {
     x->x_source->stopStream();
+}
+
+static void aoo_send_metadata(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (argc > 0){
+        // metadata type
+        t_symbol *type;
+        if (argv->a_type == A_SYMBOL){
+            type = argv->a_w.w_symbol;
+        } else {
+            // empty metadata is not allowed
+            pd_error(x, "%s: bad metadata type", classname(x));
+        #if 1
+            x->x_metadata_type = nullptr;
+        #endif
+            return;
+        }
+        // metadata content
+        if (argc > 1){
+            // set new stream metadata
+            auto size = argc - 1;
+            x->x_metadata.resize(size);
+            for (int i = 0; i < size; ++i){
+                x->x_metadata[i] = (AooByte)atom_getfloat(argv + i + 1);
+            }
+        } else {
+            pd_error(x, "%s: metadata must not be empty", classname(x));
+        #if 1
+            x->x_metadata_type = nullptr;
+        #endif
+            return;
+        }
+        x->x_metadata_type = type;
+    } else {
+        // clear stream metadata
+        x->x_metadata_type = nullptr;
+    }
 }
 
 static void aoo_send_listsinks(t_aoo_send *x)
@@ -542,6 +591,8 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 t_aoo_send::t_aoo_send(int argc, t_atom *argv)
 {
     x_clock = clock_new(this, (t_method)aoo_send_tick);
+    x_metadata_type = nullptr;
+    x_metadata.reserve(AOO_STREAM_METADATA_SIZE);
 
     // arg #1: port number
     x_port = atom_getfloatarg(0, argc, argv);
@@ -624,6 +675,8 @@ void aoo_send_tilde_setup(void)
                     gensym("start"), A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_stop,
                     gensym("stop"), A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_metadata,
+                    gensym("metadata"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_accept,
                     gensym("accept"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_format,

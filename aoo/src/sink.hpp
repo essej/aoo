@@ -159,7 +159,7 @@ public:
     void reset(const sink_imp& s);
 
     AooError handle_start(const sink_imp& s, int32_t stream, uint32_t flags, int32_t lastformat,
-                          const AooFormat& f, const AooByte *settings, int32_t size);
+                          const AooFormat& f, const AooByte *settings, int32_t size, const AooCustomData& md);
 
     AooError handle_stop(const sink_imp& s, int32_t stream);
 
@@ -231,6 +231,8 @@ private:
 
     std::atomic<source_state> state_{source_state::idle};
 
+    AooCustomData *metadata_{nullptr};
+
     std::unique_ptr<AooFormat, format_deleter> format_request_;
     double format_time_ = 0;
 
@@ -276,6 +278,7 @@ private:
     // events
     lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
     void send_event(const sink_imp& s, const event& e, AooThreadLevel level);
+    void free_event_data(const event& e);
     // memory
     aoo::memory_list memory_;
     // thread synchronization

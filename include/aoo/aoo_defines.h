@@ -231,6 +231,36 @@ enum AooMsgTypes
 #endif
 };
 
+//------------ AoO custom data --------------//
+
+typedef struct AooCustomData
+{
+    const AooChar *type;
+    const AooByte *data;
+    AooSize size;
+} AooCustomData;
+
+// max. length of type name strings
+#define kAooTypeNameMaxLen 63
+
+// pre-defined data formats
+
+// plain text (UTF-8 encoded)
+#define kAooCustomDataText "text"
+// JSON (UTF-8 encoded)
+#define kAooCustomDataJSON "json"
+// XML (UTF-8 encoded)
+#define kAooCustomDataXML "xml"
+// OSC message (Open Sound Control)
+#define kAooCustomDataOSC "osc"
+// FUDI (Pure Data)
+#define kAooCustomDataFUDI "fudi"
+
+#define kAooCustomDataInvalid ""
+
+// users can define their own data formats,
+// they just have to use a unique type name.
+
 //--------------- AoO format -------------------//
 
 typedef struct AooFormat

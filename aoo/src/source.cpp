@@ -37,6 +37,7 @@ aoo::source_imp::source_imp(AooId id, AooFlag flags, AooError *err)
     // request queues
     // formatrequestqueue_.resize(64);
     // datarequestqueue_.resize(1024);
+    allocate_metadata(metadata_size_.load());
 }
 
 AOO_API void AOO_CALL AooSource_free(AooSource *src){
@@ -53,6 +54,10 @@ aoo::source_imp::~source_imp() {
             auto mem = memory_block::from_bytes((void *)e.format.format);
             memory_block::free(mem);
         }
+    }
+    if (metadata_){
+        auto size = flat_metadata_maxsize(metadata_size_.load());
+        aoo::deallocate(metadata_, size);
     }
 }
 
@@ -105,11 +110,34 @@ AooError AOO_CALL aoo::source_imp::control(
     }
     // start
     case kAooCtlStartStream:
-        state_.store(stream_state::start);
-        break;
+    {
+        // stream metadata is optional!
+        AooCustomData *metadata = (AooCustomData *)ptr;
+        if (metadata){
+            CHECKARG(AooCustomData);
+        }
+        return start_stream(metadata);
+    }
     // stop
     case kAooCtlStopStream:
         state_.store(stream_state::stop);
+        break;
+    // stream meta data
+    case kAooCtlSetStreamMetadataSize:
+    {
+        CHECKARG(AooInt32);
+        auto size = as<AooInt32>(ptr);
+        if (size < 0){
+            return kAooErrorBadArgument;
+        }
+        // the lock simplifies start_stream()
+        unique_lock lock(update_mutex_);
+        allocate_metadata(size);
+        break;
+    }
+    case kAooCtlGetStreamMetadataSize:
+        CHECKARG(AooInt32);
+        as<AooInt32>(ptr) = metadata_size_.load();
         break;
     // set/get format
     case kAooCtlSetFormat:
@@ -313,7 +341,7 @@ AooError AOO_CALL aoo::source_imp::setup(
                 update_historybuffer();
             }
 
-            start_new_stream(true);
+            make_new_stream(true);
         }
 
         // always reset timer + time DLL filter
@@ -466,7 +494,7 @@ AooError AOO_CALL aoo::source_imp::process(
         // therefore wouldn't have access to the format.
         // In practice, this is not a critical issue because the sink
         // would simply request the format, but it is not ideal...
-        start_new_stream(format_id_ == kAooIdInvalid);
+        make_new_stream(format_id_ == kAooIdInvalid);
 
         // check if we have been stopped in the meantime
         auto expected = stream_state::start;
@@ -787,7 +815,7 @@ AooError source_imp::set_format(AooFormat &f){
         // NOTE: there's a slight race condition because 'xrun_'
         // might be incremented right afterwards, but I'm not
         // sure if this could cause any real problems..
-        start_new_stream(true);
+        make_new_stream(true);
     }
     return err;
 }
@@ -821,9 +849,75 @@ void source_imp::send_event(const event& e, AooThreadLevel level){
     }
 }
 
+#define STREAM_METADATA_WARN 1
+
+AooError source_imp::start_stream(const AooCustomData *md){
+    if (md) {
+        // check type name length
+        if (strlen(md->type) > kAooTypeNameMaxLen){
+            LOG_ERROR("stream metadata type name must not be larger than "
+                      << kAooTypeNameMaxLen << " characters!");
+        #if STREAM_METADATA_WARN
+            LOG_WARNING("ignoring stream metadata");
+            md = nullptr;
+        #else
+            return kAooErrorBadArgument;
+        #endif
+        }
+        // check data size
+        if (md && md->size == 0){
+            LOG_ERROR("stream metadata cannot be empty!");
+        #if STREAM_METADATA_WARN
+            LOG_WARNING("ignoring stream metadata");
+            md = nullptr;
+        #else
+            return kAooErrorBadArgument;
+        #endif
+        }
+        // the metadata size can only be changed while locking the update mutex!
+        auto maxsize = metadata_size_.load(std::memory_order_relaxed);
+        if (md && md->size > maxsize){
+            LOG_ERROR("stream metadata exceeds size limit ("
+                      << maxsize << " bytes)!");
+        #if STREAM_METADATA_WARN
+            LOG_WARNING("ignoring stream metadata");
+            md = nullptr;
+        #else
+            return kAooErrorBadArgument;
+        #endif
+        }
+
+        LOG_DEBUG("start stream with " << md->type << " metadata");
+    } else {
+        LOG_DEBUG("start stream");
+    }
+
+    {
+        std::lock_guard<sync::spinlock> lock(metadata_lock_);
+
+        if (metadata_) {
+            if (md) {
+                flat_metadata_copy(*md, *metadata_);
+            } else {
+                // clear previous metadata
+                metadata_->type = kAooCustomDataInvalid;
+                metadata_->data = nullptr;
+                metadata_->size = 0;
+            }
+        }
+
+        // metadata needs to be "accepted" in make_new_stream()
+        metadata_id_ = kAooIdInvalid;
+    }
+
+    state_.store(stream_state::start);
+
+    return kAooOk;
+}
+
 // must be real-time safe because it might be called in process()!
 // always called with update lock!
-void source_imp::start_new_stream(bool format_changed){
+void source_imp::make_new_stream(bool format_changed){
     // implicitly reset time DLL to be on the safe side
     timer_.reset();
 
@@ -834,6 +928,14 @@ void source_imp::start_new_stream(bool format_changed){
     stream_id_ = make_stream_id();
     sequence_ = 0;
     xrun_.store(0.0); // !
+
+    // "accept" stream metadata, see send_start()
+    {
+        std::lock_guard<sync::spinlock> lock(metadata_lock_);
+        if (metadata_ && metadata_->size > 0) {
+            metadata_id_ = stream_id_;
+        }
+    }
 
     // remove audio from previous stream
     resampler_.reset();
@@ -857,6 +959,44 @@ void source_imp::start_new_stream(bool format_changed){
     }
 
     notify(send_flag::start);
+}
+
+void source_imp::allocate_metadata(int32_t size){
+    assert(size >= 0);
+
+    LOG_DEBUG("allocate metadata (" << size << " bytes)");
+
+    AooCustomData * metadata = nullptr;
+    if (size > 0){
+        auto maxsize = flat_metadata_maxsize(size);
+        metadata = (AooCustomData *)aoo::allocate(maxsize);
+        if (metadata){
+            metadata->type = kAooCustomDataInvalid;
+            metadata->data = nullptr;
+            metadata->size = 0;
+        } else {
+            // TODO report error
+            return;
+        }
+    }
+
+    AooCustomData *olddata;
+    AooInt32 oldsize;
+
+    // swap metadata
+    metadata_lock_.lock();
+    olddata = metadata_;
+    metadata_ = metadata;
+    oldsize = metadata_size_.exchange(size);
+    metadata_id_ = kAooIdInvalid; // !
+    metadata_lock_.unlock();
+
+    // free old metadata
+    if (olddata){
+        assert(oldsize >= 0);
+        auto oldmaxsize = flat_metadata_maxsize(oldsize);
+        aoo::deallocate(metadata_, oldmaxsize);
+    }
 }
 
 void source_imp::add_xrun(float n){
@@ -914,9 +1054,10 @@ void source_imp::update_historybuffer(){
 
 // /aoo/sink/<id>/start <src> <version> <stream_id> <flags>
 // <lastformat> <nchannels> <samplerate> <blocksize> <codec> <options>
+// [<metadata_type> <metadata_content>]
 void send_start(const sink_desc& s, int32_t id, int32_t stream, int32_t lastformat,
                 const AooFormat& f, const AooByte *options, AooInt32 size,
-                const sendfn& fn) {
+                const AooCustomData* metadata, const sendfn& fn) {
     LOG_DEBUG("send " kAooMsgStart " to " << s.ep << " (stream = " << stream << ")");
 
     char buf[AOO_MAX_PACKET_SIZE];
@@ -934,8 +1075,11 @@ void send_start(const sink_desc& s, int32_t id, int32_t stream, int32_t lastform
     msg << osc::BeginMessage(address) << id << (int32_t)make_version()
         << stream << (int32_t)flags << lastformat
         << f.numChannels << f.sampleRate << f.blockSize
-        << f.codec << osc::Blob(options, size)
-        << osc::EndMessage;
+        << f.codec << osc::Blob(options, size);
+    if (metadata) {
+        msg << metadata->type << osc::Blob(metadata->data, metadata->size);
+    }
+    msg << osc::EndMessage;
 
     fn((const AooByte *)msg.Data(), msg.Size(), s.ep);
 }
@@ -974,6 +1118,7 @@ void source_imp::send_stream(const sendfn& fn){
     int32_t stream_id = stream_id_;
     int32_t format_id = format_id_;
 
+    // stream format
     AooFormatStorage f;
     AooByte options[kAooCodecMaxSettingSize];
     AooInt32 size = sizeof(options);
@@ -987,6 +1132,21 @@ void source_imp::send_stream(const sendfn& fn){
         return;
     }
 
+    // stream metadata
+    AooCustomData *md = nullptr;
+    {
+        std::lock_guard<sync::spinlock> lock(metadata_lock_);
+        // only send metadata if "accepted" in make_new_stream().
+        if (metadata_id_ == stream_id) {
+            assert(metadata_ != nullptr);
+            assert(metadata_->size > 0);
+            auto mdsize = flat_metadata_size(*metadata_);
+            md = (AooCustomData *)alloca(mdsize);
+            flat_metadata_copy(*metadata_, *md);
+        }
+    }
+
+    // send messages without lock!
     updatelock.unlock();
 
     // we only free sources in this thread, so we don't have to lock
@@ -1002,7 +1162,7 @@ void source_imp::send_stream(const sendfn& fn){
         }
         if (what & send_flag::start){
             send_start(s, id(), stream_id, format_id,
-                       f.header, options, size, fn);
+                       f.header, options, size, md, fn);
         }
     }
 }

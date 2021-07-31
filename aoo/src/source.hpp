@@ -166,6 +166,11 @@ class source_imp final : public AooSource {
         idle
     };
     std::atomic<stream_state> state_{stream_state::idle};
+    // metadata
+    AooCustomData *metadata_{nullptr};
+    std::atomic<int32_t> metadata_size_{ AOO_STREAM_METADATA_SIZE };
+    int32_t metadata_id_{kAooIdInvalid};
+    sync::spinlock metadata_lock_;
     // timing
     std::atomic<double> realsr_{0};
     time_dll dll_;
@@ -234,7 +239,11 @@ class source_imp final : public AooSource {
 
     bool need_resampling() const;
 
-    void start_new_stream(bool format_changed);
+    AooError start_stream(const AooCustomData *md);
+
+    void make_new_stream(bool format_changed);
+
+    void allocate_metadata(int32_t size);
 
     void add_xrun(float n);
 

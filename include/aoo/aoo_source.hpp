@@ -61,8 +61,9 @@ public:
     // ----------------------------------------------------------
     // type-safe convenience methods for frequently used controls
 
-    AooError startStream() {
-        return control(kAooCtlStartStream, 0, nullptr, 0);
+    AooError startStream(const AooCustomData *metadata = nullptr) {
+        return control(kAooCtlStartStream, 0,
+                       (void *)metadata, metadata ? sizeof(AooCustomData) : 0);
     }
 
     AooError stopStream() {
@@ -179,6 +180,14 @@ public:
 
     AooError getBinaryDataMsg(AooBool& b) {
         return control(kAooCtlGetBinaryDataMsg, 0, AOO_ARG(b));
+    }
+
+    AooError setStreamMetaDataSize(AooInt32 size) {
+        return control(kAooCtlSetStreamMetadataSize, 0, AOO_ARG(size));
+    }
+
+    AooError getStreamMetaDataSize(AooInt32& size) {
+        return control(kAooCtlGetStreamMetadataSize, 0, AOO_ARG(size));
     }
 protected:
     ~AooSource(){} // non-virtual!

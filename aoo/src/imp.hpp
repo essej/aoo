@@ -5,6 +5,7 @@
 #include "common/net_utils.hpp"
 
 #include <stdint.h>
+#include <cstring>
 #include <utility>
 #include <memory>
 #include <atomic>
@@ -213,5 +214,25 @@ struct format_deleter {
         aoo::deallocate(x, f->size);
     }
 };
+
+inline AooSize flat_metadata_size(const AooCustomData& data){
+    return sizeof(data) + data.size + strlen(data.type) + 1;
+}
+
+inline AooSize flat_metadata_maxsize(int32_t size) {
+    return sizeof(AooCustomData) + size + kAooTypeNameMaxLen + 1;
+}
+
+inline void flat_metadata_copy(const AooCustomData& src, AooCustomData& dst) {
+    auto data = (AooByte *)(&dst) + sizeof(AooCustomData);
+    memcpy(data, src.data, src.size);
+
+    auto type = (AooChar *)(data + src.size);
+    memcpy(type, src.type, strlen(src.type) + 1);
+
+    dst.type = type;
+    dst.data = data;
+    dst.size = src.size;
+}
 
 } // aoo
