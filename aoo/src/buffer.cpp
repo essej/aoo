@@ -62,6 +62,9 @@ void history_buffer::clear(){
 
 void history_buffer::resize(int32_t n){
     buffer_.resize(n);
+#if 1
+    buffer_.shrink_to_fit();
+#endif
     clear();
 }
 
@@ -244,6 +247,9 @@ void jitter_buffer::clear(){
 
 void jitter_buffer::resize(int32_t n, int32_t maxblocksize){
     data_.resize(n);
+#if 1
+    data_.shrink_to_fit();
+#endif
     for (auto& b : data_){
         b.reserve(maxblocksize);
     }

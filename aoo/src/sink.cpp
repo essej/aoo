@@ -1014,6 +1014,9 @@ void source_desc::update(const sink_imp& s){
         // align to 8 bytes
         nbytes = (nbytes + 7) & ~7;
         audioqueue_.resize(nbytes, nbuffers);
+    #if 1
+        audioqueue_.shrink_to_fit();
+    #endif
         // fill buffer
         for (int i = 0; i < nbuffers; ++i){
             auto b = (block_data *)audioqueue_.write_data();

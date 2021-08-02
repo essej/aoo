@@ -58,6 +58,10 @@ class spsc_queue {
         resize(1, capacity);
     }
 
+    void shrink_to_fit(){
+        data_.shrink_to_fit();
+    }
+
     int32_t blocksize() const { return blocksize_; }
 
     // max. number of *blocks*

@@ -27,6 +27,9 @@ void dynamic_resampler::setup(int32_t nfrom, int32_t nto,
               << ", nto: " << nto << ", srto: " << srto << ", capacity: " << blocksize);
 #endif
     buffer_.resize(blocksize * nchannels);
+#if 1
+    buffer_.shrink_to_fit();
+#endif
     update(srfrom, srto);
 }
 

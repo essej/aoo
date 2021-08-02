@@ -1048,6 +1048,9 @@ void source_imp::update_audioqueue(){
         // align to 8 bytes
         nbytes = (nbytes + 7) & ~7;
         audioqueue_.resize(nbytes, nbuffers);
+    #if 1
+        audioqueue_.shrink_to_fit();
+    #endif
     }
 }
 
