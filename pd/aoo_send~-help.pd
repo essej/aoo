@@ -92,14 +92,14 @@ ignore it., f 62;
 #X obj 80 234 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X msg 80 253 packetsize \$1;
-#X text 186 251 max. UDP packet size (default: 512 bytes);
+#X text 189 252 max. UDP packet size (default: 512 bytes);
 #X obj 89 283 nbx 8 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
 #X msg 89 302 timefilter \$1;
 #X text 193 303 time DLL filter bandwidth (default: 0.0001);
-#X obj 94 333 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X obj 94 337 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X text 179 355 buffersize (ms) for resending lost packets (default:
+#X text 174 337 buffersize (ms) for resending lost packets (default:
 1000);
 #X msg 69 204 ping \$1;
 #X obj 69 183 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
@@ -109,10 +109,6 @@ ignore it., f 62;
 #X msg 52 148 accept \$1;
 #X obj 52 127 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
-#X text 130 130 1 (default): automatically accept all (un)invitations
-from sinks., f 65;
-#X text 131 151 0: (un)invitations cause a [invite( resp. [uninvite(
-event which, f 64;
 #X text 156 170 has to be handled manually.;
 #X msg 29 48 port \$1;
 #X obj 29 28 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0 10
@@ -122,11 +118,10 @@ event which, f 64;
 -262144 -1 -1 0 256;
 #X text 98 47 change receive port;
 #X text 98 97 change AoO source ID;
-#X msg 94 354 history \$1;
-#X msg 100 406 redundancy \$1;
-#X obj 100 386 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
+#X msg 100 413 redundancy \$1;
+#X obj 100 393 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
 10 -262144 -1 -1 0 256;
-#X text 210 388 how often each packet should be sent (default: 1);
+#X text 210 390 how often each packet should be sent (default: 1);
 #X msg 104 559 codec_set <param> <value>;
 #X msg 105 592 codec_get <param>;
 #X text 240 591 get the value of a codec parameter;
@@ -137,33 +132,39 @@ event which, f 64;
 #X text 309 476 set sink channel onset;
 #X text 241 612 responds with a [codec_get <param> <value>( message.
 ;
-#X text 210 410 redundancy might help to reduce packet loss \, at the
+#X text 210 412 redundancy might help to reduce packet loss \, at the
 cost of increased network traffic., f 44;
 #X text 296 560 set the value of a codec parameter;
 #X text 104 531 see the relevant codec subpatch for available parameters.
 ;
 #X text 104 511 set/get a parameter of the currently selected codec.
 ;
+#X msg 94 358 resend \$1;
+#X text 175 358 set to 0 to disable packet resending.;
+#X text 130 130 1: automatically accept all (un)invitations from sinks
+(= default), f 67;
+#X text 131 151 0: (un)invitations cause an [invite( resp. [uninvite(
+event which, f 66;
 #X connect 0 0 1 0;
-#X connect 1 0 29 0;
+#X connect 1 0 26 0;
 #X connect 3 0 4 0;
-#X connect 4 0 29 0;
-#X connect 6 0 22 0;
-#X connect 8 0 29 0;
+#X connect 4 0 26 0;
+#X connect 6 0 35 0;
+#X connect 8 0 26 0;
 #X connect 9 0 8 0;
-#X connect 11 0 29 0;
+#X connect 11 0 26 0;
 #X connect 12 0 11 0;
-#X connect 16 0 29 0;
+#X connect 14 0 26 0;
+#X connect 15 0 14 0;
+#X connect 16 0 26 0;
 #X connect 17 0 16 0;
-#X connect 18 0 29 0;
-#X connect 19 0 18 0;
-#X connect 22 0 29 0;
-#X connect 23 0 29 0;
-#X connect 24 0 23 0;
-#X connect 26 0 29 0;
-#X connect 27 0 29 0;
-#X connect 30 0 31 0;
-#X connect 31 0 29 0;
+#X connect 20 0 26 0;
+#X connect 21 0 20 0;
+#X connect 23 0 26 0;
+#X connect 24 0 26 0;
+#X connect 27 0 28 0;
+#X connect 28 0 26 0;
+#X connect 35 0 26 0;
 #X restore 80 407 pd advanced;
 #X text 25 646 see also;
 #X obj 98 646 aoo_receive~;
@@ -293,9 +294,9 @@ f 52;
 10 -262144 -1 -1 0 256;
 #X text 177 148 samplerate;
 #X obj 499 135 nbx 5 14 -1e+037 1e+037 0 0 empty empty empty 0 -8 0
-10 -262144 -1 -1 64 256;
+10 -262144 -1 -1 0 256;
 #X obj 501 371 nbx 5 14 0 10 0 0 empty empty empty 0 -8 0 10 -262144
--1 -1 5 256;
+-1 -1 0 256;
 #X msg 49 489 format opus;
 #X text 139 489 all arguments are optional!;
 #X text 496 310 complexity (0 - 10);
