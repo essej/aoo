@@ -156,7 +156,8 @@ enum AooErrorCodes
     kAooErrorNotImplemented,
     kAooErrorBadArgument,
     kAooErrorIdle,
-    kAooErrorWouldBlock
+    kAooErrorWouldBlock,
+    kAooErrorOutOfMemory
 };
 
 #define kAooOk kAooErrorNone
@@ -263,21 +264,23 @@ typedef struct AooCustomData
 
 //--------------- AoO format -------------------//
 
+#define kAooCodecNameMaxLen 16
+
 typedef struct AooFormat
 {
-    const AooChar *codec;
+    AooChar codec[kAooCodecNameMaxLen];
     AooInt32 size;
     AooInt32 numChannels;
     AooInt32 sampleRate;
     AooInt32 blockSize;
 } AooFormat;
 
-#define kAooFormatStorageSize 256
+#define kAooFormatExtMaxSize 64
 
 typedef struct AooFormatStorage
 {
     AooFormat header;
-    AooByte data[kAooFormatStorageSize];
+    AooByte data[kAooFormatExtMaxSize];
 } AooFormatStorage;
 
 //----------- memory allocation -------------//

@@ -16,7 +16,6 @@
 #include "common/utils.hpp"
 
 #include "buffer.hpp"
-#include "codec.hpp"
 #include "imp.hpp"
 #include "resampler.hpp"
 #include "timer.hpp"
@@ -153,7 +152,9 @@ public:
 
     int32_t poll_events(sink_imp& s, AooEventHandler fn, void *user);
 
-    AooError get_format(AooFormat& format, size_t size);
+    AooError get_format(AooFormat& format);
+
+    AooError codec_control(AooCtl ctl, void *data, AooSize size);
 
     // methods
     void reset(const sink_imp& s);
@@ -240,7 +241,8 @@ private:
     std::atomic<double> last_packet_time_{0};
     std::atomic<int32_t> lost_since_ping_{0};
     // audio decoder
-    std::unique_ptr<aoo::decoder> decoder_;
+    std::unique_ptr<AooFormat, format_deleter> format_;
+    std::unique_ptr<AooCodec, decoder_deleter> decoder_;
     // state
     int32_t channel_ = 0; // recent channel onset
     int32_t skipblocks_ = 0;

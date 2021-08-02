@@ -134,7 +134,7 @@ AooError AOO_CALL aoo::sink_imp::control(
     case kAooCtlReset:
     {
         if (index != 0){
-            GETSOURCEARG;
+            GETSOURCEARG
             src->reset(*this);
         } else {
             // reset all sources
@@ -148,15 +148,23 @@ AooError AOO_CALL aoo::sink_imp::control(
     case kAooCtlRequestFormat:
     {
         CHECKARG(AooFormat);
-        GETSOURCEARG;
+        GETSOURCEARG
         return src->request_format(*this, as<AooFormat>(ptr));
     }
     // get format
     case kAooCtlGetFormat:
     {
-        assert(size >= sizeof(AooFormat));
-        GETSOURCEARG;
-        return src->get_format(as<AooFormat>(ptr), size);
+        CHECKARG(AooFormat);
+        GETSOURCEARG
+        return src->get_format(as<AooFormat>(ptr));
+    }
+    // codec control
+    case kAooCtlCodecControl:
+    {
+        CHECKARG(AooSinkCodecCtl);
+        GETSOURCEARG
+        auto& cc = as<AooSinkCodecCtl>(ptr);
+        return src->codec_control(cc.ctl, cc.data, cc.size);
     }
     // buffer size
     case kAooCtlSetBufferSize:
@@ -176,7 +184,7 @@ AooError AOO_CALL aoo::sink_imp::control(
     case kAooCtlGetBufferFillRatio:
     {
         CHECKARG(float);
-        GETSOURCEARG;
+        GETSOURCEARG
         as<float>(ptr) = src->get_buffer_fill_ratio();
         break;
     }
@@ -698,16 +706,19 @@ AooError sink_imp::handle_start_message(const osc::ReceivedMessage& msg,
     AooId stream = (it++)->AsInt32();
     AooFlag flags = (it++)->AsInt32();
     AooId lastformat = (it++)->AsInt32();
+
     // get stream format
     AooFormat f;
     f.numChannels = (it++)->AsInt32();
     f.sampleRate = (it++)->AsInt32();
     f.blockSize = (it++)->AsInt32();
-    f.codec = (it++)->AsString();
+    snprintf(f.codec, sizeof(f.codec), "%s", (it++)->AsString());
     f.size = sizeof(AooFormat);
-    const void *settings;
+
+    const void *extension;
     osc::osc_bundle_element_size_t size;
-    (it++)->AsBlob(settings, size);
+    (it++)->AsBlob(extension, size);
+
     // get stream metadata
     AooCustomData md;
     if (msg.ArgumentCount() >= 12) {
@@ -737,7 +748,7 @@ AooError sink_imp::handle_start_message(const osc::ReceivedMessage& msg,
         src = add_source(addr, id);
     }
     return src->handle_start(*this, stream, flags, lastformat, f,
-                             (const AooByte *)settings, size, md);
+                             (const AooByte *)extension, size, md);
 }
 
 // /aoo/sink/<id>/stop <src> <stream>
@@ -937,11 +948,28 @@ bool source_desc::is_active(const sink_imp& s) const {
     return (s.elapsed_time() - last) < s.source_timeout();
 }
 
-AooError source_desc::get_format(AooFormat &format, size_t size){
+AooError source_desc::get_format(AooFormat &format){
     // synchronize with handle_format() and update()!
     scoped_shared_lock lock(mutex_);
+    if (format_){
+        if (format.size >= format_->size){
+            memcpy(&format, format_.get(), format_->size);
+            return kAooOk;
+        } else {
+            return kAooErrorBadArgument;
+        }
+    } else {
+        return kAooErrorUnknown;
+    }
+}
+
+AooError source_desc::codec_control(
+        AooCtl ctl, void *data, AooSize size) {
+    // we don't know which controls are setters and which
+    // are getters, so we just take a writer lock for either way.
+    unique_lock lock(mutex_);
     if (decoder_){
-        return decoder_->get_format(format, size);
+        return AooDecoder_control(decoder_.get(), ctl, data, size);
     } else {
         return kAooErrorUnknown;
     }
@@ -958,14 +986,15 @@ void source_desc::reset(const sink_imp& s){
 
 void source_desc::update(const sink_imp& s){
     // resize audio ring buffer
-    if (decoder_ && decoder_->blocksize() > 0 && decoder_->samplerate() > 0){
+    if (format_ && format_->blockSize > 0 && format_->sampleRate > 0){
+        assert(decoder_ != nullptr);
         // recalculate buffersize from seconds to samples
-        int32_t bufsize = s.buffersize() * decoder_->samplerate();
+        int32_t bufsize = s.buffersize() * format_->sampleRate;
         // number of buffers (round up!)
-        int32_t nbuffers = std::ceil((double)bufsize / (double)decoder_->blocksize());
+        int32_t nbuffers = std::ceil((double)bufsize / (double)format_->blockSize);
         // minimum buffer size depends on resampling and reblocking!
-        auto downsample = (double)decoder_->samplerate() / (double)s.samplerate();
-        auto reblock = (double)s.blocksize() / (double)decoder_->blocksize();
+        auto downsample = (double)format_->sampleRate / (double)s.samplerate();
+        auto reblock = (double)s.blocksize() / (double)format_->blockSize;
         minblocks_ = std::ceil(downsample * reblock);
         nbuffers = std::max<int32_t>(nbuffers, minblocks_);
         LOG_DEBUG("source_desc: buffersize (ms): " << (s.buffersize() * 1000)
@@ -977,8 +1006,8 @@ void source_desc::update(const sink_imp& s){
         eventqueue_.reset();
     #endif
 
-        auto nsamples = decoder_->nchannels() * decoder_->blocksize();
-        double sr = decoder_->samplerate(); // nominal samplerate
+        auto nsamples = format_->numChannels * format_->blockSize;
+        double sr = format_->sampleRate; // nominal samplerate
 
         // setup audio buffer
         auto nbytes = sizeof(block_data::header) + nsamples * sizeof(AooSample);
@@ -996,9 +1025,9 @@ void source_desc::update(const sink_imp& s){
         }
 
         // setup resampler
-        resampler_.setup(decoder_->blocksize(), s.blocksize(),
-                         decoder_->samplerate(), s.samplerate(),
-                         decoder_->nchannels());
+        resampler_.setup(format_->blockSize, s.blocksize(),
+                         format_->sampleRate, s.samplerate(),
+                         format_->numChannels);
 
         // setup jitter buffer.
         // if we use a very small audio buffer size, we have to make sure that
@@ -1006,8 +1035,8 @@ void source_desc::update(const sink_imp& s){
         // a larger hardware buffer size and consequently sends packets in batches.
         // we don't know the actual source samplerate and hardware buffer size,
         // so we have to make a pessimistic guess.
-        auto hwsamples = (double)decoder_->samplerate() / MINSAMPLERATE * MAXHWBUFSIZE;
-        auto minbuffers = std::ceil(hwsamples / (double)decoder_->blocksize());
+        auto hwsamples = (double)format_->sampleRate / MINSAMPLERATE * MAXHWBUFSIZE;
+        auto minbuffers = std::ceil(hwsamples / (double)format_->blockSize);
         auto jitterbufsize = std::max<int32_t>(nbuffers, minbuffers);
         // LATER optimize max. block size
         jitterbuffer_.resize(jitterbufsize, nsamples * sizeof(double));
@@ -1020,7 +1049,7 @@ void source_desc::update(const sink_imp& s){
         didupdate_ = true;
 
         // reset decoder to avoid garbage from previous stream
-        decoder_->reset();
+        AooDecoder_control(decoder_.get(), kAooCodecCtlReset, nullptr, 0);
     }
 }
 
@@ -1106,7 +1135,7 @@ float source_desc::get_buffer_fill_ratio(){
     scoped_shared_lock lock(mutex_);
     if (decoder_){
         // consider samples in resampler!
-        auto nsamples = decoder_->nchannels() * decoder_->blocksize();
+        auto nsamples = format_->numChannels * format_->blockSize;
         auto available = (double)audioqueue_.read_available() +
                 (double)resampler_.size() / (double)nsamples;
         auto ratio = available / (double)audioqueue_.capacity();
@@ -1124,7 +1153,7 @@ float source_desc::get_buffer_fill_ratio(){
 
 AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t flags,
                                    int32_t lastformat, const AooFormat& f,
-                                   const AooByte *settings, int32_t size,
+                                   const AooByte *extension, int32_t size,
                                    const AooCustomData& md) {
     LOG_DEBUG("handle start");
     // if we're in 'uninvite' state, ignore /start message, see also handle_data().
@@ -1142,15 +1171,16 @@ AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t f
         return kAooErrorNone;
     }
 
-    AooFormatStorage fmt;
-    std::unique_ptr<decoder> new_decoder;
+    std::unique_ptr<AooFormat, format_deleter> new_format;
+    std::unique_ptr<AooCodec, decoder_deleter> new_decoder;
 
     // ignore redundant /format messages!
     // NOTE: format_id_ can only change in this thread,
     // so we don't need a lock to safely *read* it!
-    bool new_format = lastformat != format_id_;
+    bool format_changed = lastformat != format_id_;
+    AooFormatStorage fmt;
 
-    if (new_format){
+    if (format_changed){
         // look up codec
         auto c = aoo::find_codec(f.codec);
         if (!c){
@@ -1158,23 +1188,27 @@ AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t f
             return kAooErrorUnknown;
         }
 
-        // try to deserialize format
+        // copy format header
+        memcpy(&fmt, &f, sizeof(AooFormat));
 
-        if (c->deserialize(f, settings, size,
-                           fmt.header, sizeof(fmt)) != kAooOk){
-            return kAooErrorUnknown;
+        // try to deserialize format extension
+        fmt.header.size = sizeof(AooFormatStorage);
+        auto err = c->deserialize(extension, size, &fmt.header, &fmt.header.size);
+        if (err != kAooOk){
+            return err;
         }
 
-        // Create a new decoder if necessary.
-        // This is the only thread where the decoder can possibly
-        // change, so we don't need a lock to safely *read* it!
-        if (!decoder_ || strcmp(decoder_->name(), f.codec)){
-            new_decoder = c->create_decoder(nullptr);
-            if (!new_decoder){
-                LOG_ERROR("couldn't create decoder!");
-                return kAooErrorUnknown;
-            }
+        // create a new decoder - will validate format!
+        auto dec = c->decoderNew(&fmt.header, &err);
+        if (!dec){
+            return err;
         }
+        new_decoder.reset(dec);
+
+        // save validated format
+        auto fp = aoo::allocate(fmt.header.size);
+        memcpy(fp, &fmt, fmt.header.size);
+        new_format.reset((AooFormat *)fp);
     }
 
     // copy metadata
@@ -1196,18 +1230,12 @@ AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t f
 
     // TODO handle 'flags' (future)
 
-    if (new_format){
+    if (format_changed){
         format_id_ = lastformat;
         format_request_ = nullptr;
 
-        if (new_decoder){
-            decoder_ = std::move(new_decoder);
-        }
-
-        // set format
-        if (decoder_->set_format(fmt.header) != kAooOk){
-            return kAooErrorUnknown;
-        }
+        format_ = std::move(new_format);
+        decoder_ = std::move(new_decoder);
     }
 
     // free old metadata
@@ -1241,7 +1269,7 @@ AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t f
         }
     }
 
-    if (new_format){
+    if (format_changed){
         // send "format" event
         event e(kAooEventFormatChange, ep);
 
@@ -1251,9 +1279,9 @@ AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t f
             e.format.format = &fmt.header;
         } else if (kAooEventModePoll){
             // use heap
-            auto f = (AooFormat *)memory_.allocate(fmt.header.size);
-            memcpy(f, &fmt, fmt.header.size);
-            e.format.format = f;
+            auto fp = (AooFormat *)memory_.allocate(fmt.header.size);
+            memcpy(fp, &fmt, fmt.header.size);
+            e.format.format = fp;
         }
 
         send_event(s, e, kAooThreadLevelNetwork);
@@ -1319,7 +1347,7 @@ AooError source_desc::handle_data(const sink_imp& s, net_packet& d, bool binary)
     // check and fix up samplerate
     if (d.samplerate == 0){
         // no dynamic resampling, just use nominal samplerate
-        d.samplerate = decoder_->samplerate();
+        d.samplerate = format_->sampleRate;
     }
 
     // copy blob data and push to queue
@@ -1508,7 +1536,7 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
         assert(skipblocks_ == 0);
         didupdate_ = false;
     } else if (xrunsamples_ > 0) {
-        auto xrunblocks = (float)xrunsamples_ / (float)decoder_->blocksize();
+        auto xrunblocks = (float)xrunsamples_ / (float)format_->blockSize;
         xrun_ += xrunblocks;
         xrunsamples_ = 0;
     }
@@ -1569,8 +1597,8 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
         send_event(s, e, kAooThreadLevelAudio);
     }
 
-    auto nchannels = decoder_->nchannels();
-    auto insize = decoder_->blocksize() * nchannels;
+    auto nchannels = format_->numChannels;
+    auto insize = format_->blockSize * nchannels;
     auto outsize = nsamples * nchannels;
     // if dynamic resampling is disabled, this will simply
     // return the nominal samplerate
@@ -1591,7 +1619,7 @@ bool source_desc::process(const sink_imp& s, AooSample **buffer,
 
             if (xrun_ > XRUN_THRESHOLD){
                 // skip audio and decrement xrun counter proportionally
-                xrun_ -= sr / decoder_->samplerate();
+                xrun_ -= sr / format_->sampleRate;
             } else {
                 // try to write audio into resampler
                 if (resampler_.write(d->data, insize)){
@@ -1675,7 +1703,7 @@ void source_desc::handle_underrun(const sink_imp& s){
     LOG_VERBOSE("audio buffer underrun");
 
     int32_t n = audioqueue_.write_available();
-    auto nsamples = decoder_->blocksize() * decoder_->nchannels();
+    auto nsamples = format_->blockSize * format_->numChannels;
     // reduce by blocks in resampler!
     n -= static_cast<int32_t>((double)resampler_.size() / (double)nsamples + 0.5);
 
@@ -1683,7 +1711,7 @@ void source_desc::handle_underrun(const sink_imp& s){
               << ", resampler: " << (double)resampler_.size() / (double)nsamples);
 
     if (n > 0){
-        double sr = decoder_->samplerate();
+        double sr = format_->sampleRate;
         for (int i = 0; i < n; ++i){
             auto b = (block_data *)audioqueue_.write_data();
             // push nominal samplerate, channel + silence
@@ -1695,7 +1723,8 @@ void source_desc::handle_underrun(const sink_imp& s){
         #else
             // use packet loss concealment
             AooInt32 size = nsamples;
-            if (decoder_->decode(nullptr, 0, b->data, size) != kAooOk){
+            if (AooDecoder_decode(decoder_.get(), nullptr, 0,
+                                  b->data, &size) != kAooOk) {
                 LOG_WARNING("AooSink: couldn't decode block!");
                 // fill with zeros
                 std::fill(b->data, b->data + nsamples, 0);
@@ -1859,7 +1888,7 @@ void source_desc::process_blocks(const sink_imp& s, stream_stats& stats){
         return;
     }
 
-    auto nsamples = decoder_->blocksize() * decoder_->nchannels();
+    auto nsamples = format_->blockSize * format_->numChannels;
 
     // Transfer all consecutive complete blocks
     while (!jitterbuffer_.empty() && audioqueue_.write_available()){
@@ -1873,7 +1902,7 @@ void source_desc::process_blocks(const sink_imp& s, stream_stats& stats){
             if (b.dropped()){
                 data = nullptr;
                 size = 0;
-                sr = decoder_->samplerate(); // nominal samplerate
+                sr = format_->sampleRate; // nominal samplerate
                 channel = -1; // current channel
             #if AOO_DEBUG_JITTER_BUFFER
                 DO_LOG_DEBUG("jitter buffer: write empty block ("
@@ -1901,7 +1930,7 @@ void source_desc::process_blocks(const sink_imp& s, stream_stats& stats){
                           << ", limit: " << minblocks_);
                 data = nullptr;
                 size = 0;
-                sr = decoder_->samplerate(); // nominal samplerate
+                sr = format_->sampleRate; // nominal samplerate
                 channel = -1; // current channel
                 add_lost(stats, 1);
                 LOG_VERBOSE("dropped block " << b.sequence);
@@ -1920,7 +1949,7 @@ void source_desc::process_blocks(const sink_imp& s, stream_stats& stats){
         d->header.channel = channel;
         // decode and push audio data
         AooInt32 n = nsamples;
-        if (decoder_->decode(data, size, d->data, n) != kAooOk){
+        if (AooDecoder_decode(decoder_.get(), data, size, d->data, &n) != kAooOk){
             LOG_WARNING("AooSink: couldn't decode block!");
             // decoder failed - fill with zeros
             std::fill(d->data, d->data + nsamples, 0);
@@ -2082,9 +2111,9 @@ void source_desc::send_format_request(const sink_imp& s, const sendfn& fn) {
         auto c = aoo::find_codec(f.codec);
         assert(c != nullptr);
 
-        AooByte buf[kAooCodecMaxSettingSize];
+        AooByte buf[kAooFormatExtMaxSize];
         AooInt32 size;
-        if (c->serialize(f, buf, size) == kAooOk){
+        if (c->serialize(&f, buf, &size) == kAooOk){
             LOG_DEBUG("codec = " << f.codec << ", nchannels = "
                       << f.numChannels << ", sr = " << f.sampleRate
                       << ", blocksize = " << f.blockSize

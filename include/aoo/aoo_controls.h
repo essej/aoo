@@ -44,6 +44,10 @@ enum AooControls
     // The source will receive one or more kAooEventFormatRequest events.
     // If the request has timed out, the sink receives a kAooEventFormatTimeout event.
     kAooCtlRequestFormat,
+    // Perform a codec control (index: codec control, arg: argument)
+    // ---
+    // The available codec controls should be listed in the AOO codecheader file.
+    kAooCtlCodecControl,
     // Reset the source/sink (none)
     kAooCtlReset,
     // Start a new stream ([optional] arg: AooCustomData)

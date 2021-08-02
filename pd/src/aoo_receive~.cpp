@@ -466,8 +466,7 @@ static t_int * aoo_receive_perform(t_int *w)
     int n = (int)(w[2]);
 
     if (x->x_node){
-        auto err = x->x_sink->process(x->x_vec.get(), n,
-                                      get_osctime());
+        auto err = x->x_sink->process(x->x_vec.get(), n, get_osctime());
         if (err != kAooErrorIdle){
             x->x_node->notify();
         }

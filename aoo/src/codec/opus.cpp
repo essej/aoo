@@ -2,8 +2,11 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
-#include "aoo/codec/aoo_opus.h"
 #include "aoo/aoo_codec.h"
+#include "aoo/codec/aoo_opus.h"
+
+#include "../imp.hpp"
+
 #include "common/utils.hpp"
 
 #include <cassert>
@@ -12,23 +15,10 @@
 
 namespace {
 
-AooAllocator g_allocator {
-    [](AooSize n, void *){ return operator new(n); },
-    nullptr,
-    [](void *ptr, AooSize, void *){ operator delete(ptr); },
-    nullptr
-};
+//---------------- helper functions -----------------//
 
-void *allocate(AooSize n){
-    return g_allocator.alloc(n, g_allocator.context);
-}
-
-void deallocate(void *ptr, AooSize n){
-    g_allocator.free(ptr, n, g_allocator.context);
-}
-
-void print_settings(const AooFormatOpus& f){
-    const char *application, *type;
+void print_format(const AooFormatOpus& f){
+    const char *application;
 
     switch (f.applicationType){
     case OPUS_APPLICATION_VOIP:
@@ -42,41 +32,23 @@ void print_settings(const AooFormatOpus& f){
         break;
     }
 
-    switch (f.signalType){
-    case OPUS_SIGNAL_MUSIC:
-        type = "music";
-        break;
-    case OPUS_SIGNAL_VOICE:
-        type = "voice";
-        break;
-    default:
-        type = "auto";
-        break;
-    }
-
     LOG_VERBOSE("Opus settings: "
                 << "nchannels = " << f.header.numChannels
                 << ", blocksize = " << f.header.blockSize
                 << ", samplerate = " << f.header.sampleRate
-                << ", application = " << application
-                << ", bitrate = " << f.bitrate
-                << ", complexity = " << f.complexity
-                << ", signal type = " << type);
+                << ", application = " << application);
 }
 
-/*/////////////////////// codec base ////////////////////////*/
-
-struct codec {
-    codec(){
-        memset(&format, 0, sizeof(format));
-    }
-    AooFormatOpus format;
-};
-
-void validate_format(AooFormatOpus& f, bool loud = true)
+bool validate_format(AooFormatOpus& f, bool loud = true)
 {
-    f.header.codec = kAooCodecOpus; // static string!
-    f.header.size = sizeof(AooFormatOpus); // actual size!
+    if (strcmp(f.header.codec, kAooCodecOpus)){
+        return false;
+    }
+
+    if (f.header.size < sizeof(AooFormatOpus)){
+        return false;
+    }
+
     // validate samplerate
     switch (f.header.sampleRate){
     case 8000:
@@ -93,7 +65,8 @@ void validate_format(AooFormatOpus& f, bool loud = true)
         f.header.sampleRate = 48000;
         break;
     }
-    // validate channels (LATER support multichannel!)
+
+    // validate channels
     if (f.header.numChannels < 1 || f.header.numChannels > 255){
         if (loud){
             LOG_WARNING("Opus: channel count " << f.header.numChannels <<
@@ -101,6 +74,7 @@ void validate_format(AooFormatOpus& f, bool loud = true)
         }
         f.header.numChannels = 1;
     }
+
     // validate blocksize
     const int minblocksize = f.header.sampleRate / 400; // 2.5 ms (e.g. 120 samples @ 48 kHz)
     const int maxblocksize = minblocksize * 24; // 60 ms (e.g. 2880 samples @ 48 kHz)
@@ -117,6 +91,7 @@ void validate_format(AooFormatOpus& f, bool loud = true)
         }
         f.header.blockSize = result / 2;
     }
+
     // validate application type
     if (f.applicationType != OPUS_APPLICATION_VOIP
             && f.applicationType != OPUS_APPLICATION_AUDIO
@@ -127,375 +102,377 @@ void validate_format(AooFormatOpus& f, bool loud = true)
         }
         f.applicationType = OPUS_APPLICATION_AUDIO;
     }
-    // bitrate, complexity and signal type should be validated by opus
+
+    return true;
 }
 
-AooError compare(codec *c, const AooFormatOpus *fmt)
-{
-    // copy and validate!
-    AooFormatOpus f1;
-    memcpy(&f1, fmt, sizeof(AooFormatOpus));
+template<typename T>
+T& as(void *p){
+    return *reinterpret_cast<T *>(p);
+}
 
-    auto& f2 = c->format;
-    auto& h1 = f1.header;
-    auto& h2 = f2.header;
+#define CHECKARG(type) assert(size == sizeof(type))
 
-    // check before validate()!
-    if (strcmp(h1.codec, h2.codec) ||
-            h1.size != h2.size) {
-        return false;
+//------------------------------- encoder --------------------------//
+
+AooError createEncoderState(const AooFormatOpus& f,
+                            OpusMSEncoder *& state, size_t& size){
+    // setup channel mapping
+    // only use decoupled streams (what's the point of coupled streams?)
+    auto nchannels = f.header.numChannels;
+    unsigned char mapping[256];
+    for (int i = 0; i < nchannels; ++i){
+        mapping[i] = i;
+    }
+    memset(mapping + nchannels, 255, 256 - nchannels);
+
+    // create state
+    size = opus_multistream_encoder_get_size(nchannels, 0);
+    state = (OpusMSEncoder *)aoo::allocate(size);
+    if (!state){
+        return kAooErrorOutOfMemory;
+    }
+    auto err = opus_multistream_encoder_init(
+                state, f.header.sampleRate, nchannels,
+                nchannels, 0, mapping, f.applicationType);
+    if (err != OPUS_OK){
+        LOG_ERROR("Opus: opus_encoder_create() failed with error code " << err);
+        aoo::deallocate(state, size);
+        return kAooErrorBadArgument;
+    }
+    return kAooOk;
+}
+
+struct Encoder : AooCodec {
+    Encoder(OpusMSEncoder *state, size_t size, const AooFormatOpus& f);
+    ~Encoder(){
+        aoo::deallocate(state_, size_);
+    }
+    OpusMSEncoder *state_;
+    size_t size_;
+    int numChannels_;
+};
+
+AooCodec * Encoder_new(AooFormat *f, AooError *err){
+    auto fmt = (AooFormatOpus *)f;
+    if (!validate_format(*fmt, true)){
+        if (err) {
+            *err = kAooErrorBadArgument;
+        }
+        return nullptr;
     }
 
-    validate_format(f1, false);
+    print_format(*fmt);
 
-    return h1.blockSize == h2.blockSize &&
-            h1.sampleRate == h2.sampleRate &&
-            h1.numChannels == h2.numChannels &&
-            f1.applicationType == f2.applicationType &&
-            f1.bitrate == f2.bitrate &&
-            f1.complexity == f2.complexity &&
-            f1.signalType == f2.signalType;
-}
-
-AooError get_format(codec *c, AooFormat *f, AooInt32 size)
-{
-    // check if format has been set
-    if (c->format.header.codec){
-        if (size >= c->format.header.size){
-            memcpy(f, &c->format, sizeof(AooFormatOpus));
-            return kAooOk;
-        } else {
-            return kAooErrorUnknown;
-        }
+    OpusMSEncoder *state;
+    size_t size;
+    auto res = createEncoderState(*fmt, state, size);
+    if (err){
+        *err = res;
+    }
+    if (res == kAooOk){
+        return aoo::construct<Encoder>(state, size, *fmt);
     } else {
-        return kAooErrorUnknown;
+        return nullptr;
     }
 }
 
-/*/////////////////////////// encoder //////////////////////*/
+void Encoder_free(AooCodec *c){
+    aoo::destroy(static_cast<Encoder *>(c));
+}
 
-struct encoder : codec {
-    ~encoder(){
-        if (state){
-            deallocate(state, size);
+AooError AOO_CALL Encoder_control(
+        AooCodec *c, AooCtl ctl, void *ptr, AooSize size) {
+    auto e = static_cast<Encoder *>(c);
+    switch (ctl){
+    case kAooCodecCtlReset:
+    {
+        auto err = opus_multistream_encoder_ctl(
+                    e->state_, OPUS_RESET_STATE);
+        if (err != OPUS_OK) {
+            return kAooErrorBadArgument;
         }
+        break;
     }
-    OpusMSEncoder *state = nullptr;
-    size_t size = 0;
-};
-
-void *encoder_new(AooError *err){
-    auto obj = allocate(sizeof(encoder));
-    new (obj) encoder {};
-    return obj;
+    case OPUS_SET_COMPLEXITY_REQUEST:
+    {
+        CHECKARG(opus_int32);
+        auto complexity = as<opus_int32>(ptr);
+        auto err = opus_multistream_encoder_ctl(
+                    e->state_, OPUS_SET_COMPLEXITY(complexity));
+        if (err != OPUS_OK){
+            return kAooErrorBadArgument;
+        }
+        break;
+    }
+    case OPUS_GET_COMPLEXITY_REQUEST:
+    {
+        CHECKARG(opus_int32);
+        auto complexity = (opus_int32 *)ptr;
+        auto err = opus_multistream_encoder_ctl(
+                    e->state_, OPUS_GET_COMPLEXITY(complexity));
+        if (err != OPUS_OK){
+            return kAooErrorBadArgument;
+        }
+        break;
+    }
+    case OPUS_SET_BITRATE_REQUEST:
+    {
+        CHECKARG(opus_int32);
+        auto bitrate = as<opus_int32>(ptr);
+        auto err = opus_multistream_encoder_ctl(
+                    e->state_, OPUS_SET_BITRATE(bitrate));
+        if (err != OPUS_OK){
+            return kAooErrorBadArgument;
+        }
+        break;
+    }
+    case OPUS_GET_BITRATE_REQUEST:
+    {
+        CHECKARG(opus_int32);
+        auto bitrate = (opus_int32 *)ptr;
+    #if 1
+        // This control is broken in opus_multistream_encoder (as of opus v1.3.2)
+        // because it would always return the default bitrate.
+        // As a temporary workaround, we just return OPUS_AUTO unconditionally.
+        // LATER validate and cache the value instead.
+        *bitrate = OPUS_AUTO;
+    #else
+        auto err = opus_multistream_encoder_ctl(
+                    e->state_, OPUS_GET_BITRATE(bitrate));
+        if (err != OPUS_OK){
+            return kAooErrorBadArgument;
+        }
+    #endif
+        break;
+    }
+    case OPUS_SET_SIGNAL_REQUEST:
+    {
+        CHECKARG(opus_int32);
+        auto signal = as<opus_int32>(ptr);
+        auto err = opus_multistream_encoder_ctl(
+                    e->state_, OPUS_SET_SIGNAL(signal));
+        if (err != OPUS_OK){
+            return kAooErrorBadArgument;
+        }
+        break;
+    }
+    case OPUS_GET_SIGNAL_REQUEST:
+    {
+        CHECKARG(opus_int32);
+        auto signal = (opus_int32 *)ptr;
+        auto err = opus_multistream_encoder_ctl(
+                    e->state_, OPUS_GET_SIGNAL(signal));
+        if (err != OPUS_OK){
+            return kAooErrorBadArgument;
+        }
+        break;
+    }
+    default:
+        LOG_WARNING("Opus: unsupported codec ctl " << ctl);
+        return kAooErrorNotImplemented;
+    }
+    return kAooOk;
 }
 
-void encoder_free(void *enc){
-    static_cast<encoder *>(enc)->~encoder();
-    deallocate(enc, sizeof(encoder));
-}
-
-AooError encode(void *enc,
-                const AooSample *s, AooInt32 n,
-                AooByte *buf, AooInt32 *size)
+AooError Encoder_encode(
+        AooCodec *c, const AooSample *input, AooInt32 numSamples,
+        AooByte *buf, AooInt32 *size)
 {
-    auto c = static_cast<encoder *>(enc);
-    if (c->state){
-        auto framesize = n / c->format.header.numChannels;
-        auto result = opus_multistream_encode_float(
-            c->state, s, framesize, (unsigned char *)buf, *size);
-        if (result > 0){
-            *size = result;
-            return kAooOk;
-        } else {
-            LOG_VERBOSE("Opus: opus_encode_float() failed with error code " << result);
-        }
+    auto e = static_cast<Encoder *>(c);
+    auto framesize = numSamples / e->numChannels_;
+    auto result = opus_multistream_encode_float(
+                e->state_, input, framesize, (unsigned char *)buf, *size);
+    if (result > 0){
+        *size = result;
+        return kAooOk;
+    } else {
+        LOG_VERBOSE("Opus: opus_encode_float() failed with error code " << result);
+        return kAooErrorUnknown;
     }
-    return kAooErrorUnknown;
 }
 
-AooError encoder_set_format(encoder *c, AooFormatOpus *f){
-    if (strcmp(f->header.codec, kAooCodecOpus)){
-        return kAooErrorUnknown;
-    }
-    if (f->header.size < sizeof(AooFormatOpus)){
-        return kAooErrorUnknown;
-    }
+//------------------------- decoder -----------------------//
 
-    validate_format(*f);
-
-    // LATER only deallocate if channels, sr and application type
-    // have changed, otherwise simply reset the encoder.
-    if (c->state){
-        deallocate(c->state, c->size);
-        c->state = nullptr;
-        c->size = 0;
-    }
+AooError createDecoderState(const AooFormatOpus& f,
+                            OpusMSDecoder *& state, size_t& size){
     // setup channel mapping
     // only use decoupled streams (what's the point of coupled streams?)
-    auto nchannels = f->header.numChannels;
+    auto nchannels = f.header.numChannels;
     unsigned char mapping[256];
     for (int i = 0; i < nchannels; ++i){
         mapping[i] = i;
     }
     memset(mapping + nchannels, 255, 256 - nchannels);
+
     // create state
-    size_t size = opus_multistream_encoder_get_size(nchannels, 0);
-    auto state = (OpusMSEncoder *)allocate(size);
+    size = opus_multistream_decoder_get_size(nchannels, 0);
+    state = (OpusMSDecoder *)aoo::allocate(size);
     if (!state){
-        return kAooErrorUnknown;
+        return kAooErrorOutOfMemory;
     }
-    auto error = opus_multistream_encoder_init(state, f->header.sampleRate,
-        nchannels, nchannels, 0, mapping, f->applicationType);
-    if (error != OPUS_OK){
-        LOG_ERROR("Opus: opus_encoder_create() failed with error code " << error);
-        return kAooErrorUnknown;
+    auto err = opus_multistream_decoder_init(
+                state, f.header.sampleRate,
+                nchannels, nchannels, 0, mapping);
+    if (err != OPUS_OK){
+        LOG_ERROR("Opus: opus_decoder_create() failed with error code " << err);
+        aoo::deallocate(state, size);
+        return kAooErrorBadArgument;
     }
-    c->state = state;
-    c->size = size;
-    // apply settings
-    // complexity
-    opus_multistream_encoder_ctl(c->state, OPUS_SET_COMPLEXITY(f->complexity));
-    opus_multistream_encoder_ctl(c->state, OPUS_GET_COMPLEXITY(&f->complexity));
-    // bitrate
-    opus_multistream_encoder_ctl(c->state, OPUS_SET_BITRATE(f->bitrate));
-#if 0
-    // This control is broken in opus_multistream_encoder (as of opus v1.3.2)
-    // because it would always return the default bitrate.
-    // The only thing we can do is omit the function and just keep the input value.
-    // This means that clients have to explicitly check for OPUS_AUTO and
-    // OPUS_BITRATE_MAX when reading the 'bitrate' value after encoder_setformat().
-    opus_multistream_encoder_ctl(c->state, OPUS_GET_BITRATE(&f->bitrate));
-#endif
-    // signal type
-    opus_multistream_encoder_ctl(c->state, OPUS_SET_SIGNAL(f->signalType));
-    opus_multistream_encoder_ctl(c->state, OPUS_GET_SIGNAL(&f->signalType));
-
-    // save and print settings
-    memcpy(&c->format, f, sizeof(AooFormatOpus));
-    print_settings(c->format);
-
     return kAooOk;
 }
 
-AooError encoder_ctl(void *x, AooCtl ctl, void *ptr, AooSize size){
-    switch (ctl){
-    case kAooCodecCtlSetFormat:
-        assert(size >= sizeof(AooFormat));
-        return encoder_set_format((encoder *)x, (AooFormatOpus *)ptr);
-    case kAooCodecCtlGetFormat:
-        return get_format((codec *)x, (AooFormat *)ptr, size);
-    case kAooCodecCtlReset:
-        if (opus_multistream_encoder_ctl(static_cast<encoder *>(x)->state,
-                                         OPUS_RESET_STATE) == OPUS_OK) {
-            return kAooOk;
-        } else {
-            return kAooErrorUnknown;
-        }
-    case kAooCodecCtlFormatEqual:
-        assert(size >= sizeof(AooFormat));
-        return compare((codec *)x, (const AooFormatOpus *)ptr);
-    default:
-        LOG_WARNING("Opus: unsupported codec ctl " << ctl);
-        return kAooErrorUnknown;
+struct Decoder : AooCodec {
+    Decoder(OpusMSDecoder *state, size_t size, const AooFormatOpus& f);
+    ~Decoder(){
+        aoo::deallocate(state_, size_);
     }
-}
-
-/*/////////////////////// decoder ///////////////////////////*/
-
-struct decoder : codec {
-    ~decoder(){
-        if (state){
-            deallocate(state, size);
-        }
-    }
-    OpusMSDecoder * state = nullptr;
-    size_t size = 0;
+    OpusMSDecoder *state_;
+    size_t size_;
+    int numChannels_;
 };
 
-void *decoder_new(AooError *err){
-    auto obj = allocate(sizeof(decoder));
-    new (obj) decoder {};
-    return obj;
-}
-
-void decoder_free(void *dec){
-    static_cast<decoder *>(dec)->~decoder();
-    deallocate(dec, sizeof(decoder));
-}
-
-AooError decode(void *dec,
-                const AooByte *buf, AooInt32 size,
-                AooSample *s, AooInt32 *n)
-{
-    auto c = static_cast<decoder *>(dec);
-    if (c->state){
-        auto framesize = *n / c->format.header.numChannels;
-        auto result = opus_multistream_decode_float(
-            c->state, (const unsigned char *)buf, size, s, framesize, 0);
-        if (result > 0){
-            *n = result;
-            return kAooOk;
-        } else if (result < 0) {
-            LOG_VERBOSE("Opus: opus_decode_float() failed with error code " << result);
+AooCodec * Decoder_new(AooFormat *f, AooError *err){
+    auto fmt = (AooFormatOpus *)f;
+    if (!validate_format(*fmt, true)){
+        if (err) {
+            *err = kAooErrorBadArgument;
         }
+        return nullptr;
     }
-    return kAooErrorUnknown;
+
+    print_format(*fmt);
+
+    OpusMSDecoder *state;
+    size_t size;
+    auto res = createDecoderState(*fmt, state, size);
+    if (err){
+        *err = res;
+    }
+    if (res == kAooOk){
+        return aoo::construct<Decoder>(state, size, *fmt);
+    } else {
+        return nullptr;
+    }
 }
 
-AooError decoder_set_format(decoder *c, AooFormat *f)
-{
-    if (strcmp(f->codec, kAooCodecOpus)){
-        return kAooErrorUnknown;
-    }
-    if (f->size < sizeof(AooFormatOpus)){
-        return kAooErrorUnknown;
-    }
+void Decoder_free(AooCodec *c){
+    aoo::destroy(static_cast<Decoder *>(c));
+}
 
-    auto fmt = reinterpret_cast<AooFormatOpus *>(f);
-
-    validate_format(*fmt);
-
-    // LATER only deallocate if channels and sr have changed,
-    // otherwise simply reset the decoder.
-    if (c->state){
-        deallocate(c->state, c->size);
-        c->state = nullptr;
-        c->size = 0;
+AooError Decoder_control(AooCodec *c, AooCtl ctl, void *ptr, AooSize size){
+    auto d = static_cast<Decoder *>(c);
+    switch (ctl){
+    case kAooCodecCtlReset:
+    {
+        auto err = opus_multistream_decoder_ctl(
+                    d->state_, OPUS_RESET_STATE);
+        if (err != OPUS_OK) {
+            return kAooErrorBadArgument;
+        }
+        break;
     }
-    // setup channel mapping
-    // only use decoupled streams (what's the point of coupled streams?)
-    auto nchannels = fmt->header.numChannels;
-    unsigned char mapping[256];
-    for (int i = 0; i < nchannels; ++i){
-        mapping[i] = i;
+    default:
+        LOG_WARNING("Opus: unsupported codec ctl " << ctl);
+        return kAooErrorNotImplemented;
     }
-    memset(mapping + nchannels, 255, 256 - nchannels);
-    // create state
-    size_t size = opus_multistream_decoder_get_size(nchannels, 0);
-    auto state = (OpusMSDecoder *)allocate(size);
-    if (!state){
-        return kAooErrorUnknown;
-    }
-    auto error = opus_multistream_decoder_init(state, fmt->header.sampleRate,
-                                               nchannels, nchannels, 0, mapping);
-    if (error != OPUS_OK){
-        LOG_ERROR("Opus: opus_decoder_create() failed with error code " << error);
-        return kAooErrorUnknown;
-    }
-    c->state = state;
-    c->size = size;
-    // these are actually encoder settings and don't do anything on the decoder
-#if 0
-    // complexity
-    opus_multistream_decoder_ctl(c->state, OPUS_SET_COMPLEXITY(f->complexity));
-    opus_multistream_decoder_ctl(c->state, OPUS_GET_COMPLEXITY(&f->complexity));
-    // bitrate
-    opus_multistream_decoder_ctl(c->state, OPUS_SET_BITRATE(f->bitrate));
-    opus_multistream_decoder_ctl(c->state, OPUS_GET_BITRATE(&f->bitrate));
-    // signal type
-    opus_multistream_decoder_ctl(c->state, OPUS_SET_SIGNAL(f->signalType));
-    opus_multistream_decoder_ctl(c->state, OPUS_GET_SIGNAL(&f->signalType));
-#endif
-
-    // save and print settings
-    memcpy(&c->format, fmt, sizeof(AooFormatOpus));
-    print_settings(c->format);
-
     return kAooOk;
 }
 
-AooError decoder_ctl(void *x, AooCtl ctl, void *ptr, AooSize size){
-    switch (ctl){
-    case kAooCodecCtlSetFormat:
-        assert(size >= sizeof(AooFormat));
-        return decoder_set_format((decoder *)x, (AooFormat *)ptr);
-    case kAooCodecCtlGetFormat:
-        return get_format((decoder *)x, (AooFormat *)ptr, size);
-    case kAooCodecCtlReset:
-        if (opus_multistream_decoder_ctl(static_cast<decoder *>(x)->state,
-                                         OPUS_RESET_STATE) == OPUS_OK) {
-            return kAooOk;
-        } else {
-            return kAooErrorUnknown;
-        }
-    case kAooCodecCtlFormatEqual:
-        assert(size >= sizeof(AooFormat));
-        return compare((codec *)x, (const AooFormatOpus *)ptr);
-    default:
-        LOG_WARNING("Opus: unsupported codec ctl " << ctl);
+AooError Decoder_decode(
+        AooCodec *c, const AooByte *buf, AooInt32 size,
+        AooSample *output, AooInt32 *numSamples)
+{
+    auto d = static_cast<Decoder *>(c);
+    auto framesize = *numSamples / d->numChannels_;
+    auto result = opus_multistream_decode_float(
+                d->state_, (const unsigned char *)buf, size, output, framesize, 0);
+    if (result > 0){
+        *numSamples = result;
+        return kAooOk;
+    } else {
+        LOG_VERBOSE("Opus: opus_decode_float() failed with error code " << result);
         return kAooErrorUnknown;
     }
 }
 
-/*////////////////////// codec ////////////////////*/
+//-------------------------- free functions ------------------------//
 
 AooError serialize(const AooFormat *f, AooByte *buf, AooInt32 *size){
-    if (*size >= 16){
+    if (!buf){
+        *size = sizeof(AooInt32);
+        return kAooOk;
+    }
+    if (*size >= sizeof(AooInt32)){
         auto fmt = (const AooFormatOpus *)f;
-        aoo::to_bytes<opus_int32>(fmt->applicationType, buf);
-        aoo::to_bytes<opus_int32>(fmt->bitrate, buf + 4);
-        aoo::to_bytes<opus_int32>(fmt->complexity, buf + 8);
-        aoo::to_bytes<opus_int32>(fmt->signalType, buf + 12);
-        *size = 16;
+        aoo::to_bytes<AooInt32>(fmt->applicationType, buf);
+        *size = sizeof(AooInt32);
 
         return kAooOk;
     } else {
-        LOG_WARNING("Opus: couldn't write settings");
-        return kAooErrorUnknown;
+        LOG_ERROR("Opus: couldn't write settings - buffer too small!");
+        return kAooErrorBadArgument;
     }
 }
 
-AooError deserialize(const AooFormat *header, const AooByte *buf,
-                     AooInt32 size, AooFormat *format, AooInt32 fmtsize){
-    if (size < 16){
+AooError deserialize(
+        const AooByte *buf, AooInt32 size, AooFormat *f, AooInt32 *fmtsize){
+    if (!f){
+        *fmtsize = sizeof(AooFormatOpus);
+        return kAooOk;
+    }
+    if (size < sizeof(AooInt32)){
         LOG_ERROR("Opus: couldn't read format - not enough data!");
-        return kAooErrorUnknown;
+        return kAooErrorBadArgument;
     }
-    if (fmtsize < sizeof(AooFormatOpus)){
+    if (*fmtsize < sizeof(AooFormatOpus)){
         LOG_ERROR("Opus: output format storage too small");
-        return kAooErrorUnknown;
+        return kAooErrorBadArgument;
     }
-    auto fmt = (AooFormatOpus *)format;
-    // header
-    fmt->header.codec = kAooCodecOpus; // static string!
-    fmt->header.size = sizeof(AooFormatOpus); // actual size!
-    fmt->header.blockSize = header->blockSize;
-    fmt->header.numChannels = header->numChannels;
-    fmt->header.sampleRate = header->sampleRate;
-    // options
-    fmt->applicationType = aoo::from_bytes<opus_int32>(buf);
-    fmt->bitrate = aoo::from_bytes<opus_int32>(buf + 4);
-    fmt->complexity = aoo::from_bytes<opus_int32>(buf + 8);
-    fmt->signalType = aoo::from_bytes<opus_int32>(buf + 12);
+    auto fmt = (AooFormatOpus *)f;
+    fmt->applicationType = aoo::from_bytes<AooInt32>(buf);
+    *fmtsize = sizeof(AooFormatOpus);
 
     return kAooOk;
 }
 
-AooCodecInterface interface = {
+AooCodecInterface g_interface = {
     // encoder
-    encoder_new,
-    encoder_free,
-    encoder_ctl,
-    encode,
+    Encoder_new,
+    Encoder_free,
+    Encoder_control,
+    Encoder_encode,
     // decoder
-    decoder_new,
-    decoder_free,
-    decoder_ctl,
-    decode,
+    Decoder_new,
+    Decoder_free,
+    Decoder_control,
+    Decoder_decode,
     // helper
     serialize,
     deserialize,
     nullptr
 };
 
+Encoder::Encoder(OpusMSEncoder *state, size_t size, const AooFormatOpus& f) {
+    interface = &g_interface;
+    state_ = state;
+    size_ = size;
+    numChannels_ = f.header.numChannels;
+}
+
+Decoder::Decoder(OpusMSDecoder *state, size_t size, const AooFormatOpus& f) {
+    interface = &g_interface;
+    state_ = state;
+    size_ = size;
+    numChannels_ = f.header.numChannels;
+}
+
 } // namespace
 
 void aoo_opusCodecSetup(AooCodecRegisterFunc fn,
                         AooLogFunc log, const AooAllocator *alloc){
-    if (alloc){
-        g_allocator = *alloc;
-    }
-    fn(kAooCodecOpus, &interface);
+    fn(kAooCodecOpus, &g_interface);
+    // the Opus codec is always statically linked, so we can simply use the
+    // internal log function and allocator
 }
 

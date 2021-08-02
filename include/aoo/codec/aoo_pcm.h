@@ -6,6 +6,8 @@
 
 #include "aoo/aoo_defines.h"
 
+#include <string.h>
+
 AOO_PACK_BEGIN
 
 //--------------------------------//
@@ -31,6 +33,20 @@ typedef AOO_STRUCT AooFormatPcm
     AooPcmBitDepth bitDepth;
 } AooFormatPcm;
 
-//--------------------------------//
+//-----------------------------------//
+
+static inline void AooFormatPcm_init(
+        AooFormatPcm *f, AooInt32 numChannels, AooInt32 sampleRate,
+        AooInt32 blockSize, AooPcmBitDepth bitDepth)
+{
+    strcpy(f->header.codec, kAooCodecPcm);
+    f->header.size = sizeof(AooFormatPcm);
+    f->header.numChannels = numChannels;
+    f->header.sampleRate = sampleRate;
+    f->header.blockSize = blockSize;
+    f->bitDepth = bitDepth;
+}
+
+//----------------------------------//
 
 AOO_PACK_END

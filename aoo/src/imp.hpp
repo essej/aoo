@@ -2,6 +2,8 @@
 
 #include "aoo/aoo.h"
 
+#include "aoo/aoo_codec.h"
+
 #include "common/net_utils.hpp"
 
 #include <stdint.h>
@@ -10,9 +12,11 @@
 #include <memory>
 #include <atomic>
 
-//--------------- helper functions ----------------//
-
 namespace aoo {
+
+const struct AooCodecInterface * find_codec(const char * name);
+
+//--------------- helper functions ----------------//
 
 uint32_t make_version();
 
@@ -84,8 +88,7 @@ void * allocate(size_t size);
 template<class T, class... U>
 T * construct(U&&... args){
     auto ptr = allocate(sizeof(T));
-    new (ptr) T(std::forward<U>(args)...);
-    return (T *)ptr;
+    return new (ptr) T(std::forward<U>(args)...);
 }
 
 void deallocate(void *ptr, size_t size);
@@ -212,6 +215,20 @@ struct format_deleter {
     void operator() (void *x) const {
         auto f = static_cast<AooFormat *>(x);
         aoo::deallocate(x, f->size);
+    }
+};
+
+struct encoder_deleter {
+    void operator() (void *x) const {
+        auto c = (AooCodec *)x;
+        c->interface->encoderFree(c);
+    }
+};
+
+struct decoder_deleter {
+    void operator() (void *x) const {
+        auto c = (AooCodec *)x;
+        c->interface->decoderFree(c);
     }
 };
 

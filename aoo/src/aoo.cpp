@@ -3,9 +3,9 @@
 # include "aoo/aoo_net.h"
 # include "common/net_utils.hpp"
 #endif
+#include "aoo/aoo_codec.h"
 
 #include "imp.hpp"
-#include "codec.hpp"
 
 #include "common/sync.hpp"
 #include "common/time.hpp"
@@ -373,15 +373,14 @@ void memory_list::deallocate(void* ptr) {
 
 /*//////////////////// codec //////////////////*/
 
-
 namespace aoo {
 
-static std::unordered_map<std::string, std::unique_ptr<aoo::codec>> g_codec_dict;
+static std::unordered_map<std::string, const AooCodecInterface *> g_codec_dict;
 
-const aoo::codec * find_codec(const char * name){
+const AooCodecInterface * find_codec(const char * name){
     auto it = g_codec_dict.find(name);
     if (it != g_codec_dict.end()){
-        return it->second.get();
+        return it->second;
     } else {
         return nullptr;
     }
@@ -394,7 +393,7 @@ AooError AOO_CALL aoo_registerCodec(const char *name, const AooCodecInterface *c
         LOG_WARNING("aoo: codec " << name << " already registered!");
         return kAooErrorUnknown;
     }
-    aoo::g_codec_dict[name] = std::make_unique<aoo::codec>(name, codec);
+    aoo::g_codec_dict[name] = codec;
     LOG_VERBOSE("aoo: registered codec '" << name << "'");
     return kAooOk;
 }

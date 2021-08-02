@@ -15,7 +15,6 @@
 #include "common/time.hpp"
 #include "common/utils.hpp"
 
-#include "codec.hpp"
 #include "buffer.hpp"
 #include "imp.hpp"
 #include "resampler.hpp"
@@ -153,7 +152,8 @@ class source_imp final : public AooSource {
     AooClient *client_ = nullptr;
 #endif
     // audio encoder
-    std::unique_ptr<encoder> encoder_;
+    std::unique_ptr<AooFormat, format_deleter> format_;
+    std::unique_ptr<AooCodec, encoder_deleter> encoder_;
     // state
     int32_t sequence_ = 0;
     std::atomic<float> xrun_{0};
@@ -219,6 +219,10 @@ class source_imp final : public AooSource {
     AooError remove_sink(const AooEndpoint& sink);
 
     AooError set_format(AooFormat& fmt);
+
+    AooError get_format(AooFormat& fmt);
+
+    AooError codec_control(AooCtl ctl, void *data, AooSize size);
 
     sink_desc * find_sink(const ip_address& addr, AooId id);
 

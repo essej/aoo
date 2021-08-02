@@ -6,15 +6,21 @@ AOO_PACK_BEGIN
 
 //--------------------------------//
 
-#define kAooCodecMaxSettingSize 256
+typedef struct AooCodec
+{
+    struct AooCodecInterface *interface;
+} AooCodec;
 
-typedef void* (AOO_CALL *AooCodecNewFunc)(AooError *);
+typedef AooCodec* (AOO_CALL *AooCodecNewFunc)(
+        AooFormat *,        // the desired format; validated and updated on success
+        AooError *          // error code on failure (result is NULL)
+);
 
-typedef void (AOO_CALL *AooCodecFreeFunc)(void *);
+typedef void (AOO_CALL *AooCodecFreeFunc)(AooCodec *);
 
 // encode samples to bytes
 typedef AooError (AOO_CALL *AooCodecEncodeFunc)(
-        void *,             // the encoder instance
+        AooCodec *,         // the encoder instance
         const AooSample *,  // input samples (interleaved)
         AooInt32,           // number of samples
         AooByte *,          // output buffer
@@ -23,7 +29,7 @@ typedef AooError (AOO_CALL *AooCodecEncodeFunc)(
 
 // decode bytes to samples
 typedef AooError (AOO_CALL *AooCodecDecodeFunc)(
-        void *,             // the decoder instance
+        AooCodec *,         // the decoder instance
         const AooByte *,    // input bytes
         AooInt32,           // input size
         AooSample *,        // output samples (interleaved)
@@ -31,73 +37,93 @@ typedef AooError (AOO_CALL *AooCodecDecodeFunc)(
 
 );
 
-// serialize format options (everything after the 'AooFormat' header)
-typedef AooError (AOO_CALL *AooCodecSerializeFunc)(
-        const AooFormat *,  // source format
-        AooByte *,          // option buffer
-        AooInt32 *          // buffer size (updated to actual size)
-);
-
-// deserialize format options (everything after the 'AooFormat' header).
-typedef AooError (AOO_CALL *AooCodecDeserializeFunc)(
-        const AooFormat *,  // format header
-        const AooByte *,    // option buffer
-        AooInt32,           // buffer size
-        AooFormat *,        // format buffer large enough to hold the codec format.
-        AooInt32            // size of the format buffer
-);
-
 typedef AooInt32 AooCodecCtl;
 
-// NOTE: codec specific controls are assumed to be positiv, e.g. OPUS_SET_BITRATE.
+// negative values are reserved for generic controls;
+// codec specific controls must be positiv
 enum AooCodecControls
 {
     // reset the codec state (NULL)
-    kAooCodecCtlReset = -1000,
-    // set the codec format (AooFormat)
-    // ---
-    // Set the format by passing the format header.
-    // The format struct is validated and updated on success!
-    kAooCodecCtlSetFormat,
-    // get the codec format (AooFormat)
-    // ---
-    // Get the format by passing an instance of 'AooFormatStorage'
-    // or a similar struct that is large enough to hold any format.
-    // On success, the actual format size will be contained in the
-    // 'size' member of the format header.
-    kAooCodecCtlGetFormat,
-    // check if the format is equal (AooFormat)
-    // ---
-    // returns kAooTrue or kAooFalse
-    kAooCodecCtlFormatEqual
+    kAooCodecCtlReset = -1000
 };
 
 // codec control
 typedef AooError (AOO_CALL *AooCodecControlFunc)
 (
-        void *,         // the encoder/decoder instance
+        AooCodec *,     // the encoder/decoder instance
         AooCodecCtl,    // the ctl number
         void *,         // pointer to value
         AooSize         // the value size
 );
 
+// serialize format extension (everything after the 'AooFormat' header).
+// on success writes the format extension to the given buffer
+typedef AooError (AOO_CALL *AooCodecSerializeFunc)(
+        const AooFormat *,  // source format
+        AooByte *,          // extension buffer; NULL: return the required buffer size.
+        AooInt32 *          // max. buffer size (updated to actual resp. required size)
+);
+
+// deserialize format extension (everything after the 'AooFormat' header).
+// on success writes the format extension to the given format structure
+typedef AooError (AOO_CALL *AooCodecDeserializeFunc)(
+        const AooByte *,    // extension buffer
+        AooInt32,           // buffer size
+        AooFormat *,        // destination format structure; NULL: return the required format size
+        AooInt32 *          // max. format size (updated to actual resp. required size)
+);
+// NOTE: this function does *not* automatically update the 'size' member of the format structure,
+// but you can simply point the last argument to it.
+
 typedef AOO_STRUCT AooCodecInterface
 {
-    // encoder
+    // encoder methods
     AooCodecNewFunc encoderNew;
     AooCodecFreeFunc encoderFree;
     AooCodecControlFunc encoderControl;
     AooCodecEncodeFunc encoderEncode;
-    // decoder
+    // decoder methods
     AooCodecNewFunc decoderNew;
     AooCodecFreeFunc decoderFree;
     AooCodecControlFunc decoderControl;
     AooCodecDecodeFunc decoderDecode;
-    // helpers
+    // free functions
     AooCodecSerializeFunc serialize;
     AooCodecDeserializeFunc deserialize;
     void *future;
 } AooCodecInterface;
+
+//---------------- helper functions ---------------------//
+
+static inline AooError AooEncoder_encode(AooCodec *enc,
+                           const AooSample *input, AooInt32 numSamples,
+                           AooByte *output, AooInt32 *numBytes) {
+    return enc->interface->encoderEncode(enc, input, numSamples, output, numBytes);
+}
+
+static inline AooError AooEncoder_control(AooCodec *enc, AooCodecCtl ctl, void *data, AooSize size) {
+    return enc->interface->encoderControl(enc, ctl, data, size);
+}
+
+static inline AooError AooEncoder_reset(AooCodec *enc) {
+    return enc->interface->encoderControl(enc, kAooCodecCtlReset, NULL, 0);
+}
+
+static inline AooError AooDecoder_decode(AooCodec *dec,
+                           const AooByte *input, AooInt32 numBytes,
+                           AooSample *output, AooInt32 *numSamples) {
+    return dec->interface->decoderDecode(dec, input, numBytes, output, numSamples);
+}
+
+static inline AooError AooDecoder_control(AooCodec *dec, AooCodecCtl ctl, void *data, AooSize size) {
+    return dec->interface->decoderControl(dec, ctl, data, size);
+}
+
+static inline AooError AooDecoder_reset(AooCodec *dec) {
+    return dec->interface->encoderControl(dec, kAooCodecCtlReset, NULL, 0);
+}
+
+//---------------- register codecs ----------------------//
 
 // register an external codec plugin
 AOO_API AooError AOO_CALL aoo_registerCodec(
@@ -105,8 +131,10 @@ AOO_API AooError AOO_CALL aoo_registerCodec(
 
 // The type of 'aoo_registerCodec', which gets passed to codec plugins
 // to register themselves.
-typedef AooError (AOO_CALL *AooCodecRegisterFunc)
-        (const AooChar *, const AooCodecInterface *);
+typedef AooError (AOO_CALL *AooCodecRegisterFunc)(
+        const AooChar *,            // codec name
+        const AooCodecInterface *   // codec interface
+);
 
 // NOTE: AOO doesn't support dynamic plugin loading out of the box,
 // but it is quite easy to implement on your own.

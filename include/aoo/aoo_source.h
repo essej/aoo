@@ -102,6 +102,11 @@ static inline AooError AooSource_getFormat(AooSource *source, AooFormatStorage *
     return AooSource_control(source, kAooCtlGetFormat, 0, AOO_ARG(*f));
 }
 
+static inline AooError AooSource_codecControl(
+        AooSource *source,  AooCtl ctl, void *data, AooSize size) {
+    return AooSource_control(source, kAooCtlCodecControl, ctl, data, size);
+}
+
 static inline AooError AooSource_setBufferSize(AooSource *source, AooSeconds s)
 {
     return AooSource_control(source, kAooCtlSetBufferSize, 0, AOO_ARG(s));

@@ -90,6 +90,10 @@ public:
         return control(kAooCtlGetFormat, 0, AOO_ARG(format));
     }
 
+    AooError codecControl(AooCtl ctl, void *data, AooSize size) {
+        return control(kAooCtlCodecControl, ctl, data, size);
+    }
+
     AooError setId(AooId id) {
         return control(kAooCtlSetId, 0, AOO_ARG(id));
     }

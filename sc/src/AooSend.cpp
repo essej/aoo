@@ -1,5 +1,9 @@
 #include "AooSend.hpp"
 
+#if USE_CODEC_OPUS
+# include "aoo/codec/aoo_opus.h"
+#endif
+
 static InterfaceTable *ft;
 
 /*////////////////// AooSend ////////////////*/
@@ -341,12 +345,220 @@ void aoo_send_format(AooSendUnit *unit, sc_msg_iter* args){
                               << ") out of range");
                     f.header.numChannels = nchannels;
                 }
-                if (owner.source()->setFormat(f.header) == kAooOk){
+                auto err = owner.source()->setFormat(f.header);
+                if (err == kAooOk){
                     // only send format on success
                     serializeFormat(msg, f.header);
+                } else {
+                    LOG_ERROR("AooSend: couldn't set format: " << aoo_strerror(err));
                 }
             }
 
+            owner.sendMsgNRT(msg);
+
+            return false; // done
+        });
+}
+
+#if USE_CODEC_OPUS
+
+bool get_opus_bitrate(AooSource *src, osc::OutboundPacketStream& msg) {
+    // NOTE: because of a bug in opus_multistream_encoder (as of opus v1.3.2)
+    // OPUS_GET_BITRATE always returns OPUS_AUTO
+    opus_int32 value;
+    auto err = AooSource_getOpusBitrate(src, &value);
+    if (err != kAooOk){
+        LOG_ERROR("could not get bitrate: " << aoo_strerror(err));
+        return false;
+    }
+    switch (value){
+    case OPUS_AUTO:
+        msg << "auto";
+        break;
+    case OPUS_BITRATE_MAX:
+        msg << "max";
+        break;
+    default:
+        msg << (float)(value * 0.001); // bit -> kBit
+        break;
+    }
+    return true;
+}
+
+void set_opus_bitrate(AooSource *src, sc_msg_iter &args) {
+    // "auto", "max" or number
+    opus_int32 value;
+    if (args.nextTag() == 's'){
+        const char *s = args.gets();
+        if (!strcmp(s, "auto")){
+            value = OPUS_AUTO;
+        } else if (!strcmp(s, "max")){
+            value = OPUS_BITRATE_MAX;
+        } else {
+            LOG_ERROR("bad bitrate argument '" << s << "'");
+            return;
+        }
+    } else {
+        opus_int32 bitrate = args.getf() * 1000.0; // kBit -> bit
+        if (bitrate > 0){
+            value = bitrate;
+        } else {
+            LOG_ERROR("bitrate argument " << bitrate << " out of range");
+            return;
+        }
+    }
+    auto err = AooSource_setOpusBitrate(src, value);
+    if (err != kAooOk){
+        LOG_ERROR("could not set bitrate: " << aoo_strerror(err));
+    }
+}
+
+bool get_opus_complexity(AooSource *src, osc::OutboundPacketStream& msg){
+    opus_int32 value;
+    auto err = AooSource_getOpusComplexity(src, &value);
+    if (err != kAooOk){
+        LOG_ERROR("could not get complexity: " << aoo_strerror(err));
+        return false;
+    }
+    msg << value;
+    return true;
+}
+
+void set_opus_complexity(AooSource *src, sc_msg_iter &args){
+    // 0-10
+    opus_int32 value = args.geti();
+    if (value < 0 || value > 10){
+        LOG_ERROR("complexity value " << value << " out of range");
+        return;
+    }
+    auto err = AooSource_setOpusComplexity(src, value);
+    if (err != kAooOk){
+        LOG_ERROR("could not set complexity: " << aoo_strerror(err));
+    }
+}
+
+bool get_opus_signal(AooSource *src, osc::OutboundPacketStream& msg){
+    opus_int32 value;
+    auto err = AooSource_getOpusSignalType(src, &value);
+    if (err != kAooOk){
+        LOG_ERROR("could not get signal type: " << aoo_strerror(err));
+        return false;
+    }
+    switch (value){
+    case OPUS_SIGNAL_MUSIC:
+        msg << "music";
+        break;
+    case OPUS_SIGNAL_VOICE:
+        msg << "voice";
+        break;
+    default:
+        msg << "auto";
+        break;
+    }
+    return true;
+}
+
+void set_opus_signal(AooSource *src, sc_msg_iter &args){
+    // "auto", "music", "voice"
+    opus_int32 value;
+    const char *s = args.gets();
+    if (!strcmp(s, "auto")){
+        value = OPUS_AUTO;
+    } else if (!strcmp(s, "music")){
+        value = OPUS_SIGNAL_MUSIC;
+    } else if (!strcmp(s, "voice")){
+        value = OPUS_SIGNAL_VOICE;
+    } else {
+        LOG_ERROR("unsupported signal type '" << s << "'");
+        return;
+    }
+    auto err = AooSource_setOpusSignalType(src, value);
+    if (err != kAooOk){
+        LOG_ERROR("could not set signal type: " << aoo_strerror(err));
+    }
+}
+
+#endif
+
+void aoo_send_codec_set(AooSendUnit *unit, sc_msg_iter* args){
+    auto cmd = UnitCmd::create(unit->mWorld, args);
+    unit->delegate().doCmd(cmd,
+        [](World *world, void *cmdData){
+            auto data = (UnitCmd *)cmdData;
+            auto& owner = static_cast<AooSend&>(*data->owner);
+
+            sc_msg_iter args(data->size, data->data);
+            skipUnitCmd(&args);
+
+            auto codec = args.gets();
+            auto param = args.gets();
+
+        #if USE_CODEC_OPUS
+            if (!strcmp(codec, "opus")){
+                opus_int32 value;
+                if (!strcmp(param ,"bitrate")){
+                    set_opus_bitrate(owner.source(), args);
+                    return false; // done
+                } else if (!strcmp(param, "complexity")){
+                    set_opus_complexity(owner.source(), args);
+                    return false; // done
+                } else if (!strcmp(param, "signal")){
+                    set_opus_signal(owner.source(), args);
+                    return false; // done
+                }
+            }
+        #endif
+
+            LOG_ERROR("unknown parameter '" << param
+                      << "' for codec '" << codec << "'");
+
+            return false; // done
+        });
+}
+
+void aoo_send_codec_get(AooSendUnit *unit, sc_msg_iter* args){
+    auto cmd = UnitCmd::create(unit->mWorld, args);
+    unit->delegate().doCmd(cmd,
+        [](World *world, void *cmdData){
+            auto data = (UnitCmd *)cmdData;
+            auto& owner = static_cast<AooSend&>(*data->owner);
+
+            sc_msg_iter args(data->size, data->data);
+            skipUnitCmd(&args);
+
+            auto replyID = args.geti();
+            auto codec = args.gets();
+            auto param = args.gets();
+
+            char buf[256];
+            osc::OutboundPacketStream msg(buf, sizeof(buf));
+            owner.beginReply(msg, "/aoo/codec/get", replyID);
+            msg << codec << param;
+
+        #if USE_CODEC_OPUS
+            if (!strcmp(codec, "opus")){
+                if (!strcmp(param, "bitrate")){
+                    if (get_opus_bitrate(owner.source(), msg)){
+                        goto codec_sendit;
+                    } else {
+                        return false;
+                    }
+                } else if (!strcmp(param, "complexity")){
+                    if (get_opus_complexity(owner.source(), msg)){
+                        goto codec_sendit;
+                    } else {
+                        return false;
+                    }
+                } else if (!strcmp(param, "signal")){
+                    if (get_opus_signal(owner.source(), msg)){
+                        goto codec_sendit;
+                    } else {
+                        return false;
+                    }
+                }
+            }
+        #endif
+codec_sendit:
             owner.sendMsgNRT(msg);
 
             return false; // done
@@ -433,6 +645,8 @@ void AooSendLoad(InterfaceTable *inTable){
     AooUnitCmd(remove);
     AooUnitCmd(accept);
     AooUnitCmd(format);
+    AooUnitCmd(codec_set);
+    AooUnitCmd(codec_get);
     AooUnitCmd(channel);
     AooUnitCmd(packetsize);
     AooUnitCmd(ping);

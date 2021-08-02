@@ -84,6 +84,18 @@ static inline AooError AooSink_reset(AooSink *sink)
     return AooSink_control(sink, kAooCtlReset, 0, 0, 0);
 }
 
+typedef struct AooSinkCodecCtl {
+    AooCtl ctl;
+    void *data;
+    AooSize size;
+} AooSinkCodecCtl;
+
+static inline AooError AooSink_codecControl(
+        AooSink *sink,  AooCtl ctl, void *data, AooSize size) {
+    AooSinkCodecCtl cc { ctl, data, size };
+    return AooSink_control(sink, kAooCtlCodecControl, ctl, &cc, sizeof(cc));
+}
+
 static inline AooError AooSink_setBufferSize(AooSink *sink, AooSeconds s)
 {
     return AooSink_control(sink, kAooCtlSetBufferSize, 0, AOO_ARG(s));

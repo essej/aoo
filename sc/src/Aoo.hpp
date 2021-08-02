@@ -235,7 +235,7 @@ uint64_t getOSCTime(World *world);
 void makeDefaultFormat(AooFormatStorage& f, int sampleRate,
                        int blockSize, int numChannels);
 
-void serializeFormat(osc::OutboundPacketStream& msg, const AooFormat& f);
+bool serializeFormat(osc::OutboundPacketStream& msg, const AooFormat& f);
 
 bool parseFormat(const AooUnit& unit, int defNumChannels, sc_msg_iter *args,
                  AooFormatStorage &f);

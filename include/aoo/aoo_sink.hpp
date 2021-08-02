@@ -82,6 +82,10 @@ public:
         return control(kAooCtlReset, 0, nullptr, 0);
     }
 
+    AooError codecControl(AooCtl ctl, void *data, AooSize size) {
+        return control(kAooCtlCodecControl, ctl, data, size);
+    }
+
     AooError setBufferSize(AooSeconds s) {
         return control(kAooCtlSetBufferSize, 0, AOO_ARG(s));
     }

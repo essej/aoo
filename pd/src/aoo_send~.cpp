@@ -6,6 +6,10 @@
 
 #include "aoo/aoo_source.hpp"
 
+#if USE_CODEC_OPUS
+# include "aoo/codec/aoo_opus.h"
+#endif
+
 #include <vector>
 #include <string.h>
 #include <assert.h>
@@ -44,6 +48,7 @@ struct t_aoo_send
 
     t_float x_f = 0;
     AooSource::Ptr x_source;
+    t_symbol *x_codec = nullptr;
     int32_t x_samplerate = 0;
     int32_t x_blocksize = 0;
     int32_t x_nchannels = 0;
@@ -140,6 +145,190 @@ static t_sink *aoo_send_findsink(t_aoo_send *x, const aoo::ip_address& addr, Aoo
     return nullptr;
 }
 
+#if USE_CODEC_OPUS
+
+bool get_opus_bitrate(t_aoo_send *x, t_atom *a) {
+    opus_int32 value;
+    auto err = AooSource_getOpusBitrate(x->x_source.get(), &value);
+    if (err != kAooOk){
+        pd_error(x, "%s: could not get bitrate: %s", classname(x), aoo_strerror(err));
+        return false;
+    }
+    // NOTE: because of a bug in opus_multistream_encoder (as of opus v1.3.2)
+    // OPUS_GET_BITRATE always returns OPUS_AUTO
+    switch (value){
+    case OPUS_AUTO:
+        SETSYMBOL(a, gensym("auto"));
+        break;
+    case OPUS_BITRATE_MAX:
+        SETSYMBOL(a, gensym("max"));
+        break;
+    default:
+        SETFLOAT(a, value * 0.001); // bit -> kBit
+        break;
+    }
+    return true;
+}
+
+void set_opus_bitrate(t_aoo_send *x, const t_atom *a) {
+    // "auto", "max" or number
+    opus_int32 value;
+    if (a->a_type == A_SYMBOL){
+        t_symbol *sym = a->a_w.w_symbol;
+        if (sym == gensym("auto")){
+            value = OPUS_AUTO;
+        } else if (sym == gensym("max")){
+            value = OPUS_BITRATE_MAX;
+        } else {
+            pd_error(x, "%s: bad bitrate argument '%s'", classname(x), sym->s_name);
+            return;
+        }
+    } else {
+        opus_int32 bitrate = atom_getfloat(a) * 1000.0; // kBit -> bit
+        if (bitrate > 0){
+            value = bitrate;
+        } else {
+            pd_error(x, "%s: bitrate argument %d out of range", classname(x), bitrate);
+            return;
+        }
+    }
+    auto err = AooSource_setOpusBitrate(x->x_source.get(), value);
+    if (err != kAooOk){
+        pd_error(x, "%s: could not set bitrate: %s", classname(x), aoo_strerror(err));
+    }
+}
+
+bool get_opus_complexity(t_aoo_send *x, t_atom *a){
+    opus_int32 value;
+    auto err = AooSource_getOpusComplexity(x->x_source.get(), &value);
+    if (err != kAooOk){
+        pd_error(x, "%s: could not get complexity: %s", classname(x), aoo_strerror(err));
+        return false;
+    }
+    SETFLOAT(a, value);
+    return true;
+}
+
+void set_opus_complexity(t_aoo_send *x, const t_atom *a){
+    // 0-10
+    opus_int32 value = atom_getfloat(a);
+    if (value < 0 || value > 10){
+        pd_error(x, "%s: complexity value %d out of range", classname(x), value);
+        return;
+    }
+    auto err = AooSource_setOpusComplexity(x->x_source.get(), value);
+    if (err != kAooOk){
+        pd_error(x, "%s: could not set complexity: %s", classname(x), aoo_strerror(err));
+    }
+}
+
+bool get_opus_signal(t_aoo_send *x, t_atom *a){
+    opus_int32 value;
+    auto err = AooSource_getOpusSignalType(x->x_source.get(), &value);
+    if (err != kAooOk){
+        pd_error(x, "%s: could not get signal type: %s", classname(x), aoo_strerror(err));
+        return false;
+    }
+    t_symbol *type;
+    switch (value){
+    case OPUS_SIGNAL_MUSIC:
+        type = gensym("music");
+        break;
+    case OPUS_SIGNAL_VOICE:
+        type = gensym("voice");
+        break;
+    default:
+        type = gensym("auto");
+        break;
+    }
+    SETSYMBOL(a, type);
+    return true;
+}
+
+void set_opus_signal(t_aoo_send *x, const t_atom *a){
+    // "auto", "music", "voice"
+    opus_int32 value;
+    t_symbol *type = atom_getsymbol(a);
+    if (type == gensym("auto")){
+        value = OPUS_AUTO;
+    } else if (type == gensym("music")){
+        value = OPUS_SIGNAL_MUSIC;
+    } else if (type == gensym("voice")){
+        value = OPUS_SIGNAL_VOICE;
+    } else {
+        pd_error(x,"%s: unsupported signal type '%s'",
+                 classname(x), type->s_name);
+        return;
+    }
+    auto err = AooSource_setOpusSignalType(x->x_source.get(), value);
+    if (err != kAooOk){
+        pd_error(x, "%s: could not set signal type: %s", classname(x), aoo_strerror(err));
+    }
+}
+
+#endif
+
+static void aoo_send_codec_set(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv){
+    if (argc < 2){
+        pd_error(x,"%s: 'codec_set' expects 2 arguments (name + value)", classname(x));
+        return;
+    }
+    auto name = atom_getsymbol(argv);
+#if USE_CODEC_OPUS
+    if (x->x_codec == gensym("opus")){
+        opus_int32 value;
+        if (name == gensym("bitrate")){
+            set_opus_bitrate(x, argv + 1);
+            return;
+        } else if (name == gensym("complexity")){
+            set_opus_complexity(x, argv + 1);
+            return;
+        } else if (name == gensym("signal")){
+            set_opus_signal(x, argv + 1);
+            return;
+        }
+    }
+#endif
+    pd_error(x,"%s: unknown parameter '%s' for codec '%s'",
+             classname(x), name->s_name, x->x_codec->s_name);
+}
+
+static void aoo_send_codec_get(t_aoo_send *x, t_symbol *s){
+    t_atom msg[2];
+    SETSYMBOL(msg, s);
+
+#if USE_CODEC_OPUS
+    if (x->x_codec == gensym("opus")){
+        if (s == gensym("bitrate")){
+            if (get_opus_bitrate(x, msg + 1)){
+                goto codec_sendit;
+            } else {
+                return;
+            }
+        } else if (s == gensym("complexity")){
+            if (get_opus_complexity(x, msg + 1)){
+                goto codec_sendit;
+            } else {
+                return;
+            }
+        } else if (s == gensym("signal")){
+            if (get_opus_signal(x, msg + 1)){
+                goto codec_sendit;
+            } else {
+                return;
+            }
+        }
+    }
+#endif
+    pd_error(x,"%s: unknown parameter '%s' for codec '%s'",
+             classname(x), s->s_name, x->x_codec->s_name);
+    return;
+
+codec_sendit:
+    // send message
+    outlet_anything(x->x_msgout, gensym("codec_get"), 2, msg);
+}
+
 static void aoo_send_setformat(t_aoo_send *x, AooFormat& f)
 {
     // Prevent user from accidentally creating huge number of channels.
@@ -152,12 +341,18 @@ static void aoo_send_setformat(t_aoo_send *x, AooFormat& f)
         f.numChannels = x->x_nchannels;
     }
 
-    x->x_source->setFormat(f);
-    // output actual format
-    t_atom msg[16];
-    int n = format_to_atoms(f, 16, msg);
-    if (n > 0){
-        outlet_anything(x->x_msgout, gensym("format"), n, msg);
+    auto err = x->x_source->setFormat(f);
+    if (err == kAooOk) {
+        x->x_codec = gensym(f.codec);
+        // output actual format
+        t_atom msg[16];
+        int n = format_to_atoms(f, 16, msg);
+        if (n > 0){
+            outlet_anything(x->x_msgout, gensym("format"), n, msg);
+        }
+    } else {
+        pd_error(x, "%s: could not set format: %s",
+                 classname(x), aoo_strerror(err));
     }
 }
 
@@ -490,8 +685,7 @@ static t_int * aoo_send_perform(t_int *w)
 
     if (x->x_node){
         auto err = x->x_source->process(
-                    (const AooSample **)x->x_vec.get(), n,
-                    get_osctime());
+                    (const AooSample **)x->x_vec.get(), n, get_osctime());
 
         if (err != kAooErrorIdle){
             x->x_node->notify();
@@ -634,6 +828,7 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
     AooFormatStorage fmt;
     format_makedefault(fmt, nchannels);
     x_source->setFormat(fmt.header);
+    x_codec = gensym(fmt.header.codec);
 
     x_source->setBufferSize(DEFBUFSIZE * 0.001);
 
@@ -681,6 +876,10 @@ void aoo_send_tilde_setup(void)
                     gensym("accept"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_format,
                     gensym("format"), A_GIMME, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_codec_set,
+                    gensym("codec_set"), A_GIMME, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_codec_get,
+                    gensym("codec_get"), A_SYMBOL, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_channel,
                     gensym("channel"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_packetsize,
