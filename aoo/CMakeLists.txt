@@ -1,8 +1,5 @@
 cmake_minimum_required (VERSION 2.8)
 
-# networking support
-option(USE_AOO_NET "build with networking support" ON)
-
 # compile time options
 option(CUSTOM_ALLOCATOR "build with custom allocator support" OFF)
 
@@ -65,7 +62,7 @@ if (CODEC_OPUS)
     list(APPEND AOO_SRC "src/codec/opus.cpp")
 endif()
 
-if (USE_AOO_NET)
+if (AOO_NET)
     list(APPEND AOO_HEADERS "src/net/server.hpp" "src/net/client.hpp"
         "src/net/SLIP.hpp")
     list(APPEND AOO_SRC "src/net/client.cpp" "src/net/server.cpp")
@@ -88,7 +85,7 @@ if (BUILD_AOO_SHARED)
         target_compile_definitions(${AOO_SHARED} PUBLIC "-DDLL_EXPORT")
         target_link_libraries(${AOO_SHARED} "ws2_32")
     endif()
-    if (USE_AOO_NET)
+    if (AOO_NET)
         target_link_libraries(${AOO_SHARED} ${MD5_LIB})
     endif()
     target_link_libraries(${AOO_SHARED} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS})   

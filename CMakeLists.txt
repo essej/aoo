@@ -105,6 +105,10 @@ if (LINUX)
     add_definitions("-fPIC")
 endif()
 
+# networking support
+option(AOO_NET "build with networking support" ON)
+add_definitions("-DUSE_AOO_NET=$<BOOL:${AOO_NET}>")
+
 # dependencies
 include_directories(deps)
 
@@ -178,11 +182,17 @@ add_subdirectory(aoo)
 # Pd external
 option(BUILD_PD_EXTERNAL "build Pd external" ON)
 if (BUILD_PD_EXTERNAL)
+    if (NOT AOO_NET)
+        message(FATAL_ERROR "Pd external requires AOO_NET")
+    endif()
     add_subdirectory(pd)
 endif()
 
 # SC extension
 option(BUILD_SC_EXTENSION "build SC extension" ON)
 if (BUILD_SC_EXTENSION)
+    if (NOT AOO_NET)
+        message(FATAL_ERROR "SC extension requires AOO_NET")
+    endif()
     add_subdirectory(sc)
 endif()
