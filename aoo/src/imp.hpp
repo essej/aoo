@@ -234,13 +234,21 @@ struct decoder_deleter {
     }
 };
 
+inline AooSize flat_metadata_maxsize(int32_t size) {
+    return sizeof(AooCustomData) + size + kAooTypeNameMaxLen + 1;
+}
+
 inline AooSize flat_metadata_size(const AooCustomData& data){
     return sizeof(data) + data.size + strlen(data.type) + 1;
 }
 
-inline AooSize flat_metadata_maxsize(int32_t size) {
-    return sizeof(AooCustomData) + size + kAooTypeNameMaxLen + 1;
-}
+struct flat_metadata_deleter {
+    void operator() (void *x) const {
+        auto md = static_cast<AooCustomData *>(x);
+        auto mdsize = flat_metadata_size(*md);
+        aoo::deallocate(x, mdsize);
+    }
+};
 
 inline void flat_metadata_copy(const AooCustomData& src, AooCustomData& dst) {
     auto data = (AooByte *)(&dst) + sizeof(AooCustomData);

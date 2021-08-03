@@ -48,11 +48,10 @@ AOO_API void AOO_CALL AooSource_free(AooSource *src){
 aoo::source_imp::~source_imp() {
     // flush event queue
     event e;
-    while (eventqueue_.try_pop(e)){
-        if (e.type_ == kAooEventFormatRequest){
-            memory_.deallocate((void *)e.format.format);
-        }
+    while (eventqueue_.try_pop(e)) {
+        free_event(e);
     }
+    // free metadata
     if (metadata_){
         auto size = flat_metadata_maxsize(metadata_size_.load());
         aoo::deallocate(metadata_, size);
@@ -678,10 +677,7 @@ AooError AOO_CALL aoo::source_imp::pollEvents(){
     event e;
     while (eventqueue_.try_pop(e)) {
         eventhandler_(eventcontext_, &e.event_, kAooThreadLevelUnknown);
-        // some memory use extra memory
-        if (e.type_ == kAooEventFormatRequest){
-            memory_.deallocate((void *)e.format.format);
-        }
+        free_event(e);
     }
     return kAooOk;
 }
@@ -896,6 +892,15 @@ void source_imp::send_event(const event& e, AooThreadLevel level){
         break;
     default:
         break;
+    }
+}
+
+void source_imp::free_event(const event &e){
+    if (e.type_ == kAooEventInvite){
+        // free metadata
+        if (e.invite.metadata){
+            memory_.deallocate((void *)e.invite.metadata);
+        }
     }
 }
 
@@ -1674,85 +1679,6 @@ void source_imp::handle_start_request(const osc::ReceivedMessage& msg,
     }
 }
 
-// /format <id> <version> <stream> <nchannels> <samplerate> <blocksize> <codec> <options>
-void source_imp::handle_format_request(const osc::ReceivedMessage& msg,
-                                       const ip_address& addr)
-{
-    LOG_DEBUG("handle format request");
-
-    auto it = msg.ArgumentsBegin();
-
-    auto id = (it++)->AsInt32();
-    auto version = (it++)->AsInt32();
-
-    // LATER handle this in the sink_desc (e.g. not sending data)
-    if (!check_version(version)){
-        LOG_ERROR("aoo_source: sink version not supported");
-        return;
-    }
-
-    // check if sink exists (not strictly necessary, but might help catch errors)
-    sink_lock lock(sinks_);
-    auto sink = find_sink(addr, id);
-
-    if (sink){
-        // requested another format
-        int32_t stream = (it++)->AsInt32();
-        // ignore outdated requests
-        // this can happen because format requests are sent repeatedly
-        // by the sink until a) the source replies or b) the timeout is reached.
-        // if the network latency is high, the sink might sent a format request
-        // right before receiving a /format message (as a result of the previous request).
-        // until the source re
-        shared_lock lock(update_mutex_);
-        if (stream != stream_id_){
-            LOG_DEBUG("ignoring outdated format request");
-            return;
-        }
-        lock.unlock();
-
-        // get stream format
-        AooFormat f;
-        f.numChannels = (it++)->AsInt32();
-        f.sampleRate = (it++)->AsInt32();
-        f.blockSize = (it++)->AsInt32();
-        snprintf(f.codec, sizeof(f.codec), "%s", (it++)->AsString());
-        f.size = sizeof(AooFormat);
-
-        const void *extension;
-        osc::osc_bundle_element_size_t size;
-        (it++)->AsBlob(extension, size);
-
-        auto c = aoo::find_codec(f.codec);
-        if (c){
-            AooFormatStorage fmt;
-            memcpy(&fmt, &f, f.size);
-            fmt.header.size = sizeof(AooFormatStorage);
-            if (c->deserialize((const AooByte *)extension, size,
-                               &fmt.header, &fmt.header.size) == kAooOk){
-                // send format event
-                event e(kAooEventFormatRequest, addr, id);
-
-                if (eventmode_ == kAooEventModeCallback){
-                    // synchronous: use stack
-                    e.format.format = &fmt.header;
-                } if (eventmode_ == kAooEventModePoll){
-                    // asynchronous: use heap
-                    auto fp = (AooFormat *)memory_.allocate(fmt.header.size);
-                    memcpy(fp, &fmt, fmt.header.size);
-                    e.format.format = fp;
-                }
-                send_event(e, kAooThreadLevelAudio);
-            }
-        } else {
-            LOG_WARNING("handle_format_request: codec '"
-                        << f.codec << "' not supported");
-        }
-    } else {
-        LOG_VERBOSE("ignoring '" << kAooMsgFormat << "' message: sink not found");
-    }
-}
-
 // /aoo/src/<id>/data <id> <stream_id> <seq1> <frame1> <seq2> <frame2> etc.
 
 void source_imp::handle_data_request(const osc::ReceivedMessage& msg,
@@ -1820,16 +1746,50 @@ void source_imp::handle_data_request(const AooByte *msg, int32_t n,
 void source_imp::handle_invite(const osc::ReceivedMessage& msg,
                                const ip_address& addr)
 {
-    auto id = msg.ArgumentsBegin()->AsInt32();
+    auto it = msg.ArgumentsBegin();
+
+    auto id = (it++)->AsInt32();
+
+    const char *type = nullptr;
+    const void *ptr = nullptr;
+    osc::osc_bundle_element_size_t size = 0;
+
+    if (msg.ArgumentCount() > 1){
+        type = (it++)->AsString();
+        (it++)->AsBlob(ptr, size);
+    }
 
     LOG_DEBUG("handle invitation by " << addr << "|" << id);
 
-    // check if sink exists (not strictly necessary, but might help catch errors)
+    // check if sink exists to catch redundant invite messages
     sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
     if (!sink){
         // push "invite" event
         event e(kAooEventInvite, addr, id);
+
+        if (type){
+            // with metadata
+            AooCustomData src;
+            src.type = type;
+            src.data = (AooByte *)ptr;
+            src.size = size;
+
+            if (eventmode_ == kAooEventModePoll){
+                // make copy on heap
+                auto mdsize = flat_metadata_size(src);
+                auto md = (AooCustomData *)memory_.allocate(mdsize);
+                flat_metadata_copy(src, *md);
+                e.invite.metadata = md;
+            } else {
+                // use stack
+                e.invite.metadata = &src;
+            }
+        } else {
+            // without metadata
+            e.invite.metadata = nullptr;
+        }
+
         send_event(e, kAooThreadLevelNetwork);
     } else {
         LOG_VERBOSE("ignoring '" << kAooMsgInvite << "' message: sink already added");

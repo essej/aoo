@@ -133,16 +133,6 @@ void AooReceive::handleEvent(const AooEvent *event){
         sendMsgRT(msg);
         break;
     }
-    case kAooEventFormatTimeout:
-    {
-        auto e = (const AooEventFormatTimeout *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        beginEvent(msg, "/format/timeout", addr, e->endpoint.id);
-        sendMsgRT(msg);
-        break;
-    }
     case kAooEventStreamStart:
     {
         auto e = (const AooEventStreamStart *)event;

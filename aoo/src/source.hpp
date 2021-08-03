@@ -268,9 +268,6 @@ class source_imp final : public AooSource {
     void handle_start_request(const osc::ReceivedMessage& msg,
                               const ip_address& addr);
 
-    void handle_format_request(const osc::ReceivedMessage& msg,
-                               const ip_address& addr);
-
     void handle_data_request(const osc::ReceivedMessage& msg,
                              const ip_address& addr);
 

@@ -27,7 +27,20 @@ AOO_API void AOO_CALL AooSink_free(AooSink *sink) {
     aoo::destroy(static_cast<aoo::sink_imp *>(sink));
 }
 
-aoo::sink_imp::~sink_imp(){}
+aoo::sink_imp::~sink_imp(){
+    // free remaining source requests
+    source_request r;
+    while (requestqueue_.try_pop(r)) {
+        if (r.type == request_type::invite){
+            // free metadata
+            if (r.extra != nullptr){
+                auto md = (AooCustomData *)r.extra;
+                auto mdsize = flat_metadata_size(*md);
+                aoo::deallocate(md, mdsize);
+            }
+        }
+    }
+}
 
 AOO_API AooError AOO_CALL AooSink_setup(
         AooSink *sink, AooSampleRate samplerate,
@@ -95,9 +108,18 @@ AooError AOO_CALL aoo::sink_imp::control(
         if (!ep){
             return kAooErrorUnknown;
         }
+        AooCustomData *metadata = nullptr;
+        if (ptr) {
+            assert(size >= sizeof(AooCustomData));
+            auto md = (const AooCustomData *)ptr;
+            auto mdsize = flat_metadata_size(*md);
+            metadata = (AooCustomData *)aoo::allocate(mdsize);
+            flat_metadata_copy(*md, *metadata);
+        }
         ip_address addr((const sockaddr *)ep->address, ep->addrlen);
 
-        push_request(source_request { request_type::invite, addr, ep->id });
+        push_request(source_request { request_type::invite,
+                                      addr, ep->id, metadata });
 
         break;
     }
@@ -143,13 +165,6 @@ AooError AOO_CALL aoo::sink_imp::control(
             timer_.reset();
         }
         break;
-    }
-    // request format
-    case kAooCtlRequestFormat:
-    {
-        CHECKARG(AooFormat);
-        GETSOURCEARG
-        return src->request_format(*this, as<AooFormat>(ptr));
     }
     // get format
     case kAooCtlGetFormat:
@@ -378,53 +393,9 @@ AOO_API AooError AOO_CALL AooSink_send(
 }
 
 AooError AOO_CALL aoo::sink_imp::send(AooSendFunc fn, void *user){
-    sendfn reply(fn, user);
+    dispatch_requests();
 
-    // handle requests
-    source_request r;
-    while (requestqueue_.try_pop(r)){
-        switch (r.type) {
-        case request_type::invite:
-        {
-            // try to find existing source
-            // we might want to invite an existing source,
-            // e.g. when it is currently uninviting
-            // NOTE that sources can also be added in the network
-            // receive thread (see handle_data() or handle_format()),
-            // so we have to lock a mutex to avoid the ABA problem.
-            sync::scoped_lock<sync::mutex> lock(source_mutex_);
-            source_lock srclock(sources_);
-            auto src = find_source(r.address, r.id);
-            if (!src){
-                src = add_source(r.address, r.id);
-            }
-            src->invite(*this);
-            break;
-        }
-        case request_type::uninvite:
-        {
-            // try to find existing source
-            source_lock lock(sources_);
-            auto src = find_source(r.address, r.id);
-            if (src){
-                src->uninvite(*this);
-            } else {
-                LOG_WARNING("aoo: can't uninvite - source not found");
-            }
-            break;
-        }
-        case request_type::uninvite_all:
-        {
-            source_lock lock(sources_);
-            for (auto& src : sources_){
-                src.uninvite(*this);
-            }
-            break;
-        }
-        default:
-            break;
-        }
-    }
+    sendfn reply(fn, user);
 
     source_lock lock(sources_);
     for (auto& s : sources_){
@@ -631,6 +602,53 @@ void sink_imp::send_event(const sink_event &e, AooThreadLevel level) {
 // only called if mode is kAooEventModeCallback
 void sink_imp::call_event(const event &e, AooThreadLevel level) const {
     eventhandler_(eventcontext_, &e.event_, level);
+}
+
+void sink_imp::dispatch_requests(){
+    source_request r;
+    while (requestqueue_.try_pop(r)){
+        switch (r.type) {
+        case request_type::invite:
+        {
+            // try to find existing source
+            // we might want to invite an existing source,
+            // e.g. when it is currently uninviting
+            // NOTE that sources can also be added in the network
+            // receive thread (see handle_data() or handle_format()),
+            // so we have to lock a mutex to avoid the ABA problem.
+            sync::scoped_lock<sync::mutex> lock(source_mutex_);
+            source_lock srclock(sources_);
+            auto src = find_source(r.address, r.id);
+            if (!src){
+                src = add_source(r.address, r.id);
+            }
+            src->invite(*this, (AooCustomData *)r.extra);
+            break;
+        }
+        case request_type::uninvite:
+        {
+            // try to find existing source
+            source_lock lock(sources_);
+            auto src = find_source(r.address, r.id);
+            if (src){
+                src->uninvite(*this);
+            } else {
+                LOG_WARNING("aoo: can't uninvite - source not found");
+            }
+            break;
+        }
+        case request_type::uninvite_all:
+        {
+            source_lock lock(sources_);
+            for (auto& src : sources_){
+                src.uninvite(*this);
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
 }
 
 aoo::source_desc * sink_imp::find_source(const ip_address& addr, AooId id){
@@ -929,7 +947,7 @@ source_desc::~source_desc(){
     // flush event queue
     event e;
     while (eventqueue_.try_pop(e)){
-        free_event_data(e);
+        free_event(e);
     }
     // flush packet queue
     net_packet d;
@@ -1056,7 +1074,7 @@ void source_desc::update(const sink_imp& s){
     }
 }
 
-void source_desc::invite(const sink_imp& s){
+void source_desc::invite(const sink_imp& s, AooCustomData *metadata){
     // don't invite if already running!
     // state can change in different threads, so we need a CAS loop
     auto state = state_.load(std::memory_order_relaxed);
@@ -1065,6 +1083,7 @@ void source_desc::invite(const sink_imp& s){
         if (state == source_state::uninvite){
             // update last packet time to reset timeout!
             last_packet_time_.store(s.elapsed_time());
+        #if 1
             // force new stream, otherwise handle_start() would ignore
             // the /start messages and we would spam the source with
             // redundant invitation messages until we time out.
@@ -1072,6 +1091,19 @@ void source_desc::invite(const sink_imp& s){
             // a redundant "add" event, see handle_start().
             scoped_lock lock(mutex_);
             stream_id_ = get_random_id();
+        #endif
+        }
+        // set metadata request
+        {
+            // metadata_request_ is only read/set in the send thread,
+            // so we don't actually have to lock.
+        #if 0
+            scoped_lock lock(mutex_);
+        #endif
+            // set current metadata (if not already set by us)
+            if (metadata_request_.get() != metadata){
+                metadata_request_.reset(metadata);
+            }
         }
     #if 1
         state_time_.store(0.0); // start immediately
@@ -1099,39 +1131,6 @@ void source_desc::uninvite(const sink_imp& s){
         }
     }
     LOG_WARNING("aoo: couldn't uninvite source - not active");
-}
-
-AooError source_desc::request_format(const sink_imp& s, const AooFormat &f){
-    if (state_.load(std::memory_order_relaxed) == source_state::uninvite){
-        // requesting a format during uninvite doesn't make sense.
-        // also, we couldn't use 'state_time', because it has a different
-        // meaning during the uninvite phase.
-        return kAooErrorUnknown;
-    }
-
-    if (!aoo::find_codec(f.codec)){
-        LOG_WARNING("request_format: codec '" << f.codec << "' not supported");
-        return kAooErrorUnknown;
-    }
-
-    // copy format
-    auto fmt = (AooFormat *)aoo::allocate(f.size);
-    memcpy(fmt, &f, f.size);
-
-    LOG_DEBUG("source_desc: request format");
-
-    scoped_lock lock(mutex_); // writer lock!
-
-    format_request_.reset(fmt);
-
-    format_time_ = s.elapsed_time();
-#if 1
-    state_time_.store(0.0); // start immediately
-#else
-    state_time_.store(s.elapsed_time()); // wait
-#endif
-
-    return kAooOk;
 }
 
 float source_desc::get_buffer_fill_ratio(){
@@ -1234,9 +1233,8 @@ AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t f
     // TODO handle 'flags' (future)
 
     if (format_changed){
+        // set new format
         format_id_ = lastformat;
-        format_request_ = nullptr;
-
         format_ = std::move(new_format);
         decoder_ = std::move(new_decoder);
     }
@@ -1406,11 +1404,6 @@ void source_desc::send(const sink_imp& s, const sendfn& fn){
         case request_type::ping_reply:
             send_ping_reply(s, fn, r);
             break;
-    #if 0
-        case request_type::format:
-            send_format_request(s, fn);
-            break;
-    #endif
         case request_type::start:
             send_start_request(s, fn);
             break;
@@ -1427,12 +1420,6 @@ void source_desc::send(const sink_imp& s, const sendfn& fn){
         // send invitations
         if (state_.load(std::memory_order_acquire) == source_state::invite){
             send_invitation(s, fn);
-        }
-
-        // the check is not really threadsafe, but it's safe because we only
-        // dereference the pointer later after grabbing the mutex
-        if (format_request_){
-            send_format_request(s, fn);
         }
 
         state_time_.store(now);
@@ -1689,8 +1676,7 @@ int32_t source_desc::poll_events(sink_imp& s, AooEventHandler fn, void *user){
     event e;
     while (eventqueue_.try_pop(e)){
         fn(user, &e.event_, kAooThreadLevelUnknown);
-        // some events use dynamic memory
-        free_event_data(e);
+        free_event(e);
         count++;
     }
     return count;
@@ -2084,73 +2070,6 @@ void source_desc::send_start_request(const sink_imp& s, const sendfn& fn) {
     fn((const AooByte *)msg.Data(), msg.Size(), ep);
 }
 
-// /aoo/src/<id>/format <sink> <version> <stream>
-// <numchannels> <samplerate> <blocksize> <codec> <options>
-// called without lock!
-void source_desc::send_format_request(const sink_imp& s, const sendfn& fn) {
-    LOG_VERBOSE("request " kAooMsgFormat " for source " << ep);
-
-    AooByte buf[AOO_MAX_PACKET_SIZE];
-    osc::OutboundPacketStream msg((char *)buf, sizeof(buf));
-
-    // make OSC address pattern
-    const int32_t max_addr_size = kAooMsgDomainLen +
-            kAooMsgSourceLen + 16 + kAooMsgFormatLen;
-    char address[max_addr_size];
-    snprintf(address, sizeof(address), "%s%s/%d%s",
-             kAooMsgDomain, kAooMsgSource, ep.id, kAooMsgFormat);
-
-    shared_lock lock(mutex_); // !
-    // check again!
-    if (!format_request_){
-        return;
-    }
-
-    auto delta = s.elapsed_time() - format_time_;
-    // for now just reuse source timeout
-    if (delta < s.source_timeout()){
-        auto stream = stream_id_;
-
-        auto& f = *format_request_;
-
-        auto c = aoo::find_codec(f.codec);
-        assert(c != nullptr);
-
-        AooByte buf[kAooFormatExtMaxSize];
-        AooInt32 size;
-        if (c->serialize(&f, buf, &size) == kAooOk){
-            LOG_DEBUG("codec = " << f.codec << ", nchannels = "
-                      << f.numChannels << ", sr = " << f.sampleRate
-                      << ", blocksize = " << f.blockSize
-                      << ", option size = " << size);
-
-            // send without lock!
-            lock.unlock();
-
-            msg << osc::BeginMessage(address) << s.id()
-                << (int32_t)make_version() << stream
-                << f.numChannels << f.sampleRate << f.blockSize
-                << f.codec << osc::Blob(buf, size)
-                << osc::EndMessage;
-
-            fn((const AooByte *)msg.Data(), msg.Size(), ep);
-        }
-    } else {
-        LOG_DEBUG("format request timeout");
-
-        event e(kAooEventFormatTimeout, ep);
-
-        send_event(s, e, kAooThreadLevelAudio);
-
-        // clear request
-        // this is safe even with a reader lock,
-        // because elsewhere it is always read/written
-        // with a writer lock, see request_format()
-        // and handle_format().
-        format_request_ = nullptr;
-    }
-}
-
 // /aoo/src/<id>/data <id> <stream_id> <seq1> <frame1> <seq2> <frame2> etc.
 // or
 // (header), id (int32), stream_id (int32), count (int32),
@@ -2257,7 +2176,7 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
     }
 }
 
-// /aoo/src/<id>/invite <sink>
+// /aoo/src/<id>/invite <sink> [<metadata_type> <metadata_content>]
 
 // called without lock!
 void source_desc::send_invitation(const sink_imp& s, const sendfn& fn){
@@ -2273,7 +2192,20 @@ void source_desc::send_invitation(const sink_imp& s, const sendfn& fn){
     snprintf(address, sizeof(address), "%s%s/%d%s",
              kAooMsgDomain, kAooMsgSource, ep.id, kAooMsgInvite);
 
-    msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
+    msg << osc::BeginMessage(address) << s.id();
+    // add metadata
+    {
+        // metadata_request_ is only read/set in the send thread,
+        // so we don't actually have to lock.
+    #if 0
+        scoped_shared_lock lock(mutex_);
+    #endif
+        if (metadata_request_){
+            msg << metadata_request_->type
+                << osc::Blob(metadata_request_->data, metadata_request_->size);
+        }
+    }
+    msg << osc::EndMessage;
 
     fn((const AooByte *)msg.Data(), msg.Size(), ep);
 }
@@ -2313,7 +2245,7 @@ void source_desc::send_event(const sink_imp& s, const event& e,
     }
 }
 
-void source_desc::free_event_data(const event &e){
+void source_desc::free_event(const event &e){
     if (e.type_ == kAooEventFormatChange){
         memory_.deallocate((void *)e.format.format);
     } else if (e.type_ == kAooEventStreamStart){

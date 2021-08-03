@@ -39,9 +39,12 @@ struct t_aoo_receive
     int32_t x_port = 0;
     AooId x_id = 0;
     std::unique_ptr<t_sample *[]> x_vec;
-    // sinks
+    // metadata
+    t_symbol *x_metadata_type;
+    std::vector<AooByte> x_metadata;
+    // sources
     std::vector<t_source> x_sources;
-    // server
+    // node
     t_node * x_node = nullptr;
     // events
     t_outlet *x_msgout = nullptr;
@@ -66,36 +69,6 @@ static t_source * aoo_receive_findsource(t_aoo_receive *x, int argc, t_atom *arg
     return 0;
 }
 
-static void aoo_receive_format(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
-{
-    if (!x->x_node){
-        pd_error(x, "%s: can't request format - no socket!", classname(x));
-        return;
-    }
-
-    // host, ip, id, codec ...
-    if (argc < 4){
-        pd_error(x, "%s: too few arguments for 'format' message", classname(x));
-        return;
-    }
-
-    aoo::ip_address addr;
-    AooId id = 0;
-    if (!x->x_node->get_source_arg((t_pd *)x, argc, argv, addr, id)){
-        return;
-    }
-
-    AooFormatStorage f;
-    if (format_parse((t_pd *)x, f, argc - 3, argv + 3, x->x_nchannels)){
-        // don't use more channels than we actually have
-        if (f.header.numChannels > x->x_nchannels){
-            f.header.numChannels = x->x_nchannels;
-        }
-        AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
-        x->x_sink->requestSourceFormat(ep, f.header);
-    }
-}
-
 static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (!x->x_node){
@@ -112,7 +85,16 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
     AooId id = 0;
     if (x->x_node->get_source_arg((t_pd *)x, argc, argv, addr, id)){
         AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
-        x->x_sink->inviteSource(ep);
+        if (x->x_metadata_type){
+            AooCustomData md;
+            md.type = x->x_metadata_type->s_name;
+            md.data = x->x_metadata.data();
+            md.size = x->x_metadata.size();
+
+            x->x_sink->inviteSource(ep, &md);
+        } else {
+            x->x_sink->inviteSource(ep);
+        }
         // notify send thread
         x->x_node->notify();
     }
@@ -142,6 +124,43 @@ static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom
         x->x_sink->uninviteSource(ep);
         // notify send thread
         x->x_node->notify();
+    }
+}
+
+static void aoo_receive_metadata(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (argc > 0){
+        // metadata type
+        t_symbol *type;
+        if (argv->a_type == A_SYMBOL){
+            type = argv->a_w.w_symbol;
+        } else {
+            pd_error(x, "%s: bad metadata type", classname(x));
+        #if 1
+            x->x_metadata_type = nullptr;
+        #endif
+            return;
+        }
+        // metadata content
+        if (argc > 1){
+            // set new stream metadata
+            auto size = argc - 1;
+            x->x_metadata.resize(size);
+            for (int i = 0; i < size; ++i){
+                x->x_metadata[i] = (AooByte)atom_getfloat(argv + i + 1);
+            }
+        } else {
+            // empty metadata is not allowed
+            pd_error(x, "%s: metadata must not be empty", classname(x));
+        #if 1
+            x->x_metadata_type = nullptr;
+        #endif
+            return;
+        }
+        x->x_metadata_type = type;
+    } else {
+        // clear stream metadata
+        x->x_metadata_type = nullptr;
     }
 }
 
@@ -303,18 +322,6 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
         outlet_anything(x->x_msgout, gensym("invite_timeout"), 3, msg);
         break;
     }
-    case kAooEventFormatTimeout:
-    {
-        auto e = (const AooEventFormatTimeout *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
-
-        // output event
-        if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
-            return;
-        }
-        outlet_anything(x->x_msgout, gensym("format_timeout"), 3, msg);
-        break;
-    }
     case kAooEventBufferUnderrun:
     {
         auto e = (const AooEventBufferUnderrun *)event;
@@ -344,25 +351,23 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
         auto e = (const AooEventStreamStart *)event;
         aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
 
+        if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
+            return;
+        }
+        outlet_anything(x->x_msgout, gensym("start"), 3, msg);
+
         if (e->metadata){
             auto total = e->metadata->size + 4;
             t_atom *vec = (t_atom *)alloca(total * sizeof(t_atom));
-            // endpoint
-            if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, vec)){
-                return;
-            }
+            // copy endpoint
+            memcpy(vec, msg, 3 * sizeof(t_atom));
             // type
             SETSYMBOL(vec + 3, gensym(e->metadata->type));
             // data
             for (int i = 0; i < e->metadata->size; ++i){
                 SETFLOAT(vec + 4 + i, (uint8_t)e->metadata->data[i]);
             }
-            outlet_anything(x->x_msgout, gensym("start"), total, vec);
-        } else {
-            if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
-                return;
-            }
-            outlet_anything(x->x_msgout, gensym("start"), 3, msg);
+            outlet_anything(x->x_msgout, gensym("metadata"), total, vec);
         }
         break;
     }
@@ -572,6 +577,8 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
 t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
 {
     x_clock = clock_new(this, (t_method)aoo_receive_tick);
+    x_metadata_type = nullptr;
+    x_metadata.reserve(AOO_STREAM_METADATA_SIZE);
 
     // arg #1: port number
     x_port = atom_getfloatarg(0, argc, argv);
@@ -640,12 +647,12 @@ void aoo_receive_tilde_setup(void)
                     gensym("port"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_id,
                     gensym("id"), A_FLOAT, A_NULL);
-    class_addmethod(aoo_receive_class, (t_method)aoo_receive_format,
-                    gensym("format"), A_GIMME, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_invite,
                     gensym("invite"), A_GIMME, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_uninvite,
                     gensym("uninvite"), A_GIMME, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_metadata,
+                    gensym("metadata"), A_GIMME, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_buffersize,
                     gensym("bufsize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_dll_bandwidth,

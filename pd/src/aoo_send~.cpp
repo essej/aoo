@@ -388,30 +388,6 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
         }
         break;
     }
-    case kAooEventFormatRequest:
-    {
-        auto e = (const AooEventFormatRequest *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        if (aoo_send_findsink(x, addr, e->endpoint.id)){
-            if (x->x_accept){
-                // make copy, because format will be updated!
-                AooFormatStorage f;
-                memcpy(&f, e->format, e->format->size);
-                aoo_send_setformat(x, f.header);
-            } else {
-                t_atom msg[32];
-                if (x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
-                    int n = format_to_atoms(*e->format, 29, msg + 3); // skip first three atoms
-                    outlet_anything(x->x_msgout, gensym("format_request"), n + 3, msg);
-                } else {
-                    bug("t_node::resolve_endpoint");
-                }
-            }
-        }
-        break;
-    }
     case kAooEventInvite:
     {
         auto e = (const AooEventInvite *)event;
@@ -429,6 +405,21 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
                 } else {
                     bug("t_node::resolve_endpoint");
                 }
+            }
+            if (e->metadata){
+                auto total = e->metadata->size + 4;
+                t_atom *vec = (t_atom *)alloca(total * sizeof(t_atom));
+                // endpoint
+                if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, vec)){
+                    return;
+                }
+                // type
+                SETSYMBOL(vec + 3, gensym(e->metadata->type));
+                // data
+                for (int i = 0; i < e->metadata->size; ++i){
+                    SETFLOAT(vec + 4 + i, (uint8_t)e->metadata->data[i]);
+                }
+                outlet_anything(x->x_msgout, gensym("metadata"), total, vec);
             }
         }
         break;
@@ -634,7 +625,6 @@ static void aoo_send_metadata(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv
         if (argv->a_type == A_SYMBOL){
             type = argv->a_w.w_symbol;
         } else {
-            // empty metadata is not allowed
             pd_error(x, "%s: bad metadata type", classname(x));
         #if 1
             x->x_metadata_type = nullptr;
@@ -650,6 +640,7 @@ static void aoo_send_metadata(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv
                 x->x_metadata[i] = (AooByte)atom_getfloat(argv + i + 1);
             }
         } else {
+            // empty metadata is not allowed
             pd_error(x, "%s: metadata must not be empty", classname(x));
         #if 1
             x->x_metadata_type = nullptr;

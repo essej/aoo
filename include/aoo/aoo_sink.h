@@ -54,15 +54,17 @@ AOO_API AooError AOO_CALL AooSink_control(
 // type-safe convenience functions for frequently used controls
 
 static inline AooError AooSink_inviteSource(
-        AooSink *sink, const AooEndpoint *source)
+        AooSink *sink, const AooEndpoint *source, const AooCustomData *metadata)
 {
-    return AooSink_control(sink, kAooCtlInviteSource, (AooIntPtr)source, 0, 0);
+    return AooSink_control(sink, kAooCtlInviteSource, (AooIntPtr)source,
+                           (void *)metadata, metadata ? sizeof(*metadata) : 0);
 }
 
 static inline AooError AooSink_uninviteSource(
         AooSink *sink, const AooEndpoint *source)
 {
-    return AooSink_control(sink, kAooCtlUninviteSource, (AooIntPtr)source, 0, 0);
+    return AooSink_control(sink, kAooCtlUninviteSource,
+                           (AooIntPtr)source, 0, 0);
 }
 
 static inline AooError AooSink_uninviteAllSources(AooSink *sink){
@@ -194,12 +196,6 @@ static inline AooError AooSink_getSourceTimeout(AooSink *sink, AooSeconds *s)
 static inline AooError AooSink_resetSource(AooSink *sink, const AooEndpoint *source)
 {
     return AooSink_control(sink, kAooCtlReset, (AooIntPtr)source, 0, 0);
-}
-
-static inline AooError AooSink_requestSourceFormat(
-        AooSink *sink, const AooEndpoint *source, const AooFormat *f)
-{
-    return AooSink_control(sink, kAooCtlRequestFormat, (AooIntPtr)source, AOO_ARG(*f));
 }
 
 static inline AooError AooSink_getSourceFormat(

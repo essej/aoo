@@ -58,8 +58,10 @@ public:
     // ----------------------------------------------------------
     // type-safe convenience methods for frequently used controls
 
-    AooError inviteSource(const AooEndpoint& source) {
-        return control(kAooCtlInviteSource, (AooIntPtr)&source, nullptr, 0);
+    AooError inviteSource(
+            const AooEndpoint& source, const AooCustomData *metadata = nullptr) {
+        return control(kAooCtlInviteSource, (AooIntPtr)&source,
+                       (void *)metadata, metadata ? sizeof(*metadata) : 0);
     }
 
     AooError uninviteSource(const AooEndpoint& source) {
@@ -164,10 +166,6 @@ public:
 
     AooError resetSource(const AooEndpoint& source) {
         return control(kAooCtlReset, (AooIntPtr)&source, nullptr, 0);
-    }
-
-    AooError requestSourceFormat(const AooEndpoint& source, const AooFormat& f) {
-        return control(kAooCtlRequestFormat, (AooIntPtr)&source, AOO_ARG(f));
     }
 
     AooError getSourceFormat(const AooEndpoint& source, AooFormatStorage& f) {

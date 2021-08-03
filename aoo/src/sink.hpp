@@ -103,12 +103,15 @@ struct source_request {
     source_request(request_type _type)
         : type(_type) {}
 
-    source_request(request_type _type, const ip_address& _addr, AooId _id)
-        : type(_type), address(_addr), id(_id) {}
+    // NOTE: can't use aoo::endpoint here
+    source_request(request_type _type, const ip_address& _addr,
+                   AooId _id, void *_extra = nullptr)
+        : type(_type), id(_id), address(_addr), extra(_extra) {}
 
     request_type type;
-    ip_address address;
     AooId id = kAooIdInvalid;
+    ip_address address;
+    void *extra = nullptr;
 };
 
 class sink_imp;
@@ -172,11 +175,9 @@ public:
 
     bool process(const sink_imp& s, AooSample **buffer, int32_t nsamples);
 
-    void invite(const sink_imp& s);
+    void invite(const sink_imp& s, AooCustomData *metadata);
 
     void uninvite(const sink_imp& s);
-
-    AooError request_format(const sink_imp& s, const AooFormat& f);
 
     float get_buffer_fill_ratio();
 
@@ -210,8 +211,6 @@ private:
 
     void send_start_request(const sink_imp& s, const sendfn& fn);
 
-    void send_format_request(const sink_imp& s, const sendfn& fn);
-
     void send_data_requests(const sink_imp& s, const sendfn& fn);
 
     void send_invitation(const sink_imp& s, const sendfn& fn);
@@ -233,9 +232,7 @@ private:
     std::atomic<source_state> state_{source_state::idle};
 
     AooCustomData *metadata_{nullptr};
-
-    std::unique_ptr<AooFormat, format_deleter> format_request_;
-    double format_time_ = 0;
+    std::unique_ptr<AooCustomData, flat_metadata_deleter> metadata_request_{nullptr};
 
     std::atomic<double> state_time_{0.0};
     std::atomic<double> last_packet_time_{0};
@@ -280,7 +277,7 @@ private:
     // events
     lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
     void send_event(const sink_imp& s, const event& e, AooThreadLevel level);
-    void free_event_data(const event& e);
+    void free_event(const event& e);
     // memory
     aoo::memory_list memory_;
     // thread synchronization
@@ -390,6 +387,8 @@ private:
     void push_request(const source_request& r){
         requestqueue_.push(r);
     }
+    void dispatch_requests();
+
     // helper method
 
     source_desc *find_source(const ip_address& addr, AooId id);

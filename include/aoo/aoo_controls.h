@@ -37,13 +37,6 @@ enum AooControls
     // The 'size' member in the format header should contain the storage size;
     // on success it is updated to the actual format size
     kAooCtlGetFormat,
-    // Request stream format (index: endpoint, arg: format struct)
-    // ---
-    // A sink can request the streaming format for a specific source,
-    // which can choose to accept or decline the request.
-    // The source will receive one or more kAooEventFormatRequest events.
-    // If the request has timed out, the sink receives a kAooEventFormatTimeout event.
-    kAooCtlRequestFormat,
     // Perform a codec control (index: codec control, arg: argument)
     // ---
     // The available codec controls should be listed in the AOO codecheader file.

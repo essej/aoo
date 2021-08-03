@@ -21,10 +21,6 @@ enum AooEventTypes
     kAooEventInviteTimeout,
     // sink: source format changed
     kAooEventFormatChange,
-    // source: format request by sink
-    kAooEventFormatRequest,
-    // sink: format request timed out
-    kAooEventFormatTimeout,
     // sink: source added
     kAooEventSourceAdd,
     // sink: source removed
@@ -70,8 +66,6 @@ typedef AOO_STRUCT AooEventEndpoint
 
 #define AooEventSourceAdd AooEventEndpoint
 #define AooEventSourceRemove AooEventEndpoint
-#define AooEventInvite AooEventEndpoint
-#define AooEventUninvite AooEventEndpoint
 #define AooEventInviteTimeout AooEventEndpoint
 #define AooEventFormatTimeout AooEventEndpoint
 #define AooEventBufferUnderrun AooEventEndpoint
@@ -86,6 +80,9 @@ typedef AOO_STRUCT AooEventStreamStart
 } AooEventStreamStart;
 
 #define AooEventStreamStop AooEventEndpoint
+
+#define AooEventInvite AooEventStreamStart
+#define AooEventUninvite AooEventEndpoint
 
 // stream state event
 typedef AooInt32 AooStreamState;
@@ -125,14 +122,11 @@ typedef AOO_STRUCT AooEventPing {
 } AooEventPing;
 
 // format events
-typedef AOO_STRUCT AooEventFormat {
+typedef AOO_STRUCT AooEventFormatChange {
     AooEventType type;
     AooEndpoint endpoint;
     const AooFormat *format;
 } AooEventFormatChange;
-
-#define AooEventFormatChange AooEventFormat
-#define AooEventFormatRequest AooEventFormat
 
 //--------------------- AOO_NET ---------------------//
 

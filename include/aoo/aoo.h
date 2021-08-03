@@ -128,8 +128,6 @@
 #define kAooMsgStartLen 6
 #define kAooMsgStop "/stop"
 #define kAooMsgStopLen 5
-#define kAooMsgFormat "/format"
-#define kAooMsgFormatLen 7
 #define kAooMsgData "/data"
 #define kAooMsgDataLen 5
 #define kAooMsgPing "/ping"
