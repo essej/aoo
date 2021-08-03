@@ -99,10 +99,7 @@ AooError AOO_CALL aoo::source_imp::control(
             // single sink
             return remove_sink(*ep);
         } else {
-            // all sinks
-            sink_lock lock(sinks_);
-            sinks_.clear();
-            return kAooOk;
+            return remove_all_sinks();
         }
     }
     // start
@@ -427,8 +424,9 @@ AooError AOO_CALL aoo::source_imp::send(AooSendFunc fn, void *user) {
         return kAooOk; // nothing to do
     }
 #endif
-
     sendfn reply(fn, user);
+
+    dispatch_requests(reply);
 
     send_stream(reply);
 
@@ -776,15 +774,46 @@ AooError source_imp::add_sink(const AooEndpoint& ep, uint32_t flags)
 AooError source_imp::remove_sink(const AooEndpoint& ep){
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
 
+    // cache stream id
+    int32_t stream;
+    {
+        scoped_shared_lock lock(update_mutex_);
+        stream = stream_id_;
+    }
+
     sink_lock lock(sinks_);
     for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
         if (it->ep.address == addr && it->ep.id == ep.id){
+            // send /stop message!
+            sink_request r(request_type::stop, it->ep);
+            r.stop.stream = stream;
+            requests_.push(r);
+
             sinks_.erase(it);
             return kAooOk;
         }
     }
     LOG_WARNING("aoo_source: sink not found!");
     return kAooErrorUnknown;
+}
+
+AooError source_imp::remove_all_sinks(){
+    // cache stream id
+    int32_t stream;
+    {
+        scoped_shared_lock lock(update_mutex_);
+        stream = stream_id_;
+    }
+
+    sink_lock lock(sinks_);
+    // send /stop messages
+    for (auto& s : sinks_){
+        sink_request r(request_type::stop, s.ep);
+        r.stop.stream = stream;
+        requests_.push(r);
+    }
+    sinks_.clear();
+    return kAooOk;
 }
 
 AooError source_imp::set_format(AooFormat &f){
@@ -1112,10 +1141,10 @@ void source_imp::update_historybuffer(){
 // /aoo/sink/<id>/start <src> <version> <stream_id> <flags>
 // <lastformat> <nchannels> <samplerate> <blocksize> <codec> <extension>
 // [<metadata_type> <metadata_content>]
-void send_start(const sink_desc& s, int32_t id, int32_t stream, int32_t lastformat,
+void send_start(const endpoint& ep, int32_t id, int32_t stream, int32_t lastformat,
                 const AooFormat& f, const AooByte *extension, AooInt32 size,
                 const AooCustomData* metadata, const sendfn& fn) {
-    LOG_DEBUG("send " kAooMsgStart " to " << s.ep << " (stream = " << stream << ")");
+    LOG_DEBUG("send " kAooMsgStart " to " << ep << " (stream = " << stream << ")");
 
     char buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -1124,7 +1153,7 @@ void send_start(const sink_desc& s, int32_t id, int32_t stream, int32_t lastform
             + kAooMsgSinkLen + 16 + kAooMsgStartLen;
     char address[max_addr_size];
     snprintf(address, sizeof(address), "%s%s/%d%s",
-             kAooMsgDomain, kAooMsgSink, s.ep.id, kAooMsgStart);
+             kAooMsgDomain, kAooMsgSink, ep.id, kAooMsgStart);
 
     // stream specific flags (for future use)
     AooFlag flags = 0;
@@ -1138,13 +1167,13 @@ void send_start(const sink_desc& s, int32_t id, int32_t stream, int32_t lastform
     }
     msg << osc::EndMessage;
 
-    fn((const AooByte *)msg.Data(), msg.Size(), s.ep);
+    fn((const AooByte *)msg.Data(), msg.Size(), ep);
 }
 
 // /aoo/sink/<id>/stop <src> <stream_id>
-void send_stop(const sink_desc& s, int32_t id,
+void send_stop(const endpoint& ep, int32_t id,
                int32_t stream, const sendfn& fn) {
-    LOG_DEBUG("send " kAooMsgStop " to " << s.ep << " (stream = " << stream << ")");
+    LOG_DEBUG("send " kAooMsgStop " to " << ep << " (stream = " << stream << ")");
 
     char buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -1153,11 +1182,20 @@ void send_stop(const sink_desc& s, int32_t id,
             + kAooMsgSinkLen + 16 + kAooMsgStopLen;
     char address[max_addr_size];
     snprintf(address, sizeof(address), "%s%s/%d%s",
-             kAooMsgDomain, kAooMsgSink, s.ep.id, kAooMsgStop);
+             kAooMsgDomain, kAooMsgSink, ep.id, kAooMsgStop);
 
     msg << osc::BeginMessage(address) << id << stream << osc::EndMessage;
 
-    fn((const AooByte *)msg.Data(), msg.Size(), s.ep);
+    fn((const AooByte *)msg.Data(), msg.Size(), ep);
+}
+
+void source_imp::dispatch_requests(const sendfn& fn){
+    sink_request r;
+    while (requests_.try_pop(r)){
+        if (r.type == request_type::stop){
+            send_stop(r.ep, id(), r.stop.stream, fn);
+        }
+    }
 }
 
 void source_imp::send_stream(const sendfn& fn){
@@ -1214,10 +1252,10 @@ void source_imp::send_stream(const sendfn& fn){
         auto what = s.need_send();
         // first send /stop message, in case we also send a /start message
         if (what & send_flag::stop){
-            send_stop(s, id(), stream_id, fn);
+            send_stop(s.ep, id(), stream_id, fn);
         }
         if (what & send_flag::start){
-            send_start(s, id(), stream_id, format_id,
+            send_start(s.ep, id(), stream_id, format_id,
                        f.header, extension, size, md, fn);
         }
     }

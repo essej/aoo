@@ -40,6 +40,7 @@ struct event {
 
     event(AooEventType type) : type_(type){}
 
+    // NOTE: can't use aoo::endpoint
     event(AooEventType type, const ip_address& addr, AooId id);
 
     event(const event& other);
@@ -63,6 +64,25 @@ enum class request_type {
     none,
     stop
 };
+
+struct sink_request {
+    sink_request() = default;
+
+    sink_request(request_type _type)
+        : type(_type) {}
+
+    sink_request(request_type _type, const endpoint& _ep)
+        : type(_type), ep(_ep) {}
+
+    request_type type;
+    endpoint ep;
+    union {
+        struct {
+            int32_t stream;
+        } stop;
+    };
+};
+
 namespace send_flag {
     const uint32_t start = 0x01;
     const uint32_t stop = 0x02;
@@ -184,6 +204,8 @@ class source_imp final : public AooSource {
     AooEventHandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;
     AooEventMode eventmode_ = kAooEventModeNone;
+    // requests
+    lockfree::unbounded_mpsc_queue<sink_request, aoo::allocator<sink_request>> requests_;
     // sinks
     using sink_list = lockfree::simple_list<sink_desc, aoo::allocator<sink_desc>>;
     using sink_lock = std::unique_lock<sink_list>;
@@ -213,6 +235,8 @@ class source_imp final : public AooSource {
 
     AooError remove_sink(const AooEndpoint& sink);
 
+    AooError remove_all_sinks();
+
     AooError set_format(AooFormat& fmt);
 
     AooError get_format(AooFormat& fmt);
@@ -229,6 +253,8 @@ class source_imp final : public AooSource {
 
     void send_event(const event& e, AooThreadLevel level);
 
+    void free_event(const event& e);
+
     bool need_resampling() const;
 
     AooError start_stream(const AooCustomData *md);
@@ -244,6 +270,8 @@ class source_imp final : public AooSource {
     void update_resampler();
 
     void update_historybuffer();
+
+    void dispatch_requests(const sendfn& fn);
 
     void send_stream(const sendfn& fn);
 
