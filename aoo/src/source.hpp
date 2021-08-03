@@ -35,6 +35,34 @@ struct data_request {
     int32_t frame;
 };
 
+struct event {
+    event() = default;
+
+    event(AooEventType type) : type_(type){}
+
+    event(AooEventType type, const ip_address& addr, AooId id);
+
+    event(const event& other);
+
+    event& operator=(const event& other);
+
+    union
+    {
+        AooEventType type_;
+        AooEvent event_;
+        AooEventEndpoint sink;
+        AooEventInvite invite;
+        AooEventPing ping;
+        AooEventXRun xrun;
+    };
+private:
+    char addr_[ip_address::max_length];
+};
+
+enum class request_type {
+    none,
+    stop
+};
 namespace send_flag {
     const uint32_t start = 0x01;
     const uint32_t stop = 0x02;
@@ -76,47 +104,6 @@ private:
 
 class source_imp final : public AooSource {
  public:
-    struct event {
-        event() = default;
-
-        event(AooEventType type) : type_(type){}
-
-        event(AooEventType type, const ip_address& addr, AooId id){
-            memcpy(&addr_, addr.address(), addr.length());
-            sink.type = type;
-            sink.endpoint.address = &addr_;
-            sink.endpoint.addrlen = addr.length();
-            sink.endpoint.id = id;
-        }
-
-        event(const event& other){
-            memcpy(this, &other, sizeof(event)); // ugh
-            if (type_ != kAooEventXRun){
-                sink.endpoint.address = &addr_;
-            }
-        }
-
-        event& operator=(const event& other){
-            memcpy(this, &other, sizeof(event)); // ugh
-            if (type_ != kAooEventXRun){
-                sink.endpoint.address = &addr_;
-            }
-            return *this;
-        }
-
-        union
-        {
-            AooEventType type_;
-            AooEvent event_;
-            AooEventEndpoint sink;
-            AooEventPing ping;
-            AooEventXRun xrun;
-            AooEventFormat format;
-        };
-    private:
-        char addr_[ip_address::max_length];
-    };
-
     source_imp(AooId id, AooFlag flags, AooError *err);
 
     ~source_imp();
@@ -236,14 +223,9 @@ class source_imp final : public AooSource {
 
     sink_desc *get_sink_arg(intptr_t index);
 
-    void notify(uint32_t what){
-        LOG_DEBUG("notify(): " << what);
-        needsend_.fetch_or(what, std::memory_order_release);
-    }
+    void notify(uint32_t what);
 
-    uint32_t need_send() {
-        return needsend_.exchange(0, std::memory_order_acquire);
-    }
+    uint32_t need_send();
 
     void send_event(const event& e, AooThreadLevel level);
 

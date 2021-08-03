@@ -688,7 +688,34 @@ AooError AOO_CALL aoo::source_imp::pollEvents(){
 
 namespace aoo {
 
-/*///////////////////////// source ////////////////////////////////*/
+//------------------------- event ---------------------------------//
+
+event::event(AooEventType type, const ip_address& addr, AooId id){
+    memcpy(&addr_, addr.address(), addr.length());
+    sink.type = type;
+    sink.endpoint.address = &addr_;
+    sink.endpoint.addrlen = addr.length();
+    sink.endpoint.id = id;
+}
+
+event::event(const event& other){
+    memcpy(this, &other, sizeof(event)); // ugh
+    // only for source events:
+    if (type_ != kAooEventXRun){
+        sink.endpoint.address = &addr_;
+    }
+}
+
+event& event::operator=(const event& other){
+    memcpy(this, &other, sizeof(event)); // ugh
+    // only for source events:
+    if (type_ != kAooEventXRun){
+        sink.endpoint.address = &addr_;
+    }
+    return *this;
+}
+
+//------------------------- source --------------------------------//
 
 sink_desc * source_imp::find_sink(const ip_address& addr, AooId id){
     for (auto& sink : sinks_){
@@ -848,6 +875,15 @@ bool source_imp::need_resampling() const {
 #else
     return blocksize_ != format_->blockSize || samplerate_ != format_->sampleRate;
 #endif
+}
+
+void source_imp::notify(uint32_t what){
+    LOG_DEBUG("notify(): " << what);
+    needsend_.fetch_or(what, std::memory_order_release);
+}
+
+uint32_t source_imp::need_send() {
+    return needsend_.exchange(0, std::memory_order_acquire);
 }
 
 void source_imp::send_event(const event& e, AooThreadLevel level){
