@@ -154,7 +154,7 @@ AooError AOO_CALL aoo::sink_imp::control(
     // get format
     case kAooCtlGetFormat:
     {
-        CHECKARG(AooFormat);
+        assert(size >= sizeof(AooFormat));
         GETSOURCEARG
         return src->get_format(as<AooFormat>(ptr));
     }
@@ -497,7 +497,7 @@ AooError AOO_CALL aoo::sink_imp::process(
 
     // no lock needed - sources are only removed in this thread!
     for (auto it = sources_.begin(); it != sources_.end();){
-        if (it->process(*this, data, nsamples, t)){
+        if (it->process(*this, data, nsamples)){
             didsomething = true;
         } else if (!it->is_active(*this)){
             // move source to garbage list (will be freed in send())
@@ -735,7 +735,7 @@ AooError sink_imp::handle_start_message(const osc::ReceivedMessage& msg,
     }
 
     if (id < 0){
-        LOG_WARNING("bad ID for " << kAooMsgFormat << " message");
+        LOG_WARNING("bad ID for " << kAooMsgStart << " message");
         return kAooErrorUnknown;
     }
     // try to find existing source
@@ -1068,10 +1068,10 @@ void source_desc::invite(const sink_imp& s){
             // force new stream, otherwise handle_start() would ignore
             // the /start messages and we would spam the source with
             // redundant invitation messages until we time out.
-            // NOTE: don't use a negative value, otherwise we would get
-            // a redundant "add" event, see handle_format().
+            // NOTE: don't use kAooIdInvalid, otherwise we would get
+            // a redundant "add" event, see handle_start().
             scoped_lock lock(mutex_);
-            stream_id_++;
+            stream_id_ = get_random_id();
         }
     #if 1
         state_time_.store(0.0); // start immediately
@@ -1443,8 +1443,10 @@ void source_desc::send(const sink_imp& s, const sendfn& fn){
 
 #define XRUN_THRESHOLD 0.1
 
-bool source_desc::process(const sink_imp& s, AooSample **buffer,
-                          int32_t nsamples, time_tag tt)
+// TODO: make sure not to send events while holding a lock!
+
+bool source_desc::process(const sink_imp& s,
+                          AooSample **buffer, int32_t nsamples)
 {
     // synchronize with update()!
     // the mutex should be uncontended most of the time.

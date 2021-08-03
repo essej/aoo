@@ -22,7 +22,7 @@ enum AooControls
     // invite/uninvite source (index: source endpoint)
     kAooCtlInviteSource,
     kAooCtlUninviteSource,
-    // Set the source stream format (arg: format struct)
+    // Set the source stream format (arg: AooFormat)
     // ---
     // Set the format by passing the format header.
     // The format struct is validated and updated on success!
@@ -30,12 +30,12 @@ enum AooControls
     // This will change the streaming format and consequently start a
     // new stream. The sink(s) will receive a kAooEventFormatChange event
     kAooCtlSetFormat,
-    // Get the source stream format (arg: format struct)
+    // Get the source stream format (arg: AooFormat)
     // ---
     // Get the current format by passing an instance of 'AooFormatStorage'
     // or a similar struct that is large enough to hold any format.
-    // On success, the actual format size will be contained in the 'size'
-    // member of the format header.
+    // The 'size' member in the format header should contain the storage size;
+    // on success it is updated to the actual format size
     kAooCtlGetFormat,
     // Request stream format (index: endpoint, arg: format struct)
     // ---

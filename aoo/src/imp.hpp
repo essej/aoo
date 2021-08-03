@@ -18,6 +18,8 @@ const struct AooCodecInterface * find_codec(const char * name);
 
 //--------------- helper functions ----------------//
 
+AooId get_random_id();
+
 uint32_t make_version();
 
 bool check_version(uint32_t version);

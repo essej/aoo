@@ -23,33 +23,29 @@
 #endif
 
 #define DO_LOG(level, msg) do { aoo::Log(level) << msg; } while (false)
-#define DO_LOG_ERROR(msg) DO_LOG(kAooLogLevelError, msg)
-#define DO_LOG_WARNING(msg) DO_LOG(kAooLogLevelWarning, msg)
-#define DO_LOG_VERBOSE(msg) DO_LOG(kAooLogLevelVerbose, msg)
-#define DO_LOG_DEBUG(msg) DO_LOG(kAooLogLevelDebug, msg)
 
 #if AOO_LOG_LEVEL >= kAooLogLevelError
- #define LOG_ERROR(x) DO_LOG_ERROR(x)
+# define LOG_ERROR(msg) DO_LOG(kAooLogLevelError, msg)
 #else
- #define LOG_ERROR(x)
+# define LOG_ERROR(msg)
 #endif
 
 #if AOO_LOG_LEVEL >= kAooLogLevelWarning
- #define LOG_WARNING(x) DO_LOG_WARNING(x)
+# define LOG_WARNING(msg) DO_LOG(kAooLogLevelWarning, msg)
 #else
- #define LOG_WARNING(x)
+# define LOG_WARNING(msg)
 #endif
 
 #if AOO_LOG_LEVEL >= kAooLogLevelVerbose
- #define LOG_VERBOSE(x) DO_LOG_VERBOSE(x)
+# define LOG_VERBOSE(msg) DO_LOG(kAooLogLevelVerbose, msg)
 #else
- #define LOG_VERBOSE(x)
+# define LOG_VERBOSE(msg)
 #endif
 
 #if AOO_LOG_LEVEL >= kAooLogLevelDebug
- #define LOG_DEBUG(x) DO_LOG_DEBUG(x)
+# define LOG_DEBUG(msg) DO_LOG(kAooLogLevelDebug, msg)
 #else
- #define LOG_DEBUG(x)
+# define LOG_DEBUG(msg)
 #endif
 
 /*------------------ endianess -------------------*/
@@ -66,7 +62,7 @@
 #endif
 
 #ifdef __MINGW32__
-#include <sys/param.h>
+# include <sys/param.h>
 #endif
 
 #ifdef _MSC_VER

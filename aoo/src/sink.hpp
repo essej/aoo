@@ -73,7 +73,7 @@ struct sink_event {
 };
 
 enum class request_type {
-    unknown,
+    none,
     start,
     ping_reply,
     invite,
@@ -84,7 +84,7 @@ enum class request_type {
 
 // used in 'source_desc'
 struct request {
-    request(request_type _type = request_type::unknown)
+    request(request_type _type = request_type::none)
         : type(_type){}
 
     request_type type;
@@ -170,7 +170,7 @@ public:
 
     void send(const sink_imp& s, const sendfn& fn);
 
-    bool process(const sink_imp& s, AooSample **buffer, int32_t nsamples, time_tag tt);
+    bool process(const sink_imp& s, AooSample **buffer, int32_t nsamples);
 
     void invite(const sink_imp& s);
 

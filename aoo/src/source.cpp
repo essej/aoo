@@ -6,7 +6,6 @@
 
 #include <cstring>
 #include <algorithm>
-#include <random>
 #include <cmath>
 
 const size_t kAooEventQueueSize = 8;
@@ -140,10 +139,10 @@ AooError AOO_CALL aoo::source_imp::control(
         break;
     // set/get format
     case kAooCtlSetFormat:
-        CHECKARG(AooFormat);
+        assert(size >= sizeof(AooFormat));
         return set_format(as<AooFormat>(ptr));
     case kAooCtlGetFormat:
-        CHECKARG(AooFormat);
+        assert(size >= sizeof(AooFormat));
         return get_format(as<AooFormat>(ptr));
     // codec control
     case kAooCtlCodecControl:
@@ -842,13 +841,6 @@ AooError source_imp::codec_control(
     }
 }
 
-int32_t source_imp::make_stream_id(){
-    thread_local std::random_device dev;
-    thread_local std::mt19937 mt(dev());
-    std::uniform_int_distribution<int32_t> dist;
-    return dist(mt);
-}
-
 bool source_imp::need_resampling() const {
 #if 1
     // always go through resampler, so we can use a variable block size
@@ -947,7 +939,7 @@ void source_imp::make_new_stream(bool format_changed){
     // We naturally want to do this when setting the format,
     // but it's good to also do it in setup() to eliminate
     // any timing gaps.
-    stream_id_ = make_stream_id();
+    stream_id_ = get_random_id();
     sequence_ = 0;
     xrun_.store(0.0); // !
 
@@ -1347,7 +1339,7 @@ void source_imp::send_data(const sendfn& fn){
         // not perfectly thread-safe, but shouldn't cause problems AFAICT....
         scoped_lock lock(update_mutex_);
         sequence_ = 0;
-        stream_id_ = make_stream_id();
+        stream_id_ = get_random_id();
     }
 }
 
@@ -1366,7 +1358,7 @@ void source_imp::resend_data(const sendfn &fn){
     // send block to sinks
     for (auto& sink : sinks_){
         data_request request;
-        while (sink.data_requests.try_pop(request)){
+        while (sink.get_data_request(request)){
             auto block = history_.find(request.sequence);
             if (block){
                 bool binary = binary_.load(std::memory_order_relaxed);
@@ -1744,7 +1736,7 @@ void source_imp::handle_data_request(const osc::ReceivedMessage& msg,
         while (npairs--){
             int32_t sequence = (it++)->AsInt32();
             int32_t frame = (it++)->AsInt32();
-            sink->data_requests.push(sequence, frame);
+            sink->add_data_request(sequence, frame);
         }
     } else {
         LOG_VERBOSE("ignoring '" << kAooMsgData << "' message: sink not found");
@@ -1782,7 +1774,7 @@ void source_imp::handle_data_request(const AooByte *msg, int32_t n,
         while (count--){
             int32_t sequence = aoo::read_bytes<int32_t>(it);
             int32_t frame = aoo::read_bytes<int32_t>(it);
-            sink->data_requests.push(sequence, frame);
+            sink->add_data_request(sequence, frame);
         }
     } else {
         LOG_VERBOSE("ignoring '" << kAooMsgData << "' message: sink not found");

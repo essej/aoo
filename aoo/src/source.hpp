@@ -49,7 +49,6 @@ struct sink_desc {
     // data
     const endpoint ep;
     std::atomic<int16_t> channel;
-    lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> data_requests;
 
     void notify(uint32_t what){
         send_.fetch_or(what, std::memory_order_release);
@@ -59,10 +58,19 @@ struct sink_desc {
         return send_.exchange(0, std::memory_order_acquire);
     }
 
+    void add_data_request(int32_t sequence, int32_t frame){
+        data_requests_.push(sequence, frame);
+    }
+
+    bool get_data_request(data_request& r){
+        return data_requests_.try_pop(r);
+    }
+
     void reset(){
-        data_requests.clear();
+        data_requests_.clear();
     }
 private:
+    lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> data_requests_;
     std::atomic<uint32_t> send_{0};
 };
 
@@ -227,8 +235,6 @@ class source_imp final : public AooSource {
     sink_desc * find_sink(const ip_address& addr, AooId id);
 
     sink_desc *get_sink_arg(intptr_t index);
-
-    static int32_t make_stream_id();
 
     void notify(uint32_t what){
         LOG_DEBUG("notify(): " << what);

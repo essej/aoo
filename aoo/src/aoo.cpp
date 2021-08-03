@@ -19,11 +19,12 @@
 #include <iostream>
 #include <sstream>
 #include <atomic>
+#include <random>
 #include <unordered_map>
 
 namespace aoo {
 
-/*//////////////////// helper /////////////////////////*/
+//--------------------- helper functions -----------------//
 
 char * copy_string(const char * s){
     if (s){
@@ -59,9 +60,16 @@ void free_sockaddr(void *sa, int32_t len){
     }
 }
 
+int32_t get_random_id(){
+    thread_local std::random_device dev;
+    thread_local std::mt19937 mt(dev());
+    std::uniform_int_distribution<int32_t> dist;
+    return dist(mt);
+}
+
 } // aoo
 
-/*//////////////////// allocator /////////////////////*/
+//------------------- allocator ------------------//
 
 #if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
 
@@ -104,7 +112,7 @@ void deallocate(void *ptr, size_t size){
 
 #endif
 
-/*//////////////////// Log ////////////////////////////*/
+//----------------------- logging --------------------------//
 
 #define LOG_MUTEX 1
 
@@ -146,7 +154,7 @@ const char *aoo_strerror(AooError e){
     }
 }
 
-/*//////////////////// OSC ////////////////////////////*/
+//----------------------- OSC --------------------------//
 
 AooError AOO_CALL aoo_parsePattern(
         const AooByte *msg, AooInt32 size,
@@ -234,7 +242,8 @@ AooError AOO_CALL aoo_parsePattern(
     }
 }
 
-// OSC time stamp (NTP time)
+//-------------------- NTP time ----------------------------//
+
 uint64_t AOO_CALL aoo_getCurrentNtpTime(void){
     return aoo::time_tag::now();
 }
@@ -251,7 +260,7 @@ double AOO_CALL aoo_ntpTimeDuration(uint64_t t1, uint64_t t2){
     return aoo::time_tag::duration(t1, t2);
 }
 
-/*/////////////// version ////////////////////*/
+//---------------------- version -------------------------//
 
 void aoo_getVersion(int32_t *major, int32_t *minor,
                     int32_t *patch, int32_t *test){
@@ -296,7 +305,7 @@ uint32_t make_version(){
             | ((uint32_t)kAooVersionPatch << 8);
 }
 
-/*//////////////////// memory /////////////////*/
+//---------------------- memory -----------------------------//
 
 #define DEBUG_MEMORY 0
 
@@ -371,7 +380,7 @@ void memory_list::deallocate(void* ptr) {
 
 } // aoo
 
-/*//////////////////// codec //////////////////*/
+//------------------------ codec ---------------------------//
 
 namespace aoo {
 
