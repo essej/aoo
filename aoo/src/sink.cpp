@@ -1180,6 +1180,7 @@ AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t f
     // NOTE: format_id_ can only change in this thread,
     // so we don't need a lock to safely *read* it!
     bool format_changed = lastformat != format_id_;
+
     AooFormatStorage fmt;
 
     if (format_changed){
@@ -1299,6 +1300,18 @@ AooError source_desc::handle_stop(const sink_imp& s, int32_t stream) {
     // NOTE: stream_id_ can only change in this thread,
     // so we don't need a lock to safely *read* it!
     if (stream == stream_id_){
+    #if 1
+        // force new stream, otherwise handle_start() could ignore
+        // subsequent /start messages with the same ID.
+        // this happens when a source removes and re-adds a sink
+        // without starting a new stream...
+        // NOTE: we have a problem if /start and /stop messages
+        // with the same stream ID arrive out of order!
+        {
+            scoped_lock lock(mutex_);
+            stream_id_ = get_random_id();
+        }
+    #endif
         state_.store(source_state::stop, std::memory_order_release);
     }
 
