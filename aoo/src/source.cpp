@@ -1794,7 +1794,7 @@ void source_imp::handle_invite(const osc::ReceivedMessage& msg,
     if (!sink){
         // push "invite" event
         event e(kAooEventInvite, addr, id);
-        send_event(e, kAooThreadLevelAudio);
+        send_event(e, kAooThreadLevelNetwork);
     } else {
         LOG_VERBOSE("ignoring '" << kAooMsgInvite << "' message: sink already added");
     }
@@ -1812,7 +1812,7 @@ void source_imp::handle_uninvite(const osc::ReceivedMessage& msg,
     if (find_sink(addr, id)){
         // push "uninvite" event
         event e(kAooEventUninvite, addr, id);
-        send_event(e, kAooThreadLevelAudio);
+        send_event(e, kAooThreadLevelNetwork);
     } else {
         LOG_VERBOSE("ignoring '" << kAooMsgUninvite << "' message: sink not found");
     }
@@ -1842,7 +1842,7 @@ void source_imp::handle_ping(const osc::ReceivedMessage& msg,
     #else
         e.ping.tt3 = aoo::time_tag::now(); // use real system time
     #endif
-        send_event(e, kAooThreadLevelAudio);
+        send_event(e, kAooThreadLevelNetwork);
     } else {
         LOG_VERBOSE("ignoring '" << kAooMsgPing << "' message: sink not found");
     }

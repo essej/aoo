@@ -1391,7 +1391,7 @@ AooError source_desc::handle_ping(const sink_imp& s, time_tag tt){
     e.ping.tt1 = tt;
     e.ping.tt2 = tt2;
     e.ping.tt3 = 0;
-    send_event(s, e, kAooThreadLevelAudio);
+    send_event(s, e, kAooThreadLevelNetwork);
 
     return kAooOk;
 }
