@@ -114,7 +114,7 @@ struct source_request {
     void *extra = nullptr;
 };
 
-class sink_imp;
+class Sink;
 
 enum class source_state {
     idle,
@@ -143,7 +143,7 @@ public:
         return (ep.address == addr) && (ep.id == id);
     }
 
-    bool is_active(const sink_imp& s) const;
+    bool is_active(const Sink& s) const;
 
     bool is_inviting() const {
         return state_.load() == source_state::invite;
@@ -153,31 +153,31 @@ public:
         return !eventqueue_.empty();
     }
 
-    int32_t poll_events(sink_imp& s, AooEventHandler fn, void *user);
+    int32_t poll_events(Sink& s, AooEventHandler fn, void *user);
 
     AooError get_format(AooFormat& format);
 
     AooError codec_control(AooCtl ctl, void *data, AooSize size);
 
     // methods
-    void reset(const sink_imp& s);
+    void reset(const Sink& s);
 
-    AooError handle_start(const sink_imp& s, int32_t stream, uint32_t flags, int32_t lastformat,
+    AooError handle_start(const Sink& s, int32_t stream, uint32_t flags, int32_t lastformat,
                           const AooFormat& f, const AooByte *settings, int32_t size, const AooCustomData& md);
 
-    AooError handle_stop(const sink_imp& s, int32_t stream);
+    AooError handle_stop(const Sink& s, int32_t stream);
 
-    AooError handle_data(const sink_imp& s, net_packet& d, bool binary);
+    AooError handle_data(const Sink& s, net_packet& d, bool binary);
 
-    AooError handle_ping(const sink_imp& s, time_tag tt);
+    AooError handle_ping(const Sink& s, time_tag tt);
 
-    void send(const sink_imp& s, const sendfn& fn);
+    void send(const Sink& s, const sendfn& fn);
 
-    bool process(const sink_imp& s, AooSample **buffer, int32_t nsamples);
+    bool process(const Sink& s, AooSample **buffer, int32_t nsamples);
 
-    void invite(const sink_imp& s, AooCustomData *metadata);
+    void invite(const Sink& s, AooCustomData *metadata);
 
-    void uninvite(const sink_imp& s);
+    void uninvite(const Sink& s);
 
     float get_buffer_fill_ratio();
 
@@ -190,32 +190,32 @@ private:
     using scoped_lock = sync::scoped_lock<sync::shared_mutex>;
     using scoped_shared_lock = sync::scoped_shared_lock<sync::shared_mutex>;
 
-    void update(const sink_imp& s);
+    void update(const Sink& s);
 
     void add_lost(stream_stats& stats, int32_t n);
 
-    void handle_underrun(const sink_imp& s);
+    void handle_underrun(const Sink& s);
 
-    bool add_packet(const sink_imp& s, const net_packet& d,
+    bool add_packet(const Sink& s, const net_packet& d,
                     stream_stats& stats);
 
-    void process_blocks(const sink_imp& s, stream_stats& stats);
+    void process_blocks(const Sink& s, stream_stats& stats);
 
-    void skip_blocks(const sink_imp& s);
+    void skip_blocks(const Sink& s);
 
-    void check_missing_blocks(const sink_imp& s);
+    void check_missing_blocks(const Sink& s);
 
     // send messages
-    void send_ping_reply(const sink_imp& s, const sendfn& fn,
+    void send_ping_reply(const Sink& s, const sendfn& fn,
                          const request& r);
 
-    void send_start_request(const sink_imp& s, const sendfn& fn);
+    void send_start_request(const Sink& s, const sendfn& fn);
 
-    void send_data_requests(const sink_imp& s, const sendfn& fn);
+    void send_data_requests(const Sink& s, const sendfn& fn);
 
-    void send_invitation(const sink_imp& s, const sendfn& fn);
+    void send_invitation(const Sink& s, const sendfn& fn);
 
-    void send_uninvitation(const sink_imp& s, const sendfn& fn);
+    void send_uninvitation(const Sink& s, const sendfn& fn);
 
     // data
 public:
@@ -276,7 +276,7 @@ private:
     }
     // events
     lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
-    void send_event(const sink_imp& s, const event& e, AooThreadLevel level);
+    void send_event(const Sink& s, const event& e, AooThreadLevel level);
     void free_event(const event& e);
     // memory
     aoo::memory_list memory_;
@@ -284,11 +284,11 @@ private:
     sync::shared_mutex mutex_; // LATER replace with a spinlock?
 };
 
-class sink_imp final : public AooSink {
+class Sink final : public AooSink {
 public:
-    sink_imp(AooId id, AooFlag flags, AooError *err);
+    Sink(AooId id, AooFlag flags, AooError *err);
 
-    ~sink_imp();
+    ~Sink();
 
     AooError AOO_CALL setup(AooSampleRate samplerate,
                             AooInt32 blocksize, AooInt32 nchannels) override;

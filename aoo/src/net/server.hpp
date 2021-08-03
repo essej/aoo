@@ -40,7 +40,7 @@
 namespace aoo {
 namespace net {
 
-class server_imp;
+class Server;
 
 using ip_address_list = std::vector<ip_address, aoo::allocator<ip_address>>;
 
@@ -55,7 +55,7 @@ using group_list = std::vector<group_ptr, aoo::allocator<group_ptr>>;
 
 class client_endpoint {
 public:
-    client_endpoint(server_imp& s, int socket, const ip_address& addr);
+    client_endpoint(Server& s, int socket, const ip_address& addr);
 
     ~client_endpoint();
 
@@ -80,7 +80,7 @@ public:
 
     bool receive_data();
 private:
-    server_imp *server_;
+    Server *server_;
     int socket_;
     ip_address_list public_addresses_;
     std::shared_ptr<user> user_;
@@ -111,7 +111,7 @@ struct user {
 
     bool active() const { return endpoint_ != nullptr; }
 
-    void on_close(server_imp& s);
+    void on_close(Server& s);
 
     bool add_group(std::shared_ptr<group> grp);
 
@@ -159,7 +159,7 @@ private:
     user_list users_;
 };
 
-class server_imp;
+class Server;
 
 class udp_server {
 public:
@@ -197,7 +197,7 @@ private:
     void send_message(const AooByte *data, int32_t n, const ip_address& addr);
 };
 
-class server_imp final : public AooServer {
+class Server final : public AooServer {
 public:
     enum class error {
         none,
@@ -219,9 +219,9 @@ public:
         };
     };
 
-    server_imp(int tcpsocket, int udpsocket);
+    Server(int tcpsocket, int udpsocket);
 
-    ~server_imp();
+    ~Server();
 
     ip_address::ip_type type() const { return type_; }
 

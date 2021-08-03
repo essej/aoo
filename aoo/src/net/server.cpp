@@ -79,10 +79,10 @@ AOO_API AooServer * AOO_CALL AooServer_new(
         return nullptr;
     }
 
-    return aoo::construct<aoo::net::server_imp>(tcpsocket, udpsocket);
+    return aoo::construct<aoo::net::Server>(tcpsocket, udpsocket);
 }
 
-aoo::net::server_imp::server_imp(int tcpsocket, int udpsocket)
+aoo::net::Server::Server(int tcpsocket, int udpsocket)
     : tcpsocket_(tcpsocket), udpserver_(udpsocket)
 {
     eventsocket_ = socket_udp(0);
@@ -94,10 +94,10 @@ aoo::net::server_imp::server_imp(int tcpsocket, int udpsocket)
 AOO_API void AOO_CALL AooServer_free(AooServer *server){
     // cast to correct type because base class
     // has no virtual destructor!
-    aoo::destroy(static_cast<aoo::net::server_imp *>(server));
+    aoo::destroy(static_cast<aoo::net::Server *>(server));
 }
 
-aoo::net::server_imp::~server_imp() {
+aoo::net::Server::~Server() {
     socket_close(tcpsocket_);
     tcpsocket_ = -1;
 
@@ -109,7 +109,7 @@ AOO_API AooError AOO_CALL AooServer_run(AooServer *server){
     return server->run();
 }
 
-AooError AOO_CALL aoo::net::server_imp::run(){
+AooError AOO_CALL aoo::net::Server::run(){
     // wait for networking or other events
     while (!quit_.load()){
         if (!receive()){
@@ -133,7 +133,7 @@ AOO_API AooError AOO_CALL AooServer_quit(AooServer *server){
     return server->quit();
 }
 
-AooError AOO_CALL aoo::net::server_imp::quit(){
+AooError AOO_CALL aoo::net::Server::quit(){
     // set quit and wake up receive thread
     quit_.store(true);
     if (!socket_signal(eventsocket_)){
@@ -152,7 +152,7 @@ AOO_API AooError AOO_CALL AooServer_setEventHandler(
     return sink->setEventHandler(fn, user, mode);
 }
 
-AooError AOO_CALL aoo::net::server_imp::setEventHandler(
+AooError AOO_CALL aoo::net::Server::setEventHandler(
         AooEventHandler fn, void *user, AooEventMode mode)
 {
     eventhandler_ = fn;
@@ -165,7 +165,7 @@ AOO_API AooBool AOO_CALL AooServer_eventsAvailable(AooServer *server){
     return server->eventsAvailable();
 }
 
-AooBool AOO_CALL aoo::net::server_imp::eventsAvailable(){
+AooBool AOO_CALL aoo::net::Server::eventsAvailable(){
     return !events_.empty();
 }
 
@@ -173,7 +173,7 @@ AOO_API AooError AOO_CALL AooServer_pollEvents(AooServer *server){
     return server->pollEvents();
 }
 
-AooError AOO_CALL aoo::net::server_imp::pollEvents(){
+AooError AOO_CALL aoo::net::Server::pollEvents(){
     // always thread-safe
     std::unique_ptr<ievent> e;
     while (events_.try_pop(e)){
@@ -189,7 +189,7 @@ AOO_API AooError AOO_CALL AooServer_control(
     return server->control(ctl, index, ptr, size);
 }
 
-AooError AOO_CALL aoo::net::server_imp::control(
+AooError AOO_CALL aoo::net::Server::control(
         AooCtl ctl, intptr_t index, void *ptr, AooSize size)
 {
     LOG_WARNING("aoo_server: unsupported control " << ctl);
@@ -199,20 +199,20 @@ AooError AOO_CALL aoo::net::server_imp::control(
 namespace aoo {
 namespace net {
 
-std::string server_imp::error_to_string(error e){
+std::string Server::error_to_string(error e){
     switch (e){
-    case server_imp::error::access_denied:
+    case Server::error::access_denied:
         return "access denied";
-    case server_imp::error::permission_denied:
+    case Server::error::permission_denied:
         return "permission denied";
-    case server_imp::error::wrong_password:
+    case Server::error::wrong_password:
         return "wrong password";
     default:
         return "unknown error";
     }
 }
 
-std::shared_ptr<user> server_imp::get_user(const std::string& name,
+std::shared_ptr<user> Server::get_user(const std::string& name,
                                        const std::string& pwd,
                                        uint32_t version, error& e)
 {
@@ -246,7 +246,7 @@ std::shared_ptr<user> server_imp::get_user(const std::string& name,
     }
 }
 
-std::shared_ptr<user> server_imp::find_user(const std::string& name)
+std::shared_ptr<user> Server::find_user(const std::string& name)
 {
     for (auto& usr : users_){
         if (usr->name == name){
@@ -256,7 +256,7 @@ std::shared_ptr<user> server_imp::find_user(const std::string& name)
     return nullptr;
 }
 
-std::shared_ptr<group> server_imp::get_group(const std::string& name,
+std::shared_ptr<group> Server::get_group(const std::string& name,
                                          const std::string& pwd, error& e)
 {
     auto grp = find_group(name);
@@ -283,7 +283,7 @@ std::shared_ptr<group> server_imp::get_group(const std::string& name,
     }
 }
 
-std::shared_ptr<group> server_imp::find_group(const std::string& name)
+std::shared_ptr<group> Server::find_group(const std::string& name)
 {
     for (auto& grp : groups_){
         if (grp->name == name){
@@ -294,21 +294,21 @@ std::shared_ptr<group> server_imp::find_group(const std::string& name)
 }
 
 
-void server_imp::on_user_joined(user &usr){
+void Server::on_user_joined(user &usr){
     auto e = std::make_unique<user_event>(kAooNetEventUserJoin,
                                           usr.name.c_str(), usr.id,
                                           usr.endpoint()->local_address()); // do we need this?
     send_event(std::move(e));
 }
 
-void server_imp::on_user_left(user &usr){
+void Server::on_user_left(user &usr){
     auto e = std::make_unique<user_event>(kAooNetEventUserLeave,
                                           usr.name.c_str(), usr.id,
                                           usr.endpoint()->local_address()); // do we need this?
     send_event(std::move(e));
 }
 
-void server_imp::on_user_joined_group(user& usr, group& grp){
+void Server::on_user_joined_group(user& usr, group& grp){
     // 1) send the new member to existing group members
     // 2) send existing group members to the new member
     for (auto& peer : grp.users()){
@@ -346,7 +346,7 @@ void server_imp::on_user_joined_group(user& usr, group& grp){
     send_event(std::move(e));
 }
 
-void server_imp::on_user_left_group(user& usr, group& grp){
+void Server::on_user_left_group(user& usr, group& grp){
     if (tcpsocket_ < 0){
         return; // prevent sending messages during shutdown
     }
@@ -369,7 +369,7 @@ void server_imp::on_user_left_group(user& usr, group& grp){
     send_event(std::move(e));
 }
 
-void server_imp::handle_relay_message(const osc::ReceivedMessage& msg,
+void Server::handle_relay_message(const osc::ReceivedMessage& msg,
                                       const ip_address& src){
     auto it = msg.ArgumentsBegin();
 
@@ -398,7 +398,7 @@ void server_imp::handle_relay_message(const osc::ReceivedMessage& msg,
     LOG_WARNING("aoo_server: couldn't find matching client for relay message");
 }
 
-void server_imp::send_event(std::unique_ptr<ievent> e){
+void Server::send_event(std::unique_ptr<ievent> e){
     switch (eventmode_){
     case kAooEventModePoll:
         events_.push(std::move(e));
@@ -412,12 +412,12 @@ void server_imp::send_event(std::unique_ptr<ievent> e){
     }
 }
 
-int32_t server_imp::get_next_user_id(){
+int32_t Server::get_next_user_id(){
     // LATER make random user ID
     return next_user_id_++;
 }
 
-bool server_imp::receive(){
+bool Server::receive(){
     bool didclose = false;
     int numclients = clients_.size();
 
@@ -495,7 +495,7 @@ bool server_imp::receive(){
     return true;
 }
 
-void server_imp::update(){
+void Server::update(){
     clients_.remove_if([](auto& c){ return !c.active(); });
     // automatically purge stale users
     // LATER add an option so that users will persist
@@ -517,7 +517,7 @@ void server_imp::update(){
     }
 }
 
-uint32_t server_imp::flags() const {
+uint32_t Server::flags() const {
     uint32_t flags = 0;
     if (allow_relay_.load(std::memory_order_relaxed)){
         flags |= kAooNetServerRelay;
@@ -697,7 +697,7 @@ void udp_server::send_message(const AooByte *msg, int32_t size,
 
 /*////////////////////////// user ///////////////////////////*/
 
-void user::on_close(server_imp& s){
+void user::on_close(Server& s){
     // disconnect user from groups
     for (auto& grp : groups_){
         grp->remove_user(*this);
@@ -761,7 +761,7 @@ bool group::remove_user(const user& usr){
 
 /*///////////////////////// client_endpoint /////////////////////////////*/
 
-client_endpoint::client_endpoint(server_imp &s, int socket, const ip_address &addr)
+client_endpoint::client_endpoint(Server &s, int socket, const ip_address &addr)
     : server_(&s), socket_(socket), addr_(addr)
 {
     // set TCP_NODELAY - do we need to do this?
@@ -959,7 +959,7 @@ void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
         std::string password = (it++)->AsString();
         count -= 2;
 
-        server_imp::error err;
+        Server::error err;
         if (!user_){
             user_ = server_->get_user(username, password, version, err);
             if (user_){
@@ -982,7 +982,7 @@ void client_endpoint::handle_login(const osc::ReceivedMessage& msg)
 
                 server_->on_user_joined(*user_);
             } else {
-                errmsg = server_imp::error_to_string(err);
+                errmsg = Server::error_to_string(err);
             }
         } else {
             errmsg = "already logged in"; // shouldn't happen
@@ -1014,7 +1014,7 @@ void client_endpoint::handle_group_join(const osc::ReceivedMessage& msg)
     std::string name = (it++)->AsString();
     std::string password = (it++)->AsString();
 
-    server_imp::error err;
+    Server::error err;
     if (user_){
         auto grp = server_->get_group(name, password, err);
         if (grp){
@@ -1026,7 +1026,7 @@ void client_endpoint::handle_group_join(const osc::ReceivedMessage& msg)
                 errmsg = "already a group member";
             }
         } else {
-            errmsg = server_imp::error_to_string(err);
+            errmsg = Server::error_to_string(err);
         }
     } else {
         errmsg = "not logged in";
@@ -1076,7 +1076,7 @@ void client_endpoint::handle_group_leave(const osc::ReceivedMessage& msg){
 
 /*///////////////////// events ////////////////////////*/
 
-server_imp::error_event::error_event(int32_t type, int32_t code,
+Server::error_event::error_event(int32_t type, int32_t code,
                                  const char * msg)
 {
     error_event_.type = type;
@@ -1084,12 +1084,12 @@ server_imp::error_event::error_event(int32_t type, int32_t code,
     error_event_.errorMessage = copy_string(msg);
 }
 
-server_imp::error_event::~error_event()
+Server::error_event::~error_event()
 {
     free_string((char *)error_event_.errorMessage);
 }
 
-server_imp::user_event::user_event(int32_t type,
+Server::user_event::user_event(int32_t type,
                                const char *name, int32_t id,
                                const ip_address& address){
     user_event_.type = type;
@@ -1099,13 +1099,13 @@ server_imp::user_event::user_event(int32_t type,
     user_event_.addrlen = address.length();
 }
 
-server_imp::user_event::~user_event()
+Server::user_event::~user_event()
 {
     free_string((char *)user_event_.userName);
     free_sockaddr((void *)user_event_.address, user_event_.addrlen);
 }
 
-server_imp::user_group_event::user_group_event(
+Server::user_group_event::user_group_event(
         int32_t type, const char *group, const char *user, int32_t id)
 {
     user_group_event_.type = type;
@@ -1114,7 +1114,7 @@ server_imp::user_group_event::user_group_event(
     user_group_event_.userId = id;
 }
 
-server_imp::user_group_event::~user_group_event()
+Server::user_group_event::~user_group_event()
 {
     free_string((char *)user_group_event_.groupName);
     free_string((char *)user_group_event_.userName);

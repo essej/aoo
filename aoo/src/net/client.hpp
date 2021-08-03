@@ -43,7 +43,7 @@ struct AooSink;
 namespace aoo {
 namespace net {
 
-class client_imp;
+class Client;
 
 #if 0
 using ip_address_list = std::vector<ip_address, aoo::allocator<ip_address>>;
@@ -55,7 +55,7 @@ using ip_address_list = std::vector<ip_address>;
 /*/////////////////////////// peer /////////////////////////*/
 class peer {
 public:
-    peer(client_imp& client, int32_t id, const std::string& group,
+    peer(Client& client, int32_t id, const std::string& group,
          const std::string& user, ip_address_list&& addrlist);
 
     ~peer();
@@ -91,7 +91,7 @@ public:
 
     friend std::ostream& operator << (std::ostream& os, const peer& p);
 private:
-    client_imp *client_;
+    Client *client_;
     const int32_t id_;
     bool relay_ = false;
     const std::string group_;
@@ -112,7 +112,7 @@ private:
 
 class udp_client {
 public:
-    udp_client(client_imp& c, int port, AooFlag flags)
+    udp_client(Client& c, int port, AooFlag flags)
         : client_(&c), port_(port) {}
 
     int port() const { return port_; }
@@ -135,7 +135,7 @@ private:
     using scoped_lock = sync::scoped_lock<sync::shared_mutex>;
     using scoped_shared_lock = sync::scoped_shared_lock<sync::shared_mutex>;
 
-    client_imp *client_;
+    Client *client_;
     int port_;
     ip_address local_address_;
     ip_address_list server_addrlist_;
@@ -162,17 +162,17 @@ enum class client_state {
     connected
 };
 
-class client_imp final : public AooClient
+class Client final : public AooClient
 {
 public:
     struct icommand {
         virtual ~icommand(){}
-        virtual void perform(client_imp&) = 0;
+        virtual void perform(Client&) = 0;
     };
 
     struct imessage {
         virtual ~imessage(){}
-        virtual void perform(client_imp&, const sendfn& fn) = 0;
+        virtual void perform(Client&, const sendfn& fn) = 0;
     };
 
     struct ievent {
@@ -187,10 +187,10 @@ public:
         };
     };
 
-    client_imp(const void *address, AooAddrSize addrlen,
+    Client(const void *address, AooAddrSize addrlen,
                AooFlag flags, AooError *err);
 
-    ~client_imp();
+    ~Client();
 
     AooError AOO_CALL run() override;
 
@@ -434,7 +434,7 @@ public:
             : request_cmd(cb, user), host_(host), port_(port),
               name_(name), pwd_(pwd) {}
 
-        void perform(client_imp& obj) override {
+        void perform(Client& obj) override {
             obj.perform_connect(host_, port_, name_, pwd_, cb_, user_);
         }
     private:
@@ -449,7 +449,7 @@ public:
         disconnect_cmd(AooNetCallback cb, void *user)
             : request_cmd(cb, user) {}
 
-        void perform(client_imp& obj) override {
+        void perform(Client& obj) override {
             obj.perform_disconnect(cb_, user_);
         }
     };
@@ -459,7 +459,7 @@ public:
         login_cmd(ip_address_list&& addrlist)
             : addrlist_(std::move(addrlist)) {}
 
-        void perform(client_imp& obj) override {
+        void perform(Client& obj) override {
             obj.perform_login(addrlist_);
         }
     private:
@@ -468,7 +468,7 @@ public:
 
     struct timeout_cmd : icommand
     {
-        void perform(client_imp& obj) override {
+        void perform(Client& obj) override {
             obj.perform_timeout();
         }
     };
@@ -479,7 +479,7 @@ public:
                        const std::string& group, const std::string& pwd)
             : request_cmd(cb, user), group_(group), password_(pwd){}
 
-        void perform(client_imp& obj) override {
+        void perform(Client& obj) override {
             obj.perform_join_group(group_, password_, cb_, user_);
         }
     private:
@@ -493,7 +493,7 @@ public:
                         const std::string& group)
             : request_cmd(cb, user), group_(group){}
 
-        void perform(client_imp& obj) override {
+        void perform(Client& obj) override {
             obj.perform_leave_group(group_, cb_, user_);
         }
     private:
@@ -508,7 +508,7 @@ public:
             data_.assign(data, data + size);
         }
 
-        void perform(client_imp& obj, const sendfn& fn) override {
+        void perform(Client& obj, const sendfn& fn) override {
             obj.perform_send_message(data_.data(), data_.size(),
                 flags_, fn, [](auto&){ return true; });
         }
@@ -522,7 +522,7 @@ public:
                      const sockaddr *addr, int32_t len, int32_t flags)
             : message(data, size, flags), address_(addr, len) {}
 
-        void perform(client_imp& obj, const sendfn& fn) override {
+        void perform(Client& obj, const sendfn& fn) override {
             obj.perform_send_message(data_.data(), data_.size(),
                 flags_, fn, [&](auto& peer){ return peer.match(address_); });
         }
@@ -535,7 +535,7 @@ public:
                       const char *group, int32_t flags)
             : message(data, size, flags), group_(group) {}
 
-        void perform(client_imp& obj, const sendfn& fn) override {
+        void perform(Client& obj, const sendfn& fn) override {
             obj.perform_send_message(data_.data(), data_.size(),
                 flags_, fn, [&](auto& peer){ return peer.match(group_); });
         }

@@ -122,11 +122,11 @@ private:
     std::atomic<uint32_t> send_{0};
 };
 
-class source_imp final : public AooSource {
+class Source final : public AooSource {
  public:
-    source_imp(AooId id, AooFlag flags, AooError *err);
+    Source(AooId id, AooFlag flags, AooError *err);
 
-    ~source_imp();
+    ~Source();
 
     AooId id() const { return id_.load(std::memory_order_relaxed); }
 

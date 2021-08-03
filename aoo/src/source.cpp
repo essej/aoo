@@ -25,10 +25,10 @@ const size_t kAooEventQueueSize = 8;
 
 AOO_API AooSource * AOO_CALL AooSource_new(
         AooId id, AooFlag flags, AooError *err) {
-    return aoo::construct<aoo::source_imp>(id, flags, err);
+    return aoo::construct<aoo::Source>(id, flags, err);
 }
 
-aoo::source_imp::source_imp(AooId id, AooFlag flags, AooError *err)
+aoo::Source::Source(AooId id, AooFlag flags, AooError *err)
     : id_(id)
 {
     // event queue
@@ -42,10 +42,10 @@ aoo::source_imp::source_imp(AooId id, AooFlag flags, AooError *err)
 AOO_API void AOO_CALL AooSource_free(AooSource *src){
     // cast to correct type because base class
     // has no virtual destructor!
-    aoo::destroy(static_cast<aoo::source_imp *>(src));
+    aoo::destroy(static_cast<aoo::Source *>(src));
 }
 
-aoo::source_imp::~source_imp() {
+aoo::Source::~Source() {
     // flush event queue
     event e;
     while (eventqueue_.try_pop(e)) {
@@ -78,7 +78,7 @@ AOO_API AooError AOO_CALL AooSource_control(
     return src->control(ctl, index, ptr, size);
 }
 
-AooError AOO_CALL aoo::source_imp::control(
+AooError AOO_CALL aoo::Source::control(
         AooCtl ctl, AooIntPtr index, void *ptr, AooSize size)
 {
     switch (ctl){
@@ -307,7 +307,7 @@ AOO_API AooError AOO_CALL AooSource_setup(
     return src->setup(samplerate, blocksize, nchannels);
 }
 
-AooError AOO_CALL aoo::source_imp::setup(
+AooError AOO_CALL aoo::Source::setup(
         AooSampleRate samplerate, AooInt32 blocksize, AooInt32 nchannels){
     scoped_lock lock(update_mutex_); // writer lock!
     if (samplerate > 0 && blocksize > 0 && nchannels > 0)
@@ -350,7 +350,7 @@ AOO_API AooError AOO_CALL AooSource_handleMessage(
 }
 
 // /aoo/src/<id>/format <sink>
-AooError AOO_CALL aoo::source_imp::handleMessage(
+AooError AOO_CALL aoo::Source::handleMessage(
         const AooByte *data, AooInt32 size,
         const void *address, AooAddrSize addrlen){
     AooMsgType type;
@@ -417,7 +417,7 @@ AOO_API AooError AOO_CALL AooSource_send(
 
 // This method reads audio samples from the ringbuffer,
 // encodes them and sends them to all sinks.
-AooError AOO_CALL aoo::source_imp::send(AooSendFunc fn, void *user) {
+AooError AOO_CALL aoo::Source::send(AooSendFunc fn, void *user) {
 #if 0
     // this breaks the /stop message!
     if (state_.load() != stream_state::run){
@@ -450,7 +450,7 @@ AOO_API AooError AOO_CALL AooSource_process(
 
 #define NO_SINKS_IDLE 1
 
-AooError AOO_CALL aoo::source_imp::process(
+AooError AOO_CALL aoo::Source::process(
         const AooSample **data, AooInt32 nsamples, AooNtpTime t) {
     auto state = state_.load();
     if (state == stream_state::idle){
@@ -650,7 +650,7 @@ AOO_API AooError AOO_CALL AooSource_setEventHandler(
     return src->setEventHandler(fn, user, mode);
 }
 
-AooError AOO_CALL aoo::source_imp::setEventHandler(
+AooError AOO_CALL aoo::Source::setEventHandler(
         AooEventHandler fn, void *user, AooEventMode mode){
     eventhandler_ = fn;
     eventcontext_ = user;
@@ -662,7 +662,7 @@ AOO_API AooBool AOO_CALL AooSource_eventsAvailable(AooSource *src){
     return src->eventsAvailable();
 }
 
-AooBool AOO_CALL aoo::source_imp::eventsAvailable(){
+AooBool AOO_CALL aoo::Source::eventsAvailable(){
     return !eventqueue_.empty();
 }
 
@@ -670,7 +670,7 @@ AOO_API AooError AOO_CALL AooSource_pollEvents(AooSource *src){
     return src->pollEvents();
 }
 
-AooError AOO_CALL aoo::source_imp::pollEvents(){
+AooError AOO_CALL aoo::Source::pollEvents(){
     // always thread-safe
     event e;
     while (eventqueue_.try_pop(e)) {
@@ -711,7 +711,7 @@ event& event::operator=(const event& other){
 
 //------------------------- source --------------------------------//
 
-sink_desc * source_imp::find_sink(const ip_address& addr, AooId id){
+sink_desc * Source::find_sink(const ip_address& addr, AooId id){
     for (auto& sink : sinks_){
         if (sink.ep.address == addr && sink.ep.id == id){
             return &sink;
@@ -720,7 +720,7 @@ sink_desc * source_imp::find_sink(const ip_address& addr, AooId id){
     return nullptr;
 }
 
-aoo::sink_desc * source_imp::get_sink_arg(intptr_t index){
+aoo::sink_desc * Source::get_sink_arg(intptr_t index){
     auto ep = (const AooEndpoint *)index;
     if (!ep){
         LOG_ERROR("AooSink: missing sink argument");
@@ -734,7 +734,7 @@ aoo::sink_desc * source_imp::get_sink_arg(intptr_t index){
     return sink;
 }
 
-AooError source_imp::add_sink(const AooEndpoint& ep, uint32_t flags)
+AooError Source::add_sink(const AooEndpoint& ep, uint32_t flags)
 {
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
 
@@ -771,7 +771,7 @@ AooError source_imp::add_sink(const AooEndpoint& ep, uint32_t flags)
     return kAooOk;
 }
 
-AooError source_imp::remove_sink(const AooEndpoint& ep){
+AooError Source::remove_sink(const AooEndpoint& ep){
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
 
     // cache stream id
@@ -797,7 +797,7 @@ AooError source_imp::remove_sink(const AooEndpoint& ep){
     return kAooErrorUnknown;
 }
 
-AooError source_imp::remove_all_sinks(){
+AooError Source::remove_all_sinks(){
     // cache stream id
     int32_t stream;
     {
@@ -816,7 +816,7 @@ AooError source_imp::remove_all_sinks(){
     return kAooOk;
 }
 
-AooError source_imp::set_format(AooFormat &f){
+AooError Source::set_format(AooFormat &f){
     auto codec = aoo::find_codec(f.codec);
     if (!codec){
         LOG_ERROR("codec '" << f.codec << "' not supported!");
@@ -867,7 +867,7 @@ AooError source_imp::set_format(AooFormat &f){
     return kAooOk;
 }
 
-AooError source_imp::get_format(AooFormat &fmt){
+AooError Source::get_format(AooFormat &fmt){
     shared_lock lock(update_mutex_); // read lock!
     if (format_){
         if (fmt.size >= format_->size){
@@ -881,7 +881,7 @@ AooError source_imp::get_format(AooFormat &fmt){
     }
 }
 
-AooError source_imp::codec_control(
+AooError Source::codec_control(
         AooCtl ctl, void *data, AooSize size) {
     // we don't know which controls are setters and which
     // are getters, so we just take a writer lock for either way.
@@ -893,7 +893,7 @@ AooError source_imp::codec_control(
     }
 }
 
-bool source_imp::need_resampling() const {
+bool Source::need_resampling() const {
 #if 1
     // always go through resampler, so we can use a variable block size
     return true;
@@ -902,16 +902,16 @@ bool source_imp::need_resampling() const {
 #endif
 }
 
-void source_imp::notify(uint32_t what){
+void Source::notify(uint32_t what){
     LOG_DEBUG("notify(): " << what);
     needsend_.fetch_or(what, std::memory_order_release);
 }
 
-uint32_t source_imp::need_send() {
+uint32_t Source::need_send() {
     return needsend_.exchange(0, std::memory_order_acquire);
 }
 
-void source_imp::send_event(const event& e, AooThreadLevel level){
+void Source::send_event(const event& e, AooThreadLevel level){
     switch (eventmode_){
     case kAooEventModePoll:
         eventqueue_.push(e);
@@ -924,7 +924,7 @@ void source_imp::send_event(const event& e, AooThreadLevel level){
     }
 }
 
-void source_imp::free_event(const event &e){
+void Source::free_event(const event &e){
     if (e.type_ == kAooEventInvite){
         // free metadata
         if (e.invite.metadata){
@@ -935,7 +935,7 @@ void source_imp::free_event(const event &e){
 
 #define STREAM_METADATA_WARN 1
 
-AooError source_imp::start_stream(const AooCustomData *md){
+AooError Source::start_stream(const AooCustomData *md){
     if (md) {
         // check type name length
         if (strlen(md->type) > kAooTypeNameMaxLen){
@@ -1001,7 +1001,7 @@ AooError source_imp::start_stream(const AooCustomData *md){
 
 // must be real-time safe because it might be called in process()!
 // always called with update lock!
-void source_imp::make_new_stream(bool format_changed){
+void Source::make_new_stream(bool format_changed){
     // implicitly reset time DLL to be on the safe side
     timer_.reset();
 
@@ -1044,7 +1044,7 @@ void source_imp::make_new_stream(bool format_changed){
     notify(send_flag::start);
 }
 
-void source_imp::allocate_metadata(int32_t size){
+void Source::allocate_metadata(int32_t size){
     assert(size >= 0);
 
     LOG_DEBUG("allocate metadata (" << size << " bytes)");
@@ -1082,14 +1082,14 @@ void source_imp::allocate_metadata(int32_t size){
     }
 }
 
-void source_imp::add_xrun(float n){
+void Source::add_xrun(float n){
     // add with CAS loop
     auto current = xrun_.load(std::memory_order_relaxed);
     while (!xrun_.compare_exchange_weak(current, current + n))
         ;
 }
 
-void source_imp::update_audioqueue(){
+void Source::update_audioqueue(){
     if (encoder_ && samplerate_ > 0){
         // recalculate buffersize from seconds to samples
         int32_t bufsize = buffersize_.load() * format_->sampleRate;
@@ -1116,7 +1116,7 @@ void source_imp::update_audioqueue(){
     }
 }
 
-void source_imp::update_resampler(){
+void Source::update_resampler(){
     if (encoder_ && samplerate_ > 0){
         resampler_.setup(blocksize_, format_->blockSize,
                          samplerate_, format_->sampleRate,
@@ -1124,7 +1124,7 @@ void source_imp::update_resampler(){
     }
 }
 
-void source_imp::update_historybuffer(){
+void Source::update_historybuffer(){
     if (encoder_){
         // bufsize can also be 0 (= don't resend)!
         int32_t bufsize = resend_buffersize_.load() * format_->sampleRate;
@@ -1189,7 +1189,7 @@ void send_stop(const endpoint& ep, int32_t id,
     fn((const AooByte *)msg.Data(), msg.Size(), ep);
 }
 
-void source_imp::dispatch_requests(const sendfn& fn){
+void Source::dispatch_requests(const sendfn& fn){
     sink_request r;
     while (requests_.try_pop(r)){
         if (r.type == request_type::stop){
@@ -1198,7 +1198,7 @@ void source_imp::dispatch_requests(const sendfn& fn){
     }
 }
 
-void source_imp::send_stream(const sendfn& fn){
+void Source::send_stream(const sendfn& fn){
     auto what = need_send();
     if (what == 0){
         return;
@@ -1263,7 +1263,7 @@ void source_imp::send_stream(const sendfn& fn){
 
 #define XRUN_THRESHOLD 0.1
 
-void source_imp::send_data(const sendfn& fn){
+void Source::send_data(const sendfn& fn){
     int32_t last_sequence = 0;
 
     // NOTE: we have to lock *before* calling 'read_available'
@@ -1422,7 +1422,7 @@ void source_imp::send_data(const sendfn& fn){
     }
 }
 
-void source_imp::resend_data(const sendfn &fn){
+void Source::resend_data(const sendfn &fn){
     shared_lock updatelock(update_mutex_); // reader lock for history buffer!
     if (!history_.capacity()){
         return;
@@ -1515,7 +1515,7 @@ void source_imp::resend_data(const sendfn &fn){
     }
 }
 
-void source_imp::send_packet(const sendfn &fn, int32_t stream_id,
+void Source::send_packet(const sendfn &fn, int32_t stream_id,
                              data_packet& d, bool binary) {
     if (binary){
         AooByte buf[AOO_MAX_PACKET_SIZE];
@@ -1559,7 +1559,7 @@ void source_imp::send_packet(const sendfn &fn, int32_t stream_id,
 
 // /aoo/sink/<id>/data <src> <stream_id> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
-void source_imp::send_packet_osc(const sendfn& fn, const endpoint& ep,
+void Source::send_packet_osc(const sendfn& fn, const endpoint& ep,
                                  int32_t stream_id, const aoo::data_packet& d) const {
     char buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -1588,7 +1588,7 @@ void source_imp::send_packet_osc(const sendfn& fn, const endpoint& ep,
 // [total (int32), nframes (int16), frame (int16)],  [sr (float64)],
 // size (int32), data...
 
-void source_imp::write_bin_data(const endpoint* ep, int32_t stream_id,
+void Source::write_bin_data(const endpoint* ep, int32_t stream_id,
                                 const data_packet& d, AooByte *buf, int32_t& size) const
 {
     int16_t flags = 0;
@@ -1633,7 +1633,7 @@ void source_imp::write_bin_data(const endpoint* ep, int32_t stream_id,
     size = it - buf;
 }
 
-void source_imp::send_packet_bin(const sendfn& fn, const endpoint& ep,
+void Source::send_packet_bin(const sendfn& fn, const endpoint& ep,
                                  int32_t stream_id, const aoo::data_packet& d) const {
     AooByte buf[AOO_MAX_PACKET_SIZE];
     int32_t size;
@@ -1650,7 +1650,7 @@ void source_imp::send_packet_bin(const sendfn& fn, const endpoint& ep,
     fn((const AooByte *)buf, size, ep);
 }
 
-void source_imp::send_ping(const sendfn& fn){
+void Source::send_ping(const sendfn& fn){
     // if stream is stopped, the timer won't increment anyway
     auto elapsed = timer_.get_elapsed();
     auto pingtime = lastpingtime_.load();
@@ -1687,7 +1687,7 @@ void source_imp::send_ping(const sendfn& fn){
 }
 
 // /start <id> <version>
-void source_imp::handle_start_request(const osc::ReceivedMessage& msg,
+void Source::handle_start_request(const osc::ReceivedMessage& msg,
                                       const ip_address& addr)
 {
     LOG_DEBUG("handle start request");
@@ -1719,7 +1719,7 @@ void source_imp::handle_start_request(const osc::ReceivedMessage& msg,
 
 // /aoo/src/<id>/data <id> <stream_id> <seq1> <frame1> <seq2> <frame2> etc.
 
-void source_imp::handle_data_request(const osc::ReceivedMessage& msg,
+void Source::handle_data_request(const osc::ReceivedMessage& msg,
                                      const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
@@ -1746,7 +1746,7 @@ void source_imp::handle_data_request(const osc::ReceivedMessage& msg,
 // (header), id (int32), stream_id (int32), count (int32),
 // seq1 (int32), frame1(int32), seq2(int32), frame2(seq), etc.
 
-void source_imp::handle_data_request(const AooByte *msg, int32_t n,
+void Source::handle_data_request(const AooByte *msg, int32_t n,
                                      const ip_address& addr)
 {
     // check size (id, stream_id, count)
@@ -1781,7 +1781,7 @@ void source_imp::handle_data_request(const AooByte *msg, int32_t n,
     }
 }
 
-void source_imp::handle_invite(const osc::ReceivedMessage& msg,
+void Source::handle_invite(const osc::ReceivedMessage& msg,
                                const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
@@ -1834,7 +1834,7 @@ void source_imp::handle_invite(const osc::ReceivedMessage& msg,
     }
 }
 
-void source_imp::handle_uninvite(const osc::ReceivedMessage& msg,
+void Source::handle_uninvite(const osc::ReceivedMessage& msg,
                                  const ip_address& addr)
 {
     auto id = msg.ArgumentsBegin()->AsInt32();
@@ -1852,7 +1852,7 @@ void source_imp::handle_uninvite(const osc::ReceivedMessage& msg,
     }
 }
 
-void source_imp::handle_ping(const osc::ReceivedMessage& msg,
+void Source::handle_ping(const osc::ReceivedMessage& msg,
                              const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();

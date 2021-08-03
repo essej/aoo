@@ -13,10 +13,10 @@ const size_t kAooEventQueueSize = 8;
 
 AOO_API AooSink * AOO_CALL AooSink_new(
         AooId id, AooFlag flags, AooError *err) {
-    return aoo::construct<aoo::sink_imp>(id, flags, err);
+    return aoo::construct<aoo::Sink>(id, flags, err);
 }
 
-aoo::sink_imp::sink_imp(AooId id, AooFlag flags, AooError *err)
+aoo::Sink::Sink(AooId id, AooFlag flags, AooError *err)
     : id_(id) {
     eventqueue_.reserve(kAooEventQueueSize);
 }
@@ -24,10 +24,10 @@ aoo::sink_imp::sink_imp(AooId id, AooFlag flags, AooError *err)
 AOO_API void AOO_CALL AooSink_free(AooSink *sink) {
     // cast to correct type because base class
     // has no virtual destructor!
-    aoo::destroy(static_cast<aoo::sink_imp *>(sink));
+    aoo::destroy(static_cast<aoo::Sink *>(sink));
 }
 
-aoo::sink_imp::~sink_imp(){
+aoo::Sink::~Sink(){
     // free remaining source requests
     source_request r;
     while (requestqueue_.try_pop(r)) {
@@ -48,7 +48,7 @@ AOO_API AooError AOO_CALL AooSink_setup(
     return sink->setup(samplerate, blocksize, nchannels);
 }
 
-AooError AOO_CALL aoo::sink_imp::setup(
+AooError AOO_CALL aoo::Sink::setup(
         AooSampleRate samplerate, AooInt32 blocksize, AooInt32 nchannels){
     if (samplerate > 0 && blocksize > 0 && nchannels > 0)
     {
@@ -97,7 +97,7 @@ AOO_API AooError AOO_CALL AooSink_control(
     return sink->control(ctl, index, ptr, size);
 }
 
-AooError AOO_CALL aoo::sink_imp::control(
+AooError AOO_CALL aoo::Sink::control(
         AooCtl ctl, AooIntPtr index, void *ptr, AooSize size)
 {
     switch (ctl){
@@ -325,7 +325,7 @@ AOO_API AooError AOO_CALL AooSink_handleMessage(
     return sink->handleMessage(data, size, address, addrlen);
 }
 
-AooError AOO_CALL aoo::sink_imp::handleMessage(
+AooError AOO_CALL aoo::Sink::handleMessage(
         const AooByte *data, AooInt32 size,
         const void *address, AooAddrSize addrlen)
 {
@@ -392,7 +392,7 @@ AOO_API AooError AOO_CALL AooSink_send(
     return sink->send(fn, user);
 }
 
-AooError AOO_CALL aoo::sink_imp::send(AooSendFunc fn, void *user){
+AooError AOO_CALL aoo::Sink::send(AooSendFunc fn, void *user){
     dispatch_requests();
 
     sendfn reply(fn, user);
@@ -416,7 +416,7 @@ AOO_API AooError AOO_CALL AooSink_process(
     return sink->process(data, nsamples, t);
 }
 
-AooError AOO_CALL aoo::sink_imp::process(
+AooError AOO_CALL aoo::Sink::process(
         AooSample **data, AooInt32 nsamples, AooNtpTime t){
     // clear outputs
     for (int i = 0; i < nchannels_; ++i){
@@ -510,7 +510,7 @@ AOO_API AooError AOO_CALL AooSink_setEventHandler(
     return sink->setEventHandler(fn, user, mode);
 }
 
-AooError AOO_CALL aoo::sink_imp::setEventHandler(
+AooError AOO_CALL aoo::Sink::setEventHandler(
         AooEventHandler fn, void *user, AooEventMode mode)
 {
     eventhandler_ = fn;
@@ -523,7 +523,7 @@ AOO_API AooBool AOO_CALL AooSink_eventsAvailable(AooSink *sink){
     return sink->eventsAvailable();
 }
 
-AooBool AOO_CALL aoo::sink_imp::eventsAvailable(){
+AooBool AOO_CALL aoo::Sink::eventsAvailable(){
     if (!eventqueue_.empty()){
         return true;
     }
@@ -544,7 +544,7 @@ AOO_API AooError AOO_CALL AooSink_pollEvents(AooSink *sink){
 
 #define EVENT_THROTTLE 1000
 
-AooError AOO_CALL aoo::sink_imp::pollEvents(){
+AooError AOO_CALL aoo::Sink::pollEvents(){
     int total = 0;
     sink_event e;
     while (eventqueue_.try_pop(e)){
@@ -579,7 +579,7 @@ AooError AOO_CALL aoo::sink_imp::pollEvents(){
 
 namespace aoo {
 
-void sink_imp::send_event(const sink_event &e, AooThreadLevel level) {
+void Sink::send_event(const sink_event &e, AooThreadLevel level) {
     switch (eventmode_){
     case kAooEventModePoll:
         eventqueue_.push(e);
@@ -600,11 +600,11 @@ void sink_imp::send_event(const sink_event &e, AooThreadLevel level) {
 }
 
 // only called if mode is kAooEventModeCallback
-void sink_imp::call_event(const event &e, AooThreadLevel level) const {
+void Sink::call_event(const event &e, AooThreadLevel level) const {
     eventhandler_(eventcontext_, &e.event_, level);
 }
 
-void sink_imp::dispatch_requests(){
+void Sink::dispatch_requests(){
     source_request r;
     while (requestqueue_.try_pop(r)){
         switch (r.type) {
@@ -651,7 +651,7 @@ void sink_imp::dispatch_requests(){
     }
 }
 
-aoo::source_desc * sink_imp::find_source(const ip_address& addr, AooId id){
+aoo::source_desc * Sink::find_source(const ip_address& addr, AooId id){
     for (auto& src : sources_){
         if (src.match(addr, id)){
             return &src;
@@ -660,7 +660,7 @@ aoo::source_desc * sink_imp::find_source(const ip_address& addr, AooId id){
     return nullptr;
 }
 
-aoo::source_desc * sink_imp::get_source_arg(intptr_t index){
+aoo::source_desc * Sink::get_source_arg(intptr_t index){
     auto ep = (const AooEndpoint *)index;
     if (!ep){
         LOG_ERROR("AooSink: missing source argument");
@@ -674,7 +674,7 @@ aoo::source_desc * sink_imp::get_source_arg(intptr_t index){
     return src;
 }
 
-source_desc * sink_imp::add_source(const ip_address& addr, AooId id){
+source_desc * Sink::add_source(const ip_address& addr, AooId id){
     // add new source
     uint32_t flags = 0;
 #if USE_AOO_NET
@@ -697,7 +697,7 @@ source_desc * sink_imp::add_source(const ip_address& addr, AooId id){
     return &sources_.front();
 }
 
-void sink_imp::reset_sources(){
+void Sink::reset_sources(){
     source_lock lock(sources_);
     for (auto& src : sources_){
         src.reset(*this);
@@ -707,7 +707,7 @@ void sink_imp::reset_sources(){
 // /aoo/sink/<id>/start <src> <version> <stream_id> <flags> <lastformat>
 // <nchannels> <samplerate> <blocksize> <codec> <options>
 // [<metadata_type> <metadata_content>]
-AooError sink_imp::handle_start_message(const osc::ReceivedMessage& msg,
+AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
                                         const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
@@ -770,7 +770,7 @@ AooError sink_imp::handle_start_message(const osc::ReceivedMessage& msg,
 }
 
 // /aoo/sink/<id>/stop <src> <stream>
-AooError sink_imp::handle_stop_message(const osc::ReceivedMessage& msg,
+AooError Sink::handle_stop_message(const osc::ReceivedMessage& msg,
                                        const ip_address& addr) {
     auto it = msg.ArgumentsBegin();
 
@@ -791,7 +791,7 @@ AooError sink_imp::handle_stop_message(const osc::ReceivedMessage& msg,
     }
 }
 
-AooError sink_imp::handle_data_message(const osc::ReceivedMessage& msg,
+AooError Sink::handle_data_message(const osc::ReceivedMessage& msg,
                                         const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
@@ -820,7 +820,7 @@ AooError sink_imp::handle_data_message(const osc::ReceivedMessage& msg,
 // [total (int32), nframes (int16), frame (int16)],  [sr (float64)],
 // size (int32), data...
 
-AooError sink_imp::handle_data_message(const AooByte *msg, int32_t n,
+AooError Sink::handle_data_message(const AooByte *msg, int32_t n,
                                        const ip_address& addr)
 {
     // check size (excluding samplerate, frames and data)
@@ -868,7 +868,7 @@ AooError sink_imp::handle_data_message(const AooByte *msg, int32_t n,
     return handle_data_packet(d, true, addr, id);
 }
 
-AooError sink_imp::handle_data_packet(net_packet& d, bool binary,
+AooError Sink::handle_data_packet(net_packet& d, bool binary,
                                        const ip_address& addr, AooId id)
 {
     if (id < 0){
@@ -887,7 +887,7 @@ AooError sink_imp::handle_data_packet(net_packet& d, bool binary,
     return src->handle_data(*this, d, binary);
 }
 
-AooError sink_imp::handle_ping_message(const osc::ReceivedMessage& msg,
+AooError Sink::handle_ping_message(const osc::ReceivedMessage& msg,
                                         const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
@@ -961,7 +961,7 @@ source_desc::~source_desc(){
     LOG_DEBUG("~source_desc");
 }
 
-bool source_desc::is_active(const sink_imp& s) const {
+bool source_desc::is_active(const Sink& s) const {
     auto last = last_packet_time_.load(std::memory_order_relaxed);
     return (s.elapsed_time() - last) < s.source_timeout();
 }
@@ -993,7 +993,7 @@ AooError source_desc::codec_control(
     }
 }
 
-void source_desc::reset(const sink_imp& s){
+void source_desc::reset(const Sink& s){
     // take writer lock!
     scoped_lock lock(mutex_);
     update(s);
@@ -1002,7 +1002,7 @@ void source_desc::reset(const sink_imp& s){
 #define MAXHWBUFSIZE 2048
 #define MINSAMPLERATE 44100
 
-void source_desc::update(const sink_imp& s){
+void source_desc::update(const Sink& s){
     // resize audio ring buffer
     if (format_ && format_->blockSize > 0 && format_->sampleRate > 0){
         assert(decoder_ != nullptr);
@@ -1074,7 +1074,7 @@ void source_desc::update(const sink_imp& s){
     }
 }
 
-void source_desc::invite(const sink_imp& s, AooCustomData *metadata){
+void source_desc::invite(const Sink& s, AooCustomData *metadata){
     // don't invite if already running!
     // state can change in different threads, so we need a CAS loop
     auto state = state_.load(std::memory_order_relaxed);
@@ -1118,7 +1118,7 @@ void source_desc::invite(const sink_imp& s, AooCustomData *metadata){
     LOG_WARNING("aoo: couldn't invite source - already active");
 }
 
-void source_desc::uninvite(const sink_imp& s){
+void source_desc::uninvite(const Sink& s){
     // don't uninvite when already idle!
     // state can change in different threads, so we need a CAS loop
     auto state = state_.load(std::memory_order_relaxed);
@@ -1153,7 +1153,7 @@ float source_desc::get_buffer_fill_ratio(){
 // /aoo/sink/<id>/start <src> <version> <stream_id> <flags>
 // <lastformat> <nchannels> <samplerate> <blocksize> <codec> <options>
 
-AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t flags,
+AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags,
                                    int32_t lastformat, const AooFormat& f,
                                    const AooByte *extension, int32_t size,
                                    const AooCustomData& md) {
@@ -1294,7 +1294,7 @@ AooError source_desc::handle_start(const sink_imp& s, int32_t stream, uint32_t f
 
 // /aoo/sink/<id>/stop <src> <stream_id>
 
-AooError source_desc::handle_stop(const sink_imp& s, int32_t stream) {
+AooError source_desc::handle_stop(const Sink& s, int32_t stream) {
     LOG_DEBUG("handle stop");
     // ignore redundant /stop messages!
     // NOTE: stream_id_ can only change in this thread,
@@ -1320,7 +1320,7 @@ AooError source_desc::handle_stop(const sink_imp& s, int32_t stream) {
 
 // /aoo/sink/<id>/data <src> <stream_id> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
 
-AooError source_desc::handle_data(const sink_imp& s, net_packet& d, bool binary)
+AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
 {
     binary_.store(binary, std::memory_order_relaxed);
 
@@ -1382,7 +1382,7 @@ AooError source_desc::handle_data(const sink_imp& s, net_packet& d, bool binary)
 
 // /aoo/sink/<id>/ping <src> <time>
 
-AooError source_desc::handle_ping(const sink_imp& s, time_tag tt){
+AooError source_desc::handle_ping(const Sink& s, time_tag tt){
     LOG_DEBUG("handle ping");
 
 #if 0
@@ -1410,7 +1410,7 @@ AooError source_desc::handle_ping(const sink_imp& s, time_tag tt){
 // only send every 50 ms! LATER we might make this settable
 #define INVITE_INTERVAL 0.05
 
-void source_desc::send(const sink_imp& s, const sendfn& fn){
+void source_desc::send(const Sink& s, const sendfn& fn){
     request r;
     while (requestqueue_.try_pop(r)){
         switch (r.type){
@@ -1445,7 +1445,7 @@ void source_desc::send(const sink_imp& s, const sendfn& fn){
 
 // TODO: make sure not to send events while holding a lock!
 
-bool source_desc::process(const sink_imp& s,
+bool source_desc::process(const Sink& s,
                           AooSample **buffer, int32_t nsamples)
 {
     // synchronize with update()!
@@ -1683,7 +1683,7 @@ bool source_desc::process(const sink_imp& s,
     return true;
 }
 
-int32_t source_desc::poll_events(sink_imp& s, AooEventHandler fn, void *user){
+int32_t source_desc::poll_events(Sink& s, AooEventHandler fn, void *user){
     // always lockfree!
     int count = 0;
     event e;
@@ -1703,7 +1703,7 @@ void source_desc::add_lost(stream_stats& stats, int32_t n) {
 #define SILENT_REFILL 0
 #define SKIP_BLOCKS 0
 
-void source_desc::handle_underrun(const sink_imp& s){
+void source_desc::handle_underrun(const Sink& s){
     LOG_VERBOSE("audio buffer underrun");
 
     int32_t n = audioqueue_.write_available();
@@ -1752,7 +1752,7 @@ void source_desc::handle_underrun(const sink_imp& s){
     underrun_ = false;
 }
 
-bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
+bool source_desc::add_packet(const Sink& s, const net_packet& d,
                              stream_stats& stats){
     // we have to check the stream_id (again) because the stream
     // might have changed in between!
@@ -1887,7 +1887,7 @@ bool source_desc::add_packet(const sink_imp& s, const net_packet& d,
     return true;
 }
 
-void source_desc::process_blocks(const sink_imp& s, stream_stats& stats){
+void source_desc::process_blocks(const Sink& s, stream_stats& stats){
     if (jitterbuffer_.empty()){
         return;
     }
@@ -1971,7 +1971,7 @@ void source_desc::process_blocks(const sink_imp& s, stream_stats& stats){
     }
 }
 
-void source_desc::skip_blocks(const sink_imp& s){
+void source_desc::skip_blocks(const Sink& s){
     auto n = std::min<int>(skipblocks_, jitterbuffer_.size());
     LOG_VERBOSE("skip " << n << " blocks");
     while (n--){
@@ -1982,7 +1982,7 @@ void source_desc::skip_blocks(const sink_imp& s){
 // /aoo/src/<id>/data <sink> <stream_id> <seq0> <frame0> <seq1> <frame1> ...
 
 // deal with "holes" in block queue
-void source_desc::check_missing_blocks(const sink_imp& s){
+void source_desc::check_missing_blocks(const Sink& s){
     // only check if it has more than a single pending block!
     if (jitterbuffer_.size() <= 1 || !s.resend_enabled()){
         return;
@@ -2037,7 +2037,7 @@ resend_done:
 
 // /aoo/<id>/ping <sink>
 // called without lock!
-void source_desc::send_ping_reply(const sink_imp &s, const sendfn &fn,
+void source_desc::send_ping_reply(const Sink &s, const sendfn &fn,
                                   const request& r){
     LOG_DEBUG("send " kAooMsgPing " to " << ep);
 
@@ -2064,7 +2064,7 @@ void source_desc::send_ping_reply(const sink_imp &s, const sendfn &fn,
 
 // /aoo/src/<id>/start <sink>
 // called without lock!
-void source_desc::send_start_request(const sink_imp& s, const sendfn& fn) {
+void source_desc::send_start_request(const Sink& s, const sendfn& fn) {
     LOG_VERBOSE("request " kAooMsgStart " for source " << ep);
 
     AooByte buf[AOO_MAX_PACKET_SIZE];
@@ -2088,7 +2088,7 @@ void source_desc::send_start_request(const sink_imp& s, const sendfn& fn) {
 // (header), id (int32), stream_id (int32), count (int32),
 // seq1 (int32), frame1(int32), seq2(int32), frame2(seq), etc.
 
-void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
+void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
     if (datarequestqueue_.empty()){
         return;
     }
@@ -2192,7 +2192,7 @@ void source_desc::send_data_requests(const sink_imp& s, const sendfn& fn){
 // /aoo/src/<id>/invite <sink> [<metadata_type> <metadata_content>]
 
 // called without lock!
-void source_desc::send_invitation(const sink_imp& s, const sendfn& fn){
+void source_desc::send_invitation(const Sink& s, const sendfn& fn){
     LOG_DEBUG("send " kAooMsgInvite " to source " << ep);
 
     char buffer[AOO_MAX_PACKET_SIZE];
@@ -2226,7 +2226,7 @@ void source_desc::send_invitation(const sink_imp& s, const sendfn& fn){
 // /aoo/<id>/uninvite <sink>
 
 // called without lock!
-void source_desc::send_uninvitation(const sink_imp& s, const sendfn &fn){
+void source_desc::send_uninvitation(const Sink& s, const sendfn &fn){
     LOG_DEBUG("send " kAooMsgUninvite " to source " << ep);
 
     char buffer[AOO_MAX_PACKET_SIZE];
@@ -2244,7 +2244,7 @@ void source_desc::send_uninvitation(const sink_imp& s, const sendfn &fn){
     fn((const AooByte *)msg.Data(), msg.Size(), ep);
 }
 
-void source_desc::send_event(const sink_imp& s, const event& e,
+void source_desc::send_event(const Sink& s, const event& e,
                              AooThreadLevel level){
     switch (s.event_mode()){
     case kAooEventModePoll:
