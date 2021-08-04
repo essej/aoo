@@ -456,7 +456,7 @@ public:
     }
 
     template<typename... U>
-    void emplace_front(U&&... args){
+    iterator emplace_front(U&&... args){
         auto n = base::allocate();
         new (n) node(std::forward<U>(args)...);
         auto next = head_.load(std::memory_order_relaxed);
@@ -465,14 +465,11 @@ public:
             // check if the head has changed and update it atomically.
             // (if the CAS fails, 'next' is updated to the current head)
         } while (!head_.compare_exchange_weak(next, n, std::memory_order_acq_rel)) ;
+        return iterator(n);
     }
 
-    void push_front(const T& v){
-        emplace_front(v);
-    }
-
-    void push_front(T&& v){
-        emplace_front(std::move(v));
+    iterator push_front(T&& v){
+        return emplace_front(std::forward<T>(v));
     }
 
     // NOTE: don't call concurrently!

@@ -761,10 +761,10 @@ AooError Source::add_sink(const AooEndpoint& ep, uint32_t flags)
         }
     }
 #endif
-    sinks_.emplace_front(addr, ep.id, flags);
+    auto it = sinks_.emplace_front(addr, ep.id, flags);
     // send /start if already running!
     if (state_.load(std::memory_order_acquire) == stream_state::run){
-        sinks_.front().notify(send_flag::start);
+        it->notify(send_flag::start);
         notify(send_flag::start);
     }
 

@@ -693,8 +693,8 @@ source_desc * Sink::add_source(const ip_address& addr, AooId id){
         }
     }
 #endif
-    sources_.emplace_front(addr, id, flags, elapsed_time());
-    return &sources_.front();
+    auto it = sources_.emplace_front(addr, id, flags, elapsed_time());
+    return &(*it);
 }
 
 void Sink::reset_sources(){
