@@ -370,7 +370,7 @@ void Server::on_user_left_group(user& usr, group& grp){
 }
 
 void Server::handle_relay_message(const osc::ReceivedMessage& msg,
-                                      const ip_address& src){
+                                  const ip_address& src){
     auto it = msg.ArgumentsBegin();
 
     auto ip = (it++)->AsString();

@@ -28,8 +28,6 @@
 
 namespace aoo {
 
-class source;
-
 struct data_request {
     int32_t sequence;
     int32_t frame;

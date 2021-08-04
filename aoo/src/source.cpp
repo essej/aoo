@@ -1516,7 +1516,7 @@ void Source::resend_data(const sendfn &fn){
 }
 
 void Source::send_packet(const sendfn &fn, int32_t stream_id,
-                             data_packet& d, bool binary) {
+                         data_packet& d, bool binary) {
     if (binary){
         AooByte buf[AOO_MAX_PACKET_SIZE];
         int32_t size;
@@ -1560,7 +1560,7 @@ void Source::send_packet(const sendfn &fn, int32_t stream_id,
 // /aoo/sink/<id>/data <src> <stream_id> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
 
 void Source::send_packet_osc(const sendfn& fn, const endpoint& ep,
-                                 int32_t stream_id, const aoo::data_packet& d) const {
+                             int32_t stream_id, const aoo::data_packet& d) const {
     char buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
@@ -1589,7 +1589,7 @@ void Source::send_packet_osc(const sendfn& fn, const endpoint& ep,
 // size (int32), data...
 
 void Source::write_bin_data(const endpoint* ep, int32_t stream_id,
-                                const data_packet& d, AooByte *buf, int32_t& size) const
+                            const data_packet& d, AooByte *buf, int32_t& size) const
 {
     int16_t flags = 0;
     if (d.samplerate != 0){
@@ -1634,7 +1634,7 @@ void Source::write_bin_data(const endpoint* ep, int32_t stream_id,
 }
 
 void Source::send_packet_bin(const sendfn& fn, const endpoint& ep,
-                                 int32_t stream_id, const aoo::data_packet& d) const {
+                             int32_t stream_id, const aoo::data_packet& d) const {
     AooByte buf[AOO_MAX_PACKET_SIZE];
     int32_t size;
 
@@ -1688,7 +1688,7 @@ void Source::send_ping(const sendfn& fn){
 
 // /start <id> <version>
 void Source::handle_start_request(const osc::ReceivedMessage& msg,
-                                      const ip_address& addr)
+                                  const ip_address& addr)
 {
     LOG_DEBUG("handle start request");
 
@@ -1720,7 +1720,7 @@ void Source::handle_start_request(const osc::ReceivedMessage& msg,
 // /aoo/src/<id>/data <id> <stream_id> <seq1> <frame1> <seq2> <frame2> etc.
 
 void Source::handle_data_request(const osc::ReceivedMessage& msg,
-                                     const ip_address& addr)
+                                 const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
     auto id = (it++)->AsInt32();
@@ -1747,7 +1747,7 @@ void Source::handle_data_request(const osc::ReceivedMessage& msg,
 // seq1 (int32), frame1(int32), seq2(int32), frame2(seq), etc.
 
 void Source::handle_data_request(const AooByte *msg, int32_t n,
-                                     const ip_address& addr)
+                                 const ip_address& addr)
 {
     // check size (id, stream_id, count)
     if (n < 12){
@@ -1782,7 +1782,7 @@ void Source::handle_data_request(const AooByte *msg, int32_t n,
 }
 
 void Source::handle_invite(const osc::ReceivedMessage& msg,
-                               const ip_address& addr)
+                           const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
 
@@ -1835,7 +1835,7 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
 }
 
 void Source::handle_uninvite(const osc::ReceivedMessage& msg,
-                                 const ip_address& addr)
+                             const ip_address& addr)
 {
     auto id = msg.ArgumentsBegin()->AsInt32();
 
@@ -1853,7 +1853,7 @@ void Source::handle_uninvite(const osc::ReceivedMessage& msg,
 }
 
 void Source::handle_ping(const osc::ReceivedMessage& msg,
-                             const ip_address& addr)
+                         const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
     AooId id = (it++)->AsInt32();

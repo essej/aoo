@@ -660,7 +660,7 @@ namespace aoo {
 namespace net {
 
 bool Client::handle_peer_message(const osc::ReceivedMessage& msg, int onset,
-                                     const ip_address& addr)
+                                 const ip_address& addr)
 {
     bool success = false;
     // NOTE: we have to loop over *all* peers because there can
@@ -681,7 +681,7 @@ bool Client::handle_peer_message(const osc::ReceivedMessage& msg, int onset,
 
 template<typename T>
 void Client::perform_send_message(const AooByte *data, int32_t size, int32_t flags,
-                                      const sendfn& fn, T&& filter)
+                                  const sendfn& fn, T&& filter)
 {
     bool reliable = flags & kAooNetMessageReliable;
     // embed inside an OSC message:
@@ -714,8 +714,8 @@ void Client::perform_send_message(const AooByte *data, int32_t size, int32_t fla
 }
 
 void Client::do_connect(const char *host, int port,
-                            const char *name, const char *pwd,
-                            AooNetCallback cb, void *user)
+                        const char *name, const char *pwd,
+                        AooNetCallback cb, void *user)
 {
     auto cmd = std::make_unique<connect_cmd>(cb, user, host, port,
                                              name, encrypt(pwd));
@@ -724,8 +724,8 @@ void Client::do_connect(const char *host, int port,
 }
 
 void Client::perform_connect(const std::string& host, int port,
-                                 const std::string& name, const std::string& pwd,
-                                 AooNetCallback cb, void *user)
+                             const std::string& name, const std::string& pwd,
+                             AooNetCallback cb, void *user)
 {
     auto state = state_.load();
     if (state != client_state::disconnected){
@@ -873,14 +873,14 @@ void Client::perform_timeout(){
 }
 
 void Client::do_join_group(const char *group, const char *pwd,
-                               AooNetCallback cb, void *user){
+                           AooNetCallback cb, void *user){
     auto cmd = std::make_unique<group_join_cmd>(cb, user, group, encrypt(pwd));
 
     push_command(std::move(cmd));
 }
 
 void Client::perform_join_group(const std::string &group, const std::string &pwd,
-                                    AooNetCallback cb, void *user)
+                                AooNetCallback cb, void *user)
 {
 
     auto request = [group, cb, user](
@@ -935,7 +935,7 @@ void Client::do_leave_group(const char *group,
 }
 
 void Client::perform_leave_group(const std::string &group,
-                                     AooNetCallback cb, void *user)
+                                 AooNetCallback cb, void *user)
 {
     auto request = [this, group, cb, user](
             const char *pattern,
@@ -1127,7 +1127,7 @@ void Client::send_server_message(const AooByte *data, int32_t size){
 }
 
 void Client::send_peer_message(const AooByte *data, int32_t size,
-                                   const ip_address& addr) {
+                               const ip_address& addr) {
     // /aoo/relay <ip> <port> <msg>
     char buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
@@ -1411,7 +1411,7 @@ void Client::on_socket_error(int err){
 }
 
 void Client::on_exception(const char *what, const osc::Exception &err,
-                              const char *pattern){
+                          const char *pattern){
     char msg[256];
     if (pattern){
         snprintf(msg, sizeof(msg), "exception in %s (%s): %s",
@@ -1443,7 +1443,7 @@ Client::error_event::~error_event()
 }
 
 Client::ping_event::ping_event(int32_t type, const ip_address& addr,
-                                   uint64_t tt1, uint64_t tt2, uint64_t tt3)
+                               uint64_t tt1, uint64_t tt2, uint64_t tt3)
 {
     ping_event_.type = type;
     ping_event_.address = copy_sockaddr(addr.address(), addr.length());
@@ -1459,8 +1459,8 @@ Client::ping_event::~ping_event()
 }
 
 Client::peer_event::peer_event(int32_t type, const ip_address& addr,
-                                   const char *group, const char *user,
-                                   int32_t id)
+                               const char *group, const char *user,
+                               int32_t id)
 {
     peer_event_.type = type;
     peer_event_.address = copy_sockaddr(addr.address(), addr.length());
@@ -1471,7 +1471,7 @@ Client::peer_event::peer_event(int32_t type, const ip_address& addr,
 }
 
 Client::peer_event::peer_event(int32_t type, const char *group,
-                                   const char *user, int32_t id)
+                               const char *user, int32_t id)
 {
     peer_event_.type = type;
     peer_event_.address = nullptr;
@@ -1490,7 +1490,7 @@ Client::peer_event::~peer_event()
 }
 
 Client::message_event::message_event(const char *data, int32_t size,
-                                         const ip_address& addr)
+                                     const ip_address& addr)
 {
     message_event_.type = kAooNetEventPeerMessage;
     message_event_.address = copy_sockaddr(addr.address(), addr.length());
@@ -1557,8 +1557,8 @@ void udp_client::update(const sendfn& reply, time_tag now){
 }
 
 AooError udp_client::handle_message(const AooByte *data, int32_t n,
-                                     const ip_address &addr,
-                                     AooMsgType type, int32_t onset){
+                                    const ip_address &addr,
+                                    AooMsgType type, int32_t onset){
     try {
         osc::ReceivedPacket packet((const char *)data, n);
         osc::ReceivedMessage msg(packet);

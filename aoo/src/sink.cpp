@@ -708,7 +708,7 @@ void Sink::reset_sources(){
 // <nchannels> <samplerate> <blocksize> <codec> <options>
 // [<metadata_type> <metadata_content>]
 AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
-                                        const ip_address& addr)
+                                    const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
 
@@ -771,7 +771,7 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
 
 // /aoo/sink/<id>/stop <src> <stream>
 AooError Sink::handle_stop_message(const osc::ReceivedMessage& msg,
-                                       const ip_address& addr) {
+                                   const ip_address& addr) {
     auto it = msg.ArgumentsBegin();
 
     AooId id = (it++)->AsInt32();
@@ -792,7 +792,7 @@ AooError Sink::handle_stop_message(const osc::ReceivedMessage& msg,
 }
 
 AooError Sink::handle_data_message(const osc::ReceivedMessage& msg,
-                                        const ip_address& addr)
+                                   const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
 
@@ -821,7 +821,7 @@ AooError Sink::handle_data_message(const osc::ReceivedMessage& msg,
 // size (int32), data...
 
 AooError Sink::handle_data_message(const AooByte *msg, int32_t n,
-                                       const ip_address& addr)
+                                   const ip_address& addr)
 {
     // check size (excluding samplerate, frames and data)
     if (n < 20){
@@ -869,7 +869,7 @@ AooError Sink::handle_data_message(const AooByte *msg, int32_t n,
 }
 
 AooError Sink::handle_data_packet(net_packet& d, bool binary,
-                                       const ip_address& addr, AooId id)
+                                  const ip_address& addr, AooId id)
 {
     if (id < 0){
         LOG_WARNING("bad ID for " << kAooMsgData << " message");
@@ -888,7 +888,7 @@ AooError Sink::handle_data_packet(net_packet& d, bool binary,
 }
 
 AooError Sink::handle_ping_message(const osc::ReceivedMessage& msg,
-                                        const ip_address& addr)
+                                   const ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
 
