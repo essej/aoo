@@ -11,7 +11,7 @@
 
 namespace aoo {
 
-//---------------- time_tag -------------------//
+//---------------- OSC time tag -------------------//
 
 struct time_tag {
     static time_tag now();
