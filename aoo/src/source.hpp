@@ -174,6 +174,7 @@ class Source final : public AooSource {
     using unique_lock = sync::unique_lock<sync::shared_mutex>;
     using scoped_lock = sync::scoped_lock<sync::shared_mutex>;
     using scoped_shared_lock = sync::scoped_shared_lock<sync::shared_mutex>;
+    using scoped_spinlock = sync::scoped_lock<sync::spinlock>;
 
     // settings
     std::atomic<AooId> id_;

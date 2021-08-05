@@ -924,6 +924,7 @@ void Source::free_event(const event &e){
 #define STREAM_METADATA_WARN 1
 
 AooError Source::start_stream(const AooCustomData *md){
+    // check metadata
     if (md) {
         // check type name length
         if (strlen(md->type) > kAooTypeNameMaxLen){
@@ -964,9 +965,9 @@ AooError Source::start_stream(const AooCustomData *md){
         LOG_DEBUG("start stream");
     }
 
+    // copy/reset metadata
     {
-        std::lock_guard<sync::spinlock> lock(metadata_lock_);
-
+        scoped_spinlock lock(metadata_lock_);
         if (metadata_) {
             if (md) {
                 flat_metadata_copy(*md, *metadata_);
@@ -977,7 +978,6 @@ AooError Source::start_stream(const AooCustomData *md){
                 metadata_->size = 0;
             }
         }
-
         // metadata needs to be "accepted" in make_new_stream()
         metadata_accepted_ = false;
     }
@@ -998,7 +998,7 @@ void Source::make_new_stream(){
 
     // "accept" stream metadata, see send_start()
     {
-        std::lock_guard<sync::spinlock> lock(metadata_lock_);
+        scoped_spinlock lock(metadata_lock_);
         if (metadata_ && metadata_->size > 0) {
             metadata_accepted_ = true;
         }
@@ -1045,12 +1045,13 @@ void Source::allocate_metadata(int32_t size){
     AooInt32 oldsize;
 
     // swap metadata
-    metadata_lock_.lock();
-    olddata = metadata_;
-    metadata_ = metadata;
-    oldsize = metadata_size_.exchange(size);
-    metadata_accepted_ = false;
-    metadata_lock_.unlock();
+    {
+        scoped_spinlock lock(metadata_lock_);
+        olddata = metadata_;
+        metadata_ = metadata;
+        oldsize = metadata_size_.exchange(size);
+        metadata_accepted_ = false;
+    }
 
     // free old metadata
     if (olddata){
@@ -1206,7 +1207,7 @@ void Source::send_stream(const sendfn& fn){
     // cache stream metadata
     AooCustomData *md = nullptr;
     {
-        std::lock_guard<sync::spinlock> lock(metadata_lock_);
+        scoped_spinlock lock(metadata_lock_);
         // only send metadata if "accepted" in make_new_stream().
         if (metadata_accepted_) {
             assert(metadata_ != nullptr);
