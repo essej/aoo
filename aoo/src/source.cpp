@@ -331,7 +331,7 @@ AooError AOO_CALL aoo::Source::setup(
                 update_historybuffer();
             }
 
-            make_new_stream(true);
+            make_new_stream();
         }
 
         // always reset timer + time DLL filter
@@ -458,7 +458,7 @@ AooError AOO_CALL aoo::Source::process(
     } else if (state == stream_state::stop){
         sink_lock lock(sinks_);
         for (auto& s : sinks_){
-            s.notify(send_flag::stop);
+            s.stop();
         }
         notify(send_flag::stop);
 
@@ -480,12 +480,7 @@ AooError AOO_CALL aoo::Source::process(
             return kAooErrorWouldBlock;
         }
 
-        // LATER also send format if we have been idle for a long time,
-        // because the remote sink might have removed the source and
-        // therefore wouldn't have access to the format.
-        // In practice, this is not a critical issue because the sink
-        // would simply request the format, but it is not ideal...
-        make_new_stream(format_id_ == kAooIdInvalid);
+        make_new_stream();
 
         // check if we have been stopped in the meantime
         auto expected = stream_state::start;
@@ -774,19 +769,15 @@ AooError Source::add_sink(const AooEndpoint& ep, uint32_t flags)
 AooError Source::remove_sink(const AooEndpoint& ep){
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
 
-    // cache stream id
-    int32_t stream;
-    {
-        scoped_shared_lock lock(update_mutex_);
-        stream = stream_id_;
-    }
-
     sink_lock lock(sinks_);
     for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
         if (it->ep.address == addr && it->ep.id == ep.id){
             // send /stop message!
             sink_request r(request_type::stop, it->ep);
-            r.stop.stream = stream;
+            {
+                scoped_shared_lock lock(update_mutex_);
+                r.stop.stream = it->stream_id;
+            }
             requests_.push(r);
 
             sinks_.erase(it);
@@ -798,18 +789,14 @@ AooError Source::remove_sink(const AooEndpoint& ep){
 }
 
 AooError Source::remove_all_sinks(){
-    // cache stream id
-    int32_t stream;
-    {
-        scoped_shared_lock lock(update_mutex_);
-        stream = stream_id_;
-    }
+    // just lock once for all stream ids
+    scoped_shared_lock lock(update_mutex_);
 
-    sink_lock lock(sinks_);
+    sink_lock lock2(sinks_);
     // send /stop messages
     for (auto& s : sinks_){
         sink_request r(request_type::stop, s.ep);
-        r.stop.stream = stream;
+        r.stop.stream = s.stream_id;
         requests_.push(r);
     }
     sinks_.clear();
@@ -844,6 +831,7 @@ AooError Source::set_format(AooFormat &f){
 
     format_ = std::move(new_format);
     encoder_ = std::move(new_encoder);
+    format_id_ = get_random_id();
 
     update_audioqueue();
 
@@ -862,7 +850,7 @@ AooError Source::set_format(AooFormat &f){
     // NOTE: there's a slight race condition because 'xrun_'
     // might be incremented right afterwards, but I'm not
     // sure if this could cause any real problems..
-    make_new_stream(true);
+    make_new_stream();
 
     return kAooOk;
 }
@@ -1001,23 +989,19 @@ AooError Source::start_stream(const AooCustomData *md){
 
 // must be real-time safe because it might be called in process()!
 // always called with update lock!
-void Source::make_new_stream(bool format_changed){
+void Source::make_new_stream(){
     // implicitly reset time DLL to be on the safe side
     timer_.reset();
 
-    // Start new sequence and resend format.
-    // We naturally want to do this when setting the format,
-    // but it's good to also do it in setup() to eliminate
-    // any timing gaps.
-    stream_id_ = get_random_id();
     sequence_ = 0;
     xrun_.store(0.0); // !
 
     // "accept" stream metadata, see send_start()
+    metadata_target_ = get_random_id();
     {
         std::lock_guard<sync::spinlock> lock(metadata_lock_);
         if (metadata_ && metadata_->size > 0) {
-            metadata_id_ = stream_id_;
+            metadata_id_ = metadata_target_;
         }
     }
 
@@ -1031,14 +1015,9 @@ void Source::make_new_stream(bool format_changed){
     // reset encoder to avoid garbage from previous stream
     AooEncoder_control(encoder_.get(), kAooCodecCtlReset, nullptr, 0);
 
-    if (format_changed){
-        format_id_ = stream_id_;
-    }
-
     sink_lock lock(sinks_);
     for (auto& s : sinks_){
-        s.reset();
-        s.notify(send_flag::start);
+        s.start();
     }
 
     notify(send_flag::start);
@@ -1210,10 +1189,9 @@ void Source::send_stream(const sendfn& fn){
         return;
     }
 
-    int32_t stream_id = stream_id_;
-    int32_t format_id = format_id_;
+    // cache stream format
+    auto format_id = format_id_;
 
-    // stream format
     AooFormatStorage f;
     memcpy(&f, format_.get(), format_->size);
 
@@ -1226,18 +1204,28 @@ void Source::send_stream(const sendfn& fn){
         return;
     }
 
-    // stream metadata
+    // cache stream metadata
     AooCustomData *md = nullptr;
     {
         std::lock_guard<sync::spinlock> lock(metadata_lock_);
         // only send metadata if "accepted" in make_new_stream().
-        if (metadata_id_ == stream_id) {
+        if (metadata_id_ == metadata_target_) {
             assert(metadata_ != nullptr);
             assert(metadata_->size > 0);
             auto mdsize = flat_metadata_size(*metadata_);
             md = (AooCustomData *)alloca(mdsize);
             flat_metadata_copy(*metadata_, *md);
         }
+    }
+
+    // cache sinks
+    // we only free sinks in this thread, so we don't have to lock
+#if 0
+    sink_lock lock(sinks_);
+#endif
+    cached_sinks_.clear();
+    for (auto& s : sinks_){
+        cached_sinks_.emplace_back(s, s.need_send());
     }
 
     // send messages without lock!
@@ -1248,17 +1236,141 @@ void Source::send_stream(const sendfn& fn){
     // this is not a real lock, so we don't have worry about dead locks
     sink_lock lock(sinks_);
 #endif
-    for (auto& s : sinks_){
-        auto what = s.need_send();
+    for (auto& s : cached_sinks_){
         // first send /stop message, in case we also send a /start message
-        if (what & send_flag::stop){
-            send_stop(s.ep, id(), stream_id, fn);
+        if (s.send & send_flag::stop){
+            send_stop(s.ep, id(), s.stream_id, fn);
         }
-        if (what & send_flag::start){
-            send_start(s.ep, id(), stream_id, format_id,
+        if (s.send & send_flag::start){
+            send_start(s.ep, id(), s.stream_id, format_id,
                        f.header, extension, size, md, fn);
         }
     }
+}
+
+// binary data message:
+// domain (int32), type (int16), cmd (int16), sink_id (int32)
+// source_id (int32), stream_id (int32), seq (int32), channel (int16), flags (int16),
+// [total (int32), nframes (int16), frame (int16)],  [sr (float64)],
+// size (int32), data...
+
+void write_bin_data(const endpoint* ep, AooId id, AooId stream_id,
+                    const data_packet& d, AooByte *buf, int32_t& size)
+{
+    int16_t flags = 0;
+    if (d.samplerate != 0){
+        flags |= kAooBinMsgDataSampleRate;
+    }
+    if (d.nframes > 1){
+        flags |= kAooBinMsgDataFrames;
+    }
+
+    auto it = buf;
+    // write header
+    memcpy(it, kAooBinMsgDomain, kAooBinMsgDomainSize);
+    it += kAooBinMsgDomainSize;
+    aoo::write_bytes<int16_t>(kAooTypeSink, it);
+    aoo::write_bytes<int16_t>(kAooBinMsgCmdData, it);
+    if (ep){
+        aoo::write_bytes<int32_t>(ep->id, it);
+    } else {
+        // skip
+        it += sizeof(int32_t);
+    }
+    // write arguments
+    aoo::write_bytes<int32_t>(id, it);
+    aoo::write_bytes<int32_t>(stream_id, it);
+    aoo::write_bytes<int32_t>(d.sequence, it);
+    aoo::write_bytes<int16_t>(d.channel, it);
+    aoo::write_bytes<int16_t>(flags, it);
+    if (flags & kAooBinMsgDataFrames){
+        aoo::write_bytes<int32_t>(d.totalsize, it);
+        aoo::write_bytes<int16_t>(d.nframes, it);
+        aoo::write_bytes<int16_t>(d.frame, it);
+    }
+    if (flags & kAooBinMsgDataSampleRate){
+         aoo::write_bytes<double>(d.samplerate, it);
+    }
+    aoo::write_bytes<int32_t>(d.size, it);
+    // write audio data
+    memcpy(it, d.data, d.size);
+    it += d.size;
+
+    size = it - buf;
+}
+
+// /aoo/sink/<id>/data <src> <stream_id> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
+
+void send_packet_osc(const endpoint& ep, AooId id, int32_t stream_id,
+                     const aoo::data_packet& d, const sendfn& fn) {
+    char buf[AOO_MAX_PACKET_SIZE];
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+    const int32_t max_addr_size = kAooMsgDomainLen
+            + kAooMsgSinkLen + 16 + kAooMsgDataLen;
+    char address[max_addr_size];
+    snprintf(address, sizeof(address), "%s%s/%d%s",
+             kAooMsgDomain, kAooMsgSink, ep.id, kAooMsgData);
+
+    msg << osc::BeginMessage(address) << id << stream_id << d.sequence << d.samplerate
+        << d.channel << d.totalsize << d.nframes << d.frame << osc::Blob(d.data, d.size)
+        << osc::EndMessage;
+
+#if AOO_DEBUG_DATA
+    LOG_DEBUG("send block: seq = " << d.sequence << ", sr = "
+              << d.samplerate << ", chn = " << d.channel << ", totalsize = "
+              << d.totalsize << ", nframes = " << d.nframes
+              << ", frame = " << d.frame << ", size " << d.size);
+#endif
+    fn((const AooByte *)msg.Data(), msg.Size(), ep);
+}
+
+void send_packet(const cached_sink_vector& sinks, const AooId id,
+                 data_packet& d, const sendfn &fn, bool binary) {
+    if (binary){
+        AooByte buf[AOO_MAX_PACKET_SIZE];
+        int32_t size;
+
+        write_bin_data(nullptr, id, kAooIdInvalid, d, buf, size);
+
+        for (auto& s : sinks){
+            // overwrite sink id, stream id and channel!
+            aoo::to_bytes(s.ep.id, buf + 8);
+            aoo::to_bytes(s.stream_id, buf + 16);
+            aoo::to_bytes<int16_t>(s.channel, buf + kAooBinMsgHeaderSize + 12);
+
+        #if AOO_DEBUG_DATA
+            LOG_DEBUG("send block: seq = " << d.sequence << ", sr = "
+                      << d.samplerate << ", chn = " << s.channel << ", totalsize = "
+                      << d.totalsize << ", nframes = " << d.nframes
+                      << ", frame = " << d.frame << ", size " << d.size);
+        #endif
+            fn(buf, size, s.ep);
+        }
+    } else {
+        for (auto& s : sinks){
+            // set channel!
+            d.channel = s.channel;
+            send_packet_osc(s.ep, id, s.stream_id, d, fn);
+        }
+    }
+}
+
+void send_packet_bin(const endpoint& ep, AooId id, AooId stream_id,
+                     const aoo::data_packet& d, const sendfn& fn) {
+    AooByte buf[AOO_MAX_PACKET_SIZE];
+    int32_t size;
+
+    write_bin_data(&ep, id, stream_id, d, buf, size);
+
+#if AOO_DEBUG_DATA
+    LOG_DEBUG("send block: seq = " << d.sequence << ", sr = "
+              << d.samplerate << ", chn = " << d.channel << ", totalsize = "
+              << d.totalsize << ", nframes = " << d.nframes
+              << ", frame = " << d.frame << ", size " << d.size);
+#endif
+
+    fn((const AooByte *)buf, size, ep);
 }
 
 #define XRUN_THRESHOLD 0.1
@@ -1290,7 +1402,6 @@ void Source::send_data(const sendfn& fn){
             if (!encoder_){
                 return;
             }
-            int32_t stream_id = stream_id_;
             // send empty block
             // NOTE: we're the only thread reading 'sequence_', so we can increment
             // it even while holding a reader lock!
@@ -1303,6 +1414,17 @@ void Source::send_data(const sendfn& fn){
             d.frame = 0;
             d.data = nullptr;
             d.size = 0;
+
+            // cache sinks
+            // we only free sinks in this thread, so we don't have to lock
+        #if 0
+            sink_lock lock(sinks_);
+        #endif
+            cached_sinks_.clear();
+            for (auto& s : sinks_){
+                cached_sinks_.emplace_back(s);
+            }
+
             // now we can unlock
             updatelock.unlock();
 
@@ -1312,7 +1434,8 @@ void Source::send_data(const sendfn& fn){
             sink_lock lock(sinks_);
         #endif
             // send block to all sinks
-            send_packet(fn, stream_id, d, binary_.load(std::memory_order_relaxed));
+            send_packet(cached_sinks_, id(), d, fn,
+                        binary_.load(std::memory_order_relaxed));
 
             updatelock.lock();
         }
@@ -1325,8 +1448,6 @@ void Source::send_data(const sendfn& fn){
         }
 
         if (!sinks_.empty()){
-            int32_t stream_id = stream_id_; // make snapshot
-
             auto ptr = (block_data *)audioqueue_.read_data();
 
             data_packet d;
@@ -1375,6 +1496,16 @@ void Source::send_data(const sendfn& fn){
                                      d.totalsize, d.nframes, maxpacketsize);
             }
 
+            // cache sinks
+            // we only free sinks in this thread, so we don't have to lock
+        #if 0
+            sink_lock lock(sinks_);
+        #endif
+            cached_sinks_.clear();
+            for (auto& s : sinks_){
+                cached_sinks_.emplace_back(s);
+            }
+
             // unlock before sending!
             updatelock.unlock();
 
@@ -1388,7 +1519,7 @@ void Source::send_data(const sendfn& fn){
                 d.data = data;
                 d.size = n;
                 // send block to all sinks
-                send_packet(fn, stream_id, d, binary);
+                send_packet(cached_sinks_, id(), d, fn, binary);
             };
 
             auto ntimes = redundancy_.load();
@@ -1418,7 +1549,14 @@ void Source::send_data(const sendfn& fn){
         // not perfectly thread-safe, but shouldn't cause problems AFAICT....
         scoped_lock lock(update_mutex_);
         sequence_ = 0;
-        stream_id_ = get_random_id();
+        // cache sinks
+        // we only free sinks in this thread, so we don't have to lock
+    #if 0
+        sink_lock lock(sinks_);
+    #endif
+        for (auto& s : sinks_){
+            s.start();
+        }
     }
 }
 
@@ -1427,7 +1565,6 @@ void Source::resend_data(const sendfn &fn){
     if (!history_.capacity()){
         return;
     }
-    int32_t stream_id = stream_id_; // cache stream_id!
 
     // we only free sources in this thread, so we don't have to lock
 #if 0
@@ -1435,17 +1572,19 @@ void Source::resend_data(const sendfn &fn){
     sink_lock lock(sinks_);
 #endif
     // send block to sinks
-    for (auto& sink : sinks_){
+    for (auto& s : sinks_){
         data_request request;
-        while (sink.get_data_request(request)){
+        while (s.get_data_request(request)){
             auto block = history_.find(request.sequence);
             if (block){
                 bool binary = binary_.load(std::memory_order_relaxed);
 
+                auto stream_id = s.stream_id;
+
                 aoo::data_packet d;
                 d.sequence = block->sequence;
                 d.samplerate = block->samplerate;
-                d.channel = sink.channel.load(std::memory_order_relaxed);
+                d.channel = s.channel.load(std::memory_order_relaxed);
                 d.totalsize = block->size();
                 d.nframes = block->num_frames();
                 // We use a buffer on the heap because blocks and even frames
@@ -1477,9 +1616,9 @@ void Source::resend_data(const sendfn &fn){
                         d.data = frameptr[i];
                         d.size = framesize[i];
                         if (binary){
-                            send_packet_bin(fn, sink.ep, stream_id, d);
+                            send_packet_bin(s.ep, id(), stream_id, d, fn);
                         } else {
-                            send_packet_osc(fn, sink.ep, stream_id, d);
+                            send_packet_osc(s.ep, id(), stream_id, d, fn);
                         }
                     }
 
@@ -1499,9 +1638,9 @@ void Source::resend_data(const sendfn &fn){
                         d.data = sendbuffer_.data();
                         d.size = size;
                         if (binary){
-                            send_packet_bin(fn, sink.ep, stream_id, d);
+                            send_packet_bin(s.ep, id(), stream_id, d, fn);
                         } else {
-                            send_packet_osc(fn, sink.ep, stream_id, d);
+                            send_packet_osc(s.ep, id(), stream_id, d, fn);
                         }
 
                         // lock again
@@ -1513,141 +1652,6 @@ void Source::resend_data(const sendfn &fn){
             }
         }
     }
-}
-
-void Source::send_packet(const sendfn &fn, int32_t stream_id,
-                         data_packet& d, bool binary) {
-    if (binary){
-        AooByte buf[AOO_MAX_PACKET_SIZE];
-        int32_t size;
-
-        write_bin_data(nullptr, stream_id, d, buf, size);
-
-        // we only free sources in this thread, so we don't have to lock
-    #if 0
-        // this is not a real lock, so we don't have worry about dead locks
-        sink_lock lock(sinks_);
-    #endif
-        for (auto& sink : sinks_){
-            // overwrite id and channel!
-            aoo::to_bytes(sink.ep.id, buf + 8);
-
-            auto channel = sink.channel.load(std::memory_order_relaxed);
-            aoo::to_bytes<int16_t>(channel, buf + kAooBinMsgHeaderSize + 12);
-
-        #if AOO_DEBUG_DATA
-            LOG_DEBUG("send block: seq = " << d.sequence << ", sr = "
-                      << d.samplerate << ", chn = " << channel << ", totalsize = "
-                      << d.totalsize << ", nframes = " << d.nframes
-                      << ", frame = " << d.frame << ", size " << d.size);
-        #endif
-            fn(buf, size, sink.ep);
-        }
-    } else {
-        // we only free sources in this thread, so we don't have to lock
-    #if 0
-        // this is not a real lock, so we don't have worry about dead locks
-        sink_lock lock(sinks_);
-    #endif
-        for (auto& sink : sinks_){
-            // set channel!
-            d.channel = sink.channel.load(std::memory_order_relaxed);
-            send_packet_osc(fn, sink.ep, stream_id, d);
-        }
-    }
-}
-
-// /aoo/sink/<id>/data <src> <stream_id> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
-
-void Source::send_packet_osc(const sendfn& fn, const endpoint& ep,
-                             int32_t stream_id, const aoo::data_packet& d) const {
-    char buf[AOO_MAX_PACKET_SIZE];
-    osc::OutboundPacketStream msg(buf, sizeof(buf));
-
-    const int32_t max_addr_size = kAooMsgDomainLen
-            + kAooMsgSinkLen + 16 + kAooMsgDataLen;
-    char address[max_addr_size];
-    snprintf(address, sizeof(address), "%s%s/%d%s",
-             kAooMsgDomain, kAooMsgSink, ep.id, kAooMsgData);
-
-    msg << osc::BeginMessage(address) << id() << stream_id << d.sequence << d.samplerate
-        << d.channel << d.totalsize << d.nframes << d.frame << osc::Blob(d.data, d.size)
-        << osc::EndMessage;
-
-#if AOO_DEBUG_DATA
-    LOG_DEBUG("send block: seq = " << d.sequence << ", sr = "
-              << d.samplerate << ", chn = " << d.channel << ", totalsize = "
-              << d.totalsize << ", nframes = " << d.nframes
-              << ", frame = " << d.frame << ", size " << d.size);
-#endif
-    fn((const AooByte *)msg.Data(), msg.Size(), ep);
-}
-
-// binary data message:
-// id (int32), stream_id (int32), seq (int32), channel (int16), flags (int16),
-// [total (int32), nframes (int16), frame (int16)],  [sr (float64)],
-// size (int32), data...
-
-void Source::write_bin_data(const endpoint* ep, int32_t stream_id,
-                            const data_packet& d, AooByte *buf, int32_t& size) const
-{
-    int16_t flags = 0;
-    if (d.samplerate != 0){
-        flags |= kAooBinMsgDataSampleRate;
-    }
-    if (d.nframes > 1){
-        flags |= kAooBinMsgDataFrames;
-    }
-
-    auto it = buf;
-    // write header
-    memcpy(it, kAooBinMsgDomain, kAooBinMsgDomainSize);
-    it += kAooBinMsgDomainSize;
-    aoo::write_bytes<int16_t>(kAooTypeSink, it);
-    aoo::write_bytes<int16_t>(kAooBinMsgCmdData, it);
-    if (ep){
-        aoo::write_bytes<int32_t>(ep->id, it);
-    } else {
-        // skip
-        it += sizeof(int32_t);
-    }
-    // write arguments
-    aoo::write_bytes<int32_t>(id(), it);
-    aoo::write_bytes<int32_t>(stream_id, it);
-    aoo::write_bytes<int32_t>(d.sequence, it);
-    aoo::write_bytes<int16_t>(d.channel, it);
-    aoo::write_bytes<int16_t>(flags, it);
-    if (flags & kAooBinMsgDataFrames){
-        aoo::write_bytes<int32_t>(d.totalsize, it);
-        aoo::write_bytes<int16_t>(d.nframes, it);
-        aoo::write_bytes<int16_t>(d.frame, it);
-    }
-    if (flags & kAooBinMsgDataSampleRate){
-         aoo::write_bytes<double>(d.samplerate, it);
-    }
-    aoo::write_bytes<int32_t>(d.size, it);
-    // write audio data
-    memcpy(it, d.data, d.size);
-    it += d.size;
-
-    size = it - buf;
-}
-
-void Source::send_packet_bin(const sendfn& fn, const endpoint& ep,
-                             int32_t stream_id, const aoo::data_packet& d) const {
-    AooByte buf[AOO_MAX_PACKET_SIZE];
-    int32_t size;
-
-    write_bin_data(&ep, stream_id, d, buf, size);
-
-#if AOO_DEBUG_DATA
-    LOG_DEBUG("send block: seq = " << d.sequence << ", sr = "
-              << d.samplerate << ", chn = " << d.channel << ", totalsize = "
-              << d.totalsize << ", nframes = " << d.nframes
-              << ", frame = " << d.frame << ", size " << d.size);
-#endif
-
-    fn((const AooByte *)buf, size, ep);
 }
 
 void Source::send_ping(const sendfn& fn){
@@ -1708,7 +1712,7 @@ void Source::handle_start_request(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
 
     if (sink){
-        // resend /start message
+        // just resend /start message
         sink->notify(send_flag::start);
 
         notify(send_flag::start);
@@ -1781,6 +1785,10 @@ void Source::handle_data_request(const AooByte *msg, int32_t n,
     }
 }
 
+// /aoo/src/<id>/invite <id> <version> <stream_id> <flags>
+// <nchannels> <sr> <blocksize> <codec> <extension>
+// [<metadata_type> <metadata_content>]
+
 void Source::handle_invite(const osc::ReceivedMessage& msg,
                            const ip_address& addr)
 {
@@ -1834,6 +1842,8 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
     }
 }
 
+// /aoo/src/<id>/uninvite <id>
+
 void Source::handle_uninvite(const osc::ReceivedMessage& msg,
                              const ip_address& addr)
 {
@@ -1851,6 +1861,8 @@ void Source::handle_uninvite(const osc::ReceivedMessage& msg,
         LOG_VERBOSE("ignoring '" << kAooMsgUninvite << "' message: sink not found");
     }
 }
+
+// /aoo/src/<id>/ping <id> <tt1> <tt2> <lostblocks>
 
 void Source::handle_ping(const osc::ReceivedMessage& msg,
                          const ip_address& addr)

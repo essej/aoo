@@ -88,13 +88,27 @@ namespace send_flag {
 
 struct sink_desc {
     sink_desc(const ip_address& addr, int32_t id, uint32_t flags)
-        : ep(addr, id, flags), channel(0) {}
+        : ep(addr, id, flags) {
+        // set in constructor to avoid race conditions
+        stream_id = get_random_id();
+    }
     sink_desc(const sink_desc& other) = delete;
     sink_desc& operator=(const sink_desc& other) = delete;
 
     // data
     const endpoint ep;
-    std::atomic<int16_t> channel;
+    std::atomic<int32_t> channel{0};
+    AooId stream_id {kAooIdInvalid};
+
+    void start(){
+        stream_id = get_random_id();
+        data_requests_.clear();
+        notify(send_flag::start);
+    }
+
+    void stop(){
+        notify(send_flag::stop);
+    }
 
     void notify(uint32_t what){
         send_.fetch_or(what, std::memory_order_release);
@@ -111,14 +125,23 @@ struct sink_desc {
     bool get_data_request(data_request& r){
         return data_requests_.try_pop(r);
     }
-
-    void reset(){
-        data_requests_.clear();
-    }
 private:
-    lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> data_requests_;
     std::atomic<uint32_t> send_{0};
+    lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> data_requests_;
 };
+
+struct cached_sink_desc {
+    cached_sink_desc(const sink_desc& s, uint32_t _send = 0)
+        : ep(s.ep), stream_id(s.stream_id), channel(s.channel.load()),
+          send(_send) {}
+
+    endpoint ep;
+    AooId stream_id;
+    int32_t channel;
+    uint32_t send;
+};
+
+using cached_sink_vector = std::vector<cached_sink_desc, aoo::allocator<cached_sink_desc>>;
 
 class Source final : public AooSource {
  public:
@@ -156,8 +179,6 @@ class Source final : public AooSource {
 
     // settings
     std::atomic<AooId> id_;
-    AooId stream_id_ = kAooIdInvalid;
-    AooId format_id_ = kAooIdInvalid;
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
     int32_t samplerate_ = 0;
@@ -167,6 +188,7 @@ class Source final : public AooSource {
     // audio encoder
     std::unique_ptr<AooFormat, format_deleter> format_;
     std::unique_ptr<AooCodec, encoder_deleter> encoder_;
+    AooId format_id_ {kAooIdInvalid};
     // state
     int32_t sequence_ = 0;
     std::atomic<float> xrun_{0};
@@ -182,7 +204,8 @@ class Source final : public AooSource {
     // metadata
     AooCustomData *metadata_{nullptr};
     std::atomic<int32_t> metadata_size_{ AOO_STREAM_METADATA_SIZE };
-    int32_t metadata_id_{kAooIdInvalid};
+    AooId metadata_id_{kAooIdInvalid};
+    AooId metadata_target_{kAooIdInvalid};
     sync::spinlock metadata_lock_;
     // timing
     std::atomic<double> realsr_{0};
@@ -208,6 +231,7 @@ class Source final : public AooSource {
     using sink_list = lockfree::simple_list<sink_desc, aoo::allocator<sink_desc>>;
     using sink_lock = std::unique_lock<sink_list>;
     sink_list sinks_;
+    cached_sink_vector cached_sinks_;
     // memory
     memory_list memory_;
     // thread synchronization
@@ -257,7 +281,7 @@ class Source final : public AooSource {
 
     AooError start_stream(const AooCustomData *md);
 
-    void make_new_stream(bool format_changed);
+    void make_new_stream();
 
     void allocate_metadata(int32_t size);
 
@@ -276,18 +300,6 @@ class Source final : public AooSource {
     void send_data(const sendfn& fn);
 
     void resend_data(const sendfn& fn);
-
-    void send_packet(const sendfn& fn, int32_t stream_id,
-                     data_packet& d, bool binary);
-
-    void send_packet_osc(const sendfn& fn, const endpoint& ep,
-                         int32_t stream_id, const data_packet& d) const;
-
-    void send_packet_bin(const sendfn& fn, const endpoint& ep,
-                         int32_t stream_id, const data_packet& d) const;
-
-    void write_bin_data(const endpoint* ep, int32_t stream_id,
-                        const data_packet& d, AooByte *buf, int32_t& size) const;
 
     void send_ping(const sendfn& fn);
 

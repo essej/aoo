@@ -1083,15 +1083,6 @@ void source_desc::invite(const Sink& s, AooCustomData *metadata){
         if (state == source_state::uninvite){
             // update last packet time to reset timeout!
             last_packet_time_.store(s.elapsed_time());
-        #if 1
-            // force new stream, otherwise handle_start() would ignore
-            // the /start messages and we would spam the source with
-            // redundant invitation messages until we time out.
-            // NOTE: don't use kAooIdInvalid, otherwise we would get
-            // a redundant "add" event, see handle_start().
-            scoped_lock lock(mutex_);
-            stream_id_ = get_random_id();
-        #endif
         }
         // set metadata request
         {
@@ -1300,18 +1291,6 @@ AooError source_desc::handle_stop(const Sink& s, int32_t stream) {
     // NOTE: stream_id_ can only change in this thread,
     // so we don't need a lock to safely *read* it!
     if (stream == stream_id_){
-    #if 1
-        // force new stream, otherwise handle_start() could ignore
-        // subsequent /start messages with the same ID.
-        // this happens when a source removes and re-adds a sink
-        // without starting a new stream...
-        // NOTE: we have a problem if /start and /stop messages
-        // with the same stream ID arrive out of order!
-        {
-            scoped_lock lock(mutex_);
-            stream_id_ = get_random_id();
-        }
-    #endif
         state_.store(source_state::stop, std::memory_order_release);
     }
 
