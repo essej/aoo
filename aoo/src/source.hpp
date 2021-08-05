@@ -227,7 +227,7 @@ class Source final : public AooSource {
     // requests
     lockfree::unbounded_mpsc_queue<sink_request, aoo::allocator<sink_request>> requests_;
     // sinks
-    using sink_list = lockfree::simple_list<sink_desc, aoo::allocator<sink_desc>>;
+    using sink_list = lockfree::concurrent_list<sink_desc, aoo::allocator<sink_desc>>;
     using sink_lock = std::unique_lock<sink_list>;
     sink_list sinks_;
     cached_sink_vector cached_sinks_; // only for the send thread
