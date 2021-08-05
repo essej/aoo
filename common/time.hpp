@@ -11,7 +11,7 @@
 
 namespace aoo {
 
-/*////////////////////////// time tag //////////////////////////*/
+//---------------- time_tag -------------------//
 
 struct time_tag {
     static time_tag now();
@@ -95,7 +95,7 @@ private:
     uint64_t value_;
 };
 
-/*//////////////////// NTP server /////////////////*/
+//----------------- NTP server -----------------------//
 
 bool check_ntp_server(std::string& msg);
 

@@ -12,7 +12,7 @@
 namespace aoo {
 namespace lockfree {
 
-/*////////////////////// spsc_queue /////////////////////////*/
+//-------------------- spsc_queue -----------------------//
 
 // a lock-free single-producer/single-consumer queue which
 // supports reading/writing data in fixed-sized blocks.
@@ -155,7 +155,7 @@ class spsc_queue {
     }
 };
 
-/*///////////////////////// unbounded_mpsc_queue ///////////////*/
+//--------------------- unbounded_mpsc_queue -------------------------//
 
 // based on https://www.drdobbs.com/parallel/writing-lock-free-code-a-corrected-queue/210604448
 
@@ -376,7 +376,7 @@ class unbounded_mpsc_queue :
     }
 };
 
-/*///////////////////////// concurrent_list ////////////////////////*/
+//------------------------ concurrent_list ---------------------------------//
 
 // A lock-free singly-linked list.
 // Adding/removing items and iterating over the list is generally thread-safe,

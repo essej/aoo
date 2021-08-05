@@ -407,7 +407,7 @@ AooError AOO_CALL aoo_registerCodec(const char *name, const AooCodecInterface *c
     return kAooOk;
 }
 
-/*/////////////// (de)initialize //////////////////*/
+//--------------------------- (de)initialize -----------------------------------//
 
 void aoo_pcmCodecSetup(AooCodecRegisterFunc fn, AooLogFunc log, const AooAllocator *alloc);
 #if USE_CODEC_OPUS

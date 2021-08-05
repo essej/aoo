@@ -21,7 +21,7 @@ struct data_packet {
     double samplerate;
 };
 
-/*///////////////////// history_buffer /////////////////////////*/
+//---------------------- history_buffer ---------------------------//
 
 class sent_block {
 public:
@@ -41,7 +41,7 @@ public:
     int32_t sequence = -1;
     double samplerate = 0;
 protected:
-    std::vector<AooByte, aoo::allocator<AooByte>> buffer_;
+    aoo::vector<AooByte> buffer_;
     int32_t numframes_ = 0;
     int32_t framesize_ = 0;
 };
@@ -62,13 +62,12 @@ public:
     sent_block * find(int32_t seq);
     sent_block * push();
 private:
-    using block_buffer = std::vector<sent_block, aoo::allocator<sent_block>>;
-    block_buffer buffer_;
+    aoo::vector<sent_block> buffer_;
     int32_t head_ = 0;
     int32_t size_ = 0;
 };
 
-/*///////////////// jitter_buffer ///////////////////////*/
+//---------------------------- jitter_buffer ------------------------------//
 
 class received_block {
 public:
@@ -96,7 +95,7 @@ public:
     int32_t channel = 0;
     double samplerate = 0;
 protected:
-    std::vector<AooByte, aoo::allocator<AooByte>> buffer_;
+    aoo::vector<AooByte> buffer_;
     int32_t numframes_ = 0;
     int32_t framesize_ = 0;
     std::bitset<256> frames_ = 0;
@@ -188,7 +187,7 @@ public:
 
     friend std::ostream& operator<<(std::ostream& os, const jitter_buffer& b);
 private:
-    std::vector<received_block, aoo::allocator<received_block>> data_;
+    aoo::vector<received_block> data_;
     int32_t size_ = 0;
     int32_t head_ = 0;
     int32_t tail_ = 0;

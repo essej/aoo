@@ -41,7 +41,7 @@
 #define kAooNetMsgClientPeerLeave \
     kAooMsgDomain kAooNetMsgClient kAooNetMsgPeerLeave
 
-/*//////////////////// AoO server /////////////////////*/
+//----------------------- Server --------------------------//
 
 AOO_API AooServer * AOO_CALL AooServer_new(
         AooInt32 port, AooFlag flags, AooError *err) {
@@ -525,7 +525,7 @@ uint32_t Server::flags() const {
     return flags;
 }
 
-/*////////////////////////// udp_server /////////////////////*/
+//-------------------------- udp_server ---------------------------//
 
 udp_server::udp_server(int socket) {
     socket_ = socket;
@@ -695,7 +695,7 @@ void udp_server::send_message(const AooByte *msg, int32_t size,
     }
 }
 
-/*////////////////////////// user ///////////////////////////*/
+//--------------------------- user -----------------------------------//
 
 void user::on_close(Server& s){
     // disconnect user from groups
@@ -733,7 +733,7 @@ bool user::remove_group(const group& grp){
     }
 }
 
-/*////////////////////////// group /////////////////////////*/
+//------------------------- group ----------------------------------//
 
 bool group::add_user(std::shared_ptr<user> grp){
     auto it = std::find(users_.begin(), users_.end(), grp);
@@ -759,7 +759,8 @@ bool group::remove_user(const user& usr){
     }
 }
 
-/*///////////////////////// client_endpoint /////////////////////////////*/
+
+// ---------------------------- client_endpoint ---------------------------//
 
 client_endpoint::client_endpoint(Server &s, int socket, const ip_address &addr)
     : server_(&s), socket_(socket), addr_(addr)
@@ -1074,7 +1075,7 @@ void client_endpoint::handle_group_leave(const osc::ReceivedMessage& msg){
     send_message(reply.Data(), reply.Size());
 }
 
-/*///////////////////// events ////////////////////////*/
+//--------------------------- events ------------------------------//
 
 Server::error_event::error_event(int32_t type, int32_t code,
                                  const char * msg)

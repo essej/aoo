@@ -9,7 +9,7 @@
 
 const size_t kAooEventQueueSize = 8;
 
-/*//////////////////// AooSink /////////////////////*/
+//------------------------- Sink ------------------------------//
 
 AOO_API AooSink * AOO_CALL AooSink_new(
         AooId id, AooFlag flags, AooError *err) {
@@ -911,7 +911,7 @@ AooError Sink::handle_ping_message(const osc::ReceivedMessage& msg,
     }
 }
 
-/*////////////////////////// event ///////////////////////////////////*/
+//------------------------ event ------------------------------//
 
 // 'event' is always used inside 'source_desc', so we can safely
 // store a pointer to the sockaddr. the ip_address itself
@@ -930,7 +930,8 @@ event::event(AooEventType type, const endpoint& ep){
 sink_event::sink_event(AooEventType _type, const endpoint &ep)
     : type(_type), address(ep.address), id(ep.id) {}
 
-/*////////////////////////// source_desc /////////////////////////////*/
+
+//----------------------- source_desc --------------------------//
 
 source_desc::source_desc(const ip_address& addr, AooId id,
                          uint32_t flags, double time)

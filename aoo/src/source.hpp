@@ -127,7 +127,7 @@ struct sink_desc {
     }
 private:
     std::atomic<uint32_t> send_{0};
-    lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> data_requests_;
+    aoo::unbounded_mpsc_queue<data_request> data_requests_;
 };
 
 struct cached_sink_desc {
@@ -140,8 +140,6 @@ struct cached_sink_desc {
     int32_t channel;
     uint32_t send;
 };
-
-using cached_sink_vector = std::vector<cached_sink_desc, aoo::allocator<cached_sink_desc>>;
 
 class Source final : public AooSource {
  public:
@@ -211,26 +209,26 @@ class Source final : public AooSource {
     time_dll dll_;
     timer timer_;
     // buffers and queues
-    std::vector<AooByte, aoo::allocator<AooByte>> sendbuffer_;
+    aoo::vector<AooByte> sendbuffer_;
     dynamic_resampler resampler_;
     struct block_data {
         double sr;
         AooSample data[1];
     };
-    lockfree::spsc_queue<char, aoo::allocator<char>> audioqueue_;
+    aoo::spsc_queue<char> audioqueue_;
     history_buffer history_;
     // events
-    lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
+    aoo::unbounded_mpsc_queue<event> eventqueue_;
     AooEventHandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;
     AooEventMode eventmode_ = kAooEventModeNone;
     // requests
-    lockfree::unbounded_mpsc_queue<sink_request, aoo::allocator<sink_request>> requests_;
+    aoo::unbounded_mpsc_queue<sink_request> requests_;
     // sinks
-    using sink_list = lockfree::concurrent_list<sink_desc, aoo::allocator<sink_desc>>;
+    using sink_list = aoo::concurrent_list<sink_desc>;
     using sink_lock = std::unique_lock<sink_list>;
     sink_list sinks_;
-    cached_sink_vector cached_sinks_; // only for the send thread
+    aoo::vector<cached_sink_desc> cached_sinks_; // only for the send thread
     // memory
     memory_list memory_;
     // thread synchronization

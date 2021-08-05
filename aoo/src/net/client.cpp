@@ -69,7 +69,6 @@
 #define DEBUG_RELAY 0
 
 namespace aoo {
-
 namespace net {
 
 std::string encrypt(const std::string& input){
@@ -93,8 +92,6 @@ void copy_string(const std::string& src, char *dst, int32_t size){
     memcpy(dst, src.data(), n);
     dst[n] = '\0';
 }
-
-/*//////////////////// OSC ////////////////////////////*/
 
 // optimized version of aoo_parse_pattern() for client/server
 AooError parse_pattern(const AooByte *msg, int32_t n, AooMsgType& type, int32_t& offset)
@@ -150,7 +147,7 @@ AooError parse_pattern(const AooByte *msg, int32_t n, AooMsgType& type, int32_t&
 } // net
 } // aoo
 
-/*//////////////////// AoO client /////////////////////*/
+//--------------------- AooClient -----------------------------//
 
 AOO_API AooClient * AOO_CALL AooClient_new(
         const void *address, AooAddrSize addrlen, AooFlag flags, AooError *err) {
@@ -1428,7 +1425,7 @@ void Client::on_exception(const char *what, const osc::Exception &err,
     close();
 }
 
-/*///////////////////// events ////////////////////////*/
+//-------------------------- events ---------------------------//
 
 Client::error_event::error_event(int32_t code, const char *msg)
 {
@@ -1507,7 +1504,7 @@ Client::message_event::~message_event()
     free_sockaddr((void *)message_event_.address, message_event_.addrlen);
 }
 
-/*///////////////////// udp_client ////////////////////*/
+//---------------------- udp_client ------------------------//
 
 void udp_client::update(const sendfn& reply, time_tag now){
     auto elapsed_time = client_->elapsed_time_since(now);
@@ -1716,7 +1713,7 @@ bool udp_client::is_server_address(const ip_address& addr){
     return false;
 }
 
-/*///////////////////// peer //////////////////////////*/
+//------------------------- peer ------------------------------//
 
 peer::peer(Client& client, int32_t id, const std::string& group,
            const std::string& user, ip_address_list&& addrlist)

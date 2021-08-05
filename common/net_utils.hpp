@@ -20,7 +20,7 @@ struct sockaddr;
 
 namespace aoo {
 
-/*///////////// IP address ////////*/
+//-------------- ip_address --------------//
 
 class ip_address {
 public:
@@ -90,8 +90,7 @@ private:
     socklen_t length_;
 };
 
-
-/*///////////// socket //////////////////*/
+//-------------------- socket --------------------//
 
 int socket_init();
 

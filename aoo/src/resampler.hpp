@@ -23,7 +23,7 @@ public:
     int32_t capacity() const { return buffer_.size(); }
     double ratio() const { return ideal_ratio_; }
 private:
-    std::vector<AooSample, aoo::allocator<AooSample>> buffer_;
+    aoo::vector<AooSample> buffer_;
     int32_t nchannels_ = 0;
     double rdpos_ = 0;
     int32_t wrpos_ = 0;

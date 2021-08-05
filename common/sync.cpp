@@ -52,7 +52,7 @@ void pause_cpu(){
 #endif
 }
 
-/*/////////////////////// thread priority ///////////////////*/
+//-------------------------- thread priority -----------------------------//
 
 void lower_thread_priority()
 {
@@ -68,7 +68,7 @@ void lower_thread_priority()
 #endif
 }
 
-/*/////////////////////// spinlock //////////////////////////*/
+//---------------------------- spinlock ------------------------------------//
 
 void spinlock::lock(){
     // only try to modify the shared state if the lock seems to be available.
@@ -90,7 +90,7 @@ void spinlock::unlock(){
     locked_.store(false, std::memory_order_release);
 }
 
-/*//////////////////// shared spinlock ///////////////////////*/
+//-------------------------- shared spinlock ---------------------------//
 
 // exclusive
 void shared_spinlock::lock(){
@@ -151,7 +151,7 @@ void shared_spinlock::unlock_shared(){
     state_.fetch_sub(1, std::memory_order_release);
 }
 
-/*////////////////////// mutex /////////////////////////////*/
+//---------------------- mutex -------------------------//
 
 #ifdef _WIN32
 mutex::mutex() {
@@ -186,7 +186,7 @@ void mutex::unlock() {
 }
 #endif
 
-/*////////////////////// shared_mutex //////////////////////*/
+//-------------------- shared_mutex -------------------------//
 
 #ifdef _WIN32
 shared_mutex::shared_mutex() {
@@ -242,7 +242,7 @@ void shared_mutex::unlock_shared() {
 }
 #endif
 
-/*//////////////////// semaphore ///////////////////*/
+//-------------------- native_semaphore -----------------------//
 
 namespace detail {
 

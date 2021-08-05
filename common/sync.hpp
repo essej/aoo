@@ -26,11 +26,11 @@
 namespace aoo {
 namespace sync {
 
-/*////////////////// thread priority /////////////////////*/
+//-------------- thread priority ------------------//
 
 void lower_thread_priority();
 
-/*////////////////// simple spin lock ////////////////////*/
+//----------------- spinlock ----------------------//
 
 class spinlock {
 public:
@@ -44,7 +44,7 @@ protected:
     std::atomic<uint32_t> locked_{false};
 };
 
-/*/////////////////// shared spin lock /////////////////////////*/
+//------------- shared spin lock -----------------//
 
 class shared_spinlock {
 public:
@@ -65,7 +65,7 @@ protected:
     std::atomic<uint32_t> state_{0};
 };
 
-// paddeded spin locks
+//--------------- padded spin locks --------------------//
 
 template<typename T, size_t N>
 class alignas(N) padded_class : public T {
@@ -79,6 +79,7 @@ using padded_spinlock = padded_class<spinlock, CACHELINE_SIZE>;
 
 using padded_shared_spinlock =  padded_class<shared_spinlock, CACHELINE_SIZE>;
 
+//------------------------------ mutex ------------------------------------//
 
 // The std::mutex implementation on Windows is bad on both MSVC and MinGW:
 // the MSVC version apparantely has some additional overhead;
@@ -106,7 +107,7 @@ private:
 #endif
 };
 
-/*//////////////////////// shared_mutex //////////////////////////*/
+//------------------------ shared_mutex -------------------------//
 
 class shared_mutex {
 public:
@@ -168,7 +169,7 @@ private:
     T& lock_;
 };
 
-/*////////////////////// semaphore ////////////////////*/
+//----------------------- semaphore --------------------------//
 
 namespace detail {
 
@@ -213,7 +214,7 @@ class semaphore {
     std::atomic<int32_t> count_{0};
 };
 
-/*////////////////// event ///////////////////////*/
+//------------------------- event ------------------------------//
 
 class event {
  public:

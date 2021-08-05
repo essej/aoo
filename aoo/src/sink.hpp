@@ -256,13 +256,13 @@ private:
         } header;
         AooSample data[1];
     };
-    lockfree::spsc_queue<char, aoo::allocator<char>> audioqueue_;
+    aoo::spsc_queue<char> audioqueue_;
     int32_t minblocks_ = 0;
     // packet queue and jitter buffer
-    lockfree::unbounded_mpsc_queue<net_packet, aoo::allocator<net_packet>> packetqueue_;
+    aoo::unbounded_mpsc_queue<net_packet> packetqueue_;
     jitter_buffer jitterbuffer_;
     // requests
-    lockfree::unbounded_mpsc_queue<request, aoo::allocator<request>> requestqueue_;
+    aoo::unbounded_mpsc_queue<request> requestqueue_;
     void push_request(const request& r){
         requestqueue_.push(r);
     }
@@ -270,12 +270,12 @@ private:
         int32_t sequence;
         int32_t frame;
     };
-    lockfree::unbounded_mpsc_queue<data_request, aoo::allocator<data_request>> datarequestqueue_;
+    aoo::unbounded_mpsc_queue<data_request> datarequestqueue_;
     void push_data_request(const data_request& r){
         datarequestqueue_.push(r);
     }
     // events
-    lockfree::unbounded_mpsc_queue<event, aoo::allocator<event>> eventqueue_;
+    aoo::unbounded_mpsc_queue<event> eventqueue_;
     void send_event(const Sink& s, const event& e, AooThreadLevel level);
     void free_event(const event& e);
     // memory
@@ -353,7 +353,7 @@ private:
     AooClient *client_ = nullptr;
 #endif
     // the sources
-    using source_list = lockfree::concurrent_list<source_desc, aoo::allocator<source_desc>>;
+    using source_list = aoo::concurrent_list<source_desc>;
     using source_lock = std::unique_lock<source_list>;
     source_list sources_;
     sync::mutex source_mutex_;
@@ -377,13 +377,13 @@ private:
     std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
     std::atomic<bool> timer_check_{ AOO_TIMER_CHECK };
     // events
-    lockfree::unbounded_mpsc_queue<sink_event, aoo::allocator<sink_event>> eventqueue_;
+    aoo::unbounded_mpsc_queue<sink_event> eventqueue_;
     void send_event(const sink_event& e, AooThreadLevel level);
     AooEventHandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;
     AooEventMode eventmode_ = kAooEventModeNone;
     // requests
-    lockfree::unbounded_mpsc_queue<source_request, aoo::allocator<source_request>> requestqueue_;
+    aoo::unbounded_mpsc_queue<source_request> requestqueue_;
     void push_request(const source_request& r){
         requestqueue_.push(r);
     }

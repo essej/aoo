@@ -7,7 +7,7 @@
 
 namespace aoo {
 
-/*////////////////////////// sent_block /////////////////////////////*/
+//-------------------------- sent_block -----------------------------//
 
 void sent_block::set(int32_t seq, double sr,
                      const AooByte *data, int32_t nbytes,
@@ -53,7 +53,7 @@ int32_t sent_block::frame_size(int32_t which) const {
     }
 }
 
-/*////////////////////////// history_buffer ///////////////////////////*/
+//-------------------- history_buffer ----------------------//
 
 void history_buffer::clear(){
     head_ = 0;
@@ -138,7 +138,7 @@ sent_block * history_buffer::push()
     return &buffer_[old];
 }
 
-/*////////////////////// received_block //////////////////////*/
+//---------------------- received_block ------------------------//
 
 void received_block::reserve(int32_t size){
     buffer_.reserve(size);
@@ -238,7 +238,7 @@ bool received_block::update(double time, double interval){
     return true;
 }
 
-/*////////////////////////// jitter_buffer /////////////////////////////*/
+//----------------------- jitter_buffer ----------------------//
 
 void jitter_buffer::clear(){
     head_ = tail_ = size_ = 0;

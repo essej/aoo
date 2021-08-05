@@ -52,7 +52,7 @@ using ip_address_list = std::vector<ip_address>;
 #endif
 
 
-/*/////////////////////////// peer /////////////////////////*/
+//---------------------- peer -----------------------------------//
 class peer {
 public:
     peer(Client& client, int32_t id, const std::string& group,
@@ -108,7 +108,7 @@ private:
                               const ip_address& addr);
 };
 
-/*///////////////////////// udp_client ///////////////////////////*/
+//---------------------------- udp_client ---------------------------------//
 
 class udp_client {
 public:
@@ -152,7 +152,7 @@ private:
     bool is_server_address(const ip_address& addr);
 };
 
-/*/////////////////////////////// client /////////////////////////////*/
+//------------------------- Client ----------------------------//
 
 enum class client_state {
     disconnected,
@@ -217,8 +217,8 @@ public:
     void perform_send_message(const AooByte *data, int32_t size, int32_t flags,
                               const sendfn& fn, T&& filter);
 
-   AooError AOO_CALL handleMessage(const AooByte *data, AooInt32 n,
-                                   const void *addr, AooAddrSize len) override;
+    AooError AOO_CALL handleMessage(const AooByte *data, AooInt32 n,
+                                    const void *addr, AooAddrSize len) override;
 
     bool handle_peer_message(const osc::ReceivedMessage& msg, int onset,
                              const ip_address& addr);
@@ -296,12 +296,12 @@ private:
         AooSource *source;
         AooId id;
     };
-    std::vector<source_desc, aoo::allocator<source_desc>> sources_;
+    aoo::vector<source_desc> sources_;
     struct sink_desc {
         AooSink *sink;
         AooId id;
     };
-    std::vector<sink_desc, aoo::allocator<sink_desc>> sinks_;
+    aoo::vector<sink_desc> sinks_;
     // SLIP buffers
     SLIP<aoo::allocator<uint8_t>> sendbuffer_;
     SLIP<aoo::allocator<uint8_t>> recvbuffer_;
@@ -309,7 +309,7 @@ private:
     std::atomic<bool> quit_{false};
     int eventsocket_ = -1;
     // peers
-    using peer_list = lockfree::concurrent_list<peer, aoo::allocator<peer>>;
+    using peer_list = aoo::concurrent_list<peer>;
     using peer_lock = std::unique_lock<peer_list>;
     peer_list peers_;
     // time
@@ -324,19 +324,19 @@ private:
     void *userdata_ = nullptr;   
     // commands
     using icommand_ptr = std::unique_ptr<icommand>;
-    using command_queue = lockfree::unbounded_mpsc_queue<icommand_ptr, aoo::allocator<icommand_ptr>>;
+    using command_queue = aoo::unbounded_mpsc_queue<icommand_ptr>;
     command_queue commands_;
     // peer/group messages
     using imessage_ptr = std::unique_ptr<imessage>;
-    using message_queue = lockfree::unbounded_mpsc_queue<imessage_ptr, aoo::allocator<imessage_ptr>>;
+    using message_queue = aoo::unbounded_mpsc_queue<imessage_ptr>;
     message_queue udp_messages_;
     message_queue tcp_messages_;
     // pending request
     using request = std::function<bool(const char *pattern, const osc::ReceivedMessage& msg)>;
-    std::vector<request, aoo::allocator<request>> pending_requests_;
+    aoo::vector<request> pending_requests_;
     // events
     using ievent_ptr = std::unique_ptr<ievent>;
-    using event_queue = lockfree::unbounded_mpsc_queue<ievent_ptr, aoo::allocator<ievent_ptr>>;
+    using event_queue = aoo::unbounded_mpsc_queue<ievent_ptr>;
     event_queue events_;
     AooEventHandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;
@@ -377,8 +377,9 @@ private:
 
     void close(bool manual = false);
 
-    /*////////////////////// events /////////////////////*/
 public:
+    //------------------------ events ----------------------------//
+
     struct event : ievent
     {
         event(int32_t type){
@@ -416,7 +417,7 @@ public:
         ~message_event();
     };
 
-    /*////////////////////// commands ///////////////////*/
+    //---------------------- commands ------------------------//
     struct request_cmd : icommand
     {
         request_cmd(AooNetCallback cb, void *user)
@@ -500,7 +501,7 @@ public:
         std::string group_;
     };
 
-    /*////////////////// messages ////////////////////*/
+    //------------------------ messages ------------------------//
 
     struct message : imessage {
         message(const AooByte *data, int32_t size, int32_t flags)
@@ -513,7 +514,7 @@ public:
                 flags_, fn, [](auto&){ return true; });
         }
     protected:
-        std::vector<AooByte, aoo::allocator<AooByte>> data_;
+        aoo::vector<AooByte> data_;
         int32_t flags_;
     };
 

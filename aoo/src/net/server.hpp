@@ -42,15 +42,15 @@ namespace net {
 
 class Server;
 
-using ip_address_list = std::vector<ip_address, aoo::allocator<ip_address>>;
+using ip_address_list = aoo::vector<ip_address>;
 
 struct user;
 using user_ptr = std::shared_ptr<user>;
-using user_list = std::vector<user_ptr, aoo::allocator<user_ptr>>;
+using user_list = aoo::vector<user_ptr>;
 
 struct group;
 using group_ptr = std::shared_ptr<group>;
-using group_list = std::vector<group_ptr, aoo::allocator<group_ptr>>;
+using group_list = aoo::vector<group_ptr>;
 
 
 class client_endpoint {
@@ -173,10 +173,10 @@ private:
     std::thread workerthread_;
 
     struct udp_packet {
-        std::vector<AooByte> data;
+        aoo::vector<AooByte> data;
         ip_address address;
     };
-    using packet_queue = lockfree::unbounded_mpsc_queue<udp_packet, aoo::allocator<udp_packet>>;
+    using packet_queue = aoo::unbounded_mpsc_queue<udp_packet>;
     packet_queue recvbuffer_;
 #if DEBUG_THREADS
     std::atomic<int32_t> recvbufferfill_{0};
@@ -266,17 +266,18 @@ private:
     int tcpsocket_;
     int eventsocket_;
     ip_address::ip_type type_;
-    std::vector<pollfd> pollarray_;
+    aoo::vector<pollfd> pollarray_;
     udp_server udpserver_;
     // clients
-    std::list<client_endpoint> clients_;
+    using client_list = std::list<client_endpoint, aoo::allocator<client_endpoint>>;
+    client_list clients_;
     // users/groups
     int32_t next_user_id_ = 0;
     user_list users_;
     group_list groups_;
     // events
     using ievent_ptr = std::unique_ptr<ievent>;
-    using event_queue = lockfree::unbounded_mpsc_queue<ievent_ptr, aoo::allocator<ievent_ptr>>;
+    using event_queue = aoo::unbounded_mpsc_queue<ievent_ptr>;
     event_queue events_;
     AooEventHandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;
@@ -297,7 +298,7 @@ private:
 
     void update();
 
-    /*/////////////////// events //////////////////////*/
+    //-------------------------- events ---------------------------//
 
     struct error_event : ievent
     {

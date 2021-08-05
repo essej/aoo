@@ -29,7 +29,7 @@
 
 namespace aoo {
 
-/*///////////////////////// ip_address /////////////////////////////*/
+//------------------------ ip_address ------------------------//
 
 ip_address::ip_address(){
     static_assert(sizeof(address_) == max_length,
@@ -336,7 +336,7 @@ bool ip_address::is_ipv4_mapped() const {
     return false;
 }
 
-/*///////////////////////// socket /////////////////////////////////*/
+//------------------------ socket ----------------------------//
 
 int socket_init()
 {

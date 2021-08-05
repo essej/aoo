@@ -10,8 +10,6 @@
 
 const size_t kAooEventQueueSize = 8;
 
-/*//////////////////// AoO source /////////////////////*/
-
 // OSC data message
 // address pattern string: max 32 bytes
 // typetag string: max. 12 bytes
@@ -22,6 +20,8 @@ const size_t kAooEventQueueSize = 8;
 // header: 12 bytes
 // args: 48 bytes (max.)
 #define kAooBinMsgDataHeaderSize 48
+
+//---------------------- Source -------------------------//
 
 AOO_API AooSource * AOO_CALL AooSource_new(
         AooId id, AooFlag flags, AooError *err) {
@@ -1324,7 +1324,7 @@ void send_packet_osc(const endpoint& ep, AooId id, int32_t stream_id,
     fn((const AooByte *)msg.Data(), msg.Size(), ep);
 }
 
-void send_packet(const cached_sink_vector& sinks, const AooId id,
+void send_packet(const aoo::vector<cached_sink_desc>& sinks, const AooId id,
                  data_packet& d, const sendfn &fn, bool binary) {
     if (binary){
         AooByte buf[AOO_MAX_PACKET_SIZE];

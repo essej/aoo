@@ -5,12 +5,14 @@
 #include "aoo/aoo_codec.h"
 
 #include "common/net_utils.hpp"
+#include "common/lockfree.hpp"
 
 #include <stdint.h>
 #include <cstring>
 #include <utility>
 #include <memory>
 #include <atomic>
+#include <vector>
 
 namespace aoo {
 
@@ -164,6 +166,20 @@ template<typename T>
 using allocator = std::allocator<T>;
 
 #endif
+
+//------------- common data structures ------------//
+
+template<typename T>
+using vector = std::vector<T, aoo::allocator<T>>;
+
+template<typename T>
+using spsc_queue = lockfree::spsc_queue<T, aoo::allocator<T>>;
+
+template<typename T>
+using unbounded_mpsc_queue = lockfree::unbounded_mpsc_queue<T, aoo::allocator<T>>;
+
+template<typename T>
+using concurrent_list = lockfree::concurrent_list<T, aoo::allocator<T>>;
 
 //------------------ memory --------------------//
 
