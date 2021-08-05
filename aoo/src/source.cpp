@@ -979,7 +979,7 @@ AooError Source::start_stream(const AooCustomData *md){
         }
 
         // metadata needs to be "accepted" in make_new_stream()
-        metadata_id_ = kAooIdInvalid;
+        metadata_accepted_ = false;
     }
 
     state_.store(stream_state::start);
@@ -997,11 +997,10 @@ void Source::make_new_stream(){
     xrun_.store(0.0); // !
 
     // "accept" stream metadata, see send_start()
-    metadata_target_ = get_random_id();
     {
         std::lock_guard<sync::spinlock> lock(metadata_lock_);
         if (metadata_ && metadata_->size > 0) {
-            metadata_id_ = metadata_target_;
+            metadata_accepted_ = true;
         }
     }
 
@@ -1050,7 +1049,7 @@ void Source::allocate_metadata(int32_t size){
     olddata = metadata_;
     metadata_ = metadata;
     oldsize = metadata_size_.exchange(size);
-    metadata_id_ = kAooIdInvalid; // !
+    metadata_accepted_ = false;
     metadata_lock_.unlock();
 
     // free old metadata
@@ -1209,7 +1208,7 @@ void Source::send_stream(const sendfn& fn){
     {
         std::lock_guard<sync::spinlock> lock(metadata_lock_);
         // only send metadata if "accepted" in make_new_stream().
-        if (metadata_id_ == metadata_target_) {
+        if (metadata_accepted_) {
             assert(metadata_ != nullptr);
             assert(metadata_->size > 0);
             auto mdsize = flat_metadata_size(*metadata_);

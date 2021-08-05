@@ -204,8 +204,7 @@ class Source final : public AooSource {
     // metadata
     AooCustomData *metadata_{nullptr};
     std::atomic<int32_t> metadata_size_{ AOO_STREAM_METADATA_SIZE };
-    AooId metadata_id_{kAooIdInvalid};
-    AooId metadata_target_{kAooIdInvalid};
+    bool metadata_accepted_{false};
     sync::spinlock metadata_lock_;
     // timing
     std::atomic<double> realsr_{0};
@@ -231,7 +230,7 @@ class Source final : public AooSource {
     using sink_list = lockfree::simple_list<sink_desc, aoo::allocator<sink_desc>>;
     using sink_lock = std::unique_lock<sink_list>;
     sink_list sinks_;
-    cached_sink_vector cached_sinks_;
+    cached_sink_vector cached_sinks_; // only for the send thread
     // memory
     memory_list memory_;
     // thread synchronization
