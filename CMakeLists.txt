@@ -196,3 +196,10 @@ if (BUILD_SC_EXTENSION)
     endif()
     add_subdirectory(sc)
 endif()
+
+
+# test suite
+option(BUILD_TEST_SUITE "build test suite" ON)
+if (BUILD_TEST_SUITE)
+    add_subdirectory(tests)
+endif()

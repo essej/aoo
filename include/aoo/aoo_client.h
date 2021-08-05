@@ -114,7 +114,7 @@ static inline AooError AooClient_joinGroup(
         AooClient *client, const AooChar *groupName, const AooChar *groupPwd,
         AooNetCallback cb, void *user)
 {
-    AooNetRequestJoinGroup data = { groupName, groupPwd };
+    AooNetRequestJoinGroup data = { groupName, groupPwd, 0 };
     return AooClient_sendRequest(client, kAooNetRequestJoinGroup, &data, cb, user);
 }
 
@@ -122,6 +122,6 @@ static inline AooError AooClient_joinGroup(
 static inline AooError AooClient_leaveGroup(
         AooClient *client, const AooChar *groupName, AooNetCallback cb, void *user)
 {
-    AooNetRequestLeaveGroup data = { groupName };
+    AooNetRequestLeaveGroup data = { groupName, 0, 0 };
     return AooClient_sendRequest(client, kAooNetRequestLeaveGroup, &data, cb, user);
 }

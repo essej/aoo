@@ -94,7 +94,7 @@ typedef struct AooSinkCodecCtl {
 
 static inline AooError AooSink_codecControl(
         AooSink *sink,  AooCtl ctl, void *data, AooSize size) {
-    AooSinkCodecCtl cc { ctl, data, size };
+    AooSinkCodecCtl cc = { ctl, data, size };
     return AooSink_control(sink, kAooCtlCodecControl, ctl, &cc, sizeof(cc));
 }
 

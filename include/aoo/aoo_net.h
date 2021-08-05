@@ -133,7 +133,7 @@ typedef AOO_STRUCT AooNetRequestGroup
     const AooChar *groupName;
     const AooChar *groupPwd;
     AooFlag flags;
-} AooNetRequestJoinGroup;
+} AooNetRequestGroup;
 
 #define AooNetRequestJoinGroup AooNetRequestGroup
 #define AooNetRequestLeaveGroup AooNetRequestGroup

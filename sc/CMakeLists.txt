@@ -48,7 +48,7 @@ message(STATUS "SUPERNOVA: ${SUPERNOVA}")
 add_library(${PROJECT} MODULE ${SRC})
 set_target_properties(${PROJECT} PROPERTIES OUTPUT_NAME ${FILENAME})
 target_compile_definitions(${PROJECT} PUBLIC "-DAOO_STATIC")
-target_link_libraries(${PROJECT} ${AOO_STATIC} ${AOONET_STATIC}
+target_link_libraries(${PROJECT} ${AOO_STATIC}
     ${MD5_LIB} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS})
 if (WIN32)
     target_link_libraries(${PROJECT} "ws2_32")
@@ -58,7 +58,7 @@ if(SUPERNOVA)
     add_library(${PROJECT}_supernova MODULE ${SRC})
     set_target_properties(${PROJECT} PROPERTIES OUTPUT_NAME ${FILENAME}_supernova)
     target_compile_definitions(${PROJECT}_supernova PUBLIC "-DSUPERNOVA=1" "-DAOO_STATIC")
-    target_link_libraries(${PROJECT}_supernova ${AOO_STATIC} ${AOONET_STATIC}
+    target_link_libraries(${PROJECT}_supernova ${AOO_STATIC}
         ${MD5_LIB} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS})
     if (WIN32)
         target_link_libraries(${PROJECT}_supernova "ws2_32")
