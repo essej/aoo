@@ -169,6 +169,11 @@ static void aoo_receive_buffersize(t_aoo_receive *x, t_floatarg f)
     x->x_sink->setBufferSize(f * 0.001);
 }
 
+static void aoo_receive_dynamic_resampling(t_aoo_receive *x, t_floatarg f)
+{
+    x->x_sink->setDynamicResampling(f);
+}
+
 static void aoo_receive_dll_bandwidth(t_aoo_receive *x, t_floatarg f)
 {
     x->x_sink->setDllBandwidth(f);
@@ -322,6 +327,18 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
         outlet_anything(x->x_msgout, gensym("invite_timeout"), 3, msg);
         break;
     }
+    case kAooEventUninviteTimeout:
+    {
+        auto e = (const AooEventInviteTimeout *)event;
+        aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
+
+        // output event
+        if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
+            return;
+        }
+        outlet_anything(x->x_msgout, gensym("uninvite_timeout"), 3, msg);
+        break;
+    }
     case kAooEventBufferUnderrun:
     {
         auto e = (const AooEventBufferUnderrun *)event;
@@ -354,11 +371,10 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
         if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
             return;
         }
-        outlet_anything(x->x_msgout, gensym("start"), 3, msg);
 
         if (e->metadata){
-            auto total = e->metadata->size + 4;
-            t_atom *vec = (t_atom *)alloca(total * sizeof(t_atom));
+            auto count = e->metadata->size + 4;
+            t_atom *vec = (t_atom *)alloca(count * sizeof(t_atom));
             // copy endpoint
             memcpy(vec, msg, 3 * sizeof(t_atom));
             // type
@@ -367,8 +383,11 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
             for (int i = 0; i < e->metadata->size; ++i){
                 SETFLOAT(vec + 4 + i, (uint8_t)e->metadata->data[i]);
             }
-            outlet_anything(x->x_msgout, gensym("metadata"), total, vec);
+            outlet_anything(x->x_msgout, gensym("start"), count, vec);
+        } else {
+            outlet_anything(x->x_msgout, gensym("start"), 3, msg);
         }
+
         break;
     }
     case kAooEventStreamStop:
@@ -655,6 +674,8 @@ void aoo_receive_tilde_setup(void)
                     gensym("metadata"), A_GIMME, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_buffersize,
                     gensym("bufsize"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_dynamic_resampling,
+                    gensym("dynamic_resampling"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_dll_bandwidth,
                     gensym("dll_bandwidth"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_packetsize,

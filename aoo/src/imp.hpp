@@ -1,8 +1,8 @@
 #pragma once
 
 #include "aoo/aoo.h"
-
 #include "aoo/aoo_codec.h"
+#include "aoo/aoo_events.h"
 
 #include "common/net_utils.hpp"
 #include "common/lockfree.hpp"
@@ -13,6 +13,7 @@
 #include <memory>
 #include <atomic>
 #include <vector>
+#include <string>
 
 namespace aoo {
 
@@ -80,6 +81,60 @@ struct sendfn {
 private:
     AooSendFunc fn_;
     void *user_;
+};
+
+//---------------- endpoint event ------------------//
+
+struct endpoint_event {
+    endpoint_event() = default;
+
+    endpoint_event(AooEventType _type) : type(_type){}
+
+    endpoint_event(AooEventType _type, const endpoint& _ep)
+        : endpoint_event(_type, _ep.address, _ep.id) {}
+
+    endpoint_event(AooEventType _type, const ip_address& addr, AooId id)
+        : type(_type) {
+        memcpy(&addr_, addr.address(), addr.length());
+        // only for endpoint events
+        if (type != kAooEventXRun){
+            ep.endpoint.address = &addr_;
+            ep.endpoint.addrlen = addr.length();
+            ep.endpoint.id = id;
+        }
+    }
+
+    endpoint_event(const endpoint_event& other) {
+        memcpy(this, &other, sizeof(endpoint_event)); // ugh
+        // only for sink events:
+        if (type != kAooEventXRun){
+            ep.endpoint.address = &addr_;
+        }
+    }
+
+    endpoint_event& operator=(const endpoint_event& other) {
+        memcpy(this, &other, sizeof(endpoint_event)); // ugh
+        // only for sink events:
+        if (type != kAooEventXRun){
+            ep.endpoint.address = &addr_;
+        }
+        return *this;
+    }
+
+    union
+    {
+        AooEventType type;
+        AooEvent event;
+        AooEventEndpoint ep;
+        AooEventEndpoint source;
+        AooEventEndpoint sink;
+        AooEventInvite invite;
+        AooEventUninvite uninvite;
+        AooEventPing ping;
+        AooEventXRun xrun;
+    };
+private:
+    char addr_[ip_address::max_length];
 };
 
 //---------------- allocator -----------------------//
@@ -171,6 +226,8 @@ using allocator = std::allocator<T>;
 
 template<typename T>
 using vector = std::vector<T, aoo::allocator<T>>;
+
+using string = std::basic_string<char, std::char_traits<char>, aoo::allocator<char>>;
 
 template<typename T>
 using spsc_queue = lockfree::spsc_queue<T, aoo::allocator<T>>;

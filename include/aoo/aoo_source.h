@@ -82,14 +82,30 @@ static inline AooError AooSource_removeAllSinks(AooSource *source)
     return AooSource_control(source, kAooCtlRemoveSink, 0, 0, 0);
 }
 
-static inline AooError AooSource_setId(AooSource *source, AooId id)
+static inline AooError AooSource_acceptInvitation(
+        AooSource *source, const AooEndpoint *sink, AooId streamID)
 {
-    return AooSource_control(source, kAooCtlSetId, 0, AOO_ARG(id));
+    return AooSource_control(source, kAooCtlAcceptInvitation,
+                             (AooIntPtr)sink, AOO_ARG(streamID));
 }
 
-static inline AooError AooSource_getId(AooSource *source, AooId *id)
+static inline AooError AooSource_acceptUninvitation(
+        AooSource *source, const AooEndpoint *sink, AooId streamID)
 {
-    return AooSource_control(source, kAooCtlGetId, 0, AOO_ARG(*id));
+    return AooSource_control(source, kAooCtlAcceptUninvitation,
+                             (AooIntPtr)sink, AOO_ARG(streamID));
+}
+
+static inline AooError AooSource_activate(
+        AooSource *source, const AooEndpoint *sink, AooBool active)
+{
+    return AooSource_control(source, kAooCtlActivate, (AooIntPtr)sink, AOO_ARG(active));
+}
+
+static inline AooError AooSource_isActive(
+        AooSource *source, const AooEndpoint *sink, AooBool *active)
+{
+    return AooSource_control(source, kAooCtlIsActive, (AooIntPtr)sink, AOO_ARG(*active));
 }
 
 static inline AooError AooSource_setFormat(AooSource *source, AooFormat *f)
@@ -105,6 +121,16 @@ static inline AooError AooSource_getFormat(AooSource *source, AooFormatStorage *
 static inline AooError AooSource_codecControl(
         AooSource *source,  AooCtl ctl, void *data, AooSize size) {
     return AooSource_control(source, kAooCtlCodecControl, ctl, data, size);
+}
+
+static inline AooError AooSource_setId(AooSource *source, AooId id)
+{
+    return AooSource_control(source, kAooCtlSetId, 0, AOO_ARG(id));
+}
+
+static inline AooError AooSource_getId(AooSource *source, AooId *id)
+{
+    return AooSource_control(source, kAooCtlGetId, 0, AOO_ARG(*id));
 }
 
 static inline AooError AooSource_setBufferSize(AooSource *source, AooSeconds s)

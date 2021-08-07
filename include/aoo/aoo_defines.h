@@ -156,7 +156,6 @@ enum AooErrorCodes
     kAooErrorNotImplemented,
     kAooErrorBadArgument,
     kAooErrorIdle,
-    kAooErrorWouldBlock,
     kAooErrorOutOfMemory
 };
 
@@ -259,8 +258,9 @@ typedef struct AooCustomData
 
 #define kAooCustomDataInvalid ""
 
-// users can define their own data formats,
-// they just have to use a unique type name.
+// Users can define their own data formats.
+// Make sure to use a unique type name!
+// HINT: you can use an ASCII encoded UUID.
 
 //--------------- AoO format -------------------//
 

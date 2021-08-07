@@ -63,8 +63,7 @@ static inline AooError AooSink_inviteSource(
 static inline AooError AooSink_uninviteSource(
         AooSink *sink, const AooEndpoint *source)
 {
-    return AooSink_control(sink, kAooCtlUninviteSource,
-                           (AooIntPtr)source, 0, 0);
+    return AooSink_control(sink, kAooCtlUninviteSource, (AooIntPtr)source, 0, 0);
 }
 
 static inline AooError AooSink_uninviteAllSources(AooSink *sink){
@@ -84,18 +83,6 @@ static inline AooError AooSink_getId(AooSink *sink, AooId *id)
 static inline AooError AooSink_reset(AooSink *sink)
 {
     return AooSink_control(sink, kAooCtlReset, 0, 0, 0);
-}
-
-typedef struct AooSinkCodecCtl {
-    AooCtl ctl;
-    void *data;
-    AooSize size;
-} AooSinkCodecCtl;
-
-static inline AooError AooSink_codecControl(
-        AooSink *sink,  AooCtl ctl, void *data, AooSize size) {
-    AooSinkCodecCtl cc = { ctl, data, size };
-    return AooSink_control(sink, kAooCtlCodecControl, ctl, &cc, sizeof(cc));
 }
 
 static inline AooError AooSink_setBufferSize(AooSink *sink, AooSeconds s)
@@ -191,6 +178,16 @@ static inline AooError AooSink_setSourceTimeout(AooSink *sink, AooSeconds s)
 static inline AooError AooSink_getSourceTimeout(AooSink *sink, AooSeconds *s)
 {
     return AooSink_control(sink, kAooCtlGetSourceTimeout, 0, AOO_ARG(*s));
+}
+
+static inline AooError AooSink_setInviteTimeout(AooSink *sink, AooSeconds s)
+{
+    return AooSink_control(sink, kAooCtlSetInviteTimeout, 0, AOO_ARG(s));
+}
+
+static inline AooError AooSink_getInviteTimeout(AooSink *sink, AooSeconds *s)
+{
+    return AooSink_control(sink, kAooCtlGetInviteTimeout, 0, AOO_ARG(*s));
 }
 
 static inline AooError AooSink_resetSource(AooSink *sink, const AooEndpoint *source)

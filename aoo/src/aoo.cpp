@@ -384,7 +384,24 @@ void memory_list::deallocate(void* ptr) {
 
 namespace aoo {
 
-static std::unordered_map<std::string, const AooCodecInterface *> g_codec_dict;
+#if 0
+
+// doesn't work because there is no std::hash specialization for aoo::string
+// I probably need to write my own hash table...
+
+template<typename K, typename V>
+using hash_table = std::unordered_map<K, V, std::hash<K>, std::equal_to<K>,
+                                      aoo::allocator<std::pair<const K, V>>>;
+
+using codec_dict = hash_table<aoo::string, const AooCodecInterface *>;
+
+#else
+
+using codec_dict = std::unordered_map<std::string, const AooCodecInterface *>;
+
+#endif
+
+static codec_dict g_codec_dict;
 
 const AooCodecInterface * find_codec(const char * name){
     auto it = g_codec_dict.find(name);

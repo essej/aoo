@@ -110,9 +110,14 @@
  #define AOO_RESEND_LIMIT 16
 #endif
 
-// max. number of seconds to wait before removing inactive source
+// max. number of seconds after which inactive source are removed
 #ifndef AOO_SOURCE_TIMEOUT
  #define AOO_SOURCE_TIMEOUT 10.0
+#endif
+
+// max. number of seconds after which the (un)invite process is stopped
+#ifndef AOO_INVITE_TIMEOUT
+ #define AOO_INVITE_TIMEOUT 1.0
 #endif
 
 //---------------- public OSC interface --------//

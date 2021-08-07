@@ -70,7 +70,7 @@ public:
         return control(kAooCtlStopStream, 0, nullptr, 0);
     }
 
-    AooError addSink(const AooEndpoint& sink, AooFlag flags = 0) {
+    AooError addSink(const AooEndpoint& sink, AooFlag flags) {
         return control(kAooCtlAddSink, (AooIntPtr)&sink, AOO_ARG(flags));
     }
 
@@ -80,6 +80,22 @@ public:
 
     AooError removeAllSinks() {
         return control(kAooCtlRemoveSink, 0, nullptr, 0);
+    }
+
+    AooError acceptInvitation(const AooEndpoint& sink, AooId streamID) {
+        return control(kAooCtlAcceptInvitation, (AooIntPtr)&sink, AOO_ARG(streamID));
+    }
+
+    AooError acceptUninvitation(const AooEndpoint& sink, AooId streamID) {
+        return control(kAooCtlAcceptUninvitation, (AooIntPtr)&sink, AOO_ARG(streamID));
+    }
+
+    AooError activate(const AooEndpoint& sink, AooBool active) {
+        return control(kAooCtlActivate, (AooIntPtr)&sink, AOO_ARG(active));
+    }
+
+    AooError isActive(const AooEndpoint& sink, AooBool& active) {
+        return control(kAooCtlIsActive, (AooIntPtr)&sink, AOO_ARG(active));
     }
 
     AooError setFormat(AooFormat& format) {

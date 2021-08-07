@@ -8,6 +8,7 @@ AOO_PACK_BEGIN
 
 enum AooEventTypes
 {
+    // generic error event
     kAooEventError = 0,
     // sink/source: received a ping from source/sink
     kAooEventPing,
@@ -17,10 +18,10 @@ enum AooEventTypes
     kAooEventInvite,
     // source: uninvited by sink
     kAooEventUninvite,
-    // sink: source invitation timed out
-    kAooEventInviteTimeout,
-    // sink: source format changed
-    kAooEventFormatChange,
+    // source: sink added
+    kAooEventSinkAdd,
+    // source: sink removed
+    kAooEventSinkRemove,
     // sink: source added
     kAooEventSourceAdd,
     // sink: source removed
@@ -31,6 +32,12 @@ enum AooEventTypes
     kAooEventStreamStop,
     // sink: stream changed state
     kAooEventStreamState,
+    // sink: source format changed
+    kAooEventFormatChange,
+    // sink: invitation timed out
+    kAooEventInviteTimeout,
+    // sink: uninvitation timed out
+    kAooEventUninviteTimeout,
     // sink: buffer underrun
     kAooEventBufferUnderrun,
     // sink: blocks have been lost
@@ -66,8 +73,8 @@ typedef AOO_STRUCT AooEventEndpoint
 
 #define AooEventSourceAdd AooEventEndpoint
 #define AooEventSourceRemove AooEventEndpoint
-#define AooEventInviteTimeout AooEventEndpoint
-#define AooEventFormatTimeout AooEventEndpoint
+#define AooEventSinkAdd AooEventEndpoint
+#define AooEventSinkRemove AooEventEndpoint
 #define AooEventBufferUnderrun AooEventEndpoint
 
 // stream start/stop event
@@ -81,10 +88,30 @@ typedef AOO_STRUCT AooEventStreamStart
 
 #define AooEventStreamStop AooEventEndpoint
 
-#define AooEventInvite AooEventStreamStart
-#define AooEventUninvite AooEventEndpoint
+// invite/uninvite
+
+typedef AOO_STRUCT AooEventInvite
+{
+    AooEventType type;
+    AooEndpoint endpoint;
+    AooId token;
+    AooInt32 reserved;
+    const AooCustomData * metadata;
+} AooEventInvite;
+
+typedef AOO_STRUCT AooEventUninvite
+{
+    AooEventType type;
+    AooEndpoint endpoint;
+    AooId token;
+} AooEventUninvite;
+
+
+#define AooEventInviteTimeout AooEventEndpoint
+#define AooEventUninviteTimeout AooEventEndpoint
 
 // stream state event
+
 typedef AooInt32 AooStreamState;
 
 #define kAooStreamStateInactive 0
@@ -98,6 +125,7 @@ typedef AOO_STRUCT AooEventStreamState
 } AooEventStreamState;
 
 // block events
+
 typedef AOO_STRUCT AooEventBlock
 {
     AooEventType type;
@@ -112,6 +140,7 @@ typedef AOO_STRUCT AooEventBlock
 #define AooEventBlockDropped AooEventBlock
 
 // ping event
+
 typedef AOO_STRUCT AooEventPing {
     AooEventType type;
     AooEndpoint endpoint;
@@ -121,7 +150,8 @@ typedef AOO_STRUCT AooEventPing {
     AooInt32 lostBlocks;    // only for source
 } AooEventPing;
 
-// format events
+// format change event
+
 typedef AOO_STRUCT AooEventFormatChange {
     AooEventType type;
     AooEndpoint endpoint;
@@ -135,7 +165,7 @@ typedef AOO_STRUCT AooEventFormatChange {
 enum AooNetEventTypes
 {
     // generic events
-    kAooNetEventError = 1000,
+    kAooNetEventError = 0,
     kAooNetEventPing,
     // client events
     kAooNetEventDisconnect,

@@ -123,6 +123,7 @@ struct OptionCmd : CmdData {
     aoo::ip_address address;
     int32_t port;
     AooId id;
+    AooFlag flags;
     union {
         float f;
         int i;

@@ -115,7 +115,7 @@ void AooSend::handleEvent(const AooEvent *event){
         aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
 
         if (accept_){
-            addSinkEvent(addr, e->endpoint.id, 0);
+            // TODO
         } else {
             beginEvent(msg, "/invite", addr, e->endpoint.id);
             sendMsgRT(msg);
@@ -128,7 +128,7 @@ void AooSend::handleEvent(const AooEvent *event){
         aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
 
         if (accept_){
-            removeSinkEvent(addr, e->endpoint.id);
+            // TODO
         } else {
             beginEvent(msg, "/uninvite", addr, e->endpoint.id);
             sendMsgRT(msg);
@@ -140,62 +140,17 @@ void AooSend::handleEvent(const AooEvent *event){
     }
 }
 
-void AooSend::addSinkEvent(const aoo::ip_address& addr, AooId id,
-                           int32_t channelOnset) {
-    auto cmd = CmdData::create<OptionCmd>(world());
-    if (cmd){
-        cmd->address = addr;
-        cmd->id = id;
-        cmd->i = channelOnset;
-
-        doCmd(cmd, [](World * world, void *cmdData){
-            auto data = (OptionCmd *)cmdData;
-            auto& owner = static_cast<AooSend &>(*data->owner);
-
-            if (owner.addSink(data->address, data->id, data->i)){
-                char buf[256];
-                osc::OutboundPacketStream msg(buf, sizeof(buf));
-                owner.beginEvent(msg, "/add", data->address, data->id);
-                owner.sendMsgNRT(msg);
-            }
-
-            return false; // done
-        });
-    }
-}
-
 bool AooSend::addSink(const aoo::ip_address& addr, AooId id,
-                      int32_t channelOnset){
+                      bool active, int32_t channelOnset){
     AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
-    if (source()->addSink(ep) == kAooOk){
+    AooFlag flags = active ? kAooSinkActive : 0;
+    if (source()->addSink(ep, flags) == kAooOk){
         if (channelOnset > 0){
             source()->setSinkChannelOnset(ep, channelOnset);
         }
         return true;
     } else {
         return false;
-    }
-}
-
-void AooSend::removeSinkEvent(const aoo::ip_address& addr, AooId id){
-    auto cmd = CmdData::create<OptionCmd>(world());
-    if (cmd){
-        cmd->address = addr;
-        cmd->id = id;
-
-        doCmd(cmd, [](World * world, void *cmdData){
-            auto data = (OptionCmd *)cmdData;
-            auto& owner = static_cast<AooSend &>(*data->owner);
-
-            if (owner.removeSink(data->address, data->id)){
-                char buf[256];
-                osc::OutboundPacketStream msg(buf, sizeof(buf));
-                owner.beginEvent(msg, "/remove", data->address, data->id);
-                owner.sendMsgNRT(msg);
-            }
-
-            return false; // done
-        });
     }
 }
 
@@ -268,10 +223,11 @@ void aoo_send_add(AooSendUnit *unit, sc_msg_iter* args){
             aoo::ip_address addr;
             AooId id;
             if (owner.node()->getSinkArg(&args, addr, id)){
+                auto active = args.geti();
                 auto channelOnset = args.geti();
 
                 // only send IP address on success
-                if (owner.addSink(addr, id, channelOnset)){
+                if (owner.addSink(addr, id, active, channelOnset)){
                     msg << addr.name() << addr.port() << id;
                 }
             }

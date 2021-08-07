@@ -33,22 +33,29 @@ struct stream_stats {
     int32_t dropped = 0;
 };
 
-class source_desc;
-
-struct event
+// 'source_event' is always used inside 'source_desc', so we can safely
+// store a pointer to the sockaddr. the ip_address itself
+// never changes during lifetime of the 'source_desc'!
+// NOTE: this assumes that the event queue is polled regularly,
+// i.e. before a source_desc can be possibly autoremoved.
+struct source_event
 {
-    event() = default;
+    source_event() = default;
 
-    event(AooEventType type) : type_(type) {}
+    source_event(AooEventType _type) : type(_type) {}
 
-    event(AooEventType type, const endpoint& ep);
+    source_event(AooEventType _type, const endpoint& _ep)
+        : type(_type) {
+        source.endpoint.address = _ep.address.address();
+        source.endpoint.addrlen = _ep.address.length();
+        source.endpoint.id = _ep.id;
+    }
 
     union {
-        AooEventType type_;
-        AooEvent event_;
+        AooEventType type;
+        AooEvent event;
         AooEventEndpoint source;
         AooEventFormatChange format;
-        AooEventFormatTimeout format_timeout;
         AooEventPing ping;
         AooEventStreamStart stream_start;
         AooEventStreamStop stream_stop;
@@ -58,18 +65,6 @@ struct event
         AooEventBlockResent block_resent;
         AooEventBlockDropped block_dropped;
     };
-};
-
-struct sink_event {
-    sink_event() = default;
-
-    sink_event(AooEventType _type) : type(_type) {}
-    sink_event(AooEventType _type, const endpoint& ep);
-
-    AooEventType type;
-    ip_address address;
-    AooId id;
-    int32_t count; // for xrun event
 };
 
 enum class request_type {
@@ -90,9 +85,12 @@ struct request {
     request_type type;
     union {
         struct {
-            uint64_t tt1;
-            uint64_t tt2;
+            AooNtpTime tt1;
+            AooNtpTime tt2;
         } ping;
+        struct {
+            AooId token;
+        } uninvite;
     };
 };
 
@@ -104,17 +102,19 @@ struct source_request {
         : type(_type) {}
 
     // NOTE: can't use aoo::endpoint here
-    source_request(request_type _type, const ip_address& _addr,
-                   AooId _id, void *_extra = nullptr)
-        : type(_type), id(_id), address(_addr), extra(_extra) {}
+    source_request(request_type _type, const ip_address& _addr, AooId _id)
+        : type(_type), id(_id), address(_addr) {}
 
     request_type type;
     AooId id = kAooIdInvalid;
     ip_address address;
-    void *extra = nullptr;
+    union {
+        struct {
+            AooId token;
+            AooCustomData *metadata;
+        } invite;
+    };
 };
-
-class Sink;
 
 enum class source_state {
     idle,
@@ -122,12 +122,15 @@ enum class source_state {
     stop,
     start,
     invite,
-    uninvite
+    uninvite,
+    timeout
 };
 
 struct net_packet : data_packet {
     int32_t stream_id;
 };
+
+class Sink;
 
 class source_desc {
 public:
@@ -143,11 +146,7 @@ public:
         return (ep.address == addr) && (ep.id == id);
     }
 
-    bool is_active(const Sink& s) const;
-
-    bool is_inviting() const {
-        return state_.load() == source_state::invite;
-    }
+    bool check_active(const Sink& s);
 
     bool has_events() const {
         return !eventqueue_.empty();
@@ -162,7 +161,7 @@ public:
     // methods
     void reset(const Sink& s);
 
-    AooError handle_start(const Sink& s, int32_t stream, uint32_t flags, int32_t lastformat,
+    AooError handle_start(const Sink& s, int32_t stream, uint32_t flags, int32_t format_id,
                           const AooFormat& f, const AooByte *settings, int32_t size, const AooCustomData& md);
 
     AooError handle_stop(const Sink& s, int32_t stream);
@@ -175,7 +174,7 @@ public:
 
     bool process(const Sink& s, AooSample **buffer, int32_t nsamples);
 
-    void invite(const Sink& s, AooCustomData *metadata);
+    void invite(const Sink& s, AooId token, AooCustomData *metadata);
 
     void uninvite(const Sink& s);
 
@@ -206,19 +205,16 @@ private:
     void check_missing_blocks(const Sink& s);
 
     // send messages
-    void send_ping_reply(const Sink& s, const sendfn& fn,
-                         const request& r);
+    void send_ping_reply(const Sink& s, AooNtpTime tt1, AooNtpTime tt2,
+                         const sendfn& fn);
 
     void send_start_request(const Sink& s, const sendfn& fn);
 
     void send_data_requests(const Sink& s, const sendfn& fn);
 
-    void send_invitation(const Sink& s, const sendfn& fn);
-
-    void send_uninvitation(const Sink& s, const sendfn& fn);
-
-    // data
+    void send_invitations(const Sink& s, const sendfn& fn);
 public:
+    // data
     const endpoint ep;
 private:
     AooId stream_id_ = kAooIdInvalid;
@@ -230,13 +226,15 @@ private:
     std::atomic<bool> binary_{false};
 
     std::atomic<source_state> state_{source_state::idle};
-
     AooCustomData *metadata_{nullptr};
-    std::unique_ptr<AooCustomData, flat_metadata_deleter> metadata_request_{nullptr};
 
-    std::atomic<double> state_time_{0.0};
-    std::atomic<double> last_packet_time_{0};
+    std::unique_ptr<AooCustomData, flat_metadata_deleter> invite_metadata_{nullptr};
+    std::atomic<int32_t> invite_token_{kAooIdInvalid};
+
     std::atomic<int32_t> lost_since_ping_{0};
+    std::atomic<float> invite_start_time_{0};
+    std::atomic<float> last_invite_time_{0};
+    std::atomic<float> last_packet_time_{0};
     // audio decoder
     std::unique_ptr<AooFormat, format_deleter> format_;
     std::unique_ptr<AooCodec, decoder_deleter> decoder_;
@@ -275,9 +273,9 @@ private:
         datarequestqueue_.push(r);
     }
     // events
-    aoo::unbounded_mpsc_queue<event> eventqueue_;
-    void send_event(const Sink& s, const event& e, AooThreadLevel level);
-    void free_event(const event& e);
+    aoo::unbounded_mpsc_queue<source_event> eventqueue_;
+    void send_event(const Sink& s, const source_event& e, AooThreadLevel level);
+    void free_event(const source_event& e);
     // memory
     aoo::memory_list memory_;
     // thread synchronization
@@ -336,13 +334,17 @@ public:
 
     AooSeconds source_timeout() const { return source_timeout_.load(std::memory_order_relaxed); }
 
+    AooSeconds invite_timeout() const { return invite_timeout_.load(std::memory_order_relaxed); }
+
     AooSeconds elapsed_time() const { return timer_.get_elapsed(); }
 
     time_tag absolute_time() const { return timer_.get_absolute(); }
 
     AooEventMode event_mode() const { return eventmode_; }
 
-    void call_event(const event& e, AooThreadLevel level) const;
+    void send_event(const endpoint_event& e, AooThreadLevel level) const;
+
+    void call_event(const source_event& e, AooThreadLevel level) const;
 private:
     // settings
     std::atomic<AooId> id_;
@@ -372,13 +374,13 @@ private:
     std::atomic<int32_t> packetsize_{ AOO_PACKET_SIZE };
     std::atomic<int32_t> resend_limit_{ AOO_RESEND_LIMIT };
     std::atomic<AooSeconds> source_timeout_{ AOO_SOURCE_TIMEOUT };
+    std::atomic<AooSeconds> invite_timeout_{ AOO_INVITE_TIMEOUT };
     std::atomic<double> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
     std::atomic<bool> resend_{AOO_RESEND_DATA};
     std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
     std::atomic<bool> timer_check_{ AOO_TIMER_CHECK };
     // events
-    aoo::unbounded_mpsc_queue<sink_event> eventqueue_;
-    void send_event(const sink_event& e, AooThreadLevel level);
+    mutable aoo::unbounded_mpsc_queue<endpoint_event> eventqueue_;
     AooEventHandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;
     AooEventMode eventmode_ = kAooEventModeNone;

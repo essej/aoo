@@ -23,10 +23,8 @@ public:
 
     AooSource * source() { return source_.get(); }
 
-    void addSinkEvent(const aoo::ip_address& addr, AooId id, int32_t channelOnset);
-    bool addSink(const aoo::ip_address& addr, AooId id, int32_t channelOnset);
-
-    void removeSinkEvent(const aoo::ip_address& addr, AooId id);
+    bool addSink(const aoo::ip_address& addr, AooId id,
+                 bool active, int32_t channelOnset);
     bool removeSink(const aoo::ip_address& addr, AooId id);
     void removeAll();
 

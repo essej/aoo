@@ -21,6 +21,116 @@ const size_t kAooEventQueueSize = 8;
 // args: 48 bytes (max.)
 #define kAooBinMsgDataHeaderSize 48
 
+//-------------------- sink_desc ------------------------//
+
+namespace aoo {
+
+// called while locked
+void sink_desc::start(){
+    // clear requests, just to make sure we don't resend
+    // frames with a previous format.
+    data_requests_.clear();
+    if (is_active()){
+        stream_id_.store(get_random_id());
+        LOG_DEBUG(ep << ": start new stream (" << stream_id() << ")");
+        notify_start();
+    }
+}
+
+// called while locked
+void sink_desc::stop(Source& s){
+    if (is_active()){
+        LOG_DEBUG(ep << ": stop stream (" << stream_id() << ")");
+        sink_request r(request_type::stop, ep);
+        r.stop.stream = stream_id();
+        s.push_request(r);
+    }
+}
+
+bool sink_desc::need_invite(AooId token){
+    // avoid redundant invitation events
+    if (token != invite_token_){
+        invite_token_ = token;
+        LOG_DEBUG(ep << ": received invitation ("
+                  << token << ")");
+        return true;
+    } else {
+        LOG_DEBUG(ep << ": invitation already received ("
+                  << token << ")");
+        return false;
+    }
+}
+
+bool sink_desc::need_uninvite(AooId token){
+    // avoid redundant invitation events
+    if (token != uninvite_token_){
+        uninvite_token_ = token;
+        LOG_DEBUG(ep << ": received uninvitation ("
+                  << token << ")");
+        return true;
+    } else {
+        LOG_DEBUG(ep << ": uninvitation already received ("
+                  << token << ")");
+        return false;
+    }
+}
+
+void sink_desc::accept_invitation(Source& s, AooId token){
+    if (token != kAooIdInvalid){
+        stream_id_.store(token); // activates sink
+        LOG_DEBUG(ep << ": accept invitation (" << token << ")");
+        if (s.is_running()){
+            notify_start();
+            s.notify_start();
+        }
+    } else {
+        // nothing to do, just let the remote side timeout
+        LOG_DEBUG(ep << ": don't accept invitation (" << token << ")");
+    }
+}
+
+void sink_desc::accept_uninvitation(Source& s, AooId token){
+    if (token != kAooIdInvalid){
+        // deactivate the source, but check if we're still on the
+        // same stream as the remote end (probably not necessary).
+        if (stream_id() == token){
+            stream_id_.store(kAooIdInvalid);
+            LOG_DEBUG(ep << ": accept uninvitation (" << token << ")");
+            if (s.is_running()){
+                sink_request r(request_type::stop, ep);
+                r.stop.stream = token;
+                s.push_request(r);
+            }
+        } else {
+            LOG_DEBUG(ep << ": invitation already accepted (" << token << ")");
+        }
+    } else {
+        // nothing to do, just let the remote side timeout
+        LOG_DEBUG(ep << ": don't accept uninvitation (" << token << ")");
+    }
+}
+
+void sink_desc::activate(Source& s, bool b) {
+    if (b){
+        stream_id_.store(get_random_id());
+        LOG_DEBUG(ep << ": activate (" << stream_id() << ")");
+        if (s.is_running()){
+            notify_start();
+            s.notify_start();
+        }
+    } else {
+        auto stream = stream_id_.exchange(kAooIdInvalid);
+        LOG_DEBUG(ep << ": deactivate (" << stream << ")");
+        if (s.is_running()){
+            sink_request r(request_type::stop, ep);
+            r.stop.stream = stream;
+            s.push_request(r);
+        }
+    }
+}
+
+} // namespace aoo
+
 //---------------------- Source -------------------------//
 
 AOO_API AooSource * AOO_CALL AooSource_new(
@@ -47,7 +157,7 @@ AOO_API void AOO_CALL AooSource_free(AooSource *src){
 
 aoo::Source::~Source() {
     // flush event queue
-    event e;
+    endpoint_event e;
     while (eventqueue_.try_pop(e)) {
         free_event(e);
     }
@@ -85,11 +195,13 @@ AooError AOO_CALL aoo::Source::control(
     // add sink
     case kAooCtlAddSink:
     {
+        CHECKARG(AooFlag);
         auto ep = (const AooEndpoint *)index;
         if (!ep){
             return kAooErrorUnknown;
         }
-        return add_sink(*ep, 0); // ignore flags
+        auto flags = as<AooFlag>(ptr);
+        return add_sink(*ep, flags);
     }
     // remove sink(s)
     case kAooCtlRemoveSink:
@@ -129,6 +241,40 @@ AooError AOO_CALL aoo::Source::control(
         allocate_metadata(size);
         break;
     }
+    case kAooCtlActivate:
+    {
+        CHECKARG(AooBool);
+        GETSINKARG
+        bool active = as<AooBool>(ptr);
+        sink->activate(*this, active);
+
+        break;
+    }
+    case kAooCtlIsActive:
+    {
+        CHECKARG(AooBool);
+        GETSINKARG
+        as<AooBool>(ptr) = sink->is_active();
+        break;
+    }
+    case kAooCtlAcceptInvitation:
+    {
+        CHECKARG(AooId);
+        GETSINKARG
+        auto id = as<AooId>(ptr);
+        sink->accept_invitation(*this, id);
+
+        break;
+    }
+    case kAooCtlAcceptUninvitation:
+    {
+        CHECKARG(AooId);
+        GETSINKARG
+        auto id = as<AooId>(ptr);
+        sink->accept_uninvitation(*this, id);
+
+        break;
+    }
     case kAooCtlGetStreamMetadataSize:
         CHECKARG(AooInt32);
         as<AooInt32>(ptr) = metadata_size_.load();
@@ -147,9 +293,9 @@ AooError AOO_CALL aoo::Source::control(
     case kAooCtlSetChannelOnset:
     {
         CHECKARG(int32_t);
-        GETSINKARG;
+        GETSINKARG
         auto chn = as<int32_t>(ptr);
-        sink->channel.store(chn);
+        sink->set_channel(chn);
         LOG_VERBOSE("aoo_source: send to sink " << sink->ep
                     << " on channel " << chn);
         break;
@@ -157,8 +303,8 @@ AooError AOO_CALL aoo::Source::control(
     case kAooCtlGetChannelOnset:
     {
         CHECKARG(int32_t);
-        GETSINKARG;
-        as<int32_t>(ptr) = sink->channel.load();
+        GETSINKARG
+        as<int32_t>(ptr) = sink->channel();
         break;
     }
     // id
@@ -426,9 +572,10 @@ AooError AOO_CALL aoo::Source::send(AooSendFunc fn, void *user) {
 #endif
     sendfn reply(fn, user);
 
+    // *first* dispatch requests (/stop messages)
     dispatch_requests(reply);
 
-    send_stream(reply);
+    send_start(reply);
 
     send_data(reply);
 
@@ -458,14 +605,13 @@ AooError AOO_CALL aoo::Source::process(
     } else if (state == stream_state::stop){
         sink_lock lock(sinks_);
         for (auto& s : sinks_){
-            s.stop();
+            s.stop(*this);
         }
-        notify(send_flag::stop);
 
         // check if we have been started in the meantime
         auto expected = stream_state::stop;
         if (state_.compare_exchange_strong(expected, stream_state::idle)){
-            // don't return kAooIdle because we want to send the /stop message
+            // don't return kAooIdle because we want to send the /stop messages !
             return kAooOk;
         }
     } else if (state == stream_state::start){
@@ -473,11 +619,11 @@ AooError AOO_CALL aoo::Source::process(
         // the mutex should be uncontended most of the time.
         // although it is repeatedly locked in send(), the latter
         // returns early if we're not already playing.
-        unique_lock lock(update_mutex_, std::try_to_lock_t{}); // writer lock!
+        unique_lock lock(update_mutex_, sync::try_to_lock); // writer lock!
         if (!lock.owns_lock()){
             LOG_VERBOSE("aoo_source: process would block");
             // no need to call xrun()!
-            return kAooErrorWouldBlock;
+            return kAooErrorIdle; // ?
         }
 
         make_new_stream();
@@ -516,7 +662,7 @@ AooError AOO_CALL aoo::Source::process(
         }
         LOG_DEBUG("xrun: " << nblocks << " blocks");
 
-        event e(kAooEventXRun);
+        endpoint_event e(kAooEventXRun);
         e.xrun.count = nblocks + 0.5; // ?
         send_event(e, kAooThreadLevelAudio);
 
@@ -539,9 +685,6 @@ AooError AOO_CALL aoo::Source::process(
     }
 
 #if NO_SINKS_IDLE
-    // users might run the source passively (= waiting for invitations),
-    // so there's a good chance that the start will be active, but
-    // without sinks. we can save some CPU by returning early.
     if (sinks_.empty()){
         // nothing to do. users still have to check for pending events,
         // but there is no reason to call send()
@@ -552,11 +695,11 @@ AooError AOO_CALL aoo::Source::process(
     // the mutex should be available most of the time.
     // it is only locked exclusively when setting certain options,
     // e.g. changing the buffer size.
-    shared_lock lock(update_mutex_, std::try_to_lock); // reader lock!
+    shared_lock lock(update_mutex_, sync::try_to_lock); // reader lock!
     if (!lock.owns_lock()){
         LOG_VERBOSE("aoo_source: process would block");
         add_xrun(1);
-        return kAooErrorWouldBlock; // ?
+        return kAooErrorIdle; // ?
     }
 
     if (!encoder_){
@@ -667,44 +810,17 @@ AOO_API AooError AOO_CALL AooSource_pollEvents(AooSource *src){
 
 AooError AOO_CALL aoo::Source::pollEvents(){
     // always thread-safe
-    event e;
+    endpoint_event e;
     while (eventqueue_.try_pop(e)) {
-        eventhandler_(eventcontext_, &e.event_, kAooThreadLevelUnknown);
+        eventhandler_(eventcontext_, &e.event, kAooThreadLevelUnknown);
         free_event(e);
     }
     return kAooOk;
 }
 
-namespace aoo {
-
-//------------------------- event ---------------------------------//
-
-event::event(AooEventType type, const ip_address& addr, AooId id){
-    memcpy(&addr_, addr.address(), addr.length());
-    sink.type = type;
-    sink.endpoint.address = &addr_;
-    sink.endpoint.addrlen = addr.length();
-    sink.endpoint.id = id;
-}
-
-event::event(const event& other){
-    memcpy(this, &other, sizeof(event)); // ugh
-    // only for source events:
-    if (type_ != kAooEventXRun){
-        sink.endpoint.address = &addr_;
-    }
-}
-
-event& event::operator=(const event& other){
-    memcpy(this, &other, sizeof(event)); // ugh
-    // only for source events:
-    if (type_ != kAooEventXRun){
-        sink.endpoint.address = &addr_;
-    }
-    return *this;
-}
-
 //------------------------- source --------------------------------//
+
+namespace aoo {
 
 sink_desc * Source::find_sink(const ip_address& addr, AooId id){
     for (auto& sink : sinks_){
@@ -732,18 +848,28 @@ aoo::sink_desc * Source::get_sink_arg(intptr_t index){
 AooError Source::add_sink(const AooEndpoint& ep, uint32_t flags)
 {
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
-
-    sink_lock lock(sinks_);
+    // sinks can be added/removed from different threads
+    sync::scoped_lock<sync::mutex> lock1(sink_mutex_);
+    sink_lock lock2(sinks_);
     // check if sink exists!
     if (find_sink(addr, ep.id)){
         LOG_WARNING("aoo_source: sink already added!");
         return kAooErrorUnknown;
     }
-    // add sink descriptor
+    AooId stream = (flags & kAooSinkActive) ? get_random_id() : kAooIdInvalid;
+    do_add_sink(addr, ep.id, stream);
+    // always succeeds
+    return kAooOk;
+}
+
+sink_desc * Source::do_add_sink(const ip_address& addr, AooId id, AooId stream_id)
+{
+    AooFlag flags = 0;
 #if USE_AOO_NET
     // check if the peer needs to be relayed
     if (client_){
         AooBool relay;
+        AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
         if (client_->control(kAooCtlNeedRelay,
                              reinterpret_cast<intptr_t>(&ep),
                              &relay, sizeof(relay)) == kAooOk)
@@ -756,48 +882,66 @@ AooError Source::add_sink(const AooEndpoint& ep, uint32_t flags)
         }
     }
 #endif
-    auto it = sinks_.emplace_front(addr, ep.id, flags);
-    // send /start if already running!
-    if (state_.load(std::memory_order_acquire) == stream_state::run){
-        it->notify(send_flag::start);
-        notify(send_flag::start);
+    auto it = sinks_.emplace_front(addr, id, flags, stream_id);
+    // send /start if needed!
+    if (is_running() && it->is_active()){
+        it->notify_start();
+        notify_start();
     }
 
-    return kAooOk;
+    return &(*it);
 }
 
 AooError Source::remove_sink(const AooEndpoint& ep){
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
 
-    sink_lock lock(sinks_);
+    // sinks can be added/removed from different threads
+    sync::scoped_lock<sync::mutex> lock1(sink_mutex_);
+    sink_lock lock2(sinks_);
+    if (do_remove_sink(addr, ep.id)){
+        return kAooOk;
+    } else {
+        return kAooErrorUnknown;
+    }
+}
+
+bool Source::do_remove_sink(const ip_address& addr, AooId id){
     for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
-        if (it->ep.address == addr && it->ep.id == ep.id){
-            // send /stop message!
-            sink_request r(request_type::stop, it->ep);
-            {
-                scoped_shared_lock lock(update_mutex_);
-                r.stop.stream = it->stream_id;
+        if (it->ep.address == addr && it->ep.id == id){
+            // send /stop if needed!
+            if (is_running() && it->is_active()) {
+                sink_request r(request_type::stop, it->ep);
+                {
+                    scoped_shared_lock lock(update_mutex_);
+                    r.stop.stream = it->stream_id();
+                }
+                push_request(r);
             }
-            requests_.push(r);
 
             sinks_.erase(it);
-            return kAooOk;
+            return true;
         }
     }
     LOG_WARNING("aoo_source: sink not found!");
-    return kAooErrorUnknown;
+    return false;
 }
 
 AooError Source::remove_all_sinks(){
     // just lock once for all stream ids
-    scoped_shared_lock lock(update_mutex_);
+    scoped_shared_lock lock1(update_mutex_);
 
-    sink_lock lock2(sinks_);
+    bool running = is_running();
+
+    // sinks can be added/removed from different threads
+    sync::scoped_lock<sync::mutex> lock2(sink_mutex_);
+    sink_lock lock3(sinks_);
     // send /stop messages
     for (auto& s : sinks_){
-        sink_request r(request_type::stop, s.ep);
-        r.stop.stream = s.stream_id;
-        requests_.push(r);
+        if (running && s.is_active()){
+            sink_request r(request_type::stop, s.ep);
+            r.stop.stream = s.stream_id();
+            push_request(r);
+        }
     }
     sinks_.clear();
     return kAooOk;
@@ -890,30 +1034,30 @@ bool Source::need_resampling() const {
 #endif
 }
 
-void Source::notify(uint32_t what){
-    LOG_DEBUG("notify(): " << what);
-    needsend_.fetch_or(what, std::memory_order_release);
+void Source::push_request(const sink_request &r){
+    requests_.push(r);
 }
 
-uint32_t Source::need_send() {
-    return needsend_.exchange(0, std::memory_order_acquire);
+void Source::notify_start(){
+    LOG_DEBUG("notify_start()");
+    needstart_.exchange(true, std::memory_order_release);
 }
 
-void Source::send_event(const event& e, AooThreadLevel level){
+void Source::send_event(const endpoint_event& e, AooThreadLevel level){
     switch (eventmode_){
     case kAooEventModePoll:
         eventqueue_.push(e);
         break;
     case kAooEventModeCallback:
-        eventhandler_(eventcontext_, &e.event_, level);
+        eventhandler_(eventcontext_, &e.event, level);
         break;
     default:
         break;
     }
 }
 
-void Source::free_event(const event &e){
-    if (e.type_ == kAooEventInvite){
+void Source::free_event(const endpoint_event &e){
+    if (e.type == kAooEventInvite){
         // free metadata
         if (e.invite.metadata){
             memory_.deallocate((void *)e.invite.metadata);
@@ -1019,7 +1163,7 @@ void Source::make_new_stream(){
         s.start();
     }
 
-    notify(send_flag::start);
+    notify_start();
 }
 
 void Source::allocate_metadata(int32_t size){
@@ -1120,9 +1264,9 @@ void Source::update_historybuffer(){
 // /aoo/sink/<id>/start <src> <version> <stream_id> <flags>
 // <lastformat> <nchannels> <samplerate> <blocksize> <codec> <extension>
 // [<metadata_type> <metadata_content>]
-void send_start(const endpoint& ep, int32_t id, int32_t stream, int32_t lastformat,
-                const AooFormat& f, const AooByte *extension, AooInt32 size,
-                const AooCustomData* metadata, const sendfn& fn) {
+void send_start_msg(const endpoint& ep, int32_t id, int32_t stream, int32_t lastformat,
+                    const AooFormat& f, const AooByte *extension, AooInt32 size,
+                    const AooCustomData* metadata, const sendfn& fn) {
     LOG_DEBUG("send " kAooMsgStart " to " << ep << " (stream = " << stream << ")");
 
     char buf[AOO_MAX_PACKET_SIZE];
@@ -1150,8 +1294,8 @@ void send_start(const endpoint& ep, int32_t id, int32_t stream, int32_t lastform
 }
 
 // /aoo/sink/<id>/stop <src> <stream_id>
-void send_stop(const endpoint& ep, int32_t id,
-               int32_t stream, const sendfn& fn) {
+void send_stop_msg(const endpoint& ep, int32_t id,
+                   int32_t stream, const sendfn& fn) {
     LOG_DEBUG("send " kAooMsgStop " to " << ep << " (stream = " << stream << ")");
 
     char buf[AOO_MAX_PACKET_SIZE];
@@ -1172,14 +1316,13 @@ void Source::dispatch_requests(const sendfn& fn){
     sink_request r;
     while (requests_.try_pop(r)){
         if (r.type == request_type::stop){
-            send_stop(r.ep, id(), r.stop.stream, fn);
+            send_stop_msg(r.ep, id(), r.stop.stream, fn);
         }
     }
 }
 
-void Source::send_stream(const sendfn& fn){
-    auto what = need_send();
-    if (what == 0){
+void Source::send_start(const sendfn& fn){
+    if (!needstart_.exchange(false, std::memory_order_acquire)){
         return;
     }
 
@@ -1218,33 +1361,24 @@ void Source::send_stream(const sendfn& fn){
         }
     }
 
-    // cache sinks
+    // cache sinks that need to send a /start message
     // we only free sinks in this thread, so we don't have to lock
 #if 0
     sink_lock lock(sinks_);
 #endif
     cached_sinks_.clear();
     for (auto& s : sinks_){
-        cached_sinks_.emplace_back(s, s.need_send());
+        if (s.need_start()){
+            cached_sinks_.emplace_back(s);
+        }
     }
 
     // send messages without lock!
     updatelock.unlock();
 
-    // we only free sources in this thread, so we don't have to lock
-#if 0
-    // this is not a real lock, so we don't have worry about dead locks
-    sink_lock lock(sinks_);
-#endif
     for (auto& s : cached_sinks_){
-        // first send /stop message, in case we also send a /start message
-        if (s.send & send_flag::stop){
-            send_stop(s.ep, id(), s.stream_id, fn);
-        }
-        if (s.send & send_flag::start){
-            send_start(s.ep, id(), s.stream_id, format_id,
+        send_start_msg(s.ep, id(), s.stream_id, format_id,
                        f.header, extension, size, md, fn);
-        }
     }
 }
 
@@ -1422,7 +1556,9 @@ void Source::send_data(const sendfn& fn){
         #endif
             cached_sinks_.clear();
             for (auto& s : sinks_){
-                cached_sinks_.emplace_back(s);
+                if (s.is_active()){
+                    cached_sinks_.emplace_back(s);
+                }
             }
 
             // now we can unlock
@@ -1503,7 +1639,9 @@ void Source::send_data(const sendfn& fn){
         #endif
             cached_sinks_.clear();
             for (auto& s : sinks_){
-                cached_sinks_.emplace_back(s);
+                if (s.is_active()){
+                    cached_sinks_.emplace_back(s);
+                }
             }
 
             // unlock before sending!
@@ -1557,6 +1695,7 @@ void Source::send_data(const sendfn& fn){
         for (auto& s : sinks_){
             s.start();
         }
+        notify_start();
     }
 }
 
@@ -1579,12 +1718,12 @@ void Source::resend_data(const sendfn &fn){
             if (block){
                 bool binary = binary_.load(std::memory_order_relaxed);
 
-                auto stream_id = s.stream_id;
+                auto stream_id = s.stream_id();
 
                 aoo::data_packet d;
                 d.sequence = block->sequence;
                 d.samplerate = block->samplerate;
-                d.channel = s.channel.load(std::memory_order_relaxed);
+                d.channel = s.channel();
                 d.totalsize = block->size();
                 d.nframes = block->num_frames();
                 // We use a buffer on the heap because blocks and even frames
@@ -1668,22 +1807,24 @@ void Source::send_ping(const sendfn& fn){
     #endif
         // send ping to sinks
         for (auto& sink : sinks_){
-            // /aoo/sink/<id>/ping <src> <time>
-            LOG_DEBUG("send " kAooMsgPing " to " << sink.ep);
+            if (sink.is_active()){
+                // /aoo/sink/<id>/ping <src> <time>
+                LOG_DEBUG("send " kAooMsgPing " to " << sink.ep);
 
-            char buf[AOO_MAX_PACKET_SIZE];
-            osc::OutboundPacketStream msg(buf, sizeof(buf));
+                char buf[AOO_MAX_PACKET_SIZE];
+                osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-            const int32_t max_addr_size = kAooMsgDomainLen
-                    + kAooMsgSinkLen + 16 + kAooMsgPingLen;
-            char address[max_addr_size];
-            snprintf(address, sizeof(address), "%s%s/%d%s",
-                     kAooMsgDomain, kAooMsgSink, sink.ep.id, kAooMsgPing);
+                const int32_t max_addr_size = kAooMsgDomainLen
+                        + kAooMsgSinkLen + 16 + kAooMsgPingLen;
+                char address[max_addr_size];
+                snprintf(address, sizeof(address), "%s%s/%d%s",
+                         kAooMsgDomain, kAooMsgSink, sink.ep.id, kAooMsgPing);
 
-            msg << osc::BeginMessage(address) << id() << osc::TimeTag(tt)
-                << osc::EndMessage;
+                msg << osc::BeginMessage(address) << id() << osc::TimeTag(tt)
+                    << osc::EndMessage;
 
-            fn((const AooByte *)msg.Data(), msg.Size(), sink.ep);
+                fn((const AooByte *)msg.Data(), msg.Size(), sink.ep);
+            }
         }
 
         lastpingtime_.store(elapsed);
@@ -1712,10 +1853,14 @@ void Source::handle_start_request(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
 
     if (sink){
-        // just resend /start message
-        sink->notify(send_flag::start);
+        if (sink->is_active()){
+            // just resend /start message
+            sink->notify_start();
 
-        notify(send_flag::start);
+            notify_start();
+        } else {
+            LOG_VERBOSE("ignoring '" << kAooMsgStart << "' message: sink not active");
+        }
     } else {
         LOG_VERBOSE("ignoring '" << kAooMsgStart << "' message: sink not found");
     }
@@ -1735,12 +1880,21 @@ void Source::handle_data_request(const osc::ReceivedMessage& msg,
     sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
     if (sink){
-        // get pairs of sequence + frame
-        int npairs = (msg.ArgumentCount() - 2) / 2;
-        while (npairs--){
-            int32_t sequence = (it++)->AsInt32();
-            int32_t frame = (it++)->AsInt32();
-            sink->add_data_request(sequence, frame);
+        if (sink->stream_id() != stream_id){
+            LOG_VERBOSE("ignoring '" << kAooMsgData
+                        << "' message: stream ID mismatch (outdated?)");
+            return;
+        }
+        if (sink->is_active()){
+            // get pairs of sequence + frame
+            int npairs = (msg.ArgumentCount() - 2) / 2;
+            while (npairs--){
+                int32_t sequence = (it++)->AsInt32();
+                int32_t frame = (it++)->AsInt32();
+                sink->add_data_request(sequence, frame);
+            }
+        } else {
+            LOG_VERBOSE("ignoring '" << kAooMsgData << "' message: sink not active");
         }
     } else {
         LOG_VERBOSE("ignoring '" << kAooMsgData << "' message: sink not found");
@@ -1769,25 +1923,31 @@ void Source::handle_data_request(const AooByte *msg, int32_t n,
     sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
     if (sink){
-        // get pairs of sequence + frame
-        int count = aoo::read_bytes<int32_t>(it);
-        if (n < (12 + count * sizeof(int32_t) * 2)){
-            LOG_ERROR("handle_data_request: bad 'count' argument!");
+        if (sink->stream_id() != stream_id){
+            LOG_VERBOSE("ignoring binary data message: stream ID mismatch (outdated?)");
             return;
         }
-        while (count--){
-            int32_t sequence = aoo::read_bytes<int32_t>(it);
-            int32_t frame = aoo::read_bytes<int32_t>(it);
-            sink->add_data_request(sequence, frame);
+        if (sink->is_active()){
+            // get pairs of sequence + frame
+            int count = aoo::read_bytes<int32_t>(it);
+            if (n < (12 + count * sizeof(int32_t) * 2)){
+                LOG_ERROR("handle_data_request: bad 'count' argument!");
+                return;
+            }
+            while (count--){
+                int32_t sequence = aoo::read_bytes<int32_t>(it);
+                int32_t frame = aoo::read_bytes<int32_t>(it);
+                sink->add_data_request(sequence, frame);
+            }
+        } else {
+            LOG_VERBOSE("ignoring binary data message: sink not active");
         }
     } else {
-        LOG_VERBOSE("ignoring '" << kAooMsgData << "' message: sink not found");
+        LOG_VERBOSE("ignoring binary data message: sink not found");
     }
 }
 
-// /aoo/src/<id>/invite <id> <version> <stream_id> <flags>
-// <nchannels> <sr> <blocksize> <codec> <extension>
-// [<metadata_type> <metadata_content>]
+// /aoo/src/<id>/invite <id> <stream_id> [<metadata_type> <metadata_content>]
 
 void Source::handle_invite(const osc::ReceivedMessage& msg,
                            const ip_address& addr)
@@ -1796,23 +1956,40 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
 
     auto id = (it++)->AsInt32();
 
+    auto token = (it++)->AsInt32();
+
     const char *type = nullptr;
     const void *ptr = nullptr;
     osc::osc_bundle_element_size_t size = 0;
 
-    if (msg.ArgumentCount() > 1){
+    if (msg.ArgumentCount() > 2){
         type = (it++)->AsString();
         (it++)->AsBlob(ptr, size);
     }
 
     LOG_DEBUG("handle invitation by " << addr << "|" << id);
 
-    // check if sink exists to catch redundant invite messages
-    sink_lock lock(sinks_);
+    // sinks can be added/removed from different threads
+    sync::unique_lock<sync::mutex> lock1(sink_mutex_);
+    sink_lock lock2(sinks_);
     auto sink = find_sink(addr, id);
     if (!sink){
+        // the sink is initially deactivated.
+        sink = do_add_sink(addr, id, kAooIdInvalid);
+
+        // push "add" event
+        endpoint_event e(kAooEventSinkAdd, addr, id);
+
+        send_event(e, kAooThreadLevelNetwork);
+    }
+    // make sure that the event is only sent once per invitation.
+    if (sink->need_invite(token)) {
+        lock1.unlock(); // !
+
         // push "invite" event
-        event e(kAooEventInvite, addr, id);
+        endpoint_event e(kAooEventInvite, addr, id);
+        e.invite.token = token;
+        e.invite.reserved = 0;
 
         if (type){
             // with metadata
@@ -1837,29 +2014,55 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
         }
 
         send_event(e, kAooThreadLevelNetwork);
-    } else {
-        LOG_VERBOSE("ignoring '" << kAooMsgInvite << "' message: sink already added");
     }
 }
 
-// /aoo/src/<id>/uninvite <id>
+// /aoo/src/<id>/uninvite <id> <stream_id>
 
 void Source::handle_uninvite(const osc::ReceivedMessage& msg,
                              const ip_address& addr)
 {
-    auto id = msg.ArgumentsBegin()->AsInt32();
+    auto it = msg.ArgumentsBegin();
+
+    auto id = (it++)->AsInt32();
+
+    auto token = (it++)->AsInt32();
 
     LOG_DEBUG("handle uninvitation by " << addr << "|" << id);
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     sink_lock lock(sinks_);
-    if (find_sink(addr, id)){
-        // push "uninvite" event
-        event e(kAooEventUninvite, addr, id);
-        send_event(e, kAooThreadLevelNetwork);
+    auto sink = find_sink(addr, id);
+    if (sink) {
+        if (sink->stream_id() == token){
+            if (sink->is_active()){
+                // push "uninvite" event
+                if (sink->need_uninvite(token)) {
+                    endpoint_event e(kAooEventUninvite, addr, id);
+                    e.uninvite.token = token;
+
+                    send_event(e, kAooThreadLevelNetwork);
+                }
+                return; // don't send /stop message!
+            } else {
+                // if the sink is inactive, it probably means that we have
+                // accepted the uninvitation, but the /stop message got lost.
+                LOG_DEBUG("ignoring '" << kAooMsgUninvite << "' message: "
+                          << " sink not active (/stop message got loast?)");
+            }
+        } else {
+            LOG_VERBOSE("ignoring '" << kAooMsgUninvite
+                        << "' message: stream token mismatch (outdated?)");
+        }
     } else {
         LOG_VERBOSE("ignoring '" << kAooMsgUninvite << "' message: sink not found");
     }
+    // tell the remote side that we have stopped.
+    // don't use the sink because it can be NULL!
+    sink_request r(request_type::stop, endpoint(addr, id, 0));
+    r.stop.stream = token; // use remote stream id!
+    push_request(r);
+    LOG_DEBUG("resend " << kAooMsgStop << " message");
 }
 
 // /aoo/src/<id>/ping <id> <tt1> <tt2> <lostblocks>
@@ -1877,18 +2080,23 @@ void Source::handle_ping(const osc::ReceivedMessage& msg,
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     sink_lock lock(sinks_);
-    if (find_sink(addr, id)){
-        // push "ping" event
-        event e(kAooEventPing, addr, id);
-        e.ping.tt1 = tt1;
-        e.ping.tt2 = tt2;
-        e.ping.lostBlocks = lost_blocks;
-    #if 0
-        e.ping.tt3 = timer_.get_absolute(); // use last stream time
-    #else
-        e.ping.tt3 = aoo::time_tag::now(); // use real system time
-    #endif
-        send_event(e, kAooThreadLevelNetwork);
+    auto sink = find_sink(addr, id);
+    if (sink) {
+        if (sink->is_active()){
+            // push "ping" event
+            endpoint_event e(kAooEventPing, addr, id);
+            e.ping.tt1 = tt1;
+            e.ping.tt2 = tt2;
+            e.ping.lostBlocks = lost_blocks;
+        #if 0
+            e.ping.tt3 = timer_.get_absolute(); // use last stream time
+        #else
+            e.ping.tt3 = aoo::time_tag::now(); // use real system time
+        #endif
+            send_event(e, kAooThreadLevelNetwork);
+        } else {
+            LOG_VERBOSE("ignoring '" << kAooMsgPing << "' message: sink not active");
+        }
     } else {
         LOG_VERBOSE("ignoring '" << kAooMsgPing << "' message: sink not found");
     }

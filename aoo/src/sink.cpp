@@ -33,8 +33,8 @@ aoo::Sink::~Sink(){
     while (requestqueue_.try_pop(r)) {
         if (r.type == request_type::invite){
             // free metadata
-            if (r.extra != nullptr){
-                auto md = (AooCustomData *)r.extra;
+            auto md = r.invite.metadata;
+            if (md != nullptr){
                 auto mdsize = flat_metadata_size(*md);
                 aoo::deallocate(md, mdsize);
             }
@@ -118,8 +118,10 @@ AooError AOO_CALL aoo::Sink::control(
         }
         ip_address addr((const sockaddr *)ep->address, ep->addrlen);
 
-        push_request(source_request { request_type::invite,
-                                      addr, ep->id, metadata });
+        source_request r(request_type::invite, addr, ep->id);
+        r.invite.token = get_random_id();
+        r.invite.metadata = metadata;
+        push_request(r);
 
         break;
     }
@@ -172,14 +174,6 @@ AooError AOO_CALL aoo::Sink::control(
         assert(size >= sizeof(AooFormat));
         GETSOURCEARG
         return src->get_format(as<AooFormat>(ptr));
-    }
-    // codec control
-    case kAooCtlCodecControl:
-    {
-        CHECKARG(AooSinkCodecCtl);
-        GETSOURCEARG
-        auto& cc = as<AooSinkCodecCtl>(ptr);
-        return src->codec_control(cc.ctl, cc.data, cc.size);
     }
     // buffer size
     case kAooCtlSetBufferSize:
@@ -305,6 +299,17 @@ AooError AOO_CALL aoo::Sink::control(
     case kAooCtlGetSourceTimeout:
         CHECKARG(AooSeconds);
         as<AooSeconds>(ptr) = source_timeout_.load();
+        break;
+    case kAooCtlSetInviteTimeout:
+    {
+        CHECKARG(AooSeconds);
+        auto timeout = std::max<AooSeconds>(0, as<AooSeconds>(ptr));
+        invite_timeout_.store(timeout);
+        break;
+    }
+    case kAooCtlGetInviteTimeout:
+        CHECKARG(AooSeconds);
+        as<AooSeconds>(ptr) = invite_timeout_.load();
         break;
 #if USE_AOO_NET
     case kAooCtlSetClient:
@@ -442,8 +447,8 @@ AooError AOO_CALL aoo::Sink::process(
             s.add_xrun(xrunsamples);
         }
 
-        sink_event e(kAooEventXRun);
-        e.count = (float)xrunsamples / (float)blocksize_;
+        endpoint_event e(kAooEventXRun);
+        e.xrun.count = (float)xrunsamples / (float)blocksize_;
         send_event(e, kAooThreadLevelAudio);
 
         timer_.reset();
@@ -470,17 +475,11 @@ AooError AOO_CALL aoo::Sink::process(
     for (auto it = sources_.begin(); it != sources_.end();){
         if (it->process(*this, data, nsamples)){
             didsomething = true;
-        } else if (!it->is_active(*this)){
+        } else if (!it->check_active(*this)){
+            LOG_VERBOSE("AooSink: removed inactive source " << it->ep);
+            endpoint_event e(kAooEventSourceRemove, it->ep);
+            send_event(e, kAooThreadLevelAudio);
             // move source to garbage list (will be freed in send())
-            if (it->is_inviting()){
-                LOG_VERBOSE("AooSink: invitation for " << it->ep << " timed out");
-                sink_event e(kAooEventInviteTimeout, it->ep);
-                send_event(e, kAooThreadLevelAudio);
-            } else {
-                LOG_VERBOSE("AooSink: removed inactive source " << it->ep);
-                sink_event e(kAooEventSourceRemove, it->ep);
-                send_event(e, kAooThreadLevelAudio);
-            }
             it = sources_.erase(it);
             continue;
         }
@@ -546,24 +545,9 @@ AOO_API AooError AOO_CALL AooSink_pollEvents(AooSink *sink){
 
 AooError AOO_CALL aoo::Sink::pollEvents(){
     int total = 0;
-    sink_event e;
+    endpoint_event e;
     while (eventqueue_.try_pop(e)){
-        if (e.type == kAooEventXRun){
-            AooEventXRun xe;
-            xe.type = e.type;
-            xe.count = e.count;
-            eventhandler_(eventcontext_, (const AooEvent *)&xe,
-                          kAooThreadLevelUnknown);
-        } else {
-            AooEventEndpoint ee;
-            ee.type = e.type;
-            ee.endpoint.address = e.address.address();
-            ee.endpoint.addrlen = e.address.length();
-            ee.endpoint.id = e.id;
-            eventhandler_(eventcontext_, (const AooEvent *)&ee,
-                          kAooThreadLevelUnknown);
-        }
-
+        eventhandler_(eventcontext_, &e.event, kAooThreadLevelUnknown);
         total++;
     }
     // we only need to protect against source removal
@@ -579,29 +563,22 @@ AooError AOO_CALL aoo::Sink::pollEvents(){
 
 namespace aoo {
 
-void Sink::send_event(const sink_event &e, AooThreadLevel level) {
+void Sink::send_event(const endpoint_event &e, AooThreadLevel level) const {
     switch (eventmode_){
     case kAooEventModePoll:
         eventqueue_.push(e);
         break;
     case kAooEventModeCallback:
-    {
-        AooEventEndpoint ee;
-        ee.type = e.type;
-        ee.endpoint.address = e.address.address();
-        ee.endpoint.addrlen = e.address.length();
-        ee.endpoint.id = e.id;
-        eventhandler_(eventcontext_, (const AooEvent *)&ee, level);
+        eventhandler_(eventcontext_, &e.event, level);
         break;
-    }
     default:
         break;
     }
 }
 
 // only called if mode is kAooEventModeCallback
-void Sink::call_event(const event &e, AooThreadLevel level) const {
-    eventhandler_(eventcontext_, &e.event_, level);
+void Sink::call_event(const source_event &e, AooThreadLevel level) const {
+    eventhandler_(eventcontext_, &e.event, level);
 }
 
 void Sink::dispatch_requests(){
@@ -616,13 +593,13 @@ void Sink::dispatch_requests(){
             // NOTE that sources can also be added in the network
             // receive thread (see handle_data() or handle_format()),
             // so we have to lock a mutex to avoid the ABA problem.
-            sync::scoped_lock<sync::mutex> lock(source_mutex_);
-            source_lock srclock(sources_);
+            sync::scoped_lock<sync::mutex> lock1(source_mutex_);
+            source_lock lock2(sources_);
             auto src = find_source(r.address, r.id);
             if (!src){
                 src = add_source(r.address, r.id);
             }
-            src->invite(*this, (AooCustomData *)r.extra);
+            src->invite(*this, r.invite.token, r.invite.metadata);
             break;
         }
         case request_type::uninvite:
@@ -759,8 +736,8 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
     // try to find existing source
     // NOTE: sources can also be added in the network send thread,
     // so we have to lock a mutex to avoid the ABA problem!
-    sync::scoped_lock<sync::mutex> lock(source_mutex_);
-    source_lock srclock(sources_);
+    sync::scoped_lock<sync::mutex> lock1(source_mutex_);
+    source_lock lock2(sources_);
     auto src = find_source(addr, id);
     if (!src){
         src = add_source(addr, id);
@@ -878,8 +855,8 @@ AooError Sink::handle_data_packet(net_packet& d, bool binary,
     // try to find existing source
     // NOTE: sources can also be added in the network send thread,
     // so we have to lock a mutex to avoid the ABA problem!
-    sync::scoped_lock<sync::mutex> lock(source_mutex_);
-    source_lock srclock(sources_);
+    sync::scoped_lock<sync::mutex> lock1(source_mutex_);
+    source_lock lock2(sources_);
     auto src = find_source(addr, id);
     if (!src){
         src = add_source(addr, id);
@@ -911,26 +888,6 @@ AooError Sink::handle_ping_message(const osc::ReceivedMessage& msg,
     }
 }
 
-//------------------------ event ------------------------------//
-
-// 'event' is always used inside 'source_desc', so we can safely
-// store a pointer to the sockaddr. the ip_address itself
-// never changes during lifetime of the 'source_desc'!
-// NOTE: this assumes that the event queue is polled regularly,
-// i.e. before a source_desc can be possibly autoremoved.
-event::event(AooEventType type, const endpoint& ep){
-    source.type = type;
-    source.endpoint.address = ep.address.address();
-    source.endpoint.addrlen = ep.address.length();
-    source.endpoint.id = ep.id;
-}
-
-// 'sink_event' is used in 'sink' for source events that can outlive
-// its corresponding 'source_desc', therefore the ip_address is copied!
-sink_event::sink_event(AooEventType _type, const endpoint &ep)
-    : type(_type), address(ep.address), id(ep.id) {}
-
-
 //----------------------- source_desc --------------------------//
 
 source_desc::source_desc(const ip_address& addr, AooId id,
@@ -946,7 +903,7 @@ source_desc::source_desc(const ip_address& addr, AooId id,
 
 source_desc::~source_desc(){
     // flush event queue
-    event e;
+    source_event e;
     while (eventqueue_.try_pop(e)){
         free_event(e);
     }
@@ -962,9 +919,14 @@ source_desc::~source_desc(){
     LOG_DEBUG("~source_desc");
 }
 
-bool source_desc::is_active(const Sink& s) const {
-    auto last = last_packet_time_.load(std::memory_order_relaxed);
-    return (s.elapsed_time() - last) < s.source_timeout();
+bool source_desc::check_active(const Sink& s) {
+    auto elapsed = s.elapsed_time();
+    // check source idle timeout
+    auto delta = elapsed - last_packet_time_.load(std::memory_order_relaxed);
+    if (delta > s.source_timeout()){
+        return false; // source timeout
+    }
+    return true;
 }
 
 AooError source_desc::get_format(AooFormat &format){
@@ -1075,54 +1037,42 @@ void source_desc::update(const Sink& s){
     }
 }
 
-void source_desc::invite(const Sink& s, AooCustomData *metadata){
-    // don't invite if already running!
-    // state can change in different threads, so we need a CAS loop
-    auto state = state_.load(std::memory_order_relaxed);
-    while (state != source_state::run) {
-        // special case: (re)invite shortly after uninvite
-        if (state == source_state::uninvite){
-            // update last packet time to reset timeout!
-            last_packet_time_.store(s.elapsed_time());
-        }
-        // set metadata request
-        {
-            // metadata_request_ is only read/set in the send thread,
-            // so we don't actually have to lock.
-        #if 0
-            scoped_lock lock(mutex_);
-        #endif
-            // set current metadata (if not already set by us)
-            if (metadata_request_.get() != metadata){
-                metadata_request_.reset(metadata);
-            }
-        }
-    #if 1
-        state_time_.store(0.0); // start immediately
-    #else
-        state_time_.store(s.elapsed_time()); // wait
-    #endif
-        if (state_.compare_exchange_weak(state, source_state::invite)){
-            LOG_DEBUG("source_desc: invite");
-            return;
-        }
-    }
-    LOG_WARNING("aoo: couldn't invite source - already active");
+void source_desc::invite(const Sink& s, AooId token, AooCustomData *metadata){
+    // always invite, even if we're already running!
+    invite_token_.store(token);
+    // NOTE: the metadata is only read/set in this thread (= send thread)
+    // so we don't have to worry about race conditions!
+    invite_metadata_.reset(metadata);
+
+    auto elapsed = s.elapsed_time();
+    // reset invite timeout, in case we're not running;
+    // otherwise this won't do anything.
+    last_packet_time_.store(elapsed);
+#if 1
+    last_invite_time_.store(0.0); // start immediately
+#else
+    last_invite_time_.store(elapsed); // wait
+#endif
+    invite_start_time_.store(elapsed);
+
+    state_.store(source_state::invite);
+
+    LOG_DEBUG("source_desc: invite");
 }
 
 void source_desc::uninvite(const Sink& s){
-    // don't uninvite when already idle!
+    // only uninvite when running!
     // state can change in different threads, so we need a CAS loop
-    auto state = state_.load(std::memory_order_relaxed);
-    while (state != source_state::idle){
-        // update start time for uninvite phase, see handle_data()
-        state_time_.store(s.elapsed_time());
+    auto state = state_.load(std::memory_order_acquire);
+    while (state == source_state::run){
+        // reset uninvite timeout, see handle_data()
+        invite_start_time_.store(s.elapsed_time());
         if (state_.compare_exchange_weak(state, source_state::uninvite)){
             LOG_DEBUG("source_desc: uninvite");
             return;
         }
     }
-    LOG_WARNING("aoo: couldn't uninvite source - not active");
+    LOG_WARNING("aoo: couldn't uninvite source - not running");
 }
 
 float source_desc::get_buffer_fill_ratio(){
@@ -1146,22 +1096,23 @@ float source_desc::get_buffer_fill_ratio(){
 // <lastformat> <nchannels> <samplerate> <blocksize> <codec> <options>
 
 AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags,
-                                   int32_t lastformat, const AooFormat& f,
+                                   int32_t format_id, const AooFormat& f,
                                    const AooByte *extension, int32_t size,
                                    const AooCustomData& md) {
-    LOG_DEBUG("handle start");
-    // if we're in 'uninvite' state, ignore /start message, see also handle_data().
-    if (state_.load(std::memory_order_acquire) == source_state::uninvite){
-    #if 1
-        push_request(request(request_type::uninvite));
-    #endif
-        return kAooOk;
+    LOG_DEBUG("handle start (" << stream << ")");
+    auto state = state_.load(std::memory_order_acquire);
+    if (state == source_state::invite) {
+        // ignore /start messages that don't match the desired stream id
+        if (stream != invite_token_.load()){
+            LOG_DEBUG("handle_start: doesn't match invite token");
+            return kAooOk;
+        }
     }
-
     // ignore redundant /start messages!
     // NOTE: stream_id_ can only change in this thread,
     // so we don't need a lock to safely *read* it!
     if (stream == stream_id_){
+        LOG_DEBUG("handle_start: ignore redundant /start message");
         return kAooErrorNone;
     }
 
@@ -1169,9 +1120,10 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
     std::unique_ptr<AooCodec, decoder_deleter> new_decoder;
 
     // ignore redundant /format messages!
-    // NOTE: format_id_ can only change in this thread,
-    // so we don't need a lock to safely *read* it!
-    bool format_changed = lastformat != format_id_;
+    // NOTE: format_id_ is only used in this method,
+    // so we don't need a lock!
+    bool format_changed = format_id != format_id_;
+    format_id_ = format_id;
 
     AooFormatStorage fmt;
 
@@ -1220,6 +1172,8 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
 
     unique_lock lock(mutex_); // writer lock!
 
+    // NOTE: the stream ID must always be in sync with the format,
+    // so we have to set it while holding the lock!
     bool first_stream = stream_id_ == kAooIdInvalid;
     stream_id_ = stream;
 
@@ -1227,7 +1181,6 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
 
     if (format_changed){
         // set new format
-        format_id_ = lastformat;
         format_ = std::move(new_format);
         decoder_ = std::move(new_decoder);
     }
@@ -1242,30 +1195,22 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
     // always update!
     update(s);
 
+    state_.store(source_state::start);
+
     lock.unlock();
 
     // send "add" event *before* setting the state to avoid
     // possible wrong ordering with subsequent "start" event
     if (first_stream){
         // first /start message -> source added.
-        event e(kAooEventSourceAdd, ep);
+        source_event e(kAooEventSourceAdd, ep);
         send_event(s, e, kAooThreadLevelNetwork);
         LOG_DEBUG("add new source " << ep);
     }
 
-    // set state to "start" and check again for uninvite.
-    // NOTE: state can be changed in both network threads,
-    // so we need a CAS loop.
-    auto state = state_.load(std::memory_order_relaxed);
-    while (state != source_state::uninvite){
-        if (state_.compare_exchange_weak(state, source_state::start)){
-            break;
-        }
-    }
-
     if (format_changed){
         // send "format" event
-        event e(kAooEventFormatChange, ep);
+        source_event e(kAooEventFormatChange, ep);
 
         auto mode = s.event_mode();
         if (mode == kAooEventModeCallback){
@@ -1287,12 +1232,21 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
 // /aoo/sink/<id>/stop <src> <stream_id>
 
 AooError source_desc::handle_stop(const Sink& s, int32_t stream) {
-    LOG_DEBUG("handle stop");
+    LOG_DEBUG("handle stop (" << stream << ")");
     // ignore redundant /stop messages!
     // NOTE: stream_id_ can only change in this thread,
     // so we don't need a lock to safely *read* it!
     if (stream == stream_id_){
-        state_.store(source_state::stop, std::memory_order_release);
+        // check if we're already idle to avoid duplicate "stop" events
+        auto state = state_.load(std::memory_order_relaxed);
+        while (state != source_state::idle){
+            if (state_.compare_exchange_weak(state, source_state::stop)){
+                return kAooOk;
+            }
+        }
+        LOG_DEBUG("handle_stop: already idle");
+    } else {
+        LOG_DEBUG("handle_stop: ignore redundant /stop message");
     }
 
     return kAooOk;
@@ -1307,22 +1261,65 @@ AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
     // always update packet time to signify that we're receiving packets
     last_packet_time_.store(s.elapsed_time(), std::memory_order_relaxed);
 
-    // if we're in uninvite state, ignore data and send uninvite request.
-    if (state_.load(std::memory_order_acquire) == source_state::uninvite){
-        LOG_DEBUG("handle data: uninvite");
-        // only try for a certain amount of time to avoid spamming the source.
-        auto delta = s.elapsed_time() - state_time_.load(std::memory_order_relaxed);
-        if (delta < s.source_timeout()){
-            push_request(request(request_type::uninvite));
+    auto state = state_.load(std::memory_order_acquire);
+    if (state == source_state::invite) {
+        // ignore data messages that don't match the desired stream id.
+        if (d.stream_id != invite_token_.load()){
+            LOG_DEBUG("handle_data: doesn't match invite token");
+            return kAooOk;
         }
-        // ignore data message
+    } else if (state == source_state::uninvite) {
+        // ignore data and send uninvite request. only try for a certain
+        // amount of time to avoid spamming the source.
+        auto delta = s.elapsed_time() - invite_start_time_.load(std::memory_order_relaxed);
+        if (delta < s.invite_timeout()){
+            LOG_DEBUG("handle data: uninvite (elapsed: " << delta << ")");
+            request r(request_type::uninvite);
+            r.uninvite.token = d.stream_id;
+            push_request(r);
+        } else {
+            // transition into 'timeout' state, but only if the state
+            // hasn't changed in between.
+            if (state_.compare_exchange_strong(state, source_state::timeout)) {
+                LOG_DEBUG("handle data: uninvite -> timeout");
+            } else {
+                LOG_DEBUG("handle data: uninvite -> timeout failed");
+            }
+            // always send timeout event
+            LOG_VERBOSE(ep << ": uninvitation timed out");
+            endpoint_event e(kAooEventUninviteTimeout, ep);
+            s.send_event(e, kAooThreadLevelNetwork);
+        }
         return kAooOk;
+    } else if (state == source_state::timeout) {
+        // we keep ignoring any data until we
+        // a) invite a new stream (change to 'invite' state)
+        // b) receive a new stream
+        //
+        // (if the user doesn't want to receive anything, they
+        // would actually have to *deactivate* the source [TODO])
+        if (d.stream_id == stream_id_){
+            // LOG_DEBUG("handle_data: ignore (invite timeout)");
+            return kAooOk;
+        }
+    } else if (state == source_state::idle) {
+        if (d.stream_id == stream_id_) {
+            // this can happen when /data messages are reordered after
+            // a /stop message.
+            LOG_DEBUG("received data message for idle stream!");
+        #if 1
+            // NOTE: during the 'idle' state no packets are being processed,
+            // so incoming data messages would pile up indefinitely.
+            return kAooOk;
+        #endif
+        }
     }
 
     // the source format might have changed and we haven't noticed,
     // e.g. because of dropped UDP packets.
     // NOTE: stream_id_ can only change in this thread!
     if (d.stream_id != stream_id_){
+        LOG_DEBUG("received data message before /start message");
         push_request(request(request_type::start));
         return kAooOk;
     }
@@ -1365,6 +1362,14 @@ AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
 AooError source_desc::handle_ping(const Sink& s, time_tag tt){
     LOG_DEBUG("handle ping");
 
+#if 1
+    // only handle pings if active
+    auto state = state_.load(std::memory_order_acquire);
+    if (!(state == source_state::start || state == source_state::run)){
+        return kAooOk;
+    }
+#endif
+
 #if 0
     time_tag tt2 = s.absolute_time(); // use last stream time
 #else
@@ -1378,7 +1383,7 @@ AooError source_desc::handle_ping(const Sink& s, time_tag tt){
     push_request(r);
 
     // push "ping" event
-    event e(kAooEventPing, ep);
+    source_event e(kAooEventPing, ep);
     e.ping.tt1 = tt;
     e.ping.tt2 = tt2;
     e.ping.tt3 = 0;
@@ -1387,36 +1392,28 @@ AooError source_desc::handle_ping(const Sink& s, time_tag tt){
     return kAooOk;
 }
 
-// only send every 50 ms! LATER we might make this settable
-#define INVITE_INTERVAL 0.05
+void send_uninvitation(const Sink& s, const endpoint& ep,
+                       AooId token, const sendfn &fn);
 
 void source_desc::send(const Sink& s, const sendfn& fn){
     request r;
     while (requestqueue_.try_pop(r)){
         switch (r.type){
         case request_type::ping_reply:
-            send_ping_reply(s, fn, r);
+            send_ping_reply(s, r.ping.tt1, r.ping.tt2, fn);
             break;
         case request_type::start:
             send_start_request(s, fn);
             break;
         case request_type::uninvite:
-            send_uninvitation(s, fn);
+            send_uninvitation(s, ep, r.uninvite.token, fn);
             break;
         default:
             break;
         }
     }
 
-    auto now = s.elapsed_time();
-    if ((now - state_time_.load(std::memory_order_relaxed)) >= INVITE_INTERVAL){
-        // send invitations
-        if (state_.load(std::memory_order_acquire) == source_state::invite){
-            send_invitation(s, fn);
-        }
-
-        state_time_.store(now);
-    }
+    send_invitations(s, fn);
 
     send_data_requests(s, fn);
 }
@@ -1425,12 +1422,11 @@ void source_desc::send(const Sink& s, const sendfn& fn){
 
 // TODO: make sure not to send events while holding a lock!
 
-bool source_desc::process(const Sink& s,
-                          AooSample **buffer, int32_t nsamples)
+bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples)
 {
     // synchronize with update()!
     // the mutex should be uncontended most of the time.
-    shared_lock lock(mutex_, std::try_to_lock_t{});
+    shared_lock lock(mutex_, sync::try_to_lock);
     if (!lock.owns_lock()) {
         if (streamstate_ == kAooStreamStateActive) {
             xrun_ += 1.0;
@@ -1438,6 +1434,7 @@ bool source_desc::process(const Sink& s,
         } else {
             // I'm not sure if this can happen...
         }
+        // how to report this to the client?
         return false;
     }
 
@@ -1451,16 +1448,17 @@ bool source_desc::process(const Sink& s,
         if (state == source_state::start){
             // start -> run
             if (state_.compare_exchange_weak(state, source_state::run)) {
+                LOG_DEBUG("start -> run");
                 if (streamstate_ == kAooStreamStateActive){
                 #if 0
                     streamstate_ = kAooStreamStateInactive;
                 #endif
                     // send missing /stop message
-                    event e(kAooEventStreamStop, ep);
+                    source_event e(kAooEventStreamStop, ep);
                     send_event(s, e, kAooThreadLevelAudio);
                 }
 
-                event e(kAooEventStreamStart, ep);
+                source_event e(kAooEventStreamStart, ep);
                 // move metadata into event
                 e.stream_start.metadata = metadata_;
                 metadata_ = nullptr;
@@ -1481,34 +1479,33 @@ bool source_desc::process(const Sink& s,
             if (state_.compare_exchange_weak(state, source_state::idle)) {
                 lock.unlock(); // !
 
+                LOG_DEBUG("stop -> idle");
+
                 if (streamstate_ != kAooStreamStateInactive){
                     streamstate_ = kAooStreamStateInactive;
 
-                    event e(kAooEventStreamState, ep);
+                    source_event e(kAooEventStreamState, ep);
                     e.stream_state.state = kAooStreamStateInactive;
                     send_event(s, e, kAooThreadLevelAudio);
                 }
 
-                event e(kAooEventStreamStop, ep);
+                source_event e(kAooEventStreamStop, ep);
                 send_event(s, e, kAooThreadLevelAudio);
 
                 return false;
             }
-        } else if (state == source_state::uninvite){
-            // don't transition into "stop" state!
+        } else {
+            // invite, uninvite, timeout or idle
             if (streamstate_ != kAooStreamStateInactive){
                 lock.unlock(); // !
 
                 streamstate_ = kAooStreamStateInactive;
 
-                event e(kAooEventStreamState, ep);
+                source_event e(kAooEventStreamState, ep);
                 e.stream_state.state = kAooStreamStateInactive;
                 send_event(s, e, kAooThreadLevelAudio);
             }
 
-            return false;
-        } else {
-            // invite, uninvite or idle
             return false;
         }
     }
@@ -1559,25 +1556,25 @@ bool source_desc::process(const Sink& s,
 
     if (stats.lost > 0){
         // push packet loss event
-        event e(kAooEventBlockLost, ep);
+        source_event e(kAooEventBlockLost, ep);
         e.block_lost.count = stats.lost;
         send_event(s, e, kAooThreadLevelAudio);
     }
     if (stats.reordered > 0){
         // push packet reorder event
-        event e(kAooEventBlockReordered, ep);
+        source_event e(kAooEventBlockReordered, ep);
         e.block_reordered.count = stats.reordered;
         send_event(s, e, kAooThreadLevelAudio);
     }
     if (stats.resent > 0){
         // push packet resend event
-        event e(kAooEventBlockResent, ep);
+        source_event e(kAooEventBlockResent, ep);
         e.block_resent.count = stats.resent;
         send_event(s, e, kAooThreadLevelAudio);
     }
     if (stats.dropped > 0){
         // push packet resend event
-        event e(kAooEventBlockDropped, ep);
+        source_event e(kAooEventBlockDropped, ep);
         e.block_dropped.count = stats.dropped;
         send_event(s, e, kAooThreadLevelAudio);
     }
@@ -1626,7 +1623,7 @@ bool source_desc::process(const Sink& s,
             if (streamstate_ != kAooStreamStateInactive){
                 streamstate_ = kAooStreamStateInactive;
 
-                event e(kAooEventStreamState, ep);
+                source_event e(kAooEventStreamState, ep);
                 e.stream_state.state = kAooStreamStateInactive;
                 send_event(s, e, kAooThreadLevelAudio);
             }
@@ -1655,7 +1652,7 @@ bool source_desc::process(const Sink& s,
     if (streamstate_ != kAooStreamStateActive){
         streamstate_ = kAooStreamStateActive;
 
-        event e(kAooEventStreamState, ep);
+        source_event e(kAooEventStreamState, ep);
         e.stream_state.state = kAooStreamStateActive;
         send_event(s, e, kAooThreadLevelAudio);
     }
@@ -1666,9 +1663,9 @@ bool source_desc::process(const Sink& s,
 int32_t source_desc::poll_events(Sink& s, AooEventHandler fn, void *user){
     // always lockfree!
     int count = 0;
-    event e;
+    source_event e;
     while (eventqueue_.try_pop(e)){
-        fn(user, &e.event_, kAooThreadLevelUnknown);
+        fn(user, &e.event, kAooThreadLevelUnknown);
         free_event(e);
         count++;
     }
@@ -1726,7 +1723,7 @@ void source_desc::handle_underrun(const Sink& s){
     #endif
     }
 
-    event e(kAooEventBufferUnderrun, ep);
+    source_event e(kAooEventBufferUnderrun, ep);
     send_event(s, e, kAooThreadLevelAudio);
 
     underrun_ = false;
@@ -1767,7 +1764,7 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
         // report gap to source
         lost_since_ping_.fetch_add(diff - 1);
         // send event
-        event e(kAooEventBlockLost, ep);
+        source_event e(kAooEventBlockLost, ep);
         e.block_lost.count = diff - 1;
         send_event(s, e, kAooThreadLevelAudio);
     }
@@ -2017,8 +2014,8 @@ resend_done:
 
 // /aoo/<id>/ping <sink>
 // called without lock!
-void source_desc::send_ping_reply(const Sink &s, const sendfn &fn,
-                                  const request& r){
+void source_desc::send_ping_reply(const Sink &s, AooNtpTime tt1,
+                                  AooNtpTime tt2, const sendfn &fn) {
     LOG_DEBUG("send " kAooMsgPing " to " << ep);
 
     auto lost_blocks = lost_since_ping_.exchange(0);
@@ -2034,8 +2031,8 @@ void source_desc::send_ping_reply(const Sink &s, const sendfn &fn,
              kAooMsgDomain, kAooMsgSource, ep.id, kAooMsgPing);
 
     msg << osc::BeginMessage(address) << s.id()
-        << osc::TimeTag(r.ping.tt1)
-        << osc::TimeTag(r.ping.tt2)
+        << osc::TimeTag(tt1)
+        << osc::TimeTag(tt2)
         << lost_blocks
         << osc::EndMessage;
 
@@ -2169,12 +2166,11 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
     }
 }
 
-// /aoo/src/<id>/invite <sink> [<metadata_type> <metadata_content>]
+// /aoo/src/<id>/invite <sink> <stream_id> [<metadata_type> <metadata_content>]
 
 // called without lock!
-void source_desc::send_invitation(const Sink& s, const sendfn& fn){
-    LOG_DEBUG("send " kAooMsgInvite " to source " << ep);
-
+void send_invitation(const Sink& s, const endpoint& ep, AooId token,
+                     const AooCustomData *metadata, const sendfn& fn){
     char buffer[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg(buffer, sizeof(buffer));
 
@@ -2185,28 +2181,22 @@ void source_desc::send_invitation(const Sink& s, const sendfn& fn){
     snprintf(address, sizeof(address), "%s%s/%d%s",
              kAooMsgDomain, kAooMsgSource, ep.id, kAooMsgInvite);
 
-    msg << osc::BeginMessage(address) << s.id();
-    // add metadata
-    {
-        // metadata_request_ is only read/set in the send thread,
-        // so we don't actually have to lock.
-    #if 0
-        scoped_shared_lock lock(mutex_);
-    #endif
-        if (metadata_request_){
-            msg << metadata_request_->type
-                << osc::Blob(metadata_request_->data, metadata_request_->size);
-        }
+    msg << osc::BeginMessage(address) << s.id() << token;
+    if (metadata){
+        msg << metadata->type << osc::Blob(metadata->data, metadata->size);
     }
     msg << osc::EndMessage;
+
+    LOG_DEBUG("send " kAooMsgInvite " to source " << ep
+              << " (" << token << ")");
 
     fn((const AooByte *)msg.Data(), msg.Size(), ep);
 }
 
 // /aoo/<id>/uninvite <sink>
 
-// called without lock!
-void source_desc::send_uninvitation(const Sink& s, const sendfn &fn){
+void send_uninvitation(const Sink& s, const endpoint& ep,
+                       AooId token, const sendfn &fn){
     LOG_DEBUG("send " kAooMsgUninvite " to source " << ep);
 
     char buffer[AOO_MAX_PACKET_SIZE];
@@ -2219,12 +2209,50 @@ void source_desc::send_uninvitation(const Sink& s, const sendfn &fn){
     snprintf(address, sizeof(address), "%s%s/%d%s",
              kAooMsgDomain, kAooMsgSource, ep.id, kAooMsgUninvite);
 
-    msg << osc::BeginMessage(address) << s.id() << osc::EndMessage;
+    msg << osc::BeginMessage(address) << s.id() << token
+        << osc::EndMessage;
 
     fn((const AooByte *)msg.Data(), msg.Size(), ep);
 }
 
-void source_desc::send_event(const Sink& s, const event& e,
+// only send every 50 ms! LATER we might make this settable
+#define INVITE_INTERVAL 0.05
+
+void source_desc::send_invitations(const Sink &s, const sendfn &fn){
+    auto state = state_.load(std::memory_order_acquire);
+    if (state != source_state::invite){
+        return;
+    }
+
+    auto now = s.elapsed_time();
+    auto delta = now - invite_start_time_.load(std::memory_order_acquire);
+    if (delta >= s.invite_timeout()){
+        // transition into 'timeout' state, but only if the state
+        // hasn't changed in between.
+        if (state_.compare_exchange_strong(state, source_state::timeout)){
+            LOG_DEBUG("send_invitation: invite -> timeout");
+        } else {
+            LOG_DEBUG("send_invitation: invite -> timeout failed");
+        }
+        // always send timeout event
+        LOG_VERBOSE(ep << ": invitation timed out");
+        endpoint_event e(kAooEventInviteTimeout, ep);
+        s.send_event(e, kAooThreadLevelNetwork);
+    } else {
+        delta = now - last_invite_time_.load(std::memory_order_relaxed);
+        if (delta >= INVITE_INTERVAL){
+            auto token = invite_token_.load();
+            // NOTE: the metadata is only read/set in the send thread,
+            // so we don't have to worry about race conditions!
+            auto metadata = invite_metadata_.get();
+            send_invitation(s, ep, token, metadata, fn);
+
+            last_invite_time_.store(now);
+        }
+    }
+}
+
+void source_desc::send_event(const Sink& s, const source_event& e,
                              AooThreadLevel level){
     switch (s.event_mode()){
     case kAooEventModePoll:
@@ -2238,10 +2266,10 @@ void source_desc::send_event(const Sink& s, const event& e,
     }
 }
 
-void source_desc::free_event(const event &e){
-    if (e.type_ == kAooEventFormatChange){
+void source_desc::free_event(const source_event &e){
+    if (e.type == kAooEventFormatChange){
         memory_.deallocate((void *)e.format.format);
-    } else if (e.type_ == kAooEventStreamStart){
+    } else if (e.type == kAooEventStreamStart){
         if (e.stream_start.metadata){
             memory_.deallocate((void *)e.stream_start.metadata);
         }

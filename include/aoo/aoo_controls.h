@@ -16,11 +16,35 @@ enum AooControls
     // Set/get source/sink ID (arg: AooId)
     kAooCtlSetId = 0,
     kAooCtlGetId,
-    // add/remove sink (index: sink endpoint)
+    // add/remove sink (index: sink endpoint, arg: AooFlag)
+    // ---
+    // Unless you pass the kAooSinkActive flag, sinks are
+    // initially deactivated and have to be activated
+    // manually with the kAooCtlActivate control,
     kAooCtlAddSink,
+    // remove the given sink (index: sink endpoint)
     kAooCtlRemoveSink,
-    // invite/uninvite source (index: source endpoint)
+    // uninvite source (index: source endpoint, arg: metadata)
+    // ---
+    // This will continuously send invitation requests
+    // to the source. The source can either accept the
+    // invitation request and start a stream, or it can
+    // ignore it, upon which the sink will eventually
+    // receive an AooEventInviteTimeout event.
+    // The invitation can contain additional metadata which
+    // the source can interpret before accepting the invitation.
+    // If you call this control while you are already receiving
+    // a stream, it will force a new stream. For example, you
+    // might want to request different format parameters or
+    // even ask for different musical content.
     kAooCtlInviteSource,
+    // uninvite source (index: source endpoint)
+    // ---
+    // this will continuously send uninvitation requests
+    // to the source. the source can either accept the
+    // uninvitation request and stop the stream, or it can
+    // ignore and continue sending, upon which the sink
+    // will eventually receive an AooEventUninviteTimeout event.
     kAooCtlUninviteSource,
     // Set the source stream format (arg: AooFormat)
     // ---
@@ -39,7 +63,7 @@ enum AooControls
     kAooCtlGetFormat,
     // Perform a codec control (index: codec control, arg: argument)
     // ---
-    // The available codec controls should be listed in the AOO codecheader file.
+    // The available codec controls should be listed in the respective header file.
     kAooCtlCodecControl,
     // Reset the source/sink (none)
     kAooCtlReset,
@@ -52,6 +76,30 @@ enum AooControls
     kAooCtlStartStream,
     // Stop the stream (none)
     kAooCtlStopStream,
+    // (De)activate the given endpoint (index: endpoint, arg: AooBool)
+    kAooCtlActivate,
+    // Check whether the given endpoint is active (index: endpoint, arg: AooBool)
+    kAooCtlIsActive,
+    // accept/decline an invitation (index: sink, arg: AooId)
+    // ---
+    // When you receive an AooEventInvite event, you can decide to accept
+    // or decline the invitation.
+    // If you choose to accept it, you just have to call this control with
+    // the 'streamID' of the corresponding event; before you might want to
+    // perform certain actions, e.g. based on the metadata.
+    // [Calling this with a valid stream ID essentially activates the sink
+    // with the given stream ID.]
+    // If you choose to decline it, call this control with kAooIdInvalid.
+    kAooCtlAcceptInvitation,
+    // accept/decline an uninvitation (index: sink, arg: AooBool)
+    // ---
+    // Use this control to accept/decline an uninvitation request.
+    // If you choose to accept it, you just have to call this control with
+    // the 'streamID' of the corresponding event.
+    // [Calling this with a valid stream ID essentially deactivates the sink
+    // with the given stream ID.]
+    // If you choose to decline it, call this control with kAooIdInvalid.
+    kAooCtlAcceptUninvitation,
     // Set/get buffer size in seconds (arg: AooSeconds)
     // ---
     // This is the size of the ring buffer
@@ -158,6 +206,11 @@ enum AooControls
     // Time to wait before removing inactive source.
     kAooCtlSetSourceTimeout,
     kAooCtlGetSourceTimeout,
+    // Set/get (un)invite timeout in seconds (arg: AooSeconds)
+    // ---
+    // Time to wait before stopping the (un)invite process.
+    kAooCtlSetInviteTimeout,
+    kAooCtlGetInviteTimeout,
     // Set/get buffer fill ratio (arg: double)
     // ---
     // This is a read-only option for sinks which
@@ -178,6 +231,12 @@ enum AooControls
     kAooCtlSetStreamMetadataSize,
     kAooCtlGetStreamMetadataSize
 };
+
+//----------------- control flags ---------------------//
+
+// kAooCtlAddSink
+
+#define kAooSinkActive 0x01 // start active
 
 //------------- user defined controls -----------------//
 
