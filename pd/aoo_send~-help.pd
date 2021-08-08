@@ -16,34 +16,29 @@ sinks;
 #X msg 52 123 start;
 #X obj 469 20 declare -lib aoo;
 #X obj 29 521 aoo_send~ 9998 1 2;
-#N canvas 300 77 652 694 events 0;
+#N canvas 300 77 652 719 events 0;
 #X obj 37 26 inlet;
 #X obj 37 84 outlet;
-#X text 62 550 It also tells you the network latency:;
-#X text 64 571 <delta1> is the approx. delay between source and sink
+#X text 62 567 It also tells you the network latency:;
+#X text 64 588 <delta1> is the approx. delay between source and sink
 (in ms), f 62;
-#X text 64 592 <delta2> is the approx. delay between sink and source
+#X text 64 609 <delta2> is the approx. delay between sink and source
 (in ms), f 62;
-#X text 64 612 <rtt> is the approx. roundtrip time (in ms) \, as measured
+#X text 64 629 <rtt> is the approx. roundtrip time (in ms) \, as measured
 on the source, f 71;
-#X text 65 634 NOTE: The roundtrip time is not necessarily the same
+#X text 65 651 NOTE: The roundtrip time is not necessarily the same
 as the sum of the deltas \, especially if the two clocks are not perfectly
 in sync. If one clock runs significantly early or late \, the deltas
 can even be negative!, f 73;
 #X text 66 139 A sink invites you to send audio messages.;
-#X text 62 510 A periodic message exchanged between source and sink
+#X text 62 527 A periodic message exchanged between source and sink
 \, so the source knows that the sink is receiving its messages.;
-#X obj 118 44 tgl 15 0 \$0-ping \$0-ping empty 17 7 0 10 -262144 -1
+#X obj 115 56 tgl 15 0 \$0-ping \$0-ping empty 17 7 0 10 -262144 -1
 -1 0 1;
-#X text 66 257 A sink asks you to stop sending audio messages.;
-#X msg 38 232 uninvite <host> <port> <ID>;
-#X text 64 279 You may accept it with [uninvite <host> <port> <ID>(
-or ignore it., f 67;
-#X text 64 338 A sink has been added \, either by the user or through
+#X msg 38 242 uninvite <host> <port> <ID>;
+#X text 64 355 A sink has been added \, either by the user or through
 an invitation., f 68;
-#X text 64 390 A sink has been removed by the user.;
-#X text 65 203 You may accept the invitation with [invite <host> <port>
-<ID>( or ignore it., f 77;
+#X text 64 407 A sink has been removed by the user.;
 #X msg 39 116 invite <host> <port> <ID> [<type> <data...>], f 46;
 #X text 64 162 'type' and 'data' are the (optional) invitation metadata
 \, see [pd metadata] in [aoo_receive~].;
@@ -85,27 +80,19 @@ an invitation., f 68;
 #X connect 12 0 8 1;
 #X connect 14 0 11 1;
 #X restore 83 130 pd filter;
-#N canvas 151 242 450 371 accept 0;
-#X obj 62 143 route invite uninvite;
-#X obj 62 113 spigot 1;
-#X obj 62 331 s \$0-msg;
-#X obj 62 232 list prepend invite;
-#X obj 133 260 list prepend uninvite;
-#X obj 62 296 list trim;
-#X text 133 115 auto accept (un)invitations;
-#X obj 115 73 r \$0-accept;
+#N canvas 164 259 450 371 metadata 0;
 #X obj 62 72 inlet;
-#N canvas 122 224 347 333 metadata 0;
-#X obj 56 48 inlet;
-#X obj 56 134 route osc fudi;
-#X obj 56 164 oscparse;
-#X obj 103 195 fudiparse;
-#X obj 56 230 list prepend metadata;
-#X obj 56 258 list trim;
-#X obj 56 106 list trim;
-#X obj 56 77 route bang;
-#X obj 56 287 print aoo_send~;
-#X connect 0 0 7 0;
+#X obj 102 209 route osc fudi;
+#X obj 102 239 oscparse;
+#X obj 149 270 fudiparse;
+#X obj 102 305 list prepend metadata;
+#X obj 102 333 list trim;
+#X obj 102 181 list trim;
+#X obj 102 152 route bang;
+#X obj 102 362 print aoo_send~;
+#X obj 62 96 route invite;
+#X obj 62 120 list split 3;
+#X connect 0 0 9 0;
 #X connect 1 0 2 0;
 #X connect 1 1 3 0;
 #X connect 1 2 4 0;
@@ -115,25 +102,9 @@ an invitation., f 68;
 #X connect 5 0 8 0;
 #X connect 6 0 1 0;
 #X connect 7 1 6 0;
-#X restore 102 202 pd metadata;
-#X obj 62 176 list split 3;
-#X text 160 176 remove metadata;
-#X obj 228 79 s \$0-accept;
-#X obj 228 25 loadbang;
-#X msg 228 51 1;
-#X connect 0 0 10 0;
-#X connect 0 1 4 0;
-#X connect 1 0 0 0;
-#X connect 3 0 5 0;
-#X connect 4 0 5 0;
-#X connect 5 0 2 0;
-#X connect 7 0 1 1;
-#X connect 8 0 1 0;
-#X connect 10 0 3 0;
-#X connect 10 1 9 0;
-#X connect 13 0 14 0;
-#X connect 14 0 12 0;
-#X restore 203 159 pd accept;
+#X connect 9 0 10 0;
+#X connect 10 1 7 0;
+#X restore 203 159 pd metadata;
 #X connect 0 0 4 0;
 #X connect 3 0 2 0;
 #X connect 3 1 6 0;
@@ -142,17 +113,20 @@ an invitation., f 68;
 #X connect 5 0 1 0;
 #X restore 37 54 pd route;
 #X f 9;
-#X obj 118 66 tgl 15 0 \$0-accept \$0-accept empty 17 7 0 10 -262144
--1 -1 1 1;
-#X text 141 64 accept (un)invitations;
-#X text 141 41 post pings;
-#X text 35 423 sink events:;
-#X msg 37 451 event <host> <port> <ID> ...;
-#X msg 65 483 ... ping <delta1> <delta2> <rtt>;
-#X msg 35 312 add <host> <port> <ID>;
-#X msg 35 364 remove <host> <port> <ID>;
-#X connect 0 0 18 0;
-#X connect 18 0 1 0;
+#X text 138 53 post pings;
+#X text 35 440 sink events:;
+#X msg 37 468 event <host> <port> <ID> ...;
+#X msg 65 500 ... ping <delta1> <delta2> <rtt>;
+#X msg 35 329 add <host> <port> <ID>;
+#X msg 35 381 remove <host> <port> <ID>;
+#X text 66 267 A sink asks you to stop sending audio messages.;
+#X text 36 710 ---;
+#X text 65 198 If 'auto_invite' is off \, you have to manually accept
+it with the [invite( method - or ignore it., f 66;
+#X text 64 288 If 'auto_invite' is off \, you have to manually accept
+it with the [uninvite( method - or ignore it., f 66;
+#X connect 0 0 15 0;
+#X connect 15 0 1 0;
 #X restore 29 550 pd events;
 #X text 50 579 ping;
 #X text 101 124 start streaming;
@@ -482,7 +456,7 @@ type), f 58;
 #X text 227 125 HINT: you can use these two methods to send short "audio
 messages" instead of continuous streams. Each "message" can contain
 additional metadata., f 50;
-#N canvas 331 181 634 589 sink 0;
+#N canvas 352 69 684 642 sink 0;
 #X msg 29 95 add localhost 9999 1;
 #X msg 70 327 remove localhost 9999 1;
 #X text 132 365 remove all AoO sinks;
@@ -490,7 +464,7 @@ additional metadata., f 50;
 #X text 173 401 list all sinks. This will output a message [sink <host>
 <port> <id>( for each sink., f 44;
 #X msg 79 364 remove;
-#X obj 29 544 s \$0-msg;
+#X obj 29 602 s \$0-msg;
 #X msg 26 61 add <host> <port> <ID> [<active> <channel onset>];
 #X text 25 36 add an AoO sink;
 #X msg 37 134 add localhost 9999 1 0;
@@ -506,11 +480,19 @@ additional metadata., f 50;
 #X text 249 326 remove an AoO sink;
 #X text 232 131 by default \, sinks are initially activated \, but
 you can override this with the <active> argument., f 51;
-#X msg 95 504 uninvite localhost 9999 1;
-#X msg 91 461 invite localhost 9999 1;
-#X text 285 504 accept uninvitation \, see [uninvite( event.;
-#X text 269 460 accept invitation \, see [invite( event.;
+#X msg 95 565 uninvite localhost 9999 1;
+#X msg 91 530 invite localhost 9999 1;
 #X text 234 176 with initial sink channel onset (default: 0);
+#X msg 88 462 auto_invite \$1;
+#X obj 88 441 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
+1;
+#X text 269 529 manually accept invitation \, see [invite( event.;
+#X text 285 565 manually accept uninvitation \, see [uninvite( event.
+;
+#X text 88 497 the following methods are only needed if 'auto_invite'
+is off., f 62;
+#X text 204 463 automatically accept (un)invitations (default: on)
+;
 #X connect 0 0 6 0;
 #X connect 1 0 6 0;
 #X connect 3 0 6 0;
@@ -523,6 +505,8 @@ you can override this with the <active> argument., f 51;
 #X connect 15 0 14 0;
 #X connect 19 0 6 0;
 #X connect 20 0 6 0;
+#X connect 22 0 6 0;
+#X connect 23 0 22 0;
 #X restore 82 226 pd sink;
 #X msg 30 56 add localhost 9999 1;
 #X msg 41 89 remove localhost 9999 1;

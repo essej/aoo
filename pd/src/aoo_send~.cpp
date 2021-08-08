@@ -67,6 +67,7 @@ struct t_aoo_send
     t_outlet *x_msgout = nullptr;
     // (un)invite
     AooId x_invite_token = kAooIdInvalid;
+    bool x_auto_invite = true; // on by default
 };
 
 bool static aoo_send_check(t_aoo_send *x, const char *name)
@@ -414,6 +415,9 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
             auto e = (const AooEventInvite *)event;
 
             x->x_invite_token = e->token;
+            if (x->x_auto_invite) {
+                x->x_source->acceptInvitation(ep, e->token);
+            }
 
             if (e->metadata){
                 auto count = e->metadata->size + 4;
@@ -437,6 +441,9 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
             auto e = (const AooEventUninvite *)event;
 
             x->x_invite_token = e->token;
+            if (x->x_auto_invite) {
+                x->x_source->acceptUninvitation(ep, e->token);
+            }
 
             outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
 
@@ -507,6 +514,10 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     if (format_parse((t_pd *)x, f, argc, argv, x->x_nchannels)){
         aoo_send_setformat(x, f.header);
     }
+}
+
+static void aoo_send_auto_invite(t_aoo_send *x, t_floatarg f) {
+    x->x_auto_invite = f != 0;
 }
 
 static void aoo_send_invite(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
@@ -971,6 +982,8 @@ void aoo_send_tilde_setup(void)
                     gensym("stop"), A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_metadata,
                     gensym("metadata"), A_GIMME, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_auto_invite,
+                    gensym("auto_invite"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_invite,
                     gensym("invite"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_uninvite,
