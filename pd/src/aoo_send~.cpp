@@ -516,7 +516,10 @@ static void aoo_send_invite(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
     aoo::ip_address addr;
     AooId id;
     if (x->x_node->get_sink_arg((t_pd *)x, argc, argv, addr, id)){
-        bool accept = argc > 3 ? atom_getfloat(argv + 3) : true;
+        // interpret non-float argument as 'yes', so we can simply
+        // pass the original 'invite' message - including the metadata!
+        bool accept = ((argc > 3) && (argv[3].a_type == A_FLOAT)) ?
+                    argv[3].a_w.w_float : true;
     #if 1
         if (!aoo_send_findsink(x, addr, id)){
             pd_error(x, "%s: couldn't find sink!", classname(x));
@@ -535,7 +538,10 @@ static void aoo_send_uninvite(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv
     aoo::ip_address addr;
     AooId id;
     if (x->x_node->get_sink_arg((t_pd *)x, argc, argv, addr, id)){
-        bool accept = argc > 3 ? atom_getfloat(argv + 3) : true;
+        // interpret non-float argument as 'yes', so we can simply
+        // pass the original 'invite' message - including the metadata!
+        bool accept = ((argc > 3) && (argv[3].a_type == A_FLOAT)) ?
+                    argv[3].a_w.w_float : true;
     #if 1
         if (!aoo_send_findsink(x, addr, id)){
             pd_error(x, "%s: couldn't find sink!", classname(x));
