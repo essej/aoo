@@ -131,6 +131,7 @@ struct endpoint_event {
         AooEventInvite invite;
         AooEventUninvite uninvite;
         AooEventPing ping;
+        AooEventPingReply ping_reply;
         AooEventXRun xrun;
     };
 private:

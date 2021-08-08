@@ -10,10 +10,12 @@ enum AooEventTypes
 {
     // generic error event
     kAooEventError = 0,
-    // sink/source: received a ping from source/sink
-    kAooEventPing,
     // source/sink: xruns occured
     kAooEventXRun,
+    // sink: received a ping from source
+    kAooEventPing,
+    // source: received a ping reply from sink
+    kAooEventPingReply,
     // source: invited by sink
     kAooEventInvite,
     // source: uninvited by sink
@@ -58,13 +60,34 @@ typedef AOO_STRUCT AooEventError
     const AooChar *errorMessage;
 } AooError_event;
 
+// xrun event
 typedef AOO_STRUCT AooEventXRun
 {
     AooEventType type;
     AooInt32 count;
 } AooEventXRun;
 
-// source event
+// ping events
+
+typedef AOO_STRUCT AooEventPing {
+    AooEventType type;
+    AooEndpoint endpoint;
+    AooNtpTime tt1;
+    AooNtpTime tt2;
+} AooEventPing;
+
+typedef AOO_STRUCT AooEventPingReply {
+    AooEventType type;
+    AooEndpoint endpoint;
+    AooNtpTime tt1;
+    AooNtpTime tt2;
+    AooNtpTime tt3;
+    // lost blocks since last ping
+    AooInt32 lostBlockCount;
+} AooEventPingReply;
+
+// source/sink events
+
 typedef AOO_STRUCT AooEventEndpoint
 {
     AooEventType type;
@@ -106,7 +129,6 @@ typedef AOO_STRUCT AooEventUninvite
     AooId token;
 } AooEventUninvite;
 
-
 #define AooEventInviteTimeout AooEventEndpoint
 #define AooEventUninviteTimeout AooEventEndpoint
 
@@ -138,17 +160,6 @@ typedef AOO_STRUCT AooEventBlock
 #define AooEventBlockResent AooEventBlock
 #define AooEventBlockGap AooEventBlock
 #define AooEventBlockDropped AooEventBlock
-
-// ping event
-
-typedef AOO_STRUCT AooEventPing {
-    AooEventType type;
-    AooEndpoint endpoint;
-    AooNtpTime tt1;
-    AooNtpTime tt2;
-    AooNtpTime tt3;         // only for source
-    AooInt32 lostBlocks;    // only for source
-} AooEventPing;
 
 // format change event
 

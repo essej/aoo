@@ -394,7 +394,7 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
         outlet_anything(x->x_msgout, gensym("xrun"), 1, &msg);
         break;
     }
-    case kAooEventPing:
+    case kAooEventPingReply:
     case kAooEventInvite:
     case kAooEventUninvite:
     case kAooEventSinkAdd:
@@ -472,9 +472,9 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
             break;
         }
         //--------------------- sink events -----------------------//
-        case kAooEventPing:
+        case kAooEventPingReply:
         {
-            auto e = (const AooEventPing *)event;
+            auto e = (const AooEventPingReply *)event;
 
             double diff1 = aoo_ntpTimeDuration(e->tt1, e->tt2) * 1000.0;
             double diff2 = aoo_ntpTimeDuration(e->tt2, e->tt3) * 1000.0;
@@ -484,7 +484,7 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
             SETFLOAT(msg + 4, diff1);
             SETFLOAT(msg + 5, diff2);
             SETFLOAT(msg + 6, rtt);
-            SETFLOAT(msg + 7, e->lostBlocks);
+            SETFLOAT(msg + 7, e->lostBlockCount);
 
             outlet_anything(x->x_msgout, gensym("event"), 8, msg);
 

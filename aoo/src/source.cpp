@@ -2116,15 +2116,16 @@ void Source::handle_ping(const osc::ReceivedMessage& msg,
     if (sink) {
         if (sink->is_active()){
             // push "ping" event
-            endpoint_event e(kAooEventPing, addr, id);
-            e.ping.tt1 = tt1;
-            e.ping.tt2 = tt2;
-            e.ping.lostBlocks = lost_blocks;
+            endpoint_event e(kAooEventPingReply, addr, id);
+            e.ping_reply.tt1 = tt1;
+            e.ping_reply.tt2 = tt2;
         #if 0
-            e.ping.tt3 = timer_.get_absolute(); // use last stream time
+            e.ping_reply.tt3 = timer_.get_absolute(); // use last stream time
         #else
-            e.ping.tt3 = aoo::time_tag::now(); // use real system time
+            e.ping_reply.tt3 = aoo::time_tag::now(); // use real system time
         #endif
+            e.ping_reply.lostBlockCount = lost_blocks;
+
             send_event(e, kAooThreadLevelNetwork);
         } else {
             LOG_VERBOSE("ignoring '" << kAooMsgPing << "' message: sink not active");
