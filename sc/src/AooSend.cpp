@@ -160,7 +160,7 @@ bool AooSend::removeSink(const aoo::ip_address& addr, AooId id){
 }
 
 void AooSend::removeAll(){
-    source()->removeAllSinks();
+    source()->removeAll();
 }
 
 /*////////////////// AooSendUnit ////////////////*/
@@ -182,14 +182,14 @@ void AooSendUnit::next(int numSamples){
         bool playing = in0(2);
         if (playing != playing_) {
             if (playing){
-                source->startStream();
+                source->startStream(nullptr);
             } else {
                 source->stopStream();
             }
             playing_ = playing;
         }
 
-        auto vec = (const float **)mInBuf + channelOnset_;
+        auto vec = mInBuf + channelOnset_;
         uint64_t t = getOSCTime(mWorld);
 
         if (source->process(vec, numSamples, t) == kAooOk){
@@ -322,7 +322,7 @@ bool get_opus_bitrate(AooSource *src, osc::OutboundPacketStream& msg) {
     // NOTE: because of a bug in opus_multistream_encoder (as of opus v1.3.2)
     // OPUS_GET_BITRATE always returns OPUS_AUTO
     opus_int32 value;
-    auto err = AooSource_getOpusBitrate(src, &value);
+    auto err = AooSource_getOpusBitrate(src, 0, &value);
     if (err != kAooOk){
         LOG_ERROR("could not get bitrate: " << aoo_strerror(err));
         return false;
@@ -363,7 +363,7 @@ void set_opus_bitrate(AooSource *src, sc_msg_iter &args) {
             return;
         }
     }
-    auto err = AooSource_setOpusBitrate(src, value);
+    auto err = AooSource_setOpusBitrate(src, 0, value);
     if (err != kAooOk){
         LOG_ERROR("could not set bitrate: " << aoo_strerror(err));
     }
@@ -371,7 +371,7 @@ void set_opus_bitrate(AooSource *src, sc_msg_iter &args) {
 
 bool get_opus_complexity(AooSource *src, osc::OutboundPacketStream& msg){
     opus_int32 value;
-    auto err = AooSource_getOpusComplexity(src, &value);
+    auto err = AooSource_getOpusComplexity(src, 0, &value);
     if (err != kAooOk){
         LOG_ERROR("could not get complexity: " << aoo_strerror(err));
         return false;
@@ -387,7 +387,7 @@ void set_opus_complexity(AooSource *src, sc_msg_iter &args){
         LOG_ERROR("complexity value " << value << " out of range");
         return;
     }
-    auto err = AooSource_setOpusComplexity(src, value);
+    auto err = AooSource_setOpusComplexity(src, 0, value);
     if (err != kAooOk){
         LOG_ERROR("could not set complexity: " << aoo_strerror(err));
     }
@@ -395,7 +395,7 @@ void set_opus_complexity(AooSource *src, sc_msg_iter &args){
 
 bool get_opus_signal(AooSource *src, osc::OutboundPacketStream& msg){
     opus_int32 value;
-    auto err = AooSource_getOpusSignalType(src, &value);
+    auto err = AooSource_getOpusSignalType(src, 0, &value);
     if (err != kAooOk){
         LOG_ERROR("could not get signal type: " << aoo_strerror(err));
         return false;
@@ -428,7 +428,7 @@ void set_opus_signal(AooSource *src, sc_msg_iter &args){
         LOG_ERROR("unsupported signal type '" << s << "'");
         return;
     }
-    auto err = AooSource_setOpusSignalType(src, value);
+    auto err = AooSource_setOpusSignalType(src, 0, value);
     if (err != kAooOk){
         LOG_ERROR("could not set signal type: " << aoo_strerror(err));
     }

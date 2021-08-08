@@ -46,29 +46,45 @@ AOO_API AooBool AOO_CALL AooSink_eventsAvailable(AooSink *sink);
 // NOTE: the event handler must have been registered with kAooEventModePoll.
 AOO_API AooError AOO_CALL AooSink_pollEvents(AooSink *sink);
 
+// uninvite source
+// ---
+// This will continuously send invitation requests to the source
+// The source can either accept the invitation request and start a
+// stream or it can ignore it, upon which the sink will eventually
+// receive an AooEventInviteTimeout event.
+// The invitation can contain additional metadata which the source
+// can interpret before accepting the invitation.
+// If you call this function while you are already receiving a stream,
+// it will force a new stream. For example, you might want to request
+// different format parameters or even ask for different musical content.
+AOO_API AooError AOO_CALL AooSink_inviteSource(
+        AooSink *sink, const AooEndpoint *source, const AooCustomData *metadata);
+
+// uninvite source
+// ---
+// This will continuously send uninvitation requests to the source.
+// The source can either accept the uninvitation request and stop the
+// stream, or it can ignore and continue sending, upon which the sink
+// will eventually receive an AooEventUninviteTimeout event.
+AOO_API AooError AOO_CALL AooSink_uninviteSource(
+        AooSink *sink, const AooEndpoint *source);
+
+// uninvite all sources
+AOO_API AooError AOO_CALL AooSink_uninviteAll(AooSink *sink);
+
 // control interface (always threadsafe)
 AOO_API AooError AOO_CALL AooSink_control(
         AooSink *sink, AooCtl ctl, AooIntPtr index, void *data, AooSize size);
 
+// codec control interface (always threadsafe)
+// ---
+// The available codec controls should be listed in the respective header file.
+AOO_API AooError AOO_CALL AooSink_codecControl(
+        AooSink *sink, AooCtl ctl, AooIntPtr index, void *data, AooSize size);
+
+
 // ------------------------------------------------------------
 // type-safe convenience functions for frequently used controls
-
-static inline AooError AooSink_inviteSource(
-        AooSink *sink, const AooEndpoint *source, const AooCustomData *metadata)
-{
-    return AooSink_control(sink, kAooCtlInviteSource, (AooIntPtr)source,
-                           (void *)metadata, metadata ? sizeof(*metadata) : 0);
-}
-
-static inline AooError AooSink_uninviteSource(
-        AooSink *sink, const AooEndpoint *source)
-{
-    return AooSink_control(sink, kAooCtlUninviteSource, (AooIntPtr)source, 0, 0);
-}
-
-static inline AooError AooSink_uninviteAllSources(AooSink *sink){
-    return AooSink_control(sink, kAooCtlUninviteSource, 0, 0, 0);
-}
 
 static inline AooError AooSink_setId(AooSink *sink, AooId id)
 {

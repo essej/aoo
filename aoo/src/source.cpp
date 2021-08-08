@@ -61,6 +61,20 @@ bool sink_desc::need_invite(AooId token){
     }
 }
 
+void sink_desc::accept_invitation(Source &s, AooId token){
+    if (token != kAooIdInvalid){
+        stream_id_.store(token); // activates sink
+        LOG_DEBUG(ep << ": accept invitation (" << token << ")");
+        if (s.is_running()){
+            notify_start();
+            s.notify_start();
+        }
+    } else {
+        // nothing to do, just let the remote side timeout
+        LOG_DEBUG(ep << ": don't accept invitation (" << token << ")");
+    }
+}
+
 bool sink_desc::need_uninvite(AooId token){
     // avoid redundant invitation events
     if (token != uninvite_token_){
@@ -75,21 +89,7 @@ bool sink_desc::need_uninvite(AooId token){
     }
 }
 
-void sink_desc::accept_invitation(Source& s, AooId token){
-    if (token != kAooIdInvalid){
-        stream_id_.store(token); // activates sink
-        LOG_DEBUG(ep << ": accept invitation (" << token << ")");
-        if (s.is_running()){
-            notify_start();
-            s.notify_start();
-        }
-    } else {
-        // nothing to do, just let the remote side timeout
-        LOG_DEBUG(ep << ": don't accept invitation (" << token << ")");
-    }
-}
-
-void sink_desc::accept_uninvitation(Source& s, AooId token){
+void sink_desc::accept_uninvitation(Source &s, AooId token){
     if (token != kAooIdInvalid){
         // deactivate the source, but check if we're still on the
         // same stream as the remote end (probably not necessary).
@@ -192,42 +192,6 @@ AooError AOO_CALL aoo::Source::control(
         AooCtl ctl, AooIntPtr index, void *ptr, AooSize size)
 {
     switch (ctl){
-    // add sink
-    case kAooCtlAddSink:
-    {
-        CHECKARG(AooFlag);
-        auto ep = (const AooEndpoint *)index;
-        if (!ep){
-            return kAooErrorUnknown;
-        }
-        auto flags = as<AooFlag>(ptr);
-        return add_sink(*ep, flags);
-    }
-    // remove sink(s)
-    case kAooCtlRemoveSink:
-    {
-        auto ep = (const AooEndpoint *)index;
-        if (ep){
-            // single sink
-            return remove_sink(*ep);
-        } else {
-            return remove_all_sinks();
-        }
-    }
-    // start
-    case kAooCtlStartStream:
-    {
-        // stream metadata is optional!
-        AooCustomData *metadata = (AooCustomData *)ptr;
-        if (metadata){
-            CHECKARG(AooCustomData);
-        }
-        return start_stream(metadata);
-    }
-    // stop
-    case kAooCtlStopStream:
-        state_.store(stream_state::stop);
-        break;
     // stream meta data
     case kAooCtlSetStreamMetadataSize:
     {
@@ -257,24 +221,6 @@ AooError AOO_CALL aoo::Source::control(
         as<AooBool>(ptr) = sink->is_active();
         break;
     }
-    case kAooCtlAcceptInvitation:
-    {
-        CHECKARG(AooId);
-        GETSINKARG
-        auto id = as<AooId>(ptr);
-        sink->accept_invitation(*this, id);
-
-        break;
-    }
-    case kAooCtlAcceptUninvitation:
-    {
-        CHECKARG(AooId);
-        GETSINKARG
-        auto id = as<AooId>(ptr);
-        sink->accept_uninvitation(*this, id);
-
-        break;
-    }
     case kAooCtlGetStreamMetadataSize:
         CHECKARG(AooInt32);
         as<AooInt32>(ptr) = metadata_size_.load();
@@ -286,9 +232,6 @@ AooError AOO_CALL aoo::Source::control(
     case kAooCtlGetFormat:
         assert(size >= sizeof(AooFormat));
         return get_format(as<AooFormat>(ptr));
-    // codec control
-    case kAooCtlCodecControl:
-        return codec_control(index, ptr, size);
     // set/get channel onset
     case kAooCtlSetChannelOnset:
     {
@@ -447,6 +390,24 @@ AooError AOO_CALL aoo::Source::control(
     return kAooOk;
 }
 
+AOO_API AooError AOO_CALL AooSource_codecControl(
+        AooSource *source, AooCtl ctl, AooIntPtr index, void *data, AooSize size)
+{
+    return source->codecControl(ctl, index, data, size);
+}
+
+AooError AOO_CALL aoo::Source::codecControl(
+        AooCtl ctl, AooIntPtr index, void *data, AooSize size) {
+    // we don't know which controls are setters and which
+    // are getters, so we just take a writer lock for either way.
+    unique_lock lock(update_mutex_);
+    if (encoder_){
+        return AooEncoder_control(encoder_.get(), ctl, data, size);
+    } else {
+        return kAooErrorUnknown;
+    }
+}
+
 AOO_API AooError AOO_CALL AooSource_setup(
         AooSource *src, AooSampleRate samplerate,
         AooInt32 blocksize, AooInt32 nchannels){
@@ -591,14 +552,14 @@ AooError AOO_CALL aoo::Source::send(AooSendFunc fn, void *user) {
 }
 
 AOO_API AooError AOO_CALL AooSource_process(
-        AooSource *src, const AooSample **data, AooInt32 n, AooNtpTime t) {
+        AooSource *src, AooSample **data, AooInt32 n, AooNtpTime t) {
     return src->process(data, n, t);
 }
 
 #define NO_SINKS_IDLE 1
 
 AooError AOO_CALL aoo::Source::process(
-        const AooSample **data, AooInt32 nsamples, AooNtpTime t) {
+        AooSample **data, AooInt32 nsamples, AooNtpTime t) {
     auto state = state_.load();
     if (state == stream_state::idle){
         return kAooErrorIdle; // pausing
@@ -818,6 +779,206 @@ AooError AOO_CALL aoo::Source::pollEvents(){
     return kAooOk;
 }
 
+AOO_API AooError AOO_CALL AooSource_startStream(
+        AooSource *source, const AooCustomData *metadata)
+{
+    return source->startStream(metadata);
+}
+
+#define STREAM_METADATA_WARN 1
+
+AooError AOO_CALL aoo::Source::startStream(const AooCustomData *md) {
+    // check metadata
+    if (md) {
+        // check type name length
+        if (strlen(md->type) > kAooTypeNameMaxLen){
+            LOG_ERROR("stream metadata type name must not be larger than "
+                      << kAooTypeNameMaxLen << " characters!");
+        #if STREAM_METADATA_WARN
+            LOG_WARNING("ignoring stream metadata");
+            md = nullptr;
+        #else
+            return kAooErrorBadArgument;
+        #endif
+        }
+        // check data size
+        if (md && md->size == 0){
+            LOG_ERROR("stream metadata cannot be empty!");
+        #if STREAM_METADATA_WARN
+            LOG_WARNING("ignoring stream metadata");
+            md = nullptr;
+        #else
+            return kAooErrorBadArgument;
+        #endif
+        }
+        // the metadata size can only be changed while locking the update mutex!
+        auto maxsize = metadata_size_.load(std::memory_order_relaxed);
+        if (md && md->size > maxsize){
+            LOG_ERROR("stream metadata exceeds size limit ("
+                      << maxsize << " bytes)!");
+        #if STREAM_METADATA_WARN
+            LOG_WARNING("ignoring stream metadata");
+            md = nullptr;
+        #else
+            return kAooErrorBadArgument;
+        #endif
+        }
+
+        LOG_DEBUG("start stream with " << md->type << " metadata");
+    } else {
+        LOG_DEBUG("start stream");
+    }
+
+    // copy/reset metadata
+    {
+        scoped_spinlock lock(metadata_lock_);
+        if (metadata_) {
+            if (md) {
+                flat_metadata_copy(*md, *metadata_);
+            } else {
+                // clear previous metadata
+                metadata_->type = kAooCustomDataInvalid;
+                metadata_->data = nullptr;
+                metadata_->size = 0;
+            }
+        }
+        // metadata needs to be "accepted" in make_new_stream()
+        metadata_accepted_ = false;
+    }
+
+    state_.store(stream_state::start);
+
+    return kAooOk;
+}
+
+AOO_API AooError AOO_CALL AooSource_stopStream(AooSource *source) {
+    return source->stopStream();
+}
+
+AooError AOO_CALL aoo::Source::stopStream() {
+    state_.store(stream_state::stop);
+    return kAooOk;
+}
+
+AOO_API AooError AOO_CALL AooSource_addSink(
+        AooSource *source, const AooEndpoint *sink, AooFlag flags)
+{
+    if (sink) {
+        return source->addSink(*sink, flags);
+    } else {
+        return kAooErrorBadArgument;
+    }
+}
+
+AooError AOO_CALL aoo::Source::addSink(const AooEndpoint& ep, AooFlag flags) {
+    ip_address addr((const sockaddr *)ep.address, ep.addrlen);
+    // sinks can be added/removed from different threads
+    sync::scoped_lock<sync::mutex> lock1(sink_mutex_);
+    sink_lock lock2(sinks_);
+    // check if sink exists!
+    if (find_sink(addr, ep.id)){
+        LOG_WARNING("aoo_source: sink already added!");
+        return kAooErrorUnknown;
+    }
+    AooId stream = (flags & kAooSinkActive) ? get_random_id() : kAooIdInvalid;
+    do_add_sink(addr, ep.id, stream);
+    // always succeeds
+    return kAooOk;
+}
+
+AOO_API AooError AOO_CALL AooSource_removeSink(
+        AooSource *source, const AooEndpoint *sink)
+{
+    if (sink) {
+        return source->removeSink(*sink);
+    } else {
+        return kAooErrorBadArgument;
+    }
+}
+
+AooError AOO_CALL aoo::Source::removeSink(const AooEndpoint& ep) {
+    ip_address addr((const sockaddr *)ep.address, ep.addrlen);
+
+    // sinks can be added/removed from different threads
+    sync::scoped_lock<sync::mutex> lock1(sink_mutex_);
+    sink_lock lock2(sinks_);
+    if (do_remove_sink(addr, ep.id)){
+        return kAooOk;
+    } else {
+        return kAooErrorUnknown;
+    }
+}
+
+AOO_API AooError AOO_CALL AooSource_removeAll(AooSource *source)
+{
+    return source->removeAll();
+}
+
+AooError AOO_CALL aoo::Source::removeAll() {
+    // just lock once for all stream ids
+    scoped_shared_lock lock1(update_mutex_);
+
+    bool running = is_running();
+
+    // sinks can be added/removed from different threads
+    sync::scoped_lock<sync::mutex> lock2(sink_mutex_);
+    sink_lock lock3(sinks_);
+    // send /stop messages
+    for (auto& s : sinks_){
+        if (running && s.is_active()){
+            sink_request r(request_type::stop, s.ep);
+            r.stop.stream = s.stream_id();
+            push_request(r);
+        }
+    }
+    sinks_.clear();
+    return kAooOk;
+}
+
+AOO_API AOO_CALL AooError AooSource_acceptInvitation(
+        AooSource *source, const AooEndpoint *sink, AooId token)
+{
+    if (sink) {
+        return source->acceptInvitation(*sink, token);
+    } else {
+        return kAooErrorBadArgument;
+    }
+}
+
+AooError AOO_CALL aoo::Source::acceptInvitation(const AooEndpoint& ep, AooId token) {
+    ip_address addr((const sockaddr *)ep.address, ep.addrlen);
+    auto sink = find_sink(addr, ep.id);
+    if (sink){
+        sink->accept_invitation(*this, token);
+        return kAooOk;
+    } else {
+        LOG_ERROR("AooSink: couldn't find sink");
+        return kAooErrorBadArgument;
+    }
+}
+
+AOO_API AooError AOO_CALL AooSource_acceptUninvitation(
+        AooSource *source, const AooEndpoint *sink, AooId token)
+{
+    if (sink) {
+        return source->acceptUninvitation(*sink, token);
+    } else {
+        return kAooErrorBadArgument;
+    }
+}
+
+AooError AOO_CALL aoo::Source::acceptUninvitation(const AooEndpoint& ep, AooId token) {
+    ip_address addr((const sockaddr *)ep.address, ep.addrlen);
+    auto sink = find_sink(addr, ep.id);
+    if (sink){
+        sink->accept_uninvitation(*this, token);
+        return kAooOk;
+    } else {
+        LOG_ERROR("AooSink: couldn't find sink");
+        return kAooErrorBadArgument;
+    }
+}
+
 //------------------------- source --------------------------------//
 
 namespace aoo {
@@ -843,23 +1004,6 @@ aoo::sink_desc * Source::get_sink_arg(intptr_t index){
         LOG_ERROR("AooSink: couldn't find sink");
     }
     return sink;
-}
-
-AooError Source::add_sink(const AooEndpoint& ep, uint32_t flags)
-{
-    ip_address addr((const sockaddr *)ep.address, ep.addrlen);
-    // sinks can be added/removed from different threads
-    sync::scoped_lock<sync::mutex> lock1(sink_mutex_);
-    sink_lock lock2(sinks_);
-    // check if sink exists!
-    if (find_sink(addr, ep.id)){
-        LOG_WARNING("aoo_source: sink already added!");
-        return kAooErrorUnknown;
-    }
-    AooId stream = (flags & kAooSinkActive) ? get_random_id() : kAooIdInvalid;
-    do_add_sink(addr, ep.id, stream);
-    // always succeeds
-    return kAooOk;
 }
 
 sink_desc * Source::do_add_sink(const ip_address& addr, AooId id, AooId stream_id)
@@ -892,19 +1036,6 @@ sink_desc * Source::do_add_sink(const ip_address& addr, AooId id, AooId stream_i
     return &(*it);
 }
 
-AooError Source::remove_sink(const AooEndpoint& ep){
-    ip_address addr((const sockaddr *)ep.address, ep.addrlen);
-
-    // sinks can be added/removed from different threads
-    sync::scoped_lock<sync::mutex> lock1(sink_mutex_);
-    sink_lock lock2(sinks_);
-    if (do_remove_sink(addr, ep.id)){
-        return kAooOk;
-    } else {
-        return kAooErrorUnknown;
-    }
-}
-
 bool Source::do_remove_sink(const ip_address& addr, AooId id){
     for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
         if (it->ep.address == addr && it->ep.id == id){
@@ -924,27 +1055,6 @@ bool Source::do_remove_sink(const ip_address& addr, AooId id){
     }
     LOG_WARNING("aoo_source: sink not found!");
     return false;
-}
-
-AooError Source::remove_all_sinks(){
-    // just lock once for all stream ids
-    scoped_shared_lock lock1(update_mutex_);
-
-    bool running = is_running();
-
-    // sinks can be added/removed from different threads
-    sync::scoped_lock<sync::mutex> lock2(sink_mutex_);
-    sink_lock lock3(sinks_);
-    // send /stop messages
-    for (auto& s : sinks_){
-        if (running && s.is_active()){
-            sink_request r(request_type::stop, s.ep);
-            r.stop.stream = s.stream_id();
-            push_request(r);
-        }
-    }
-    sinks_.clear();
-    return kAooOk;
 }
 
 AooError Source::set_format(AooFormat &f){
@@ -1013,18 +1123,6 @@ AooError Source::get_format(AooFormat &fmt){
     }
 }
 
-AooError Source::codec_control(
-        AooCtl ctl, void *data, AooSize size) {
-    // we don't know which controls are setters and which
-    // are getters, so we just take a writer lock for either way.
-    unique_lock lock(update_mutex_);
-    if (encoder_){
-        return AooEncoder_control(encoder_.get(), ctl, data, size);
-    } else {
-        return kAooErrorUnknown;
-    }
-}
-
 bool Source::need_resampling() const {
 #if 1
     // always go through resampler, so we can use a variable block size
@@ -1063,72 +1161,6 @@ void Source::free_event(const endpoint_event &e){
             memory_.deallocate((void *)e.invite.metadata);
         }
     }
-}
-
-#define STREAM_METADATA_WARN 1
-
-AooError Source::start_stream(const AooCustomData *md){
-    // check metadata
-    if (md) {
-        // check type name length
-        if (strlen(md->type) > kAooTypeNameMaxLen){
-            LOG_ERROR("stream metadata type name must not be larger than "
-                      << kAooTypeNameMaxLen << " characters!");
-        #if STREAM_METADATA_WARN
-            LOG_WARNING("ignoring stream metadata");
-            md = nullptr;
-        #else
-            return kAooErrorBadArgument;
-        #endif
-        }
-        // check data size
-        if (md && md->size == 0){
-            LOG_ERROR("stream metadata cannot be empty!");
-        #if STREAM_METADATA_WARN
-            LOG_WARNING("ignoring stream metadata");
-            md = nullptr;
-        #else
-            return kAooErrorBadArgument;
-        #endif
-        }
-        // the metadata size can only be changed while locking the update mutex!
-        auto maxsize = metadata_size_.load(std::memory_order_relaxed);
-        if (md && md->size > maxsize){
-            LOG_ERROR("stream metadata exceeds size limit ("
-                      << maxsize << " bytes)!");
-        #if STREAM_METADATA_WARN
-            LOG_WARNING("ignoring stream metadata");
-            md = nullptr;
-        #else
-            return kAooErrorBadArgument;
-        #endif
-        }
-
-        LOG_DEBUG("start stream with " << md->type << " metadata");
-    } else {
-        LOG_DEBUG("start stream");
-    }
-
-    // copy/reset metadata
-    {
-        scoped_spinlock lock(metadata_lock_);
-        if (metadata_) {
-            if (md) {
-                flat_metadata_copy(*md, *metadata_);
-            } else {
-                // clear previous metadata
-                metadata_->type = kAooCustomDataInvalid;
-                metadata_->data = nullptr;
-                metadata_->size = 0;
-            }
-        }
-        // metadata needs to be "accepted" in make_new_stream()
-        metadata_accepted_ = false;
-    }
-
-    state_.store(stream_state::start);
-
-    return kAooOk;
 }
 
 // must be real-time safe because it might be called in process()!

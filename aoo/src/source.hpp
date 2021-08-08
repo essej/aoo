@@ -150,7 +150,7 @@ class Source final : public AooSource {
 
     AooError AOO_CALL send(AooSendFunc fn, void *user) override;
 
-    AooError AOO_CALL process(const AooSample **data, AooInt32 n,
+    AooError AOO_CALL process(AooSample **data, AooInt32 n,
                               AooNtpTime t) override;
 
     AooError AOO_CALL setEventHandler(AooEventHandler fn, void *user,
@@ -160,8 +160,25 @@ class Source final : public AooSource {
 
     AooError AOO_CALL pollEvents() override;
 
+    AooError AOO_CALL startStream(const AooCustomData *metadata) override;
+
+    AooError AOO_CALL stopStream() override;
+
+    AooError AOO_CALL addSink(const AooEndpoint& sink, AooFlag flags) override;
+
+    AooError AOO_CALL removeSink(const AooEndpoint& sink) override;
+
+    AooError AOO_CALL removeAll() override;
+
+    AooError AOO_CALL acceptInvitation(const AooEndpoint& sink, AooId token) override;
+
+    AooError AOO_CALL acceptUninvitation(const AooEndpoint& sink, AooId token) override;
+
     AooError AOO_CALL control(AooCtl ctl, AooIntPtr index,
                               void *ptr, AooSize size) override;
+
+    AooError AOO_CALL codecControl(AooCtl ctl, AooIntPtr index,
+                                   void *ptr, AooSize size) override;
 
     //----------------------- semi-public methods -------------------//
 
@@ -257,21 +274,13 @@ class Source final : public AooSource {
     std::atomic<bool> binary_{ AOO_BINARY_DATA_MSG };
 
     // helper methods
-    AooError add_sink(const AooEndpoint& ep, AooFlag flags);
-
     sink_desc * do_add_sink(const ip_address& addr, AooId id, AooId stream_id);
 
-    AooError remove_sink(const AooEndpoint& ep);
-
     bool do_remove_sink(const ip_address& addr, AooId id);
-
-    AooError remove_all_sinks();
 
     AooError set_format(AooFormat& fmt);
 
     AooError get_format(AooFormat& fmt);
-
-    AooError codec_control(AooCtl ctl, void *data, AooSize size);
 
     sink_desc * find_sink(const ip_address& addr, AooId id);
 
@@ -282,8 +291,6 @@ class Source final : public AooSource {
     void free_event(const endpoint_event& e);
 
     bool need_resampling() const;
-
-    AooError start_stream(const AooCustomData *md);
 
     void make_new_stream();
 

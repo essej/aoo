@@ -85,6 +85,7 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
     AooId id = 0;
     if (x->x_node->get_source_arg((t_pd *)x, argc, argv, addr, id)){
         AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
+
         if (x->x_metadata_type){
             AooCustomData md;
             md.type = x->x_metadata_type->s_name;
@@ -93,7 +94,7 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
 
             x->x_sink->inviteSource(ep, &md);
         } else {
-            x->x_sink->inviteSource(ep);
+            x->x_sink->inviteSource(ep, nullptr);
         }
         // notify send thread
         x->x_node->notify();
@@ -108,7 +109,7 @@ static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom
     }
 
     if (!argc){
-        x->x_sink->uninviteAllSources();
+        x->x_sink->uninviteAll();
         return;
     }
 

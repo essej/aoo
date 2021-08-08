@@ -51,26 +51,43 @@ public:
     // NOTE: the event handler must have been registered with kAooEventModePoll.
     virtual AooError AOO_CALL pollEvents() = 0;
 
+    // uninvite source
+    // ---
+    // This will continuously send invitation requests to the source
+    // The source can either accept the invitation request and start a
+    // stream or it can ignore it, upon which the sink will eventually
+    // receive an AooEventInviteTimeout event.
+    // The invitation can contain additional metadata which the source
+    // can interpret before accepting the invitation.
+    // If you call this function while you are already receiving a stream,
+    // it will force a new stream. For example, you might want to request
+    // different format parameters or even ask for different musical content.
+    virtual AooError AOO_CALL inviteSource(
+            const AooEndpoint& source, const AooCustomData *metadata) = 0;
+
+    // uninvite source
+    // ---
+    // This will continuously send uninvitation requests to the source.
+    // The source can either accept the uninvitation request and stop the
+    // stream, or it can ignore and continue sending, upon which the sink
+    // will eventually receive an AooEventUninviteTimeout event.
+    virtual AooError AOO_CALL uninviteSource(const AooEndpoint& source) = 0;
+
+    // uninvite all sources
+    virtual AooError AOO_CALL uninviteAll() = 0;
+
     // control interface (always threadsafe)
     virtual AooError AOO_CALL control(
             AooCtl ctl, AooIntPtr index, void *data, AooSize size) = 0;
 
+    // codec control interface (always threadsafe)
+    // ---
+    // The available codec controls should be listed in the respective header file.
+    virtual AooError AOO_CALL codecControl(
+            AooCtl ctl, AooIntPtr index, void *data, AooSize size) = 0;
+
     // ----------------------------------------------------------
     // type-safe convenience methods for frequently used controls
-
-    AooError inviteSource(
-            const AooEndpoint& source, const AooCustomData *metadata = nullptr) {
-        return control(kAooCtlInviteSource, (AooIntPtr)&source,
-                       (void *)metadata, metadata ? sizeof(*metadata) : 0);
-    }
-
-    AooError uninviteSource(const AooEndpoint& source) {
-        return control(kAooCtlUninviteSource, (AooIntPtr)&source, nullptr, 0);
-    }
-
-    AooError uninviteAllSources() {
-        return control(kAooCtlUninviteSource, 0, nullptr, 0);
-    }
 
     AooError setId(AooId id) {
         return control(kAooCtlSetId, 0, AOO_ARG(id));

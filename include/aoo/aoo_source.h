@@ -28,11 +28,12 @@ AOO_API AooError AOO_CALL AooSource_send(
         AooSource *source, AooSendFunc fn, void *user);
 
 // process audio blocks (threadsafe, called from the audio thread)
+// ---
 // data:        array of channel data (non-interleaved)
 // numSamples:  number of samples per channel
 // t:           current NTP timestamp (see aoo_osctime_get)
 AOO_API AooError AOO_CALL AooSource_process(
-        AooSource *source, const AooSample **data, AooInt32 numSamples, AooNtpTime t);
+        AooSource *source, AooSample **data, AooInt32 numSamples, AooNtpTime t);
 
 // set event handler callback + mode
 AOO_API AooError AOO_CALL AooSource_setEventHandler(
@@ -46,55 +47,74 @@ AOO_API AooBool AOO_CALL AooSource_eventsAvailable(AooSource *source);
 // NOTE: the event handler must have been registered with kAooEventModePoll.
 AOO_API AooError AOO_CALL AooSource_pollEvents(AooSource *source);
 
+// Start a new stream
+// ---
+// Can be called from any thread. Realtime safe!
+// You can pass an optional AooCustomData structure which will be sent as
+// additional stream metadata. For example, it could contain information
+// about the channel layout, the musical content, etc.
+AOO_API AooError AOO_CALL AooSource_startStream(
+        AooSource *source, const AooCustomData *metadata);
+
+// Stop the stream
+AOO_API AooError AOO_CALL AooSource_stopStream(AooSource *source);
+
+// add sink
+// ---
+// Unless you pass the kAooSinkActive flag, sinks are
+// initially deactivated and have to be activated
+// manually with the kAooCtlActivate control.
+
+#define kAooSinkActive 0x01 // start active
+
+AOO_API AooError AOO_CALL AooSource_addSink(
+        AooSource *source, const AooEndpoint *sink, AooFlag flags);
+
+// remove the given sink
+AOO_API AooError AOO_CALL AooSource_removeSink(
+        AooSource *source, const AooEndpoint *sink);
+
+// remove all sinks
+AOO_API AooError AOO_CALL AooSource_removeAll(AooSource *source);
+
+// accept/decline an invitation
+// ---
+// When you receive an AooEventInvite event, you can decide to
+// accept or decline the invitation.
+// If you choose to accept it, you have to call this function with
+// the 'token' of the corresponding event; before you might want to
+// perform certain actions, e.g. based on the metadata.
+// (Calling this with a valid token essentially activates the sink.)
+// If you choose to decline it, call it with kAooIdInvalid.
+AOO_API AOO_CALL AooError AooSource_acceptInvitation(
+        AooSource *source, const AooEndpoint *sink, AooId token);
+
+// accept/decline an uninvitation (index: sink, arg: AooBool)
+// ---
+// When you receive an AooEventUninvite event, you can decide to
+// accept or decline the uninvitation.
+// If you choose to accept it, you have to call this function with
+// the 'token' of the corresponding event.
+// (Calling this with a valid token essentially deactivates the sink.)
+// If you choose to decline it, call it with kAooIdInvalid.
+AOO_API AooError AOO_CALL AooSource_acceptUninvitation(
+        AooSource *source, const AooEndpoint *sink, AooId token);
+
 // control interface (always threadsafe)
+// ---
+// See aoo_controls.h for available controls
 AOO_API AooError AOO_CALL AooSource_control(
         AooSource *source, AooCtl ctl, AooIntPtr index, void *data, AooSize size);
 
+// codec control interface (always threadsafe)
+// ---
+// The available codec controls should be listed in the respective header file.
+AOO_API AooError AOO_CALL AooSource_codecControl(
+        AooSource *source,  AooCtl ctl, AooIntPtr index, void *data, AooSize size);
+
+
 // ------------------------------------------------------------
 // type-safe convenience functions for frequently used controls
-
-static inline AooError AooSource_startStream(
-        AooSource *source, const AooCustomData *metadata)
-{
-    return AooSource_control(source, kAooCtlStartStream, 0,
-                             (void *)metadata, metadata ? sizeof(AooCustomData) : 0);
-}
-
-static inline AooError AooSource_stopStream(AooSource *source)
-{
-    return AooSource_control(source, kAooCtlStopStream, 0, 0, 0);
-}
-
-static inline AooError AooSource_addSink(
-        AooSource *source, const AooEndpoint *sink, AooFlag flags)
-{
-    return AooSource_control(source, kAooCtlAddSink, (AooIntPtr)sink, AOO_ARG(flags));
-}
-
-static inline AooError AooSource_removeSink(
-        AooSource *source, const AooEndpoint *sink)
-{
-    return AooSource_control(source, kAooCtlRemoveSink, (AooIntPtr)sink, 0, 0);
-}
-
-static inline AooError AooSource_removeAllSinks(AooSource *source)
-{
-    return AooSource_control(source, kAooCtlRemoveSink, 0, 0, 0);
-}
-
-static inline AooError AooSource_acceptInvitation(
-        AooSource *source, const AooEndpoint *sink, AooId streamID)
-{
-    return AooSource_control(source, kAooCtlAcceptInvitation,
-                             (AooIntPtr)sink, AOO_ARG(streamID));
-}
-
-static inline AooError AooSource_acceptUninvitation(
-        AooSource *source, const AooEndpoint *sink, AooId streamID)
-{
-    return AooSource_control(source, kAooCtlAcceptUninvitation,
-                             (AooIntPtr)sink, AOO_ARG(streamID));
-}
 
 static inline AooError AooSource_activate(
         AooSource *source, const AooEndpoint *sink, AooBool active)
@@ -116,11 +136,6 @@ static inline AooError AooSource_setFormat(AooSource *source, AooFormat *f)
 static inline AooError AooSource_getFormat(AooSource *source, AooFormatStorage *f)
 {
     return AooSource_control(source, kAooCtlGetFormat, 0, AOO_ARG(*f));
-}
-
-static inline AooError AooSource_codecControl(
-        AooSource *source,  AooCtl ctl, void *data, AooSize size) {
-    return AooSource_control(source, kAooCtlCodecControl, ctl, data, size);
 }
 
 static inline AooError AooSource_setId(AooSource *source, AooId id)

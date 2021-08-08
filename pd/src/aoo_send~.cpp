@@ -109,7 +109,7 @@ static void aoo_send_doaddsink(t_aoo_send *x, const aoo::ip_address& addr,
 
 static void aoo_send_doremoveall(t_aoo_send *x)
 {
-    x->x_source->removeAllSinks();
+    x->x_source->removeAll();
 
     int numsinks = x->x_sinks.size();
     if (!numsinks){
@@ -167,7 +167,7 @@ static t_sink *aoo_send_findsink(t_aoo_send *x, const aoo::ip_address& addr, Aoo
 
 bool get_opus_bitrate(t_aoo_send *x, t_atom *a) {
     opus_int32 value;
-    auto err = AooSource_getOpusBitrate(x->x_source.get(), &value);
+    auto err = AooSource_getOpusBitrate(x->x_source.get(), 0, &value);
     if (err != kAooOk){
         pd_error(x, "%s: could not get bitrate: %s", classname(x), aoo_strerror(err));
         return false;
@@ -198,7 +198,8 @@ void set_opus_bitrate(t_aoo_send *x, const t_atom *a) {
         } else if (sym == gensym("max")){
             value = OPUS_BITRATE_MAX;
         } else {
-            pd_error(x, "%s: bad bitrate argument '%s'", classname(x), sym->s_name);
+            pd_error(x, "%s: bad bitrate argument '%s'",
+                     classname(x), sym->s_name);
             return;
         }
     } else {
@@ -206,21 +207,24 @@ void set_opus_bitrate(t_aoo_send *x, const t_atom *a) {
         if (bitrate > 0){
             value = bitrate;
         } else {
-            pd_error(x, "%s: bitrate argument %d out of range", classname(x), bitrate);
+            pd_error(x, "%s: bitrate argument %d out of range",
+                     classname(x), bitrate);
             return;
         }
     }
-    auto err = AooSource_setOpusBitrate(x->x_source.get(), value);
+    auto err = AooSource_setOpusBitrate(x->x_source.get(), 0, value);
     if (err != kAooOk){
-        pd_error(x, "%s: could not set bitrate: %s", classname(x), aoo_strerror(err));
+        pd_error(x, "%s: could not set bitrate: %s",
+                 classname(x), aoo_strerror(err));
     }
 }
 
 bool get_opus_complexity(t_aoo_send *x, t_atom *a){
     opus_int32 value;
-    auto err = AooSource_getOpusComplexity(x->x_source.get(), &value);
+    auto err = AooSource_getOpusComplexity(x->x_source.get(), 0, &value);
     if (err != kAooOk){
-        pd_error(x, "%s: could not get complexity: %s", classname(x), aoo_strerror(err));
+        pd_error(x, "%s: could not get complexity: %s",
+                 classname(x), aoo_strerror(err));
         return false;
     }
     SETFLOAT(a, value);
@@ -231,20 +235,23 @@ void set_opus_complexity(t_aoo_send *x, const t_atom *a){
     // 0-10
     opus_int32 value = atom_getfloat(a);
     if (value < 0 || value > 10){
-        pd_error(x, "%s: complexity value %d out of range", classname(x), value);
+        pd_error(x, "%s: complexity value %d out of range",
+                 classname(x), value);
         return;
     }
-    auto err = AooSource_setOpusComplexity(x->x_source.get(), value);
+    auto err = AooSource_setOpusComplexity(x->x_source.get(), 0, value);
     if (err != kAooOk){
-        pd_error(x, "%s: could not set complexity: %s", classname(x), aoo_strerror(err));
+        pd_error(x, "%s: could not set complexity: %s",
+                 classname(x), aoo_strerror(err));
     }
 }
 
 bool get_opus_signal(t_aoo_send *x, t_atom *a){
     opus_int32 value;
-    auto err = AooSource_getOpusSignalType(x->x_source.get(), &value);
+    auto err = AooSource_getOpusSignalType(x->x_source.get(), 0, &value);
     if (err != kAooOk){
-        pd_error(x, "%s: could not get signal type: %s", classname(x), aoo_strerror(err));
+        pd_error(x, "%s: could not get signal type: %s",
+                 classname(x), aoo_strerror(err));
         return false;
     }
     t_symbol *type;
@@ -278,9 +285,10 @@ void set_opus_signal(t_aoo_send *x, const t_atom *a){
                  classname(x), type->s_name);
         return;
     }
-    auto err = AooSource_setOpusSignalType(x->x_source.get(), value);
+    auto err = AooSource_setOpusSignalType(x->x_source.get(), 0, value);
     if (err != kAooOk){
-        pd_error(x, "%s: could not set signal type: %s", classname(x), aoo_strerror(err));
+        pd_error(x, "%s: could not set signal type: %s",
+                 classname(x), aoo_strerror(err));
     }
 }
 
@@ -681,7 +689,7 @@ static void aoo_send_start(t_aoo_send *x)
 
         x->x_source->startStream(&md);
     } else {
-        x->x_source->startStream();
+        x->x_source->startStream(nullptr);
     }
 }
 
@@ -768,8 +776,7 @@ static t_int * aoo_send_perform(t_int *w)
                   "AooSample size must match t_sample");
 
     if (x->x_node){
-        auto err = x->x_source->process(
-                    (const AooSample **)x->x_vec.get(), n, get_osctime());
+        auto err = x->x_source->process(x->x_vec.get(), n, get_osctime());
 
         if (err != kAooErrorIdle){
             x->x_node->notify();

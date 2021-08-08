@@ -282,7 +282,7 @@ void aoo_recv_invite(AooReceiveUnit *unit, sc_msg_iter *args){
             if (owner.node()->getSourceArg(&args, addr, id)){
                 AooEndpoint ep { addr.address(),
                             (AooAddrSize)addr.length(), id };
-                if (owner.sink()->inviteSource(ep) == kAooOk) {
+                if (owner.sink()->inviteSource(ep, nullptr) == kAooOk) {
                     // only send IP address on success
                     msg << addr.name() << addr.port() << id;
                 }
@@ -322,7 +322,7 @@ void aoo_recv_uninvite(AooReceiveUnit *unit, sc_msg_iter *args){
                     }
                 }
             } else {
-                owner.sink()->uninviteAllSources();
+                owner.sink()->uninviteAll();
             }
 
             owner.sendMsgNRT(msg);

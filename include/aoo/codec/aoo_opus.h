@@ -45,50 +45,50 @@ static inline void AooFormatOpus_init(
 
 // set bitrate in bits/s, OPUS_BITRATE_MAX or OPUS_AUTO
 static inline AooError AooSource_setOpusBitrate(
-        AooSource *src, opus_int32 bitrate) {
-    return AooSource_control(
-                src, kAooCtlCodecControl, OPUS_SET_BITRATE_REQUEST,
+        AooSource *src, const AooEndpoint *sink, opus_int32 bitrate) {
+    return AooSource_codecControl(
+                src, OPUS_SET_BITRATE_REQUEST, (AooIntPtr)sink,
                 &bitrate, sizeof(bitrate));
 }
 
 // get bitrate
 static inline AooError AooSource_getOpusBitrate(
-        AooSource *src, opus_int32 *bitrate) {
-    return AooSource_control(
-                src, kAooCtlCodecControl, OPUS_GET_BITRATE_REQUEST,
+        AooSource *src, const AooEndpoint *sink, opus_int32 *bitrate) {
+    return AooSource_codecControl(
+                src, OPUS_GET_BITRATE_REQUEST, (AooIntPtr)sink,
                 bitrate, sizeof(bitrate));
 }
 
 // set complexity (0-10 or OPUS_AUTO)
 static inline AooError AooSource_setOpusComplexity(
-        AooSource *src, opus_int32 complexity) {
-    return AooSource_control(
-                src, kAooCtlCodecControl, OPUS_SET_COMPLEXITY_REQUEST,
+        AooSource *src, const AooEndpoint *sink, opus_int32 complexity) {
+    return AooSource_codecControl(
+                src, OPUS_SET_COMPLEXITY_REQUEST, (AooIntPtr)sink,
                 &complexity, sizeof(complexity));
 }
 
 // get complexity
 static inline AooError AooSource_getOpusComplexity(
-        AooSource *src, opus_int32 *complexity) {
-    return AooSource_control(
-                src, kAooCtlCodecControl, OPUS_GET_COMPLEXITY_REQUEST,
+        AooSource *src, const AooEndpoint *sink, opus_int32 *complexity) {
+    return AooSource_codecControl(
+                src, OPUS_GET_COMPLEXITY_REQUEST, (AooIntPtr)sink,
                 complexity, sizeof(complexity));
 }
 
 // set signal type
 // (OPUS_SIGNAL_VOICE, OPUS_SIGNAL_MUSIC or OPUS_AUTO)
 static inline AooError AooSource_setOpusSignalType(
-        AooSource *src, opus_int32 signalType) {
-    return AooSource_control(
-                src, kAooCtlCodecControl, OPUS_SET_SIGNAL_REQUEST,
+        AooSource *src, const AooEndpoint *sink, opus_int32 signalType) {
+    return AooSource_codecControl(
+                src, OPUS_SET_SIGNAL_REQUEST, (AooIntPtr)sink,
                 &signalType, sizeof(signalType));
 }
 
 // get signal type
 static inline AooError AooSource_getOpusSignalType(
-        AooSource *src, opus_int32 *signalType) {
-    return AooSource_control(
-                src, kAooCtlCodecControl, OPUS_GET_SIGNAL_REQUEST,
+        AooSource *src, const AooEndpoint *sink, opus_int32 *signalType) {
+    return AooSource_codecControl(
+                src, OPUS_GET_SIGNAL_REQUEST, (AooIntPtr)sink,
                 signalType, sizeof(signalType));
 }
 

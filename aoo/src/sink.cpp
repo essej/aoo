@@ -101,45 +101,6 @@ AooError AOO_CALL aoo::Sink::control(
         AooCtl ctl, AooIntPtr index, void *ptr, AooSize size)
 {
     switch (ctl){
-    // invite source
-    case kAooCtlInviteSource:
-    {
-        auto ep = (const AooEndpoint *)index;
-        if (!ep){
-            return kAooErrorUnknown;
-        }
-        AooCustomData *metadata = nullptr;
-        if (ptr) {
-            assert(size >= sizeof(AooCustomData));
-            auto md = (const AooCustomData *)ptr;
-            auto mdsize = flat_metadata_size(*md);
-            metadata = (AooCustomData *)aoo::allocate(mdsize);
-            flat_metadata_copy(*md, *metadata);
-        }
-        ip_address addr((const sockaddr *)ep->address, ep->addrlen);
-
-        source_request r(request_type::invite, addr, ep->id);
-        r.invite.token = get_random_id();
-        r.invite.metadata = metadata;
-        push_request(r);
-
-        break;
-    }
-    // uninvite source(s)
-    case kAooCtlUninviteSource:
-    {
-        auto ep = (const AooEndpoint *)index;
-        if (ep){
-            // single source
-            ip_address addr((const sockaddr *)ep->address, ep->addrlen);
-
-            push_request(source_request { request_type::uninvite, addr, ep->id });
-        } else {
-            // all sources
-            push_request(source_request { request_type::uninvite_all });
-        }
-        break;
-    }
     // id
     case kAooCtlSetId:
     {
@@ -322,6 +283,17 @@ AooError AOO_CALL aoo::Sink::control(
         return kAooErrorNotImplemented;
     }
     return kAooOk;
+}
+
+AOO_API AooError AOO_CALL AooSink_codecControl(
+        AooSink *sink, AooCtl ctl, AooIntPtr index, void *data, AooSize size)
+{
+    return sink->codecControl(ctl, index, data, size);
+}
+
+AooError AOO_CALL aoo::Sink::codecControl(
+        AooCtl ctl, AooIntPtr index, void *data, AooSize size) {
+    return kAooErrorNotImplemented;
 }
 
 AOO_API AooError AOO_CALL AooSink_handleMessage(
@@ -558,6 +530,61 @@ AooError AOO_CALL aoo::Sink::pollEvents(){
             break;
         }
     }
+    return kAooOk;
+}
+
+AOO_API AooError AOO_CALL AooSink_inviteSource(
+        AooSink *sink, const AooEndpoint *source, const AooCustomData *metadata)
+{
+    if (sink) {
+        return sink->inviteSource(*source, metadata);
+    } else {
+        return kAooErrorBadArgument;
+    }
+}
+
+AooError AOO_CALL aoo::Sink::inviteSource(
+        const AooEndpoint& ep, const AooCustomData *md) {
+    ip_address addr((const sockaddr *)ep.address, ep.addrlen);
+
+    AooCustomData *metadata = nullptr;
+    if (md) {
+        auto mdsize = flat_metadata_size(*md);
+        metadata = (AooCustomData *)aoo::allocate(mdsize);
+        flat_metadata_copy(*md, *metadata);
+    }
+
+    source_request r(request_type::invite, addr, ep.id);
+    r.invite.token = get_random_id();
+    r.invite.metadata = metadata;
+    push_request(r);
+
+    return kAooOk;
+}
+
+AOO_API AooError AOO_CALL AooSink_uninviteSource(
+        AooSink *sink, const AooEndpoint *source)
+{
+    if (source){
+        return sink->uninviteSource(*source);
+    } else {
+        return kAooErrorBadArgument;
+    }
+}
+
+AooError AOO_CALL aoo::Sink::uninviteSource(const AooEndpoint& ep) {
+    ip_address addr((const sockaddr *)ep.address, ep.addrlen);
+    push_request(source_request { request_type::uninvite, addr, ep.id });
+    return kAooOk;
+}
+
+AOO_API AooError AOO_CALL AooSink_uninviteAll(AooSink *sink)
+{
+    return sink->uninviteAll();
+}
+
+AooError AOO_CALL aoo::Sink::uninviteAll() {
+    push_request(source_request { request_type::uninvite_all });
     return kAooOk;
 }
 

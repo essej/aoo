@@ -40,7 +40,7 @@ public:
     // numSamples:  number of samples per channel
     // t:           current NTP timestamp (see aoo_osctime_get)
     virtual AooError AOO_CALL process(
-            const AooSample **data, AooInt32 numSamples, AooNtpTime t) = 0;
+            AooSample **data, AooInt32 numSamples, AooNtpTime t) = 0;
 
     // set event handler callback + mode
     virtual AooError AOO_CALL setEventHandler(
@@ -54,41 +54,67 @@ public:
     // NOTE: the event handler must have been registered with kAooEventModePoll.
     virtual AooError AOO_CALL pollEvents() = 0;
 
+    // Start a new stream
+    // ---
+    // Can be called from any thread. Realtime safe!
+    // You can pass an optional AooCustomData structure which will be sent as
+    // additional stream metadata. For example, it could contain information
+    // about the channel layout, the musical content, etc.
+    virtual AooError AOO_CALL startStream(
+            const AooCustomData *metadata) = 0;
+
+    // Stop the stream
+    virtual AooError AOO_CALL stopStream() = 0;
+
+    // add sink
+    // ---
+    // Unless you pass the kAooSinkActive flag, sinks are
+    // initially deactivated and have to be activated
+    // manually with the kAooCtlActivate control.
+    virtual AooError AOO_CALL addSink(
+            const AooEndpoint& sink, AooFlag flags) = 0;
+
+    // remove the given sink
+    virtual AooError AOO_CALL removeSink(const AooEndpoint& sink) = 0;
+
+    // remove all sinks
+    virtual AooError AOO_CALL removeAll() = 0;
+
+    // accept/decline an invitation
+    // ---
+    // When you receive an AooEventInvite event, you can decide to
+    // accept or decline the invitation.
+    // If you choose to accept it, you have to call this function with
+    // the 'token' of the corresponding event; before you might want to
+    // perform certain actions, e.g. based on the metadata.
+    // (Calling this with a valid token essentially activates the sink.)
+    // If you choose to decline it, call it with kAooIdInvalid.
+    virtual AooError AOO_CALL acceptInvitation(
+            const AooEndpoint& sink, AooId token) = 0;
+
+    // accept/decline an uninvitation (index: sink, arg: AooBool)
+    // ---
+    // When you receive an AooEventUninvite event, you can decide to
+    // accept or decline the uninvitation.
+    // If you choose to accept it, you have to call this function with
+    // the 'token' of the corresponding event.
+    // (Calling this with a valid token essentially deactivates the sink.)
+    // If you choose to decline it, call it with kAooIdInvalid.
+    virtual AooError AOO_CALL acceptUninvitation(
+            const AooEndpoint& sink, AooId token) = 0;
+
     // control interface (always threadsafe)
     virtual AooError AOO_CALL control(
             AooCtl ctl, AooIntPtr index, void *data, AooSize size) = 0;
 
+    // codec control interface (always threadsafe)
+    // ---
+    // The available codec controls should be listed in the respective header file.
+    virtual AooError AOO_CALL codecControl(
+            AooCtl ctl, AooIntPtr index, void *data, AooSize size) = 0;
+
     // ----------------------------------------------------------
     // type-safe convenience methods for frequently used controls
-
-    AooError startStream(const AooCustomData *metadata = nullptr) {
-        return control(kAooCtlStartStream, 0,
-                       (void *)metadata, metadata ? sizeof(AooCustomData) : 0);
-    }
-
-    AooError stopStream() {
-        return control(kAooCtlStopStream, 0, nullptr, 0);
-    }
-
-    AooError addSink(const AooEndpoint& sink, AooFlag flags) {
-        return control(kAooCtlAddSink, (AooIntPtr)&sink, AOO_ARG(flags));
-    }
-
-    AooError removeSink(const AooEndpoint& sink) {
-        return control(kAooCtlRemoveSink, (AooIntPtr)&sink, nullptr, 0);
-    }
-
-    AooError removeAllSinks() {
-        return control(kAooCtlRemoveSink, 0, nullptr, 0);
-    }
-
-    AooError acceptInvitation(const AooEndpoint& sink, AooId streamID) {
-        return control(kAooCtlAcceptInvitation, (AooIntPtr)&sink, AOO_ARG(streamID));
-    }
-
-    AooError acceptUninvitation(const AooEndpoint& sink, AooId streamID) {
-        return control(kAooCtlAcceptUninvitation, (AooIntPtr)&sink, AOO_ARG(streamID));
-    }
 
     AooError activate(const AooEndpoint& sink, AooBool active) {
         return control(kAooCtlActivate, (AooIntPtr)&sink, AOO_ARG(active));
@@ -104,10 +130,6 @@ public:
 
     AooError get_format(AooFormatStorage& format) {
         return control(kAooCtlGetFormat, 0, AOO_ARG(format));
-    }
-
-    AooError codecControl(AooCtl ctl, void *data, AooSize size) {
-        return control(kAooCtlCodecControl, ctl, data, size);
     }
 
     AooError setId(AooId id) {

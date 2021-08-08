@@ -306,8 +306,18 @@ public:
 
     AooError AOO_CALL pollEvents() override;
 
+    AooError AOO_CALL inviteSource(
+            const AooEndpoint& source, const AooCustomData *metadata) override;
+
+    AooError AOO_CALL uninviteSource(const AooEndpoint& source) override;
+
+    AooError AOO_CALL uninviteAll() override;
+
     AooError AOO_CALL control(AooCtl ctl, AooIntPtr index,
                               void *ptr, AooSize size) override;
+
+    AooError AOO_CALL codecControl(
+            AooCtl ctl, AooIntPtr index, void *data, AooSize size) override;
 
     // getters
     AooId id() const { return id_.load(std::memory_order_relaxed); }
