@@ -6,6 +6,7 @@
 
 #include "common/lockfree.hpp"
 #include "common/sync.hpp"
+#include "common/utils.hpp"
 
 #include <iostream>
 #include <vector>
@@ -384,24 +385,28 @@ t_node_imp::t_node_imp(t_symbol *s, int socket, const aoo::ip_address& addr)
     : x_proxy(this), x_bindsym(s),
       x_socket(socket), x_port(addr.port()), x_type(addr.type())
 {
+    LOG_DEBUG("create AooClient on port " << addr.port());
     x_client = AooClient::create(addr.address(), addr.length(), 0, nullptr);
 
     pd_bind(&x_proxy.x_pd, x_bindsym);
 
 #if NETWORK_THREAD_POLL
     // start network I/O thread
+    LOG_DEBUG("start network thread");
     x_iothread = std::thread([this](){
         aoo::sync::lower_thread_priority();
         perform_io();
     });
 #else
     // start send thread
+    LOG_DEBUG("start network send thread");
     x_sendthread = std::thread([this](){
         aoo::sync::lower_thread_priority();
         send_packets();
     });
 
     // start receive thread
+    LOG_DEBUG("start network receive thread");
     x_recvthread = std::thread([this](){
         aoo::sync::lower_thread_priority();
         receive_packets();
@@ -444,9 +449,11 @@ t_node_imp::~t_node_imp()
     x_quit = true;
 
 #if NETWORK_THREAD_POLL
+    LOG_DEBUG("join network thread");
     aoo::socket_signal(x_socket); // wake perform_io()
     x_iothread.join();
 #else
+    LOG_DEBUG("join network threads");
     x_event.set(); // wake send_packets()
     aoo::socket_signal(x_socket); // wake receive_packets()
     x_sendthread.join();

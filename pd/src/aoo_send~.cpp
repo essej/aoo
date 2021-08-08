@@ -101,7 +101,7 @@ static void aoo_send_doaddsink(t_aoo_send *x, const aoo::ip_address& addr,
     // output message
     t_atom msg[3];
     if (x->x_node->resolve_endpoint(addr, id, 3, msg)){
-        outlet_anything(x->x_msgout, gensym("sink_add"), 3, msg);
+        outlet_anything(x->x_msgout, gensym("add"), 3, msg);
     } else {
         bug("t_node::resolve_endpoint");
     }
@@ -126,7 +126,7 @@ static void aoo_send_doremoveall(t_aoo_send *x)
     for (int i = 0; i < numsinks; ++i){
         t_atom msg[3];
         if (x->x_node->resolve_endpoint(sinks[i].s_address, sinks[i].s_id, 3, msg)){
-            outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
+            outlet_anything(x->x_msgout, gensym("remove"), 3, msg);
         } else {
             bug("t_node::resolve_endpoint");
         }
@@ -143,7 +143,7 @@ static void aoo_send_doremovesink(t_aoo_send *x, const aoo::ip_address& addr, Ao
             // output message
             t_atom msg[3];
             if (x->x_node->resolve_endpoint(addr, id, 3, msg)){
-                outlet_anything(x->x_msgout, gensym("sink_remove"), 3, msg);
+                outlet_anything(x->x_msgout, gensym("remove"), 3, msg);
             } else {
                 bug("t_node::resolve_endpoint");
             }
@@ -380,108 +380,110 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
     case kAooEventXRun:
     {
         auto e = (const AooEventXRun *)event;
-
         t_atom msg;
         SETFLOAT(&msg, e->count);
         outlet_anything(x->x_msgout, gensym("xrun"), 1, &msg);
         break;
     }
     case kAooEventPing:
-    {
-        auto e = (const AooEventPing *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
-        double diff1 = aoo_ntpTimeDuration(e->tt1, e->tt2) * 1000.0;
-        double diff2 = aoo_ntpTimeDuration(e->tt2, e->tt3) * 1000.0;
-        double rtt = aoo_ntpTimeDuration(e->tt1, e->tt3) * 1000.0;
-
-        t_atom msg[7];
-        if (x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
-            SETFLOAT(msg + 3, diff1);
-            SETFLOAT(msg + 4, diff2);
-            SETFLOAT(msg + 5, rtt);
-            SETFLOAT(msg + 6, e->lostBlocks);
-            outlet_anything(x->x_msgout, gensym("ping"), 7, msg);
-        } else {
-            bug("t_node::resolve_endpoint");
-        }
-        break;
-    }
     case kAooEventInvite:
+    case kAooEventUninvite:
+    case kAooEventSinkAdd:
+    case kAooEventSinkRemove:
     {
-        auto e = (const AooEventInvite *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
-
-        t_atom msg[3];
-        if (!x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
-            bug("t_node::resolve_endpoint");
+        // common endpoint header
+        auto& ep = ((const AooEventEndpoint *)event)->endpoint;
+        aoo::ip_address addr((const sockaddr *)ep.address, ep.addrlen);
+        t_atom msg[12];
+        if (!x->x_node->resolve_endpoint(addr, ep.id, 3, msg)) {
+            bug("aoo_send_handle_event: resolve_endpoint");
             return;
         }
+        // event data
+        switch (event->type){
+        case kAooEventInvite:
+        {
+            auto e = (const AooEventInvite *)event;
 
-        x->x_invite_token = e->token;
+            x->x_invite_token = e->token;
 
-        if (e->metadata){
-            auto count = e->metadata->size + 4;
-            t_atom *vec = (t_atom *)alloca(count * sizeof(t_atom));
-            // copy endpoint
-            memcpy(vec, msg, 3 * sizeof(t_atom));
-            // type
-            SETSYMBOL(vec + 3, gensym(e->metadata->type));
-            // data
-            for (int i = 0; i < e->metadata->size; ++i){
-                SETFLOAT(vec + 4 + i, (uint8_t)e->metadata->data[i]);
+            if (e->metadata){
+                auto count = e->metadata->size + 4;
+                t_atom *vec = (t_atom *)alloca(count * sizeof(t_atom));
+                // copy endpoint
+                memcpy(vec, msg, 3 * sizeof(t_atom));
+                // type
+                SETSYMBOL(vec + 3, gensym(e->metadata->type));
+                // data
+                for (int i = 0; i < e->metadata->size; ++i){
+                    SETFLOAT(vec + 4 + i, (uint8_t)e->metadata->data[i]);
+                }
+                outlet_anything(x->x_msgout, gensym("invite"), count, vec);
+            } else {
+                outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
             }
-            outlet_anything(x->x_msgout, gensym("invite"), count, vec);
-        } else {
-            outlet_anything(x->x_msgout, gensym("invite"), 3, msg);
+            break;
         }
-        break;
-    }
-    case kAooEventUninvite:
-    {
-        auto e = (const AooEventUninvite *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
+        case kAooEventUninvite:
+        {
+            auto e = (const AooEventUninvite *)event;
 
-        t_atom msg[3];
-        if (x->x_node->resolve_endpoint(addr, e->endpoint.id, 3, msg)){
             x->x_invite_token = e->token;
 
             outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
-        } else {
-            bug("t_node::resolve_endpoint");
+
+            break;
         }
-        break;
-    }
-    case kAooEventSinkAdd:
-    {
-        auto e = (const AooEventSinkAdd *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
+        case kAooEventSinkAdd:
+        {
+            if (!aoo_send_findsink(x, addr, ep.id)){
+                aoo_send_doaddsink(x, addr, ep.id);
+            } else {
+                // the sink might have been added concurrently by the user (very unlikely)
+                verbose(0, "sink %s %d %d already added",
+                        addr.name(), addr.port(), ep.id);
+            }
+            break;
+        }
+        case kAooEventSinkRemove:
+        {
+            if (aoo_send_findsink(x, addr, ep.id)){
+                aoo_send_doremovesink(x, addr, ep.id);
+            } else {
+                // the sink might been removed concurrently by the user (very unlikely)
+                verbose(0, "sink %s %d %d already removed",
+                        addr.name(), addr.port(), ep.id);
+            }
+            break;
+        }
+        //--------------------- sink events -----------------------//
+        case kAooEventPing:
+        {
+            auto e = (const AooEventPing *)event;
 
-        if (!aoo_send_findsink(x, addr, e->endpoint.id)){
-            aoo_send_doaddsink(x, addr, e->endpoint.id);
-        } else {
-            // the sink might have been added concurrently by the user (very unlikely)
-            verbose(0, "sink %s %d %d already added",
-                    addr.name(), addr.port(), e->endpoint.id);
+            double diff1 = aoo_ntpTimeDuration(e->tt1, e->tt2) * 1000.0;
+            double diff2 = aoo_ntpTimeDuration(e->tt2, e->tt3) * 1000.0;
+            double rtt = aoo_ntpTimeDuration(e->tt1, e->tt3) * 1000.0;
+
+            SETSYMBOL(msg + 3, gensym("ping"));
+            SETFLOAT(msg + 4, diff1);
+            SETFLOAT(msg + 5, diff2);
+            SETFLOAT(msg + 6, rtt);
+            SETFLOAT(msg + 7, e->lostBlocks);
+
+            outlet_anything(x->x_msgout, gensym("event"), 8, msg);
+
+            break;
+        }
+        default:
+            bug("aoo_send_handle_event: bad case label!");
+            break;
         }
 
-        break;
-    }
-    case kAooEventSinkRemove:
-    {
-        auto e = (const AooEventSinkRemove *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
-
-        if (aoo_send_findsink(x, addr, e->endpoint.id)){
-            aoo_send_doremovesink(x, addr, e->endpoint.id);
-        } else {
-            // the sink might been removed concurrently by the user (very unlikely)
-            verbose(0, "sink %s %d %d already removed",
-                    addr.name(), addr.port(), e->endpoint.id);
-        }
-
-        break;
+        break; // !
     }
     default:
+        verbose(0, "%s: unknown event type (%d)", classname(x), event->type);
         break;
     }
 }
