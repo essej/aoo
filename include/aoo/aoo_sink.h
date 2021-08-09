@@ -6,11 +6,11 @@
 
 typedef struct AooSink AooSink;
 
-// create a new AoO sink instance
+// create a new AOO sink instance
 AOO_API AooSink * AOO_CALL AooSink_new(
         AooId id, AooFlag flags, AooError *err);
 
-// destroy the AoO sink instance
+// destroy the AOO sink instance
 AOO_API void AOO_CALL AooSink_free(AooSink *sink);
 
 // setup the sink - needs to be synchronized with other method calls!

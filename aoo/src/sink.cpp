@@ -315,7 +315,7 @@ AooError AOO_CALL aoo::Sink::handleMessage(
     AooInt32 onset;
     auto err = aoo_parsePattern(data, size, &type, &sinkid, &onset);
     if (err != kAooOk){
-        LOG_WARNING("not an AoO message!");
+        LOG_WARNING("not an AOO message!");
         return kAooErrorUnknown;
     }
 

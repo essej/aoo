@@ -161,7 +161,7 @@ enum AooErrorCodes
 
 #define kAooOk kAooErrorNone
 
-//--------------- AoO events -------------------//
+//--------------- AOO events -------------------//
 
 typedef AooInt32 AooEventType;
 
@@ -189,7 +189,7 @@ typedef void (AOO_CALL *AooEventHandler)(
         AooThreadLevel level
 );
 
-//--------------- AoO endpoint -----------------//
+//--------------- AOO endpoint -----------------//
 
 typedef AooUInt32 AooAddrSize;
 
@@ -215,7 +215,7 @@ typedef AooInt32 (AOO_CALL *AooSendFunc)(
         AooFlag             // flags
 );
 
-//------------ AoO message types ---------------//
+//------------ AOO message types ---------------//
 
 typedef AooInt32 AooMsgType;
 
@@ -231,7 +231,7 @@ enum AooMsgTypes
 #endif
 };
 
-//------------ AoO custom data --------------//
+//------------ AOO custom data --------------//
 
 typedef struct AooCustomData
 {
@@ -262,7 +262,7 @@ typedef struct AooCustomData
 // Make sure to use a unique type name!
 // HINT: you can use an ASCII encoded UUID.
 
-//--------------- AoO format -------------------//
+//--------------- AOO format -------------------//
 
 #define kAooCodecNameMaxLen 16
 

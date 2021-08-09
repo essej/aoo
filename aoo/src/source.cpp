@@ -1682,7 +1682,7 @@ void Source::send_data(const sendfn& fn){
             // from here on we don't hold any lock!
 
             // send a single frame to all sinks
-            // /AoO/<sink>/data <src> <stream_id> <seq> <sr> <channel_onset>
+            // /aoo/<sink>/data <src> <stream_id> <seq> <sr> <channel_onset>
             // <totalsize> <numpackets> <packetnum> <data>
             auto dosend = [&](int32_t frame, const AooByte* data, auto n){
                 d.frame = frame;

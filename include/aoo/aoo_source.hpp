@@ -13,10 +13,10 @@ public:
         }
     };
 
-    // smart pointer for AoO source instance
+    // smart pointer for AOO source instance
     using Ptr = std::unique_ptr<AooSource, Deleter>;
 
-    // create a new managed AoO source instance
+    // create a new managed AOO source instance
     static Ptr create(AooId id, AooFlag flags, AooError *err) {
         return Ptr(AooSource_new(id, flags, err));
     }

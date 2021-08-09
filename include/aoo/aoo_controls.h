@@ -4,7 +4,7 @@
 
 #define AOO_ARG(x) ((void *)&x), sizeof(x)
 
-// AoO controls that can be passed to *_ctl function.
+// AOO controls that can be passed to *_ctl function.
 // *_ctl function arguments:
 // AooCtl 'ctl': control code
 // intptr_t 'index': special index; can also be AooEndpoint *

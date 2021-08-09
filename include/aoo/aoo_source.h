@@ -6,11 +6,11 @@
 
 typedef struct AooSource AooSource;
 
-// create a new AoO source instance
+// create a new AOO source instance
 AOO_API AooSource * AooSource_new(
         AooId id, AooFlag flags, AooError *err);
 
-// destroy the AoO source instance
+// destroy the AOO source instance
 AOO_API void AooSource_free(AooSource *source);
 
 // setup the source - needs to be synchronized with other method calls!

@@ -16,10 +16,10 @@ public:
         }
     };
 
-    // smart pointer for AoO client instance
+    // smart pointer for AOO client instance
     using Ptr = std::unique_ptr<AooClient, Deleter>;
 
-    // create a new AoO client instance
+    // create a new managed AOO client instance
     static Ptr create(const void *address, AooAddrSize addrlen,
                       AooFlag flags, AooError *err) {
         return Ptr(AooClient_new(address, addrlen, flags, err));

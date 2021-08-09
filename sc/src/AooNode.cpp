@@ -410,7 +410,7 @@ void AooNode::handleClientMessage(const char *data, int32_t size,
                                   const aoo::ip_address& addr, aoo::time_tag time)
 {
     if (size > 4 && !memcmp("/aoo", data, 4)){
-        // AoO message
+        // AOO message
         client_->handleMessage((const AooByte *)data, size,
                                addr.address(), addr.length());
     } else if (!strncmp("/sc/msg", data, size)){

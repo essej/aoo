@@ -161,7 +161,7 @@ enum AooBinMsgDataFlags
 
 //------------------ library functions --------------------//
 
-// initialize AoO library (call before creating any objects!)
+// initialize AOO library (call before creating any objects!)
 AOO_API void AOO_CALL aoo_initialize(void);
 
 // initialize with log function and/or custom allocator;
@@ -169,14 +169,14 @@ AOO_API void AOO_CALL aoo_initialize(void);
 AOO_API void AOO_CALL aoo_initializeEx(
         AooLogFunc log, const AooAllocator *alloc);
 
-// terminate AoO library (call before program exit)
+// terminate AOO library (call before program exit)
 AOO_API void AOO_CALL aoo_terminate(void);
 
-// get the AoO version numbers
+// get the AOO version numbers
 AOO_API void AOO_CALL aoo_getVersion(
         AooInt32 *major, AooInt32 *minor, AooInt32 *patch, AooInt32 *test);
 
-// get the AoO version string: <major>[.<minor>][.<patch>][-test<test>]
+// get the AOO version string: <major>[.<minor>][.<patch>][-test<test>]
 AOO_API const AooChar * AOO_CALL aoo_getVersionString(void);
 
 // get a textual description for an error code

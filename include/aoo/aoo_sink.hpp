@@ -13,10 +13,10 @@ public:
         }
     };
 
-    // smart pointer for AoO sink instance
+    // smart pointer for AOO sink instance
     using Ptr = std::unique_ptr<AooSink, Deleter>;
 
-    // create a new managed AoO sink instance
+    // create a new managed AOO sink instance
     static Ptr create(AooId id, AooFlag flags, AooError *err) {
         return Ptr(AooSink_new(id, flags, err));
     }

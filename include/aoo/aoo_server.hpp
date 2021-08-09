@@ -13,10 +13,10 @@ public:
         }
     };
 
-    // smart pointer for AoO server instance
+    // smart pointer for AOO server instance
     using Ptr = std::unique_ptr<AooServer, Deleter>;
 
-    // create a new AoO server instance
+    // create a new managed AOO server instance
     static Ptr create(int32_t port, AooFlag flags, AooError *err) {
         return Ptr(AooServer_new(port, flags, err));
     }
