@@ -58,7 +58,7 @@ AOO_API AooError AOO_CALL AooSink_pollEvents(AooSink *sink);
 // it will force a new stream. For example, you might want to request
 // different format parameters or even ask for different musical content.
 AOO_API AooError AOO_CALL AooSink_inviteSource(
-        AooSink *sink, const AooEndpoint *source, const AooCustomData *metadata);
+        AooSink *sink, const AooEndpoint *source, const AooDataView *metadata);
 
 // uninvite source
 // ---

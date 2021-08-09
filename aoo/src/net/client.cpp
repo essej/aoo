@@ -140,7 +140,7 @@ AooError parse_pattern(const AooByte *msg, int32_t n, AooMsgType& type, int32_t&
 
         return kAooOk;
     } else {
-        return kAooErrorUnknown; // not an AoO message
+        return kAooErrorUnknown; // not an AOO message
     }
 }
 

@@ -111,7 +111,7 @@ struct source_request {
     union {
         struct {
             AooId token;
-            AooCustomData *metadata;
+            AooDataView *metadata;
         } invite;
     };
 };
@@ -162,7 +162,7 @@ public:
     void reset(const Sink& s);
 
     AooError handle_start(const Sink& s, int32_t stream, uint32_t flags, int32_t format_id,
-                          const AooFormat& f, const AooByte *settings, int32_t size, const AooCustomData& md);
+                          const AooFormat& f, const AooByte *settings, int32_t size, const AooDataView& md);
 
     AooError handle_stop(const Sink& s, int32_t stream);
 
@@ -174,7 +174,7 @@ public:
 
     bool process(const Sink& s, AooSample **buffer, int32_t nsamples);
 
-    void invite(const Sink& s, AooId token, AooCustomData *metadata);
+    void invite(const Sink& s, AooId token, AooDataView *metadata);
 
     void uninvite(const Sink& s);
 
@@ -226,9 +226,9 @@ private:
     std::atomic<bool> binary_{false};
 
     std::atomic<source_state> state_{source_state::idle};
-    AooCustomData *metadata_{nullptr};
+    AooDataView *metadata_{nullptr};
 
-    std::unique_ptr<AooCustomData, flat_metadata_deleter> invite_metadata_{nullptr};
+    std::unique_ptr<AooDataView, flat_metadata_deleter> invite_metadata_{nullptr};
     std::atomic<int32_t> invite_token_{kAooIdInvalid};
 
     // timing
@@ -310,7 +310,7 @@ public:
     AooError AOO_CALL pollEvents() override;
 
     AooError AOO_CALL inviteSource(
-            const AooEndpoint& source, const AooCustomData *metadata) override;
+            const AooEndpoint& source, const AooDataView *metadata) override;
 
     AooError AOO_CALL uninviteSource(const AooEndpoint& source) override;
 

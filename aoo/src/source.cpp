@@ -780,20 +780,20 @@ AooError AOO_CALL aoo::Source::pollEvents(){
 }
 
 AOO_API AooError AOO_CALL AooSource_startStream(
-        AooSource *source, const AooCustomData *metadata)
+        AooSource *source, const AooDataView *metadata)
 {
     return source->startStream(metadata);
 }
 
 #define STREAM_METADATA_WARN 1
 
-AooError AOO_CALL aoo::Source::startStream(const AooCustomData *md) {
+AooError AOO_CALL aoo::Source::startStream(const AooDataView *md) {
     // check metadata
     if (md) {
         // check type name length
-        if (strlen(md->type) > kAooTypeNameMaxLen){
+        if (strlen(md->type) > kAooDataTypeMaxLen){
             LOG_ERROR("stream metadata type name must not be larger than "
-                      << kAooTypeNameMaxLen << " characters!");
+                      << kAooDataTypeMaxLen << " characters!");
         #if STREAM_METADATA_WARN
             LOG_WARNING("ignoring stream metadata");
             md = nullptr;
@@ -837,7 +837,7 @@ AooError AOO_CALL aoo::Source::startStream(const AooCustomData *md) {
                 flat_metadata_copy(*md, *metadata_);
             } else {
                 // clear previous metadata
-                metadata_->type = kAooCustomDataInvalid;
+                metadata_->type = kAooDataTypeInvalid;
                 metadata_->data = nullptr;
                 metadata_->size = 0;
             }
@@ -1203,12 +1203,12 @@ void Source::allocate_metadata(int32_t size){
 
     LOG_DEBUG("allocate metadata (" << size << " bytes)");
 
-    AooCustomData * metadata = nullptr;
+    AooDataView * metadata = nullptr;
     if (size > 0){
         auto maxsize = flat_metadata_maxsize(size);
-        metadata = (AooCustomData *)aoo::allocate(maxsize);
+        metadata = (AooDataView *)aoo::allocate(maxsize);
         if (metadata){
-            metadata->type = kAooCustomDataInvalid;
+            metadata->type = kAooDataTypeInvalid;
             metadata->data = nullptr;
             metadata->size = 0;
         } else {
@@ -1217,7 +1217,7 @@ void Source::allocate_metadata(int32_t size){
         }
     }
 
-    AooCustomData *olddata;
+    AooDataView *olddata;
     AooInt32 oldsize;
 
     // swap metadata
@@ -1298,7 +1298,7 @@ void Source::update_historybuffer(){
 // [<metadata_type> <metadata_content>]
 void send_start_msg(const endpoint& ep, int32_t id, int32_t stream, int32_t lastformat,
                     const AooFormat& f, const AooByte *extension, AooInt32 size,
-                    const AooCustomData* metadata, const sendfn& fn) {
+                    const AooDataView* metadata, const sendfn& fn) {
     LOG_DEBUG("send " kAooMsgStart " to " << ep << " (stream = " << stream << ")");
 
     char buf[AOO_MAX_PACKET_SIZE];
@@ -1380,7 +1380,7 @@ void Source::send_start(const sendfn& fn){
     }
 
     // cache stream metadata
-    AooCustomData *md = nullptr;
+    AooDataView *md = nullptr;
     {
         scoped_spinlock lock(metadata_lock_);
         // only send metadata if "accepted" in make_new_stream().
@@ -1388,7 +1388,7 @@ void Source::send_start(const sendfn& fn){
             assert(metadata_ != nullptr);
             assert(metadata_->size > 0);
             auto mdsize = flat_metadata_size(*metadata_);
-            md = (AooCustomData *)alloca(mdsize);
+            md = (AooDataView *)alloca(mdsize);
             flat_metadata_copy(*metadata_, *md);
         }
     }
@@ -2025,7 +2025,7 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
 
         if (type){
             // with metadata
-            AooCustomData src;
+            AooDataView src;
             src.type = type;
             src.data = (AooByte *)ptr;
             src.size = size;
@@ -2033,7 +2033,7 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
             if (eventmode_ == kAooEventModePoll){
                 // make copy on heap
                 auto mdsize = flat_metadata_size(src);
-                auto md = (AooCustomData *)memory_.allocate(mdsize);
+                auto md = (AooDataView *)memory_.allocate(mdsize);
                 flat_metadata_copy(src, *md);
                 e.invite.metadata = md;
             } else {

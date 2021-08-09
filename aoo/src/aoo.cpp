@@ -238,7 +238,7 @@ AooError AOO_CALL aoo_parsePattern(
         }
         return kAooOk;
     } else {
-        return kAooErrorUnknown; // not an AoO message
+        return kAooErrorUnknown; // not an AOO message
     }
 }
 

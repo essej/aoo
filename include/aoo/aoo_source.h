@@ -50,11 +50,11 @@ AOO_API AooError AOO_CALL AooSource_pollEvents(AooSource *source);
 // Start a new stream
 // ---
 // Can be called from any thread. Realtime safe!
-// You can pass an optional AooCustomData structure which will be sent as
+// You can pass an optional AooDataView structure which will be sent as
 // additional stream metadata. For example, it could contain information
 // about the channel layout, the musical content, etc.
 AOO_API AooError AOO_CALL AooSource_startStream(
-        AooSource *source, const AooCustomData *metadata);
+        AooSource *source, const AooDataView *metadata);
 
 // Stop the stream
 AOO_API AooError AOO_CALL AooSource_stopStream(AooSource *source);

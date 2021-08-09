@@ -105,7 +105,7 @@ typedef AOO_STRUCT AooEventStreamStart
 {
     AooEventType type;
     AooEndpoint endpoint;
-    const AooCustomData * metadata;
+    const AooDataView * metadata;
 } AooEventStreamStart;
 
 #define AooEventStreamStop AooEventEndpoint
@@ -118,7 +118,7 @@ typedef AOO_STRUCT AooEventInvite
     AooEndpoint endpoint;
     AooId token;
     AooInt32 reserved;
-    const AooCustomData * metadata;
+    const AooDataView * metadata;
 } AooEventInvite;
 
 typedef AOO_STRUCT AooEventUninvite

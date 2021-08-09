@@ -63,7 +63,7 @@ public:
     // it will force a new stream. For example, you might want to request
     // different format parameters or even ask for different musical content.
     virtual AooError AOO_CALL inviteSource(
-            const AooEndpoint& source, const AooCustomData *metadata) = 0;
+            const AooEndpoint& source, const AooDataView *metadata) = 0;
 
     // uninvite source
     // ---

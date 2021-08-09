@@ -160,7 +160,7 @@ class Source final : public AooSource {
 
     AooError AOO_CALL pollEvents() override;
 
-    AooError AOO_CALL startStream(const AooCustomData *metadata) override;
+    AooError AOO_CALL startStream(const AooDataView *metadata) override;
 
     AooError AOO_CALL stopStream() override;
 
@@ -223,7 +223,7 @@ class Source final : public AooSource {
     };
     std::atomic<stream_state> state_{stream_state::idle};
     // metadata
-    AooCustomData *metadata_{nullptr};
+    AooDataView *metadata_{nullptr};
     std::atomic<int32_t> metadata_size_{ AOO_STREAM_METADATA_SIZE };
     bool metadata_accepted_{false};
     sync::spinlock metadata_lock_;

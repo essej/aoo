@@ -534,7 +534,7 @@ AooError AOO_CALL aoo::Sink::pollEvents(){
 }
 
 AOO_API AooError AOO_CALL AooSink_inviteSource(
-        AooSink *sink, const AooEndpoint *source, const AooCustomData *metadata)
+        AooSink *sink, const AooEndpoint *source, const AooDataView *metadata)
 {
     if (sink) {
         return sink->inviteSource(*source, metadata);
@@ -544,13 +544,13 @@ AOO_API AooError AOO_CALL AooSink_inviteSource(
 }
 
 AooError AOO_CALL aoo::Sink::inviteSource(
-        const AooEndpoint& ep, const AooCustomData *md) {
+        const AooEndpoint& ep, const AooDataView *md) {
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
 
-    AooCustomData *metadata = nullptr;
+    AooDataView *metadata = nullptr;
     if (md) {
         auto mdsize = flat_metadata_size(*md);
-        metadata = (AooCustomData *)aoo::allocate(mdsize);
+        metadata = (AooDataView *)aoo::allocate(mdsize);
         flat_metadata_copy(*md, *metadata);
     }
 
@@ -742,7 +742,7 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
     (it++)->AsBlob(extension, size);
 
     // get stream metadata
-    AooCustomData md;
+    AooDataView md;
     if (msg.ArgumentCount() >= 12) {
         md.type = (it++)->AsString();
         const void *md_data;
@@ -751,7 +751,7 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
         md.data = (const AooByte *)md_data;
         md.size = md_size;
     } else {
-        md.type = kAooCustomDataInvalid;
+        md.type = kAooDataTypeInvalid;
         md.data = nullptr;
         md.size = 0;
     }
@@ -1064,7 +1064,7 @@ void source_desc::update(const Sink& s){
     }
 }
 
-void source_desc::invite(const Sink& s, AooId token, AooCustomData *metadata){
+void source_desc::invite(const Sink& s, AooId token, AooDataView *metadata){
     // always invite, even if we're already running!
     invite_token_.store(token);
     // NOTE: the metadata is only read/set in this thread (= send thread)
@@ -1125,7 +1125,7 @@ float source_desc::get_buffer_fill_ratio(){
 AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags,
                                    int32_t format_id, const AooFormat& f,
                                    const AooByte *extension, int32_t size,
-                                   const AooCustomData& md) {
+                                   const AooDataView& md) {
     LOG_DEBUG("handle start (" << stream << ")");
     auto state = state_.load(std::memory_order_acquire);
     if (state == source_state::invite) {
@@ -1186,14 +1186,14 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
     }
 
     // copy metadata
-    AooCustomData *metadata = nullptr;
+    AooDataView *metadata = nullptr;
     if (md.data){
         assert(md.size > 0);
         LOG_DEBUG("stream metadata: "
                   << md.type << ", " << md.size << " bytes");
         // allocate flat metadata
         auto mdsize = flat_metadata_size(md);
-        metadata = (AooCustomData *)memory_.allocate(mdsize);
+        metadata = (AooDataView *)memory_.allocate(mdsize);
         flat_metadata_copy(md, *metadata);
     }
 
@@ -2217,7 +2217,7 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
 
 // called without lock!
 void send_invitation(const Sink& s, const endpoint& ep, AooId token,
-                     const AooCustomData *metadata, const sendfn& fn){
+                     const AooDataView *metadata, const sendfn& fn){
     char buffer[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg(buffer, sizeof(buffer));
 

@@ -57,11 +57,11 @@ public:
     // Start a new stream
     // ---
     // Can be called from any thread. Realtime safe!
-    // You can pass an optional AooCustomData structure which will be sent as
+    // You can pass an optional AooDataView structure which will be sent as
     // additional stream metadata. For example, it could contain information
     // about the channel layout, the musical content, etc.
     virtual AooError AOO_CALL startStream(
-            const AooCustomData *metadata) = 0;
+            const AooDataView *metadata) = 0;
 
     // Stop the stream
     virtual AooError AOO_CALL stopStream() = 0;

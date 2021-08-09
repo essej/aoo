@@ -87,7 +87,7 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
         AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
 
         if (x->x_metadata_type){
-            AooCustomData md;
+            AooDataView md;
             md.type = x->x_metadata_type->s_name;
             md.data = x->x_metadata.data();
             md.size = x->x_metadata.size();
