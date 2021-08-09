@@ -87,5 +87,5 @@ else()
 endif()
 
 install(TARGETS ${PROJECT} DESTINATION "${PD_INSTALLDIR}/${FILENAME}")
-install(FILES "aoo_receive~-help.pd" "aoo_send~-help.pd" "aoo_net-help.pd" "../readme.rst" "../LICENSE"
+install(FILES "aoo_receive~-help.pd" "aoo_send~-help.pd" "aoo_net-help.pd" "../README.md" "../LICENSE"
         DESTINATION "${PD_INSTALLDIR}/${FILENAME}")
