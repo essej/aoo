@@ -71,15 +71,15 @@ enum AooControls
     // Used for dynamic resampling, see kAooCtlSetDynamicResampling.
     kAooCtlSetDllBandwidth,
     kAooCtlGetDllBandwidth,
-    // Enable/disable timer check (arg: AooBool)
+    // Enable/disable xrun detection (arg: AooBool)
     // ---
     // Enable to catch timing problems, e.g. when the host accidentally
     // blocks the audio callback, which would confuse the time DLL filter.
     // Also, timing gaps are handled by sending empty blocks at the source
     // resp. dropping blocks at the sink.
     // NOTE: only takes effect on source/sink setup!
-    kAooCtlSetTimerCheck,
-    kAooCtlGetTimerCheck,
+    kAooCtlSetXRunDetection,
+    kAooCtlGetXRunDetection,
     // Set/get sink channel onset (index: sink endpoint, arg: int32_t)
     // ---
     // The channel onset of the sink where a given source

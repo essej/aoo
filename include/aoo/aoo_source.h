@@ -158,14 +158,14 @@ static inline AooError AooSource_getBufferSize(AooSource *source, AooSeconds *s)
     return AooSource_control(source, kAooCtlGetBufferSize, 0, AOO_ARG(*s));
 }
 
-static inline AooError AooSource_setTimerCheck(AooSource *source, AooBool b)
+static inline AooError AooSource_setXRunDetection(AooSource *source, AooBool b)
 {
-    return AooSource_control(source, kAooCtlSetTimerCheck, 0, AOO_ARG(b));
+    return AooSource_control(source, kAooCtlSetXRunDetection, 0, AOO_ARG(b));
 }
 
-static inline AooError AooSource_getTimerCheck(AooSource *source, AooBool *b)
+static inline AooError AooSource_getXRunDetectionk(AooSource *source, AooBool *b)
 {
-    return AooSource_control(source, kAooCtlGetTimerCheck, 0, AOO_ARG(*b));
+    return AooSource_control(source, kAooCtlGetXRunDetection, 0, AOO_ARG(*b));
 }
 
 static inline AooError AooSource_setDynamicResampling(AooSource *source, AooBool b)

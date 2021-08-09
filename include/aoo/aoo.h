@@ -68,14 +68,15 @@
  #define AOO_DLL_BANDWIDTH 0.012
 #endif
 
-// enable/disable timer check to
-// catch timing issues (e.g. blocking audio thread)
-#ifndef AOO_TIMER_CHECK
- #define AOO_TIMER_CHECK 1
+// enable/disable xrun detection
+// (e.g. blocking audio thread)
+#ifndef AOO_XRUN_DETECTIOIN
+ #define AOO_XRUN_DETECTION 1
 #endif
 
 // the tolerance for deviations from the nominal
-// block period in (fractional) blocks
+// block period in (fractional) blocks.
+// used by the xrun detection algorithm.
 #ifndef AOO_TIMER_TOLERANCE
  #define AOO_TIMER_TOLERANCE 0.25
 #endif

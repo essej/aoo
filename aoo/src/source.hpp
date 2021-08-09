@@ -270,7 +270,7 @@ class Source final : public AooSource {
     std::atomic<double> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
     std::atomic<AooSeconds> ping_interval_{ AOO_PING_INTERVAL };
     std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
-    std::atomic<bool> timer_check_{ AOO_TIMER_CHECK };
+    std::atomic<bool> timer_check_{ AOO_XRUN_DETECTION };
     std::atomic<bool> binary_{ AOO_BINARY_DATA_MSG };
 
     // helper methods

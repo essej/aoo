@@ -156,12 +156,12 @@ public:
         return control(kAooCtlGetBufferSize, 0, AOO_ARG(s));
     }
 
-    AooError setTimerCheck(AooBool b) {
-        return control(kAooCtlSetTimerCheck, 0, AOO_ARG(b));
+    AooError setXRunDetection(AooBool b) {
+        return control(kAooCtlSetXRunDetection, 0, AOO_ARG(b));
     }
 
-    AooError getTimerCheck(AooBool b) {
-        return control(kAooCtlGetTimerCheck, 0, AOO_ARG(b));
+    AooError getXRunDetection(AooBool b) {
+        return control(kAooCtlGetXRunDetection, 0, AOO_ARG(b));
     }
 
     AooError setDynamicResampling(AooBool b) {

@@ -9,13 +9,13 @@ message(STATUS "use dynamic resampling: ${DYNAMIC_RESAMPLING}")
 set(DLL_BANDWIDTH 0.0001 CACHE STRING "default DLL filter bandwidth")
 message(STATUS "default DLL filter bandwidth: ${DLL_BANDWIDTH}")
 
-option(TIMER_CHECK "use timer check" ON)
-message(STATUS "timer check: ${TIMER_CHECK}")
+option(XRUN_DETECTION "enable/disable xrun detection" ON)
+message(STATUS "xrun detection: ${XRUN_DETECTION}")
 
 set(TIMER_TOLERANCE 0.25 CACHE STRING "default timer check tolerance")
 message(STATUS "default timer check tolerance: ${TIMER_TOLERANCE}")
 
-option(BINARY_DATA_MSG "use timer check" ON)
+option(BINARY_DATA_MSG "use binary data messages" ON)
 message(STATUS "send binary data message: ${BINARY_DATA_MSG}")
 
 # compile time debugging options
@@ -37,7 +37,7 @@ set(OPTIONS
     "-DAOO_CUSTOM_ALLOCATOR=$<BOOL:${CUSTOM_ALLOCATOR}>"
     "-DAOO_DYNAMIC_RESAMPLING=$<BOOL:${DYNAMIC_RESAMPLING}>"
     "-DAOO_DLL_BANDWIDTH=${DLL_BANDWIDTH}"
-    "-DAOO_TIMER_CHECK=$<BOOL:${TIMER_CHECK}>"
+    "-DAOO_XRUN_DETECTION=$<BOOL:${XRUN_DETECTION}>"
     "-DAOO_TIMER_TOLERANCE=${TIMER_TOLERANCE}"
     "-DAOO_BINARY_DATA_MSG=$<BOOL:${BINARY_DATA_MSG}>"
     "-DAOO_DEBUG_MEMORY=$<BOOL:${DEBUG_MEMORY}>"

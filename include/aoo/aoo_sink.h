@@ -111,14 +111,14 @@ static inline AooError AooSink_getBufferSize(AooSink *sink, AooSeconds *s)
     return AooSink_control(sink, kAooCtlGetBufferSize, 0, AOO_ARG(*s));
 }
 
-static inline AooError AooSink_setTimerCheck(AooSink *sink, AooBool b)
+static inline AooError AooSink_setXRunDetection(AooSink *sink, AooBool b)
 {
-    return AooSink_control(sink, kAooCtlSetTimerCheck, 0, AOO_ARG(b));
+    return AooSink_control(sink, kAooCtlSetXRunDetection, 0, AOO_ARG(b));
 }
 
-static inline AooError AooSink_getTimerCheck(AooSink *sink, AooBool *b)
+static inline AooError AooSink_getXRunDetection(AooSink *sink, AooBool *b)
 {
-    return AooSink_control(sink, kAooCtlGetTimerCheck, 0, AOO_ARG(*b));
+    return AooSink_control(sink, kAooCtlGetXRunDetection, 0, AOO_ARG(*b));
 }
 
 static inline AooError AooSink_setDynamicResampling(AooSink *sink, AooBool b)

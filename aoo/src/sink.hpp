@@ -391,7 +391,7 @@ private:
     std::atomic<double> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
     std::atomic<bool> resend_{AOO_RESEND_DATA};
     std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
-    std::atomic<bool> timer_check_{ AOO_TIMER_CHECK };
+    std::atomic<bool> timer_check_{ AOO_XRUN_DETECTION };
     // events
     mutable aoo::unbounded_mpsc_queue<endpoint_event> eventqueue_;
     AooEventHandler eventhandler_ = nullptr;

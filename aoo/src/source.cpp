@@ -302,11 +302,11 @@ AooError AOO_CALL aoo::Source::control(
         as<int32_t>(ptr) = packetsize_.load();
         break;
     // set/get timer check
-    case kAooCtlSetTimerCheck:
+    case kAooCtlSetXRunDetection:
         CHECKARG(AooBool);
         timer_check_.store(as<AooBool>(ptr));
         break;
-    case kAooCtlGetTimerCheck:
+    case kAooCtlGetXRunDetection:
         CHECKARG(AooBool);
         as<AooBool>(ptr) = timer_check_.load();
         break;
