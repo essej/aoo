@@ -215,7 +215,7 @@ void AooReceive::handleEvent(const AooEvent *event){
         aoo::ip_address addr((const sockaddr *)e->endpoint.address,
                              e->endpoint.addrlen);
 
-        double diff = aoo_ntpTimeDuration(e->tt1, e->tt2);
+        double diff = aoo_ntpTimeDuration(e->t1, e->t2);
 
         beginEvent(msg, "/ping", addr, e->endpoint.id);
         msg << diff;

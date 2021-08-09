@@ -24,12 +24,6 @@ sinks;
 (in ms), f 62;
 #X text 64 609 <delta2> is the approx. delay between sink and source
 (in ms), f 62;
-#X text 64 629 <rtt> is the approx. roundtrip time (in ms) \, as measured
-on the source, f 71;
-#X text 65 651 NOTE: The roundtrip time is not necessarily the same
-as the sum of the deltas \, especially if the two clocks are not perfectly
-in sync. If one clock runs significantly early or late \, the deltas
-can even be negative!, f 73;
 #X text 66 139 A sink invites you to send audio messages.;
 #X text 62 527 A periodic message exchanged between source and sink
 \, so the source knows that the sink is receiving its messages.;
@@ -116,17 +110,27 @@ an invitation., f 68;
 #X text 138 53 post pings;
 #X text 35 440 sink events:;
 #X msg 37 468 event <host> <port> <ID> ...;
-#X msg 65 500 ... ping <delta1> <delta2> <rtt>;
 #X msg 35 329 add <host> <port> <ID>;
 #X msg 35 381 remove <host> <port> <ID>;
 #X text 66 267 A sink asks you to stop sending audio messages.;
-#X text 36 710 ---;
+#X text 36 756 ---;
 #X text 65 198 If 'auto_invite' is off \, you have to manually accept
 it with the [invite( method - or ignore it., f 66;
 #X text 64 288 If 'auto_invite' is off \, you have to manually accept
 it with the [uninvite( method - or ignore it., f 66;
-#X connect 0 0 15 0;
-#X connect 15 0 1 0;
+#X msg 65 500 ... ping <delta1> <delta2> <rtt> <packetloss>;
+#X text 65 650 NOTE: The roundtrip time is not necessarily the same
+as the sum of the deltas \, especially if the clocks are not perfectly
+in sync. If one clock runs significantly early or late \, the deltas
+can even be negative!, f 73;
+#X text 65 701 <packetloss> the current packet loss in percent (averaged
+between pings). If you encounter continuous high packet loss \, you
+might want to adjust the codec settings (e.g. reduce the bandwidth).
+, f 74;
+#X text 64 629 <rtt> is the approx. roundtrip time (in ms) \, as measured
+on the source., f 71;
+#X connect 0 0 13 0;
+#X connect 13 0 1 0;
 #X restore 29 550 pd events;
 #X text 50 579 ping;
 #X text 101 124 start streaming;
@@ -484,7 +488,7 @@ you can override this with the <active> argument., f 51;
 #X msg 91 530 invite localhost 9999 1;
 #X text 234 176 with initial sink channel onset (default: 0);
 #X msg 88 462 auto_invite \$1;
-#X obj 88 441 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 1
+#X obj 88 441 tgl 15 0 empty empty empty 17 7 0 10 -262144 -1 -1 0
 1;
 #X text 269 529 manually accept invitation \, see [invite( event.;
 #X text 285 565 manually accept uninvitation \, see [uninvite( event.

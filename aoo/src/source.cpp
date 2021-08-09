@@ -2097,7 +2097,7 @@ void Source::handle_uninvite(const osc::ReceivedMessage& msg,
     LOG_DEBUG("resend " << kAooMsgStop << " message");
 }
 
-// /aoo/src/<id>/ping <id> <tt1> <tt2> <lostblocks>
+// /aoo/src/<id>/ping <id> <tt1> <tt2> <packetloss>
 
 void Source::handle_ping(const osc::ReceivedMessage& msg,
                          const ip_address& addr)
@@ -2106,7 +2106,7 @@ void Source::handle_ping(const osc::ReceivedMessage& msg,
     AooId id = (it++)->AsInt32();
     time_tag tt1 = (it++)->AsTimeTag();
     time_tag tt2 = (it++)->AsTimeTag();
-    int32_t lost_blocks = (it++)->AsInt32();
+    float packet_loss = (it++)->AsFloat();
 
     LOG_DEBUG("handle ping");
 
@@ -2117,14 +2117,14 @@ void Source::handle_ping(const osc::ReceivedMessage& msg,
         if (sink->is_active()){
             // push "ping" event
             endpoint_event e(kAooEventPingReply, addr, id);
-            e.ping_reply.tt1 = tt1;
-            e.ping_reply.tt2 = tt2;
+            e.ping_reply.t1 = tt1;
+            e.ping_reply.t2 = tt2;
         #if 0
             e.ping_reply.tt3 = timer_.get_absolute(); // use last stream time
         #else
-            e.ping_reply.tt3 = aoo::time_tag::now(); // use real system time
+            e.ping_reply.t3 = aoo::time_tag::now(); // use real system time
         #endif
-            e.ping_reply.lostBlockCount = lost_blocks;
+            e.ping_reply.packetLoss = packet_loss;
 
             send_event(e, kAooThreadLevelNetwork);
         } else {

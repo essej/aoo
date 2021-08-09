@@ -72,18 +72,17 @@ typedef AOO_STRUCT AooEventXRun
 typedef AOO_STRUCT AooEventPing {
     AooEventType type;
     AooEndpoint endpoint;
-    AooNtpTime tt1;
-    AooNtpTime tt2;
+    AooNtpTime t1;
+    AooNtpTime t2;
 } AooEventPing;
 
 typedef AOO_STRUCT AooEventPingReply {
     AooEventType type;
     AooEndpoint endpoint;
-    AooNtpTime tt1;
-    AooNtpTime tt2;
-    AooNtpTime tt3;
-    // lost blocks since last ping
-    AooInt32 lostBlockCount;
+    AooNtpTime t1;
+    AooNtpTime t2;
+    AooNtpTime t3;
+    float packetLoss;
 } AooEventPingReply;
 
 // source/sink events

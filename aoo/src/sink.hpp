@@ -231,14 +231,17 @@ private:
     std::unique_ptr<AooCustomData, flat_metadata_deleter> invite_metadata_{nullptr};
     std::atomic<int32_t> invite_token_{kAooIdInvalid};
 
-    std::atomic<int32_t> lost_since_ping_{0};
+    // timing
     std::atomic<float> invite_start_time_{0};
     std::atomic<float> last_invite_time_{0};
     std::atomic<float> last_packet_time_{0};
+    // statistics
+    std::atomic<int32_t> lost_blocks_{0};
+    time_tag last_ping_reply_time_;
     // audio decoder
     std::unique_ptr<AooFormat, format_deleter> format_;
     std::unique_ptr<AooCodec, decoder_deleter> decoder_;
-    // state
+    // processing state
     int32_t channel_ = 0; // recent channel onset
     int32_t skipblocks_ = 0;
     float xrun_ = 0;

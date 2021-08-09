@@ -421,7 +421,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
         case kAooEventPing:
         {
             auto e = (const AooEventPing *)event;
-            double diff = aoo_ntpTimeDuration(e->tt1, e->tt2) * 1000.0;
+            double diff = aoo_ntpTimeDuration(e->t1, e->t2) * 1000.0;
             SETSYMBOL(msg + 3, gensym("ping"));
             SETFLOAT(msg + 4, diff);
             outlet_anything(x->x_msgout, gensym("event"), 5, msg);

@@ -476,15 +476,15 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
         {
             auto e = (const AooEventPingReply *)event;
 
-            double diff1 = aoo_ntpTimeDuration(e->tt1, e->tt2) * 1000.0;
-            double diff2 = aoo_ntpTimeDuration(e->tt2, e->tt3) * 1000.0;
-            double rtt = aoo_ntpTimeDuration(e->tt1, e->tt3) * 1000.0;
+            double diff1 = aoo_ntpTimeDuration(e->t1, e->t2) * 1000.0;
+            double diff2 = aoo_ntpTimeDuration(e->t2, e->t3) * 1000.0;
+            double rtt = aoo_ntpTimeDuration(e->t1, e->t3) * 1000.0;
 
             SETSYMBOL(msg + 3, gensym("ping"));
             SETFLOAT(msg + 4, diff1);
             SETFLOAT(msg + 5, diff2);
             SETFLOAT(msg + 6, rtt);
-            SETFLOAT(msg + 7, e->lostBlockCount);
+            SETFLOAT(msg + 7, e->packetLoss);
 
             outlet_anything(x->x_msgout, gensym("event"), 8, msg);
 

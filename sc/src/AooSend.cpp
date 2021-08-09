@@ -100,12 +100,12 @@ void AooSend::handleEvent(const AooEvent *event){
     {
         auto e = (const AooEventPingReply *)event;
         aoo::ip_address addr((const sockaddr *)e->endpoint.address, e->endpoint.addrlen);
-        double diff1 = aoo_ntpTimeDuration(e->tt1, e->tt2);
-        double diff2 = aoo_ntpTimeDuration(e->tt2, e->tt3);
-        double rtt = aoo_ntpTimeDuration(e->tt1, e->tt3);
+        double diff1 = aoo_ntpTimeDuration(e->t1, e->t2);
+        double diff2 = aoo_ntpTimeDuration(e->t2, e->t3);
+        double rtt = aoo_ntpTimeDuration(e->t1, e->t3);
 
         beginEvent(msg, "/ping", addr, e->endpoint.id);
-        msg << diff1 << diff2 << rtt << e->lostBlockCount;
+        msg << diff1 << diff2 << rtt << e->packetLoss;
         sendMsgRT(msg);
         break;
     }

@@ -1053,7 +1053,7 @@ void source_desc::update(const Sink& s){
         jitterbuffer_.resize(jitterbufsize, nsamples * sizeof(double));
         LOG_DEBUG("jitter buffer: " << jitterbufsize << " blocks");
 
-        lost_since_ping_.store(0);
+        lost_blocks_.store(0);
         channel_ = 0;
         skipblocks_ = 0;
         underrun_ = false;
@@ -1411,8 +1411,8 @@ AooError source_desc::handle_ping(const Sink& s, time_tag tt){
 
     // push "ping" event
     source_event e(kAooEventPing, ep);
-    e.ping.tt1 = tt;
-    e.ping.tt2 = tt2;
+    e.ping.t1 = tt;
+    e.ping.t2 = tt2;
     send_event(s, e, kAooThreadLevelNetwork);
 
     return kAooOk;
@@ -1700,7 +1700,7 @@ int32_t source_desc::poll_events(Sink& s, AooEventHandler fn, void *user){
 
 void source_desc::add_lost(stream_stats& stats, int32_t n) {
     stats.lost += n;
-    lost_since_ping_.fetch_add(n, std::memory_order_relaxed);
+    lost_blocks_.fetch_add(n, std::memory_order_relaxed);
 }
 
 #define SILENT_REFILL 0
@@ -1788,7 +1788,7 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
             LOG_VERBOSE("source_desc: transmission gap, but audio buffer is not empty");
         }
         // report gap to source
-        lost_since_ping_.fetch_add(diff - 1);
+        lost_blocks_.fetch_add(diff - 1);
         // send event
         source_event e(kAooEventBlockLost, ep);
         e.block_lost.count = diff - 1;
@@ -2038,13 +2038,36 @@ resend_done:
     }
 }
 
-// /aoo/<id>/ping <sink>
+// /aoo/<id>/ping <id> <tt1> <tt2> <packetloss>
 // called without lock!
 void source_desc::send_ping_reply(const Sink &s, AooNtpTime tt1,
                                   AooNtpTime tt2, const sendfn &fn) {
     LOG_DEBUG("send " kAooMsgPing " to " << ep);
 
-    auto lost_blocks = lost_since_ping_.exchange(0);
+    // cache samplerate and blocksize
+    shared_lock lock(mutex_);
+    if (!format_){
+        LOG_DEBUG("send_ping_reply: no format");
+        return; // shouldn't happen
+    }
+    auto sr = format_->sampleRate;
+    auto blocksize = format_->blockSize;
+    lock.unlock();
+
+    // get lost blocks since last ping reply and calculate
+    // packet loss percentage.
+    auto lost_blocks = lost_blocks_.exchange(0);
+    auto last_ping_time = std::exchange(last_ping_reply_time_, tt2);
+    // NOTE: the delta can be very large for the first ping in a stream,
+    // but this is not an issue because there's no packetloss anyway.
+    auto delta = time_tag::duration(last_ping_time, tt2);
+    float packetloss = (float)lost_blocks * (float)blocksize
+            / ((float)sr * delta);
+    if (packetloss > 1.0){
+        LOG_DEBUG("packet loss percentage larger than 1");
+        packetloss = 1.0;
+    }
+    LOG_DEBUG("ping delta: " << delta << ", packet loss: " << packetloss);
 
     char buffer[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg(buffer, sizeof(buffer));
@@ -2057,9 +2080,7 @@ void source_desc::send_ping_reply(const Sink &s, AooNtpTime tt1,
              kAooMsgDomain, kAooMsgSource, ep.id, kAooMsgPing);
 
     msg << osc::BeginMessage(address) << s.id()
-        << osc::TimeTag(tt1)
-        << osc::TimeTag(tt2)
-        << lost_blocks
+        << osc::TimeTag(tt1) << osc::TimeTag(tt2) << packetloss
         << osc::EndMessage;
 
     fn((const AooByte *)msg.Data(), msg.Size(), ep);
