@@ -297,7 +297,7 @@ AooError AOO_CALL aoo::Sink::codecControl(
 }
 
 AOO_API AooError AOO_CALL AooSink_handleMessage(
-        AooSink *sink, const AooByte *data, AooSize size,
+        AooSink *sink, const AooByte *data, AooInt32 size,
         const void *address, AooAddrSize addrlen) {
     return sink->handleMessage(data, size, address, addrlen);
 }

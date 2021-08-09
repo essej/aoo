@@ -19,7 +19,7 @@ AOO_API AooError AOO_CALL AooSink_setup(
         AooInt32 blockSize, AooInt32 numChannels);
 
 // handle messages from sources (threadsafe, called from a network thread)
-AOO_API AooError AOO_CALL AooSink_handle_message(
+AOO_API AooError AOO_CALL AooSink_handleMessage(
         AooSink *sink, const AooByte *data, AooInt32 size,
         const void *address, AooAddrSize addrlen);
 

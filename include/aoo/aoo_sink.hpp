@@ -29,7 +29,7 @@ public:
 
     // handle messages from sources (threadsafe, called from a network thread)
     virtual AooError AOO_CALL handleMessage(
-            const AooByte *data, AooInt32 n,
+            const AooByte *data, AooInt32 size,
             const void *address, AooAddrSize addrlen) = 0;
 
     // send outgoing messages (threadsafe, called from a network thread)
