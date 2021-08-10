@@ -1,11 +1,10 @@
 cmake_minimum_required (VERSION 3.1)
 
-include(GNUInstallDirs)
-
 set(PROJECT "aoo")
 message(STATUS "Project: ${PROJECT}")
 project(${PROJECT})
 
+include(GNUInstallDirs)
 include (CheckCCompilerFlag)
 include (CheckCXXCompilerFlag)
 
@@ -19,9 +18,11 @@ if (MINGW AND NOT WIN32)
     set(WIN32 TRUE)
 endif()
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+# check for Clang or AppleClang
+if((CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 	set(CMAKE_COMPILER_IS_CLANG 1)
 endif()
+message(STATUS "CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 
 if(NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)

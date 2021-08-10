@@ -66,7 +66,7 @@ message(STATUS "PD_EXTENSION: ${CMAKE_SHARED_MODULE_SUFFIX}")
 add_library(${PROJECT} MODULE ${SOURCES})
 set_target_properties(${PROJECT} PROPERTIES OUTPUT_NAME ${FILENAME})
 target_compile_definitions(${PROJECT} PUBLIC "-DAOO_STATIC")
-target_link_libraries(${PROJECT} ${AOO_STATIC} ${LIBS})
+target_link_libraries(${PROJECT} ${AOO_STATIC} ${OPUS_LIB} ${LIBS})
 
 # platform specific definitions and options
 if (WIN32)

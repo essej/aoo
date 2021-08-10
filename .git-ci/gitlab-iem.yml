@@ -116,6 +116,7 @@ variables:
     - rm -rf "${PD_PATH}"; mkdir -p "${PD_PATH}"
     - unzip -q Pd.zip -d "${PD_PATH}"
     - mv -v "${PD_PATH}"/*/* "${PD_PATH}"
+    - export CC=gcc; export CXX=g++;
     - *script_deps
     - *script_cmake
 
