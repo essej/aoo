@@ -7,11 +7,11 @@
 typedef struct AooSource AooSource;
 
 // create a new AOO source instance
-AOO_API AooSource * AooSource_new(
+AOO_API AooSource * AOO_CALL AooSource_new(
         AooId id, AooFlag flags, AooError *err);
 
 // destroy the AOO source instance
-AOO_API void AooSource_free(AooSource *source);
+AOO_API void AOO_CALL AooSource_free(AooSource *source);
 
 // setup the source - needs to be synchronized with other method calls!
 AOO_API AooError AOO_CALL AooSource_setup(
@@ -86,7 +86,7 @@ AOO_API AooError AOO_CALL AooSource_removeAll(AooSource *source);
 // perform certain actions, e.g. based on the metadata.
 // (Calling this with a valid token essentially activates the sink.)
 // If you choose to decline it, call it with kAooIdInvalid.
-AOO_API AOO_CALL AooError AooSource_acceptInvitation(
+AOO_API AooError AOO_CALL AooSource_acceptInvitation(
         AooSource *source, const AooEndpoint *sink, AooId token);
 
 // accept/decline an uninvitation (index: sink, arg: AooBool)

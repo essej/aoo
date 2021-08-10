@@ -634,8 +634,8 @@ AooError AOO_CALL aoo::Source::process(
         if (nsamples == blocksize_){
             dll_.update(elapsed);
         #if AOO_DEBUG_DLL
-            DO_LOG_DEBUG("time elapsed: " << elapsed << ", period: "
-                      << dll_.period() << ", samplerate: " << dll_.samplerate());
+            LOG_ALL("time elapsed: " << elapsed << ", period: "
+                    << dll_.period() << ", samplerate: " << dll_.samplerate());
         #endif
         } else {
             // reset time DLL with nominal samplerate
@@ -935,7 +935,7 @@ AooError AOO_CALL aoo::Source::removeAll() {
     return kAooOk;
 }
 
-AOO_API AOO_CALL AooError AooSource_acceptInvitation(
+AOO_API AooError AOO_CALL AooSource_acceptInvitation(
         AooSource *source, const AooEndpoint *sink, AooId token)
 {
     if (sink) {

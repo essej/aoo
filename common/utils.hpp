@@ -24,6 +24,8 @@
 
 #define DO_LOG(level, msg) do { aoo::Log(level) << msg; } while (false)
 
+#define LOG_ALL(msg) DO_LOG(kAooLogLevelNone, msg)
+
 #if AOO_LOG_LEVEL >= kAooLogLevelError
 # define LOG_ERROR(msg) DO_LOG(kAooLogLevelError, msg)
 #else
@@ -86,7 +88,7 @@ void log_message(AooLogLevel level, const std::string& msg);
 
 class Log {
 public:
-    Log(AooLogLevel level = kAooLogLevelDebug)
+    Log(AooLogLevel level = kAooLogLevelNone)
         : level_(level){}
     ~Log() {
         stream_ << "\n";

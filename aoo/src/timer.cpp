@@ -100,9 +100,9 @@ timer::state timer::moving_average_check::check(double delta, double& error){
         return state::error;
     } else {
     #if AOO_DEBUG_TIMER
-        DO_LOG_DEBUG("average delta: " << (average * 1000.0)
-                  << " ms, error: " << (last_error * 1000.0)
-                  << ", average error: " << (average_error * 1000.0));
+        LOG_ALL("average delta: " << (average * 1000.0)
+                << " ms, error: " << (last_error * 1000.0)
+                << ", average error: " << (average_error * 1000.0));
     #endif
         return state::ok;
     }

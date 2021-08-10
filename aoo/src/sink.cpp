@@ -430,8 +430,8 @@ AooError AOO_CALL aoo::Sink::process(
         if (nsamples == blocksize_){
             dll_.update(elapsed);
         #if AOO_DEBUG_DLL
-            DO_LOG_DEBUG("time elapsed: " << elapsed << ", period: "
-                      << dll_.period() << ", samplerate: " << dll_.samplerate());
+            LOG_ALL("time elapsed: " << elapsed << ", period: "
+                    << dll_.period() << ", samplerate: " << dll_.samplerate());
         #endif
         } else {
             // reset time DLL with nominal samplerate
@@ -1575,9 +1575,9 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples)
     check_missing_blocks(s);
 
 #if AOO_DEBUG_JITTER_BUFFER
-    DO_LOG_DEBUG(jitterbuffer_);
-    DO_LOG_DEBUG("oldest: " << jitterbuffer_.last_popped()
-              << ", newest: " << jitterbuffer_.last_pushed());
+    LOG_ALL(jitterbuffer_);
+    LOG_ALL("oldest: " << jitterbuffer_.last_popped()
+            << ", newest: " << jitterbuffer_.last_pushed());
 #endif
 
     if (stats.lost > 0){
@@ -1912,8 +1912,8 @@ void source_desc::process_blocks(const Sink& s, stream_stats& stats){
                 sr = format_->sampleRate; // nominal samplerate
                 channel = -1; // current channel
             #if AOO_DEBUG_JITTER_BUFFER
-                DO_LOG_DEBUG("jitter buffer: write empty block ("
-                          << b.sequence << ") for source xrun");
+                LOG_ALL("jitter buffer: write empty block ("
+                        << b.sequence << ") for source xrun");
             #endif
                 // record dropped block
                 stats.dropped++;
@@ -1924,8 +1924,8 @@ void source_desc::process_blocks(const Sink& s, stream_stats& stats){
                 sr = b.samplerate; // real samplerate
                 channel = b.channel;
             #if AOO_DEBUG_JITTER_BUFFER
-                DO_LOG_DEBUG("jitter buffer: write samples for block ("
-                          << b.sequence << ")");
+                LOG_ALL("jitter buffer: write samples for block ("
+                        << b.sequence << ")");
             #endif
             }
         } else {
@@ -1944,7 +1944,7 @@ void source_desc::process_blocks(const Sink& s, stream_stats& stats){
             } else {
                 // wait for block
             #if AOO_DEBUG_JITTER_BUFFER
-                DO_LOG_DEBUG("jitter buffer: wait");
+                LOG_ALL("jitter buffer: wait");
             #endif
                 break;
             }

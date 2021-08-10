@@ -39,7 +39,7 @@ AOO_API AooError AOO_CALL AooClient_removeSink(
 // find peer of the given user + group name and return its IP endpoint address
 // address: pointer to sockaddr_storage
 // addrlen: initialized with max. storage size, updated to actual size
-AOO_API AooError AOO_CALL AooClient_getPeerbyName(
+AOO_API AooError AOO_CALL AooClient_getPeerByName(
         AooClient *client, const AooChar *group, const AooChar *user,
         void *address, AooAddrSize *addrlen);
 
