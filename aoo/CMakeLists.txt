@@ -1,5 +1,3 @@
-cmake_minimum_required (VERSION 2.8)
-
 # compile time options
 option(CUSTOM_ALLOCATOR "build with custom allocator support" OFF)
 
@@ -49,36 +47,55 @@ set(OPTIONS
     "-DAOO_DEBUG_JITTER_BUFFER=$<BOOL:${DEBUG_JITTER_BUFFER}>"
 )
 
-set(INCLUDE "../include/aoo")
-set(COMMON "../common")
+set(INCLUDE "${CMAKE_SOURCE_DIR}/include/aoo")
+set(COMMON "${CMAKE_SOURCE_DIR}/common")
+set(DEPS "${CMAKE_SOURCE_DIR}/deps")
 
-file(GLOB AOO_HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp"
+file(GLOB HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp"
      "${INCLUDE}/codec/aoo_pcm.h" "src/*.hpp" "${COMMON}/*.hpp")
 
- file(GLOB AOO_SRC "src/*.cpp" "src/codec/pcm.cpp" "${COMMON}/*.cpp")
+file(GLOB SOURCES "src/*.cpp" "src/codec/pcm.cpp" "${COMMON}/*.cpp")
+
+if (NOT SYSTEM_OSCPACK)
+    # only build "osc" part
+    file(GLOB OSCPACK_HEADERS "${DEPS}/oscpack/osc/*.h")
+    file(GLOB OSCPACK_SOURCES "${DEPS}/oscpack/osc/*.cpp")
+    list(APPEND HEADERS ${OSCPACK_HEADERS})
+    list(APPEND SOURCES ${OSCPACK_SOURCES})
+endif()
 
 if (CODEC_OPUS)
-    list(APPEND AOO_HEADERS "${INCLUDE}/codec/aoo_opus.h")
-    list(APPEND AOO_SRC "src/codec/opus.cpp")
+    list(APPEND HEADERS "${INCLUDE}/codec/aoo_opus.h")
+    list(APPEND SOURCES "src/codec/opus.cpp")
 endif()
 
 if (AOO_NET)
-    list(APPEND AOO_HEADERS "src/net/server.hpp" "src/net/client.hpp"
+    list(APPEND HEADERS "src/net/server.hpp" "src/net/client.hpp"
         "src/net/SLIP.hpp")
-    list(APPEND AOO_SRC "src/net/client.cpp" "src/net/server.cpp")
+    list(APPEND SOURCES "src/net/client.cpp" "src/net/server.cpp")
+    if (NOT SYSTEM_MD5)
+        list(APPEND HEADERS "${DEPS}/md5/md5.h")
+        list(APPEND SOURCES "${DEPS}/md5/md5.c")
+    endif()
 endif()
 
-# static library
-add_library(${AOO_STATIC} STATIC ${AOO_HEADERS} ${AOO_SRC})
+# always build static library because we need it for Pd, SC, tests, etc.
+# BUILD_AOO_SHARED only installs it
+option(BUILD_AOO_SHARED "build 'aoo' shared library" ON)
+
+add_library(${AOO_STATIC} STATIC ${HEADERS} ${SOURCES})
 
 target_compile_definitions(${AOO_STATIC} PUBLIC ${OPTIONS} "-DAOO_STATIC")
+target_link_libraries(${AOO_STATIC} ${OSCPACK_LIB} ${OPUS_LIB})
+if (AOO_NET)
+    target_link_libraries(${AOO_STATIC} ${MD5_LIB})
+endif()
 
 # shared library
-option(BUILD_AOO_SHARED "build 'aoo' shared library" ON)
 option(BUILD_AOO_STATIC "build 'aoo' static library" ON)
 
 if (BUILD_AOO_SHARED)
-    add_library(${AOO_SHARED} SHARED ${AOO_HEADERS} ${AOO_SRC})
+    add_library(${AOO_SHARED} SHARED ${HEADERS} ${SOURCES})
 
     target_compile_definitions(${AOO_SHARED} PUBLIC "-DAOO_BUILD" ${OPTIONS})
     if (WIN32)
@@ -88,7 +105,7 @@ if (BUILD_AOO_SHARED)
     if (AOO_NET)
         target_link_libraries(${AOO_SHARED} ${MD5_LIB})
     endif()
-    target_link_libraries(${AOO_SHARED} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS})   
+    target_link_libraries(${AOO_SHARED} ${OSCPACK_LIB} ${OPUS_LIB} ${LIBS})
 endif()
 
 if (BUILD_AOO_SHARED OR BUILD_AOO_STATIC)

@@ -1,5 +1,3 @@
-cmake_minimum_required (VERSION 2.8)
-
 set(PROJECT "pd")
 set(FILENAME "aoo")
 message(STATUS "---\n*** Pd external ***")
@@ -10,7 +8,7 @@ set(COMMON "../common")
 file(GLOB HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp"
     "${COMMON}/*.hpp" "src/*.hpp")
 
-file(GLOB SRC ${HEADERS} "src/*.cpp")
+file(GLOB SOURCES ${HEADERS} "src/*.cpp")
 
 # Pd directories:
 if (NOT PD_DIR)
@@ -65,11 +63,10 @@ endif()
 message(STATUS "PD_EXTENSION: ${CMAKE_SHARED_MODULE_SUFFIX}")
 
 # the Pd external
-add_library(${PROJECT} MODULE ${SRC})
+add_library(${PROJECT} MODULE ${SOURCES})
 set_target_properties(${PROJECT} PROPERTIES OUTPUT_NAME ${FILENAME})
 target_compile_definitions(${PROJECT} PUBLIC "-DAOO_STATIC")
-target_link_libraries(${PROJECT} ${AOO_STATIC}
-    ${MD5_LIB} ${OSCPACK_LIB} ${CODEC_OPUS_LIB} ${LIBS})
+target_link_libraries(${PROJECT} ${AOO_STATIC} ${LIBS})
 
 # platform specific definitions and options
 if (WIN32)

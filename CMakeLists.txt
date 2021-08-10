@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.1)
 
 include(GNUInstallDirs)
 
@@ -58,51 +58,55 @@ endif()
 
 # compiler flags
 if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANG)
-    add_definitions(-fvisibility=hidden)
+    add_compile_options("-fvisibility=hidden")
 
-    CHECK_CXX_COMPILER_FLAG(-msse HAS_CXX_SSE)
+    CHECK_CXX_COMPILER_FLAG("-msse" HAS_CXX_SSE)
     if (HAS_CXX_SSE)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse")
+        add_compile_options("-msse")
     endif()
 
-    CHECK_CXX_COMPILER_FLAG(-msse2 HAS_CXX_SSE2)
+    CHECK_CXX_COMPILER_FLAG("-msse2" HAS_CXX_SSE2)
     if (HAS_CXX_SSE2)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse2")
+        add_compile_options("-msse2")
     endif()
 
-    CHECK_CXX_COMPILER_FLAG(-msse3 HAS_CXX_SSE3)
+    CHECK_CXX_COMPILER_FLAG("-msse3" HAS_CXX_SSE3)
     if (HAS_CXX_SSE3)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse3")
+        add_compile_options("-msse3")
     endif()
 
+    # people still own old machines that don't support SSE4
     if (FALSE)
-        CHECK_CXX_COMPILER_FLAG(-msse4 HAS_CXX_SSE4)
+        CHECK_CXX_COMPILER_FLAG("-msse4" HAS_CXX_SSE4)
         if (HAS_CXX_SSE4)
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4")
+            add_compile_options("-msse4")
         endif()
     endif()
 
-    CHECK_CXX_COMPILER_FLAG(-mfpmath=sse HAS_CXX_FPMATH_SSE)
+    CHECK_CXX_COMPILER_FLAG("-mfpmath=sse" HAS_CXX_FPMATH_SSE)
     if (HAS_CXX_FPMATH_SSE)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpmath=sse")
+        add_compile_options("-mfpmath=sse")
     endif()
 
     if(NATIVE)
-        add_definitions(-march=native)
+        add_compile_options("-march=native")
     endif()
 
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -ffast-math -funroll-loops -fomit-frame-pointer")
+    add_compile_options("-ffast-math" "-funroll-loops" "-fomit-frame-pointer")
+
+    # C++ only:
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 
     if(CMAKE_COMPILER_IS_CLANG)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
     endif()
 endif()
 if (MINGW)
-    set(CMAKE_CXX_COMPILER g++)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mstackrealign")
+    # set(CMAKE_CXX_COMPILER g++)
+    add_compile_options("-mstackrealign")
 endif()
 if (LINUX)
-    add_definitions("-fPIC")
+    add_compile_options("-fPIC")
 endif()
 
 # networking support
@@ -116,18 +120,12 @@ include_directories(deps)
 option(SYSTEM_OSCPACK "use system provided oscpack library" OFF)
 if (SYSTEM_OSCPACK)
     set(OSCPACK_LIB "oscpack" CACHE STRING "oscpack linker flags")
-else()
-    set(OSCPACK_LIB "oscpack")
-    add_subdirectory("deps/oscpack")
 endif()
 
 # md5
 option(SYSTEM_MD5 "use system provided md5 library" OFF)
 if (SYSTEM_MD5)
     set(MD5_LIB "md5" CACHE STRING "md5 linker flags")
-else()
-    set(MD5_LIB "md5")
-    add_subdirectory("deps/md5")
 endif()
 
 # Opus
@@ -137,18 +135,18 @@ if (CODEC_OPUS)
 
     option(SYSTEM_OPUS "use system provided Opus library" OFF)
     if (SYSTEM_OPUS)
-        set(CODEC_OPUS_LIB "opus" CACHE STRING "Opus linker flags")
+        set(OPUS_LIB "opus" CACHE STRING "Opus linker flags")
     else()
         include_directories("deps/opus/include")
         # use different variable for finding the library,
-        # because we don't want to change the cache variable
-        find_library(OPUS_LIB_STATIC "opus" HINTS "deps/opus/lib" REQUIRED)
-        set(CODEC_OPUS_LIB ${OPUS_LIB_STATIC})
+        # because find_library() can't override a cache variable.
+        find_library(OPUS_LIB_LOCAL "opus" HINTS "deps/opus/lib" REQUIRED)
+        set(OPUS_LIB ${OPUS_LIB_LOCAL})
         if (MINGW)
             list(APPEND LIBS "ssp") # for fortified functions
         endif()
     endif()
-    message(STATUS "Opus library: ${CODEC_OPUS_LIB}")
+    message(STATUS "Opus library: ${OPUS_LIB}")
 endif()
 
 # platform specific linker flags
