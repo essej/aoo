@@ -138,19 +138,20 @@ void log_message(AooLogLevel level, const std::string &msg){
 
 } // aoo
 
-static std::vector<const char *> errmsg = {
-    // TODO
-    "unknown error",    // -1
-    "no error",         // 0
-    "not implemented",
-    "bad argument"
-};
-
 const char *aoo_strerror(AooError e){
-    if (e >= 0 && e < (AooError)errmsg.size()){
-        return errmsg[e + 1];
-    } else {
-        return errmsg[0];
+    switch (e){
+    case kAooErrorUnknown:
+        return "unspecified error";
+    case kAooErrorNone:
+        return "no error";
+    case kAooErrorNotImplemented:
+        return "not implemented";
+    case kAooErrorIdle:
+        return "idle";
+    case kAooErrorOutOfMemory:
+        return "out of memory";
+    default:
+        return "unknown error code";
     }
 }
 
