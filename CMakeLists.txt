@@ -19,7 +19,7 @@ if (MINGW AND NOT WIN32)
 endif()
 
 # check for Clang or AppleClang
-if((CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 	set(CMAKE_COMPILER_IS_CLANG 1)
 endif()
 message(STATUS "CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
