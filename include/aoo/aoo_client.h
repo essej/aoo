@@ -94,7 +94,7 @@ AOO_API AooError AOO_CALL AooClient_control(
 // type-safe convenience functions for frequently used requests
 
 // connect to AOO server (always thread safe)
-static inline AooError AooClient_connect(
+AOO_INLINE AooError AooClient_connect(
         AooClient *client, const AooChar *hostName, AooInt32 port,
         const AooChar *userName, const AooChar *userPwd, AooNetCallback cb, void *user)
 {
@@ -103,14 +103,14 @@ static inline AooError AooClient_connect(
 }
 
 // disconnect from AOO server (always thread safe)
-static inline AooError AooClient_disconnect(
+AOO_INLINE AooError AooClient_disconnect(
         AooClient *client, AooNetCallback cb, void *user)
 {
     return AooClient_sendRequest(client, kAooNetRequestDisconnect, NULL, cb, user);
 }
 
 // join an AOO group
-static inline AooError AooClient_joinGroup(
+AOO_INLINE AooError AooClient_joinGroup(
         AooClient *client, const AooChar *groupName, const AooChar *groupPwd,
         AooNetCallback cb, void *user)
 {
@@ -119,7 +119,7 @@ static inline AooError AooClient_joinGroup(
 }
 
 // leave an AOO group
-static inline AooError AooClient_leaveGroup(
+AOO_INLINE AooError AooClient_leaveGroup(
         AooClient *client, const AooChar *groupName, AooNetCallback cb, void *user)
 {
     AooNetRequestLeaveGroup data = { groupName, 0, 0 };

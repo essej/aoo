@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
@@ -27,7 +27,7 @@ enum AooPcmBitDepthValues
     kAooPcmBitDepthSize
 };
 
-typedef AOO_STRUCT AooFormatPcm
+typedef struct AooFormatPcm
 {
     AooFormat header;
     AooPcmBitDepth bitDepth;
@@ -35,7 +35,7 @@ typedef AOO_STRUCT AooFormatPcm
 
 //-----------------------------------//
 
-static inline void AooFormatPcm_init(
+AOO_INLINE void AooFormatPcm_init(
         AooFormatPcm *f, AooInt32 numChannels, AooInt32 sampleRate,
         AooInt32 blockSize, AooPcmBitDepth bitDepth)
 {

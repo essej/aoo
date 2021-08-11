@@ -52,7 +52,7 @@ enum AooEventTypes
     kAooEventBlockDropped,
 };
 
-typedef AOO_STRUCT AooEventError
+typedef struct AooEventError
 {
     AooEventType type;
     // platform specific error code for system errors
@@ -61,7 +61,7 @@ typedef AOO_STRUCT AooEventError
 } AooError_event;
 
 // xrun event
-typedef AOO_STRUCT AooEventXRun
+typedef struct AooEventXRun
 {
     AooEventType type;
     AooInt32 count;
@@ -69,14 +69,14 @@ typedef AOO_STRUCT AooEventXRun
 
 // ping events
 
-typedef AOO_STRUCT AooEventPing {
+typedef struct AooEventPing {
     AooEventType type;
     AooEndpoint endpoint;
     AooNtpTime t1;
     AooNtpTime t2;
 } AooEventPing;
 
-typedef AOO_STRUCT AooEventPingReply {
+typedef struct AooEventPingReply {
     AooEventType type;
     AooEndpoint endpoint;
     AooNtpTime t1;
@@ -87,7 +87,7 @@ typedef AOO_STRUCT AooEventPingReply {
 
 // source/sink events
 
-typedef AOO_STRUCT AooEventEndpoint
+typedef struct AooEventEndpoint
 {
     AooEventType type;
     AooEndpoint endpoint;
@@ -101,7 +101,7 @@ typedef AOO_STRUCT AooEventEndpoint
 
 // stream start/stop event
 
-typedef AOO_STRUCT AooEventStreamStart
+typedef struct AooEventStreamStart
 {
     AooEventType type;
     AooEndpoint endpoint;
@@ -112,7 +112,7 @@ typedef AOO_STRUCT AooEventStreamStart
 
 // invite/uninvite
 
-typedef AOO_STRUCT AooEventInvite
+typedef struct AooEventInvite
 {
     AooEventType type;
     AooEndpoint endpoint;
@@ -121,7 +121,7 @@ typedef AOO_STRUCT AooEventInvite
     const AooDataView * metadata;
 } AooEventInvite;
 
-typedef AOO_STRUCT AooEventUninvite
+typedef struct AooEventUninvite
 {
     AooEventType type;
     AooEndpoint endpoint;
@@ -138,7 +138,7 @@ typedef AooInt32 AooStreamState;
 #define kAooStreamStateInactive 0
 #define kAooStreamStateActive 1
 
-typedef AOO_STRUCT AooEventStreamState
+typedef struct AooEventStreamState
 {
     AooEventType type;
     AooEndpoint endpoint;
@@ -147,7 +147,7 @@ typedef AOO_STRUCT AooEventStreamState
 
 // block events
 
-typedef AOO_STRUCT AooEventBlock
+typedef struct AooEventBlock
 {
     AooEventType type;
     AooEndpoint endpoint;
@@ -162,7 +162,7 @@ typedef AOO_STRUCT AooEventBlock
 
 // format change event
 
-typedef AOO_STRUCT AooEventFormatChange {
+typedef struct AooEventFormatChange {
     AooEventType type;
     AooEndpoint endpoint;
     const AooFormat *format;
@@ -197,7 +197,7 @@ enum AooNetEventTypes
 
 // generic events
 
-typedef AOO_STRUCT AooNetEventError
+typedef struct AooNetEventError
 {
     AooEventType type;
     // platform specific error code for system/socket errors
@@ -205,7 +205,7 @@ typedef AOO_STRUCT AooNetEventError
     const AooChar *errorMessage;
 } AooNetEventError;
 
-typedef AOO_STRUCT AooNetEventPing
+typedef struct AooNetEventPing
 {
     AooEventType type;
     AooAddrSize addrlen;
@@ -219,7 +219,7 @@ typedef AOO_STRUCT AooNetEventPing
 
 #define AooNetEventDisconnect AooNetEventError
 
-typedef AOO_STRUCT AooNetEventPeer
+typedef struct AooNetEventPeer
 {
     AooEventType type;
     AooAddrSize addrlen;
@@ -234,7 +234,7 @@ typedef AOO_STRUCT AooNetEventPeer
 #define AooNetEventPeerJoin AooNetEventPeer
 #define AooNetEventPeerLeave AooNetEventPeer
 
-typedef AOO_STRUCT AooNetEventPeerMessage
+typedef struct AooNetEventPeerMessage
 {
     AooEventType type;
     AooAddrSize addrlen;
@@ -245,7 +245,7 @@ typedef AOO_STRUCT AooNetEventPeerMessage
 
 // server events
 
-typedef AOO_STRUCT AooNetEventUser
+typedef struct AooNetEventUser
 {
     AooEventType type;
     AooAddrSize addrlen;
@@ -259,7 +259,7 @@ typedef AOO_STRUCT AooNetEventUser
 #define AooNetEventUserJoin AooNetEventUser
 #define AooNetEventUserLeave AooNetEventUser
 
-typedef AOO_STRUCT AooNetEventGroup
+typedef struct AooNetEventGroup
 {
     AooEventType type;
     const AooChar *groupName;
@@ -268,7 +268,7 @@ typedef AOO_STRUCT AooNetEventGroup
 #define AooNetEventGroupAdd AooNetEventGroup
 #define AooNetEventGroupRemove AooNetEventGroup
 
-typedef AOO_STRUCT AooNetEventUserGroup
+typedef struct AooNetEventUserGroup
 {
     AooEventType type;
     AooId userId;

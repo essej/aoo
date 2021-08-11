@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
@@ -19,7 +19,7 @@ AOO_PACK_BEGIN
 
 #define kAooCodecOpus "opus"
 
-typedef AOO_STRUCT AooFormatOpus
+typedef struct AooFormatOpus
 {
     AooFormat header;
     // OPUS_APPLICATION_VOIP, OPUS_APPLICATION_AUDIO or
@@ -29,7 +29,7 @@ typedef AOO_STRUCT AooFormatOpus
 
 //-----------------------------------------------------//
 
-static inline void AooFormatOpus_init(
+AOO_INLINE void AooFormatOpus_init(
         AooFormatOpus *f, AooInt32 numChannels, AooInt32 sampleRate,
         AooInt32 blockSize, opus_int32 applicationType)
 {
@@ -44,7 +44,7 @@ static inline void AooFormatOpus_init(
 // helper functions for common controls
 
 // set bitrate in bits/s, OPUS_BITRATE_MAX or OPUS_AUTO
-static inline AooError AooSource_setOpusBitrate(
+AOO_INLINE AooError AooSource_setOpusBitrate(
         AooSource *src, const AooEndpoint *sink, opus_int32 bitrate) {
     return AooSource_codecControl(
                 src, OPUS_SET_BITRATE_REQUEST, (AooIntPtr)sink,
@@ -52,7 +52,7 @@ static inline AooError AooSource_setOpusBitrate(
 }
 
 // get bitrate
-static inline AooError AooSource_getOpusBitrate(
+AOO_INLINE AooError AooSource_getOpusBitrate(
         AooSource *src, const AooEndpoint *sink, opus_int32 *bitrate) {
     return AooSource_codecControl(
                 src, OPUS_GET_BITRATE_REQUEST, (AooIntPtr)sink,
@@ -60,7 +60,7 @@ static inline AooError AooSource_getOpusBitrate(
 }
 
 // set complexity (0-10 or OPUS_AUTO)
-static inline AooError AooSource_setOpusComplexity(
+AOO_INLINE AooError AooSource_setOpusComplexity(
         AooSource *src, const AooEndpoint *sink, opus_int32 complexity) {
     return AooSource_codecControl(
                 src, OPUS_SET_COMPLEXITY_REQUEST, (AooIntPtr)sink,
@@ -68,7 +68,7 @@ static inline AooError AooSource_setOpusComplexity(
 }
 
 // get complexity
-static inline AooError AooSource_getOpusComplexity(
+AOO_INLINE AooError AooSource_getOpusComplexity(
         AooSource *src, const AooEndpoint *sink, opus_int32 *complexity) {
     return AooSource_codecControl(
                 src, OPUS_GET_COMPLEXITY_REQUEST, (AooIntPtr)sink,
@@ -77,7 +77,7 @@ static inline AooError AooSource_getOpusComplexity(
 
 // set signal type
 // (OPUS_SIGNAL_VOICE, OPUS_SIGNAL_MUSIC or OPUS_AUTO)
-static inline AooError AooSource_setOpusSignalType(
+AOO_INLINE AooError AooSource_setOpusSignalType(
         AooSource *src, const AooEndpoint *sink, opus_int32 signalType) {
     return AooSource_codecControl(
                 src, OPUS_SET_SIGNAL_REQUEST, (AooIntPtr)sink,
@@ -85,7 +85,7 @@ static inline AooError AooSource_setOpusSignalType(
 }
 
 // get signal type
-static inline AooError AooSource_getOpusSignalType(
+AOO_INLINE AooError AooSource_getOpusSignalType(
         AooSource *src, const AooEndpoint *sink, opus_int32 *signalType) {
     return AooSource_codecControl(
                 src, OPUS_GET_SIGNAL_REQUEST, (AooIntPtr)sink,

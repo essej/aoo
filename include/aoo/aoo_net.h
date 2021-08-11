@@ -86,7 +86,7 @@ AOO_PACK_BEGIN
 typedef void (AOO_CALL *AooNetCallback)
         (void *user, AooError result, const void *reply);
 
-typedef AOO_STRUCT AooNetReplyError
+typedef struct AooNetReplyError
 {
     // discriptive error message
     const AooChar *errorMessage;
@@ -106,7 +106,7 @@ enum AooNetRequestTypes
 
 // connect
 
-typedef AOO_STRUCT AooNetRequestConnect
+typedef struct AooNetRequestConnect
 {
     const AooChar *hostName;
     AooInt32 port;
@@ -120,7 +120,7 @@ enum AooNetServerFlags
     kAooNetServerRelay = 0x01
 };
 
-typedef AOO_STRUCT AooNetReplyConnect
+typedef struct AooNetReplyConnect
 {
     AooId userId;
     AooFlag serverFlags;
@@ -128,7 +128,7 @@ typedef AOO_STRUCT AooNetReplyConnect
 
 // join/leave group
 
-typedef AOO_STRUCT AooNetRequestGroup
+typedef struct AooNetRequestGroup
 {
     const AooChar *groupName;
     const AooChar *groupPwd;

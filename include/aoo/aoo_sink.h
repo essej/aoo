@@ -86,138 +86,138 @@ AOO_API AooError AOO_CALL AooSink_codecControl(
 // ------------------------------------------------------------
 // type-safe convenience functions for frequently used controls
 
-static inline AooError AooSink_setId(AooSink *sink, AooId id)
+AOO_INLINE AooError AooSink_setId(AooSink *sink, AooId id)
 {
     return AooSink_control(sink, kAooCtlSetId, 0, AOO_ARG(id));
 }
 
-static inline AooError AooSink_getId(AooSink *sink, AooId *id)
+AOO_INLINE AooError AooSink_getId(AooSink *sink, AooId *id)
 {
     return AooSink_control(sink, kAooCtlGetId, 0, AOO_ARG(*id));
 }
 
-static inline AooError AooSink_reset(AooSink *sink)
+AOO_INLINE AooError AooSink_reset(AooSink *sink)
 {
     return AooSink_control(sink, kAooCtlReset, 0, 0, 0);
 }
 
-static inline AooError AooSink_setBufferSize(AooSink *sink, AooSeconds s)
+AOO_INLINE AooError AooSink_setBufferSize(AooSink *sink, AooSeconds s)
 {
     return AooSink_control(sink, kAooCtlSetBufferSize, 0, AOO_ARG(s));
 }
 
-static inline AooError AooSink_getBufferSize(AooSink *sink, AooSeconds *s)
+AOO_INLINE AooError AooSink_getBufferSize(AooSink *sink, AooSeconds *s)
 {
     return AooSink_control(sink, kAooCtlGetBufferSize, 0, AOO_ARG(*s));
 }
 
-static inline AooError AooSink_setXRunDetection(AooSink *sink, AooBool b)
+AOO_INLINE AooError AooSink_setXRunDetection(AooSink *sink, AooBool b)
 {
     return AooSink_control(sink, kAooCtlSetXRunDetection, 0, AOO_ARG(b));
 }
 
-static inline AooError AooSink_getXRunDetection(AooSink *sink, AooBool *b)
+AOO_INLINE AooError AooSink_getXRunDetection(AooSink *sink, AooBool *b)
 {
     return AooSink_control(sink, kAooCtlGetXRunDetection, 0, AOO_ARG(*b));
 }
 
-static inline AooError AooSink_setDynamicResampling(AooSink *sink, AooBool b)
+AOO_INLINE AooError AooSink_setDynamicResampling(AooSink *sink, AooBool b)
 {
     return AooSink_control(sink, kAooCtlSetDynamicResampling, 0, AOO_ARG(b));
 }
 
-static inline AooError AooSink_getDynamicResampling(AooSink *sink, AooBool *b)
+AOO_INLINE AooError AooSink_getDynamicResampling(AooSink *sink, AooBool *b)
 {
     return AooSink_control(sink, kAooCtlGetDynamicResampling, 0, AOO_ARG(*b));
 }
 
-static inline AooError AooSink_getRealSampleRate(AooSink *sink, AooSampleRate *sr)
+AOO_INLINE AooError AooSink_getRealSampleRate(AooSink *sink, AooSampleRate *sr)
 {
     return AooSink_control(sink, kAooCtlGetRealSampleRate, 0, AOO_ARG(*sr));
 }
 
-static inline AooError AooSink_setDllBandwidth(AooSink *sink, double q)
+AOO_INLINE AooError AooSink_setDllBandwidth(AooSink *sink, double q)
 {
     return AooSink_control(sink, kAooCtlSetDllBandwidth, 0, AOO_ARG(q));
 }
 
-static inline AooError AooSink_getDllBandwidth(AooSink *sink, double *q)
+AOO_INLINE AooError AooSink_getDllBandwidth(AooSink *sink, double *q)
 {
     return AooSink_control(sink, kAooCtlGetDllBandwidth, 0, AOO_ARG(*q));
 }
 
-static inline AooError AooSink_setPacketSize(AooSink *sink, AooInt32 n)
+AOO_INLINE AooError AooSink_setPacketSize(AooSink *sink, AooInt32 n)
 {
     return AooSink_control(sink, kAooCtlSetPacketSize, 0, AOO_ARG(n));
 }
 
-static inline AooError AooSink_getPacketSize(AooSink *sink, AooInt32 *n)
+AOO_INLINE AooError AooSink_getPacketSize(AooSink *sink, AooInt32 *n)
 {
     return AooSink_control(sink, kAooCtlGetPacketSize, 0, AOO_ARG(*n));
 }
 
-static inline AooError AooSink_setResendData(AooSink *sink, AooBool b)
+AOO_INLINE AooError AooSink_setResendData(AooSink *sink, AooBool b)
 {
     return AooSink_control(sink, kAooCtlSetResendData, 0, AOO_ARG(b));
 }
 
-static inline AooError AooSink_getResendData(AooSink *sink, AooBool *b)
+AOO_INLINE AooError AooSink_getResendData(AooSink *sink, AooBool *b)
 {
     return AooSink_control(sink, kAooCtlGetResendData, 0, AOO_ARG(*b));
 }
 
-static inline AooError AooSink_setResendInterval(AooSink *sink, AooSeconds s)
+AOO_INLINE AooError AooSink_setResendInterval(AooSink *sink, AooSeconds s)
 {
     return AooSink_control(sink, kAooCtlSetResendInterval, 0, AOO_ARG(s));
 }
 
-static inline AooError AooSink_getResendInterval(AooSink *sink, AooSeconds *s)
+AOO_INLINE AooError AooSink_getResendInterval(AooSink *sink, AooSeconds *s)
 {
     return AooSink_control(sink, kAooCtlGetResendInterval, 0, AOO_ARG(*s));
 }
 
-static inline AooError AooSink_setResendLimit(AooSink *sink, AooInt32 n)
+AOO_INLINE AooError AooSink_setResendLimit(AooSink *sink, AooInt32 n)
 {
     return AooSink_control(sink, kAooCtlSetResendLimit, 0, AOO_ARG(n));
 }
 
-static inline AooError AooSink_getResendLimit(AooSink *sink, AooInt32 *n)
+AOO_INLINE AooError AooSink_getResendLimit(AooSink *sink, AooInt32 *n)
 {
     return AooSink_control(sink, kAooCtlGetResendLimit, 0, AOO_ARG(*n));
 }
 
-static inline AooError AooSink_setSourceTimeout(AooSink *sink, AooSeconds s)
+AOO_INLINE AooError AooSink_setSourceTimeout(AooSink *sink, AooSeconds s)
 {
     return AooSink_control(sink, kAooCtlSetSourceTimeout, 0, AOO_ARG(s));
 }
 
-static inline AooError AooSink_getSourceTimeout(AooSink *sink, AooSeconds *s)
+AOO_INLINE AooError AooSink_getSourceTimeout(AooSink *sink, AooSeconds *s)
 {
     return AooSink_control(sink, kAooCtlGetSourceTimeout, 0, AOO_ARG(*s));
 }
 
-static inline AooError AooSink_setInviteTimeout(AooSink *sink, AooSeconds s)
+AOO_INLINE AooError AooSink_setInviteTimeout(AooSink *sink, AooSeconds s)
 {
     return AooSink_control(sink, kAooCtlSetInviteTimeout, 0, AOO_ARG(s));
 }
 
-static inline AooError AooSink_getInviteTimeout(AooSink *sink, AooSeconds *s)
+AOO_INLINE AooError AooSink_getInviteTimeout(AooSink *sink, AooSeconds *s)
 {
     return AooSink_control(sink, kAooCtlGetInviteTimeout, 0, AOO_ARG(*s));
 }
 
-static inline AooError AooSink_resetSource(AooSink *sink, const AooEndpoint *source)
+AOO_INLINE AooError AooSink_resetSource(AooSink *sink, const AooEndpoint *source)
 {
     return AooSink_control(sink, kAooCtlReset, (AooIntPtr)source, 0, 0);
 }
 
-static inline AooError AooSink_getSourceFormat(
+AOO_INLINE AooError AooSink_getSourceFormat(
         AooSink *sink, const AooEndpoint *source, AooFormatStorage *f)
 {
     return AooSink_control(sink, kAooCtlGetFormat, (AooIntPtr)source, AOO_ARG(*f));
 }
 
-static inline AooError AooSink_getBufferFillRatio(
+AOO_INLINE AooError AooSink_getBufferFillRatio(
         AooSink *sink, const AooEndpoint *source, double *r)
 {
     return AooSink_control(sink, kAooCtlGetBufferFillRatio, (AooIntPtr)source, AOO_ARG(*r));

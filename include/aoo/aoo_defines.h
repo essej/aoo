@@ -7,7 +7,15 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define AOO_STRUCT struct
+#if defined(__cplusplus)
+# define AOO_INLINE inline
+#else
+# if (__STDC_VERSION__ >= 199901L)
+#  define AOO_INLINE static inline
+# else
+#  define AOO_INLINE static
+# endif
+#endif
 
 #if defined(__GNUC__)
 # define AOO_PACK_BEGIN _Pragma("pack(push,8)")
@@ -207,12 +215,12 @@ enum AooEndpointFlags
 };
 
 typedef AooInt32 (AOO_CALL *AooSendFunc)(
-        void *,             // user
-        const AooByte *,    // data
-        AooInt32,           // number of bytes
-        const void *,       // address
-        AooAddrSize,        // address size
-        AooFlag             // flags
+        void *user,
+        const AooByte *data,
+        AooInt32 size,
+        const void *address,
+        AooAddrSize addrlen,
+        AooFlag flags
 );
 
 //------------ AOO message types ---------------//
@@ -287,12 +295,10 @@ typedef struct AooFormatStorage
 
 typedef struct AooAllocator
 {
-    // allocate memory; args: size, context
-    void* (AOO_CALL *alloc)(AooSize, void *);
-    // reallocate memory; args: ptr, old size, new size, context
-    void* (AOO_CALL *realloc)(void *, AooSize, AooSize, void *);
-    // free memory; args: ptr, size, context
-    void (AOO_CALL *free)(void *, AooSize, void *);
+    void* (AOO_CALL *alloc)(AooSize size, void *context);
+    void* (AOO_CALL *realloc)(void *ptr, AooSize oldSize,
+                              AooSize newSize, void *context);
+    void (AOO_CALL *free)(void *ptr, AooSize size, void *context);
     // user context passed to functions
     void* context;
 } AooAllocator;
