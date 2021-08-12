@@ -49,6 +49,14 @@
     AOONET_MSG_GROUP AOONET_MSG_PUBLIC
 
 
+// just in case
+#ifndef SOL_TCP
+    #define SOL_TCP 6  // socket options TCP level
+#endif
+#ifndef TCP_USER_TIMEOUT
+    #define TCP_USER_TIMEOUT 18  // how long for loss retry before timeout [ms]
+#endif
+
 namespace aoo {
 namespace net {
 
@@ -905,6 +913,13 @@ client_endpoint::client_endpoint(server &s, int sock, const ip_address &addr)
     val = 1;
     if (setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val)) < 0){
         LOG_WARNING("client_endpoint: couldn't set TCP_NODELAY");
+        // ignore
+    }
+
+    // attempt to set TCP_USER_TIMEOUT option
+    val = 10000;  // user timeout in milliseconds [ms]
+    if (setsockopt (socket, SOL_TCP, TCP_USER_TIMEOUT, (char*) &val, sizeof (val)) < 0){
+        LOG_WARNING("client_endpoint: couldn't set TCP_USER_TIMEOUT");
         // ignore
     }
 
