@@ -49,14 +49,6 @@
     AOONET_MSG_GROUP AOONET_MSG_PUBLIC
 
 
-// just in case
-#ifndef SOL_TCP
-    #define SOL_TCP 6  // socket options TCP level
-#endif
-#ifndef TCP_USER_TIMEOUT
-    #define TCP_USER_TIMEOUT 18  // how long for loss retry before timeout [ms]
-#endif
-
 namespace aoo {
 namespace net {
 
@@ -916,12 +908,45 @@ client_endpoint::client_endpoint(server &s, int sock, const ip_address &addr)
         // ignore
     }
 
+    // keepalive and user timeout
+    int keepidle = 10;
+    int keepinterval = 10;
+    int keepcnt = 2;
+
+    val = 1;
+    if (setsockopt (socket, SOL_SOCKET, SO_KEEPALIVE, (char*) &val, sizeof (val)) < 0){
+        LOG_WARNING("client_endpoint: couldn't set SO_KEEPALIVE");
+        // ignore
+    }
+#ifdef TCP_KEEPIDLE
+    if (setsockopt (socket, IPPROTO_TCP, TCP_KEEPIDLE, (char*) &keepidle, sizeof (keepidle)) < 0){
+        LOG_WARNING("client_endpoint: couldn't set SO_KEEPIDLE");
+        // ignore
+    }
+#elif defined(TCP_KEEPALIVE)
+    if (setsockopt (socket, IPPROTO_TCP, TCP_KEEPALIVE, (char*) &keepidle, sizeof (keepidle)) < 0){
+        LOG_WARNING("client_endpoint: couldn't set SO_KEEPALIVE");
+        // ignore
+    }
+#endif
+
+    if (setsockopt (socket, IPPROTO_TCP, TCP_KEEPINTVL, (char*) &keepinterval, sizeof (keepinterval)) < 0){
+        LOG_WARNING("client_endpoint: couldn't set SO_KEEPINTVL");
+        // ignore
+    }
+    if (setsockopt (socket, IPPROTO_TCP, TCP_KEEPCNT, (char*) &keepcnt, sizeof (keepcnt)) < 0){
+        LOG_WARNING("client_endpoint: couldn't set SO_KEEPCNT");
+        // ignore
+    }
+
+#ifdef TCP_USER_TIMEOUT
+    int utimeout = (keepidle + keepinterval * keepcnt - 1) * 1000;
     // attempt to set TCP_USER_TIMEOUT option
-    val = 10000;  // user timeout in milliseconds [ms]
-    if (setsockopt (socket, SOL_TCP, TCP_USER_TIMEOUT, (char*) &val, sizeof (val)) < 0){
+    if (setsockopt (socket, IPPROTO_TCP, TCP_USER_TIMEOUT, (char*) &utimeout, sizeof (utimeout)) < 0){
         LOG_WARNING("client_endpoint: couldn't set TCP_USER_TIMEOUT");
         // ignore
     }
+#endif
 
     sendbuffer_.setup(65536);
     recvbuffer_.setup(65536);
