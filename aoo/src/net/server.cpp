@@ -792,7 +792,6 @@ client_endpoint::client_endpoint(server_imp &s, int socket, const ip_address &ad
         LOG_WARNING("client_endpoint: couldn't set TCP_NODELAY");
         // ignore
     }
-
     // keepalive and user timeout
     int keepidle = 10;
     int keepinterval = 10;
@@ -814,7 +813,6 @@ client_endpoint::client_endpoint(server_imp &s, int socket, const ip_address &ad
         // ignore
     }
 #endif
-
     if (setsockopt (socket, IPPROTO_TCP, TCP_KEEPINTVL, (char*) &keepinterval, sizeof (keepinterval)) < 0){
         LOG_WARNING("client_endpoint: couldn't set SO_KEEPINTVL");
         // ignore
@@ -828,7 +826,7 @@ client_endpoint::client_endpoint(server_imp &s, int socket, const ip_address &ad
     int utimeout = (keepidle + keepinterval * keepcnt - 1) * 1000;
     // attempt to set TCP_USER_TIMEOUT option
     val = 10000;  // user timeout in milliseconds [ms]
-    if (setsockopt (socket, IPPROTO_TCP, TCP_USER_TIMEOUT, (char*) &utimeout, sizeof (utimeout)) < 0)
+    if (setsockopt (socket, IPPROTO_TCP, TCP_USER_TIMEOUT, (char*) &utimeout, sizeof (utimeout)) < 0) {
         LOG_WARNING("client_endpoint: couldn't set TCP_USER_TIMEOUT");
         // ignore
     }
