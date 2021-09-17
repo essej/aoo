@@ -1,3 +1,11 @@
+/* Copyright (c) 2021 Christof Ressi
+ * For information on usage and redistribution, and for a DISCLAIMER OF ALL
+ * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
+
+/** \file
+ * \brief C++ interface for AOO client
+ */
+
 #pragma once
 
 #include "aoo_client.h"
@@ -7,8 +15,10 @@
 struct AooSource;
 struct AooSink;
 
+/** \brief AOO client interface */
 struct AooClient {
 public:
+    /** \brief custom deleter for AooClient */
     class Deleter {
     public:
         void operator()(AooClient *obj){
@@ -16,89 +26,85 @@ public:
         }
     };
 
-    // smart pointer for AOO client instance
+    /** \brief smart pointer for AOO client instance */
     using Ptr = std::unique_ptr<AooClient, Deleter>;
 
-    // create a new managed AOO client instance
+    /** \brief create a new managed AOO client instance
+     *
+     * \copydetails AooClient_new()
+     */
     static Ptr create(const void *address, AooAddrSize addrlen,
                       AooFlag flags, AooError *err) {
         return Ptr(AooClient_new(address, addrlen, flags, err));
     }
 
-    //----------------- methods ------------------------------//
+    /*------------------ methods -------------------------------*/
 
-    // run the AOO client; this function blocks indefinitely.
+    /** \copydoc AooClient_run() */
     virtual AooError AOO_CALL run() = 0;
 
-    // quit the AOO client from another thread
+    /** \copydoc AooClient_quit() */
     virtual AooError AOO_CALL quit() = 0;
 
-    // add AOO source
+    /** \copydoc AooClient_addSource() */
     virtual AooError AOO_CALL addSource(AooSource *source, AooId id) = 0;
 
-    // remove AOO source
+    /** \copydoc AooClient_removeSource() */
     virtual AooError AOO_CALL removeSource(AooSource *source) = 0;
 
-    // add AOO sink
+    /** \copydoc AooClient_addSink() */
     virtual AooError AOO_CALL addSink(AooSink *sink, AooId id) = 0;
 
-    // remove AOO sink
+    /** \copydoc AooClient_removeSink() */
     virtual AooError AOO_CALL removeSink(AooSink *sink) = 0;
 
-    // find peer by name and return its IP endpoint address
-    // address: pointer to sockaddr_storage
-    // addrlen: initialized with max. storage size, updated to actual size
+    /** \copydoc AooClient_getPeerByName() */
     virtual AooError AOO_CALL getPeerByName(
             const AooChar *group, const AooChar *user,
             void *address, AooAddrSize *addrlen) = 0;
 
-    // send a request to the AOO server (always thread safe)
+    /** \copydoc AooClient_sendRequest() */
     virtual AooError AOO_CALL sendRequest(
             AooNetRequestType request, void *data,
             AooNetCallback callback, void *user) = 0;
 
-    // send a message to one or more peers
-    // 'addr' + 'len' accept the following values:
-    // a) 'struct sockaddr *' + 'socklen_t': send to a single peer
-    // b) 'const AooChar *' (group name) + 0: send to all peers of a specific group
-    // c) 'NULL' + 0: send to all peers
-    // the 'flags' parameter allows for (future) additional settings
+    /** \copydoc AooClient_sendPeerMessage() */
     virtual AooError AOO_CALL sendPeerMessage(
             const AooByte *data, AooInt32 size,
             const void *target, AooAddrSize len, AooFlag flags) = 0;
 
-    // handle messages from peers (thread safe, called from a network thread)
-    // 'addr' should be sockaddr *
+    /** \copydoc AooClient_handleMessage() */
     virtual AooError AOO_CALL handleMessage(
             const AooByte *data, AooInt32 size, const void *address, AooAddrSize addrlen) = 0;
 
-    // send outgoing messages (threadsafe, called from a network thread)
+    /** \copydoc AooClient_send() */
     virtual AooError AOO_CALL send(AooSendFunc fn, void *user) = 0;
 
-    // set event handler callback + mode
+    /** \copydoc AooClient_setEventHandler() */
     virtual AooError AOO_CALL setEventHandler(
             AooEventHandler fn, void *user, AooEventMode mode) = 0;
 
-    // check for pending events (always thread safe)
+    /** \copydoc AooClient_eventsAvailable() */
     virtual AooBool AOO_CALL eventsAvailable() = 0;
 
-    // poll events (threadsafe, but not reentrant)
-    // will call the event handler function one or more times
+    /** \copydoc AooClient_pollEvents() */
     virtual AooError AOO_CALL pollEvents() = 0;
 
-    // client controls (threadsafe, but not reentrant)
+    /** \copydoc AooClient_control */
     virtual AooError AOO_CALL control(
             AooCtl ctl, AooIntPtr index, void *data, AooSize size) = 0;
 
-    // ----------------------------------------------------------
-    // type-safe convenience methods for frequently used controls
+    /*--------------------------------------------*/
+    /*         type-safe control functions        */
+    /*--------------------------------------------*/
 
-    // (empty)
+    /* (empty) */
 
-    // ----------------------------------------------------------
-    // type-safe convenience methods for frequently used requests
+    /*--------------------------------------------*/
+    /*         type-safe request functions        */
+    /*--------------------------------------------*/
 
-    // connect to AOO server (always thread safe)
+    /** \copydoc AooClient_connect() */
     AooError connect(const AooChar *hostName, AooInt32 port,
                      const AooChar *userName, const AooChar *userPwd,
                      AooNetCallback cb, void *user)
@@ -107,13 +113,13 @@ public:
         return sendRequest(kAooNetRequestConnect, &data, cb, user);
     }
 
-    // disconnect from AOO server (always thread safe)
+    /** \copydoc AooClient_disconnect() */
     AooError disconnect(AooNetCallback cb, void *user)
     {
         return sendRequest(kAooNetRequestDisconnect, NULL, cb, user);
     }
 
-    // join an AOO group
+    /** \copydoc AooClient_joinGroup() */
     AooError joinGroup(const AooChar *groupName, const AooChar *groupPwd,
                        AooNetCallback cb, void *user)
     {
@@ -121,8 +127,8 @@ public:
         return sendRequest(kAooNetRequestJoinGroup, &data, cb, user);
     }
 
-    // leave an AOO group
-    AooError leave_group(const AooChar *groupName, AooNetCallback cb, void *user)
+    /** \copydoc AooClient_leaveGroup() */
+    AooError leaveGroup(const AooChar *groupName, AooNetCallback cb, void *user)
     {
         AooNetRequestLeaveGroup data = { groupName };
         return sendRequest(kAooNetRequestLeaveGroup, &data, cb, user);

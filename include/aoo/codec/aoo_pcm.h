@@ -1,6 +1,10 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
+/* Copyright (c) 2021 Christof Ressi
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
+
+/** \file
+ * \brief PCM codec settings
+ */
 
 #pragma once
 
@@ -10,14 +14,13 @@
 
 AOO_PACK_BEGIN
 
-//--------------------------------//
-
-// PCM codec
+/*--------------------------------------------------*/
 
 #define kAooCodecPcm "pcm"
 
 typedef AooInt32 AooPcmBitDepth;
 
+/** \brief PCM bit depth values */
 enum AooPcmBitDepthValues
 {
     kAooPcmInt16 = 0,
@@ -27,26 +30,29 @@ enum AooPcmBitDepthValues
     kAooPcmBitDepthSize
 };
 
+/** \brief PCM codec format */
 typedef struct AooFormatPcm
 {
     AooFormat header;
     AooPcmBitDepth bitDepth;
 } AooFormatPcm;
 
-//-----------------------------------//
+/*------------------------------------------------*/
 
+/** \brief initialize AooFormatPcm structure */
 AOO_INLINE void AooFormatPcm_init(
-        AooFormatPcm *f, AooInt32 numChannels, AooInt32 sampleRate,
+        AooFormatPcm *fmt,
+        AooInt32 numChannels, AooInt32 sampleRate,
         AooInt32 blockSize, AooPcmBitDepth bitDepth)
 {
-    strcpy(f->header.codec, kAooCodecPcm);
-    f->header.size = sizeof(AooFormatPcm);
-    f->header.numChannels = numChannels;
-    f->header.sampleRate = sampleRate;
-    f->header.blockSize = blockSize;
-    f->bitDepth = bitDepth;
+    strcpy(fmt->header.codec, kAooCodecPcm);
+    fmt->header.size = sizeof(AooFormatPcm);
+    fmt->header.numChannels = numChannels;
+    fmt->header.sampleRate = sampleRate;
+    fmt->header.blockSize = blockSize;
+    fmt->bitDepth = bitDepth;
 }
 
-//----------------------------------//
+/*-----------------------------------------------*/
 
 AOO_PACK_END

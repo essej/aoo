@@ -688,8 +688,8 @@ static void aoo_client_group_leave(t_aoo_client *x, t_symbol *group)
 
             delete request;
         };
-        x->x_node->client()->leave_group(group->s_name, cb,
-                                 new t_group_request { x, group, nullptr });
+        x->x_node->client()->leaveGroup(group->s_name, cb,
+                                        new t_group_request { x, group, nullptr });
     }
 }
 

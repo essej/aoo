@@ -69,6 +69,13 @@ private:
 
 //---------------------------- jitter_buffer ------------------------------//
 
+// LATER use a (sorted) linked list of data frames (coming from the network thread)
+// which are eventually written sequentially into a contiguous client-size buffer.
+// This has the advantage that we don't need to preallocate memory and we can easily
+// handle arbitrary number of data frames. We can still use the bitset as an optimization,
+// but only up to a certain number of frames (e.g. 32); above that we do a linear search
+// over the linked list.
+
 class received_block {
 public:
     void reserve(int32_t size);
@@ -149,6 +156,7 @@ public:
     using const_iterator = base_iterator<const received_block, const jitter_buffer>;
 
     void clear();
+
     void resize(int32_t n, int32_t maxblocksize);
 
     bool empty() const {

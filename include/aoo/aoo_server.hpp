@@ -1,11 +1,21 @@
+/* Copyright (c) 2021 Christof Ressi
+ * For information on usage and redistribution, and for a DISCLAIMER OF ALL
+ * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
+
+/** \file
+ * \brief C++ interface for AOO server
+ */
+
 #pragma once
 
 #include "aoo_server.h"
 
 #include <memory>
 
+/** \brief AOO server interface */
 struct AooServer {
 public:
+    /** \brief custom deleter for AooServer */
     class Deleter {
     public:
         void operator()(AooServer *obj){
@@ -13,43 +23,44 @@ public:
         }
     };
 
-    // smart pointer for AOO server instance
+    /** \brief smart pointer for AOO server instance */
     using Ptr = std::unique_ptr<AooServer, Deleter>;
 
-    // create a new managed AOO server instance
+    /** \brief create a new managed AOO server instance
+     *
+     * \copydetails AooServer_new()
+     */
     static Ptr create(int32_t port, AooFlag flags, AooError *err) {
         return Ptr(AooServer_new(port, flags, err));
     }
 
-    //--------------------- methods --------------------------//
+    /*---------------------- methods ---------------------------*/
 
-    // run the AOO server;
-    // this function blocks until quit() is called.
+    /** \copydoc AooServer_run() */
     virtual AooError AOO_CALL run() = 0;
 
-    // quit the AOO server from another thread
+    /** \copydoc AooServer_quit() */
     virtual AooError AOO_CALL quit() = 0;
 
-    // set event handler callback + mode
+    /** \copydoc AooServer_setEventHandler() */
     virtual AooError AOO_CALL setEventHandler(
             AooEventHandler fn, void *user, AooEventMode mode) = 0;
 
-    // check for pending events (always thread safe)
+    /** \copydoc AooServer_eventsAvailable() */
     virtual AooBool AOO_CALL eventsAvailable() = 0;
 
-    // poll events (threadsafe, but not reentrant).
-    // will call the event handler function one or more times.
-    // NOTE: the event handler must have been registered with kAooEventModePoll.
+    /** \copydoc AooServer_pollEvents() */
     virtual AooError AOO_CALL pollEvents() = 0;
 
-    // server controls (threadsafe, but not reentrant)
+    /** \copydoc AooServer_control() */
     virtual AooError AOO_CALL control(
             AooCtl ctl, AooIntPtr index, void *data, AooSize size) = 0;
 
-    // ----------------------------------------------------------
-    // type-safe convenience methods for frequently used controls
+    /*--------------------------------------------*/
+    /*         type-safe control functions        */
+    /*--------------------------------------------*/
 
-    // (empty)
+    /* (empty) */
 protected:
     ~AooServer(){} // non-virtual!
 };

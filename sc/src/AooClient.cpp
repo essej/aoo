@@ -158,7 +158,7 @@ void AooClient::leaveGroup(const char* name) {
         }
         delete request;
     };
-    node_->client()->leave_group(name, cb, new GroupRequest{ this, name });
+    node_->client()->leaveGroup(name, cb, new GroupRequest{ this, name });
 }
 
 // called from network thread
