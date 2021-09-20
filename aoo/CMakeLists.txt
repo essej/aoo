@@ -84,6 +84,11 @@ endif()
 option(BUILD_AOO_SHARED "build 'aoo' shared library" ON)
 
 add_library(${AOO_STATIC} STATIC ${HEADERS} ${SOURCES})
+if (NOT MSVC)
+    # for MSVC we keep the "aoo_static" name to avoid name clash with
+    # "aoo.lib" import library
+    set_target_properties(${AOO_STATIC} PROPERTIES OUTPUT_NAME "aoo")
+endif()
 
 target_compile_definitions(${AOO_STATIC} PUBLIC ${OPTIONS} "-DAOO_STATIC")
 target_link_libraries(${AOO_STATIC} ${OSCPACK_LIB} ${OPUS_LIB})
@@ -96,6 +101,7 @@ option(BUILD_AOO_STATIC "build 'aoo' static library" ON)
 
 if (BUILD_AOO_SHARED)
     add_library(${AOO_SHARED} SHARED ${HEADERS} ${SOURCES})
+    set_target_properties(${AOO_SHARED} PROPERTIES OUTPUT_NAME "aoo")
 
     target_compile_definitions(${AOO_SHARED} PUBLIC "-DAOO_BUILD" ${OPTIONS})
     if (WIN32)
@@ -119,5 +125,5 @@ if (BUILD_AOO_SHARED OR BUILD_AOO_STATIC)
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     # install public headers (note the trailing slash!)
     install(DIRECTORY "${INCLUDE}/"
-            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${AOO_SHARED})
+            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/aoo")
 endif()

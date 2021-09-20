@@ -141,7 +141,7 @@ if (CODEC_OPUS)
         include_directories("deps/opus/include")
         # use different variable for finding the library,
         # because find_library() can't override a cache variable.
-        find_library(OPUS_LIB_LOCAL "opus" HINTS "deps/opus/lib" REQUIRED)
+        find_library(OPUS_LIB_LOCAL "opus" HINTS "deps/opus/lib" NO_DEFAULT_PATH)
         set(OPUS_LIB ${OPUS_LIB_LOCAL})
         if (MINGW)
             list(APPEND LIBS "ssp") # for fortified functions
@@ -174,7 +174,7 @@ include_directories(.)
 include_directories(include)
 
 # "aoo" library
-set(AOO_SHARED "aoo")
+set(AOO_SHARED "aoo_shared")
 set(AOO_STATIC "aoo_static")
 add_subdirectory(aoo)
 
