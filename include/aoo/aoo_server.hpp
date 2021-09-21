@@ -36,23 +36,41 @@ public:
 
     /*---------------------- methods ---------------------------*/
 
-    /** \copydoc AooServer_run() */
+    /** \brief run the AOO server
+     *
+     * This function blocks until AooServer_quit() is called.
+     */
     virtual AooError AOO_CALL run() = 0;
 
-    /** \copydoc AooServer_quit() */
+    /** \brief quit the AOO server from another thread */
     virtual AooError AOO_CALL quit() = 0;
 
-    /** \copydoc AooServer_setEventHandler() */
+    /** \brief set event handler function and event handling mode
+     *
+     * \attention Not threadsafe - only call in the beginning!
+     */
     virtual AooError AOO_CALL setEventHandler(
             AooEventHandler fn, void *user, AooEventMode mode) = 0;
 
-    /** \copydoc AooServer_eventsAvailable() */
+    /** \brief check for pending events
+     *
+     * \note Threadsafe and RT-safe
+     */
     virtual AooBool AOO_CALL eventsAvailable() = 0;
 
-    /** \copydoc AooServer_pollEvents() */
+    /** \brief poll events
+     *
+     * \note Threadsafe and RT-safe, but not reentrant.
+     *
+     * This function will call the registered event handler one or more times.
+     * \attention The event handler must have been registered with #kAooEventModePoll.
+     */
     virtual AooError AOO_CALL pollEvents() = 0;
 
-    /** \copydoc AooServer_control() */
+    /** \brief control interface
+     *
+     * Not to be used directly.
+     */
     virtual AooError AOO_CALL control(
             AooCtl ctl, AooIntPtr index, void *data, AooSize size) = 0;
 

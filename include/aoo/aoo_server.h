@@ -29,38 +29,23 @@ AOO_API AooServer * AOO_CALL AooServer_new(
 /** \brief destroy AOO server instance */
 AOO_API void AOO_CALL AooServer_free(AooServer *server);
 
-/** \brief run the AOO server
- *
- * This function blocks until AooServer_quit() is called.
- */
+/** \copydoc AooServer::run() */
 AOO_API AooError AOO_CALL AooServer_run(AooServer *server);
 
-/** \brief quit the AOO server from another thread */
+/** \copydoc AooServer::quit() */
 AOO_API AooError AOO_CALL AooServer_quit(AooServer *server);
 
-/** \brief set event handler function and event handling mode
- *
- * \warning Not threadsafe - only call in the beginning! */
+/** \copydoc AooServer::setEventHandler() */
 AOO_API AooError AOO_CALL AooServer_setEventHandler(
         AooServer *sink, AooEventHandler fn, void *user, AooEventMode mode);
 
-/** \brief check for pending events
- *
- * \note Threadsafe and RT-safe */
+/** \copydoc AooServer::eventsAvailable() */
 AOO_API AooBool AOO_CALL AooServer_eventsAvailable(AooServer *server);
 
-/** \brief poll events
- *
- * \note Threadsafe and RT-safe, but not reentrant.
- *
- * This function will call the registered event handler one or more times.
- * \attention The event handler must have been registered with #kAooEventModePoll.
- */
+/** \copydoc AooServer::pollEvents() */
 AOO_API AooError AOO_CALL AooServer_pollEvents(AooServer *server);
 
-/** \brief control interface
- *
- * used internally by helper functions for specific controls */
+/** \copydoc AooServer::control() */
 AOO_API AooError AOO_CALL AooServer_control(
         AooServer *server, AooCtl ctl, AooIntPtr index, void *data, AooSize size);
 

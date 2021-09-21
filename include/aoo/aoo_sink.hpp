@@ -36,47 +36,112 @@ public:
 
     /*-------------------- methods -----------------------------*/
 
-    /** \copydoc AooSink_setup() */
+    /** \brief setup AOO sink
+     *
+     * \attention Not threadsafe - needs to be synchronized with other method calls!
+     *
+     * \param sampleRate the sample rate
+     * \param blockSize the max. blocksize
+     * \param numChannels the max. number of channels
+     */
     virtual AooError AOO_CALL setup(
             AooSampleRate sampleRate, AooInt32 blockSize, AooInt32 numChannels) = 0;
 
-    /** \copydoc AooSink_handleMessage() */
+    /** \brief handle source messages
+     *
+     * \note Threadsafe; call on the network thread
+     *
+     * \param data the message data
+     * \param size the message size in bytes
+     * \param address the remote socket address
+     * \param addrlen the socket address length
+     */
     virtual AooError AOO_CALL handleMessage(
             const AooByte *data, AooInt32 size,
             const void *address, AooAddrSize addrlen) = 0;
 
-    /** \copydoc AooSink_send() */
+    /** \brief send outgoing messages
+     *
+     * \note Threadsafe; call on the network thread
+     *
+     * \param fn the send function
+     * \param user the user data (passed to the send function)
+     */
     virtual AooError AOO_CALL send(AooSendFunc fn, void *user) = 0;
 
-    /** \copydoc AooSink_process() */
+    /** \brief process audio
+     *
+     * \note Threadsafe and RT-safe; call on the audio thread
+     *
+     * \param data an array of audio channels; the number of
+     *        channels must match the number in #AooSource_setup.
+     * \param numSamples the number of samples per channel
+     * \param t current NTP time; \see aoo_getCurrentNtpTime
+     */
     virtual AooError AOO_CALL process(AooSample **data, AooInt32 numSamples,
                                       AooNtpTime t) = 0;
 
-    /** \copydoc AooSink_setEventHandler() */
+    /** \brief set event handler function and event handling mode
+     *
+     * \attention Not threadsafe - only call in the beginning!
+     */
     virtual AooError AOO_CALL setEventHandler(
             AooEventHandler fn, void *user, AooEventMode mode) = 0;
 
-    /** \copydoc AooSink_eventsAvailable() */
+    /** \brief check for pending events
+     *
+     * \note Threadsafe and RT-safe */
     virtual AooBool AOO_CALL eventsAvailable() = 0;
 
-    /** \copydoc AooSink_pollEvents() */
+    /** \brief poll events
+     *
+     * \note Threadsafe and RT-safe, but not reentrant.
+     *
+     * This function will call the registered event handler one or more times.
+     * \attention The event handler must have been registered with #kAooEventModePoll.
+     */
     virtual AooError AOO_CALL pollEvents() = 0;
 
-    /** \copydoc AooSink_inviteSource() */
+    /** \brief invite source
+     *
+     * This will continuously send invitation requests to the source
+     * The source can either accept the invitation request and start a
+     * stream or it can ignore it, upon which the sink will eventually
+     * receive an AooEventInviteTimeout event.
+     * If you call this function while you are already receiving a stream,
+     * it will force a new stream. For example, you might want to request
+     * different format parameters or even ask for different musical content.
+     *
+     * \param source the AOO source to be invited
+     * \param metadata optional metadata that the source can interpret
+     *        before accepting the invitation
+     */
     virtual AooError AOO_CALL inviteSource(
             const AooEndpoint& source, const AooDataView *metadata) = 0;
 
-    /** \copydoc AooSink_inviteSource() */
+    /** \brief uninvite source
+     *
+     * This will continuously send uninvitation requests to the source.
+     * The source can either accept the uninvitation request and stop the
+     * stream, or it can ignore and continue sending, upon which the sink
+     * will eventually receive an #kAooEventUninviteTimeout event.
+     *
+     * \param source the AOO source to be uninvited
+     */
     virtual AooError AOO_CALL uninviteSource(const AooEndpoint& source) = 0;
 
-    /** \copydoc AooSink_ininviteAll() */
+    /** \brief uninvite all sources */
     virtual AooError AOO_CALL uninviteAll() = 0;
 
-    /** \copydoc AooSink_control() */
+    /** \brief control interface
+     *
+     * Not to be used directly. */
     virtual AooError AOO_CALL control(
             AooCtl ctl, AooIntPtr index, void *data, AooSize size) = 0;
 
-    /** \copydoc AooSink_codecControl() */
+    /** \brief codec control interface
+     *
+     * Not to be used directly. */
     virtual AooError AOO_CALL codecControl(
             AooCtl ctl, AooIntPtr index, void *data, AooSize size) = 0;
 
@@ -84,137 +149,201 @@ public:
     /*         type-safe control functions        */
     /*--------------------------------------------*/
 
-    /** \copydoc AooSink_setId() */
+    /** \brief Set AOO source ID
+     * \param id The new ID
+     */
     AooError setId(AooId id) {
         return control(kAooCtlSetId, 0, AOO_ARG(id));
     }
 
-    /** \copydoc AooSink_getId() */
+    /** \brief Get AOO source ID */
     AooError getId(AooId &id) {
         return control(kAooCtlGetId, 0, AOO_ARG(id));
     }
 
-    /** \copydoc AooSink_reset() */
+    /** \brief Reset the sink */
     AooError reset() {
         return control(kAooCtlReset, 0, nullptr, 0);
     }
 
-    /** \copydoc AooSink_setBufferSize() */
+    /** \brief Set the buffer size in seconds (in seconds)
+     *
+     * This is the size of the ring buffer between the audio and network thread.
+     *
+     * A larger buffer size helps to deal with network jitter, packet reordering
+     * and packet loss.
+     *
+     * For local networks small buffersizes between 10-50ms should work;
+     * for unreliable/unpredictable networks you might need to increase it
+     * significantly if you want to avoid dropouts.
+     *
+     * Some codecs, like Opus, offer packet loss concealment, so you can use
+     * very low buffer sizes and still get acceptable results.
+     */
     AooError setBufferSize(AooSeconds s) {
         return control(kAooCtlSetBufferSize, 0, AOO_ARG(s));
     }
 
-    /** \copydoc AooSink_getBufferSize() */
+    /** \brief Get the current buffer size (in seconds) */
     AooError getBufferSize(AooSeconds& s) {
         return control(kAooCtlGetBufferSize, 0, AOO_ARG(s));
     }
 
-    /** \copydoc AooSink_setXRunDetection() */
+    /** \brief Enable/disable xrun detection
+     *
+     * xrun detection helps to catch timing problems, e.g. when the host accidentally
+     * blocks the audio callback, which would confuse the time DLL filter.
+     * Also, timing gaps are handled by dropping blocks at the sink.
+     * \attention: only takes effect after calling AooSink::setup()!
+     */
     AooError setXRunDetection(AooBool b) {
         return control(kAooCtlSetXRunDetection, 0, AOO_ARG(b));
     }
 
-    /** \copydoc AooSink_getXRunDetection() */
+    /** \brief Check if xrun detection is enabled */
     AooError getXRunDetection(AooBool b) {
         return control(kAooCtlGetXRunDetection, 0, AOO_ARG(b));
     }
 
-    /** \copydoc AooSink_setDynamicResampling() */
+    /** \brief Enable/disable dynamic resampling
+     *
+     * Dynamic resampling attempts to mitigate timing differences
+     * between different machines caused by internal clock drift.
+     *
+     * A DLL filter estimates the effective sample rate on both sides
+     * and the audio data is resampled accordingly. The behavior can be
+     * fine-tuned with AooSource::setDllBandWidth().
+     *
+     * See the paper "Using a DLL to filter time" by Fons Adriaensen.
+     */
     AooError setDynamicResampling(AooBool b) {
         return control(kAooCtlSetDynamicResampling, 0, AOO_ARG(b));
     }
 
-    /** \copydoc AooSink_getDynamicResampling() */
+    /** \brief Check if dynamic resampling is enabled. */
     AooError getDynamicResampling(AooBool b) {
         return control(kAooCtlGetDynamicResampling, 0, AOO_ARG(b));
     }
 
-    /** \copydoc AooSink_getRealSampleRate() */
+    /** \brief Get the "real" samplerate as measured by the DLL filter */
     AooError getRealSampleRate(AooSampleRate& sr) {
         return control(kAooCtlGetRealSampleRate, 0, AOO_ARG(sr));
     }
 
-    /** \copydoc AooSink_setDllBandwidth() */
+    /** \brief Set DLL filter bandwidth
+     *
+     * Used for dynamic resampling, see AooSource::setDynamicResampling().
+     */
     AooError setDllBandwidth(double q) {
         return control(kAooCtlSetDllBandwidth, 0, AOO_ARG(q));
     }
 
-    /** \copydoc AooSink_getDllBandwidth() */
+    /** \brief get DLL filter bandwidth */
     AooError getDllBandwidth(double& q) {
         return control(kAooCtlGetDllBandwidth, 0, AOO_ARG(q));
     }
 
-    /** \copydoc AooSink_setPacketSize() */
+    /** \brief Set the max. UDP packet size in bytes
+     *
+     * The default value should be fine for most networks (including the internet),
+     * but you might want to increase this value for local networks because larger
+     * packet sizes have less overhead. This is mostly relevant for resend requests.
+     */
     AooError setPacketSize(AooInt32 n) {
         return control(kAooCtlSetPacketSize, 0, AOO_ARG(n));
     }
 
-    /** \copydoc AooSink_getPacketSize() */
+    /** \brief Get the max. UDP packet size */
     AooError getPacketSize(AooInt32& n) {
         return control(kAooCtlGetPacketSize, 0, AOO_ARG(n));
     }
 
-    /** \copydoc AooSink_setResendData() */
+    /** \brief Enable/disable data resending */
     AooError setResendData(AooBool b) {
         return control(kAooCtlSetResendData, 0, AOO_ARG(b));
     }
 
-    /** \copydoc AooSink_getResendData() */
+    /** \brief Check if data resending is enabled */
     AooError getResendData(AooBool& b) {
         return control(kAooCtlGetResendData, 0, AOO_ARG(b));
     }
 
-    /** \copydoc AooSink_setResendInterval() */
+    /** \brief Set resend interval (in seconds)
+     *
+     * This is the interval between individual resend attempts for a specific frame.
+     * Since there is always a certain roundtrip delay between source and sink,
+     * it makes sense to wait between resend attempts to not spam the network
+     * with redundant messages.
+     */
     AooError setResendInterval(AooSeconds s) {
         return control(kAooCtlSetResendInterval, 0, AOO_ARG(s));
     }
 
-    /** \copydoc AooSink_getResendInterval() */
+    /** \brief Get resend interval (in seconds) */
     AooError getResendInterval(AooSeconds& s) {
         return control(kAooCtlGetResendInterval, 0, AOO_ARG(s));
     }
 
-    /** \copydoc AooSink_setResendLimit() */
+    /** \brief Set the frame resend limit
+     *
+     * This is the max. number of frames to request in a single process call.
+     */
     AooError setResendLimit(AooInt32 n) {
         return control(kAooCtlSetResendLimit, 0, AOO_ARG(n));
     }
 
-    /** \copydoc AooSink_getResendLimit() */
+    /** \brief Get the frame resend limit */
     AooError getResendLimit(AooInt32& n) {
         return control(kAooCtlGetResendLimit, 0, AOO_ARG(n));
     }
 
-    /** \copydoc AooSink_setSourceTimeout() */
+    /** \brief Set source timeout (in seconds)
+     *
+     * The time to wait before removing inactive sources
+     */
     AooError setSourceTimeout(AooSeconds s) {
         return control(kAooCtlSetSourceTimeout, 0, AOO_ARG(s));
     }
 
-    /** \copydoc AooSink_getSourceTimeout() */
+    /** \brief Get source timeout (in seconds) */
     AooError getSourceTimeout(AooSeconds& s) {
         return control(kAooCtlGetSourceTimeout, 0, AOO_ARG(s));
     }
 
-    /** \copydoc AooSink_setInviteTimeout() */
+    /** \brief Set (un)invite timeout (in seconds)
+     *
+     * Time to wait before stopping the (un)invite process.
+     */
     AooError setInviteTimeout(AooSeconds s) {
         return control(kAooCtlSetInviteTimeout, 0, AOO_ARG(s));
     }
 
-    /** \copydoc AooSink_getInviteTimeout() */
+    /** \brief Get (un)invite timeout (in seconds) */
     AooError getInviteTimeout(AooSeconds& s) {
         return control(kAooCtlGetInviteTimeout, 0, AOO_ARG(s));
     }
 
-    /** \copydoc AooSink_resetSource() */
+    /** \brief Reset a specific source */
     AooError resetSource(const AooEndpoint& source) {
         return control(kAooCtlReset, (AooIntPtr)&source, nullptr, 0);
     }
 
-    /** \copydoc AooSink_getSourceFormat() */
-    AooError getSourceFormat(const AooEndpoint& source, AooFormatStorage& f) {
-        return control(kAooCtlGetFormat, (AooIntPtr)&source, AOO_ARG(f));
+    /** \brief Get the source stream format
+     *
+     * \param source The source endpoint.
+     * \param[out] format Pointer to an instance of `AooFormatStorage` or a similar struct
+     * that is large enough to hold any codec format. The `size` member in the format header
+     * should contain the storage size; on success it is updated to the actual format size.
+     */
+    AooError getSourceFormat(const AooEndpoint& source, AooFormatStorage& format) {
+        return control(kAooCtlGetFormat, (AooIntPtr)&source, AOO_ARG(format));
     }
 
-    /** \copydoc AooSink_getBufferFillRatio() */
+    /** \brief Get the current buffer fill ratio
+     *
+     * \param source The source endpoint.
+     * \param[out] ratio The current fill ratio (0.0: empty, 1.0: full)
+     */
     AooError getBufferFillRatio(const AooEndpoint& source, double& ratio) {
         return control(kAooCtlGetBufferFillRatio, (AooIntPtr)&source, AOO_ARG(ratio));
     }
