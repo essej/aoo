@@ -47,9 +47,9 @@ set(OPTIONS
     "-DAOO_DEBUG_JITTER_BUFFER=$<BOOL:${DEBUG_JITTER_BUFFER}>"
 )
 
-set(INCLUDE "../include/aoo")
-set(COMMON "../common")
-set(DEPS "../deps")
+set(INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../include/aoo")
+set(COMMON "${CMAKE_CURRENT_SOURCE_DIR}/../common")
+set(DEPS "${CMAKE_CURRENT_SOURCE_DIR}/../deps")
 
 file(GLOB HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp"
      "${INCLUDE}/codec/aoo_pcm.h" "src/*.hpp" "${COMMON}/*.hpp")
