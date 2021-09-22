@@ -8,16 +8,27 @@
 #include <atomic>
 
 #ifndef _WIN32
- #include <pthread.h>
- #ifdef __APPLE__
-  // macOS doesn't support unnamed pthread semaphores,
-  // so we use Mach semaphores instead
-  #include <mach/mach.h>
- #endif
- #ifdef __linux__
-  // unnamed pthread semaphore
+  #include <pthread.h>
+  // HACK to check if pthread_rwlock_t is available
+  #ifdef PTHREAD_RWLOCK_INITIALIZER
+    #define HAVE_PTHREAD_RWLOCK
+  #endif
+#endif
+
+#ifdef __APPLE__
+// macOS doesn't support unnamed pthread semaphores,
+// so we use Mach semaphores instead
+#include <mach/mach.h>
+#endif
+
+#if defined(__linux__) || defined(__FreeBSD__) || \
+    defined(__NetBSD__) || defined(__OpenBSD__)
+  #define HAVE_POSIX_SEMAPHORE
   #include <semaphore.h>
- #endif
+#endif
+
+#if defined(_WIN32) || defined(__APPLE__) || defined(HAVE_POSIX_SEMAPHORE)
+  #define HAVE_SEMAPHORE
 #endif
 
 // for shared_lock
@@ -110,7 +121,7 @@ private:
 
 //------------------------ shared_mutex -------------------------//
 
-#if defined(_WIN32) || defined(__APPLE__) || defined(__linux__)
+#if defined(_WIN32) || defined(HAVE_PTHREAD_RWLOCK)
 
 class shared_mutex {
 public:
@@ -138,7 +149,7 @@ private:
 // fallback
 using shared_mutex = std::shared_mutex;
 
-#endif
+#endif // _WIN32 || HAVE_PTHREAD_RWLOCK
 
 typedef std::try_to_lock_t try_to_lock_t;
 typedef std::defer_lock_t defer_lock_t;
@@ -180,6 +191,8 @@ private:
 
 //----------------------- semaphore --------------------------//
 
+#ifdef HAVE_SEMAPHORE
+
 namespace detail {
 
 class native_semaphore {
@@ -195,64 +208,57 @@ class native_semaphore {
     void *sem_;
 #elif defined(__APPLE__)
     semaphore_t sem_;
-#elif defined(__linux__) // pthreads
+#else // posix
     sem_t sem_;
-#else
-    void *sem_;
 #endif
 };
 
 } // detail
 
+#endif // HAVE_SEMAPHORE
+
 // thanks to https://preshing.com/20150316/semaphores-are-surprisingly-versatile/
 
 class semaphore {
  public:
-    void post(){
-        auto old = count_.fetch_add(1, std::memory_order_release);
-        if (old < 0){
-            sem_.post();
-        }
-    }
-    void wait(){
-        auto old = count_.fetch_sub(1, std::memory_order_acquire);
-        if (old <= 0){
-            sem_.wait();
-        }
-    }
+    semaphore();
+    ~semaphore();
+    semaphore(const semaphore&) = delete;
+    semaphore& operator=(const semaphore&) = delete;
+    void post();
+    void wait();
  private:
+#ifdef HAVE_SEMAPHORE
     detail::native_semaphore sem_;
     std::atomic<int32_t> count_{0};
+#else
+    // fallback using mutex + condition variable
+    pthread_mutex_t mutex_;
+    pthread_cond_t condition_;
+    int32_t count_{0};
+#endif
 };
 
 //------------------------- event ------------------------------//
 
 class event {
  public:
-    void set(){
-        int oldcount = count_.load(std::memory_order_relaxed);
-        for (;;) {
-            // don't increment past 1
-            // NOTE: we have to use the CAS loop even if we don't
-            // increment 'oldcount', because a another thread
-            // might decrement the counter concurrently!
-            auto newcount = oldcount >= 0 ? 1 : oldcount + 1;
-            if (count_.compare_exchange_weak(oldcount, newcount, std::memory_order_release,
-                                             std::memory_order_relaxed))
-                break;
-        }
-        if (oldcount < 0)
-            sem_.post(); // release one waiting thread
-    }
-    void wait(){
-        auto old = count_.fetch_sub(1, std::memory_order_acquire);
-        if (old <= 0){
-            sem_.wait();
-        }
-    }
+    event();
+    ~event();
+    event(const event&) = delete;
+    event& operator=(const event&) = delete;
+    void set();
+    void wait();
  private:
+#ifdef HAVE_SEMAPHORE
     detail::native_semaphore sem_;
     std::atomic<int32_t> count_{0};
+#else
+    // fallback using mutex + condition variable
+    pthread_mutex_t mutex_;
+    pthread_cond_t condition_;
+    bool state_{false};
+#endif // HAVE_SEMAPHORE
 };
 
 } // sync
