@@ -188,7 +188,8 @@ void mutex::unlock() {
 
 //-------------------- shared_mutex -------------------------//
 
-#ifdef _WIN32
+#if defined(_WIN32)
+
 shared_mutex::shared_mutex() {
     InitializeSRWLock((PSRWLOCK)& rwlock_);
 }
@@ -213,7 +214,9 @@ bool shared_mutex::try_lock_shared() {
 void shared_mutex::unlock_shared() {
     ReleaseSRWLockShared((PSRWLOCK)&rwlock_);
 }
-#else
+
+#elif defined(__APPLE__) || defined(__linux__)
+
 shared_mutex::shared_mutex() {
     pthread_rwlock_init(&rwlock_, nullptr);
 }
@@ -240,6 +243,7 @@ bool shared_mutex::try_lock_shared() {
 void shared_mutex::unlock_shared() {
     pthread_rwlock_unlock(&rwlock_);
 }
+
 #endif
 
 //-------------------- native_semaphore -----------------------//
@@ -251,8 +255,10 @@ native_semaphore::native_semaphore(){
     sem_ = CreateSemaphoreA(0, 0, LONG_MAX, 0);
 #elif defined(__APPLE__)
     semaphore_create(mach_task_self(), &sem_, SYNC_POLICY_FIFO, 0);
-#else // pthreads
+#elif defined(__linux__) // pthreads
     sem_init(&sem_, 0, 0);
+#else
+    // TODO
 #endif
 }
 
@@ -261,8 +267,10 @@ native_semaphore::~native_semaphore(){
     CloseHandle(sem_);
 #elif defined(__APPLE__)
     semaphore_destroy(mach_task_self(), sem_);
-#else // pthreads
+#elif defined(__linux__) // pthreads
     sem_destroy(&sem_);
+#else
+    // TODO
 #endif
 }
 
@@ -271,8 +279,10 @@ void native_semaphore::post(){
     ReleaseSemaphore(sem_, 1, 0);
 #elif defined(__APPLE__)
     semaphore_signal(sem_);
-#else
+#elif defined(__linux__) // pthreads
     sem_post(&sem_);
+#else
+    // TODO
 #endif
 }
 
@@ -281,8 +291,10 @@ void native_semaphore::wait(){
     WaitForSingleObject(sem_, INFINITE);
 #elif defined(__APPLE__)
     semaphore_wait(sem_);
-#else
+#elif defined(__linux__) // pthreads
     while (sem_wait(&sem_) == -1 && errno == EINTR) continue;
+#else
+    // TODO
 #endif
 }
 

@@ -8,15 +8,16 @@
 #include <atomic>
 
 #ifndef _WIN32
-#include <pthread.h>
-#ifdef __APPLE__
+ #include <pthread.h>
+ #ifdef __APPLE__
   // macOS doesn't support unnamed pthread semaphores,
   // so we use Mach semaphores instead
   #include <mach/mach.h>
-#else
+ #endif
+ #ifdef __linux__
   // unnamed pthread semaphore
   #include <semaphore.h>
-#endif
+ #endif
 #endif
 
 // for shared_lock
@@ -109,6 +110,8 @@ private:
 
 //------------------------ shared_mutex -------------------------//
 
+#if defined(_WIN32) || defined(__APPLE__) || defined(__linux__)
+
 class shared_mutex {
 public:
     shared_mutex();
@@ -130,6 +133,12 @@ private:
     pthread_rwlock_t rwlock_;
 #endif
 };
+
+#else
+// fallback
+using shared_mutex = std::shared_mutex;
+
+#endif
 
 typedef std::try_to_lock_t try_to_lock_t;
 typedef std::defer_lock_t defer_lock_t;
@@ -186,8 +195,10 @@ class native_semaphore {
     void *sem_;
 #elif defined(__APPLE__)
     semaphore_t sem_;
-#else // pthreads
+#elif defined(__linux__) // pthreads
     sem_t sem_;
+#else
+    void *sem_;
 #endif
 };
 

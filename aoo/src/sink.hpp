@@ -378,8 +378,10 @@ private:
     timer timer_;
     // options
 #if __cplusplus >= 201703L
+  #ifndef ESP_PLATFORM
     static_assert(std::atomic<AooSeconds>::is_always_lock_free,
                   "AooSeconds is not lockfree!");
+  #endif
 #endif
 
     std::atomic<AooSeconds> buffersize_{ AOO_SINK_BUFFER_SIZE };
