@@ -82,7 +82,7 @@ struct time_tag {
     }
 
     friend bool operator==(time_tag lhs, time_tag rhs){
-        return lhs.value_ = rhs.value_;
+        return lhs.value_ == rhs.value_;
     }
     friend bool operator<(time_tag lhs, time_tag rhs){
         return lhs.value_ < rhs.value_;
