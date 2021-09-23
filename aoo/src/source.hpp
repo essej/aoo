@@ -228,7 +228,7 @@ class Source final : public AooSource {
     bool metadata_accepted_{false};
     sync::spinlock metadata_lock_;
     // timing
-    std::atomic<double> realsr_{0};
+    atomic64_relaxed<AooSampleRate> realsr_{0};
     time_dll dll_;
     timer timer_;
     // buffers and queues
@@ -258,19 +258,12 @@ class Source final : public AooSource {
     // thread synchronization
     sync::shared_mutex update_mutex_;
     // options
-#if __cplusplus >= 201703L
-  #ifndef ESP_PLATFORM
-    static_assert(std::atomic<AooSeconds>::is_always_lock_free,
-                  "AooSeconds is not lockfree!");
-  #endif
-#endif
-
-    std::atomic<AooSeconds> buffersize_{ AOO_SOURCE_BUFFER_SIZE };
-    std::atomic<AooSeconds> resend_buffersize_{ AOO_RESEND_BUFFER_SIZE };
+    std::atomic<float> buffersize_{ AOO_SOURCE_BUFFER_SIZE };
+    std::atomic<float> resend_buffersize_{ AOO_RESEND_BUFFER_SIZE };
     std::atomic<int32_t> packetsize_{ AOO_PACKET_SIZE };
     std::atomic<int32_t> redundancy_{ AOO_SEND_REDUNDANCY };
-    std::atomic<double> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
-    std::atomic<AooSeconds> ping_interval_{ AOO_PING_INTERVAL };
+    std::atomic<float> ping_interval_{ AOO_PING_INTERVAL };
+    std::atomic<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
     std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
     std::atomic<bool> timer_check_{ AOO_XRUN_DETECTION };
     std::atomic<bool> binary_{ AOO_BINARY_DATA_MSG };

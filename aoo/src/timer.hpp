@@ -2,7 +2,12 @@
 
 #include "aoo/aoo.h"
 
-#include "common/sync.hpp"
+#include "imp.hpp"
+
+#ifndef HAVE_64BIT_ATOMICS
+# include "common/sync.hpp"
+#endif
+
 #include "common/time.hpp"
 
 #include <memory>
@@ -24,16 +29,19 @@ public:
 
     void setup(int32_t sr, int32_t blocksize, bool check);
     void reset();
-    double get_elapsed() const {
-        return elapsed_.load(std::memory_order_relaxed);
-    }
-    time_tag get_absolute() const{
-        return last_.load(std::memory_order_relaxed);
-    }
+    double get_elapsed() const;
+    time_tag get_absolute() const;
     state update(time_tag t, double& error);
 private:
+#ifdef HAVE_64BIT_ATOMICS
     std::atomic<uint64_t> last_;
     std::atomic<double> elapsed_{0};
+#else
+    uint64_t last_;
+    double elapsed_{0};
+    mutable sync::spinlock lock_;
+    using scoped_lock = sync::scoped_lock<sync::spinlock>;
+#endif
 
     // moving average filter to detect timing issues
     struct moving_average_check {

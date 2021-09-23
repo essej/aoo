@@ -22,6 +22,8 @@
 # include <stdlib.h> // BSDs for example
 #endif
 
+/*------------------- logging ----------------------*/
+
 #define DO_LOG(level, msg) do { aoo::Log(level) << msg; } while (false)
 
 #define LOG_ALL(msg) DO_LOG(kAooLogLevelNone, msg)

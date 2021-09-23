@@ -334,7 +334,7 @@ AooError AOO_CALL aoo::Source::control(
     // get real samplerate
     case kAooCtlGetRealSampleRate:
         CHECKARG(double);
-        as<double>(ptr) = realsr_.load(std::memory_order_relaxed);
+        as<double>(ptr) = realsr_.load();
         break;
     // set/get ping interval
     case kAooCtlSetPingInterval:
@@ -606,7 +606,7 @@ AooError AOO_CALL aoo::Source::process(
         LOG_DEBUG("setup time DLL filter for source");
         auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
         dll_.setup(samplerate_, blocksize_, bw, 0);
-        realsr_.store(samplerate_, std::memory_order_relaxed);
+        realsr_.store(samplerate_);
         // it is safe to set 'lastpingtime' after updating
         // the timer, because in the worst case the ping
         // is simply sent the next time.
@@ -642,7 +642,7 @@ AooError AOO_CALL aoo::Source::process(
             auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
             dll_.setup(samplerate_, blocksize_, bw, elapsed);
         }
-        realsr_.store(dll_.samplerate(), std::memory_order_relaxed);
+        realsr_.store(dll_.samplerate());
     }
 
 #if NO_SINKS_IDLE
@@ -687,7 +687,7 @@ AooError AOO_CALL aoo::Source::process(
 
     double sr;
     if (dynamic_resampling){
-        sr = realsr_.load(std::memory_order_relaxed) / (double)samplerate_
+        sr = realsr_.load() / (double)samplerate_
                 * (double)format_->sampleRate;
     } else {
         sr = format_->sampleRate;

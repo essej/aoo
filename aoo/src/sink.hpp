@@ -329,7 +329,7 @@ public:
 
     int32_t samplerate() const { return samplerate_; }
 
-    AooSampleRate real_samplerate() const { return realsr_.load(std::memory_order_relaxed); }
+    AooSampleRate real_samplerate() const { return realsr_.load(); }
 
     bool dynamic_resampling() const { return dynamic_resampling_.load(std::memory_order_relaxed);}
 
@@ -373,24 +373,17 @@ private:
     source_list sources_;
     sync::mutex source_mutex_;
     // timing
-    std::atomic<AooSampleRate> realsr_{0};
+    atomic64_relaxed<AooSampleRate> realsr_{0};
     time_dll dll_;
     timer timer_;
     // options
-#if __cplusplus >= 201703L
-  #ifndef ESP_PLATFORM
-    static_assert(std::atomic<AooSeconds>::is_always_lock_free,
-                  "AooSeconds is not lockfree!");
-  #endif
-#endif
-
-    std::atomic<AooSeconds> buffersize_{ AOO_SINK_BUFFER_SIZE };
-    std::atomic<AooSeconds> resend_interval_{ AOO_RESEND_INTERVAL };
+    std::atomic<float> buffersize_{ AOO_SINK_BUFFER_SIZE };
+    std::atomic<float> resend_interval_{ AOO_RESEND_INTERVAL };
     std::atomic<int32_t> packetsize_{ AOO_PACKET_SIZE };
     std::atomic<int32_t> resend_limit_{ AOO_RESEND_LIMIT };
-    std::atomic<AooSeconds> source_timeout_{ AOO_SOURCE_TIMEOUT };
-    std::atomic<AooSeconds> invite_timeout_{ AOO_INVITE_TIMEOUT };
-    std::atomic<double> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
+    std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT };
+    std::atomic<float> invite_timeout_{ AOO_INVITE_TIMEOUT };
+    std::atomic<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
     std::atomic<bool> resend_{AOO_RESEND_DATA};
     std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
     std::atomic<bool> timer_check_{ AOO_XRUN_DETECTION };

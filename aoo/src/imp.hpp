@@ -15,7 +15,65 @@
 #include <vector>
 #include <string>
 
+//------------------- atomics ----------------------//
+
+#if __cplusplus >= 201703L
+// help to catch platforms without lockfree 64-bit atomics
+# ifndef ESP_PLATFORM
+static_assert(std::atomic<double>::is_always_lock_free,
+              "std::atomic<double> is not lockfree!");
+
+static_assert(std::atomic<uint64_t>::is_always_lock_free,
+              "std::atomic<uint64_t> is not lockfree!");
+# endif
+#endif // C++17
+
+#if defined(__i386__) || defined(_M_IX86) || \
+    defined(__x86_64__) || defined(_M_X64) || \
+    defined(__arm__) || defined(__aarch64__) || \
+    defined(__ppc64__)
+# define HAVE_64BIT_ATOMICS
+#else
+# warning "platform does not support 64-bit atomic operations - using spinlocks"
+# include "common/sync.hpp"
+#endif
+
 namespace aoo {
+
+template<typename T>
+class atomic64_relaxed {
+public:
+    atomic64_relaxed(T value) : value_(value) {}
+
+    T load() const {
+    #ifdef HAVE_64BIT_ATOMICS
+        return value_.load(std::memory_order_relaxed);
+    #else
+        sync::scoped_lock<sync::spinlock> lock(lock_);
+        return value_;
+    #endif
+    }
+
+    void store(T value) {
+    #ifdef HAVE_64BIT_ATOMICS
+        value_.store(value, std::memory_order_relaxed);
+    #else
+        sync::scoped_lock<sync::spinlock> lock(lock_);
+        value_ = value;
+    #endif
+    }
+private:
+    static_assert(sizeof(T) == 8, "bad type for atomic64");
+#ifdef HAVE_64BIT_ATOMICS
+    std::atomic<T> value_;
+#else
+    T value_;
+    mutable sync::spinlock lock_;
+#endif
+};
+
+
+//---------------- codec ---------------------------//
 
 const struct AooCodecInterface * find_codec(const char * name);
 
@@ -139,7 +197,6 @@ private:
 };
 
 //---------------- allocator -----------------------//
-
 
 #if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
 

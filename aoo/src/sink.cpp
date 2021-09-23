@@ -193,7 +193,7 @@ AooError AOO_CALL aoo::Sink::control(
     // real samplerate
     case kAooCtlGetRealSampleRate:
         CHECKARG(double);
-        as<double>(ptr) = realsr_.load(std::memory_order_relaxed);
+        as<double>(ptr) = realsr_.load();
         break;
     // packetsize
     case kAooCtlSetPacketSize:
@@ -409,7 +409,7 @@ AooError AOO_CALL aoo::Sink::process(
         LOG_DEBUG("setup time DLL filter for sink");
         auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
         dll_.setup(samplerate_, blocksize_, bw, 0);
-        realsr_.store(samplerate_, std::memory_order_relaxed);
+        realsr_.store(samplerate_);
     } else if (state == timer::state::error){
         // recover sources
         int32_t xrunsamples = error * samplerate_ + 0.5;
@@ -438,7 +438,7 @@ AooError AOO_CALL aoo::Sink::process(
             auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
             dll_.setup(samplerate_, blocksize_, bw, elapsed);
         }
-        realsr_.store(dll_.samplerate(), std::memory_order_relaxed);
+        realsr_.store(dll_.samplerate());
     }
 
     bool didsomething = false;

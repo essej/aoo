@@ -3,14 +3,24 @@
 namespace aoo {
 
 timer::timer(timer&& other){
+#ifdef HAVE_64BIT_ATOMICS
     last_ = other.last_.load();
     elapsed_ = other.elapsed_.load();
+#else
+    last_ = other.last_;
+    elapsed_ = other.elapsed_;
+#endif
     mavg_check_ = std::move(other.mavg_check_);
 }
 
 timer& timer::operator=(timer&& other){
+#ifdef HAVE_64BIT_ATOMICS
     last_ = other.last_.load();
     elapsed_ = other.elapsed_.load();
+#else
+    last_ = other.last_;
+    elapsed_ = other.elapsed_;
+#endif
     mavg_check_ = std::move(other.mavg_check_);
     return *this;
 }
@@ -27,21 +37,57 @@ void timer::setup(int32_t sr, int32_t blocksize, bool check){
 }
 
 void timer::reset(){
+#ifdef HAVE_64BIT_ATOMICS
     last_.store(0, std::memory_order_relaxed);
+#else
+    scoped_lock lock(lock_);
+    last_ = 0;
+#endif
+}
+
+double timer::get_elapsed() const {
+#ifdef HAVE_64BIT_ATOMICS
+    return elapsed_.load(std::memory_order_relaxed);
+#else
+    scoped_lock lock(lock_);
+    return elapsed_;
+#endif
+}
+
+time_tag timer::get_absolute() const {
+#ifdef HAVE_64BIT_ATOMICS
+    return last_.load(std::memory_order_relaxed);
+#else
+    scoped_lock lock(lock_);
+    return last_;
+#endif
 }
 
 timer::state timer::update(time_tag t, double& error){
+#ifdef HAVE_64BIT_ATOMICS
     time_tag last = last_.exchange(t, std::memory_order_relaxed);
+#else
+    sync::unique_lock<sync::spinlock> lock(lock_);
+    time_tag last = std::exchange(last_, t);
+#endif
     if (!last.is_empty()){
+    #ifndef HAVE_64BIT_ATOMICS
+        lock.unlock();
+    #endif
         auto delta = time_tag::duration(last, t);
     #if AOO_DEBUG_TIMER
         LOG_DEBUG("time delta: " << delta * 1000.0 << " ms");
     #endif
-
+    #ifdef HAVE_64BIT_ATOMICS
         // 'elapsed' is only ever modified in this function
         // (which is not reentrant!)
         auto elapsed = elapsed_.load(std::memory_order_relaxed) + delta;
         elapsed_.store(elapsed, std::memory_order_relaxed);
+    #else
+        lock.lock();
+        elapsed_ += delta;
+        lock.unlock();
+    #endif
 
         if (mavg_check_){
             return mavg_check_->check(delta, error);
@@ -50,7 +96,12 @@ timer::state timer::update(time_tag t, double& error){
         }
     } else {
         // reset
+    #ifdef HAVE_64BIT_ATOMICS
         elapsed_.store(0, std::memory_order_relaxed);
+    #else
+        elapsed_ = 0;
+        lock.unlock();
+    #endif
         if (mavg_check_){
             mavg_check_->reset();
         }
