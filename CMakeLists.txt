@@ -116,24 +116,22 @@ set(AOO_CMAKE "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 function(test_atomics feature file)
     message(STATUS "Checking ${feature} support")
 
-    try_run(RUN_RESULT_VAR COMPILE_RESULT_VAR
+    # For now we just try if it compiles and links.
+    # If C++17 is enabled, we would also get a compilation
+    # error if the atomics are not always lockfree.
+    # Also, the executable return EXIT_FAILURE if is_lock_free()
+    # is false, so we could actually do a runtime test,
+    # but is doesn't work when cross compiling....
+    # LATER find a better solution.
+    try_compile(RESULT_VAR
         "${AOO_CMAKE}/build" "${AOO_CMAKE}/${file}"
-        COMPILE_OUTPUT_VARIABLE COMPILE_OUTPUT)
+        OUTPUT_VARIABLE COMPILE_OUTPUT)
 
-    if (COMPILE_RESULT_VAR)
-        if (RUN_RESULT_VAR STREQUAL FAILED_TO_RUN)
-            message(FATAL_ERROR "failed to run ${file}")
-        endif()
-
-        if (RUN_RESULT_VAR EQUAL 0)
-            message(STATUS "- ok")
-            add_definitions("-DHAVE_${feature}")
-        else()
-            message(STATUS "- failed (not lock-free)")
-            message("Falling back to software emulation")
-        endif()
+    if (RESULT_VAR)
+        message(STATUS "- ok")
+        add_definitions("-DHAVE_${feature}")
     else()
-        message(STATUS "- failed with compilation error")
+        message(STATUS "- failed")
         message(${COMPILE_OUTPUT})
         message("Falling back to software emulation")
     endif()

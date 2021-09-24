@@ -3,6 +3,11 @@
 
 volatile std::atomic<int64_t> i{0};
 
+#if __cplusplus >= 201703L
+static_assert(std::atomic<int64_t>::is_always_lock_free,
+              "atomic int64_t is not lockfree!");
+#endif
+
 int main() {
     i.store(1);
 
