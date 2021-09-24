@@ -110,6 +110,40 @@ if (LINUX)
     add_compile_options("-fPIC")
 endif()
 
+# custom feature tests
+set(AOO_CMAKE "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+function(test_atomics feature file)
+    message(STATUS "Checking ${feature} support")
+
+    try_run(RUN_RESULT_VAR COMPILE_RESULT_VAR
+        "${AOO_CMAKE}/build" "${AOO_CMAKE}/${file}"
+        COMPILE_OUTPUT_VARIABLE COMPILE_OUTPUT)
+
+    if (COMPILE_RESULT_VAR)
+        if (RUN_RESULT_VAR STREQUAL FAILED_TO_RUN)
+            message(FATAL_ERROR "failed to run ${file}")
+        endif()
+
+        if (RUN_RESULT_VAR EQUAL 0)
+            message(STATUS "- ok")
+            add_definitions("-DHAVE_${feature}")
+        else()
+            message(STATUS "- failed (not lock-free)")
+            message("Falling back to software emulation")
+        endif()
+    else()
+        message(STATUS "- failed with compilation error")
+        message(${COMPILE_OUTPUT})
+        message("Falling back to software emulation")
+    endif()
+endfunction()
+
+# atomic doubles
+test_atomics("ATOMIC_DOUBLE" "atomic_double.cpp")
+# atomic 64-bit integers
+test_atomics("ATOMIC_INT64" "atomic_int64.cpp")
+
 # networking support
 option(AOO_NET "build with networking support" ON)
 add_definitions("-DUSE_AOO_NET=$<BOOL:${AOO_NET}>")
