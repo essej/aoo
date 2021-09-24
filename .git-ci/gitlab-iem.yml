@@ -8,26 +8,21 @@ variables:
 ### script snippets
 
 .script:deps: &script_deps
+# submodules
+  - git submodule update --init
 # supercollider
   - git clone https://github.com/supercollider/supercollider.git "${SC_PATH}"
   - pushd "${SC_PATH}"
   - git submodule update --init
   - popd
-# submodules (Opus)
-  - git submodule update --init
-  - rm -rf deps/opus/build
-  - cmake -Hdeps/opus -Bdeps/opus/build -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=deps/opus -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE
-    -DOPUS_STACK_PROTECTOR=OFF
-  - make -C deps/opus/build install VERBOSE=1
 
 .script:cmake: &script_cmake
   - prefix="$(pwd)/build/${CI_JOB_NAME}"
   - rm -rf build
   - cmake -H. -Bbuild -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX="$prefix/aoo" -DSTATIC_LIBS=${STATIC_LIBS}
-    -DPD_EXTENSION=${PD_EXTENSION} -DPD_DIR="${PD_PATH}" -DPD_INSTALLDIR="$prefix/pd"
-    -DSUPERNOVA=${SUPERNOVA} -DSC_INCLUDEDIR="${SC_PATH}" -DSC_INSTALLDIR="$prefix/sc"
+    -DCMAKE_INSTALL_PREFIX="$prefix/aoo" -DAOO_STATIC_LIBS=${STATIC_LIBS} -DAOO_SYSTEM_OPUS=OFF
+    ${PD_EXTENSION:+-DPD_EXTENSION=${PD_EXTENSION}} -DPD_DIR="${PD_PATH}" -DPD_INSTALLDIR="$prefix/pd"
+    -DSC_SUPERNOVA=${SUPERNOVA} -DSC_INCLUDEDIR="${SC_PATH}" -DSC_INSTALLDIR="$prefix/sc"
 
 ### build snippets
 .script:make: &script_make

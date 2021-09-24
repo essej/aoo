@@ -11,7 +11,11 @@
 #include "aoo/aoo_defines.h"
 #include "aoo/aoo_source.h"
 
-#include <opus/opus_multistream.h>
+#ifdef AOO_OPUS_MULTISTREAM_H
+# include AOO_OPUS_MULTISTREAM_H
+#else
+# include <opus/opus_multistream.h>
+#endif
 
 #include <string.h>
 

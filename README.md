@@ -74,38 +74,44 @@ and also helped reviving the Virtual IEM Computer Music Ensemble [^VICE] within 
 
 ### Content
 
-`aoo` -        AOO C/C++ library source code
-`common` -     shared code
-`deps` -       dependencies
-`doku` -       documentation, papers
-`include` -    public headers
-`pd` -         Pd external
-`sc` -         SC extension
-`tests` -      test suite
+`aoo`     - AOO C/C++ library source code
+`cmake`   - CMake stuff (e.g. feature tests)
+`common`  - shared code
+`deps`    - dependencies
+`doku`    - documentation, papers
+`doxygen` - doxygen documentation
+`include` - public headers
+`pd`      - Pd external
+`sc`      - SC extension
+`tests`   - test suite
 
 
 #### C/C++ library
 
-See the headers in the `aoo/include` directory for documentation.
+The public API headers are contained in the `aoo/include` directory.
+
+To generate the API documentation you need to have `doxygen` installed. Just run the `doxygen`
+command in the toplevel folder and it will store the generated files in the `doxygen` folder.
+You can view the documentation in a standard web browser by opening `doxygen/html/index.html`.
 
 The library features 4 object classes:
 
-`AooSource` - AOO source object, see `aoo/include/aoo_source[.h|.hpp]`
+`AooSource` - AOO source object, see `aoo_source.h` and `aoo_source.hpp` in `include/aoo`.
 
-`AooSink` - AOO sink object, see `aoo/include/aoo_sink[.h|.hpp]`
+`AooSink` - AOO sink object, see `aoo_sink.h` and `aoo_sink.hpp` in `include/aoo`.
 
-`AooClient` - AOO client object, `see aoo/include/aoo_client[.h|.hpp]`
+`AooClient` - AOO client object, see `aoo_client.h` and `aoo_client.hpp` in `include/aoo`.
 
-`AooServer` - AOO UDP hole punching server, `see aoo/include/aoo_server[.h|.hpp]`
+`AooServer` - AOO UDP hole punching server, see `aoo_server.h` and `aoo_server.hpp` in `include/aoo`.
 
-The `.h` files contain a set of C functions, the `.hpp` files contain C++ interfaces.
+**NOTE**:
+By following certain COM conventions (no virtual destructors, no method overloading, only simple
+function parameters and return types), we achieve portable C++ interfaces on Windows and all other
+platforms with a stable vtable layout (generally true for Linux and macOS, in my experience).
+This means you can grab a pre-build version of the AOO shared library and directly use it in your
+C++ project.
 
-**NOTE**: By following certain COM conventions (no virtual destructors, no method overloading,
-only POD parameters and simple return types), we achieve portable C++ interfaces on Windows
-and all other platforms where the vtable layout for such classes is stable (generally true
-for Linux and macOS, in my experience). This means you only have to build 'aoo' once as a
-shared library and can then use its C++ interface in applications built with different
-compilers resp. compiler versions. If you want to play it extra safe, use the C interface :-)
+The C interface is meant to be used in C projects and for creating bindings to other languages.
 
 
 #### Pd external
@@ -147,23 +153,23 @@ TODO
 1. Install Pure Data.
    Windows/macOS: http://msp.ucsd.edu/software.html
    Linux: `sudo apt-get install pure-data-dev
-2. The `BUILD_PD_EXTERNAL` CMake variable must be `ON`
+2. The `AOO_BUILD_PD_EXTERNAL` CMake variable must be `ON`
 3. Make sure that `PD_INCLUDEDIR` points to the Pd `src` or `include` directory.
 4. Windows: make sure that `PD_BINDIR` points to the Pd `bin` directory.
 5. Set `PD_INSTALLDIR` to the desired installation path (if you're not happy with the default).
 
-If you do *not* want to build the Pd external, set `BUILD_PD_EXTERNAL` to `OFF`!
+If you do *not* want to build the Pd external, set `AOO_BUILD_PD_EXTERNAL` to `OFF`!
 
 
 ##### SuperCollider
 
 1. Clone the SuperCollider source code from https://github.com/supercollider/supercollider.
-2. The `BUILD_SC_EXTENSION` CMake variable must be `ON`
+2. The `AOO_BUILD_SC_EXTENSION` CMake variable must be `ON`
 3. Set `SC_INCLUDEDIR` to the `supercollider` folder (which should contain the subfolders `common` and `include`)
 4. Set `SC_INSTALLDIR` to the desired installation path (if you're not happy with the default).
-5. Set `SUPERNOVA` to `ON` if you want to also build a Supernova version.
+5. Set `SC_SUPERNOVA` to `ON` if you want to also build a Supernova version.
 
-If you do *not* want to build the SC extension, set `BUILD_SC_EXTENSION` to `OFF`!
+If you do *not* want to build the SC extension, set `AOO_BUILD_SC_EXTENSION` to `OFF`!
 
 
 ##### Opus
@@ -176,17 +182,17 @@ a) Link with the system wide `opus` library
 1. Install Opus:
   * macOS -> homebrew: `brew install opus`
   * Windows -> Msys2: `pacman -S mingw32/mingw-w64-i686-opus` (32 bit) resp.
-                     `pacman -S mingw64/mingw-w64-x86_64-opus` (64 bit)
+                      `pacman -S mingw64/mingw-w64-x86_64-opus` (64 bit)
   * Linux -> apt: `sudo apt-get install libopus-dev`
-2. Set the `SYSTEM_OPUS` CMake variable to `ON` (see below).
+2. Set the `AOO_SYSTEM_OPUS` CMake variable to `ON` (see below).
+   **NOTE**: You can override the `AOO_OPUS_LDFLAGS` variable if you need special linker commands.
 
-b) Build Opus from source
+b) Use local Opus library
 
-1. Clone from `https://github.com/xiph/opus.git` into the `deps` folder.
-2. Follow the build instructions and install it directly into the `opus` folder.
-   (The static library should be in `opus/lib`.)
+1. Run `git submodule update --init` to fetch the Opus source code
+2. Set the `AOO_SYSTEM_OPUS` CMake variable to `OFF` (see below).
+3. Now Opus will be included in the project and you can configure it as needed.
    **NOTE**: Don't build the shared library, i.e. `OPUS_BUILD_SHARED_LIBRARY` should be `OFF`.
-3. Set the `SYSTEM_OPUS` CMake variable to `OFF` (see below).
 
 **NOTE**: by default, a) will link dynamically with the Opus library and b) will link statically.
 For local builds, a) is more convenient. If you want to ship it to other people, b) might be preferred.
@@ -212,19 +218,19 @@ These are the most important project options:
 * `AOO_NET` (BOOL) - Build with integrated networking support (`AooClient` and `AooServer`).
    Disable it if you don't need it and want to reduce code size.
    **NOTE**: It is required for the Pd and SC extensions. Default: `ON`.
-* `BUILD_AOO_STATIC` (BOOL) - Build static AOO library. Default: `ON`.
-* `BUILD_AOO_SHARED` (BOOL) - Build shared AOO library. Default: `ON`.
-* `BUILD_PD_EXTERNAL` (BOOL) - Build the Pd external. Default: `ON`.
-* `BUILD_SC_EXTENSION` (BOOL) - Build the SuperCollider extension. Default: `ON`
+* `AOO_BUILD_STATIC_LIBRARY` (BOOL) - Build static AOO library. Default: `ON`.
+* `AOO_BUILD_SHARED_LIBRARY` (BOOL) - Build shared AOO library. Default: `ON`.
+* `AOO_BUILD_PD_EXTERNAL` (BOOL) - Build the Pd external. Default: `ON`.
+* `AOO_BUILD_SC_EXTENSION` (BOOL) - Build the SuperCollider extension. Default: `ON`
+* `AOO_CODEC_OPUS` (BOOL) - Enable/disable built-in Opus support
+* `AOO_LOG_LEVEL` (STRING) - Choose one of the following log levels:
+   "None", "Error", "Warning", "Verbose", "Debug". Default: "Warning".
+* `AOO_STATIC_LIBS` (BOOL) - Linux and MinGW only:
+   Link statically with `libgcc`, `libstdc++` and `libpthread`. Makes sure that the
+   resulting binaries don't depend on specific system library versions. Default: `ON`.
 * `CMAKE_BUILD_TYPE` (STRING) - Choose one of the following build types:
    "Release", "RelMinSize", "RelWithDebInfo", "Debug". Default: "Release".
 * `CMAKE_INSTALL_PREFIX` (PATH) - Where to install the AOO C/C++ library.
-* `CODEC_OPUS` (BOOL) - Enable/disable built-in Opus support
-* `LOG_LEVEL` (STRING) - Choose one of the following log levels:
-   "None", "Error", "Warning", "Verbose", "Debug". Default: "Warning".
-* `STATIC_LIBS` (BOOL) - Linux and MinGW only:
-   Link statically with `libgcc`, `libstdc++` and `libpthread`. Makes sure that the
-   resulting binaries don't depend on specific system library versions. Default: `ON`.
 
 `cmake-gui` will show all available options. Alternatively, run `cmake . -LH` from the `build` folder.
 
