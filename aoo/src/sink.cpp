@@ -402,12 +402,12 @@ AooError AOO_CALL aoo::Sink::process(
 
     // update timer
     // always do this, even if there are no sources!
-    bool dynamic_resampling = dynamic_resampling_.load(std::memory_order_relaxed);
+    bool dynamic_resampling = dynamic_resampling_.load();
     double error;
     auto state = timer_.update(t, error);
     if (state == timer::state::reset){
         LOG_DEBUG("setup time DLL filter for sink");
-        auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
+        auto bw = dll_bandwidth_.load();
         dll_.setup(samplerate_, blocksize_, bw, 0);
         realsr_.store(samplerate_);
     } else if (state == timer::state::error){
@@ -435,7 +435,7 @@ AooError AOO_CALL aoo::Sink::process(
         #endif
         } else {
             // reset time DLL with nominal samplerate
-            auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
+            auto bw = dll_bandwidth_.load();
             dll_.setup(samplerate_, blocksize_, bw, elapsed);
         }
         realsr_.store(dll_.samplerate());

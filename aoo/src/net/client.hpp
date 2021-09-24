@@ -264,11 +264,11 @@ public:
     void perform_leave_group(const std::string& group,
                              AooNetCallback cb, void *user);
 
-    double ping_interval() const { return ping_interval_.load(std::memory_order_relaxed); }
+    double ping_interval() const { return ping_interval_.load(); }
 
-    double request_interval() const { return request_interval_.load(std::memory_order_relaxed); }
+    double request_interval() const { return request_interval_.load(); }
 
-    double request_timeout() const { return request_timeout_.load(std::memory_order_relaxed); }
+    double request_timeout() const { return request_timeout_.load(); }
 
     void send_event(std::unique_ptr<ievent> e);
 
@@ -342,9 +342,9 @@ private:
     void *eventcontext_ = nullptr;
     AooEventMode eventmode_ = kAooEventModeNone;
     // options
-    std::atomic<AooSeconds> ping_interval_{AOO_NET_CLIENT_PING_INTERVAL * 0.001};
-    std::atomic<AooSeconds> request_interval_{AOO_NET_CLIENT_REQUEST_INTERVAL * 0.001};
-    std::atomic<AooSeconds> request_timeout_{AOO_NET_CLIENT_REQUEST_TIMEOUT * 0.001};
+    parameter<AooSeconds> ping_interval_{AOO_NET_CLIENT_PING_INTERVAL * 0.001};
+    parameter<AooSeconds> request_interval_{AOO_NET_CLIENT_REQUEST_INTERVAL * 0.001};
+    parameter<AooSeconds> request_timeout_{AOO_NET_CLIENT_REQUEST_TIMEOUT * 0.001};
 
     // methods
     bool wait_for_event(float timeout);

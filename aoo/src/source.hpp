@@ -182,7 +182,7 @@ class Source final : public AooSource {
 
     //----------------------- semi-public methods -------------------//
 
-    AooId id() const { return id_.load(std::memory_order_relaxed); }
+    AooId id() const { return id_.load(); }
 
     bool is_running() const {
         return state_.load(std::memory_order_acquire) == stream_state::run;
@@ -199,7 +199,7 @@ class Source final : public AooSource {
     using scoped_spinlock = sync::scoped_lock<sync::spinlock>;
 
     // settings
-    std::atomic<AooId> id_;
+    parameter<AooId> id_;
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
     int32_t samplerate_ = 0;
@@ -228,7 +228,7 @@ class Source final : public AooSource {
     bool metadata_accepted_{false};
     sync::spinlock metadata_lock_;
     // timing
-    atomic64_relaxed<AooSampleRate> realsr_{0};
+    parameter<AooSampleRate> realsr_{0};
     time_dll dll_;
     timer timer_;
     // buffers and queues
@@ -258,15 +258,15 @@ class Source final : public AooSource {
     // thread synchronization
     sync::shared_mutex update_mutex_;
     // options
-    std::atomic<float> buffersize_{ AOO_SOURCE_BUFFER_SIZE };
-    std::atomic<float> resend_buffersize_{ AOO_RESEND_BUFFER_SIZE };
-    std::atomic<int32_t> packetsize_{ AOO_PACKET_SIZE };
-    std::atomic<int32_t> redundancy_{ AOO_SEND_REDUNDANCY };
-    std::atomic<float> ping_interval_{ AOO_PING_INTERVAL };
-    std::atomic<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
-    std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
-    std::atomic<bool> timer_check_{ AOO_XRUN_DETECTION };
-    std::atomic<bool> binary_{ AOO_BINARY_DATA_MSG };
+    parameter<float> buffersize_{ AOO_SOURCE_BUFFER_SIZE };
+    parameter<float> resend_buffersize_{ AOO_RESEND_BUFFER_SIZE };
+    parameter<int32_t> packetsize_{ AOO_PACKET_SIZE };
+    parameter<int32_t> redundancy_{ AOO_SEND_REDUNDANCY };
+    parameter<float> ping_interval_{ AOO_PING_INTERVAL };
+    parameter<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
+    parameter<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
+    parameter<bool> timer_check_{ AOO_XRUN_DETECTION };
+    parameter<bool> binary_{ AOO_BINARY_DATA_MSG };
 
     // helper methods
     sink_desc * do_add_sink(const ip_address& addr, AooId id, AooId stream_id);

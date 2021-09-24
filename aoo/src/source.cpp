@@ -599,12 +599,12 @@ AooError AOO_CALL aoo::Source::process(
     // update timer
     // always do this, even if there are no sinks.
     // do it *before* trying to lock the mutex
-    bool dynamic_resampling = dynamic_resampling_.load(std::memory_order_relaxed);
+    bool dynamic_resampling = dynamic_resampling_.load();
     double error;
     auto timerstate = timer_.update(t, error);
     if (timerstate == timer::state::reset){
         LOG_DEBUG("setup time DLL filter for source");
-        auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
+        auto bw = dll_bandwidth_.load();
         dll_.setup(samplerate_, blocksize_, bw, 0);
         realsr_.store(samplerate_);
         // it is safe to set 'lastpingtime' after updating
@@ -639,7 +639,7 @@ AooError AOO_CALL aoo::Source::process(
         #endif
         } else {
             // reset time DLL with nominal samplerate
-            auto bw = dll_bandwidth_.load(std::memory_order_relaxed);
+            auto bw = dll_bandwidth_.load();
             dll_.setup(samplerate_, blocksize_, bw, elapsed);
         }
         realsr_.store(dll_.samplerate());
@@ -1602,8 +1602,7 @@ void Source::send_data(const sendfn& fn){
             sink_lock lock(sinks_);
         #endif
             // send block to all sinks
-            send_packet(cached_sinks_, id(), d, fn,
-                        binary_.load(std::memory_order_relaxed));
+            send_packet(cached_sinks_, id(), d, fn, binary_.load());
 
             updatelock.lock();
         }
@@ -1651,8 +1650,8 @@ void Source::send_data(const sendfn& fn){
             d.sequence = last_sequence = sequence_++;
 
             // calculate number of frames
-            bool binary = binary_.load(std::memory_order_relaxed);
-            auto packetsize = packetsize_.load(std::memory_order_relaxed);
+            bool binary = binary_.load();
+            auto packetsize = packetsize_.load();
             auto maxpacketsize = packetsize -
                     (binary ? kAooBinMsgDataHeaderSize : kAooMsgDataHeaderSize);
             auto dv = div(d.totalsize, maxpacketsize);
@@ -1748,7 +1747,7 @@ void Source::resend_data(const sendfn &fn){
         while (s.get_data_request(request)){
             auto block = history_.find(request.sequence);
             if (block){
-                bool binary = binary_.load(std::memory_order_relaxed);
+                bool binary = binary_.load();
 
                 auto stream_id = s.stream_id();
 

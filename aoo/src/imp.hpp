@@ -14,39 +14,100 @@
 #include <atomic>
 #include <vector>
 #include <string>
+#include <type_traits>
 
 //------------------- atomics ----------------------//
 
-#if __cplusplus >= 201703L
-// help to catch platforms without lockfree 64-bit atomics
-# ifndef ESP_PLATFORM
-static_assert(std::atomic<double>::is_always_lock_free,
-              "std::atomic<double> is not lockfree!");
-
-static_assert(std::atomic<uint64_t>::is_always_lock_free,
-              "std::atomic<uint64_t> is not lockfree!");
-# endif
-#endif // C++17
-
-#if defined(__i386__) || defined(_M_IX86) || \
-    defined(__x86_64__) || defined(_M_X64) || \
-    defined(__arm__) || defined(__aarch64__) || \
-    defined(__ppc64__)
-# define HAVE_64BIT_ATOMICS
-#else
-# warning "platform does not support 64-bit atomic operations - using spinlocks"
+#if !defined(HAVE_ATOMIC_DOUBLE) || !defined(HAVE_ATOMIC_INT64)
 # include "common/sync.hpp"
+// # warning "no support for 64-bit atomics"
 #endif
 
 namespace aoo {
 
+template<typename T, typename enable = void>
+class relaxed_atomic;
+
+// 32-bit atomics (and smaller)
 template<typename T>
-class atomic64_relaxed {
+class relaxed_atomic<T,
+        typename std::enable_if<(sizeof(T) <= 4)>::type> {
 public:
-    atomic64_relaxed(T value) : value_(value) {}
+    relaxed_atomic(T value) : value_(value) {}
 
     T load() const {
-    #ifdef HAVE_64BIT_ATOMICS
+        return value_.load(std::memory_order_relaxed);
+    }
+
+    void store(T value) {
+        value_.store(value, std::memory_order_relaxed);
+    }
+
+    double exchange(double value) {
+        return value_.exchange(value, std::memory_order_relaxed);
+    }
+private:
+#if __cplusplus >= 201703L
+    static_assert(std::atomic<T>::is_always_lock_free,
+                  "std::atomic<T> is not lockfree!");
+#endif
+    std::atomic<T> value_;
+};
+
+// specialization for doubles
+template<>
+class relaxed_atomic <double> {
+public:
+    relaxed_atomic(double value) : value_(value) {}
+
+    double load() const {
+    #ifdef HAVE_ATOMIC_DOUBLE
+        return value_.load(std::memory_order_relaxed);
+    #else
+        sync::scoped_lock<sync::spinlock> lock(lock_);
+        return value_;
+    #endif
+    }
+
+    void store(double value) {
+    #ifdef HAVE_ATOMIC_DOUBLE
+        value_.store(value, std::memory_order_relaxed);
+    #else
+        sync::scoped_lock<sync::spinlock> lock(lock_);
+        value_ = value;
+    #endif
+    }
+
+    double exchange(double value) {
+    #ifdef HAVE_ATOMIC_DOUBLE
+        return value_.exchange(value, std::memory_order_relaxed);
+    #else
+        sync::scoped_lock<sync::spinlock> lock(lock_);
+        return std::exchange(value_, value);
+    #endif
+    }
+private:
+#ifdef HAVE_ATOMIC_DOUBLE
+#if __cplusplus >= 201703L
+    static_assert(std::atomic<double>::is_always_lock_free,
+                  "atomic double is not lockfree!");
+#endif
+    std::atomic<double> value_;
+#else
+    double value_;
+    mutable sync::spinlock lock_;
+#endif
+};
+
+// specialization for 64-bit integers
+template<typename T>
+class relaxed_atomic<T, typename std::enable_if<
+        std::is_integral<T>::value && (sizeof(T) == 8)>::type> {
+public:
+    relaxed_atomic(T value) : value_(value) {}
+
+    T load() const {
+    #ifdef HAVE_ATOMIC_INT64
         return value_.load(std::memory_order_relaxed);
     #else
         sync::scoped_lock<sync::spinlock> lock(lock_);
@@ -55,16 +116,28 @@ public:
     }
 
     void store(T value) {
-    #ifdef HAVE_64BIT_ATOMICS
+    #ifdef HAVE_ATOMIC_INT64
         value_.store(value, std::memory_order_relaxed);
     #else
         sync::scoped_lock<sync::spinlock> lock(lock_);
         value_ = value;
     #endif
     }
+
+    T exchange(T value) {
+    #ifdef HAVE_ATOMIC_INT64
+        return value_.exchange(value, std::memory_order_relaxed);
+    #else
+        sync::scoped_lock<sync::spinlock> lock(lock_);
+        return std::exchange(value_, value);
+    #endif
+    }
 private:
-    static_assert(sizeof(T) == 8, "bad type for atomic64");
-#ifdef HAVE_64BIT_ATOMICS
+#ifdef HAVE_ATOMIC_INT64
+#if __cplusplus >= 201703L
+    static_assert(std::atomic<T>::is_always_lock_free,
+                  "atomic 64-bit integer is not lockfree!");
+#endif
     std::atomic<T> value_;
 #else
     T value_;
@@ -72,6 +145,8 @@ private:
 #endif
 };
 
+template<typename T>
+using parameter = relaxed_atomic<T>;
 
 //---------------- codec ---------------------------//
 

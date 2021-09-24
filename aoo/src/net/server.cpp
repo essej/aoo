@@ -519,7 +519,7 @@ void Server::update(){
 
 uint32_t Server::flags() const {
     uint32_t flags = 0;
-    if (allow_relay_.load(std::memory_order_relaxed)){
+    if (allow_relay_.load()){
         flags |= kAooNetServerRelay;
     }
     return flags;

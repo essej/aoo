@@ -291,8 +291,8 @@ private:
     std::atomic<bool> quit_{false};
 
     // options
-    std::atomic<bool> allow_relay_{AOO_NET_RELAY_ENABLE};
-    std::atomic<bool> notify_on_shutdown_{AOO_NET_NOTIFY_ON_SHUTDOWN};
+    parameter<bool> allow_relay_{AOO_NET_RELAY_ENABLE};
+    parameter<bool> notify_on_shutdown_{AOO_NET_NOTIFY_ON_SHUTDOWN};
 
     bool receive();
 

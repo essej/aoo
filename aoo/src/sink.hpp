@@ -323,7 +323,7 @@ public:
             AooCtl ctl, AooIntPtr index, void *data, AooSize size) override;
 
     // getters
-    AooId id() const { return id_.load(std::memory_order_relaxed); }
+    AooId id() const { return id_.load(); }
 
     int32_t nchannels() const { return nchannels_; }
 
@@ -331,23 +331,23 @@ public:
 
     AooSampleRate real_samplerate() const { return realsr_.load(); }
 
-    bool dynamic_resampling() const { return dynamic_resampling_.load(std::memory_order_relaxed);}
+    bool dynamic_resampling() const { return dynamic_resampling_.load();}
 
     int32_t blocksize() const { return blocksize_; }
 
-    AooSeconds buffersize() const { return buffersize_.load(std::memory_order_relaxed); }
+    AooSeconds buffersize() const { return buffersize_.load(); }
 
-    int32_t packetsize() const { return packetsize_.load(std::memory_order_relaxed); }
+    int32_t packetsize() const { return packetsize_.load(); }
 
-    bool resend_enabled() const { return resend_.load(std::memory_order_relaxed); }
+    bool resend_enabled() const { return resend_.load(); }
 
-    AooSeconds resend_interval() const { return resend_interval_.load(std::memory_order_relaxed); }
+    AooSeconds resend_interval() const { return resend_interval_.load(); }
 
-    int32_t resend_limit() const { return resend_limit_.load(std::memory_order_relaxed); }
+    int32_t resend_limit() const { return resend_limit_.load(); }
 
-    AooSeconds source_timeout() const { return source_timeout_.load(std::memory_order_relaxed); }
+    AooSeconds source_timeout() const { return source_timeout_.load(); }
 
-    AooSeconds invite_timeout() const { return invite_timeout_.load(std::memory_order_relaxed); }
+    AooSeconds invite_timeout() const { return invite_timeout_.load(); }
 
     AooSeconds elapsed_time() const { return timer_.get_elapsed(); }
 
@@ -360,7 +360,7 @@ public:
     void call_event(const source_event& e, AooThreadLevel level) const;
 private:
     // settings
-    std::atomic<AooId> id_;
+    parameter<AooId> id_;
     int32_t nchannels_ = 0;
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
@@ -373,20 +373,20 @@ private:
     source_list sources_;
     sync::mutex source_mutex_;
     // timing
-    atomic64_relaxed<AooSampleRate> realsr_{0};
+    parameter<AooSampleRate> realsr_{0};
     time_dll dll_;
     timer timer_;
     // options
-    std::atomic<float> buffersize_{ AOO_SINK_BUFFER_SIZE };
-    std::atomic<float> resend_interval_{ AOO_RESEND_INTERVAL };
-    std::atomic<int32_t> packetsize_{ AOO_PACKET_SIZE };
-    std::atomic<int32_t> resend_limit_{ AOO_RESEND_LIMIT };
-    std::atomic<float> source_timeout_{ AOO_SOURCE_TIMEOUT };
-    std::atomic<float> invite_timeout_{ AOO_INVITE_TIMEOUT };
-    std::atomic<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
-    std::atomic<bool> resend_{AOO_RESEND_DATA};
-    std::atomic<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
-    std::atomic<bool> timer_check_{ AOO_XRUN_DETECTION };
+    parameter<float> buffersize_{ AOO_SINK_BUFFER_SIZE };
+    parameter<float> resend_interval_{ AOO_RESEND_INTERVAL };
+    parameter<int32_t> packetsize_{ AOO_PACKET_SIZE };
+    parameter<int32_t> resend_limit_{ AOO_RESEND_LIMIT };
+    parameter<float> source_timeout_{ AOO_SOURCE_TIMEOUT };
+    parameter<float> invite_timeout_{ AOO_INVITE_TIMEOUT };
+    parameter<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
+    parameter<bool> resend_{AOO_RESEND_DATA};
+    parameter<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
+    parameter<bool> timer_check_{ AOO_XRUN_DETECTION };
     // events
     mutable aoo::unbounded_mpsc_queue<endpoint_event> eventqueue_;
     AooEventHandler eventhandler_ = nullptr;

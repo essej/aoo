@@ -4,15 +4,17 @@
 
 #include "imp.hpp"
 
-#ifndef HAVE_64BIT_ATOMICS
-# include "common/sync.hpp"
-#endif
-
 #include "common/time.hpp"
 
 #include <memory>
 #include <atomic>
 #include <array>
+
+#if defined(HAVE_ATOMIC_DOUBLE) && defined(HAVE_ATOMIC_INT64)
+# define AOO_TIMER_ATOMIC 1
+#else
+# define AOO_TIMER_ATOMIC 0
+#endif
 
 namespace aoo {
 
@@ -33,7 +35,7 @@ public:
     time_tag get_absolute() const;
     state update(time_tag t, double& error);
 private:
-#ifdef HAVE_64BIT_ATOMICS
+#if AOO_TIMER_ATOMIC
     std::atomic<uint64_t> last_;
     std::atomic<double> elapsed_{0};
 #else

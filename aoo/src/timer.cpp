@@ -3,7 +3,7 @@
 namespace aoo {
 
 timer::timer(timer&& other){
-#ifdef HAVE_64BIT_ATOMICS
+#if AOO_TIMER_ATOMIC
     last_ = other.last_.load();
     elapsed_ = other.elapsed_.load();
 #else
@@ -14,7 +14,7 @@ timer::timer(timer&& other){
 }
 
 timer& timer::operator=(timer&& other){
-#ifdef HAVE_64BIT_ATOMICS
+#if AOO_TIMER_ATOMIC
     last_ = other.last_.load();
     elapsed_ = other.elapsed_.load();
 #else
@@ -37,7 +37,7 @@ void timer::setup(int32_t sr, int32_t blocksize, bool check){
 }
 
 void timer::reset(){
-#ifdef HAVE_64BIT_ATOMICS
+#if AOO_TIMER_ATOMIC
     last_.store(0, std::memory_order_relaxed);
 #else
     scoped_lock lock(lock_);
@@ -46,7 +46,7 @@ void timer::reset(){
 }
 
 double timer::get_elapsed() const {
-#ifdef HAVE_64BIT_ATOMICS
+#if AOO_TIMER_ATOMIC
     return elapsed_.load(std::memory_order_relaxed);
 #else
     scoped_lock lock(lock_);
@@ -55,7 +55,7 @@ double timer::get_elapsed() const {
 }
 
 time_tag timer::get_absolute() const {
-#ifdef HAVE_64BIT_ATOMICS
+#if AOO_TIMER_ATOMIC
     return last_.load(std::memory_order_relaxed);
 #else
     scoped_lock lock(lock_);
@@ -64,21 +64,21 @@ time_tag timer::get_absolute() const {
 }
 
 timer::state timer::update(time_tag t, double& error){
-#ifdef HAVE_64BIT_ATOMICS
+#if AOO_TIMER_ATOMIC
     time_tag last = last_.exchange(t, std::memory_order_relaxed);
 #else
     sync::unique_lock<sync::spinlock> lock(lock_);
     time_tag last = std::exchange(last_, t);
 #endif
     if (!last.is_empty()){
-    #ifndef HAVE_64BIT_ATOMICS
+    #if !AOO_TIMER_ATOMIC
         lock.unlock();
     #endif
         auto delta = time_tag::duration(last, t);
     #if AOO_DEBUG_TIMER
         LOG_DEBUG("time delta: " << delta * 1000.0 << " ms");
     #endif
-    #ifdef HAVE_64BIT_ATOMICS
+    #if AOO_TIMER_ATOMIC
         // 'elapsed' is only ever modified in this function
         // (which is not reentrant!)
         auto elapsed = elapsed_.load(std::memory_order_relaxed) + delta;
@@ -96,7 +96,7 @@ timer::state timer::update(time_tag t, double& error){
         }
     } else {
         // reset
-    #ifdef HAVE_64BIT_ATOMICS
+    #if AOO_TIMER_ATOMIC
         elapsed_.store(0, std::memory_order_relaxed);
     #else
         elapsed_ = 0;
