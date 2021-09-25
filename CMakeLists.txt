@@ -17,7 +17,7 @@ include_directories(deps)
 # NOTE: build it first, so we don't pollute it with our own settings
 option(AOO_CODEC_OPUS "use Opus codec" ON)
 if (AOO_CODEC_OPUS)
-    option(AOO_SYSTEM_OPUS "use system provided Opus library" ON)
+    option(AOO_SYSTEM_OPUS "use system provided Opus library" OFF)
     if (AOO_SYSTEM_OPUS)
         set(AOO_OPUS_LDFLAGS "opus" CACHE STRING "Opus linker flags")
         message(STATUS "Opus library: ${AOO_OPUS_LDFLAGS}")
@@ -97,8 +97,9 @@ if (WIN32)
 endif()
 
 # compiler flags
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# use C++17 if possible, otherwise fallback to C++14
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED OFF)
 
 if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANG)
     add_compile_options("-fvisibility=hidden")
@@ -137,6 +138,9 @@ if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANG)
 
     add_compile_options("-ffast-math" "-funroll-loops" "-fomit-frame-pointer")
 
+    # disable some warnings being treated as errors
+    add_compile_options("-Wno-error=class-memaccess")
+
     # C++ only:
     if(CMAKE_COMPILER_IS_CLANG)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
@@ -149,8 +153,6 @@ if (MINGW)
 endif()
 
 # custom feature tests
-set(CMAKEDIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-
 function(test_atomics feature file)
     if (DEFINED AOO_HAVE_${feature})
         return()
@@ -165,7 +167,8 @@ function(test_atomics feature file)
     # It would also be possible to do a runtime test with,
     # is_lock_free(), but it wouldn't work for cross compiling...
     try_compile(RESULT_VAR
-        "${CMAKEDIR}/build" "${CMAKEDIR}/${file}"
+        "${CMAKE_CURRENT_BINARY_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${file}"
         OUTPUT_VARIABLE COMPILE_OUTPUT
         CXX_STANDARD 17)
 

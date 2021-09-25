@@ -40,7 +40,7 @@ message(STATUS "SC_SUPERNOVA: ${SC_SUPERNOVA}")
 
 # the UGens
 add_library(SC MODULE ${SRC})
-set_target_properties(SC PROPERTIES OUTPUT_NAME "AOO")
+set_target_properties(SC PROPERTIES OUTPUT_NAME "aoo")
 target_compile_definitions(SC PUBLIC -DAOO_STATIC)
 target_link_libraries(SC AOO_STATIC ${AOO_OPUS_LDFLAGS} ${LIBS})
 if (WIN32)
@@ -49,7 +49,7 @@ endif()
 
 if (SC_SUPERNOVA)
     add_library(SUPERNOVA MODULE ${SRC})
-    set_target_properties(SUPERNOVA PROPERTIES OUTPUT_NAME "AOO_supernova")
+    set_target_properties(SUPERNOVA PROPERTIES OUTPUT_NAME "aoo_supernova")
     target_compile_definitions(SUPERNOVA PUBLIC -DSUPERNOVA -DAOO_STATIC)
     target_link_libraries(SUPERNOVA AOO_STATIC ${AOO_OPUS_LDFLAGS} ${LIBS})
     if (WIN32)

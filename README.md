@@ -189,8 +189,8 @@ a) Link with the system wide `opus` library
 
 b) Use local Opus library
 
-1. Run `git submodule update --init` to fetch the Opus source code
-2. Set the `AOO_SYSTEM_OPUS` CMake variable to `OFF` (see below).
+1. Run `git submodule update --init` to fetch the Opus source code.
+2. Make sure that `AOO_SYSTEM_OPUS` CMake variable is `OFF` (default).
 3. Now Opus will be included in the project and you can configure it as needed.
    **NOTE**: Don't build the shared library, i.e. `OPUS_BUILD_SHARED_LIBRARY` should be `OFF`.
 
