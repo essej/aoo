@@ -385,42 +385,30 @@ void memory_list::deallocate(void* ptr) {
 
 namespace aoo {
 
-#if 0
+// can't use std::unordered_map with custom allocator, so let's just use
+// aoo::vector instead. performance might be better anyway, since the vector
+// will be very small.
 
-// doesn't work because there is no std::hash specialization for aoo::string
-// I probably need to write my own hash table...
-
-template<typename K, typename V>
-using hash_table = std::unordered_map<K, V, std::hash<K>, std::equal_to<K>,
-                                      aoo::allocator<std::pair<const K, V>>>;
-
-using codec_dict = hash_table<aoo::string, const AooCodecInterface *>;
-
-#else
-
-using codec_dict = std::unordered_map<std::string, const AooCodecInterface *>;
-
-#endif
-
-static codec_dict g_codec_dict;
+using codec_list = aoo::vector<std::pair<aoo::string, const AooCodecInterface *>>;
+static codec_list g_codec_list;
 
 const AooCodecInterface * find_codec(const char * name){
-    auto it = g_codec_dict.find(name);
-    if (it != g_codec_dict.end()){
-        return it->second;
-    } else {
-        return nullptr;
+    for (auto& codec : g_codec_list) {
+        if (codec.first == name) {
+            return codec.second;
+        }
     }
+    return nullptr;
 }
 
 } // aoo
 
 AooError AOO_CALL aoo_registerCodec(const char *name, const AooCodecInterface *codec){
-    if (aoo::g_codec_dict.count(name) != 0){
+    if (aoo::find_codec(name)) {
         LOG_WARNING("aoo: codec " << name << " already registered!");
         return kAooErrorUnknown;
     }
-    aoo::g_codec_dict[name] = codec;
+    aoo::g_codec_list.emplace_back(name, codec);
     LOG_VERBOSE("aoo: registered codec '" << name << "'");
     return kAooOk;
 }
