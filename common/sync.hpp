@@ -42,6 +42,101 @@ namespace sync {
 
 void lower_thread_priority();
 
+//----------------- relaxed atomics ---------------//
+
+namespace detail {
+#if !defined(AOO_HAVE_ATOMIC_DOUBLE) || !defined(AOO_HAVE_ATOMIC_INT64)
+// emulate atomics using a global spinlock
+void global_spinlock_lock();
+void global_spinlock_unlock();
+
+template<typename T>
+class relaxed_atomic_emulated {
+private:
+    struct scoped_lock {
+        scoped_lock() { global_spinlock_lock(); }
+        ~scoped_lock() { global_spinlock_unlock(); }
+    };
+public:
+    relaxed_atomic_emulated(T value = T{}) : value_(value) {}
+
+    T load() const {
+        scoped_lock lock;
+        return value_;
+    }
+
+    void store(T value) {
+        scoped_lock lock;
+        value_ = value;
+    }
+
+    T exchange(T value) {
+        scoped_lock lock;
+        return std::exchange(value_, value);
+    }
+private:
+    T value_;
+};
+#endif
+
+// native atomics
+template<typename T>
+class relaxed_atomic_native {
+public:
+    relaxed_atomic_native(T value = T{}) : value_(value) {}
+
+    T load() const {
+        return value_.load(std::memory_order_relaxed);
+    }
+
+    void store(T value) {
+        value_.store(value, std::memory_order_relaxed);
+    }
+
+    T exchange(T value) {
+        return value_.exchange(value, std::memory_order_relaxed);
+    }
+private:
+#if __cplusplus >= 201703L
+    static_assert(std::atomic<T>::is_always_lock_free,
+                  "std::atomic<T> is not lockfree!");
+#endif
+    std::atomic<T> value_;
+};
+
+} // detail
+
+template<typename T, typename enable = void>
+class relaxed_atomic
+        : public detail::relaxed_atomic_native<T>
+{
+    using detail::relaxed_atomic_native<T>::relaxed_atomic_native;
+};
+
+// specialization for doubles (if needed)
+#ifndef AOO_HAVE_ATOMIC_DOUBLE
+// #warning "emulating atomic doubles in software"
+template<>
+class relaxed_atomic<double>
+        : public detail::relaxed_atomic_emulated<double>
+{
+    using relaxed_atomic_emulated::relaxed_atomic_emulated;
+};
+#endif
+
+// specialization for 64-bit integers (if needed)
+#ifndef AOO_HAVE_ATOMIC_INT64
+// #warning "emulating atomic 64-bit integers in software"
+template<typename T>
+class relaxed_atomic<T, typename std::enable_if<
+        std::is_integral<T>::value && (sizeof(T) == 8)>::type>
+        : public detail::relaxed_atomic_emulated<T>
+{
+    using detail::relaxed_atomic_emulated<T>::relaxed_atomic_emulated;
+};
+#endif
+
+
 //----------------- spinlock ----------------------//
 
 class spinlock {

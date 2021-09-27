@@ -3,24 +3,14 @@
 namespace aoo {
 
 timer::timer(timer&& other){
-#if AOO_TIMER_ATOMIC
-    last_ = other.last_.load();
-    elapsed_ = other.elapsed_.load();
-#else
-    last_ = other.last_;
-    elapsed_ = other.elapsed_;
-#endif
+    last_.store(other.last_.load());
+    elapsed_.store(other.elapsed_.load());
     mavg_check_ = std::move(other.mavg_check_);
 }
 
 timer& timer::operator=(timer&& other){
-#if AOO_TIMER_ATOMIC
-    last_ = other.last_.load();
-    elapsed_ = other.elapsed_.load();
-#else
-    last_ = other.last_;
-    elapsed_ = other.elapsed_;
-#endif
+    last_.store(other.last_.load());
+    elapsed_.store(other.elapsed_.load());
     mavg_check_ = std::move(other.mavg_check_);
     return *this;
 }
@@ -36,58 +26,17 @@ void timer::setup(int32_t sr, int32_t blocksize, bool check){
     reset();
 }
 
-void timer::reset(){
-#if AOO_TIMER_ATOMIC
-    last_.store(0, std::memory_order_relaxed);
-#else
-    scoped_lock lock(lock_);
-    last_ = 0;
-#endif
-}
-
-double timer::get_elapsed() const {
-#if AOO_TIMER_ATOMIC
-    return elapsed_.load(std::memory_order_relaxed);
-#else
-    scoped_lock lock(lock_);
-    return elapsed_;
-#endif
-}
-
-time_tag timer::get_absolute() const {
-#if AOO_TIMER_ATOMIC
-    return last_.load(std::memory_order_relaxed);
-#else
-    scoped_lock lock(lock_);
-    return last_;
-#endif
-}
-
 timer::state timer::update(time_tag t, double& error){
-#if AOO_TIMER_ATOMIC
-    time_tag last = last_.exchange(t, std::memory_order_relaxed);
-#else
-    sync::unique_lock<sync::spinlock> lock(lock_);
-    time_tag last = std::exchange(last_, t);
-#endif
+    time_tag last = last_.exchange(t);
     if (!last.is_empty()){
-    #if !AOO_TIMER_ATOMIC
-        lock.unlock();
-    #endif
         auto delta = time_tag::duration(last, t);
     #if AOO_DEBUG_TIMER
         LOG_DEBUG("time delta: " << delta * 1000.0 << " ms");
     #endif
-    #if AOO_TIMER_ATOMIC
         // 'elapsed' is only ever modified in this function
         // (which is not reentrant!)
-        auto elapsed = elapsed_.load(std::memory_order_relaxed) + delta;
-        elapsed_.store(elapsed, std::memory_order_relaxed);
-    #else
-        lock.lock();
-        elapsed_ += delta;
-        lock.unlock();
-    #endif
+        auto elapsed = elapsed_.load() + delta;
+        elapsed_.store(elapsed);
 
         if (mavg_check_){
             return mavg_check_->check(delta, error);
@@ -96,12 +45,7 @@ timer::state timer::update(time_tag t, double& error){
         }
     } else {
         // reset
-    #if AOO_TIMER_ATOMIC
-        elapsed_.store(0, std::memory_order_relaxed);
-    #else
-        elapsed_ = 0;
-        lock.unlock();
-    #endif
+        elapsed_.store(0);
         if (mavg_check_){
             mavg_check_->reset();
         }

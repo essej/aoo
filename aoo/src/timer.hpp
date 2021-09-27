@@ -4,17 +4,12 @@
 
 #include "imp.hpp"
 
+#include "common/sync.hpp"
 #include "common/time.hpp"
 
 #include <memory>
 #include <atomic>
 #include <array>
-
-#if defined(HAVE_ATOMIC_DOUBLE) && defined(HAVE_ATOMIC_INT64)
-# define AOO_TIMER_ATOMIC 1
-#else
-# define AOO_TIMER_ATOMIC 0
-#endif
 
 namespace aoo {
 
@@ -30,20 +25,13 @@ public:
     timer& operator=(timer&& other);
 
     void setup(int32_t sr, int32_t blocksize, bool check);
-    void reset();
-    double get_elapsed() const;
-    time_tag get_absolute() const;
+    void reset() { last_.store(0); }
+    double get_elapsed() const { return elapsed_.load(); }
+    time_tag get_absolute() const { return last_.load(); }
     state update(time_tag t, double& error);
 private:
-#if AOO_TIMER_ATOMIC
-    std::atomic<uint64_t> last_;
-    std::atomic<double> elapsed_{0};
-#else
-    uint64_t last_;
-    double elapsed_{0};
-    mutable sync::spinlock lock_;
-    using scoped_lock = sync::scoped_lock<sync::spinlock>;
-#endif
+    sync::relaxed_atomic<uint64_t> last_{0};
+    sync::relaxed_atomic<double> elapsed_{0};
 
     // moving average filter to detect timing issues
     struct moving_average_check {

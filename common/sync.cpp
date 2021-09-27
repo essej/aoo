@@ -67,6 +67,17 @@ void lower_thread_priority()
 #endif
 }
 
+//---------------------------- atomics -------------------------------------//
+
+namespace detail {
+static padded_spinlock g_atomic_spinlock;
+
+void global_spinlock_lock() { g_atomic_spinlock.lock(); }
+
+void global_spinlock_unlock() { g_atomic_spinlock.unlock(); }
+
+}
+
 //---------------------------- spinlock ------------------------------------//
 
 void spinlock::lock(){
