@@ -4,8 +4,10 @@ message(STATUS "Project: aoo")
 project(aoo)
 
 include(GNUInstallDirs)
-include (CheckCCompilerFlag)
-include (CheckCXXCompilerFlag)
+include(CheckCCompilerFlag)
+include(CheckCXXCompilerFlag)
+include(cmake/test_atomic.cmake)
+include(cmake/test_linker_flag.cmake)
 
 # built everything (including Opus) with -fPIC
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -96,101 +98,94 @@ if (WIN32)
     set(LOCALAPPDATA $ENV{LOCALAPPDATA})
 endif()
 
-# compiler flags
 # use C++17 if possible, otherwise fallback to C++14
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED OFF)
 
+# feature tests
 if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANG)
     add_compile_options("-fvisibility=hidden")
 
-    CHECK_CXX_COMPILER_FLAG("-msse" HAS_CXX_SSE)
-    if (HAS_CXX_SSE)
-        add_compile_options("-msse")
-    endif()
+    check_cxx_compiler_flag("-msse" HAVE_CXX_SSE)
+    check_cxx_compiler_flag("-msse2" HAVE_CXX_SSE2)
+    check_cxx_compiler_flag("-msse3" HAVE_CXX_SSE3)
+    check_cxx_compiler_flag("-msse4" HAVE_CXX_SSE4)
+    check_cxx_compiler_flag("-mfpmath=sse" HAVE_CXX_FPMATH_SSE)
 
-    CHECK_CXX_COMPILER_FLAG("-msse2" HAS_CXX_SSE2)
-    if (HAS_CXX_SSE2)
-        add_compile_options("-msse2")
-    endif()
+    test_linker_flag("-latomic" AOO_HAVE_LIB_ATOMIC)
 
-    CHECK_CXX_COMPILER_FLAG("-msse3" HAS_CXX_SSE3)
-    if (HAS_CXX_SSE3)
-        add_compile_options("-msse3")
-    endif()
+    # atomic double support
+    test_atomic(ATOMIC_DOUBLE "atomic_double.cpp")
+    # message(STATUS "atomic doubles supported: ${AOO_HAVE_ATOMIC_DOUBLE}")
 
-    # people still own old machines that don't support SSE4
-    if (FALSE)
-        CHECK_CXX_COMPILER_FLAG("-msse4" HAS_CXX_SSE4)
-        if (HAS_CXX_SSE4)
-            add_compile_options("-msse4")
-        endif()
-    endif()
-
-    CHECK_CXX_COMPILER_FLAG("-mfpmath=sse" HAS_CXX_FPMATH_SSE)
-    if (HAS_CXX_FPMATH_SSE)
-        add_compile_options("-mfpmath=sse")
-    endif()
-
-    if(NATIVE)
-        add_compile_options("-march=native")
-    endif()
-
-    add_compile_options("-ffast-math" "-funroll-loops" "-fomit-frame-pointer")
-
-    # disable some warnings being treated as errors
-    add_compile_options("-Wno-error=class-memaccess")
-
-    # C++ only:
-    if(CMAKE_COMPILER_IS_CLANG)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
-    endif()
+    # atomic 64-bit integer support
+    test_atomic(ATOMIC_INT64 "atomic_int64.cpp")
+    # message(STATUS "atomic 64-bit integers supported: ${AOO_HAVE_ATOMIC_INT64}")
 endif()
 
+# global optimization flags
+
+add_compile_options("-ffast-math" "-funroll-loops" "-fomit-frame-pointer")
+if (HAVE_CXX_SSE)
+    add_compile_options("-msse")
+endif()
+if (HAVE_CXX_SSE2)
+    add_compile_options("-msse2")
+endif()
+if (HAVE_CXX_SSE3)
+    add_compile_options("-msse3")
+endif()
+# people still own old machines that don't support SSE4
+if (FALSE)
+    check_cxx_compiler_flag("-msse4" HAVE_CXX_SSE4)
+    if (HAVE_CXX_SSE4)
+        add_compile_options("-msse4")
+    endif()
+endif()
+if (HAVE_CXX_FPMATH_SSE)
+    add_compile_options("-mfpmath=sse")
+endif()
+option(AOO_NATIVE "optimize for this machine (not portable!)" OFF)
+if (AOO_NATIVE)
+    add_compile_options("-march=native")
+endif()
+
+# platform specific compile options
+
+# clang/GCC
+if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANG)
+    # disable some warnings being treated as errors
+    add_compile_options("-Wno-error=class-memaccess")
+endif()
+
+# clang++:
+if (CMAKE_COMPILER_IS_CLANG)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
+endif()
+
+# MinGW
 if (MINGW)
-    # set(CMAKE_CXX_COMPILER g++)
     add_compile_options("-mstackrealign")
 endif()
 
-# custom feature tests
-function(test_atomics feature file)
-    if (DEFINED AOO_HAVE_${feature})
-        return()
-    endif()
-
-    message(STATUS "Checking ${feature} support")
-
-    # For now we just try if it compiles and links.
-    # If C++17 is available, we also get a compilation error
-    # if the atomics are not always lockfree; otherwise
-    # we automatically fall back to C++14.
-    # It would also be possible to do a runtime test with,
-    # is_lock_free(), but it wouldn't work for cross compiling...
-    try_compile(RESULT_VAR
-        "${CMAKE_CURRENT_BINARY_DIR}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${file}"
-        OUTPUT_VARIABLE COMPILE_OUTPUT
-        CXX_STANDARD 17)
-
-    if (RESULT_VAR)
-        message(STATUS "- ok")
-        add_definitions(-DHAVE_${feature})
-    else()
-        message(STATUS "- failed")
-        message(${COMPILE_OUTPUT})
-        message("Falling back to software emulation")
-    endif()
-
-    set(AOO_HAVE_${feature} ${RESULT_VAR} CACHE BOOL "${feature} support")
-endfunction()
-
-# atomic doubles
-test_atomics(ATOMIC_DOUBLE "atomic_double.cpp")
-# message(STATUS "atomic doubles supported: ${AOO_HAVE_ATOMIC_DOUBLE}")
-
-# atomic 64-bit integers
-test_atomics(ATOMIC_INT64 "atomic_int64.cpp")
-# message(STATUS "atomic 64-bit integers supported: ${AOO_HAVE_ATOMIC_INT64}")
+# atomics
+if (AOO_HAVE_ATOMIC_DOUBLE)
+    add_definitions(-DAOO_HAVE_ATOMIC_DOUBLE)
+else()
+    message(STATUS "No built-in support for atomic doubles - "
+        "will be emulated in software")
+endif()
+if (AOO_HAVE_ATOMIC_INT64)
+    add_definitions(-DAOO_HAVE_ATOMIC_INT64)
+else()
+    message(STATUS "No built-in support for atomic 64-bit integers - "
+        "will be emulated in software")
+endif()
+# link with "libatomic" if available and necessary
+if (AOO_HAVE_LIB_ATOMIC AND
+        (NOT AOO_HAVE_ATOMIC_DOUBLE OR NOT AOO_HAVE_ATOMIC_INT64))
+    list(APPEND LIBS "-latomic")
+endif()
 
 # opus support
 message(STATUS "Use Opus codec: ${AOO_CODEC_OPUS}")
@@ -202,7 +197,7 @@ if (AOO_CODEC_OPUS AND (NOT AOO_SYSTEM_OPUS))
 endif()
 
 # networking support
-option(AOO_NET "build with networking support" ON)
+option(AOO_NET "Build with networking support" ON)
 message(STATUS "Use AOO NET: ${AOO_NET}")
 add_definitions(-DUSE_AOO_NET=$<BOOL:${AOO_NET}>)
 
