@@ -92,44 +92,12 @@ private:
 
 //---------------- endpoint event ------------------//
 
-struct endpoint_event {
-    endpoint_event() = default;
-
-    endpoint_event(AooEventType _type) : type(_type){}
-
-    endpoint_event(AooEventType _type, const endpoint& _ep)
-        : endpoint_event(_type, _ep.address, _ep.id) {}
-
-    endpoint_event(AooEventType _type, const ip_address& addr, AooId id)
-        : type(_type) {
-        memcpy(&addr_, addr.address(), addr.length());
-        // only for endpoint events
-        if (type != kAooEventXRun){
-            ep.endpoint.address = &addr_;
-            ep.endpoint.addrlen = addr.length();
-            ep.endpoint.id = id;
-        }
-    }
-
-    endpoint_event(const endpoint_event& other) {
-        memcpy(this, &other, sizeof(endpoint_event)); // ugh
-        // only for sink events:
-        if (type != kAooEventXRun){
-            ep.endpoint.address = &addr_;
-        }
-    }
-
-    endpoint_event& operator=(const endpoint_event& other) {
-        memcpy(this, &other, sizeof(endpoint_event)); // ugh
-        // only for sink events:
-        if (type != kAooEventXRun){
-            ep.endpoint.address = &addr_;
-        }
-        return *this;
-    }
-
-    union
-    {
+struct endpoint_event_base
+{
+    endpoint_event_base() = default;
+    endpoint_event_base(AooEventType _type)
+        : type(_type) {}
+    union {
         AooEventType type;
         AooEvent event;
         AooEventEndpoint ep;
@@ -141,6 +109,43 @@ struct endpoint_event {
         AooEventPingReply ping_reply;
         AooEventXRun xrun;
     };
+};
+
+struct endpoint_event : endpoint_event_base {
+    endpoint_event() = default;
+
+    endpoint_event(AooEventType _type) : endpoint_event_base(_type) {}
+
+    endpoint_event(AooEventType _type, const endpoint& _ep)
+        : endpoint_event(_type, _ep.address, _ep.id) {}
+
+    endpoint_event(AooEventType _type, const ip_address& addr, AooId id)
+        : endpoint_event_base(_type) {
+        memcpy(&addr_, addr.address(), addr.length());
+        // only for endpoint events
+        if (type != kAooEventXRun){
+            ep.endpoint.address = &addr_;
+            ep.endpoint.addrlen = addr.length();
+            ep.endpoint.id = id;
+        }
+    }
+
+    endpoint_event(const endpoint_event& other)
+        : endpoint_event_base(other) {
+        // only for sink events:
+        if (type != kAooEventXRun){
+            ep.endpoint.address = &addr_;
+        }
+    }
+
+    endpoint_event& operator=(const endpoint_event& other) {
+        endpoint_event_base::operator=(other);
+        // only for sink events:
+        if (type != kAooEventXRun){
+            ep.endpoint.address = &addr_;
+        }
+        return *this;
+    }
 private:
     char addr_[ip_address::max_length];
 };

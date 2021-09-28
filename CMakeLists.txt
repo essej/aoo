@@ -152,12 +152,6 @@ endif()
 
 # platform specific compile options
 
-# clang/GCC
-if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANG)
-    # disable some warnings being treated as errors
-    add_compile_options("-Wno-error=class-memaccess")
-endif()
-
 # clang++:
 if (CMAKE_COMPILER_IS_CLANG)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
