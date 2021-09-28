@@ -455,14 +455,20 @@ void AOO_CALL aoo_initializeEx(AooLogFunc log, const AooAllocator *alloc) {
     if (log) {
         aoo::g_logfunction = log;
     }
-#if AOO_CUSTOM_ALLOCATOR
     if (alloc) {
+#if AOO_CUSTOM_ALLOCATOR
         aoo::g_allocator = *alloc;
-    }
+#else
+        LOG_WARNING("aoo_initializeEx: custom allocator not supported");
 #endif
+    }
     aoo_initialize();
 }
 
-void AOO_CALL aoo_terminate() {}
+void AOO_CALL aoo_terminate() {
+    // free codec pluginlist
+    aoo::codec_list tmp;
+    std::swap(tmp, aoo::g_codec_list);
+}
 
 
