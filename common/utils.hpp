@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <cstring>
+#include <string>
 #include <sstream>
 
 /*------------------ alloca -----------------------*/
@@ -93,7 +94,6 @@ public:
     Log(AooLogLevel level = kAooLogLevelNone)
         : level_(level){}
     ~Log() {
-        stream_ << "\n";
         log_message(level_, stream_.str());
     }
     template<typename T>

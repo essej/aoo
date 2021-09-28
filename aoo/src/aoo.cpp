@@ -16,8 +16,12 @@
 # include "aoo/codec/aoo_opus.h"
 #endif
 
-#include <iostream>
-#include <sstream>
+#define CERR_LOG_FUNCTION 1
+#if CERR_LOG_FUNCTION
+# include <iostream>
+#endif
+#define CERR_LOG_MUTEX 1
+
 #include <atomic>
 #include <random>
 #include <unordered_map>
@@ -83,8 +87,7 @@ static AooAllocator g_allocator {
     [](size_t n, void *){
     #if AOO_DEBUG_MEMORY
         auto total = total_memory.fetch_add(n, std::memory_order_relaxed) + (ptrdiff_t)n;
-        fprintf(stderr, "allocate %zu bytes (total: %zd)\n", n, total);
-        fflush(stderr);
+        LOG_ALL("allocate " << n << " bytes (total: " << total << ")");
     #endif
         return operator new(n);
     },
@@ -92,8 +95,7 @@ static AooAllocator g_allocator {
     [](void *ptr, size_t n, void *){
     #if AOO_DEBUG_MEMORY
         auto total = total_memory.fetch_sub(n, std::memory_order_relaxed) - (ptrdiff_t)n;
-        fprintf(stderr, "deallocate %zu bytes (total: %zd)\n", n, total);
-        fflush(stderr);
+        LOG_ALL("deallocate " << n << " bytes (total: " << total << ")");
     #endif
         operator delete(ptr);
     },
@@ -114,26 +116,33 @@ void deallocate(void *ptr, size_t size){
 
 //----------------------- logging --------------------------//
 
-#define LOG_MUTEX 1
-
 namespace aoo {
 
-#if LOG_MUTEX
+#if CERR_LOG_FUNCTION
+
+#if CERR_LOG_MUTEX
 static aoo::sync::mutex g_log_mutex;
 #endif
 
 static void cerr_logfunction(AooLogLevel level, const char *msg, ...){
-#if LOG_MUTEX
+#if CERR_LOG_MUTEX
     aoo::sync::scoped_lock<aoo::sync::mutex> lock(g_log_mutex);
 #endif
-    std::cerr << msg;
-    std::flush(std::cerr);
+    std::cerr << msg << std::endl;
 }
 
 static AooLogFunc g_logfunction = cerr_logfunction;
 
+#else // CERR_LOG_FUNCTION
+
+static AooLogFunc g_logfunction = nullptr;
+
+#endif // CERR_LOG_FUNCTION
+
 void log_message(AooLogLevel level, const std::string &msg){
-    g_logfunction(level, msg.c_str());
+    if (g_logfunction) {
+        g_logfunction(level, msg.c_str());
+    }
 }
 
 } // aoo
@@ -289,8 +298,10 @@ namespace aoo {
 
 bool check_version(uint32_t version){
     auto major = (version >> 24) & 255;
+#if 0
     auto minor = (version >> 16) & 255;
     auto bugfix = (version >> 8) & 255;
+#endif
 
     if (major != kAooVersionMajor){
         return false;
@@ -308,24 +319,22 @@ uint32_t make_version(){
 
 //---------------------- memory -----------------------------//
 
-#define DEBUG_MEMORY 0
+#define DEBUG_MEMORY_LIST 0
 
 memory_list::block * memory_list::block::alloc(size_t size){
     auto fullsize = sizeof(block::header) + size;
     auto b = (block *)aoo::allocate(fullsize);
     b->header.next = nullptr;
     b->header.size = size;
-#if DEBUG_MEMORY
-    fprintf(stderr, "allocate memory block (%d bytes)\n", size);
-    fflush(stderr);
+#if DEBUG_MEMORY_LIST
+    LOG_ALL("allocate memory block (" << size << " bytes)");
 #endif
     return b;
 }
 
 void memory_list::block::free(memory_list::block *b){
-#if DEBUG_MEMORY
-    fprintf(stderr, "deallocate memory block (%d bytes)\n", b->size());
-    fflush(stderr);
+#if DEBUG_MEMORY_LIST
+    LOG_ALL("deallocate memory block (" << b->header.size << " bytes)");
 #endif
     auto fullsize = sizeof(block::header) + b->header.size;
     aoo::deallocate(b, fullsize);
@@ -349,9 +358,8 @@ void* memory_list::allocate(size_t size) {
             auto next = head->header.next;
             if (list_.compare_exchange_weak(head, next, std::memory_order_acq_rel)){
                 if (head->header.size >= size){
-                #if DEBUG_MEMORY
-                    fprintf(stderr, "reuse memory block (%d bytes)\n", head->header.size);
-                    fflush(stderr);
+                #if DEBUG_MEMORY_LIST
+                    LOG_ALL("reuse memory block (" << head->header.size << " bytes)");
                 #endif
                     return head->data;
                 } else {
@@ -373,9 +381,8 @@ void memory_list::deallocate(void* ptr) {
     // check if the head has changed and update it atomically.
     // (if the CAS fails, 'next' is updated to the current head)
     while (!list_.compare_exchange_weak(b->header.next, b, std::memory_order_acq_rel)) ;
-#if DEBUG_MEMORY
-    fprintf(stderr, "return memory block (%d bytes)\n", b->header.size);
-    fflush(stderr);
+#if DEBUG_MEMORY_LIST
+    LOG_ALL("return memory block (" << b->header.size << " bytes)");
 #endif
 }
 
