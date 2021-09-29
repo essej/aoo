@@ -27,7 +27,7 @@
 #include <unordered_map>
 
 #ifdef ESP_PLATFORM
-# include "esp_random.h"
+# include "esp_system.h"
 #endif
 
 namespace aoo {
