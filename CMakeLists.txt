@@ -82,6 +82,7 @@ endif()
 
 # logging
 set(AOO_LOG_LEVEL "Warning" CACHE STRING "compile time log level")
+set_property(CACHE AOO_LOG_LEVEL PROPERTY STRINGS "None;Error;Warning;Verbose;Debug")
 message(STATUS "Log level: ${AOO_LOG_LEVEL}")
 add_definitions(-DAOO_LOG_LEVEL=kAooLogLevel${AOO_LOG_LEVEL})
 

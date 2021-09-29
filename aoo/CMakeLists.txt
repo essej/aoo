@@ -1,5 +1,12 @@
 # compile time options
 option(AOO_CUSTOM_ALLOCATOR "build with custom allocator support" OFF)
+message(STATUS "Use custom allocator: ${AOO_CUSTOM_ALLOCATOR}")
+
+set(AOO_PACKET_SIZE 512 CACHE STRING "default UDP packet size")
+message(STATUS "Default UDP packet size: ${AOO_PACKET_SIZE}")
+
+set(AOO_MAX_PACKET_SIZE 4096 CACHE STRING "max. UDP packet size")
+message(STATUS "Max. UDP packet size: ${AOO_MAX_PACKET_SIZE}")
 
 option(AOO_DYNAMIC_RESAMPLING "enable/disable dynamic resampling" ON)
 message(STATUS "Use dynamic resampling: ${AOO_DYNAMIC_RESAMPLING}")
@@ -33,6 +40,8 @@ option(AOO_DEBUG_JITTER_BUFFER "debug jitter buffer" OFF)
 
 set(OPTIONS
     -DAOO_CUSTOM_ALLOCATOR=$<BOOL:${AOO_CUSTOM_ALLOCATOR}>
+    -DAOO_PACKET_SIZE=${AOO_PACKET_SIZE}
+    -DAOO_MAX_PACKET_SIZE=${AOO_MAX_PACKET_SIZE}
     -DAOO_DYNAMIC_RESAMPLING=$<BOOL:${AOO_DYNAMIC_RESAMPLING}>
     -DAOO_DLL_BANDWIDTH=${AOO_DLL_BANDWIDTH}
     -DAOO_XRUN_DETECTION=$<BOOL:${AOO_XRUN_DETECTION}>
@@ -57,11 +66,18 @@ file(GLOB HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp"
 file(GLOB SOURCES "src/*.cpp" "src/codec/pcm.cpp" "${COMMON}/*.cpp")
 
 if (NOT AOO_SYSTEM_OSCPACK)
-    # only build "osc" part
-    file(GLOB OSCPACK_HEADERS "${DEPS}/oscpack/osc/*.h")
-    file(GLOB OSCPACK_SOURCES "${DEPS}/oscpack/osc/*.cpp")
-    list(APPEND HEADERS ${OSCPACK_HEADERS})
-    list(APPEND SOURCES ${OSCPACK_SOURCES})
+    # only build required files in "osc" folder
+    set(OSC "${DEPS}/oscpack/osc")
+    list(APPEND HEADERS
+        "${OSC}/OscException.h"
+        "${OSC}/OscHostEndianness.h"
+        "${OSC}/OscOutboundPacketStream.h"
+        "${OSC}/OscReceivedElements.h"
+        "${OSC}/OscTypes.h")
+    list(APPEND SOURCES
+        "${OSC}/OscOutboundPacketStream.cpp"
+        "${OSC}/OscReceivedElements.cpp"
+        "${OSC}/OscTypes.cpp")
 endif()
 
 if (AOO_CODEC_OPUS)
