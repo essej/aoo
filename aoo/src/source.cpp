@@ -1188,7 +1188,9 @@ void Source::make_new_stream(){
     history_.clear(); // !
 
     // reset encoder to avoid garbage from previous stream
-    AooEncoder_control(encoder_.get(), kAooCodecCtlReset, nullptr, 0);
+    if (encoder_) {
+        AooEncoder_control(encoder_.get(), kAooCodecCtlReset, nullptr, 0);
+    }
 
     sink_lock lock(sinks_);
     for (auto& s : sinks_){
