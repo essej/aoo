@@ -45,10 +45,10 @@
 #   endif
 #  elif defined(__GNUC__) && defined(AOO_BUILD) // GNU C
 #   define AOO_EXPORT __attribute__ ((visibility ("default")))
-#  else // Other
+#  else /* Other */
 #   define AOO_EXPORT
 #  endif
-# else // AOO_STATIC
+# else /* AOO_STATIC */
 #  define AOO_EXPORT
 # endif
 #endif

@@ -60,7 +60,7 @@ enum AooEventTypes
     /** sink: blocks have been resent */
     kAooEventBlockResent,
     /** sink: block has been dropped by source */
-    kAooEventBlockDropped,
+    kAooEventBlockDropped
 };
 
 /** \brief error event */
@@ -252,7 +252,7 @@ enum AooNetEventTypes
 typedef struct AooNetEventError
 {
     AooEventType type;
-    // platform specific error code for system/socket errors
+    /* platform specific error code for system/socket errors */
     AooInt32 errorCode;
     const AooChar *errorMessage;
 } AooNetEventError;
@@ -265,7 +265,7 @@ typedef struct AooNetEventPing
     const void *address;
     AooNtpTime tt1;
     AooNtpTime tt2;
-    AooNtpTime tt3; // only for clients
+    AooNtpTime tt3; /* only for clients */
 } AooNetEventPing;
 
 /* client events */
@@ -358,7 +358,7 @@ typedef struct AooNetEventUserGroup
 /** \brief user has left a group */
 #define AooNetEventUserGroupLeave AooNetEventUserGroup
 
-#endif // USE_AOO_NET
+#endif /* USE_AOO_NET */
 
 /*--------------------------------------------------*/
 /*             user defined events                  */

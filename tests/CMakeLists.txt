@@ -1,7 +1,7 @@
 add_executable(TEST_C_INTERFACE "c_interface.c")
 
 # force C standard
-set(TEST_C_STANDARD "c99")
+set(TEST_C_STANDARD "c89")
 
 set(STATIC_LIBAOO TRUE)
 

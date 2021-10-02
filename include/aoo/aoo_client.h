@@ -104,7 +104,7 @@ AOO_INLINE AooError AooClient_connect(
         AooClient *client, const AooChar *hostName, AooInt32 port,
         const AooChar *userName, const AooChar *userPwd, AooNetCallback cb, void *user)
 {
-    AooNetRequestConnect data = { hostName, port, userName, userPwd };
+    AooNetRequestConnect data = { hostName, port, userName, userPwd, 0 };
     return AooClient_sendRequest(client, kAooNetRequestConnect, &data, cb, user);
 }
 
