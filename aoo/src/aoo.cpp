@@ -444,9 +444,11 @@ AooError AOO_CALL aoo_registerCodec(const char *name, const AooCodecInterface *c
 
 //--------------------------- (de)initialize -----------------------------------//
 
-void aoo_pcmCodecSetup(AooCodecRegisterFunc fn, AooLogFunc log, const AooAllocator *alloc);
+void aoo_pcmLoad(AooCodecRegisterFunc fn, AooLogFunc log, const AooAllocator *alloc);
+void aoo_pcmUnload();
 #if USE_CODEC_OPUS
-void aoo_opusCodecSetup(AooCodecRegisterFunc fn, AooLogFunc log, const AooAllocator *alloc);
+void aoo_opusLoad(AooCodecRegisterFunc fn, AooLogFunc log, const AooAllocator *alloc);
+void aoo_opusUnload();
 #endif
 
 #if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
@@ -463,10 +465,10 @@ void AOO_CALL aoo_initialize(){
     #endif
 
         // register codecs
-        aoo_pcmCodecSetup(aoo_registerCodec, aoo::g_logfunction, ALLOCATOR);
+        aoo_pcmLoad(aoo_registerCodec, aoo::g_logfunction, ALLOCATOR);
 
     #if USE_CODEC_OPUS
-        aoo_opusCodecSetup(aoo_registerCodec, aoo::g_logfunction, ALLOCATOR);
+        aoo_opusLoad(aoo_registerCodec, aoo::g_logfunction, ALLOCATOR);
     #endif
 
         initialized = true;
@@ -488,6 +490,11 @@ void AOO_CALL aoo_initializeEx(AooLogFunc log, const AooAllocator *alloc) {
 }
 
 void AOO_CALL aoo_terminate() {
+    // unload codecs
+    aoo_pcmUnload();
+#if USE_CODEC_OPUS
+    aoo_opusUnload();
+#endif
     // free codec pluginlist
     aoo::codec_list tmp;
     std::swap(tmp, aoo::g_codec_list);

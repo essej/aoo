@@ -209,17 +209,25 @@ typedef AooError (AOO_CALL *AooCodecRegisterFunc)(
  * \note AOO doesn't support dynamic plugin loading out of the box,
  * but it is quite easy to implement on your own.
  * You just have to put one or more codecs in a shared library and export
- * a single function of type AooCodecSetupFunc with the name `aoo_setup`:
+ * a single function of type AooCodecSetupFunc with the name `aoo_load`:
  *
- *     void aoo_setup(AooCodecRegisterFunc fn, AooLogFunc log, const AooAllocator *alloc);
+ *     void aoo_load(AooCodecRegisterFunc fn, AooLogFunc log, const AooAllocator *alloc);
  *
  * In your host application, you would then scan directories for shared libraries,
- * check if they export a function named `aoo_setup`, and if yes, call it with a
- * pointer to #aoo_registerCodec and (optionally) the log function and custom allocator.
+ * check if they export a function named `aoo_load`, and if yes, call it with a
+ * pointer to #aoo_registerCodec and (optionally) a log function and custom allocator.
  */
-typedef AooError (AOO_CALL *AooCodecSetupFunc)
+typedef AooError (AOO_CALL *AooCodecLoadFunc)
         (const AooCodecRegisterFunc *registerFunction,
          AooLogFunc logFunction, const AooAllocator *allocator);
+
+/** \brief type of exit function for codec plugin module
+ *
+ * Your codec plugin can optionally export a function `aoo_unload` which should be
+ * called before program exit to properly release shared resources.
+ */
+typedef AooError (AOO_CALL *AooCodecUnloadFunc)(void);
+
 
 /*-------------------------------------------------------------------------------------*/
 
