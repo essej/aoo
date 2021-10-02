@@ -60,7 +60,7 @@ bool registerClient(World *world, void *cmdData){
     bool found = false;
     for (auto& client : clientList){
         if (client == addr){
-            LOG_WARNING("aoo: client already registered!");
+            LOG_WARNING("client already registered!");
             found = true;
             break;
         }
@@ -95,7 +95,7 @@ bool unregisterClient(World *world, void *cmdData){
         }
     }
 
-    LOG_WARNING("aoo: couldn't unregister client - not found!");
+    LOG_WARNING("couldn't unregister client - not found!");
 
     return false;
 }
@@ -296,7 +296,7 @@ static int32_t getFormatParam(sc_msg_iter *args, const char *name, int32_t def)
         if (args->nextTag() == 's'){
             auto s = args->gets();
             if (strcmp(s, "_")){
-                LOG_ERROR("aoo: bad " << name << " argument " << s
+                LOG_ERROR("bad " << name << " argument " << s
                           << ", using " << def);
             }
         } else {
@@ -332,7 +332,7 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
             bitdepth = kAooPcmFloat64;
             break;
         default:
-            LOG_ERROR("aoo: bad bitdepth argument " << nbits);
+            LOG_ERROR("bad bitdepth argument " << nbits);
             return false;
         }
 
@@ -355,7 +355,7 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
             } else if (!strcmp(type, "lowdelay")){
                 applicationType = OPUS_APPLICATION_RESTRICTED_LOWDELAY;
             } else {
-                LOG_ERROR("aoo: unsupported application type '" << type << "'");
+                LOG_ERROR("unsupported application type '" << type << "'");
                 return false;
             }
         } else {
@@ -367,7 +367,7 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
     }
 #endif
     else {
-        LOG_ERROR("aoo: unknown codec '" << codec << "'");
+        LOG_ERROR("unknown codec '" << codec << "'");
         return false;
     }
     return true;
@@ -427,7 +427,7 @@ bool serializeFormat(osc::OutboundPacketStream& msg, const AooFormat& f)
     }
 #endif
     else {
-        LOG_ERROR("aoo: unknown codec " << f.codec);
+        LOG_ERROR("unknown codec " << f.codec);
         return false;
     }
 }

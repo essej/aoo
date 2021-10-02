@@ -141,7 +141,7 @@ AooNode::AooNode(World *world, int socket, const aoo::ip_address& addr)
     });
 #endif
 
-    LOG_VERBOSE("aoo: new node on port " << port_);
+    LOG_VERBOSE("new node on port " << port_);
 }
 
 AooNode::~AooNode(){
@@ -166,7 +166,7 @@ AooNode::~AooNode(){
         clientThread_.join();
     }
 
-    LOG_VERBOSE("aoo: released node on port " << port_);
+    LOG_VERBOSE("released node on port " << port_);
 }
 
 using NodeMap = std::unordered_map<int, std::weak_ptr<AooNode>>;
@@ -257,7 +257,7 @@ bool AooNode::getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
                              int32_t *id, const char *what) const
 {
     if (args->remain() < 2){
-        LOG_ERROR("aoo: too few arguments for " << what);
+        LOG_ERROR("too few arguments for " << what);
         return false;
     }
 
@@ -272,7 +272,7 @@ bool AooNode::getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
         if (client_->getPeerByName(group, user, addr.address_ptr(), &len) == kAooOk) {
             *addr.length_ptr() = len;
         } else {
-            LOG_ERROR("aoo: couldn't find peer " << group << "|" << user);
+            LOG_ERROR("couldn't find peer " << group << "|" << user);
             return false;
         }
     } else {
@@ -283,7 +283,7 @@ bool AooNode::getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
         if (!result.empty()){
             addr = result.front(); // pick the first result
         } else {
-            LOG_ERROR("aoo: couldn't resolve hostname '"
+            LOG_ERROR("couldn't resolve hostname '"
                       << host << "' for " << what);
             return false;
         }
@@ -295,11 +295,11 @@ bool AooNode::getEndpointArg(sc_msg_iter *args, aoo::ip_address& addr,
             if (i >= 0){
                 *id = i;
             } else {
-                LOG_ERROR("aoo: bad ID '" << i << "' for " << what);
+                LOG_ERROR("bad ID '" << i << "' for " << what);
                 return false;
             }
         } else {
-            LOG_ERROR("aoo: too few arguments for " << what);
+            LOG_ERROR("too few arguments for " << what);
             return false;
         }
     }

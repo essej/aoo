@@ -18,9 +18,11 @@
 
 #define CERR_LOG_FUNCTION 1
 #if CERR_LOG_FUNCTION
-# include <iostream>
-#endif
-#define CERR_LOG_MUTEX 1
+# include <cstdio>
+# include <cstdarg>
+# define CERR_LOG_MUTEX 0
+# define CERR_LOG_LABEL 1
+#endif // CERR_LOG_FUNCTION
 
 #include <atomic>
 #include <random>
@@ -143,14 +145,61 @@ namespace aoo {
 #if CERR_LOG_FUNCTION
 
 #if CERR_LOG_MUTEX
-static aoo::sync::mutex g_log_mutex;
+static sync::mutex g_log_mutex;
 #endif
 
-static void cerr_logfunction(AooLogLevel level, const char *msg, ...){
-#if CERR_LOG_MUTEX
-    aoo::sync::scoped_lock<aoo::sync::mutex> lock(g_log_mutex);
+static void
+#ifndef _MSC_VER
+    __attribute__((format(printf, 2, 3 )))
 #endif
-    std::cerr << msg << std::endl;
+        cerr_logfunction(AooLogLevel level, const char *fmt, ...)
+{
+    const char *label = nullptr;
+
+#if CERR_LOG_LABEL
+    switch (level) {
+    case kAooLogLevelError:
+        label = "error";
+        break;
+    case kAooLogLevelWarning:
+        label = "warning";
+        break;
+    case kAooLogLevelVerbose:
+        label = "verbose";
+        break;
+    case kAooLogLevelDebug:
+        label = "debug";
+        break;
+    default:
+        break;
+    }
+#endif
+    auto size = Log::buffer_size;
+    char buffer[size];
+    int count = 0;
+    if (label) {
+        count += snprintf(buffer, size, "[aoo][%s] ", label);
+    } else {
+        count += snprintf(buffer, size, "[aoo] ");
+    }
+
+    va_list args;
+    va_start (args, fmt);
+    count += vsnprintf(buffer + count, size - count, fmt, args);
+    va_end (args);
+
+    // force newline
+    count = std::min(count, size - 2);
+    buffer[count++] = '\n';
+    buffer[count++] = '\0';
+
+#if CERR_LOG_MUTEX
+    // shouldn't be necessary since fwrite() is supposed
+    // to be atomic.
+    sync::scoped_lock<sync::mutex> lock(g_log_mutex);
+#endif
+    fwrite(buffer, count, 1, stderr);
+    fflush(stderr);
 }
 
 static AooLogFunc g_logfunction = cerr_logfunction;
@@ -161,9 +210,33 @@ static AooLogFunc g_logfunction = nullptr;
 
 #endif // CERR_LOG_FUNCTION
 
-void log_message(AooLogLevel level, const std::string &msg){
+Log::int_type Log::overflow(int_type c) {
+    if (pos_ < buffer_size - 1) {
+        buffer_[pos_++] = c;
+        return 0;
+    } else {
+        return std::streambuf::traits_type::eof();
+    }
+}
+
+std::streamsize Log::xsputn(const char_type *s, std::streamsize n) {
+    auto limit = buffer_size - 1;
+    if (pos_ < limit) {
+        if (pos_ + n > limit) {
+            n = limit - pos_;
+        }
+        memcpy(buffer_ + pos_, s, n);
+        pos_ += n;
+        return n;
+    } else {
+        return 0;
+    }
+}
+
+Log::~Log() {
     if (g_logfunction) {
-        g_logfunction(level, msg.c_str());
+        buffer_[pos_] = '\0';
+        g_logfunction(level_, buffer_);
     }
 }
 
@@ -434,11 +507,11 @@ const AooCodecInterface * find_codec(const char * name){
 
 AooError AOO_CALL aoo_registerCodec(const char *name, const AooCodecInterface *codec){
     if (aoo::find_codec(name)) {
-        LOG_WARNING("aoo: codec " << name << " already registered!");
+        LOG_WARNING("codec " << name << " already registered!");
         return kAooErrorUnknown;
     }
     aoo::g_codec_list.emplace_back(name, codec);
-    LOG_VERBOSE("aoo: registered codec '" << name << "'");
+    LOG_VERBOSE("registered codec '" << name << "'");
     return kAooOk;
 }
 
@@ -499,5 +572,3 @@ void AOO_CALL aoo_terminate() {
     aoo::codec_list tmp;
     std::swap(tmp, aoo::g_codec_list);
 }
-
-

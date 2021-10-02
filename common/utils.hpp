@@ -8,8 +8,7 @@
 
 #include <stdint.h>
 #include <cstring>
-#include <string>
-#include <sstream>
+#include <ostream>
 
 /*------------------ alloca -----------------------*/
 #ifdef _WIN32
@@ -87,23 +86,24 @@
 
 namespace aoo {
 
-void log_message(AooLogLevel level, const std::string& msg);
-
-class Log {
+class Log final : std::streambuf, public std::ostream {
 public:
+    static const int32_t buffer_size = 256;
+
     Log(AooLogLevel level = kAooLogLevelNone)
-        : level_(level){}
-    ~Log() {
-        log_message(level_, stream_.str());
-    }
-    template<typename T>
-    Log& operator<<(T&& t) {
-        stream_ << std::forward<T>(t);
-        return *this;
-    }
+        : std::ostream(this), level_(level) {}
+    ~Log();
 private:
-    std::ostringstream stream_;
+    using int_type = std::streambuf::int_type;
+    using char_type = std::streambuf::char_type;
+
+    int_type overflow(int_type c) override;
+
+    std::streamsize xsputn(const char_type *s, std::streamsize n) override;
+
     AooLogLevel level_;
+    int32_t pos_ = 0;
+    char buffer_[buffer_size];
 };
 
 template<typename T>

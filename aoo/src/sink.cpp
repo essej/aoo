@@ -637,7 +637,7 @@ void Sink::dispatch_requests(){
             if (src){
                 src->uninvite(*this);
             } else {
-                LOG_WARNING("aoo: can't uninvite - source not found");
+                LOG_WARNING("can't uninvite - source not found");
             }
             break;
         }
@@ -1099,7 +1099,7 @@ void source_desc::uninvite(const Sink& s){
             return;
         }
     }
-    LOG_WARNING("aoo: couldn't uninvite source - not running");
+    LOG_WARNING("couldn't uninvite source - not running");
 }
 
 float source_desc::get_buffer_fill_ratio(){
