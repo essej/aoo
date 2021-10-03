@@ -64,7 +64,7 @@ AOO_API AooError AOO_CALL AooClient_sendRequest(
 /** \copydoc AooClient::sendPeerMessage() */
 AOO_API AooError AOO_CALL AooClient_sendPeerMessage(
         AooClient *client, const AooByte *data, AooInt32 size,
-        const void *target, AooAddrSize addrlen, AooFlag flags);
+        const void *address, AooAddrSize addrlen, AooFlag flags);
 
 /** \copydoc AooClient::handleMessage() */
 AOO_API AooError AOO_CALL AooClient_handleMessage(
@@ -104,7 +104,12 @@ AOO_INLINE AooError AooClient_connect(
         AooClient *client, const AooChar *hostName, AooInt32 port,
         const AooChar *userName, const AooChar *userPwd, AooNetCallback cb, void *user)
 {
-    AooNetRequestConnect data = { hostName, port, userName, userPwd, 0 };
+    AooNetRequestConnect data;
+    data.hostName = hostName;
+    data.port = port;
+    data.userName = userName;
+    data.userPwd = userPwd;
+    data.flags = 0;
     return AooClient_sendRequest(client, kAooNetRequestConnect, &data, cb, user);
 }
 
@@ -120,7 +125,10 @@ AOO_INLINE AooError AooClient_joinGroup(
         AooClient *client, const AooChar *groupName, const AooChar *groupPwd,
         AooNetCallback cb, void *user)
 {
-    AooNetRequestJoinGroup data = { groupName, groupPwd, 0 };
+    AooNetRequestJoinGroup data;
+    data.groupName = groupName;
+    data.groupPwd = groupPwd;
+    data.flags = 0;
     return AooClient_sendRequest(client, kAooNetRequestJoinGroup, &data, cb, user);
 }
 
@@ -128,6 +136,9 @@ AOO_INLINE AooError AooClient_joinGroup(
 AOO_INLINE AooError AooClient_leaveGroup(
         AooClient *client, const AooChar *groupName, AooNetCallback cb, void *user)
 {
-    AooNetRequestLeaveGroup data = { groupName, 0, 0 };
+    AooNetRequestLeaveGroup data;
+    data.groupName = groupName;
+    data.groupPwd = NULL;
+    data.flags = 0;
     return AooClient_sendRequest(client, kAooNetRequestLeaveGroup, &data, cb, user);
 }

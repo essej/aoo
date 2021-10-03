@@ -18,13 +18,15 @@ int main(int argc, const char * arg[]) {
     AooSource *source = AooSource_new(0, 0, NULL);
     AooSink *sink = AooSink_new(0, 0, NULL);
 #if USE_AOO_NET
+    AooClient *client;
+    AooServer *server;
     struct sockaddr_in sa;
     memset(&sa, 0, sizeof(sa));
     sa.sin_family = AF_INET;
     sa.sin_addr.s_addr = htonl(0x7F000001);
     sa.sin_port = htons(50000);
-    AooClient *client = AooClient_new(&sa, sizeof(sa), 0, NULL);
-    AooServer *server = AooServer_new(40000, 0, NULL);
+    client = AooClient_new(&sa, sizeof(sa), 0, NULL);
+    server = AooServer_new(40000, 0, NULL);
 #endif
 
     AooSource_free(source);
