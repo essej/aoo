@@ -218,8 +218,8 @@ typedef AooError (AOO_CALL *AooCodecRegisterFunc)(
  * pointer to #aoo_registerCodec and (optionally) a log function and custom allocator.
  */
 typedef AooError (AOO_CALL *AooCodecLoadFunc)
-        (const AooCodecRegisterFunc *registerFunction,
-         AooLogFunc logFunction, const AooAllocator *allocator);
+        (const AooCodecRegisterFunc *registerFunc,
+         AooLogFunc logFunc, AooAllocFunc allocFunc);
 
 /** \brief type of exit function for codec plugin module
  *

@@ -395,7 +395,7 @@ PcmCodec::PcmCodec(const AooFormatPcm& f) {
 } // namespace
 
 void aoo_pcmLoad(AooCodecRegisterFunc fn,
-                 AooLogFunc log, const AooAllocator *alloc){
+                 AooLogFunc log, AooAllocFunc alloc){
     fn(kAooCodecPcm, &g_interface);
     // the PCM codec is always statically linked, so we can simply use the
     // internal log function and allocator

@@ -407,19 +407,27 @@ typedef struct AooFormatStorage
 
 /*------------ memory allocation --------------*/
 
-/** \brief custom allocator */
-typedef struct AooAllocator
-{
-    /** allocate memory */
-    void* (AOO_CALL *alloc)(AooSize size, void *context);
-    /** reallocate memory */
-    void* (AOO_CALL *realloc)(void *ptr, AooSize oldSize,
-                              AooSize newSize, void *context);
-    /** free memory */
-    void (AOO_CALL *free)(void *ptr, AooSize size, void *context);
-    /** user context passed to functions */
-    void* context;
-} AooAllocator;
+/** \brief custom allocator function
+ * \param ptr pointer to memory block;
+ *    `NULL` if `oldsize` is 0.
+ * \param oldsize original size of memory block;
+ *    0 for allocating new memory
+ * \param newsize size of the memory block;
+ *    0 for freeing existing memory.
+ * \return pointer to the new memory block;
+ *    `NULL` if `newsize` is 0 or the allocation failed.
+ *
+ * If `oldsize` is 0 and `newsize` is not 0, the function
+ * shall behave like `malloc`.
+ * If `oldsize` is not 0 and `newsize` is 0, the function
+ * shall behave like `free`.
+ * If both `oldsize`and `newsize` are not 0, the function
+ * shall behave like `realloc`.
+ * If both `oldsize` and `newsize` are 0, the function
+ * shall have no effect.
+ */
+typedef void * (AOO_CALL *AooAllocFunc)
+    (void *ptr, AooSize oldsize, AooSize newsize);
 
 /*---------------- logging ----------------*/
 
@@ -442,7 +450,11 @@ typedef AooInt32 AooLogLevel;
 #define AOO_LOG_LEVEL kAooLogLevelWarning
 #endif
 
-/** \brief custom log function type */
+/** \brief custom log function type
+ * \param level the log level
+ * \param fmt the format string
+ * \param ... arguments
+ */
 typedef void
 /** \cond */
 #ifndef _MSC_VER
@@ -450,7 +462,7 @@ typedef void
 #endif
 /** \endcond */
     (AOO_CALL *AooLogFunc)
-        (AooLogLevel level, const AooChar *msg, ...);
+        (AooLogLevel level, const AooChar *fmt, ...);
 
 /*--------------------------------------*/
 

@@ -185,11 +185,11 @@ AOO_API void AOO_CALL aoo_initialize(void);
  * \brief initialize with log function and/or custom allocator
  *
  * \note Call before using any AOO functions!
- * \param logfn custom log function; `NULL`: use default log function
- * \param alloc custom allocator; `NULL`: use default allocator
+ * \param log custom log function; `NULL`: use default log function
+ * \param alloc custom allocation function; `NULL`: use default allocator
  */
 AOO_API void AOO_CALL aoo_initializeEx(
-        AooLogFunc logfn, const AooAllocator *alloc);
+        AooLogFunc log, AooAllocFunc alloc);
 
 /**
  * \brief terminate AOO library

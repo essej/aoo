@@ -107,31 +107,42 @@ namespace aoo {
 std::atomic<ptrdiff_t> total_memory{0};
 #endif
 
-static AooAllocator g_allocator {
-    [](size_t n, void *){
+static AooAllocFunc g_allocator =
+        [](void *ptr, AooSize oldsize, AooSize newsize) -> void*
+{
+    if (newsize > 0) {
+        // allocate new memory
+        // NOTE: we never reallocate
+        assert(ptr == nullptr && oldsize == 0);
     #if AOO_DEBUG_MEMORY
-        auto total = total_memory.fetch_add(n, std::memory_order_relaxed) + (ptrdiff_t)n;
-        LOG_ALL("allocate " << n << " bytes (total: " << total << ")");
+        auto total = total_memory.fetch_add(newsize, std::memory_order_relaxed) + (ptrdiff_t)newsize;
+        LOG_ALL("allocate " << newsize << " bytes (total: " << total << ")");
     #endif
-        return operator new(n);
-    },
-    nullptr,
-    [](void *ptr, size_t n, void *){
+        return operator new(newsize);
+    } else if (oldsize > 0) {
+        // free memory
     #if AOO_DEBUG_MEMORY
-        auto total = total_memory.fetch_sub(n, std::memory_order_relaxed) - (ptrdiff_t)n;
-        LOG_ALL("deallocate " << n << " bytes (total: " << total << ")");
+        auto total = total_memory.fetch_sub(oldsize, std::memory_order_relaxed) - (ptrdiff_t)oldsize;
+        LOG_ALL("deallocate " << oldsize << " bytes (total: " << total << ")");
     #endif
         operator delete(ptr);
-    },
-    nullptr
+    } else {
+        // (de)allocating memory of size 0: do nothing.
+        assert(ptr == nullptr);
+    }
+    return nullptr;
 };
 
 void * allocate(size_t size){
-    return g_allocator.alloc(size, g_allocator.context);
+    auto result = g_allocator(nullptr, 0, size);
+    if (!result && size > 0) {
+        throw std::bad_alloc{};
+    }
+    return result;
 }
 
 void deallocate(void *ptr, size_t size){
-    g_allocator.free(ptr, size, g_allocator.context);
+    g_allocator(ptr, size, 0);
 }
 
 } // aoo
@@ -517,15 +528,15 @@ AooError AOO_CALL aoo_registerCodec(const char *name, const AooCodecInterface *c
 
 //--------------------------- (de)initialize -----------------------------------//
 
-void aoo_pcmLoad(AooCodecRegisterFunc fn, AooLogFunc log, const AooAllocator *alloc);
+void aoo_pcmLoad(AooCodecRegisterFunc fn, AooLogFunc log, AooAllocFunc alloc);
 void aoo_pcmUnload();
 #if USE_CODEC_OPUS
-void aoo_opusLoad(AooCodecRegisterFunc fn, AooLogFunc log, const AooAllocator *alloc);
+void aoo_opusLoad(AooCodecRegisterFunc fn, AooLogFunc log, AooAllocFunc alloc);
 void aoo_opusUnload();
 #endif
 
 #if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
-#define ALLOCATOR &aoo::g_allocator
+#define ALLOCATOR aoo::g_allocator
 #else
 #define ALLOCATOR nullptr
 #endif
@@ -548,7 +559,7 @@ void AOO_CALL aoo_initialize(){
     }
 }
 
-void AOO_CALL aoo_initializeEx(AooLogFunc log, const AooAllocator *alloc) {
+void AOO_CALL aoo_initializeEx(AooLogFunc log, AooAllocFunc alloc) {
     if (log) {
         aoo::g_logfunction = log;
     }

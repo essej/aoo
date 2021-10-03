@@ -470,7 +470,7 @@ Decoder::Decoder(OpusMSDecoder *state, size_t size, const AooFormatOpus& f) {
 } // namespace
 
 void aoo_opusLoad(AooCodecRegisterFunc fn,
-                  AooLogFunc log, const AooAllocator *alloc){
+                  AooLogFunc log, AooAllocFunc alloc){
     fn(kAooCodecOpus, &g_interface);
     // the Opus codec is always statically linked, so we can simply use the
     // internal log function and allocator

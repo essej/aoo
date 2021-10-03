@@ -166,8 +166,10 @@ void deallocate(void *ptr, size_t size);
 
 template<typename T>
 void destroy(T *x){
-    x->~T();
-    deallocate(x, sizeof(T));
+    if (x) {
+        x->~T();
+        deallocate(x, sizeof(T));
+    }
 }
 
 template<class T>
