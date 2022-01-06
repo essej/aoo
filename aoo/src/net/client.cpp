@@ -1322,8 +1322,8 @@ void client_imp::handle_peer_add(const osc::ReceivedMessage& msg){
     peer_lock lock(peers_);
     // check if peer already exists (shouldn't happen)
     for (auto& p: peers_){
-        if (p.match(group, id) || (legacy && p.match(group, user))){
-            LOG_ERROR("aoo_client: peer " << p << " already added");
+        if ((!legacy && p.match(group, id)) || (legacy && p.match(group, user))){
+            LOG_ERROR("aoo_client: peer " << p << " already added , id: " << id << "  legacy: " << legacy);
             return;
         }
     }
