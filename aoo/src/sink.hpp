@@ -240,6 +240,7 @@ private:
     // state
     int32_t channel_ = 0; // recent channel onset
     int32_t skipblocks_ = 0;
+    int32_t ignoreblocks_ = 0;
     float xrun_ = 0;
     int32_t xrunsamples_ = 0;
     // resampler

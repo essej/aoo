@@ -502,6 +502,15 @@ aoo_error aoo::source_imp::process(const aoo_sample **data, int32_t nsamples, ui
     if (sinks_.empty()){
         // nothing to do. users still have to check for pending events,
         // but there is no reason to call send()
+        if (resampler_.size() > 0 || audioqueue_.read_available() > 0) {
+            // clear this so no garbage gets in when we have sinks again
+            resampler_.reset();
+            audioqueue_.reset();
+            if (encoder_) {
+                encoder_->reset();
+            }
+            DO_LOG_DEBUG("clear state on no sinks");
+        }
         return AOO_ERROR_IDLE;
     }
 #endif

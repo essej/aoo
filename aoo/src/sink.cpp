@@ -937,6 +937,7 @@ void source_desc::update(const sink_imp& s){
             std::fill(b->data, b->data + nsamples, 0);
             audioqueue_.write_commit();
         }
+        ignoreblocks_ = aqbuffers + 1; // ignore silent fill + first recv'd block (which can contain discontinuity for an undetermined reason)
 
         // setup resampler
         resampler_.setup(decoder_->blocksize(), s.blocksize(),
@@ -1407,6 +1408,30 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
         // try to write samples from buffer into resampler
         if (audioqueue_.read_available()){
             auto d = (block_data *)audioqueue_.read_data();
+
+            if (ignoreblocks_ >= 0) {
+                --ignoreblocks_;
+
+                if (ignoreblocks_ >= 0) {
+                    // silence it
+                    std::fill(d->data, d->data + insize, 0.f);
+                }
+                else {
+                    // we are past the initial ignore blocks, safety fade in this block
+                    //float fadedelta = 1.0f / std::min(128, decoder_->blocksize());
+                    float fadedelta = 1.0f / decoder_->blocksize();
+                    float fadeg = 0.0f;
+                    for (int i = 0; i < insize; i += nchannels){
+                        for (int j = 0; j < nchannels; ++j){
+                            d->data[i + j] *= fadeg;
+                        }
+                        fadeg += fadedelta;
+                        fadeg = std::min(1.0f, fadeg);
+                    }
+
+                    LOG_DEBUG("safety fade in first real block fadedelta bs: " << decoder_->blocksize());
+                }
+            }
 
             if (xrun_ > XRUN_THRESHOLD){
                 // skip audio and decrement xrun counter proportionally
