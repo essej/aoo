@@ -902,8 +902,8 @@ bool client_endpoint::handle_message(const char *data, int32_t n){
                 //return false;
             }
         } else if (type == AOO_TYPE_RELAY){
-            // use public address!
-            server_->handle_relay_message(msg, public_addresses().front());
+            // use public address! (but use the last one, since the first might not actually be a public address?!)
+            server_->handle_relay_message(msg, public_addresses().back());
         } else {
             LOG_WARNING("aoo_client: got unexpected message " << msg.AddressPattern());
             return false;
