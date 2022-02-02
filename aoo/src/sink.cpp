@@ -93,7 +93,13 @@ aoo_error aoo::sink_imp::control(int32_t ctl, intptr_t index,
         }
         ip_address addr((const sockaddr *)ep->address, ep->addrlen);
 
-        push_request(source_request { request_type::invite, addr, ep->id });
+        uint32_t flags = 0;
+        if (ptr != nullptr) {
+            CHECKARG(uint32_t);
+            flags = as<uint32_t>(ptr);
+        }
+
+        push_request(source_request { request_type::invite, addr, ep->id, flags });
 
         break;
     }
@@ -105,7 +111,7 @@ aoo_error aoo::sink_imp::control(int32_t ctl, intptr_t index,
             // single source
             ip_address addr((const sockaddr *)ep->address, ep->addrlen);
 
-            push_request(source_request { request_type::invite, addr, ep->id });
+            push_request(source_request { request_type::uninvite, addr, ep->id });
         } else {
             // all sources
             push_request(source_request { request_type::uninvite_all });
@@ -374,7 +380,7 @@ aoo_error aoo::sink_imp::send(aoo_sendfn fn, void *user){
             source_lock lock2(sources_);
             auto src = find_source(r.address, r.id);
             if (!src){
-                src = add_source(r.address, r.id);
+                src = add_source(r.address, r.id, r.flags);
             }
             src->invite(*this);
             break;
@@ -640,9 +646,9 @@ aoo::source_desc * sink_imp::get_source_arg(intptr_t index){
     return src;
 }
 
-source_desc * sink_imp::add_source(const ip_address& addr, aoo_id id){
+source_desc * sink_imp::add_source(const ip_address& addr, aoo_id id, uint32_t flags){
     // add new source
-    sources_.emplace_front(addr, id, elapsed_time());
+    sources_.emplace_front(addr, id, elapsed_time(), flags);
     return &sources_.front();
 }
 
@@ -680,7 +686,7 @@ aoo_error sink_imp::handle_format_message(const osc::ReceivedMessage& msg,
     osc::osc_bundle_element_size_t size;
     (it++)->AsBlob(settings, size);
     // for backwards comptability (later remove check)
-    uint32_t flags = (it != msg.ArgumentsEnd()) ?
+    uint32_t flags = (it != msg.ArgumentsEnd() && it->IsInt32()) ?
                 (uint32_t)(it++)->AsInt32() : 0;
 
     if (id < 0){
@@ -839,8 +845,8 @@ sink_event::sink_event(aoo_event_type _type, const source_desc &desc)
 
 /*////////////////////////// source_desc /////////////////////////////*/
 
-source_desc::source_desc(const ip_address& addr, aoo_id id, double time)
-    : addr_(addr), id_(id), last_packet_time_(time)
+source_desc::source_desc(const ip_address& addr, aoo_id id, double time, uint32_t flags)
+    : addr_(addr), id_(id), flags_(flags), last_packet_time_(time)
 {
     // reserve some memory, so we don't have to allocate memory
     // when pushing events in the audio thread.
@@ -903,6 +909,8 @@ void source_desc::update(const sink_imp& s){
         auto reblock = (double)s.blocksize() / (double)decoder_->blocksize();
         minblocks_ = std::ceil(downsample * reblock);
         nbuffers = std::max<int32_t>(nbuffers, minblocks_);
+        int32_t aqbuffers = nbuffers; // minblocks_; // force
+
         LOG_DEBUG("source_desc: buffersize (ms): " << s.buffersize()
                   << ", samples: " << bufsize << ", nbuffers: " << nbuffers
                   << ", minimum: " << minblocks_);
@@ -919,9 +927,9 @@ void source_desc::update(const sink_imp& s){
         auto nbytes = sizeof(block_data::header) + nsamples * sizeof(aoo_sample);
         // align to 8 bytes
         nbytes = (nbytes + 7) & ~7;
-        audioqueue_.resize(nbytes, nbuffers);
+        audioqueue_.resize(nbytes, aqbuffers);
         // fill buffer
-        for (int i = 0; i < nbuffers; ++i){
+        for (int i = 0; i < aqbuffers; ++i){
             auto b = (block_data *)audioqueue_.write_data();
             // push nominal samplerate, channel + silence
             b->header.samplerate = sr;
@@ -929,6 +937,7 @@ void source_desc::update(const sink_imp& s){
             std::fill(b->data, b->data + nsamples, 0);
             audioqueue_.write_commit();
         }
+        ignoreblocks_ = aqbuffers + 1; // ignore silent fill + first recv'd block (which can contain discontinuity for an undetermined reason)
 
         // setup resampler
         resampler_.setup(decoder_->blocksize(), s.blocksize(),
@@ -944,6 +953,7 @@ void source_desc::update(const sink_imp& s){
         auto hwsamples = (double)decoder_->samplerate() / MINSAMPLERATE * MAXHWBUFSIZE;
         auto minbuffers = std::ceil(hwsamples / (double)decoder_->blocksize());
         auto jitterbufsize = std::max<int32_t>(nbuffers, minbuffers);
+        //auto jitterbufsize = nbuffers;
         // LATER optimize max. block size
         jitterbuffer_.resize(jitterbufsize, nsamples * sizeof(double));
         LOG_DEBUG("jitter buffer: " << jitterbufsize << " blocks");
@@ -1047,9 +1057,10 @@ float source_desc::get_buffer_fill_ratio(){
         auto nsamples = decoder_->nchannels() * decoder_->blocksize();
         auto available = (double)audioqueue_.read_available() +
                 (double)resampler_.size() / (double)nsamples;
-        auto ratio = available / (double)audioqueue_.capacity();
-        LOG_DEBUG("fill ratio: " << ratio << ", audioqueue: " << audioqueue_.read_available()
-                  << ", resampler: " << (double)resampler_.size() / (double)nsamples);
+        auto ratio = (available + jitterbuffer_.size()) / (double)(audioqueue_.capacity() + jitterbuffer_.capacity());
+        //LOG_DEBUG("fill ratio: " << ratio << ", audioqueue: " << audioqueue_.read_available()
+        //          << ", resampler: " << (double)resampler_.size() / (double)nsamples << "  jitter: " << jitterbuffer_.size());
+
         // FIXME sometimes the result is bigger than 1.0
         return std::min<float>(1.0, ratio);
     } else {
@@ -1397,6 +1408,30 @@ bool source_desc::process(const sink_imp& s, aoo_sample **buffer,
         // try to write samples from buffer into resampler
         if (audioqueue_.read_available()){
             auto d = (block_data *)audioqueue_.read_data();
+
+            if (ignoreblocks_ >= 0) {
+                --ignoreblocks_;
+
+                if (ignoreblocks_ >= 0) {
+                    // silence it
+                    std::fill(d->data, d->data + insize, 0.f);
+                }
+                else {
+                    // we are past the initial ignore blocks, safety fade in this block
+                    //float fadedelta = 1.0f / std::min(128, decoder_->blocksize());
+                    float fadedelta = 1.0f / decoder_->blocksize();
+                    float fadeg = 0.0f;
+                    for (int i = 0; i < insize; i += nchannels){
+                        for (int j = 0; j < nchannels; ++j){
+                            d->data[i + j] *= fadeg;
+                        }
+                        fadeg += fadedelta;
+                        fadeg = std::min(1.0f, fadeg);
+                    }
+
+                    LOG_DEBUG("safety fade in first real block fadedelta bs: " << decoder_->blocksize());
+                }
+            }
 
             if (xrun_ > XRUN_THRESHOLD){
                 // skip audio and decrement xrun counter proportionally
@@ -2034,7 +2069,7 @@ void source_desc::send_invitation(const sink_imp& s, const sendfn& fn){
 
     fn(msg.Data(), msg.Size(), addr_, flags_);
 
-    LOG_DEBUG("send /invite to source " << id_);
+    LOG_DEBUG("send /invite to source " << id_ << "  flags: " << flags_);
 }
 
 // called without lock!
