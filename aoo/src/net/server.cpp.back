@@ -211,18 +211,6 @@ aoo_error aoo::net::server_imp::control(int32_t ctl, intptr_t index,
             as<int32_t>(ptr) = users_.size();
             break;
         }
-        case AOO_NET_CTL_GET_OUTGOING_UDP_BYTES:
-        {
-            CHECKARG(uint64_t);
-            as<uint64_t>(ptr) = udpserver_.get_outgoing_bytes();
-            break;
-        }
-        case AOO_NET_CTL_GET_INCOMING_UDP_BYTES:
-        {
-            CHECKARG(uint64_t);
-            as<uint64_t>(ptr) = udpserver_.get_incoming_bytes();
-            break;
-        }
         default:
             LOG_WARNING("aoo_server: unsupported control " << ctl);
             return AOO_ERROR_UNSPECIFIED;
@@ -599,7 +587,6 @@ void udp_server::receive_packets(){
             recvbufferfill_.fetch_add(1, std::memory_order_relaxed);
         #endif
             event_.set();
-            incomingbytes_ += nbytes;
         } else if (nbytes < 0) {
             // ignore errors when quitting
             if (!quit_){
@@ -727,9 +714,6 @@ void udp_server::send_message(const char *msg, int32_t size,
         int err = socket_errno();
         // TODO handle error
         LOG_ERROR("aoo_server: send() failed (" << err << ")");
-    }
-    else {
-        outgoingbytes_ += result;
     }
 }
 
@@ -977,7 +961,7 @@ bool client_endpoint::handle_message(const char *data, int32_t n){
             }
         } else if (type == AOO_TYPE_RELAY){
             // use public address!
-            server_->handle_relay_message(msg, public_addresses().front());
+            server_->handle_relay_message(msg, public_addresses().back());
         } else {
             LOG_WARNING("aoo_client: got unexpected message " << msg.AddressPattern());
             return false;

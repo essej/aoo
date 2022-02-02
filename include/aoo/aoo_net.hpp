@@ -83,6 +83,20 @@ public:
         return cnt;
     }
 
+    // get cumulative incoming received udp data bytes
+    virtual uint64_t get_incoming_udp_bytes() {
+        uint64_t cnt = 0;
+        control(AOO_NET_CTL_GET_INCOMING_UDP_BYTES, 0, &cnt, sizeof(cnt));
+        return cnt;
+    }
+
+    // get cumulative outgoing sent udp data bytes
+    virtual uint64_t get_outgoing_udp_bytes() {
+        uint64_t cnt = 0;
+        control(AOO_NET_CTL_GET_OUTGOING_UDP_BYTES, 0, &cnt, sizeof(cnt));
+        return cnt;
+    }
+
     // *none*
 protected:
     ~server(){} // non-virtual!

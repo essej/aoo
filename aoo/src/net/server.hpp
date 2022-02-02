@@ -166,6 +166,10 @@ class udp_server {
 public:
     udp_server(int socket);
     ~udp_server();
+
+    uint64_t get_outgoing_bytes() const { return outgoingbytes_; }
+    uint64_t get_incoming_bytes() const { return incomingbytes_; }
+
 private:
     int socket_;
     ip_address::ip_type type_;
@@ -184,6 +188,9 @@ private:
 #endif
     std::atomic<bool> quit_{false};
     sync::event event_;
+
+    uint64_t outgoingbytes_ = 0;
+    uint64_t incomingbytes_ = 0;
 
     void receive_packets();
 

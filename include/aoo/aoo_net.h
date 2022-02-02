@@ -104,7 +104,9 @@ typedef struct aoo_net_group_request {
 typedef enum aoo_net_option
 {
     AOO_NET_CTL_GET_GROUP_COUNT = 0,
-    AOO_NET_CTL_GET_USER_COUNT
+    AOO_NET_CTL_GET_USER_COUNT,
+    AOO_NET_CTL_GET_OUTGOING_UDP_BYTES,
+    AOO_NET_CTL_GET_INCOMING_UDP_BYTES
 } aoo_net_option;
 
 /*///////////////////////// events ///////////////////////////*/
