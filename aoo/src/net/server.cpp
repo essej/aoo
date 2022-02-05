@@ -189,11 +189,46 @@ AOO_API AooError AOO_CALL AooServer_control(
     return server->control(ctl, index, ptr, size);
 }
 
+template<typename T>
+T& as(void *p){
+    return *reinterpret_cast<T *>(p);
+}
+
+#define CHECKARG(type) assert(size == sizeof(type))
+
 AooError AOO_CALL aoo::net::Server::control(
         AooCtl ctl, intptr_t index, void *ptr, AooSize size)
 {
-    LOG_WARNING("aoo_server: unsupported control " << ctl);
-    return kAooErrorNotImplemented;
+    switch (ctl){
+        case kAooNetServerControlGetGroupCount:
+        {
+            CHECKARG(int32_t);
+            as<int32_t>(ptr) = (int32_t) groups_.size();
+            break;
+        }
+        case kAooNetServerControlGetUserCount:
+        {
+            CHECKARG(int32_t);
+            as<int32_t>(ptr) = (int32_t) users_.size();
+            break;
+        }
+        case kAooNetServerControlGetOutgoingUdpBytes:
+        {
+            CHECKARG(uint64_t);
+            as<uint64_t>(ptr) = udpserver_.get_outgoing_bytes();
+            break;
+        }
+        case kAooNetServerControlGetIncomingUdpBytes:
+        {
+            CHECKARG(uint64_t);
+            as<uint64_t>(ptr) = udpserver_.get_incoming_bytes();
+            break;
+        }
+        default:
+            LOG_WARNING("aoo_server: unsupported control " << ctl);
+            return kAooErrorNotImplemented;
+    }
+    return kAooOk;
 }
 
 namespace aoo {
@@ -565,6 +600,7 @@ void udp_server::receive_packets(){
             recvbufferfill_.fetch_add(1, std::memory_order_relaxed);
         #endif
             event_.set();
+            incomingbytes_ += nbytes;
         } else if (nbytes < 0) {
             // ignore errors when quitting
             if (!quit_){
@@ -692,6 +728,9 @@ void udp_server::send_message(const AooByte *msg, int32_t size,
         int err = socket_errno();
         // TODO handle error
         LOG_ERROR("aoo_server: send() failed (" << err << ")");
+    }
+    else {
+        outgoingbytes_ += result;
     }
 }
 

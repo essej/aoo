@@ -78,6 +78,34 @@ public:
     /*         type-safe control functions        */
     /*--------------------------------------------*/
 
+    // get number of currently active groups
+    virtual int32_t getGroupCount() {
+        int32_t cnt = 0;
+        control(kAooNetServerControlGetGroupCount, 0, &cnt, sizeof(cnt));
+        return cnt;
+    }
+
+    // get number of currently active users
+    virtual int32_t getUserCount() {
+        int32_t cnt = 0;
+        control(kAooNetServerControlGetUserCount, 0, &cnt, sizeof(cnt));
+        return cnt;
+    }
+
+    // get cumulative incoming received udp data bytes
+    virtual uint64_t getIncomingUdpBytes() {
+        uint64_t cnt = 0;
+        control(kAooNetServerControlGetIncomingUdpBytes, 0, &cnt, sizeof(cnt));
+        return cnt;
+    }
+
+    // get cumulative outgoing sent udp data bytes
+    virtual uint64_t getOutgoingUdpBytes() {
+        uint64_t cnt = 0;
+        control(kAooNetServerControlGetOutgoingUdpBytes, 0, &cnt, sizeof(cnt));
+        return cnt;
+    }
+
     /* (empty) */
 protected:
     ~AooServer(){} // non-virtual!

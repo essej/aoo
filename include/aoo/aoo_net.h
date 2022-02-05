@@ -169,6 +169,16 @@ enum AooNetMessageFlags
     kAooNetMessageReliable = 0x01
 };
 
+
+enum AooNetServerControl
+{
+    kAooNetServerControlGetGroupCount = 0,
+    kAooNetServerControlGetUserCount,
+    kAooNetServerControlGetOutgoingUdpBytes,
+    kAooNetServerControlGetIncomingUdpBytes
+};
+
+
 /*-------------------------------------------------*/
 
 AOO_PACK_END
