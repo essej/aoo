@@ -86,8 +86,7 @@ if (AOO_CODEC_OPUS)
 endif()
 
 if (AOO_NET)
-    list(APPEND HEADERS "src/net/server.hpp" "src/net/client.hpp"
-        "src/net/SLIP.hpp")
+    list(APPEND HEADERS "src/net/server.hpp" "src/net/client.hpp")
     list(APPEND SOURCES "src/net/client.cpp" "src/net/server.cpp")
     if (NOT AOO_SYSTEM_MD5)
         list(APPEND HEADERS "${DEPS}/md5/md5.h")
