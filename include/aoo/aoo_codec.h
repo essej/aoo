@@ -19,7 +19,7 @@ AOO_PACK_BEGIN
 /** \brief base class for all codec classes */
 typedef struct AooCodec
 {
-    struct AooCodecInterface *interface;
+    struct AooCodecInterface *cls;
 } AooCodec;
 
 /** \brief codec constructor
@@ -152,7 +152,7 @@ AOO_INLINE AooError AooEncoder_encode(AooCodec *enc,
                            const AooSample *input, AooInt32 numSamples,
                            AooByte *output, AooInt32 *numBytes)
 {
-    return enc->interface->encoderEncode(enc, input, numSamples, output, numBytes);
+    return enc->cls->encoderEncode(enc, input, numSamples, output, numBytes);
 }
 
 /** \brief control encoder instance
@@ -160,12 +160,12 @@ AOO_INLINE AooError AooEncoder_encode(AooCodec *enc,
 AOO_INLINE AooError AooEncoder_control(AooCodec *enc,
                            AooCodecCtl ctl, void *data, AooSize size)
 {
-    return enc->interface->encoderControl(enc, ctl, data, size);
+    return enc->cls->encoderControl(enc, ctl, data, size);
 }
 
 /** \brief reset encoder state */
 AOO_INLINE AooError AooEncoder_reset(AooCodec *enc) {
-    return enc->interface->encoderControl(enc, kAooCodecCtlReset, NULL, 0);
+    return enc->cls->encoderControl(enc, kAooCodecCtlReset, NULL, 0);
 }
 
 /** \brief decode bytes to audio samples
@@ -174,7 +174,7 @@ AOO_INLINE AooError AooDecoder_decode(AooCodec *dec,
                            const AooByte *input, AooInt32 numBytes,
                            AooSample *output, AooInt32 *numSamples)
 {
-    return dec->interface->decoderDecode(dec, input, numBytes, output, numSamples);
+    return dec->cls->decoderDecode(dec, input, numBytes, output, numSamples);
 }
 
 /** \brief control decoder instance
@@ -182,13 +182,13 @@ AOO_INLINE AooError AooDecoder_decode(AooCodec *dec,
 AOO_INLINE AooError AooDecoder_control(AooCodec *dec,
                            AooCodecCtl ctl, void *data, AooSize size)
 {
-    return dec->interface->decoderControl(dec, ctl, data, size);
+    return dec->cls->decoderControl(dec, ctl, data, size);
 }
 
 /** \brief reset decoder state */
 AOO_INLINE AooError AooDecoder_reset(AooCodec *dec)
 {
-    return dec->interface->encoderControl(dec, kAooCodecCtlReset, NULL, 0);
+    return dec->cls->encoderControl(dec, kAooCodecCtlReset, NULL, 0);
 }
 
 /*----------------- register codecs -----------------------*/
@@ -201,7 +201,7 @@ AOO_API AooError AOO_CALL aoo_registerCodec(
  * entry function of the codec plugin to register itself. */
 typedef AooError (AOO_CALL *AooCodecRegisterFunc)(
         const AooChar *name,                // codec name
-        const AooCodecInterface *interface  // codec interface
+        const AooCodecInterface *cls  // codec interface
 );
 
 /** \brief type of entry function for codec plugin module

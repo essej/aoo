@@ -388,7 +388,7 @@ AooCodecInterface g_interface = {
 };
 
 PcmCodec::PcmCodec(const AooFormatPcm& f) {
-    interface = &g_interface;
+    cls = &g_interface;
     sampleSize_ = bytes_per_sample(f.bitDepth);
 }
 

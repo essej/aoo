@@ -72,7 +72,7 @@ struct sendfn {
         : fn_(fn), user_(user) {}
 
     void operator() (const AooByte *data, AooInt32 size,
-                      const ip_address& addr, AooFlag flags = 0) const {
+                     const ip_address& addr, AooFlag flags = 0) const {
         fn_(user_, data, size, addr.address(), addr.length(), flags);
     }
 
@@ -310,14 +310,14 @@ struct format_deleter {
 struct encoder_deleter {
     void operator() (void *x) const {
         auto c = (AooCodec *)x;
-        c->interface->encoderFree(c);
+        c->cls->encoderFree(c);
     }
 };
 
 struct decoder_deleter {
     void operator() (void *x) const {
         auto c = (AooCodec *)x;
-        c->interface->decoderFree(c);
+        c->cls->decoderFree(c);
     }
 };
 

@@ -454,14 +454,14 @@ AooCodecInterface g_interface = {
 };
 
 Encoder::Encoder(OpusMSEncoder *state, size_t size, const AooFormatOpus& f) {
-    interface = &g_interface;
+    cls = &g_interface;
     state_ = state;
     size_ = size;
     numChannels_ = f.header.numChannels;
 }
 
 Decoder::Decoder(OpusMSDecoder *state, size_t size, const AooFormatOpus& f) {
-    interface = &g_interface;
+    cls = &g_interface;
     state_ = state;
     size_ = size;
     numChannels_ = f.header.numChannels;

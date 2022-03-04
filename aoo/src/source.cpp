@@ -1376,7 +1376,7 @@ void Source::send_start(const sendfn& fn){
     AooByte extension[kAooFormatExtMaxSize];
     AooInt32 size = sizeof(extension);
 
-    if (encoder_->interface->serialize(
+    if (encoder_->cls->serialize(
                 &f.header, extension, &size) != kAooOk) {
         return;
     }
