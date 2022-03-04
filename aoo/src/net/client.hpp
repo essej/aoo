@@ -309,7 +309,7 @@ private:
     std::atomic<bool> quit_{false};
     int eventsocket_ = -1;
     // peers
-    using peer_list = aoo::concurrent_list<peer>;
+    using peer_list = aoo::rcu_list<peer>;
     using peer_lock = std::unique_lock<peer_list>;
     peer_list peers_;
     // time

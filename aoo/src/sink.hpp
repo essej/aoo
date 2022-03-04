@@ -368,7 +368,7 @@ private:
     AooClient *client_ = nullptr;
 #endif
     // the sources
-    using source_list = aoo::concurrent_list<source_desc>;
+    using source_list = aoo::rcu_list<source_desc>;
     using source_lock = std::unique_lock<source_list>;
     source_list sources_;
     sync::mutex source_mutex_;

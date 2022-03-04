@@ -250,7 +250,7 @@ template<typename T>
 using unbounded_mpsc_queue = lockfree::unbounded_mpsc_queue<T, aoo::allocator<T>>;
 
 template<typename T>
-using concurrent_list = lockfree::concurrent_list<T, aoo::allocator<T>>;
+using rcu_list = lockfree::rcu_list<T, aoo::allocator<T>>;
 
 //------------------ memory --------------------//
 
