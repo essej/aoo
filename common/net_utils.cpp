@@ -41,10 +41,18 @@ ip_address::ip_address(){
     clear();
 }
 
+ip_address::ip_address(socklen_t size) {
+    memset(&address_, 0, sizeof(address_));
+    length_ = size;
+}
+
 ip_address::ip_address(const struct sockaddr *sa, socklen_t len){
     memcpy(&address_, sa, len);
     length_ = len;
 }
+
+ip_address::ip_address(const AooSockAddr &addr)
+    : ip_address((const struct sockaddr *)addr.data, addr.size) {}
 
 ip_address::ip_address(uint32_t ipv4, int port){
     struct sockaddr_in sa;
@@ -58,7 +66,11 @@ ip_address::ip_address(uint32_t ipv4, int port){
 
 void ip_address::clear(){
     memset(&address_, 0, sizeof(address_));
-    length_ = sizeof(address_); // e.g. for recvfrom()
+    length_ = 0; // e.g. for recvfrom()
+}
+
+void ip_address::resize(socklen_t size) {
+    length_ = size;
 }
 
 std::vector<ip_address> ip_address::resolve(const std::string &host,
@@ -94,7 +106,7 @@ std::vector<ip_address> ip_address::resolve(const std::string &host,
     #endif
 #endif
         AI_NUMERICSERV | // we use a port number
-        AI_PASSIVE;     // listen to any addr if hostname is NULL
+        AI_PASSIVE;      // listen to any addr if hostname is NULL
 
     char portstr[10]; // largest port is 65535
     snprintf(portstr, sizeof(portstr), "%d", port);
@@ -279,7 +291,11 @@ const char * ip_address::get_name(const sockaddr *addr){
 }
 
 const char* ip_address::name() const {
-    return get_name((const sockaddr *)&address_);
+    if (length_ > 0) {
+        return get_name((const sockaddr *)&address_);
+    } else {
+        return "";
+    }
 }
 
 // for backwards compatibility with IPv4 only servers
@@ -358,15 +374,17 @@ int socket_init()
 int socket_errno()
 {
 #ifdef _WIN32
-    int err = WSAGetLastError();
-    // UDP only?
-    if (err == WSAECONNRESET){
-        return 0; // ignore
-    }
+    return WSAGetLastError();
 #else
-    int err = errno;
+    return errno;
 #endif
-    return err;
+}
+
+int socket_error(int socket) {
+    int error = 0;
+    socklen_t errlen = sizeof(error);
+    getsockopt(socket, SOL_SOCKET, SO_ERROR, (char *)&error, &errlen);
+    return error;
 }
 
 int socket_strerror(int err, char *buf, int size)
@@ -481,7 +499,7 @@ int socket_tcp(int port)
     }
 #else
     int sock = socket(AF_INET, SOCK_STREAM, 0);
-    bindaddr = ip_address(port, ip_address::IPv4);
+    ip_address bindaddr = ip_address(port, ip_address::IPv4);
 #endif
     if (sock >= 0){
         // set SO_REUSEADDR
@@ -562,7 +580,7 @@ int socket_sendto(int socket, const void *buf, int size, const ip_address& addr)
 }
 
 int socket_receive(int socket, void *buf, int size,
-                   ip_address* addr, int32_t timeout)
+                   ip_address* addr, double timeout)
 {
     if (timeout >= 0){
         // non-blocking receive via poll()
@@ -571,9 +589,9 @@ int socket_receive(int socket, void *buf, int size,
         p.revents = 0;
         p.events = POLLIN;
     #ifdef _WIN32
-        int result = WSAPoll(&p, 1, timeout / 1000);
+        int result = WSAPoll(&p, 1, timeout * 1000);
     #else
-        int result = poll(&p, 1, timeout / 1000);
+        int result = poll(&p, 1, timeout * 1000);
     #endif
         if (result < 0){
             socket_error_print("poll");
@@ -583,7 +601,8 @@ int socket_receive(int socket, void *buf, int size,
             return 0; // timeout
         }
     }
-    if (addr){
+    if (addr) {
+        addr->resize(ip_address::max_length);
         return recvfrom(socket, (char *)buf, size, 0,
                         addr->address_ptr(), addr->length_ptr());
     } else {
@@ -684,7 +703,7 @@ int socket_set_nonblocking(int socket, bool nonblocking)
 }
 
 // kudos to https://stackoverflow.com/a/46062474/6063908
-int socket_connect(int socket, const ip_address& addr, float timeout)
+int socket_connect(int socket, const ip_address& addr, double timeout)
 {
     // set nonblocking and connect
     socket_set_nonblocking(socket, true);

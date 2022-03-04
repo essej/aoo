@@ -280,6 +280,12 @@ typedef void (AOO_CALL *AooEventHandler)(
 /** \brief socket address size type */
 typedef AooUInt32 AooAddrSize;
 
+typedef struct AooSockAddr
+{
+    const void *data;
+    AooAddrSize size;
+} AooSockAddr;
+
 /** \brief AOO endpoint */
 typedef struct AooEndpoint
 {
