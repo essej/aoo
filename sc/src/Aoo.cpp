@@ -470,7 +470,7 @@ PluginLoad(Aoo) {
         gClientSocketType = aoo::socket_family(gClientSocket);
     }
     else {
-        LOG_ERROR("AOO: couldn't open client socket - "
+        LOG_ERROR("AOO: couldn't open client socket: "
             << aoo::socket_strerror(aoo::socket_errno()));
     }
 }
