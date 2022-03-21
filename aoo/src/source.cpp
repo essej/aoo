@@ -1008,25 +1008,31 @@ aoo::sink_desc * Source::get_sink_arg(intptr_t index){
 
 sink_desc * Source::do_add_sink(const ip_address& addr, AooId id, AooId stream_id)
 {
-    AooFlag flags = 0;
 #if USE_AOO_NET
+    ip_address relay;
     // check if the peer needs to be relayed
     if (client_){
-        AooBool relay;
+        AooBool b;
         AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
         if (client_->control(kAooCtlNeedRelay,
                              reinterpret_cast<intptr_t>(&ep),
-                             &relay, sizeof(relay)) == kAooOk)
+                             &b, sizeof(b)) == kAooOk)
         {
-            if (relay == kAooTrue){
-                LOG_DEBUG("sink " << addr << "|" << ep.id
+            if (b == kAooTrue){
+                LOG_DEBUG("AooSource: sink " << addr << "|" << ep.id
                           << " needs to be relayed");
-                flags |= kAooEndpointRelay;
+                // get relay address
+                client_->control(kAooCtlGetRelayAddress,
+                                 reinterpret_cast<intptr_t>(&ep),
+                                 &relay, sizeof(relay));
+
             }
         }
     }
+    auto it = sinks_.emplace_front(addr, id, stream_id, relay);
+#else
+    auto it = sinks_.emplace_front(addr, id, stream_id);
 #endif
-    auto it = sinks_.emplace_front(addr, id, flags, stream_id);
     // send /start if needed!
     if (is_running() && it->is_active()){
         it->notify_start();
@@ -1324,7 +1330,7 @@ void send_start_msg(const endpoint& ep, int32_t id, int32_t stream, int32_t last
     }
     msg << osc::EndMessage;
 
-    fn((const AooByte *)msg.Data(), msg.Size(), ep);
+    ep.send(msg, fn);
 }
 
 // /aoo/sink/<id>/stop <src> <stream_id>
@@ -1343,7 +1349,7 @@ void send_stop_msg(const endpoint& ep, int32_t id,
 
     msg << osc::BeginMessage(address) << id << stream << osc::EndMessage;
 
-    fn((const AooByte *)msg.Data(), msg.Size(), ep);
+    ep.send(msg, fn);
 }
 
 void Source::dispatch_requests(const sendfn& fn){
@@ -1411,8 +1417,7 @@ void Source::send_start(const sendfn& fn){
     updatelock.unlock();
 
     for (auto& s : cached_sinks_){
-        send_start_msg(s.ep, id(), s.stream_id, format_id,
-                       f.header, extension, size, md, fn);
+        send_start_msg(s.ep, id(), s.stream_id, format_id, f.header, extension, size, md, fn);
     }
 }
 
@@ -1490,10 +1495,10 @@ void send_packet_osc(const endpoint& ep, AooId id, int32_t stream_id,
               << d.totalsize << ", nframes = " << d.nframes
               << ", frame = " << d.frame << ", size " << d.size);
 #endif
-    fn((const AooByte *)msg.Data(), msg.Size(), ep);
+    ep.send(msg, fn);
 }
 
-void send_packet(const aoo::vector<cached_sink_desc>& sinks, const AooId id,
+void send_packet(const aoo::vector<cached_sink>& sinks, const AooId id,
                  data_packet& d, const sendfn &fn, bool binary) {
     if (binary){
         AooByte buf[AOO_MAX_PACKET_SIZE];
@@ -1513,7 +1518,7 @@ void send_packet(const aoo::vector<cached_sink_desc>& sinks, const AooId id,
                       << d.totalsize << ", nframes = " << d.nframes
                       << ", frame = " << d.frame << ", size " << d.size);
         #endif
-            fn(buf, size, s.ep);
+            s.ep.send(buf, size, fn);
         }
     } else {
         for (auto& s : sinks){
@@ -1538,7 +1543,7 @@ void send_packet_bin(const endpoint& ep, AooId id, AooId stream_id,
               << ", frame = " << d.frame << ", size " << d.size);
 #endif
 
-    fn((const AooByte *)buf, size, ep);
+    ep.send(buf, size, fn);
 }
 
 #define XRUN_THRESHOLD 0.1
@@ -1856,7 +1861,7 @@ void Source::send_ping(const sendfn& fn){
                 msg << osc::BeginMessage(address) << id() << osc::TimeTag(tt)
                     << osc::EndMessage;
 
-                fn((const AooByte *)msg.Data(), msg.Size(), sink.ep);
+                sink.ep.send(msg, fn);
             }
         }
 
@@ -2092,7 +2097,11 @@ void Source::handle_uninvite(const osc::ReceivedMessage& msg,
     }
     // tell the remote side that we have stopped.
     // don't use the sink because it can be NULL!
-    sink_request r(request_type::stop, endpoint(addr, id, 0));
+#if USE_AOO_NET
+    sink_request r(request_type::stop, endpoint(addr, id, sink->ep.relay));
+#else
+    sink_request r(request_type::stop, endpoint(addr, id));
+#endif
     r.stop.stream = token; // use remote stream id!
     push_request(r);
     LOG_DEBUG("resend " << kAooMsgStop << " message");
