@@ -3,10 +3,15 @@
 #include "aoo/aoo.h"
 #include "aoo/aoo_codec.h"
 #include "aoo/aoo_events.h"
+#if USE_AOO_NET
+#include "aoo/aoo_net.h"
+#endif
 
 #include "common/net_utils.hpp"
 #include "common/lockfree.hpp"
 #include "common/sync.hpp"
+
+#include "oscpack/osc/OscOutboundPacketStream.h"
 
 #include <stdint.h>
 #include <cstring>
@@ -80,23 +85,7 @@ struct ip_host {
 } // net
 #endif // USE_AOO_NET
 
-//---------------- endpoint ------------------------//
-
-struct endpoint {
-    endpoint() = default;
-    endpoint(const ip_address& _address, int32_t _id, uint32_t _flags)
-        : address(_address), id(_id), flags(_flags) {}
-
-    // data
-    ip_address address;
-    AooId id = 0;
-    uint32_t flags = 0;
-};
-
-inline std::ostream& operator<<(std::ostream& os, const endpoint& ep){
-    os << ep.address << "|" << ep.id;
-    return os;
-}
+//-------------------- sendfn-------------------------//
 
 struct sendfn {
     sendfn(AooSendFunc fn = nullptr, void *user = nullptr)
@@ -107,12 +96,6 @@ struct sendfn {
         fn_(user_, data, size, addr.address(), addr.length(), flags);
     }
 
-    void operator() (const AooByte *data, AooInt32 size,
-                     const endpoint& ep) const {
-        fn_(user_, data, size,
-            ep.address.address(), ep.address.length(), ep.flags);
-    }
-
     AooSendFunc fn() const { return fn_; }
 
     void * user() const { return user_; }
@@ -120,6 +103,63 @@ private:
     AooSendFunc fn_;
     void *user_;
 };
+
+//---------------- endpoint ------------------------//
+
+#if USE_AOO_NET
+// net/client.cpp
+namespace net {
+osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_address& addr);
+} // net
+#endif
+
+struct endpoint {
+    endpoint() = default;
+    endpoint(const ip_address& _address, int32_t _id)
+        : address(_address), id(_id) {}
+#if USE_AOO_NET
+    endpoint(const ip_address& _address, int32_t _id, const ip_address& _relay)
+        : address(_address), relay(_relay), id(_id) {}
+#endif
+    // data
+    ip_address address;
+#if USE_AOO_NET
+    ip_address relay;
+#endif
+    AooId id = 0;
+
+    void send(const osc::OutboundPacketStream& msg, const sendfn& fn) const {
+        return send((const AooByte *)msg.Data(), msg.Size(), fn);
+    }
+
+#if USE_AOO_NET
+    void send(const AooByte *data, AooSize size, const sendfn& fn) const {
+        if (relay.valid()) {
+            char buf[AOO_MAX_PACKET_SIZE];
+            // LATER check for binary messages with *data != '/'
+            // (we never send OSC bundles) and relay them in binary format.
+            using namespace net;
+            osc::OutboundPacketStream msg2(buf, sizeof(buf));
+            msg2 << osc::BeginMessage(kAooMsgDomain kAooNetMsgRelay)
+                 << address << osc::Blob(data, size)
+                 << osc::EndMessage;
+
+            fn((const AooByte *)msg2.Data(), msg2.Size(), relay);
+        } else {
+            fn(data, size, address, 0);
+        }
+    }
+#else
+    void send(const AooByte *data, AooSize size, const sendfn& fn) const {
+        fn(data, size, address, 0);
+    }
+#endif
+};
+
+inline std::ostream& operator<<(std::ostream& os, const endpoint& ep){
+    os << ep.address << "|" << ep.id;
+    return os;
+}
 
 //---------------- endpoint event ------------------//
 
