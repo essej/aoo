@@ -127,9 +127,9 @@ struct endpoint_event : endpoint_event_base {
 
     endpoint_event(AooEventType _type, const ip_address& addr, AooId id)
         : endpoint_event_base(_type) {
-        memcpy(&addr_, addr.address(), addr.length());
         // only for endpoint events
-        if (type != kAooEventXRun){
+        if (type != kAooEventXRun) {
+            memcpy(&addr_, addr.address(), addr.length());
             ep.endpoint.address = &addr_;
             ep.endpoint.addrlen = addr.length();
             ep.endpoint.id = id;
@@ -139,7 +139,8 @@ struct endpoint_event : endpoint_event_base {
     endpoint_event(const endpoint_event& other)
         : endpoint_event_base(other) {
         // only for sink events:
-        if (type != kAooEventXRun){
+        if (type != kAooEventXRun) {
+            memcpy(&addr_, other.addr_, sizeof(addr_));
             ep.endpoint.address = &addr_;
         }
     }
@@ -147,7 +148,8 @@ struct endpoint_event : endpoint_event_base {
     endpoint_event& operator=(const endpoint_event& other) {
         endpoint_event_base::operator=(other);
         // only for sink events:
-        if (type != kAooEventXRun){
+        if (type != kAooEventXRun) {
+            memcpy(&addr_, other.addr_, sizeof(addr_));
             ep.endpoint.address = &addr_;
         }
         return *this;
