@@ -48,12 +48,37 @@ void * copy_sockaddr(const void *sa, int32_t len);
 
 void free_sockaddr(void *sa, int32_t len);
 
+#if USE_AOO_NET
 namespace net {
 
 AooError parse_pattern(const AooByte *msg, int32_t n,
                        AooMsgType& type, int32_t& offset);
 
+struct ip_host {
+    ip_host() = default;
+    ip_host(const std::string& _name, int _port)
+        : name(_name), port(_port) {}
+    ip_host(const AooIpEndpoint& ep)
+        : name(ep.hostName), port(ep.port) {}
+
+    std::string name;
+    int port = 0;
+
+    bool valid() const {
+        return !name.empty() && port > 0;
+    }
+
+    bool operator==(const ip_host& other) const {
+        return name == other.name && port == other.port;
+    }
+
+    bool operator!=(const ip_host& other) const {
+        return !operator==(other);
+    }
+};
+
 } // net
+#endif // USE_AOO_NET
 
 //---------------- endpoint ------------------------//
 
@@ -327,6 +352,22 @@ struct decoder_deleter {
         auto c = (AooCodec *)x;
         c->cls->decoderFree(c);
     }
+};
+
+struct metadata {
+    metadata() = default;
+    metadata(const AooDataView* md) {
+        if (md) {
+            type_ = md->type;
+            data_.assign(md->data, md->data + md->size);
+        }
+    }
+    const char *type() const { return type_.c_str(); }
+    const AooByte *data() const { return data_.data(); }
+    AooSize size() const { return data_.size(); }
+private:
+    std::string type_;
+    std::vector<AooByte> data_;
 };
 
 inline AooSize flat_metadata_maxsize(int32_t size) {
