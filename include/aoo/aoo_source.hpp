@@ -248,7 +248,7 @@ public:
     }
 
     /** \brief Check if xrun detection is enabled */
-    AooError getXRunDetection(AooBool b) {
+    AooError getXRunDetection(AooBool& b) {
         return control(kAooCtlGetXRunDetection, 0, AOO_ARG(b));
     }
 
@@ -268,7 +268,7 @@ public:
     }
 
     /** \brief Check if dynamic resampling is enabled. */
-    AooError getDynamicResampling(AooBool b) {
+    AooError getDynamicResampling(AooBool& b) {
         return control(kAooCtlGetDynamicResampling, 0, AOO_ARG(b));
     }
 
