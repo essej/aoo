@@ -310,6 +310,7 @@ class unbounded_mpsc_queue :
     template<typename Fn>
     void consume(Fn&& func){
         // use node *after* devider, because devider is always a dummy!
+        // doesn't delete the actual data. LATER make this an option?
         auto next = devider_.load(std::memory_order_relaxed)->next_;
         func(next->data_);
         devider_.store(next, std::memory_order_release); // publish

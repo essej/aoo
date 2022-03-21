@@ -36,8 +36,14 @@ namespace aoo {
 
 //--------------------- helper functions -----------------//
 
-char * copy_string(const char * s){
-    if (s){
+char * copy_string(const std::string& s) {
+    auto result = aoo::allocate(s.size() + 1);
+    memcpy(result, s.data(), s.size() + 1);
+    return (char *)result;
+}
+
+char * copy_string(const char * s) {
+    if (s) {
         auto len = strlen(s);
         auto result = aoo::allocate(len + 1);
         memcpy(result, s, len + 1);
@@ -54,7 +60,14 @@ void free_string(char *s){
     }
 }
 
-void * copy_sockaddr(const void *sa, int32_t len){
+void * copy_sockaddr(const ip_address& addr) {
+    auto result = aoo::allocate(addr.length());
+    memcpy(result, addr.address(), addr.length());
+    return result;
+}
+
+#if 0
+void * copy_sockaddr(const void *sa, int32_t len) {
     if (sa){
         auto result = aoo::allocate(len);
         memcpy(result, sa, len);
@@ -63,6 +76,7 @@ void * copy_sockaddr(const void *sa, int32_t len){
         return nullptr;
     }
 }
+#endif
 
 void free_sockaddr(void *sa, int32_t len){
     if (sa){
