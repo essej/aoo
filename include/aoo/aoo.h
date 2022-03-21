@@ -158,7 +158,8 @@
 
 /*------------------- binary message ---------------------*/
 
-/* domain (int32), type (int16), msg_type (int16), id (int32) */
+/* domain (int32), type (int16), cmd (int16), id (int32) */
+
 #define kAooBinMsgHeaderSize 12
 
 #define kAooBinMsgDomain "\0aoo"
