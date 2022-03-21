@@ -680,24 +680,29 @@ aoo::source_desc * Sink::get_source_arg(intptr_t index){
 
 source_desc * Sink::add_source(const ip_address& addr, AooId id){
     // add new source
-    uint32_t flags = 0;
 #if USE_AOO_NET
+    ip_address relay;
     // check if the peer needs to be relayed
     if (client_){
         AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
-        AooBool relay;
+        AooBool b;
         if (client_->control(kAooCtlNeedRelay,
                              reinterpret_cast<intptr_t>(&ep),
-                             &relay, sizeof(relay)) == kAooOk)
+                             &b, sizeof(b)) == kAooOk)
         {
-            if (relay == kAooTrue){
-                LOG_DEBUG("source " << addr << " needs to be relayed");
-                flags |= kAooEndpointRelay;
+            if (b == kAooTrue){
+                LOG_DEBUG("AooSink: source " << addr << " needs to be relayed");
+                // get relay address
+                client_->control(kAooCtlGetRelayAddress,
+                                 reinterpret_cast<intptr_t>(&ep),
+                                 &relay, sizeof(relay));
             }
         }
     }
+    auto it = sources_.emplace_front(addr, id, relay, elapsed_time());
+#else
+    auto it = sources_.emplace_front(addr, id, elapsed_time());
 #endif
-    auto it = sources_.emplace_front(addr, id, flags, elapsed_time());
     return &(*it);
 }
 
@@ -917,9 +922,14 @@ AooError Sink::handle_ping_message(const osc::ReceivedMessage& msg,
 
 //----------------------- source_desc --------------------------//
 
+#if USE_AOO_NET
 source_desc::source_desc(const ip_address& addr, AooId id,
-                         uint32_t flags, double time)
-    : ep(addr, id, flags), last_packet_time_(time)
+                         const ip_address& relay, double time)
+    : ep(addr, id, relay), last_packet_time_(time)
+#else
+source_desc::source_desc(const ip_address& addr, AooId id, double time)
+    : ep(addr, id), last_packet_time_(time)
+#endif
 {
     // reserve some memory, so we don't have to allocate memory
     // when pushing events in the audio thread.
@@ -2083,7 +2093,7 @@ void source_desc::send_ping_reply(const Sink &s, AooNtpTime tt1,
         << osc::TimeTag(tt1) << osc::TimeTag(tt2) << packetloss
         << osc::EndMessage;
 
-    fn((const AooByte *)msg.Data(), msg.Size(), ep);
+    ep.send(msg, fn);
 }
 
 // /aoo/src/<id>/start <sink>
@@ -2104,7 +2114,7 @@ void source_desc::send_start_request(const Sink& s, const sendfn& fn) {
     msg << osc::BeginMessage(address) << s.id()
         << (int32_t)make_version() << osc::EndMessage;
 
-    fn((const AooByte *)msg.Data(), msg.Size(), ep);
+    ep.send(msg, fn);
 }
 
 // /aoo/src/<id>/data <id> <stream_id> <seq1> <frame1> <seq2> <frame2> etc.
@@ -2155,7 +2165,7 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
                 // write 'count' field
                 aoo::to_bytes(numrequests, head - sizeof(int32_t));
                 // send it off
-                fn(buf, it - buf, ep);
+                ep.send(buf, it - buf, fn);
                 // prepare next message (just rewind)
                 it = head;
                 numrequests = 0;
@@ -2166,7 +2176,7 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
             // write 'count' field
             aoo::to_bytes(numrequests, head - sizeof(int32_t));
             // send it off
-            fn(buf, it - buf, ep);
+            ep.send(buf, it - buf, fn);
         }
     } else {
         char buf[AOO_MAX_PACKET_SIZE];
@@ -2195,7 +2205,7 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
                 // send it off
                 msg << osc::EndMessage;
 
-                fn((const AooByte *)msg.Data(), msg.Size(), ep);
+                ep.send(msg, fn);
 
                 // prepare next message
                 msg.Clear();
@@ -2208,7 +2218,7 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
             // send it off
             msg << osc::EndMessage;
 
-            fn((const AooByte *)msg.Data(), msg.Size(), ep);
+            ep.send(msg, fn);
         }
     }
 }
@@ -2237,7 +2247,7 @@ void send_invitation(const Sink& s, const endpoint& ep, AooId token,
     LOG_DEBUG("send " kAooMsgInvite " to source " << ep
               << " (" << token << ")");
 
-    fn((const AooByte *)msg.Data(), msg.Size(), ep);
+    ep.send(msg, fn);
 }
 
 // /aoo/<id>/uninvite <sink>
@@ -2259,7 +2269,7 @@ void send_uninvitation(const Sink& s, const endpoint& ep,
     msg << osc::BeginMessage(address) << s.id() << token
         << osc::EndMessage;
 
-    fn((const AooByte *)msg.Data(), msg.Size(), ep);
+    ep.send(msg, fn);
 }
 
 // only send every 50 ms! LATER we might make this settable

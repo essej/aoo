@@ -134,8 +134,12 @@ class Sink;
 
 class source_desc {
 public:
+#if USE_AOO_NET
     source_desc(const ip_address& addr, AooId id,
-                uint32_t flags, double time);
+                const ip_address& relay, double time);
+#else
+    source_desc(const ip_address& addr, AooId id, double time);
+#endif
 
     source_desc(const source_desc& other) = delete;
     source_desc& operator=(const source_desc& other) = delete;
