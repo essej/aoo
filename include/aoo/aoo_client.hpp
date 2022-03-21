@@ -10,7 +10,9 @@
 
 #include "aoo_client.h"
 
-#include <memory>
+#if AOO_HAVE_CXX11
+# include <memory>
+#endif
 
 struct AooSource;
 struct AooSink;
@@ -18,6 +20,7 @@ struct AooSink;
 /** \brief AOO client interface */
 struct AooClient {
 public:
+#if AOO_HAVE_CXX11
     /** \brief custom deleter for AooClient */
     class Deleter {
     public:
@@ -37,6 +40,7 @@ public:
                       AooFlag flags, AooError *err) {
         return Ptr(AooClient_new(address, addrlen, flags, err));
     }
+#endif
 
     /*------------------ methods -------------------------------*/
 

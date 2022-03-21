@@ -13,6 +13,15 @@
 #include <stdint.h>
 #include <stddef.h>
 
+/* check for C++11
+ * NB: MSVC does not correctly set __cplusplus by default! */
+#if defined(__cplusplus) && (__cplusplus >= 201103L || ((defined(_MSC_VER) && _MSC_VER >= 1900)))
+    #define AOO_HAVE_CXX11 1
+#else
+    #define AOO_HAVE_CXX11 0
+#endif
+
+
 #if defined(__cplusplus)
 # define AOO_INLINE inline
 #else

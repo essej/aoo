@@ -10,11 +10,14 @@
 
 #include "aoo_server.h"
 
-#include <memory>
+#if AOO_HAVE_CXX11
+# include <memory>
+#endif
 
 /** \brief AOO server interface */
 struct AooServer {
 public:
+#if AOO_HAVE_CXX11
     /** \brief custom deleter for AooServer */
     class Deleter {
     public:
@@ -33,6 +36,7 @@ public:
     static Ptr create(int32_t port, AooFlag flags, AooError *err) {
         return Ptr(AooServer_new(port, flags, err));
     }
+#endif
 
     /*---------------------- methods ---------------------------*/
 
