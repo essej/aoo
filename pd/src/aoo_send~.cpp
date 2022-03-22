@@ -613,6 +613,11 @@ static void aoo_send_dll_bandwidth(t_aoo_send *x, t_floatarg f)
     x->x_source->setDllBandwidth(f);
 }
 
+static void aoo_send_binary(t_aoo_send *x, t_floatarg f)
+{
+    x->x_source->setBinaryDataMsg(f);
+}
+
 static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (!aoo_send_check(x, argc, argv, 3, "add")) return;
@@ -1008,6 +1013,8 @@ void aoo_send_tilde_setup(void)
                     gensym("dynamic_resampling"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_dll_bandwidth,
                     gensym("dll_bandwidth"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_binary,
+                    gensym("binary"), A_FLOAT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_listsinks,
                     gensym("list_sinks"), A_NULL);
 }
