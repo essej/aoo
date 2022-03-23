@@ -104,7 +104,8 @@ void AooServer::handleEvent(const AooEvent *event){
     case kAooNetEventClientLogin:
     {
         auto e = (const AooNetEventClientLogin *)event;
-        aoo::ip_address addr(e->address);
+        aoo::ip_address addr;
+        aoo::socket_peer(e->sockfd, addr);
         msg << "/client/add" << e->id << addr.address() << addr.port();
         break;
     }

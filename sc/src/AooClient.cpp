@@ -216,6 +216,10 @@ void AooClient::handleEvent(const AooEvent* event) {
         msg << "/disconnect" << e->errorCode << e->errorMessage;
         break;
     }
+    case kAooNetEventPeerHandshake:
+    case kAooNetEventPeerTimeout:
+        // ignore for now
+        return;
     case kAooNetEventPeerJoin:
     {
         auto e = (const AooNetEventPeer*)event;
@@ -232,6 +236,10 @@ void AooClient::handleEvent(const AooEvent* event) {
             << e->groupName << e->userName << addr.name() << addr.port();
         break;
     }
+    case kAooNetEventPeerPing:
+    case kAooNetEventPeerPingReply:
+        // TODO
+        return;
     case kAooNetEventError:
     {
         auto e = (const AooNetEventError*)event;
