@@ -302,13 +302,16 @@ typedef struct AooNetEventPeer
 /** \brief peer has joined a group */
 #define AooNetEventPeerJoin AooNetEventPeer
 
+#if 0
 /** \brief peer has left a group */
 typedef struct AooNetEventLeave
 {
     AooEventType type;
+    AooFlag reserved;
     AooId group;
     AooId user;
 } AooNetEventPeerLeave;
+#endif
 
 /** \brief received ping from peer */
 typedef struct AooNetEventPeerPing
@@ -350,10 +353,9 @@ typedef struct AooNetEventPeerMessage
 typedef struct AooNetEventClientLogin
 {
     AooEventType type;
-    AooId id;
-    AooSockAddr address;
-    const AooDataView *metadata;
     AooFlag flags;
+    AooId id;
+    AooSocket sockfd;
 } AooNetEventClientLogin;
 
 /** \brief client has been removed */
@@ -361,9 +363,6 @@ typedef struct AooNetEventClientRemove
 {
     AooEventType type;
     AooId id;
-#if 1
-    AooSockAddr address;
-#endif
 } AooNetEventClientRemove;
 
 /** \brief group added */
@@ -394,15 +393,15 @@ typedef struct AooNetEventGroupJoin
 {
     AooEventType type;
     AooFlag flags;
-    AooId clientId;
     AooId groupId;
+    AooId userId;
 #if 1
     const AooChar *groupName;
 #endif
-    AooId userId;
-    AooFlag userFlags;
     const AooChar *userName;
-    const AooDataView *metadata;
+    AooId clientId;
+    AooFlag userFlags;
+    const AooDataView *userMetadata;
 #if 0
     const AooIpEndpoint *relayAddress;
 #endif
