@@ -33,13 +33,13 @@ void udp_server::start(int port, receive_handler receive,
     }
 
     if (rcvbufsize > 0) {
-        if (aoo::socket_setrecvbufsize(socket_, rcvbufsize) < 0){
+        if (aoo::socket_set_recvbufsize(socket_, rcvbufsize) < 0){
             aoo::socket_error_print("setrecvbufsize");
         }
     }
 
     if (sndbufsize > 0) {
-        if (aoo::socket_setsendbufsize(socket_, sndbufsize) < 0){
+        if (aoo::socket_set_sendbufsize(socket_, sndbufsize) < 0){
             aoo::socket_error_print("setsendbufsize");
         }
     }

@@ -36,9 +36,9 @@ public:
     ip_address(socklen_t size);
     ip_address(const struct sockaddr *sa, socklen_t len);
     ip_address(const AooSockAddr& addr);
-    ip_address(uint32_t ipv4, int port);
     ip_address(int port, ip_type type); // "any" address
     ip_address(const std::string& ip, int port, ip_type type);
+    ip_address(const AooByte *bytes, AooSize size, int port, ip_type type);
 
     ip_address(const ip_address& other);
     ip_address& operator=(const ip_address& other);
@@ -58,6 +58,8 @@ public:
     const char* name_unmapped() const;
 
     int port() const;
+
+    const AooByte* address_bytes() const;
 
     bool valid() const;
 
@@ -95,6 +97,8 @@ private:
         char __ss_pad2[16];
     } address_;
     socklen_t length_;
+
+    void check();
 };
 
 //-------------------- socket --------------------//
@@ -111,6 +115,8 @@ int socket_connect(int socket, const ip_address& addr, double timeout);
 
 int socket_address(int socket, ip_address& addr);
 
+int socket_peer(int socket, ip_address& addr);
+
 int socket_port(int socket);
 
 ip_address::ip_type socket_family(int socket);
@@ -121,9 +127,9 @@ int socket_sendto(int socket, const void *buf, int size,
 int socket_receive(int socket, void *buf, int size,
                    ip_address* addr, double timeout);
 
-int socket_setsendbufsize(int socket, int bufsize);
+int socket_set_sendbufsize(int socket, int bufsize);
 
-int socket_setrecvbufsize(int socket, int bufsize);
+int socket_set_recvbufsize(int socket, int bufsize);
 
 int socket_set_nonblocking(int socket, bool nonblocking);
 
