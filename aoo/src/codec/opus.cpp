@@ -436,7 +436,8 @@ AooError deserialize(
     return kAooOk;
 }
 
-AooCodecInterface g_interface = {
+static AooCodecInterface g_interface = {
+    sizeof(AooCodecInterface),
     // encoder
     Encoder_new,
     Encoder_free,
@@ -449,8 +450,7 @@ AooCodecInterface g_interface = {
     Decoder_decode,
     // helper
     serialize,
-    deserialize,
-    nullptr
+    deserialize
 };
 
 Encoder::Encoder(OpusMSEncoder *state, size_t size, const AooFormatOpus& f) {
@@ -469,9 +469,8 @@ Decoder::Decoder(OpusMSDecoder *state, size_t size, const AooFormatOpus& f) {
 
 } // namespace
 
-void aoo_opusLoad(AooCodecRegisterFunc fn,
-                  AooLogFunc log, AooAllocFunc alloc){
-    fn(kAooCodecOpus, &g_interface);
+void aoo_opusLoad(const AooCodecHostInterface *ift){
+    ift->registerCodec(kAooCodecOpus, &g_interface);
     // the Opus codec is always statically linked, so we can simply use the
     // internal log function and allocator
 }

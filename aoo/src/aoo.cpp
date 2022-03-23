@@ -35,6 +35,23 @@
 
 namespace aoo {
 
+void * AOO_CALL def_allocator(void *ptr, AooSize oldsize, AooSize newsize);
+
+#ifndef _MSC_VER
+void __attribute__((format(printf, 2, 3 )))
+#else
+void
+#endif
+    def_logfunc(AooLogLevel, const char *, ...);
+
+// populate interface table with default implementations
+static AooCodecHostInterface g_interface = {
+    sizeof(AooCodecHostInterface),
+    aoo_registerCodec,
+    def_allocator,
+    def_logfunc
+};
+
 //--------------------- helper functions -----------------//
 
 char * copy_string(const std::string& s) {
@@ -216,17 +233,13 @@ ip_host osc_read_host(osc::ReceivedMessageArgumentIterator& it) {
 
 //------------------- allocator ------------------//
 
-#if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
-
 namespace aoo {
 
 #if AOO_DEBUG_MEMORY
 std::atomic<ptrdiff_t> total_memory{0};
 #endif
 
-static AooAllocFunc g_allocator =
-        [](void *ptr, AooSize oldsize, AooSize newsize) -> void*
-{
+void * AOO_CALL def_allocator(void *ptr, AooSize oldsize, AooSize newsize) {
     if (newsize > 0) {
         // allocate new memory
         // NOTE: we never reallocate
@@ -248,10 +261,12 @@ static AooAllocFunc g_allocator =
         assert(ptr == nullptr);
     }
     return nullptr;
-};
+}
 
-void * allocate(size_t size){
-    auto result = g_allocator(nullptr, 0, size);
+#if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
+
+void * allocate(size_t size) {
+    auto result = g_interface.allocFunc(nullptr, 0, size);
     if (!result && size > 0) {
         throw std::bad_alloc{};
     }
@@ -259,12 +274,12 @@ void * allocate(size_t size){
 }
 
 void deallocate(void *ptr, size_t size){
-    g_allocator(ptr, size, 0);
+    g_interface.allocFunc(ptr, size, 0);
 }
 
-} // aoo
-
 #endif
+
+} // aoo
 
 //----------------------- logging --------------------------//
 
@@ -276,11 +291,12 @@ namespace aoo {
 static sync::mutex g_log_mutex;
 #endif
 
-static void
 #ifndef _MSC_VER
-    __attribute__((format(printf, 2, 3 )))
+void __attribute__((format(printf, 2, 3 )))
+#else
+void
 #endif
-        cerr_logfunction(AooLogLevel level, const char *fmt, ...)
+    def_logfunc(AooLogLevel level, const char *fmt, ...)
 {
     const char *label = nullptr;
 
@@ -330,11 +346,14 @@ static void
     fflush(stderr);
 }
 
-static AooLogFunc g_logfunction = cerr_logfunction;
-
 #else // CERR_LOG_FUNCTION
 
-static AooLogFunc g_logfunction = nullptr;
+#ifndef _MSC_VER
+void __attribute__((format(printf, 2, 3 )))
+#else
+void
+#endif
+    def_logfunc(AooLogLevel, const char *, ...) {}
 
 #endif // CERR_LOG_FUNCTION
 
@@ -362,9 +381,9 @@ std::streamsize Log::xsputn(const char_type *s, std::streamsize n) {
 }
 
 Log::~Log() {
-    if (g_logfunction) {
+    if (aoo::g_interface.logFunc) {
         buffer_[pos_] = '\0';
-        g_logfunction(level_, buffer_);
+        aoo::g_interface.logFunc(level_, buffer_);
     }
 }
 
@@ -636,6 +655,11 @@ const AooCodecInterface * find_codec(const char * name){
 
 } // aoo
 
+const AooCodecHostInterface * aoo_getCodecHostInterface(void)
+{
+    return &aoo::g_interface;
+}
+
 AooError AOO_CALL aoo_registerCodec(const char *name, const AooCodecInterface *codec){
     if (aoo::find_codec(name)) {
         LOG_WARNING("codec " << name << " already registered!");
@@ -648,49 +672,44 @@ AooError AOO_CALL aoo_registerCodec(const char *name, const AooCodecInterface *c
 
 //--------------------------- (de)initialize -----------------------------------//
 
-void aoo_pcmLoad(AooCodecRegisterFunc fn, AooLogFunc log, AooAllocFunc alloc);
+void aoo_pcmLoad(const AooCodecHostInterface *);
 void aoo_pcmUnload();
 #if USE_CODEC_OPUS
-void aoo_opusLoad(AooCodecRegisterFunc fn, AooLogFunc log, AooAllocFunc alloc);
+void aoo_opusLoad(const AooCodecHostInterface *);
 void aoo_opusUnload();
 #endif
 
-#if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
-#define ALLOCATOR aoo::g_allocator
-#else
-#define ALLOCATOR nullptr
-#endif
+#define HAVE_SETTING(settings, field) \
+    (settings && (settings->size >= (offsetof(AooSettings, field) + sizeof(settings->field))))
 
-void AOO_CALL aoo_initialize(){
+AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
     static bool initialized = false;
-    if (!initialized){
+    if (!initialized) {
     #if USE_AOO_NET
         aoo::socket_init();
     #endif
+        // optional settings
+        if (HAVE_SETTING(settings, logFunc) && settings->logFunc) {
+            aoo::g_interface.logFunc = settings->logFunc;
+        }
+        if (HAVE_SETTING(settings, allocFunc) && settings->allocFunc) {
+    #if AOO_CUSTOM_ALLOCATOR
+            aoo::g_interface.allocFunc = settings->allocFunc;
+    #else
+            LOG_WARNING("aoo_initializeEx: custom allocator not supported");
+    #endif
+        }
 
         // register codecs
-        aoo_pcmLoad(aoo_registerCodec, aoo::g_logfunction, ALLOCATOR);
+        aoo_pcmLoad(&aoo::g_interface);
 
     #if USE_CODEC_OPUS
-        aoo_opusLoad(aoo_registerCodec, aoo::g_logfunction, ALLOCATOR);
+        aoo_opusLoad(&aoo::g_interface);
     #endif
 
         initialized = true;
     }
-}
-
-void AOO_CALL aoo_initializeEx(AooLogFunc log, AooAllocFunc alloc) {
-    if (log) {
-        aoo::g_logfunction = log;
-    }
-    if (alloc) {
-#if AOO_CUSTOM_ALLOCATOR
-        aoo::g_allocator = *alloc;
-#else
-        LOG_WARNING("aoo_initializeEx: custom allocator not supported");
-#endif
-    }
-    aoo_initialize();
+    return kAooOk;
 }
 
 void AOO_CALL aoo_terminate() {

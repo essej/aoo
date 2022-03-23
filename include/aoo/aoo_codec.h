@@ -128,6 +128,7 @@ typedef AooError (AOO_CALL *AooCodecDeserializeFunc)(
 /** \brief interface to be implemented by AOO codec classes */
 typedef struct AooCodecInterface
 {
+    AooSize size;
     /* encoder methods */
     AooCodecNewFunc encoderNew;
     AooCodecFreeFunc encoderFree;
@@ -141,7 +142,6 @@ typedef struct AooCodecInterface
     /* free functions */
     AooCodecSerializeFunc serialize;
     AooCodecDeserializeFunc deserialize;
-    void *future;
 } AooCodecInterface;
 
 /*----------------- helper functions ----------------------*/
@@ -193,16 +193,27 @@ AOO_INLINE AooError AooDecoder_reset(AooCodec *dec)
 
 /*----------------- register codecs -----------------------*/
 
-/** \brief register an external codec plugin */
-AOO_API AooError AOO_CALL aoo_registerCodec(
-        const AooChar *name, const AooCodecInterface *codec);
-
 /** \brief The type of #aoo_registerCodec, which gets passed to the
  * entry function of the codec plugin to register itself. */
 typedef AooError (AOO_CALL *AooCodecRegisterFunc)(
         const AooChar *name,                // codec name
         const AooCodecInterface *cls  // codec interface
 );
+
+typedef struct AooCodecHostInterface
+{
+    AooSize size;
+    AooCodecRegisterFunc registerCodec;
+    AooAllocFunc allocFunc;
+    AooLogFunc logFunc;
+} AooCodecHostInterface;
+
+/** \brief global codec host interface instance */
+AOO_API const AooCodecHostInterface * aoo_getCodecHostInterface(void);
+
+/** \brief register an external codec plugin */
+AOO_API AooError AOO_CALL aoo_registerCodec(
+        const AooChar *name, const AooCodecInterface *codec);
 
 /** \brief type of entry function for codec plugin module
  *
@@ -215,11 +226,10 @@ typedef AooError (AOO_CALL *AooCodecRegisterFunc)(
  *
  * In your host application, you would then scan directories for shared libraries,
  * check if they export a function named `aoo_load`, and if yes, call it with a
- * pointer to #aoo_registerCodec and (optionally) a log function and custom allocator.
+ * pointer to the host interface table.
  */
 typedef AooError (AOO_CALL *AooCodecLoadFunc)
-        (const AooCodecRegisterFunc *registerFunc,
-         AooLogFunc logFunc, AooAllocFunc allocFunc);
+        (const AooCodecHostInterface *);
 
 /** \brief type of exit function for codec plugin module
  *

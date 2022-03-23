@@ -180,22 +180,29 @@ enum AooBinMsgDataFlags
 
 /*------------------ library functions --------------------*/
 
-/**
- * \brief initialize AOO library
- *
- * \note Call before using any AOO functions!
- */
-AOO_API void AOO_CALL aoo_initialize(void);
+/** \brief settings for aoo_initializeEx() */
+typedef struct AooSettings
+{
+    AooSize size; /** `sizeof(AooSettings)` */
+    AooAllocFunc allocFunc; /** custom allocator function, or `NULL` */
+    AooLogFunc logFunc; /** custom log function, or `NULL` */
+} AooSettings;
+
+/** \brief default initialization for AooSettings struct */
+AOO_INLINE void AooSettings_init(AooSettings *settings)
+{
+    settings->size = sizeof(AooSettings);
+    settings->allocFunc = NULL;
+    settings->logFunc = NULL;
+}
 
 /**
- * \brief initialize with log function and/or custom allocator
+ * \brief initialize AOO library settings
  *
  * \note Call before using any AOO functions!
- * \param log custom log function; `NULL`: use default log function
- * \param alloc custom allocation function; `NULL`: use default allocator
+ * \param settings (optional) settings struct
  */
-AOO_API void AOO_CALL aoo_initializeEx(
-        AooLogFunc log, AooAllocFunc alloc);
+AOO_API AooError AOO_CALL aoo_initialize(const AooSettings *settings);
 
 /**
  * \brief terminate AOO library
