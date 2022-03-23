@@ -51,66 +51,6 @@
 namespace aoo {
 namespace net {
 
-//------------------------------ OSC utilities ---------------------------------//
-
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const AooDataView *md) {
-    if (md) {
-        msg << md->type << osc::Blob(md->data, md->size);
-    } else {
-        msg << "" << osc::Blob(msg.Data(), 0); // HACK: do not use nullptr because of memcpy()
-    }
-    return msg;
-}
-
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const aoo::metadata& md) {
-    if (md.size() > 0) {
-        msg << md.type() << osc::Blob(md.data(), md.size());
-    } else {
-        msg << "" << osc::Blob(msg.Data(), 0); // HACK: do not use nullptr because of memcpy()
-    }
-    return msg;
-}
-
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_address& addr) {
-    // send *unmapped* addresses in case the client is IPv4 only
-    if (addr.valid()) {
-        msg << addr.name_unmapped() << (int32_t)addr.port();
-    } else {
-        msg << "" << (int32_t)0;
-    }
-    return msg;
-}
-
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_host& addr) {
-    msg << addr.name.c_str() << addr.port;
-    return msg;
-}
-
-AooDataView osc_read_metadata(osc::ReceivedMessageArgumentIterator& it) {
-    auto type = (it++)->AsString();
-    const void *blobdata;
-    osc::osc_bundle_element_size_t blobsize;
-    (it++)->AsBlob(blobdata, blobsize);
-    if (blobsize) {
-        return AooDataView { type, (const AooByte *)blobdata, (AooSize)blobsize };
-    } else {
-        return AooDataView { type, nullptr, 0 };
-    }
-}
-
-ip_address osc_read_address(osc::ReceivedMessageArgumentIterator& it,
-                            ip_address::ip_type type = ip_address::Unspec) {
-    auto host = (it++)->AsString();
-    auto port = (it++)->AsInt32();
-    return ip_address(host, port, type);
-}
-
-ip_host osc_read_host(osc::ReceivedMessageArgumentIterator& it) {
-    auto host = (it++)->AsString();
-    auto port = (it++)->AsInt32();
-    return ip_host { host, port };
-}
-
 //--------------------- group -------------------------//
 
 user* group::add_user(user&& usr) {

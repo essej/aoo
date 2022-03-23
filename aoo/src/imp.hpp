@@ -11,6 +11,7 @@
 #include "common/lockfree.hpp"
 #include "common/sync.hpp"
 
+#include "oscpack/osc/OscReceivedElements.h"
 #include "oscpack/osc/OscOutboundPacketStream.h"
 
 #include <stdint.h>
@@ -26,6 +27,12 @@ namespace aoo {
 
 template<typename T>
 using parameter = sync::relaxed_atomic<T>;
+
+//------------------ OSC ---------------------------//
+
+osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_address& addr);
+
+ip_address osc_read_address(osc::ReceivedMessageArgumentIterator& it, ip_address::ip_type type = ip_address::Unspec);
 
 //---------------- codec ---------------------------//
 
@@ -82,6 +89,10 @@ struct ip_host {
     }
 };
 
+osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_host& addr);
+
+ip_host osc_read_host(osc::ReceivedMessageArgumentIterator& it);
+
 } // net
 #endif // USE_AOO_NET
 
@@ -105,13 +116,6 @@ private:
 };
 
 //---------------- endpoint ------------------------//
-
-#if USE_AOO_NET
-// net/client.cpp
-namespace net {
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_address& addr);
-} // net
-#endif
 
 struct endpoint {
     endpoint() = default;
@@ -409,6 +413,17 @@ private:
     std::string type_;
     std::vector<AooByte> data_;
 };
+
+// HACK: declare the AooDataView overload in "net" namespace and then import into "aoo"
+// namespace to prevent the compiler from picking OutboundPacketStream::operator<<bool
+namespace net {
+osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const AooDataView *md);
+} // net
+osc::OutboundPacketStream& net::operator<<(osc::OutboundPacketStream& msg, const AooDataView *md);
+
+osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const aoo::metadata& md);
+
+AooDataView osc_read_metadata(osc::ReceivedMessageArgumentIterator& it);
 
 inline AooSize flat_metadata_maxsize(int32_t size) {
     return sizeof(AooDataView) + size + kAooDataTypeMaxLen + 1;

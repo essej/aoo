@@ -44,22 +44,6 @@ struct AooSink;
 namespace aoo {
 namespace net {
 
-// server.cpp
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const AooDataView *md);
-
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const aoo::metadata& md);
-
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_address& addr);
-
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_host& addr);
-
-AooDataView osc_read_metadata(osc::ReceivedMessageArgumentIterator& it);
-
-ip_address osc_read_address(osc::ReceivedMessageArgumentIterator& it,
-                            ip_address::ip_type type = ip_address::Unspec);
-
-ip_host osc_read_host(osc::ReceivedMessageArgumentIterator& it);
-
 class Client;
 
 #if 0
