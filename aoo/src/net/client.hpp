@@ -108,7 +108,8 @@ public:
                         osc::ReceivedMessageArgumentIterator it,
                         const ip_address& addr);
 private:
-    void handle_ping(Client& client, const ip_address& addr, bool reply);
+    void handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
+                     const ip_address& addr, bool reply);
 
     void send_message(const osc::OutboundPacketStream &msg,
                       const ip_address& addr, const sendfn &fn);
@@ -126,6 +127,7 @@ private:
     ip_address relay_address_;
     time_tag start_time_;
     double last_pingtime_ = 0;
+    time_tag ping_tt1_;
     std::atomic<bool> connected_{false};
     std::atomic<bool> got_ping_{false};
     bool timeout_ = false;
@@ -238,6 +240,8 @@ public:
         virtual void perform(Client&) = 0;
     };
 
+    using command_ptr = std::unique_ptr<icommand>;
+
     struct ievent {
         virtual ~ievent() {}
 
@@ -245,9 +249,15 @@ public:
             AooEvent event_;
             AooNetEventError error_event_;
             AooNetEventPeer peer_event_;
+            AooNetEventPeerPing peer_ping_;
+            AooNetEventPeerPingReply peer_ping_reply_;
             AooNetEventPeerMessage message_event_;
         };
     };
+
+    using event_ptr = std::unique_ptr<ievent>;
+
+    //----------------------------------------------------------//
 
     Client(int socket, const ip_address& address,
            AooFlag flags, AooError *err);
@@ -360,9 +370,9 @@ public:
 
     double query_timeout() const { return query_timeout_.load(); }
 
-    void send_event(std::unique_ptr<ievent> e);
+    void send_event(event_ptr e);
 
-    void push_command(std::unique_ptr<icommand>&& cmd);
+    void push_command(command_ptr cmd);
 
     double elapsed_time_since(time_tag now) const {
         return time_tag::duration(start_time_, now);
@@ -409,8 +419,7 @@ private:
     };
     std::vector<group_membership> memberships_;
     // commands
-    using icommand_ptr = std::unique_ptr<icommand>;
-    using command_queue = aoo::unbounded_mpsc_queue<icommand_ptr>;
+    using command_queue = aoo::unbounded_mpsc_queue<command_ptr>;
     command_queue commands_;
     // pending request
     struct callback_cmd : icommand
@@ -439,11 +448,12 @@ private:
         AooNetCallback cb_;
         void *user_;
     };
-    using request_map = std::unordered_map<AooId, std::unique_ptr<callback_cmd>>;
+    using callback_cmd_ptr = std::unique_ptr<callback_cmd>;
+    using request_map = std::unordered_map<AooId, callback_cmd_ptr>;
     request_map pending_requests_;
     AooId next_token_ = 0;
     // events
-    using event_queue = aoo::unbounded_mpsc_queue<std::unique_ptr<ievent>>;
+    using event_queue = aoo::unbounded_mpsc_queue<event_ptr>;
     event_queue events_;
     AooEventHandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;
@@ -500,8 +510,19 @@ public:
 
     struct peer_event : ievent
     {
-        peer_event(int32_t type, peer& p);
+        peer_event(int32_t type, const peer& p);
         ~peer_event();
+    };
+
+    struct peer_ping_event : ievent
+    {
+        peer_ping_event(const peer& p, time_tag tt1, time_tag tt2);
+    };
+
+    struct peer_ping_reply_event : ievent
+    {
+        peer_ping_reply_event(const peer& p, time_tag tt1,
+                              time_tag tt2, time_tag tt3);
     };
 
     struct message_event : ievent

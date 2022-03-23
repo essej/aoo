@@ -1077,7 +1077,7 @@ void Client::perform(const peer_message& m, const sendfn& fn) {
             char buf[AOO_MAX_PACKET_SIZE];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
             msg << osc::BeginMessage(kAooNetMsgPeerMessage)
-                << peer.group_id() << peer.local_id() << osc::TimeTag(m.tt_.value())
+                << peer.group_id() << peer.local_id() << osc::TimeTag(m.tt_)
                 << m.data_->type << osc::Blob(m.data_->data, m.data_->size)
                 << osc::EndMessage;
             peer.send_message(msg, fn);
@@ -1085,7 +1085,7 @@ void Client::perform(const peer_message& m, const sendfn& fn) {
     }
 }
 
-void Client::send_event(std::unique_ptr<ievent> e)
+void Client::send_event(event_ptr e)
 {
     switch (eventmode_){
     case kAooEventModePoll:
@@ -1093,16 +1093,15 @@ void Client::send_event(std::unique_ptr<ievent> e)
         break;
     case kAooEventModeCallback:
         // client only has network threads
-        eventhandler_(eventcontext_, &e->event_, kAooThreadLevelAudio);
+        eventhandler_(eventcontext_, &e->event_, kAooThreadLevelNetwork);
         break;
     default:
         break;
     }
 }
 
-void Client::push_command(std::unique_ptr<icommand>&& cmd){
+void Client::push_command(command_ptr cmd){
     commands_.push(std::move(cmd));
-
     signal();
 }
 
@@ -1522,16 +1521,23 @@ Client::error_event::~error_event()
     free_string((char *)error_event_.errorMessage);
 }
 
-Client::peer_event::peer_event(int32_t type, peer& p)
+Client::peer_event::peer_event(int32_t type, const peer& p)
 {
-    // TODO metadata
     peer_event_.type = type;
+    peer_event_.flags = 0;
     peer_event_.groupId = p.group_id();
     peer_event_.userId = p.user_id();
     peer_event_.groupName = aoo::copy_string(p.group_name());
     peer_event_.userName = aoo::copy_string(p.user_name());
-    peer_event_.address.data = aoo::copy_sockaddr(p.address());
-    peer_event_.address.size = p.address().length();
+    if (p.address().valid()) {
+        peer_event_.address.data = aoo::copy_sockaddr(p.address());
+        peer_event_.address.size = p.address().length();
+    } else {
+        peer_event_.address.data = nullptr;
+        peer_event_.address.size = 0;
+    }
+    // TODO metadata
+    peer_event_.metadata = nullptr;
 }
 
 
@@ -1540,6 +1546,26 @@ Client::peer_event::~peer_event()
     free_string((char *)peer_event_.userName);
     free_string((char *)peer_event_.groupName);
     free_sockaddr((void *)peer_event_.address.data, peer_event_.address.size);
+}
+
+Client::peer_ping_event::peer_ping_event(const peer& p, time_tag tt1, time_tag tt2) {
+    peer_ping_.type = kAooNetEventPeerPing;
+    peer_ping_.flags = 0;
+    peer_ping_.group = p.group_id();
+    peer_ping_.user = p.user_id();
+    peer_ping_.tt1 = tt1.value();
+    peer_ping_.tt2 = tt2.value();
+}
+
+Client::peer_ping_reply_event::peer_ping_reply_event(
+        const peer& p, time_tag tt1, time_tag tt2, time_tag tt3) {
+    peer_ping_reply_.type = kAooNetEventPeerPingReply;
+    peer_ping_reply_.flags = 0;
+    peer_ping_reply_.group = p.group_id();
+    peer_ping_reply_.user = p.user_id();
+    peer_ping_reply_.tt1 = tt1.value();
+    peer_ping_reply_.tt2 = tt2.value();
+    peer_ping_reply_.tt3 = tt3.value();
 }
 
 Client::message_event::message_event(AooId group, AooId user, time_tag tt,
@@ -1713,6 +1739,8 @@ void udp_client::send_server_message(const osc::OutboundPacketStream& msg, const
 
 void udp_client::handle_server_message(Client& client, const osc::ReceivedMessage& msg, int onset) {
     auto pattern = msg.AddressPattern() + onset;
+    LOG_DEBUG("AooClient: got server OSC message " << pattern);
+
     try {
         if (!strcmp(pattern, kAooNetMsgPingReply)){
             LOG_DEBUG("AooClient: got UDP ping from server");
@@ -1853,23 +1881,47 @@ void peer::send(Client& client, const sendfn& fn, time_tag now) {
             char buf[64];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
             msg << osc::BeginMessage(kAooNetMsgPeerPing)
-                << group_id_ << local_id_
+                << group_id_ << local_id_ << osc::TimeTag(now)
                 << osc::EndMessage;
 
             send_message(msg, fn);
 
             last_pingtime_ = elapsed_time;
+
+            LOG_DEBUG("AooClient: send ping to " << *this << " (" << now << ")");
         }
         // reply to /ping message
-        // NB: we send *our* user ID, see above
-        if (got_ping_.exchange(false)){
-            char buf[64];
-            osc::OutboundPacketStream msg(buf, sizeof(buf));
-            msg << osc::BeginMessage(kAooNetMsgPeerPingReply)
-                << group_id_ << local_id_
-                << osc::EndMessage;
+        // NB: we send *our* user ID, see above.
+        if (got_ping_.exchange(false, std::memory_order_acquire)) {
+            // The empty timetag distinguishes a handshake
+            // ping (reply) from a regular ping (reply).
+            auto tt1 = ping_tt1_;
+            if (!tt1.is_empty()) {
+                // regular ping reply
+                char buf[64];
+                osc::OutboundPacketStream msg(buf, sizeof(buf));
+                msg << osc::BeginMessage(kAooNetMsgPeerPingReply)
+                    << group_id_ << local_id_
+                    << osc::TimeTag(tt1) << osc::TimeTag(now)
+                    << osc::EndMessage;
 
-            send_message(msg, fn);
+                send_message(msg, fn);
+
+                LOG_DEBUG("AooClient: send ping reply to " << *this
+                          << " (" << time_tag(tt1) << " " << now << ")");
+            } else {
+                // handshake ping reply
+                char buf[64];
+                osc::OutboundPacketStream msg(buf, sizeof(buf));
+                msg << osc::BeginMessage(kAooNetMsgPeerPingReply)
+                    << group_id_ << local_id_
+                    << osc::TimeTag(0) << osc::TimeTag(0)
+                    << osc::EndMessage;
+
+                send_message(msg, fn);
+
+                LOG_DEBUG("AooClient: send handshake ping reply to " << *this);
+            }
         }
     } else if (!timeout_) {
         // try to establish UDP connection with peer
@@ -1896,6 +1948,7 @@ void peer::send(Client& client, const sendfn& fn, time_tag now) {
             std::stringstream ss;
             ss << "couldn't establish connection with peer " << *this;
 
+            // TODO: do we really need to send the error event?
             auto e1 = std::make_unique<Client::error_event>(0, ss.str().c_str());
             client.send_event(std::move(e1));
 
@@ -1912,24 +1965,25 @@ void peer::send(Client& client, const sendfn& fn, time_tag now) {
         if (delta >= client.query_interval()){
             char buf[64];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
-            // /aoo/peer/ping <group> <user>
-            // NB: we send *our* user ID, see above
+            // /aoo/peer/ping <group> <user> <tt>
+            // NB: we send *our* user ID, see above. The empty timetag
+            // distinguishes a handshake ping from a regular ping!
             //
             // With the group and user ID, peers can identify us even if
-            // we're behind a symmetric NAT. NB: This trick doesn't work
+            // we're behind a symmetric NAT. This trick doesn't work
             // if both parties are behind a symmetrict NAT; in that case,
             // UDP hole punching simply doesn't work.
             msg << osc::BeginMessage(kAooNetMsgPeerPing)
-                << group_id_ << local_id_
+                << group_id_ << local_id_ << osc::TimeTag(0)
                 << osc::EndMessage;
 
             for (auto& addr : addrlist_) {
                 send_message(msg, addr, fn);
             }
 
-            // LOG_DEBUG("AooClient: send ping to " << *this);
-
             last_pingtime_ = elapsed_time;
+
+            LOG_DEBUG("AooClient: send handshake ping to " << *this);
         }
     }
 }
@@ -1943,10 +1997,12 @@ void peer::send_message(const osc::OutboundPacketStream &msg, const sendfn &fn) 
 void peer::handle_message(Client& client, const char *pattern,
                           osc::ReceivedMessageArgumentIterator it,
                           const ip_address& addr) {
+    LOG_DEBUG("AooClient: got OSC message " << pattern << " from " << *this);
+
     if (!strcmp(pattern, kAooNetMsgPing)) {
-        handle_ping(client, addr, false);
+        handle_ping(client, it, addr, false);
     } else if (!strcmp(pattern, kAooNetMsgPingReply)) {
-        handle_ping(client, addr, true);
+        handle_ping(client, it, addr, true);
     } else if (!strcmp(pattern, kAooNetMsgMessage)) {
         auto tt = (time_tag)(it++)->AsTimeTag();
         auto data = osc_read_metadata(it);
@@ -1963,8 +2019,10 @@ void peer::handle_message(Client& client, const char *pattern,
     }
 }
 
-void peer::handle_ping(Client& client, const ip_address& addr, bool reply) {
-    if (!connected()){
+void peer::handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
+                       const ip_address& addr, bool reply) {
+    if (!connected()) {
+        // first ping
     #if FORCE_RELAY
         // force relay
         if (!relay()){
@@ -1987,18 +2045,49 @@ void peer::handle_ping(Client& client, const ip_address& addr, bool reply) {
 
         // push event
         auto e = std::make_unique<Client::peer_event>(kAooNetEventPeerJoin, *this);
-
         client.send_event(std::move(e));
 
         LOG_VERBOSE("AooClient: successfully established connection with "
-                  << *this << " " << addr << (relay() ? " (relayed)" : ""));
+                    << *this << " " << addr << (relay() ? " (relayed)" : ""));
     }
 
     if (reply) {
-        LOG_DEBUG("AooClient: got reply from " << *this);
+        time_tag tt1 = (it++)->AsTimeTag();
+        if (!tt1.is_empty()) {
+            // regular ping reply
+            time_tag tt2 = (it++)->AsTimeTag();
+            time_tag tt3 = time_tag::now();
+
+            // only send event for regular ping reply!
+            auto e = std::make_unique<Client::peer_ping_reply_event>(*this, tt1, tt2, tt3);
+            client.send_event(std::move(e));
+
+            LOG_DEBUG("AooClient: got ping reply from " << *this
+                      << "(" << tt1 << " " << tt2 << " " << tt3);
+        } else {
+            // handshake ping reply
+            LOG_DEBUG("AooClient: got handshake ping reply from " << *this);
+        }
     } else {
-        LOG_DEBUG("AooClient: got ping from " << *this);
-        got_ping_.store(true);
+        time_tag tt1 = (it++)->AsTimeTag();
+        // reply to both handshake and regular pings!!!
+        // This is not 100% threadsafe, but regular pings will never
+        // be sent fast enough to actually cause a race condition.
+        ping_tt1_ = tt1;
+        got_ping_.store(true, std::memory_order_release);
+        if (!tt1.is_empty()) {
+            // regular ping
+            time_tag tt2 = time_tag::now();
+
+            // only send event for regular ping!
+            auto e = std::make_unique<Client::peer_ping_event>(*this, tt1, tt2);
+            client.send_event(std::move(e));
+
+            LOG_DEBUG("AooClient: got ping from " << *this << "(" << tt1 << " " << tt2);
+        } else {
+            // handshake ping
+            LOG_DEBUG("AooClient: got handshake ping from " << *this);
+        }
     }
 }
 
