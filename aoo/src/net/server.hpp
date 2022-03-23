@@ -42,9 +42,6 @@
 namespace aoo {
 namespace net {
 
-// net/client.cpp
-std::string encrypt(const std::string& input);
-
 class Server;
 
 using ip_address_list = std::vector<ip_address>;

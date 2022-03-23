@@ -12,8 +12,6 @@
 #include <algorithm>
 #include <sstream>
 
-#include "md5/md5.h"
-
 #ifndef _WIN32
 #include <sys/poll.h>
 #include <sys/select.h>
@@ -79,80 +77,6 @@
 
 #define kAooNetMsgServerRequest \
     kAooMsgDomain kAooNetMsgServer kAooNetMsgRequest
-
-namespace aoo {
-namespace net {
-
-std::string encrypt(const std::string& input) {
-    // pass empty password unchanged
-    if (input.empty()) {
-        return "";
-    }
-
-    uint8_t result[16];
-    MD5_CTX ctx;
-    MD5_Init(&ctx);
-    MD5_Update(&ctx, (uint8_t *)input.data(), input.size());
-    MD5_Final(result, &ctx);
-
-    char output[33];
-    for (int i = 0; i < 16; ++i){
-        snprintf(&output[i * 2], 3, "%02X", result[i]);
-    }
-
-    return output;
-}
-
-// optimized version of aoo_parse_pattern() for client/server
-AooError parse_pattern(const AooByte *msg, int32_t n, AooMsgType& type, int32_t& offset)
-{
-    int32_t count = 0;
-    if (aoo::binmsg_check(msg, n))
-    {
-        type = aoo::binmsg_type(msg, n);
-        offset = aoo::binmsg_headersize(msg, n);
-        return kAooOk;
-    } else if (n >= kAooMsgDomainLen
-            && !memcmp(msg, kAooMsgDomain, kAooMsgDomainLen))
-    {
-        count += kAooMsgDomainLen;
-        if (n >= (count + kAooNetMsgServerLen)
-            && !memcmp(msg + count, kAooNetMsgServer, kAooNetMsgServerLen))
-        {
-            type = kAooTypeServer;
-            count += kAooNetMsgServerLen;
-        }
-        else if (n >= (count + kAooNetMsgClientLen)
-            && !memcmp(msg + count, kAooNetMsgClient, kAooNetMsgClientLen))
-        {
-            type = kAooTypeClient;
-            count += kAooNetMsgClientLen;
-        }
-        else if (n >= (count + kAooNetMsgPeerLen)
-            && !memcmp(msg + count, kAooNetMsgPeer, kAooNetMsgPeerLen))
-        {
-            type = kAooTypePeer;
-            count += kAooNetMsgPeerLen;
-        }
-        else if (n >= (count + kAooNetMsgRelayLen)
-            && !memcmp(msg + count, kAooNetMsgRelay, kAooNetMsgRelayLen))
-        {
-            type = kAooTypeRelay;
-            count += kAooNetMsgRelayLen;
-        } else {
-            return kAooErrorUnknown;
-        }
-
-        offset = count;
-
-        return kAooOk;
-    } else {
-        return kAooErrorUnknown; // not an AOO message
-    }
-}
-
-} // net
-} // aoo
 
 //--------------------- AooClient -----------------------------//
 

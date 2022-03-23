@@ -72,6 +72,8 @@ AooSize write_relay_message(AooByte *buffer, AooSize bufsize,
                             const AooByte *msg, AooSize msgsize,
                             const ip_address& addr);
 
+std::string encrypt(const std::string& input);
+
 struct ip_host {
     ip_host() = default;
     ip_host(const std::string& _name, int _port)
