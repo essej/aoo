@@ -388,7 +388,181 @@ private:
                 request_handler_(request_context_, client.id(), token, (const AooNetRequest *)&request);
     }
 
-    //-----------------------------------------------------------------//
+    //--------------------------- events -----------------------------//
+
+    struct event_handler {
+        event_handler(AooEventHandler fn, void *user, AooThreadLevel level)
+            : fn_(fn), user_(user), level_(level) {}
+
+        template<typename T>
+        void operator()(const T& event) const {
+            fn_(user_, &reinterpret_cast<const AooEvent&>(event), level_);
+        }
+    private:
+        AooEventHandler fn_;
+        void *user_;
+        AooThreadLevel level_;
+    };
+
+    struct ievent {
+        virtual ~ievent() {}
+
+        virtual void dispatch(const event_handler& fn) const = 0;
+    };
+
+    using event_ptr = std::unique_ptr<ievent>;
+
+    void send_event(event_ptr event);
+
+    struct error_event : ievent
+    {
+        error_event(int32_t code, const char *msg)
+            : code_(code), msg_(msg) {}
+
+        void dispatch(const event_handler& fn) const override {
+            AooNetEventError e;
+            e.type = kAooNetEventError;
+            e.errorCode = code_;
+            e.errorMessage = msg_.c_str();
+
+            fn(e);
+        }
+
+        int32_t code_;
+        std::string msg_;
+    };
+
+    struct client_login_event : ievent
+    {
+        client_login_event(const client_endpoint& c)
+            : id_(c.id()), sockfd_(c.sockfd()) {}
+
+        void dispatch(const event_handler& fn) const override {
+            AooNetEventClientLogin e;
+            e.type = kAooNetEventClientLogin;
+            e.flags = 0;
+            e.id = id_;
+            e.sockfd = sockfd_;
+
+            fn(e);
+        }
+
+        AooId id_;
+        AooSocket sockfd_;
+    };
+
+    struct client_remove_event : ievent
+    {
+        client_remove_event(AooId id)
+            : id_(id) {}
+
+        void dispatch(const event_handler& fn) const override {
+            AooNetEventClientRemove e;
+            e.type = kAooNetEventClientRemove;
+            e.id = id_;
+
+            fn(e);
+        }
+
+        AooId id_;
+    };
+
+    struct group_add_event : ievent
+    {
+        group_add_event(const group& grp)
+            : id_(grp.id()), name_(grp.name()), metadata_(grp.metadata()) {}
+
+        void dispatch(const event_handler& fn) const override {
+            AooNetEventGroupAdd e;
+            e.type = kAooNetEventGroupAdd;
+            e.id = id_;
+            e.name = name_.c_str();
+            AooDataView md { metadata_.type(), metadata_.data(), metadata_.size() };
+            e.metadata = md.size > 0 ? &md : nullptr;
+            e.flags = 0;
+
+            fn(e);
+        }
+
+        AooId id_;
+        std::string name_;
+        aoo::metadata metadata_;
+    };
+
+    struct group_remove_event : ievent
+    {
+       group_remove_event(const group& grp)
+            : id_(grp.id()), name_(grp.name()) {}
+
+        void dispatch(const event_handler& fn) const override {
+            AooNetEventGroupRemove e;
+            e.type = kAooNetEventGroupRemove;
+            e.id = id_;
+            e.name = name_.c_str();
+
+            fn(e);
+        }
+
+        AooId id_;
+        std::string name_;
+    };
+
+    struct group_join_event : ievent
+    {
+        group_join_event(const group& grp, const user& usr)
+            : group_id_(grp.id()), user_id_(usr.id()),
+              group_name_(grp.name()), user_name_(usr.name()),
+              metadata_(usr.metadata()), client_id_(usr.client()) {}
+
+        void dispatch(const event_handler& fn) const override {
+            AooNetEventGroupJoin e;
+            e.type = kAooNetEventGroupJoin;
+            e.flags = 0;
+            e.groupId = group_id_;
+            e.userId = user_id_;
+            e.groupName = group_name_.c_str();
+            e.userName = user_name_.c_str();
+            e.clientId = client_id_;
+            e.userFlags = 0;
+            AooDataView md { metadata_.type(), metadata_.data(), metadata_.size() };
+            e.userMetadata = md.size > 0 ? &md : nullptr;
+
+            fn(e);
+        }
+
+        AooId group_id_;
+        AooId user_id_;
+        std::string group_name_;
+        std::string user_name_;
+        aoo::metadata metadata_;
+        AooId client_id_;
+    };
+
+    struct group_leave_event : ievent
+    {
+        group_leave_event(const group& grp, const user& usr)
+            : group_id_(grp.id()), user_id_(usr.id()),
+              group_name_(grp.name()), user_name_(usr.name()) {}
+
+        void dispatch(const event_handler& fn) const override {
+            AooNetEventGroupLeave e;
+            e.type = kAooNetEventGroupLeave;
+            e.flags = 0;
+            e.groupId = group_id_;
+            e.userId = user_id_;
+            e.groupName = group_name_.c_str();
+            e.userName = user_name_.c_str();
+
+            fn(e);
+        }
+
+        AooId group_id_;
+        AooId user_id_;
+        std::string group_name_;
+        std::string user_name_;
+    };
+
+    //----------------------------------------------------------------//
 
     // clients
     using client_map = std::unordered_map<AooId, client_endpoint>;
@@ -404,7 +578,7 @@ private:
     AooNetRequestHandler request_handler_{nullptr};
     void *request_context_{nullptr};
     // event handler
-    using event_queue = aoo::unbounded_mpsc_queue<AooEvent*>;
+    using event_queue = aoo::unbounded_mpsc_queue<event_ptr>;
     event_queue events_;
     AooEventHandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;

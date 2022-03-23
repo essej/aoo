@@ -707,10 +707,10 @@ AOO_API AooError AOO_CALL AooServer_pollEvents(AooServer *server) {
 
 AooError AOO_CALL aoo::net::Server::pollEvents(){
     // always thread-safe
-    // TODO
-    AooEvent *e;
+    event_handler fn(eventhandler_, eventcontext_, kAooThreadLevelNetwork);
+    event_ptr e;
     while (events_.try_pop(e)){
-        eventhandler_(eventcontext_, e, kAooThreadLevelUnknown);
+        e->dispatch(fn);
     }
     return kAooOk;
 }
@@ -817,6 +817,10 @@ bool Server::remove_client(AooId id) {
     }
     it->second.on_close(*this);
     clients_.erase(it);
+
+    auto e = std::make_unique<client_remove_event>(id);
+    send_event(std::move(e));
+
     return true;
 }
 
@@ -884,6 +888,10 @@ void Server::on_user_joined_group(const group& grp, const user& usr,
             }
         }
     }
+
+    // send event
+    auto e = std::make_unique<group_join_event>(grp, usr);
+    send_event(std::move(e));
 }
 
 void Server::on_user_left_group(const group& grp, const user& usr) {
@@ -898,6 +906,10 @@ void Server::on_user_left_group(const group& grp, const user& usr) {
             }
         }
     }
+
+    // send event
+    auto e = std::make_unique<group_leave_event>(grp, usr);
+    send_event(std::move(e));
 }
 
 void Server::do_remove_user_from_group(group& grp, user& usr) {
@@ -911,6 +923,11 @@ void Server::do_remove_user_from_group(group& grp, user& usr) {
         }
         // remove group if empty and not persistent
         if (!grp.persistent() && !grp.user_count()) {
+            // send event
+            auto e = std::make_unique<group_remove_event>(grp);
+            send_event(std::move(e));
+
+            // finally remove it
             remove_group(grp.id());
         }
     }
@@ -1034,6 +1051,9 @@ AooError Server::do_login(client_endpoint& client, AooId token,
 
     client.send_message(msg);
 
+    auto e = std::make_unique<client_login_event>(client);
+    send_event(std::move(e));
+
     return kAooOk;
 }
 
@@ -1141,7 +1161,11 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
     if (!grp) {
         grp = add_group(group(request.groupName, request.groupPwd, get_next_group_id(),
                               group_md, group_relay, false));
-        if (!grp) {
+        if (grp) {
+            // send event
+            auto e = std::make_unique<group_add_event>(*grp);
+            send_event(std::move(e));
+        } else {
             // group has been added in the meantime... LATER try to deal with this
             client.send_error(*this, token, request.type, kAooErrorUnknown,
                               0, "could not create group: already exists");
@@ -1219,7 +1243,9 @@ AooError Server::do_group_leave(client_endpoint& client, AooId token,
         // user ID to the server.
         if (auto usr = grp->find_user(client)) {
             on_user_left_group(*grp, *usr);
+
             client.on_group_leave(*grp, *usr, false);
+
             do_remove_user_from_group(*grp, *usr);
 
             // send reply
@@ -1436,6 +1462,22 @@ AooId Server::get_next_client_id(){
 AooId Server::get_next_group_id(){
     // LATER make random group ID
     return next_group_id_++;
+}
+
+void Server::send_event(event_ptr event) {
+    switch (eventmode_){
+    case kAooEventModePoll:
+        events_.push(std::move(event));
+        break;
+    case kAooEventModeCallback:
+    {
+        event_handler fn(eventhandler_, eventcontext_, kAooThreadLevelNetwork);
+        event->dispatch(fn);
+        break;
+    }
+    default:
+        break;
+    }
 }
 
 } // net
