@@ -38,6 +38,8 @@ option(AOO_DEBUG_AUDIO_BUFFER "debug audio buffer" OFF)
 
 option(AOO_DEBUG_JITTER_BUFFER "debug jitter buffer" OFF)
 
+option(AOO_DEBUG_RELAY "debug relay" OFF)
+
 set(OPTIONS
     -DAOO_CUSTOM_ALLOCATOR=$<BOOL:${AOO_CUSTOM_ALLOCATOR}>
     -DAOO_PACKET_SIZE=${AOO_PACKET_SIZE}

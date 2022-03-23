@@ -26,6 +26,12 @@
 #include <errno.h>
 #endif
 
+// debugging
+
+#define FORCE_RELAY 0
+
+// OSC patterns
+
 #define kAooNetMsgPingReply \
     kAooNetMsgPing kAooNetMsgReply
 
@@ -74,12 +80,6 @@
 #define kAooNetMsgServerRequest \
     kAooMsgDomain kAooNetMsgServer kAooNetMsgRequest
 
-// debugging
-
-#define FORCE_RELAY 0
-
-#define DEBUG_RELAY 0
-
 namespace aoo {
 namespace net {
 
@@ -107,13 +107,10 @@ std::string encrypt(const std::string& input) {
 AooError parse_pattern(const AooByte *msg, int32_t n, AooMsgType& type, int32_t& offset)
 {
     int32_t count = 0;
-    if (n >= kAooBinMsgHeaderSize &&
-        !memcmp(msg, kAooBinMsgDomain, kAooBinMsgDomainSize))
+    if (aoo::binmsg_check(msg, n))
     {
-        // domain (int32), type (int16), cmd (int16), id (int32) ...
-        type = aoo::from_bytes<int16_t>(msg + 4);
-        offset = 12;
-
+        type = aoo::binmsg_type(msg, n);
+        offset = aoo::binmsg_headersize(msg, n);
         return kAooOk;
     } else if (n >= kAooMsgDomainLen
             && !memcmp(msg, kAooMsgDomain, kAooMsgDomainLen))
@@ -586,7 +583,11 @@ AooError AOO_CALL aoo::net::Client::handleMessage(
     } else {
         // forward to UDP client
         ip_address address((const sockaddr *)addr, len);
-        return udp_client_.handle_message(*this, data, size, address, type, onset);
+        if (binmsg_check(data, size)) {
+            return udp_client_.handle_bin_message(*this, data, size, address, type, onset);
+        } else {
+            return udp_client_.handle_osc_message(*this, data, size, address, type, onset);
+        }
     }
 
     return kAooErrorUnknown;
@@ -1564,13 +1565,33 @@ Client::message_event::~message_event()
 
 //---------------------- udp_client ------------------------//
 
-AooError udp_client::handle_message(Client& client, const AooByte *data, int32_t n,
-                                    const ip_address& addr, AooMsgType type, int32_t onset){
-    try {
-        osc::ReceivedPacket packet((const char *)data, n);
-        osc::ReceivedMessage msg(packet);
+AooError udp_client::handle_bin_message(Client& client, const AooByte *data, int32_t size,
+                                        const ip_address& addr, AooMsgType type, int32_t onset) {
+    if (type == kAooTypeRelay) {
+        ip_address src;
+        onset = binmsg_read_relay(data, size, src);
+        if (onset > 0) {
+        #if AOO_DEBUG_RELAY
+            LOG_DEBUG("AooClient: handle binary relay message from " << src << " via " << addr);
+        #endif
+            auto msg = data + onset;
+            auto msgsize = size - onset;
+            return client.handleMessage(msg, msgsize, src.address(), src.length());
+        } else {
+            LOG_ERROR("AooClient: bad binary relay message");
+            return kAooErrorUnknown;
+        }
+    } else {
+        LOG_WARNING("AooClient: unsupported binary message");
+        return kAooErrorUnknown;
+    }
+}
 
-        LOG_DEBUG("AooClient: handle UDP message " << msg.AddressPattern() << " from " << addr);
+AooError udp_client::handle_osc_message(Client& client, const AooByte *data, int32_t size,
+                                        const ip_address& addr, AooMsgType type, int32_t onset) {
+    try {
+        osc::ReceivedPacket packet((const char *)data, size);
+        osc::ReceivedMessage msg(packet);
 
         if (type == kAooTypePeer){
             // peer message
@@ -1580,24 +1601,25 @@ AooError udp_client::handle_message(Client& client, const AooByte *data, int32_t
             // a) pings from a peer which we haven't had the chance to add yet
             // b) pings sent to alternative endpoint addresses
             if (!client.handle_peer_message(msg, onset, addr)){
-                LOG_VERBOSE("AooClient: ignoring UDP message "
-                            << msg.AddressPattern() << " from endpoint " << addr);
+                LOG_VERBOSE("AooClient: ignore UDP message " << msg.AddressPattern() + onset
+                            << " from endpoint " << addr);
             }
         } else if (type == kAooTypeClient){
             // server message
-            if (is_server_address(addr)){
+            if (is_server_address(addr)) {
                 handle_server_message(client, msg, onset);
             } else {
-                LOG_WARNING("AooClient: got message from unknown server " << addr);
+                LOG_WARNING("AooClient: got OSC message from unknown server " << addr);
             }
         } else if (type == kAooTypeRelay){
-            ip_address addr;
-            auto packet = unwrap_message(msg, addr, type_);
-        #if DEBUG_RELAY
-            LOG_DEBUG("AooClient: got relayed message " << packet.Contents());
+            ip_address src;
+            auto packet = unwrap_message(msg, src, type_);
+            auto msg = (const AooByte *)packet.Contents();
+            auto msgsize = packet.Size();
+        #if AOO_DEBUG_RELAY
+            LOG_DEBUG("AooClient: handle OSC relay message from " << src << " via " << addr);
         #endif
-            client.handleMessage((const AooByte *)packet.Contents(), packet.Size(),
-                                  addr.address(), addr.length());
+            return client.handleMessage(msg, msgsize, src.address(), src.length());
         } else {
             LOG_WARNING("AooClient: got unexpected message " << msg.AddressPattern());
             return kAooErrorUnknown;
@@ -1605,7 +1627,7 @@ AooError udp_client::handle_message(Client& client, const AooByte *data, int32_t
 
         return kAooOk;
     } catch (const osc::Exception& e){
-        LOG_ERROR("AooClient: exception in handle_message: " << e.what());
+        LOG_ERROR("AooClient: exception in handle_osc_message: " << e.what());
     #if 0
         on_exception("UDP message", e);
     #endif
@@ -1982,17 +2004,18 @@ void peer::handle_ping(Client& client, const ip_address& addr, bool reply) {
 
 void peer::send_message(const osc::OutboundPacketStream &msg,
                         const ip_address &addr, const sendfn &fn) {
+    auto data = (const AooByte *)msg.Data();
+    auto size = msg.Size();
     if (relay()) {
-        // LATER check for binary messages with *data != '/'
-        // (we never send OSC bundles) and relay them in binary format.
-        char buf[AOO_MAX_PACKET_SIZE];
-        osc::OutboundPacketStream msg2(buf, sizeof(buf));
-        msg2 << osc::BeginMessage(kAooMsgDomain kAooNetMsgRelay)
-             << addr << osc::Blob(msg.Data(), msg.Size())
-             << osc::EndMessage;
-        fn((const AooByte *)msg2.Data(), msg2.Size(), relay_address_);
+    #if AOO_DEBUG_RELAY
+        LOG_DEBUG("AooClient: relay message " << data << " to peer " << *this);
+    #endif
+        AooByte buf[AOO_MAX_PACKET_SIZE];
+        auto result = write_relay_message(buf, sizeof(buf), data, size, addr);
+
+        fn(buf, result, relay_address_);
     } else {
-        fn((const AooByte *)msg.Data(), msg.Size(), addr);
+        fn(data, size, addr);
     }
 }
 

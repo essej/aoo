@@ -9,6 +9,8 @@
 #include <iostream>
 #include <sstream>
 
+// OSC address patterns
+
 #define kAooNetMsgClientPingReply \
     kAooMsgDomain kAooNetMsgClient kAooNetMsgPing kAooNetMsgReply
 
@@ -295,34 +297,25 @@ AooError AOO_CALL aoo::net::Server::handleUdpMessage(
         const AooByte *data, AooInt32 size,
         const void *address, AooAddrSize addrlen,
         AooSendFunc replyFn, void *user) {
-    try {
-        osc::ReceivedPacket packet((const char *)data, size);
-        osc::ReceivedMessage msg(packet);
-
-        AooMsgType type;
-        int32_t onset;
-        auto err = parse_pattern(data, size, type, onset);
-        if (err != kAooOk){
-            LOG_WARNING("AooServer: not an AOO NET message!");
-            return kAooErrorUnknown;
-        }
-
-        ip_address addr((const struct sockaddr *)address, addrlen);
-        sendfn fn(replyFn, user);
-
-        if (type == kAooTypeServer){
-            handle_udp_message(msg, onset, addr, fn);
-        } else if (type == kAooTypeRelay){
-            handle_relay(msg, addr, fn);
-        } else {
-            LOG_WARNING("AooServer: not a client message!");
-            return kAooErrorUnknown;
-        }
-    } catch (const osc::Exception& e){
-        LOG_ERROR("AooServer: exception in handleUdpMessage: " << e.what());
-        // ignore for now
+    AooMsgType type;
+    int32_t onset;
+    auto err = parse_pattern(data, size, type, onset);
+    if (err != kAooOk){
+        LOG_WARNING("AooServer: not an AOO NET message!");
+        return kAooErrorUnknown;
     }
-    return kAooOk;
+
+    ip_address addr((const struct sockaddr *)address, addrlen);
+    sendfn fn(replyFn, user);
+
+    if (type == kAooTypeServer){
+        return handle_udp_message(data, size, onset, addr, fn);
+    } else if (type == kAooTypeRelay){
+        return handle_relay(data, size, addr, fn);
+    } else {
+        LOG_WARNING("AooServer: not a client message!");
+        return kAooErrorUnknown;
+    }
 }
 
 AOO_API AooError AOO_CALL AooServer_addClient(
@@ -1282,23 +1275,108 @@ AooError Server::do_custom_request(client_endpoint& client, AooId token,
     return kAooOk;
 }
 
-void Server::handle_udp_message(const osc::ReceivedMessage &msg, int onset,
+AooError Server::handle_udp_message(const AooByte *data, AooSize size, int onset,
                                 const ip_address& addr, const sendfn& fn) {
-    auto pattern = msg.AddressPattern() + onset;
-    LOG_DEBUG("AooServer: handle client UDP message " << pattern);
-
+    if (binmsg_check(data, size)) {
+        LOG_WARNING("AooServer: unsupported binary message");
+        return kAooErrorUnknown;
+    }
+    // OSC format
     try {
+        osc::ReceivedPacket packet((const char *)data, size);
+        osc::ReceivedMessage msg(packet);
+
+        auto pattern = msg.AddressPattern() + onset;
+        LOG_DEBUG("AooServer: handle client UDP message " << pattern);
+
         if (!strcmp(pattern, kAooNetMsgPing)){
             handle_ping(msg, addr, fn);
         } else if (!strcmp(pattern, kAooNetMsgQuery)) {
             handle_query(msg, addr, fn);
         } else {
             LOG_ERROR("AooServer: unknown message " << pattern);
+            return kAooErrorUnknown;
         }
+        return kAooOk;
     } catch (const osc::Exception& e){
+        auto pattern = (const char *)data + onset;
         LOG_ERROR("AooServer: exception on handling " << pattern
                   << " message: " << e.what());
-        // ignore for now
+        return kAooErrorUnknown;
+    }
+}
+
+AooError Server::handle_relay(const AooByte *data, AooSize size,
+                              const ip_address& addr, const sendfn& fn) const {
+    if (!allow_relay_.load()) {
+    #if AOO_DEBUG_RELAY
+        LOG_DEBUG("AooServer: ignore relay message from " << addr);
+    #endif
+        return kAooOk; // ?
+    }
+
+    if (binmsg_check(data, size)) {
+        // --- binary format ---
+        ip_address dst;
+        auto onset = binmsg_read_relay(data, size, dst);
+        if (onset > 0) {
+        #if AOO_DEBUG_RELAY
+            LOG_DEBUG("AooServer: forward binary relay message from " << addr << " to " << dst);
+        #endif
+            if (addr.type() == dst.type()) {
+                // simply replace the header (= rewrite address)
+                binmsg_write_relay(const_cast<AooByte *>(data), size, addr);
+                fn(data, size, dst);
+                return kAooOk;
+            } else {
+                // rewrite whole message
+                AooByte buf[AOO_MAX_PACKET_SIZE];
+                auto result = write_relay_message(buf, sizeof(buf), data, size, addr);
+                if (result > 0) {
+                    fn(buf, result + size, dst);
+                    return kAooOk;
+                } else {
+                    LOG_ERROR("AooServer: can't relay: buffer too small");
+                }
+            }
+        } else {
+            LOG_ERROR("AooServer: bad relay message");
+        }
+        return kAooErrorUnknown;
+    } else {
+        // --- OSC format ---
+        try {
+            osc::ReceivedPacket packet((const char *)data, size);
+            osc::ReceivedMessage msg(packet);
+
+            auto it = msg.ArgumentsBegin();
+            // infer the address type from the sender.
+            // E.g. the destination address might be IPv4,
+            // but our UDP socket is IPv6, so it would need
+            // to convert the address to IPv4-mapped.
+            auto dst = osc_read_address(it, addr.type());
+
+            const void *msgData;
+            osc::osc_bundle_element_size_t msgSize;
+            (it++)->AsBlob(msgData, msgSize);
+
+            // don't prepend size for UDP message!
+            char buf[AOO_MAX_PACKET_SIZE];
+            osc::OutboundPacketStream out(buf, sizeof(buf));
+            out << osc::BeginMessage(kAooMsgDomain kAooNetMsgRelay)
+                << addr << osc::Blob(msgData, msgSize)
+                << osc::EndMessage;
+
+        #if AOO_DEBUG_RELAY
+            LOG_DEBUG("AooServer: forward OSC relay message from " << addr << " to " << dst);
+        #endif
+            fn((const AooByte *)out.Data(), out.Size(), dst);
+
+            return kAooOk;
+        } catch (const osc::Exception& e){
+            LOG_ERROR("AooServer: exception in handle_relay: " << e.what());
+            return kAooErrorUnknown;
+        }
     }
 }
 
@@ -1312,33 +1390,6 @@ void Server::handle_ping(const osc::ReceivedMessage& msg,
           << osc::EndMessage;
 
     fn((const AooByte *)reply.Data(), reply.Size(), addr);
-}
-
-void Server::handle_relay(const osc::ReceivedMessage& msg,
-                          const ip_address& addr, const sendfn& fn) const {
-    if (!allow_relay_.load()) {
-        LOG_DEBUG("AooServer: ignore relay message");
-        return;
-    }
-
-    auto it = msg.ArgumentsBegin();
-
-    auto ip = (it++)->AsString();
-    auto port = (it++)->AsInt32();
-    ip_address dst(ip, port, type());
-
-    const void *msgData;
-    osc::osc_bundle_element_size_t msgSize;
-    (it++)->AsBlob(msgData, msgSize);
-
-    // don't prepend size for UDP message!
-    char buf[AOO_MAX_PACKET_SIZE];
-    osc::OutboundPacketStream out(buf, sizeof(buf));
-    out << osc::BeginMessage(kAooMsgDomain kAooNetMsgRelay)
-        << addr << osc::Blob(msgData, msgSize)
-        << osc::EndMessage;
-
-    fn((const AooByte *)out.Data(), out.Size(), dst);
 }
 
 void Server::handle_query(const osc::ReceivedMessage& msg,

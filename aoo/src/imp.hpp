@@ -1,15 +1,17 @@
 #pragma once
 
 #include "aoo/aoo.h"
+#if USE_AOO_NET
+# include "aoo/aoo_net.h"
+#endif
 #include "aoo/aoo_codec.h"
 #include "aoo/aoo_events.h"
-#if USE_AOO_NET
-#include "aoo/aoo_net.h"
-#endif
 
 #include "common/net_utils.hpp"
 #include "common/lockfree.hpp"
 #include "common/sync.hpp"
+#include "common/time.hpp"
+#include "common/utils.hpp"
 
 #include "oscpack/osc/OscReceivedElements.h"
 #include "oscpack/osc/OscOutboundPacketStream.h"
@@ -65,6 +67,10 @@ namespace net {
 
 AooError parse_pattern(const AooByte *msg, int32_t n,
                        AooMsgType& type, int32_t& offset);
+
+AooSize write_relay_message(AooByte *buffer, AooSize bufsize,
+                            const AooByte *msg, AooSize msgsize,
+                            const ip_address& addr);
 
 struct ip_host {
     ip_host() = default;
@@ -133,26 +139,10 @@ struct endpoint {
     AooId id = 0;
 
     void send(const osc::OutboundPacketStream& msg, const sendfn& fn) const {
-        return send((const AooByte *)msg.Data(), msg.Size(), fn);
+        send((const AooByte *)msg.Data(), msg.Size(), fn);
     }
-
 #if USE_AOO_NET
-    void send(const AooByte *data, AooSize size, const sendfn& fn) const {
-        if (relay.valid()) {
-            char buf[AOO_MAX_PACKET_SIZE];
-            // LATER check for binary messages with *data != '/'
-            // (we never send OSC bundles) and relay them in binary format.
-            using namespace net;
-            osc::OutboundPacketStream msg2(buf, sizeof(buf));
-            msg2 << osc::BeginMessage(kAooMsgDomain kAooNetMsgRelay)
-                 << address << osc::Blob(data, size)
-                 << osc::EndMessage;
-
-            fn((const AooByte *)msg2.Data(), msg2.Size(), relay);
-        } else {
-            fn(data, size, address, 0);
-        }
-    }
+    void send(const AooByte *data, AooSize size, const sendfn& fn) const;
 #else
     void send(const AooByte *data, AooSize size, const sendfn& fn) const {
         fn(data, size, address, 0);
@@ -164,6 +154,26 @@ inline std::ostream& operator<<(std::ostream& os, const endpoint& ep){
     os << ep.address << "|" << ep.id;
     return os;
 }
+
+#if USE_AOO_NET
+inline void endpoint::send(const AooByte *data, AooSize size, const sendfn& fn) const {
+    if (relay.valid()) {
+    #if AOO_DEBUG_RELAY
+        LOG_DEBUG("relay message to " << *this << " via " << relay);
+    #endif
+        AooByte buffer[AOO_MAX_PACKET_SIZE];
+        auto result = net::write_relay_message(buffer, sizeof(buffer),
+                                               data, size, address);
+        if (result > 0) {
+            fn(buffer, result, relay, 0);
+        } else {
+            LOG_ERROR("can't relay binary message: buffer too small");
+        }
+    } else {
+        fn(data, size, address, 0);
+    }
+}
+#endif
 
 //---------------- endpoint event ------------------//
 

@@ -15,6 +15,7 @@
 #include "common/net_utils.hpp"
 
 #include "../imp.hpp"
+#include "../binmsg.hpp"
 
 #include "oscpack/osc/OscOutboundPacketStream.h"
 #include "oscpack/osc/OscReceivedElements.h"
@@ -182,8 +183,11 @@ public:
 
     ip_address::ip_type type() const { return type_; }
 
-    AooError handle_message(Client& client, const AooByte *data, int32_t n,
-                            const ip_address& addr, int32_t type, AooMsgType onset);
+    AooError handle_osc_message(Client& client, const AooByte *data, int32_t n,
+                                const ip_address& addr, int32_t type, AooMsgType onset);
+
+    AooError handle_bin_message(Client& client, const AooByte *data, int32_t n,
+                                const ip_address& addr, int32_t type, AooMsgType onset);
 
     void update(Client& client, const sendfn& fn, time_tag now);
 

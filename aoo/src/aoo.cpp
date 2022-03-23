@@ -110,6 +110,40 @@ int32_t get_random_id(){
 #endif
 }
 
+#if USE_AOO_NET
+namespace net {
+
+AooSize write_relay_message(AooByte *buffer, AooSize bufsize,
+                            const AooByte *msg, AooSize msgsize,
+                            const ip_address& addr) {
+    if (aoo::binmsg_check(msg, msgsize)) {
+    #if AOO_DEBUG_RELAY && 0
+        LOG_DEBUG("write binary relay message");
+    #endif
+        auto onset = aoo::binmsg_write_relay(buffer, bufsize, addr);
+        auto total = msgsize + onset;
+        // NB: we do not write the message size itself because it is implicit
+        if (bufsize >= total) {
+            memcpy(buffer + onset, msg, msgsize);
+            return total;
+        } else {
+            return 0;
+        }
+    } else {
+    #if AOO_DEBUG_RELAY && 0
+        LOG_DEBUG("write OSC relay message " << msg);
+    #endif
+        osc::OutboundPacketStream msg2((char *)buffer, bufsize);
+        msg2 << osc::BeginMessage(kAooMsgDomain kAooNetMsgRelay)
+             << addr << osc::Blob(msg, msgsize)
+             << osc::EndMessage;
+        return msg2.Size();
+    }
+}
+
+} // net
+#endif
+
 //------------------------------ OSC utilities ---------------------------------//
 
 // see comment in "imp.hpp"

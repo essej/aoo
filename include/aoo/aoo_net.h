@@ -37,6 +37,13 @@
 
 AOO_PACK_BEGIN
 
+/*------------- compile time settings ---------------*/
+
+/** \brief debug relay messages */
+#ifndef AOO_DEBUG_RELAY
+#define AOO_DEBUG_RELAY 0
+#endif
+
 /*-------------- default values ---------------------*/
 
 /** \brief enable/disable server relay by default */
@@ -53,7 +60,6 @@ AOO_PACK_BEGIN
 #ifndef AOO_NET_USER_AUTO_CREATE
 #define AOO_NET_USER_AUTO_CREATE 1
 #endif
-
 
 /*-------------- public OSC interface ---------------*/
 

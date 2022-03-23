@@ -13,6 +13,7 @@
 #include "common/lockfree.hpp"
 #include "common/net_utils.hpp"
 
+#include "../binmsg.hpp"
 #include "../imp.hpp"
 
 #include "oscpack/osc/OscOutboundPacketStream.h"
@@ -174,6 +175,8 @@ public:
 
     AooId id() const { return id_; }
 
+    AooSocket sockfd() const { return sockfd_; }
+
     void add_public_address(const ip_address& addr) {
         public_addresses_.push_back(addr);
     }
@@ -289,9 +292,12 @@ public:
             AooCtl ctl, AooIntPtr index, void *data, AooSize size) override;
 
     //-----------------------------------------------------------------//
+
+#if 0
     ip_address::ip_type type() const {
         return ip_address::ip_type::Unspec; // TODO
     }
+#endif
 
     client_endpoint * find_client(AooId id);
 
@@ -323,14 +329,14 @@ public:
     void handle_message(client_endpoint& client, const osc::ReceivedMessage& msg, int32_t size);
 private:
     // UDP
-    void handle_udp_message(const osc::ReceivedMessage& msg, int onset,
+    AooError handle_udp_message(const AooByte *data, AooSize size, int onset,
                             const ip_address& addr, const sendfn& fn);
+
+    AooError handle_relay(const AooByte *data, AooSize size,
+                          const aoo::ip_address& addr, const aoo::sendfn& fn) const;
 
     void handle_ping(const osc::ReceivedMessage& msg,
                      const ip_address& addr, const sendfn& fn) const;
-
-    void handle_relay(const osc::ReceivedMessage& msg,
-                      const aoo::ip_address& addr, const aoo::sendfn& fn) const;
 
     void handle_query(const osc::ReceivedMessage& msg,
                       const ip_address& addr, const sendfn& fn);
