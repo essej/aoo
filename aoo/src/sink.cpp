@@ -330,13 +330,15 @@ AooError AOO_CALL aoo::Sink::handleMessage(
 
     ip_address addr((const sockaddr *)address, addrlen);
 
-    if (data[0] == 0){
+    if (aoo::binmsg_check(data, size)){
         // binary message
-        auto cmd = aoo::from_bytes<int16_t>(data + kAooBinMsgDomainSize + 2);
+        auto cmd = aoo::binmsg_cmd(data, size);
+        auto id = aoo::binmsg_from(data, size);
         switch (cmd){
         case kAooBinMsgCmdData:
-            return handle_data_message(data + onset, size - onset, addr);
+            return handle_data_message(data + onset, size - onset, id, addr);
         default:
+            LOG_WARNING("AooSink: unsupported binary message");
             return kAooErrorUnknown;
         }
     } else {
@@ -825,56 +827,57 @@ AooError Sink::handle_data_message(const osc::ReceivedMessage& msg,
 }
 
 // binary data message:
-// id (int32), stream_id (int32), seq (int32), channel (int16), flags (int16),
-// [total (int32), nframes (int16), frame (int16)],  [sr (float64)],
-// size (int32), data...
+// stream_id (int32), seq (int32), channel (uint8), flags (uint8), size (uint16)
+// [total (int32), nframes (int16), frame (int16)], [sr (float64)], data...
 
 AooError Sink::handle_data_message(const AooByte *msg, int32_t n,
-                                   const ip_address& addr)
+                                   AooId id, const ip_address& addr)
 {
-    // check size (excluding samplerate, frames and data)
-    if (n < 20){
-        LOG_ERROR("AooSink: handle_data_message: header too small!");
-        return kAooErrorUnknown;
-    }
-
-    auto it = msg;
-
-    auto id = aoo::read_bytes<int32_t>(it);
-
+    AooFlag flags;
     aoo::net_packet d;
+    auto it = msg;
+    auto end = it + n;
+
+    // check basic size (stream_id, seq, channel, flags, size)
+    if (n < 12){
+        goto wrong_size;
+    }
     d.stream_id = aoo::read_bytes<int32_t>(it);
     d.sequence = aoo::read_bytes<int32_t>(it);
-    d.channel = aoo::read_bytes<int16_t>(it);
-    auto flags = aoo::read_bytes<int16_t>(it);
-    if (flags & kAooBinMsgDataFrames){
-        d.totalsize = aoo::read_bytes<int32_t>(it);
-        d.nframes = aoo::read_bytes<int16_t>(it);
-        d.frame = aoo::read_bytes<int16_t>(it);
+    d.channel = aoo::read_bytes<uint8_t>(it);
+    flags = aoo::read_bytes<uint8_t>(it);
+    d.size = aoo::read_bytes<uint16_t>(it);
+    if (flags & kAooBinMsgDataFrames) {
+        if ((end - it) < 8) {
+            goto wrong_size;
+        }
+        d.totalsize = aoo::read_bytes<uint32_t>(it);
+        d.nframes = aoo::read_bytes<uint16_t>(it);
+        d.frame = aoo::read_bytes<uint16_t>(it);
     } else {
-        d.totalsize = 0;
+        d.totalsize = d.size;
         d.nframes = 1;
         d.frame = 0;
     }
-    if (flags & kAooBinMsgDataSampleRate){
+    if (flags & kAooBinMsgDataSampleRate) {
+        if ((end - it) < 8) {
+            goto wrong_size;
+        }
         d.samplerate = aoo::read_bytes<double>(it);
     } else {
         d.samplerate = 0;
     }
-
-    d.size = aoo::read_bytes<int32_t>(it);
-    if (d.totalsize == 0){
-        d.totalsize = d.size;
-    }
-
-    if (n < ((it - msg) + d.size)){
-        LOG_ERROR("AooSink: handle_data_bin_message: wrong data size!");
-        return kAooErrorUnknown;
-    }
-
     d.data = it;
 
+    if ((end - it) < d.size) {
+        goto wrong_size;
+    }
+
     return handle_data_packet(d, true, addr, id);
+
+wrong_size:
+    LOG_ERROR("AooSink: binary data message too small!");
+    return kAooErrorUnknown;
 }
 
 AooError Sink::handle_data_packet(net_packet& d, bool binary,
@@ -2119,8 +2122,12 @@ void source_desc::send_start_request(const Sink& s, const sendfn& fn) {
 
 // /aoo/src/<id>/data <id> <stream_id> <seq1> <frame1> <seq2> <frame2> etc.
 // or
-// (header), id (int32), stream_id (int32), count (int32),
+// header, stream_id (int32), count (int32),
 // seq1 (int32), frame1(int32), seq2(int32), frame2(int32), etc.
+
+// TODO:
+// header, stream_id (int32), count (int32),
+// seq1 (int32), offset1 (int16), bitset1 (uint16) etc. // offset < 0 -> all
 
 void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
     if (datarequestqueue_.empty()){
@@ -2136,25 +2143,21 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
     if (binary_.load(std::memory_order_relaxed)){
         // --- binary version ---
         const int32_t maxdatasize = s.packetsize()
-                - (kAooBinMsgHeaderSize + 8); // id + stream_id
+                - (kAooBinMsgLargeHeaderSize + 8); // header + stream_id + count
         const int32_t maxrequests = maxdatasize / 8; // 2 * int32
-        int32_t numrequests = 0;
 
-        auto it = buf;
         // write header
-        memcpy(it, kAooBinMsgDomain, kAooBinMsgDomainSize);
-        it += kAooBinMsgDomainSize;
-        aoo::write_bytes<int16_t>(kAooTypeSource, it);
-        aoo::write_bytes<int16_t>(kAooBinMsgCmdData, it);
-        aoo::write_bytes<int32_t>(ep.id, it);
-        // write first 2 args (constant)
-        aoo::write_bytes<int32_t>(s.id(), it);
+        auto onset = aoo::binmsg_write_header(buf, sizeof(buf), kAooTypeSource,
+                                              kAooBinMsgCmdData, ep.id, s.id());
+        // write arguments
+        auto it = buf + onset;
         aoo::write_bytes<int32_t>(stream_id, it);
         // skip 'count' field
         it += sizeof(int32_t);
 
-        auto head = it;
+        auto head = it; // cache pointer
 
+        int32_t numrequests = 0;
         data_request r;
         while (datarequestqueue_.try_pop(r)){
             LOG_DEBUG("AooSink: send binary data request ("
@@ -2164,7 +2167,7 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
             aoo::write_bytes<int32_t>(r.frame, it);
             if (++numrequests >= maxrequests){
                 // write 'count' field
-                aoo::to_bytes(numrequests, head - sizeof(int32_t));
+                aoo::to_bytes<int32_t>(numrequests, head - sizeof(int32_t));
                 // send it off
                 ep.send(buf, it - buf, fn);
                 // prepare next message (just rewind)

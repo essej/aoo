@@ -15,6 +15,7 @@
 #include "common/time.hpp"
 #include "common/utils.hpp"
 
+#include "binmsg.hpp"
 #include "buffer.hpp"
 #include "imp.hpp"
 #include "resampler.hpp"
@@ -423,7 +424,7 @@ private:
                                  const ip_address& addr);
 
     AooError handle_data_message(const AooByte *msg, int32_t n,
-                                 const ip_address& addr);
+                                 AooId id, const ip_address& addr);
 
     AooError handle_data_packet(net_packet& d, bool binary,
                                 const ip_address& addr, AooId id);

@@ -377,6 +377,15 @@ AooError AOO_CALL aoo::Source::control(
         CHECKARG(int32_t);
         as<int32_t>(ptr) = redundancy_.load();
         break;
+    case kAooCtlSetBinaryDataMsg:
+        CHECKARG(AooBool);
+        binary_.store(as<AooBool>(ptr));
+        timer_.reset(); // !
+        break;
+    case kAooCtlGetBinaryDataMsg:
+        CHECKARG(AooBool);
+        as<AooBool>(ptr) = binary_.load();
+        break;
 #if USE_AOO_NET
     case kAooCtlSetClient:
         client_ = reinterpret_cast<AooClient *>(index);
@@ -479,17 +488,20 @@ AooError AOO_CALL aoo::Source::handleMessage(
 
     ip_address addr((const sockaddr *)address, addrlen);
 
-    if (data[0] == 0){
+    if (aoo::binmsg_check(data, size)){
         // binary message
-        auto cmd = aoo::from_bytes<int16_t>(data + kAooBinMsgDomainSize + 2);
+        auto cmd = aoo::binmsg_cmd(data, size);
+        auto id = aoo::binmsg_from(data, size);
         switch (cmd){
         case kAooBinMsgCmdData:
-            handle_data_request(data + onset, size - onset, addr);
+            handle_data_request(data + onset, size - onset, id, addr);
             return kAooOk;
         default:
+            LOG_WARNING("AooSink: unsupported binary message");
             return kAooErrorBadArgument;
         }
     } else {
+        // OSC message
         try {
             osc::ReceivedPacket packet((const char *)data, size);
             osc::ReceivedMessage msg(packet);
@@ -1423,14 +1435,14 @@ void Source::send_start(const sendfn& fn){
 }
 
 // binary data message:
-// domain (int32), type (int16), cmd (int16), sink_id (int32)
-// source_id (int32), stream_id (int32), seq (int32), channel (int16), flags (int16),
-// [total (int32), nframes (int16), frame (int16)],  [sr (float64)],
-// size (int32), data...
+// stream_id (int32), seq (int32), channel (uint8), flags (uint8), size (uint16)
+// [total (int32), nframes (int16), frame (int16)],  [sr (float64)], data...
 
-void write_bin_data(const endpoint* ep, AooId id, AooId stream_id,
-                    const data_packet& d, AooByte *buf, int32_t& size)
+AooSize write_bin_data(AooByte *buffer, AooSize size,
+                       AooId stream_id, const data_packet& d)
 {
+    assert(size >= 32);
+
     int16_t flags = 0;
     if (d.samplerate != 0){
         flags |= kAooBinMsgDataSampleRate;
@@ -1438,39 +1450,26 @@ void write_bin_data(const endpoint* ep, AooId id, AooId stream_id,
     if (d.nframes > 1){
         flags |= kAooBinMsgDataFrames;
     }
-
-    auto it = buf;
-    // write header
-    memcpy(it, kAooBinMsgDomain, kAooBinMsgDomainSize);
-    it += kAooBinMsgDomainSize;
-    aoo::write_bytes<int16_t>(kAooTypeSink, it);
-    aoo::write_bytes<int16_t>(kAooBinMsgCmdData, it);
-    if (ep){
-        aoo::write_bytes<int32_t>(ep->id, it);
-    } else {
-        // skip
-        it += sizeof(int32_t);
-    }
     // write arguments
-    aoo::write_bytes<int32_t>(id, it);
+    auto it = buffer;
     aoo::write_bytes<int32_t>(stream_id, it);
     aoo::write_bytes<int32_t>(d.sequence, it);
-    aoo::write_bytes<int16_t>(d.channel, it);
-    aoo::write_bytes<int16_t>(flags, it);
+    aoo::write_bytes<uint8_t>(d.channel, it);
+    aoo::write_bytes<uint8_t>(flags, it);
+    aoo::write_bytes<uint16_t>(d.size, it);
     if (flags & kAooBinMsgDataFrames){
-        aoo::write_bytes<int32_t>(d.totalsize, it);
-        aoo::write_bytes<int16_t>(d.nframes, it);
-        aoo::write_bytes<int16_t>(d.frame, it);
+        aoo::write_bytes<uint32_t>(d.totalsize, it);
+        aoo::write_bytes<uint16_t>(d.nframes, it);
+        aoo::write_bytes<uint16_t>(d.frame, it);
     }
     if (flags & kAooBinMsgDataSampleRate){
          aoo::write_bytes<double>(d.samplerate, it);
     }
-    aoo::write_bytes<int32_t>(d.size, it);
     // write audio data
     memcpy(it, d.data, d.size);
     it += d.size;
 
-    size = it - buf;
+    return (it - buffer);
 }
 
 // /aoo/sink/<id>/data <src> <stream_id> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
@@ -1503,15 +1502,22 @@ void send_packet(const aoo::vector<cached_sink>& sinks, const AooId id,
                  data_packet& d, const sendfn &fn, bool binary) {
     if (binary){
         AooByte buf[AOO_MAX_PACKET_SIZE];
-        int32_t size;
 
-        write_bin_data(nullptr, id, kAooIdInvalid, d, buf, size);
+        // start at max. header size
+        auto args = buf + kAooBinMsgLargeHeaderSize;
+        auto argsize = write_bin_data(args, sizeof(buf) - kAooBinMsgLargeHeaderSize,
+                                      kAooIdInvalid, d);
+        auto end = args + argsize;
 
-        for (auto& s : sinks){
-            // overwrite sink id, stream id and channel!
-            aoo::to_bytes(s.ep.id, buf + 8);
-            aoo::to_bytes(s.stream_id, buf + 16);
-            aoo::to_bytes<int16_t>(s.channel, buf + kAooBinMsgHeaderSize + 12);
+        for (auto& s : sinks) {
+            // write header
+            bool large =  s.ep.id > 255 || id > 255;
+            auto start = large ? buf : (args - kAooBinMsgHeaderSize);
+            aoo::binmsg_write_header(start, args - start, kAooTypeSink,
+                                     kAooBinMsgCmdData, s.ep.id, id);
+            // replace stream ID and channel
+            aoo::to_bytes(s.stream_id, args);
+            args[8] = s.channel;
 
         #if AOO_DEBUG_DATA
             LOG_DEBUG("AooSource: send block: seq = " << d.sequence << ", sr = "
@@ -1519,7 +1525,7 @@ void send_packet(const aoo::vector<cached_sink>& sinks, const AooId id,
                       << d.totalsize << ", nframes = " << d.nframes
                       << ", frame = " << d.frame << ", size " << d.size);
         #endif
-            s.ep.send(buf, size, fn);
+            s.ep.send(start, end - start, fn);
         }
     } else {
         for (auto& s : sinks){
@@ -1533,9 +1539,11 @@ void send_packet(const aoo::vector<cached_sink>& sinks, const AooId id,
 void send_packet_bin(const endpoint& ep, AooId id, AooId stream_id,
                      const aoo::data_packet& d, const sendfn& fn) {
     AooByte buf[AOO_MAX_PACKET_SIZE];
-    int32_t size;
 
-    write_bin_data(&ep, id, stream_id, d, buf, size);
+    auto onset = aoo::binmsg_write_header(buf, sizeof(buf), kAooTypeSink,
+                                          kAooBinMsgCmdData, ep.id, id);
+    auto argsize = write_bin_data(buf + onset, sizeof(buf) - onset, stream_id, d);
+    auto size = onset + argsize;
 
 #if AOO_DEBUG_DATA
     LOG_DEBUG("AooSource: send block: seq = " << d.sequence << ", sr = "
@@ -1940,22 +1948,26 @@ void Source::handle_data_request(const osc::ReceivedMessage& msg,
     }
 }
 
-// (header), id (int32), stream_id (int32), count (int32),
+// (header), stream_id (int32), count (int32),
 // seq1 (int32), frame1(int32), seq2(int32), frame2(seq), etc.
 
+// TODO:
+// header, stream_id (int32), count (int32),
+// seq1 (int32), offset1 (int16), bitset1 (uint16) etc. // offset < 0 -> all
+
 void Source::handle_data_request(const AooByte *msg, int32_t n,
-                                 const ip_address& addr)
+                                 AooId id, const ip_address& addr)
 {
-    // check size (id, stream_id, count)
-    if (n < 12){
-        LOG_ERROR("AooSource: handle_data_request: header too small!");
+    // check size (stream_id, count)
+    if (n < 8){
+        LOG_ERROR("AooSource: binary data message too small!");
         return;
     }
 
     auto it = msg;
+    auto end = it + n;
 
-    auto id = aoo::read_bytes<int32_t>(it);
-    auto stream_id = aoo::read_bytes<int32_t>(it); // we can ignore the stream_id
+    auto stream_id = aoo::read_bytes<int32_t>(it);
 
     LOG_DEBUG("AooSource: handle data request");
 
@@ -1963,14 +1975,14 @@ void Source::handle_data_request(const AooByte *msg, int32_t n,
     auto sink = find_sink(addr, id);
     if (sink){
         if (sink->stream_id() != stream_id){
-            LOG_VERBOSE("AooSource: ignoring binary data message: stream ID mismatch (outdated?)");
+            LOG_VERBOSE("AooSource: ignore binary data message: stream ID mismatch (outdated?)");
             return;
         }
         if (sink->is_active()){
             // get pairs of sequence + frame
             int count = aoo::read_bytes<int32_t>(it);
-            if (n < (12 + count * sizeof(int32_t) * 2)){
-                LOG_ERROR("AooSource: handle_data_request: bad 'count' argument!");
+            if ((end - it) < (count * sizeof(int32_t) * 2)){
+                LOG_ERROR("AooSource: bad 'count' argument for binary data message!");
                 return;
             }
             while (count--){
@@ -1979,10 +1991,10 @@ void Source::handle_data_request(const AooByte *msg, int32_t n,
                 sink->add_data_request(sequence, frame);
             }
         } else {
-            LOG_VERBOSE("AooSource: ignoring binary data message: sink not active");
+            LOG_VERBOSE("AooSource: ignore binary data message: sink not active");
         }
     } else {
-        LOG_VERBOSE("AooSource: ignoring binary data message: sink not found");
+        LOG_VERBOSE("AooSource: ignore binary data message: sink not found");
     }
 }
 

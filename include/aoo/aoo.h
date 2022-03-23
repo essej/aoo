@@ -158,14 +158,19 @@
 
 /*------------------- binary message ---------------------*/
 
-/* domain (int32), type (int16), cmd (int16), id (int32) */
+/* domain bit + type (uint8), size bit + cmd (uint8)
+ * a) sink ID (uint8), source ID (uint8)
+ * b) padding (uint16), sink ID (int32), source ID (int32)
+ */
 
-#define kAooBinMsgHeaderSize 12
-
-#define kAooBinMsgDomain "\0aoo"
-#define kAooBinMsgDomainSize 4
+#define kAooBinMsgHeaderSize 4
+#define kAooBinMsgLargeHeaderSize 12
+#define kAooBinMsgDomainBit 0x80
+#define kAooBinMsgSizeBit 0x80
 
 #define kAooBinMsgCmdData 0
+#define kAooBinMsgCmdRelayIPv4 0
+#define kAooBinMsgCmdRelayIPv6 1
 
 enum AooBinMsgDataFlags
 {

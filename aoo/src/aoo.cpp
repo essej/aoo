@@ -5,6 +5,7 @@
 #endif
 #include "aoo/aoo_codec.h"
 
+#include "binmsg.hpp"
 #include "imp.hpp"
 
 #include "common/sync.hpp"
@@ -291,16 +292,19 @@ AooError AOO_CALL aoo_parsePattern(
         AooMsgType *type, AooId *id, AooInt32 *offset)
 {
     int32_t count = 0;
-    if (size >= kAooBinMsgHeaderSize &&
-        !memcmp(msg, kAooBinMsgDomain, kAooBinMsgDomainSize))
+    if (aoo::binmsg_check(msg, size))
     {
-        // domain (int32), type (int16), cmd (int16), id (int32) ...
-        *type = aoo::from_bytes<int16_t>(msg + 4);
-        // cmd = aoo::from_bytes<int16_t>(msg + 6);
-        *id = aoo::from_bytes<int32_t>(msg + 8);
-        *offset = 12;
-
-        return kAooOk;
+        *type = aoo::binmsg_type(msg, size);
+        *id = aoo::binmsg_to(msg, size);
+        auto n = aoo::binmsg_headersize(msg, size);
+        if (n > 0) {
+            if (offset) {
+                *offset = n;
+            }
+            return kAooOk;
+        } else {
+            return kAooErrorBadArgument;
+        }
     } else if (size >= kAooMsgDomainLen
         && !memcmp(msg, kAooMsgDomain, kAooMsgDomainLen))
     {
