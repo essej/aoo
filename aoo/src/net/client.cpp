@@ -577,9 +577,10 @@ AOO_API AooError AOO_CALL AooClient_pollEvents(AooClient *client){
 
 AooError AOO_CALL aoo::net::Client::pollEvents(){
     // always thread-safe
-    std::unique_ptr<ievent> e;
+    event_handler fn(eventhandler_, eventcontext_, kAooThreadLevelUnknown);
+    event_ptr e;
     while (events_.try_pop(e)){
-        eventhandler_(eventcontext_, &e->event_, kAooThreadLevelUnknown);
+        e->dispatch(fn);
     }
     return kAooOk;
 }
@@ -1016,9 +1017,11 @@ void Client::send_event(event_ptr e)
         events_.push(std::move(e));
         break;
     case kAooEventModeCallback:
-        // client only has network threads
-        eventhandler_(eventcontext_, &e->event_, kAooThreadLevelNetwork);
+    {
+        event_handler fn(eventhandler_, eventcontext_, kAooThreadLevelNetwork);
+        e->dispatch(fn);
         break;
+    }
     default:
         break;
     }
@@ -1242,7 +1245,6 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
     auto group_id = (it++)->AsInt32();
     auto user_name = (it++)->AsString();
     auto user_id = (it++)->AsInt32();
-    // TODO metadata
     auto metadata = osc_read_metadata(it);
     // collect IP addresses
     auto count = (it++)->AsInt32();
@@ -1284,6 +1286,7 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
 
     auto peer = peers_.emplace_front(group_name, group_id, user_name, user_id,
                                      membership->user_id, std::move(addrlist),
+                                     metadata.size > 0 ? &metadata : nullptr,
                                      std::move(relaylist), membership->relay_list);
 
     auto e = std::make_unique<peer_event>(kAooNetEventPeerHandshake, *peer);
@@ -1328,7 +1331,7 @@ void Client::handle_peer_remove(const osc::ReceivedMessage& msg){
                 std::stringstream ss;
                 ss << p << " uses a relay provided by " << *peer
                    << ", so the connection might stop working";
-                auto e = std::make_unique<error_event>(0, ss.str().c_str());
+                auto e = std::make_unique<net_error_event>(0, ss.str());
                 send_event(std::move(e));
             }
         }
@@ -1374,7 +1377,7 @@ void Client::close(bool manual){
     pending_requests_.clear();
 
     if (!manual && state_.load() == client_state::connected){
-        auto e = std::make_unique<event>(kAooNetEventDisconnect);
+        auto e = std::make_unique<base_event>(kAooNetEventDisconnect);
         send_event(std::move(e));
     }
     state_.store(client_state::disconnected);
@@ -1406,7 +1409,7 @@ void Client::on_socket_error(int err){
     } else {
         snprintf(msg, sizeof(msg), "connection closed by server");
     }
-    auto e = std::make_unique<error_event>(err, msg);
+    auto e = std::make_unique<net_error_event>(err, msg);
 
     send_event(std::move(e));
 
@@ -1424,93 +1427,11 @@ void Client::on_exception(const char *what, const osc::Exception &err,
                  what, err.what());
     }
 
-    auto e = std::make_unique<error_event>(0, msg);
+    auto e = std::make_unique<net_error_event>(0, msg);
 
     send_event(std::move(e));
 
     close();
-}
-
-//-------------------------- events ---------------------------//
-
-Client::error_event::error_event(int32_t code, const char *msg)
-{
-    error_event_.type = kAooNetEventError;
-    error_event_.errorCode = code;
-    error_event_.errorMessage = aoo::copy_string(msg);
-}
-
-Client::error_event::~error_event()
-{
-    free_string((char *)error_event_.errorMessage);
-}
-
-Client::peer_event::peer_event(int32_t type, const peer& p)
-{
-    peer_event_.type = type;
-    peer_event_.flags = 0;
-    peer_event_.groupId = p.group_id();
-    peer_event_.userId = p.user_id();
-    peer_event_.groupName = aoo::copy_string(p.group_name());
-    peer_event_.userName = aoo::copy_string(p.user_name());
-    if (p.address().valid()) {
-        peer_event_.address.data = aoo::copy_sockaddr(p.address());
-        peer_event_.address.size = p.address().length();
-    } else {
-        peer_event_.address.data = nullptr;
-        peer_event_.address.size = 0;
-    }
-    // TODO metadata
-    peer_event_.metadata = nullptr;
-}
-
-
-Client::peer_event::~peer_event()
-{
-    free_string((char *)peer_event_.userName);
-    free_string((char *)peer_event_.groupName);
-    free_sockaddr((void *)peer_event_.address.data, peer_event_.address.size);
-}
-
-Client::peer_ping_event::peer_ping_event(const peer& p, time_tag tt1, time_tag tt2) {
-    peer_ping_.type = kAooNetEventPeerPing;
-    peer_ping_.flags = 0;
-    peer_ping_.group = p.group_id();
-    peer_ping_.user = p.user_id();
-    peer_ping_.tt1 = tt1.value();
-    peer_ping_.tt2 = tt2.value();
-}
-
-Client::peer_ping_reply_event::peer_ping_reply_event(
-        const peer& p, time_tag tt1, time_tag tt2, time_tag tt3) {
-    peer_ping_reply_.type = kAooNetEventPeerPingReply;
-    peer_ping_reply_.flags = 0;
-    peer_ping_reply_.group = p.group_id();
-    peer_ping_reply_.user = p.user_id();
-    peer_ping_reply_.tt1 = tt1.value();
-    peer_ping_reply_.tt2 = tt2.value();
-    peer_ping_reply_.tt3 = tt3.value();
-}
-
-Client::message_event::message_event(AooId group, AooId user, time_tag tt,
-                                     const AooDataView& msg)
-{
-    auto data = (AooByte *)aoo::allocate(msg.size);
-    memcpy(data, msg.data, msg.size);
-
-    message_event_.type = kAooNetEventPeerMessage;
-    message_event_.groupId = group;
-    message_event_.userId = user;
-    message_event_.timeStamp = tt.value();
-    message_event_.data.type = aoo::copy_string(msg.type);
-    message_event_.data.data = data;
-    message_event_.data.size = msg.size;
-}
-
-Client::message_event::~message_event()
-{
-    free_string((AooChar *)message_event_.data.type);
-    aoo::deallocate((AooByte *)message_event_.data.data, message_event_.data.size);
 }
 
 //---------------------- udp_client ------------------------//
@@ -1747,11 +1668,11 @@ bool udp_client::is_server_address(const ip_address& addr){
 
 peer::peer(const std::string& groupname, AooId groupid,
            const std::string& username, AooId userid, AooId localid,
-           ip_address_list&& addrlist, ip_address_list&& user_relay,
-           const ip_address_list& group_relay)
+           ip_address_list&& addrlist, const AooDataView *metadata,
+           ip_address_list&& user_relay, const ip_address_list& group_relay)
     : group_name_(groupname), user_name_(username), group_id_(groupid), user_id_(userid),
-      local_id_(localid), addrlist_(std::move(addrlist)), user_relay_(std::move(user_relay)),
-      group_relay_(group_relay)
+      local_id_(localid), addrlist_(std::move(addrlist)), metadata_(metadata),
+      user_relay_(std::move(user_relay)), group_relay_(group_relay)
 {
     start_time_ = time_tag::now();
 
@@ -1873,10 +1794,10 @@ void peer::send(Client& client, const sendfn& fn, time_tag now) {
             ss << "couldn't establish connection with peer " << *this;
 
             // TODO: do we really need to send the error event?
-            auto e1 = std::make_unique<Client::error_event>(0, ss.str().c_str());
+            auto e1 = std::make_unique<net_error_event>(0, ss.str());
             client.send_event(std::move(e1));
 
-            auto e2 = std::make_unique<Client::peer_event>(
+            auto e2 = std::make_unique<peer_event>(
                         kAooNetEventPeerTimeout, *this);
             client.send_event(std::move(e2));
 
@@ -1933,7 +1854,7 @@ void peer::handle_message(Client& client, const char *pattern,
         LOG_DEBUG("AooClient: got '" << data.type
                   << "' message from " << *this);
 
-        auto e = std::make_unique<Client::message_event>(
+        auto e = std::make_unique<peer_message_event>(
                     group_id(), user_id(), tt, data);
 
         client.send_event(std::move(e));
@@ -1968,7 +1889,7 @@ void peer::handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
         connected_.store(true, std::memory_order_release);
 
         // push event
-        auto e = std::make_unique<Client::peer_event>(kAooNetEventPeerJoin, *this);
+        auto e = std::make_unique<peer_event>(kAooNetEventPeerJoin, *this);
         client.send_event(std::move(e));
 
         LOG_VERBOSE("AooClient: successfully established connection with "
@@ -1983,7 +1904,7 @@ void peer::handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
             time_tag tt3 = time_tag::now();
 
             // only send event for regular ping reply!
-            auto e = std::make_unique<Client::peer_ping_reply_event>(*this, tt1, tt2, tt3);
+            auto e = std::make_unique<peer_ping_reply_event>(*this, tt1, tt2, tt3);
             client.send_event(std::move(e));
 
             LOG_DEBUG("AooClient: got ping reply from " << *this
@@ -2004,7 +1925,7 @@ void peer::handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
             time_tag tt2 = time_tag::now();
 
             // only send event for regular ping!
-            auto e = std::make_unique<Client::peer_ping_event>(*this, tt1, tt2);
+            auto e = std::make_unique<peer_ping_event>(*this, tt1, tt2);
             client.send_event(std::move(e));
 
             LOG_DEBUG("AooClient: got ping from " << *this << "(" << tt1 << " " << tt2);

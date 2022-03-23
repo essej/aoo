@@ -101,6 +101,49 @@ osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_h
 
 ip_host osc_read_host(osc::ReceivedMessageArgumentIterator& it);
 
+
+//-------------------------- ievent --------------------------------//
+
+struct event_handler {
+    event_handler(AooEventHandler fn, void *user, AooThreadLevel level)
+        : fn_(fn), user_(user), level_(level) {}
+
+    template<typename T>
+    void operator()(const T& event) const {
+        fn_(user_, &reinterpret_cast<const AooEvent&>(event), level_);
+    }
+private:
+    AooEventHandler fn_;
+    void *user_;
+    AooThreadLevel level_;
+};
+
+struct ievent {
+    virtual ~ievent() {}
+
+    virtual void dispatch(const event_handler& fn) const = 0;
+};
+
+using event_ptr = std::unique_ptr<ievent>;
+
+struct net_error_event : ievent
+{
+    net_error_event(int32_t code, std::string msg)
+        : code_(code), msg_(std::move(msg)) {}
+
+    void dispatch(const event_handler& fn) const override {
+        AooNetEventError e;
+        e.type = kAooNetEventError;
+        e.errorCode = code_;
+        e.errorMessage = msg_.c_str();
+
+        fn(e);
+    }
+
+    int32_t code_;
+    std::string msg_;
+};
+
 } // net
 #endif // USE_AOO_NET
 
@@ -179,10 +222,12 @@ inline void endpoint::send(const AooByte *data, AooSize size, const sendfn& fn) 
 
 //---------------- endpoint event ------------------//
 
-struct endpoint_event_base
+// we keep the union in a seperate base class, so that we
+// can use the default copy constructor and assignment.
+struct endpoint_event_union
 {
-    endpoint_event_base() = default;
-    endpoint_event_base(AooEventType _type)
+    endpoint_event_union() = default;
+    endpoint_event_union(AooEventType _type)
         : type(_type) {}
     union {
         AooEventType type;
@@ -198,16 +243,16 @@ struct endpoint_event_base
     };
 };
 
-struct endpoint_event : endpoint_event_base {
+struct endpoint_event : endpoint_event_union {
     endpoint_event() = default;
 
-    endpoint_event(AooEventType _type) : endpoint_event_base(_type) {}
+    endpoint_event(AooEventType _type) : endpoint_event_union(_type) {}
 
     endpoint_event(AooEventType _type, const endpoint& _ep)
         : endpoint_event(_type, _ep.address, _ep.id) {}
 
     endpoint_event(AooEventType _type, const ip_address& addr, AooId id)
-        : endpoint_event_base(_type) {
+        : endpoint_event_union(_type) {
         // only for endpoint events
         if (type != kAooEventXRun) {
             memcpy(&addr_, addr.address(), addr.length());
@@ -218,7 +263,7 @@ struct endpoint_event : endpoint_event_base {
     }
 
     endpoint_event(const endpoint_event& other)
-        : endpoint_event_base(other) {
+        : endpoint_event_union(other) {
         // only for sink events:
         if (type != kAooEventXRun) {
             memcpy(&addr_, other.addr_, sizeof(addr_));
@@ -227,7 +272,7 @@ struct endpoint_event : endpoint_event_base {
     }
 
     endpoint_event& operator=(const endpoint_event& other) {
-        endpoint_event_base::operator=(other);
+        endpoint_event_union::operator=(other);
         // only for sink events:
         if (type != kAooEventXRun) {
             memcpy(&addr_, other.addr_, sizeof(addr_));

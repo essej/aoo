@@ -59,8 +59,8 @@ class peer {
 public:
     peer(const std::string& groupname, AooId groupid,
          const std::string& username, AooId userid, AooId localid,
-         ip_address_list&& addrlist, ip_address_list&& user_relay,
-         const ip_address_list& group_relay);
+         ip_address_list&& addrlist, const AooDataView *metadata,
+         ip_address_list&& user_relay, const ip_address_list& group_relay);
 
     ~peer();
 
@@ -100,6 +100,8 @@ public:
         return real_address_;
     }
 
+    const aoo::metadata& metadata() const { return metadata_; }
+
     void send(Client& client, const sendfn& fn, time_tag now);
 
     void send_message(const osc::OutboundPacketStream& msg, const sendfn& fn);
@@ -119,6 +121,7 @@ private:
     const AooId group_id_;
     const AooId user_id_;
     const AooId local_id_;
+    aoo::metadata metadata_;
     bool relay_ = false;
     ip_address_list addrlist_;
     ip_address_list user_relay_;
@@ -139,7 +142,118 @@ inline std::ostream& operator<<(std::ostream& os, const peer& p) {
     return os;
 }
 
-//---------------------------- udp_client ---------------------------------//
+//------------------------ events ----------------------------//
+
+struct base_event : ievent {
+    base_event(AooEventType type) : type_(type) {}
+
+    void dispatch(const event_handler &fn) const override {
+        AooEvent e;
+        e.type = type_;
+        fn(e);
+    }
+
+    AooEventType type_;
+};
+
+struct peer_event : base_event
+{
+    peer_event(int32_t type, const peer& p)
+        : base_event(type), group_id_(p.group_id()), user_id_(p.user_id()),
+          group_name_(p.group_name()), user_name_(p.user_name()),
+          addr_(p.address()), metadata_(p.metadata()) {}
+
+    void dispatch(const event_handler &fn) const override {
+        AooNetEventPeer e;
+        e.type = type_;
+        e.flags = 0;
+        e.groupId = group_id_;
+        e.userId = user_id_;
+        e.groupName = group_name_.c_str();
+        e.userName = user_name_.c_str();
+        e.address.data = addr_.valid() ? addr_.address() : nullptr;
+        e.address.size = addr_.length();
+        AooDataView md { metadata_.type(), metadata_.data(), metadata_.size() };
+        e.metadata = md.size > 0 ? &md : nullptr;
+
+        fn(e);
+    }
+
+    AooId group_id_;
+    AooId user_id_;
+    std::string group_name_;
+    std::string user_name_;
+    ip_address addr_;
+    metadata metadata_;
+};
+
+struct peer_ping_base_event : base_event
+{
+    peer_ping_base_event(AooEventType type, const peer& p,
+                         time_tag tt1, time_tag tt2, time_tag tt3 = time_tag{})
+        : base_event(type), group_(p.group_id()), user_(p.user_id()),
+          tt1_(tt1), tt2_(tt2), tt3_(tt3) {}
+
+    void dispatch(const event_handler &fn) const override {
+        // AooNetEventPeerPing and AooNetEventPeerPingReply are layout compatible
+        AooNetEventPeerPingReply e;
+        e.type = type_;
+        e.flags = 0;
+        e.group = group_;
+        e.user = user_;
+        e.tt1 = tt1_;
+        e.tt2 = tt2_;
+        e.tt3 = tt3_;
+
+        fn(e);
+    }
+
+    AooId group_;
+    AooId user_;
+    time_tag tt1_;
+    time_tag tt2_;
+    time_tag tt3_;
+};
+
+struct peer_ping_event : peer_ping_base_event
+{
+    peer_ping_event(const peer& p, time_tag tt1, time_tag tt2)
+        : peer_ping_base_event(kAooNetEventPeerPing, p, tt1, tt2) {}
+};
+
+struct peer_ping_reply_event : peer_ping_base_event
+{
+    peer_ping_reply_event(const peer& p, time_tag tt1, time_tag tt2, time_tag tt3)
+        : peer_ping_base_event(kAooNetEventPeerPingReply, p, tt1, tt2, tt3) {}
+};
+
+struct peer_message_event : base_event
+{
+    peer_message_event(AooId group, AooId user, time_tag tt, const AooDataView& msg)
+        : base_event(kAooNetEventPeerMessage), group_(group), user_(user), tt_(tt), msg_(&msg) {}
+
+    void dispatch(const event_handler &fn) const override {
+        // AooNetEventPeerPing and AooNetEventPeerPingReply are layout compatible
+        AooNetEventPeerMessage e;
+        e.type = type_;
+        e.flags = 0; // TODO
+        e.groupId = group_;
+        e.userId = user_;
+        e.timeStamp = tt_;
+        e.data.type = msg_.type();
+        e.data.data = msg_.data();
+        e.data.size = msg_.size();
+
+        fn(e);
+    }
+
+    AooId group_;
+    AooId user_;
+    time_tag tt_;
+    metadata msg_;
+};
+
+//---------------------------- peer_message ---------------------------------//
 
 // peer/group messages
 struct peer_message {
@@ -175,6 +289,8 @@ struct peer_message {
     time_tag tt_;
     AooDataView *data_;
 };
+
+//---------------------------- udp_client ---------------------------------//
 
 class udp_client {
 public:
@@ -241,21 +357,6 @@ public:
     };
 
     using command_ptr = std::unique_ptr<icommand>;
-
-    struct ievent {
-        virtual ~ievent() {}
-
-        union {
-            AooEvent event_;
-            AooNetEventError error_event_;
-            AooNetEventPeer peer_event_;
-            AooNetEventPeerPing peer_ping_;
-            AooNetEventPeerPingReply peer_ping_reply_;
-            AooNetEventPeerMessage message_event_;
-        };
-    };
-
-    using event_ptr = std::unique_ptr<ievent>;
 
     //----------------------------------------------------------//
 
@@ -492,45 +593,8 @@ private:
     group_membership * find_group_membership(const std::string& name);
 
     group_membership * find_group_membership(AooId id);
+
 public:
-    //------------------------ events ----------------------------//
-
-    struct event : ievent
-    {
-        event(int32_t type){
-            event_.type = type;
-        }
-    };
-
-    struct error_event : ievent
-    {
-        error_event(int32_t code, const char *msg);
-        ~error_event();
-    };
-
-    struct peer_event : ievent
-    {
-        peer_event(int32_t type, const peer& p);
-        ~peer_event();
-    };
-
-    struct peer_ping_event : ievent
-    {
-        peer_ping_event(const peer& p, time_tag tt1, time_tag tt2);
-    };
-
-    struct peer_ping_reply_event : ievent
-    {
-        peer_ping_reply_event(const peer& p, time_tag tt1,
-                              time_tag tt2, time_tag tt3);
-    };
-
-    struct message_event : ievent
-    {
-        message_event(AooId group, AooId user, time_tag tt, const AooDataView& msg);
-        ~message_event();
-    };
-
     //---------------------- commands ------------------------//
 
     struct connect_cmd : callback_cmd

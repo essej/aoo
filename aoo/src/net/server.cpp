@@ -707,7 +707,7 @@ AOO_API AooError AOO_CALL AooServer_pollEvents(AooServer *server) {
 
 AooError AOO_CALL aoo::net::Server::pollEvents(){
     // always thread-safe
-    event_handler fn(eventhandler_, eventcontext_, kAooThreadLevelNetwork);
+    event_handler fn(eventhandler_, eventcontext_, kAooThreadLevelUnknown);
     event_ptr e;
     while (events_.try_pop(e)){
         e->dispatch(fn);
@@ -1464,15 +1464,15 @@ AooId Server::get_next_group_id(){
     return next_group_id_++;
 }
 
-void Server::send_event(event_ptr event) {
+void Server::send_event(event_ptr e) {
     switch (eventmode_){
     case kAooEventModePoll:
-        events_.push(std::move(event));
+        events_.push(std::move(e));
         break;
     case kAooEventModeCallback:
     {
         event_handler fn(eventhandler_, eventcontext_, kAooThreadLevelNetwork);
-        event->dispatch(fn);
+        e->dispatch(fn);
         break;
     }
     default:
