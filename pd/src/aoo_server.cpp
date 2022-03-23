@@ -113,14 +113,15 @@ static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int3
     {
         auto e = (const AooNetEventClientLogin *)event;
 
-        aoo::ip_address addr(e->address);
+        t_atom msg[3];
 
         char id[64];
         snprintf(id, sizeof(id), "0x%X", e->id);
+        SETSYMBOL(msg, gensym(id));
 
-        t_atom msg[3];
-        address_to_atoms(addr, 2, msg);
-        SETSYMBOL(msg + 2, gensym(id));
+        aoo::ip_address addr;
+        aoo::socket_peer(e->sockfd, addr);
+        address_to_atoms(addr, 2, msg + 1);
 
         outlet_anything(x->x_msgout, gensym("client_add"), 3, msg);
 
@@ -134,38 +135,35 @@ static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int3
     {
         auto e = (const AooNetEventClientRemove *)event;
 
-        aoo::ip_address addr(e->address);
-
+        t_atom msg;
         char id[64];
         snprintf(id, sizeof(id), "0x%X", e->id);
+        SETSYMBOL(&msg, gensym(id));
 
-        t_atom msg[3];
-        address_to_atoms(addr, 2, msg);
-        SETSYMBOL(msg + 2, gensym(id));
-
-        outlet_anything(x->x_msgout, gensym("client_remove"), 3, msg);
+        outlet_anything(x->x_msgout, gensym("client_remove"), 1, &msg);
 
         x->x_numclients--;
 
         outlet_float(x->x_stateout, x->x_numclients);
+
+        break;
     }
     case kAooNetEventGroupAdd:
     {
         auto e = (const AooNetEventGroupAdd *)event;
-
+        // TODO add group
         t_atom msg;
         SETSYMBOL(&msg, gensym(e->name));
         // TODO metadata
         outlet_anything(x->x_msgout, gensym("group_add"), 1, &msg);
 
-        // TODO add group
 
         break;
     }
     case kAooNetEventGroupRemove:
     {
         auto e = (const AooNetEventGroupRemove *)event;
-
+        // TODO remove group
         t_atom msg;
         SETSYMBOL(&msg, gensym(e->name));
         outlet_anything(x->x_msgout, gensym("group_remove"), 1, &msg);
@@ -179,7 +177,7 @@ static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int3
         t_atom msg[3];
         SETSYMBOL(msg, gensym(e->groupName));
         SETSYMBOL(msg + 1, gensym(e->userName));
-        SETFLOAT(msg + 2, e->userId);
+        SETFLOAT(msg + 2, e->userId); // always small
         outlet_anything(x->x_msgout, gensym("group_join"), 3, msg);
 
         break;
@@ -191,7 +189,7 @@ static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int3
         t_atom msg[3];
         SETSYMBOL(msg, gensym(e->groupName));
         SETSYMBOL(msg + 1, gensym(e->userName));
-        SETFLOAT(msg + 2, e->userId);
+        SETFLOAT(msg + 2, e->userId); // always small
         outlet_anything(x->x_msgout, gensym("group_leave"), 3, msg);
 
         break;
