@@ -149,7 +149,7 @@ const t_group * t_aoo_client::find_group(AooId id) const {
     return nullptr;
 }
 
-static int peer_to_atoms(t_peer& peer, int argc, t_atom *argv) {
+static int peer_to_atoms(const t_peer& peer, int argc, t_atom *argv) {
     if (argc >= 5) {
         SETSYMBOL(argv, peer.group_name);
         // don't send group ID because it might be too large for a float
@@ -442,59 +442,119 @@ void aoo_client_handle_event(t_aoo_client *x, const AooEvent *event, int32_t lev
         x->x_connected = false;
 
         outlet_float(x->x_stateout, 0); // disconnected
+
         break;
     }
+    case kAooNetEventPeerHandshake:
+    case kAooNetEventPeerTimeout:
     case kAooNetEventPeerJoin:
-    {
-        auto e = (const AooNetEventPeer *)event;
-
-        auto group_name = gensym(e->groupName);
-        auto group_id = e->groupId;
-        auto user_name = gensym(e->userName);
-        auto user_id = e->userId;
-        aoo::ip_address addr((const sockaddr *)e->address.data, e->address.size);
-
-        if (x->find_peer(group_id, user_id)) {
-            bug("aoo_client: can't add peer %s|%s",
-                group_name->s_name, user_name->s_name);
-            return;
-        }
-
-        // add peer
-        auto& peer = x->x_peers.emplace_back(
-                    t_peer { group_name, user_name, group_id, user_id, addr });
-
-        t_atom msg[5];
-        peer_to_atoms(peer, 5, msg);
-
-        outlet_anything(x->x_msgout, gensym("peer_join"), 5, msg);
-        break;
-    }
     case kAooNetEventPeerLeave:
     {
         auto e = (const AooNetEventPeer *)event;
 
         auto group_name = gensym(e->groupName);
-        auto group_id = e->groupId;
         auto user_name = gensym(e->userName);
+        auto group_id = e->groupId;
         auto user_id = e->userId;
         aoo::ip_address addr((const sockaddr *)e->address.data, e->address.size);
 
-        for (auto it = x->x_peers.begin(); it != x->x_peers.end(); ++it) {
-            if (it->group_id == group_id && it->user_id == user_id) {
-                t_atom msg[5];
-                peer_to_atoms(*it, 5, msg);
+        t_atom msg[5];
 
-                // remove *before* sending the message
-                x->x_peers.erase(it);
-
-                outlet_anything(x->x_msgout, gensym("peer_leave"), 5, msg);
-
+        switch (event->type) {
+        case kAooNetEventPeerHandshake:
+        {
+            SETSYMBOL(msg, group_name);
+            SETSYMBOL(msg + 1, user_name);
+            SETFLOAT(msg + 2, user_id);
+            outlet_anything(x->x_msgout, gensym("peer_handshake"), 3, msg);
+            break;
+        }
+        case kAooNetEventPeerTimeout:
+        {
+            SETSYMBOL(msg, group_name);
+            SETSYMBOL(msg + 1,user_name);
+            SETFLOAT(msg + 2, user_id);
+            outlet_anything(x->x_msgout, gensym("peer_timeout"), 3, msg);
+            break;
+        }
+        case kAooNetEventPeerJoin:
+        {
+            if (x->find_peer(group_id, user_id)) {
+                bug("aoo_client: can't add peer %s|%s: already exists",
+                    group_name->s_name, user_name->s_name);
                 return;
             }
+
+            // add peer
+            auto& peer = x->x_peers.emplace_back(
+                        t_peer { group_name, user_name, group_id, user_id, addr });
+            peer_to_atoms(peer, 5, msg);
+
+            outlet_anything(x->x_msgout, gensym("peer_join"), 5, msg);
+
+            break;
         }
-        bug("aoo_client: can't remove peer %s|%s",
-            group_name->s_name, user_name->s_name);
+        case kAooNetEventPeerLeave:
+        {
+            for (auto it = x->x_peers.begin(); it != x->x_peers.end(); ++it) {
+                if (it->group_id == group_id && it->user_id == user_id) {
+                    peer_to_atoms(*it, 5, msg);
+
+                    // remove *before* sending the message
+                    x->x_peers.erase(it);
+
+                    outlet_anything(x->x_msgout, gensym("peer_leave"), 5, msg);
+
+                    return;
+                }
+            }
+            bug("aoo_client: can't remove peer %s|%s: does not exist",
+                group_name->s_name, user_name->s_name);
+            break;
+        }
+        default:
+            break;
+        }
+
+        break; // !
+    }
+    case kAooNetEventPeerPing:
+    case kAooNetEventPeerPingReply:
+    {
+        // AooNetEventPeerPingReply is compatible with AooNetEventPeerPing
+        auto e = (const AooNetEventPeerPingReply *)event;
+        bool reply = e->type == kAooNetEventPeerPingReply;
+        t_atom msg[8];
+
+        auto peer = x->find_peer(e->group, e->user);
+        if (!peer) {
+            bug("aoo_client: can't find peer %d|%d for %s event",
+                e->group, e->user, reply ? "ping reply" : "ping");
+            return;
+        }
+
+        peer_to_atoms(*peer, 5, msg);
+
+        if (reply) {
+            // ping reply
+            auto delta1 = aoo::time_tag::duration(e->tt1, e->tt2) * 1000;
+            auto delta2 = aoo::time_tag::duration(e->tt2, e->tt3) * 1000;
+            auto rtt = aoo::time_tag::duration(e->tt1, e->tt3) * 1000;
+
+            peer_to_atoms(*peer, 5, msg);
+            SETFLOAT(msg + 5, delta1);
+            SETFLOAT(msg + 6, delta2);
+            SETFLOAT(msg + 7, rtt);
+
+            outlet_anything(x->x_msgout, gensym("peer_ping_reply"), 8, msg);
+        } else {
+            // ping
+            auto delta = aoo::time_tag::duration(e->tt1, e->tt2) * 1000;
+            SETFLOAT(msg + 5, delta);
+
+            outlet_anything(x->x_msgout, gensym("peer_ping"), 6, msg);
+        }
+
         break;
     }
     case kAooNetEventError:
