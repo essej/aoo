@@ -48,20 +48,6 @@ uint32_t make_version();
 
 bool check_version(uint32_t version);
 
-char * copy_string(const std::string& s);
-
-char * copy_string(const char *s);
-
-void free_string(char *s);
-
-void * copy_sockaddr(const ip_address& addr);
-
-#if 0
-void * copy_sockaddr(const void *sa, int32_t len);
-#endif
-
-void free_sockaddr(void *sa, int32_t len);
-
 #if USE_AOO_NET
 namespace net {
 

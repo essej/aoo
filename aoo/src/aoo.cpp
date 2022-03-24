@@ -36,6 +36,8 @@
 
 namespace aoo {
 
+//--------------------- interface table -------------------//
+
 void * AOO_CALL def_allocator(void *ptr, AooSize oldsize, AooSize newsize);
 
 #ifndef _MSC_VER
@@ -54,54 +56,6 @@ static AooCodecHostInterface g_interface = {
 };
 
 //--------------------- helper functions -----------------//
-
-char * copy_string(const std::string& s) {
-    auto result = aoo::allocate(s.size() + 1);
-    memcpy(result, s.data(), s.size() + 1);
-    return (char *)result;
-}
-
-char * copy_string(const char * s) {
-    if (s) {
-        auto len = strlen(s);
-        auto result = aoo::allocate(len + 1);
-        memcpy(result, s, len + 1);
-        return (char *)result;
-    } else {
-        return nullptr;
-    }
-}
-
-void free_string(char *s){
-    if (s){
-        auto len = strlen(s);
-        aoo::deallocate(s, len + 1);
-    }
-}
-
-void * copy_sockaddr(const ip_address& addr) {
-    auto result = aoo::allocate(addr.length());
-    memcpy(result, addr.address(), addr.length());
-    return result;
-}
-
-#if 0
-void * copy_sockaddr(const void *sa, int32_t len) {
-    if (sa){
-        auto result = aoo::allocate(len);
-        memcpy(result, sa, len);
-        return result;
-    } else {
-        return nullptr;
-    }
-}
-#endif
-
-void free_sockaddr(void *sa, int32_t len){
-    if (sa){
-        aoo::deallocate(sa, len);
-    }
-}
 
 int32_t get_random_id(){
 #if defined(ESP_PLATFORM)
@@ -228,10 +182,11 @@ AooSize write_relay_message(AooByte *buffer, AooSize bufsize,
 }
 
 } // net
-#endif
+#endif // USE_AOO_NET
 
 //------------------------------ OSC utilities ---------------------------------//
 
+#if USE_AOO_NET
 // see comment in "imp.hpp"
 namespace net {
 osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const AooDataView *md) {
@@ -243,6 +198,7 @@ osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const AooD
     return msg;
 }
 } // net
+#endif // USE_AOO_NET
 
 osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const aoo::metadata& md) {
     if (md.size() > 0) {
@@ -296,13 +252,9 @@ ip_host osc_read_host(osc::ReceivedMessageArgumentIterator& it) {
 }
 
 } // net
-#endif
-
-} // aoo
+#endif // USE_AOO_NET
 
 //------------------- allocator ------------------//
-
-namespace aoo {
 
 #if AOO_DEBUG_MEMORY
 std::atomic<ptrdiff_t> total_memory{0};
@@ -348,11 +300,9 @@ void deallocate(void *ptr, size_t size){
 
 #endif
 
-} // aoo
 
 //----------------------- logging --------------------------//
 
-namespace aoo {
 
 #if CERR_LOG_FUNCTION
 
