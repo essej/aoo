@@ -1292,7 +1292,7 @@ AooError Server::do_custom_request(client_endpoint& client, AooId token,
     // send reply
     auto msg = start_message(response.data.size);
 
-    msg << osc::BeginMessage(kAooNetMsgClientGroupLeave)
+    msg << osc::BeginMessage(kAooNetMsgClientRequest)
         << token << (int32_t)kAooOk << (int32_t)response.flags
         << &response.data << osc::EndMessage;
 
