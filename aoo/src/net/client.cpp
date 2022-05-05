@@ -1377,7 +1377,7 @@ void Client::close(bool manual){
     pending_requests_.clear();
 
     if (!manual && state_.load() == client_state::connected){
-        auto e = std::make_unique<base_event>(kAooNetEventDisconnect);
+        auto e = std::make_unique<base_event>(kAooNetEventClientDisconnect);
         send_event(std::move(e));
     }
     state_.store(client_state::disconnected);

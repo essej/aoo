@@ -433,7 +433,7 @@ void aoo_client_handle_event(t_aoo_client *x, const AooEvent *event, int32_t lev
         x->handle_message(e->groupId, e->userId, e->timeStamp, e->data);
         break;
     }
-    case kAooNetEventDisconnect:
+    case kAooNetEventClientDisconnect:
     {
         post("%s: disconnected from server", classname(x));
 

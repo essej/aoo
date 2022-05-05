@@ -109,9 +109,9 @@ void t_aoo_server::handle_udp_receive(int e, const aoo::ip_address& addr,
 static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int32_t)
 {
     switch (event->type) {
-    case kAooNetEventClientLogin:
+    case kAooNetEventServerClientLogin:
     {
-        auto e = (const AooNetEventClientLogin *)event;
+        auto e = (const AooNetEventServerClientLogin *)event;
 
         t_atom msg[3];
 
@@ -131,9 +131,9 @@ static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int3
 
         break;
     }
-    case kAooNetEventClientRemove:
+    case kAooNetEventServerClientRemove:
     {
-        auto e = (const AooNetEventClientRemove *)event;
+        auto e = (const AooNetEventServerClientRemove *)event;
 
         t_atom msg;
         char id[64];
@@ -148,9 +148,9 @@ static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int3
 
         break;
     }
-    case kAooNetEventGroupAdd:
+    case kAooNetEventServerGroupAdd:
     {
-        auto e = (const AooNetEventGroupAdd *)event;
+        auto e = (const AooNetEventServerGroupAdd *)event;
         // TODO add group
         t_atom msg;
         SETSYMBOL(&msg, gensym(e->name));
@@ -160,9 +160,9 @@ static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int3
 
         break;
     }
-    case kAooNetEventGroupRemove:
+    case kAooNetEventServerGroupRemove:
     {
-        auto e = (const AooNetEventGroupRemove *)event;
+        auto e = (const AooNetEventServerGroupRemove *)event;
         // TODO remove group
         t_atom msg;
         SETSYMBOL(&msg, gensym(e->name));
@@ -170,9 +170,9 @@ static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int3
 
         break;
     }
-    case kAooNetEventGroupJoin:
+    case kAooNetEventServerGroupJoin:
     {
-        auto e = (const AooNetEventGroupJoin *)event;
+        auto e = (const AooNetEventServerGroupJoin *)event;
 
         t_atom msg[3];
         SETSYMBOL(msg, gensym(e->groupName));
@@ -182,9 +182,9 @@ static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int3
 
         break;
     }
-    case kAooNetEventGroupLeave:
+    case kAooNetEventServerGroupLeave:
     {
-        auto e = (const AooNetEventGroupLeave *)event;
+        auto e = (const AooNetEventServerGroupLeave *)event;
 
         t_atom msg[3];
         SETSYMBOL(msg, gensym(e->groupName));

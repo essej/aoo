@@ -233,7 +233,6 @@ struct peer_message_event : base_event
         : base_event(kAooNetEventPeerMessage), group_(group), user_(user), tt_(tt), msg_(&msg) {}
 
     void dispatch(const event_handler &fn) const override {
-        // AooNetEventPeerPing and AooNetEventPeerPingReply are layout compatible
         AooNetEventPeerMessage e;
         e.type = type_;
         e.flags = 0; // TODO

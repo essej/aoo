@@ -214,11 +214,11 @@ enum AooNetEventTypes
     kAooNetEventError = 0,
     /* client events */
     /** client has disconnected from server */
-    kAooNetEventDisconnect,
+    kAooNetEventClientDisconnect,
     /** received a server notification */
-    kAooNetEventServerNotification,
+    kAooNetEventClientNotification,
     /** need to call AooClient_send() */
-    kAooNetEventNeedSend,
+    kAooNetEventClientNeedSend,
     /* peer events */
     /** received ping */
     kAooNetEventPeerPing,
@@ -236,17 +236,17 @@ enum AooNetEventTypes
     kAooNetEventPeerMessage,
     /* server events */
     /** client logged in successfully */
-    kAooNetEventClientLogin,
+    kAooNetEventServerClientLogin,
     /** client has been removed */
-    kAooNetEventClientRemove,
+    kAooNetEventServerClientRemove,
     /** a new group has been added (automatically) */
-    kAooNetEventGroupAdd,
+    kAooNetEventServerGroupAdd,
     /** a group has been removed (automatically) */
-    kAooNetEventGroupRemove,
+    kAooNetEventServerGroupRemove,
     /** a user has joined a group */
-    kAooNetEventGroupJoin,
+    kAooNetEventServerGroupJoin,
     /** a user has left a group */
-    kAooNetEventGroupLeave
+    kAooNetEventServerGroupLeave,
 };
 
 /* generic events */
@@ -261,16 +261,16 @@ typedef struct AooNetEventError
 
 /* client events */
 
-/** \brief client has disconnected from server */
+/** \brief client has been disconnected from server */
 #define AooNetEventDisconnect AooNetEventError
 
-/** \brief server notification */
-typedef struct AooNetEventServerNotification
+/** \brief client received server notification */
+typedef struct AooNetEventClientNotification
 {
     AooEventType type;
     AooFlag flags;
     AooDataView message;
-} AooNetEventServerNotification;
+} AooNetEventClientNotification;
 
 /* peer events */
 
@@ -350,23 +350,23 @@ typedef struct AooNetEventPeerMessage
 /* server events */
 
 /** \brief client logged in */
-typedef struct AooNetEventClientLogin
+typedef struct AooNetEventServerClientLogin
 {
     AooEventType type;
     AooFlag flags;
     AooId id;
     AooSocket sockfd;
-} AooNetEventClientLogin;
+} AooNetEventServerClientLogin;
 
 /** \brief client has been removed */
-typedef struct AooNetEventClientRemove
+typedef struct AooNetEventServerClientRemove
 {
     AooEventType type;
     AooId id;
-} AooNetEventClientRemove;
+} AooNetEventServerClientRemove;
 
 /** \brief group added */
-typedef struct AooNetEventGroupAdd
+typedef struct AooNetEventServerGroupAdd
 {
     AooEventType type;
     AooId id;
@@ -376,20 +376,20 @@ typedef struct AooNetEventGroupAdd
     const AooIpEndpoint *relayAddress;
 #endif
     AooFlag flags;
-} AooNetEventGroupAdd;
+} AooNetEventServerGroupAdd;
 
 /** \brief group removed */
-typedef struct AooNetEventGroupRemove
+typedef struct AooNetEventServerGroupRemove
 {
     AooEventType type;
     AooId id;
 #if 1
     const AooChar *name;
 #endif
-} AooNetEventGroupRemove;
+} AooNetEventServerGroupRemove;
 
 /** \brief user joined group */
-typedef struct AooNetEventGroupJoin
+typedef struct AooNetEventServerGroupJoin
 {
     AooEventType type;
     AooFlag flags;
@@ -405,10 +405,10 @@ typedef struct AooNetEventGroupJoin
 #if 0
     const AooIpEndpoint *relayAddress;
 #endif
-} AooNetEventGroupJoin;
+} AooNetEventServerGroupJoin;
 
 /** \brief user left group */
-typedef struct AooNetEventGroupLeave
+typedef struct AooNetEventServerGroupLeave
 {
     AooEventType type;
     AooFlag flags;
@@ -418,7 +418,7 @@ typedef struct AooNetEventGroupLeave
     const AooChar *groupName;
     const AooChar *userName;
 #endif
-} AooNetEventGroupLeave;
+} AooNetEventServerGroupLeave;
 
 #endif /* USE_AOO_NET */
 
