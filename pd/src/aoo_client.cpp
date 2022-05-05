@@ -229,11 +229,10 @@ static void aoo_client_send_group(t_aoo_client *x, t_symbol *s, int argc, t_atom
             if (auto group = x->find_group(name)) {
                 x->send_message(argc - 1, argv + 1, group->id, kAooIdInvalid);
             } else {
-                pd_error(x, "%: could not find group '%s'", name->s_name);
+                pd_error(x, "%s: could not find group '%s'", classname(x), name->s_name);
             }
         } else {
-            pd_error(x, "%s: bad arguments to 'send_group': expecting <group> ...",
-                     classname(x));
+            pd_error(x, "%s: bad arguments to 'send_group': expecting <group> ...", classname(x));
         }
     }
 }
@@ -247,7 +246,8 @@ static void aoo_client_send_peer(t_aoo_client *x, t_symbol *s, int argc, t_atom 
             if (auto peer = x->find_peer(group, user)) {
                 x->send_message(argc - 1, argv + 1, peer->group_id, peer->user_id);
             } else {
-                pd_error(x, "%: could not find peer %s|%s", group->s_name, user->s_name);
+                pd_error(x, "%s: could not find peer %s|%s",
+                         classname(x), group->s_name, user->s_name);
             }
         } else {
             pd_error(x, "%s: bad arguments to 'send_peer': expecting <group> <user> ...",
