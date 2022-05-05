@@ -187,7 +187,7 @@ int format_to_atoms(const AooFormat &f, int argc, t_atom *argv)
             nbits = 8;
             break;
         default:
-            error("format_to_atoms: bad bitdepth argument %d", nbits);
+            pd_error(0, "format_to_atoms: bad bitdepth argument %d", nbits);
             return 0;
         }
         SETFLOAT(argv + 4, nbits);
@@ -216,7 +216,7 @@ int format_to_atoms(const AooFormat &f, int argc, t_atom *argv)
             type = gensym("audio");
             break;
         default:
-            error("format_to_atoms: bad application type argument %d",
+            pd_error(0, "format_to_atoms: bad application type argument %d",
                   fmt.applicationType);
             return 0;
         }
@@ -226,7 +226,7 @@ int format_to_atoms(const AooFormat &f, int argc, t_atom *argv)
     }
 #endif
     else {
-        error("format_to_atoms: unknown format %s!", codec->s_name);
+        pd_error(0, "format_to_atoms: unknown format %s!", codec->s_name);
     }
     return 0;
 }

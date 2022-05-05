@@ -1,7 +1,7 @@
 ### global variables
 
 variables:
-  PD_VERSION: 0.51-1
+  PD_VERSION: 0.52-2
 # PD_PATH: only set on Windows
   SC_PATH: /tmp/supercollider
 
@@ -92,7 +92,7 @@ variables:
   variables:
     SUPERNOVA: 1
   before_script:
-    - wget -q -O Pd.tgz http://msp.ucsd.edu/Software/pd-${PD_VERSION}.mac.tar.gz
+    - wget -q -O Pd.tgz http://msp.ucsd.edu/Software/pd-${PD_VERSION}-macosx7.mac.tar.gz
     - rm -rf /Applications/Pd*.app/
     - tar xvf Pd.tgz -C /Applications/
     - rm -f Pd.tgz
