@@ -323,7 +323,7 @@ AooError AOO_CALL aoo::net::Client::joinGroup(
                                                 (relayAddress ? ip_host(*relayAddress) : ip_host{}),
                                                 cb, context);
     push_command(std::move(cmd));
-    return kAooErrorNotImplemented;
+    return kAooOk;
 }
 
 AOO_API AooError AOO_CALL AooClient_leaveGroup(
@@ -335,7 +335,8 @@ AooError AOO_CALL aoo::net::Client::leaveGroup(
         AooId group, AooNetCallback cb, void *context) {
     auto cmd = std::make_unique<group_leave_cmd>(group, cb, context);
     push_command(std::move(cmd));
-    return kAooErrorNotImplemented;
+    return kAooOk;
+}
 }
 
 AOO_API AooError AOO_CALL AooClient_getPeerByName(
