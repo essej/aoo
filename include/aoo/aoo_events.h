@@ -219,6 +219,10 @@ enum AooNetEventTypes
     kAooNetEventClientNotification,
     /** need to call AooClient_send() */
     kAooNetEventClientNeedSend,
+    /** a group has been updated */
+    kAooNetEventClientGroupUpdate,
+    /** user has been updated */
+    kAooNetEventClientUserUpdate,
     /* peer events */
     /** received ping */
     kAooNetEventPeerPing,
@@ -234,6 +238,8 @@ enum AooNetEventTypes
     kAooNetEventPeerLeave,
     /** received peer message */
     kAooNetEventPeerMessage,
+    /** peer has been updated */
+    kAooNetEventPeerUpdate,
     /* server events */
     /** client logged in successfully */
     kAooNetEventServerClientLogin,
@@ -247,6 +253,10 @@ enum AooNetEventTypes
     kAooNetEventServerGroupJoin,
     /** a user has left a group */
     kAooNetEventServerGroupLeave,
+    /** a group has been updated */
+    kAooNetEventServerGroupUpdate,
+    /** a user has been updated */
+    kAooNetEventServerUserUpdate
 };
 
 /* generic events */
@@ -271,6 +281,25 @@ typedef struct AooNetEventClientNotification
     AooFlag flags;
     AooDataView message;
 } AooNetEventClientNotification;
+
+/** \brief group metadata has been updated */
+typedef struct AooNetEventClientGroupUpdate
+{
+    AooEventType type;
+    AooFlag flags;
+    AooId groupId;
+    AooDataView groupMetadata;
+} AooNetEventClientGroupUpdate;
+
+/** \brief user metadata has been updated */
+typedef struct AooNetEventClientUserUpdate
+{
+    AooEventType type;
+    AooFlag flags;
+    AooId groupId;
+    AooId userId;
+    AooDataView userMetadata;
+} AooNetEventClientUserUpdate;
 
 /* peer events */
 
@@ -347,6 +376,16 @@ typedef struct AooNetEventPeerMessage
     AooDataView data;
 } AooNetEventPeerMessage;
 
+/** \brief peer metadata has been updated */
+typedef struct AooNetEventPeerUpdate
+{
+    AooEventType type;
+    AooFlag flags;
+    AooId groupId;
+    AooId userId;
+    AooDataView userMetadata;
+} AooNetEventPeerUpdate;
+
 /* server events */
 
 /** \brief client logged in */
@@ -419,6 +458,25 @@ typedef struct AooNetEventServerGroupLeave
     const AooChar *userName;
 #endif
 } AooNetEventServerGroupLeave;
+
+/** \brief a group has been updated */
+typedef struct AooNetEventServerGroupUpdate
+{
+    AooEventType type;
+    AooFlag flags;
+    AooId groupId;
+    AooDataView groupMetadata;
+} AooNetEventServerGroupUpdate;
+
+/** \brief a user has been updated */
+typedef struct AooNetEventServerUserUpdate
+{
+    AooEventType type;
+    AooFlag flags;
+    AooId groupId;
+    AooId userId;
+    AooDataView userMetadata;
+} AooNetEventServerUserUpdate;
 
 #endif /* USE_AOO_NET */
 

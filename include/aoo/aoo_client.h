@@ -75,6 +75,18 @@ AOO_API AooError AooClient_leaveGroup(
         AooClient *client, AooId group,
         AooNetCallback cb, void *context);
 
+/** \copydoc AooClient::updateGroup() */
+AOO_API AooError AOO_CALL AooClient_updateGroup(
+        AooClient *client,
+        AooId group, const AooDataView *metadata,
+        AooNetCallback cb, void *context);
+
+/** \copydoc AooClient::updateUser() */
+AOO_API AooError AOO_CALL AooClient_updateUser(
+        AooClient *client, AooId group,
+        AooId user, const AooDataView *metadata,
+        AooNetCallback cb, void *context);
+
 /** \copydoc AooClient::customRequest() */
 AOO_API AooError AOO_CALL AooClient_customRequest(
         AooClient *client, const AooDataView *data, AooFlag flags,

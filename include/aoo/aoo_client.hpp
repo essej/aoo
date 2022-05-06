@@ -133,6 +133,33 @@ public:
     virtual AooError AOO_CALL leaveGroup(
             AooId group, AooNetCallback cb, void *context) = 0;
 
+    /** \brief update group metadata
+     *
+     * \note Threadsafe and RT-safe
+     *
+     * \param group the group
+     * \param metadata the new metadata
+     * \param cb function to be called with server reply
+     * \param context user data passed to callback function
+     */
+    virtual AooError AOO_CALL updateGroup(
+            AooId group, const AooDataView &metadata,
+            AooNetCallback cb, void *context) = 0;
+
+    /** \brief update user metadata
+     *
+     * \note Threadsafe and RT-safe
+     *
+     * \param group the group
+     * \param user the user
+     * \param metadata the new metadata
+     * \param cb function to be called with server reply
+     * \param context user data passed to callback function
+     */
+    virtual AooError AOO_CALL updateUser(
+            AooId group, AooId user, const AooDataView &metadata,
+            AooNetCallback cb, void *context) = 0;
+
     /** \brief send custom request
      *
      * \note Threadsafe and RT-safe

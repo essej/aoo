@@ -72,6 +72,9 @@ enum AooControls
     kAooCtlGetServerRelay,
     kAooCtlSetGroupAutoCreate,
     kAooCtlGetGroupAutoCreate,
+    /* server group controls */
+    kAooCtlUpdateGroup,
+    kAooCtlUpdateUser,
 #endif
     kAooCtlSentinel
 };

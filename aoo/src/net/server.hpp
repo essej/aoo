@@ -69,6 +69,10 @@ struct user {
 
     AooId id() const { return id_; }
 
+    void set_metadata(const AooDataView& md) {
+        md_ = aoo::metadata(&md);
+    }
+
     const aoo::metadata& metadata() const { return md_; }
 
     AooId group() const { return group_; }
@@ -124,6 +128,10 @@ struct group {
     }
 
     AooId id() const { return id_; }
+
+    void set_metadata(const AooDataView& md) {
+        md_ = aoo::metadata(&md);
+    }
 
     const aoo::metadata& metadata() const { return md_; }
 
@@ -202,6 +210,12 @@ public:
                        const client_endpoint& client) const;
 
     void send_peer_remove(Server& server, const group& grp, const user& usr) const;
+
+    void send_group_update(Server& server, const group& grp);
+
+    void send_user_update(Server& server, const user& usr);
+
+    void send_peer_update(Server& server, const user& peer);
 
     void on_group_join(const group& grp, const user& usr);
 
@@ -356,6 +370,51 @@ struct group_leave_event : ievent
     std::string user_name_;
 };
 
+struct group_update_event : ievent
+{
+    group_update_event(const group& grp)
+        : group_(grp.id()), md_(grp.metadata()) {}
+
+    void dispatch(const event_handler& fn) const override {
+        AooNetEventServerGroupUpdate e;
+        e.type = kAooNetEventServerGroupUpdate;
+        e.flags = 0;
+        e.groupId = group_;
+        e.groupMetadata.type = md_.type();
+        e.groupMetadata.data = md_.data();
+        e.groupMetadata.size = md_.size();
+
+        fn(e);
+    }
+
+    AooId group_;
+    aoo::metadata md_;
+};
+
+struct user_update_event : ievent
+{
+    user_update_event(const user& usr)
+        : group_(usr.group()), user_(usr.id()),
+          md_(usr.metadata()) {}
+
+    void dispatch(const event_handler& fn) const override {
+        AooNetEventServerUserUpdate e;
+        e.type = kAooNetEventServerUserUpdate;
+        e.flags = 0;
+        e.groupId = group_;
+        e.userId = user_;
+        e.userMetadata.type = md_.type();
+        e.userMetadata.data = md_.data();
+        e.userMetadata.size = md_.size();
+
+        fn(e);
+    }
+
+    AooId group_;
+    AooId user_;
+    aoo::metadata md_;
+};
+
 //------------------------- Server -------------------------------//
 
 class Server final : public AooServer {
@@ -455,6 +514,10 @@ public:
 
     bool remove_group(AooId id);
 
+    void update_group(group& grp, const AooDataView& md);
+
+    void update_user(const group& grp, user& usr, const AooDataView& md);
+
     void on_user_joined_group(const group& grp, const user& usr,
                               const client_endpoint& client);
 
@@ -502,6 +565,18 @@ private:
     AooError do_group_leave(client_endpoint& client, AooId token,
                             const AooNetRequestGroupLeave& request,
                             AooNetResponseGroupLeave& response);
+
+    void handle_group_update(client_endpoint& client, const osc::ReceivedMessage& msg);
+
+    AooError do_group_update(client_endpoint& client, AooId token,
+                             const AooNetRequestGroupUpdate& request,
+                             AooNetResponseGroupUpdate& response);
+
+    void handle_user_update(client_endpoint& client, const osc::ReceivedMessage& msg);
+
+    AooError do_user_update(client_endpoint& client, AooId token,
+                            const AooNetRequestUserUpdate& request,
+                            AooNetResponseUserUpdate& response);
 
     void handle_custom_request(client_endpoint& client, const osc::ReceivedMessage& msg);
 

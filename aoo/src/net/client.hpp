@@ -252,6 +252,73 @@ struct peer_message_event : base_event
     metadata msg_;
 };
 
+struct peer_update_event : base_event
+{
+    peer_update_event(AooId group, AooId user, const AooDataView& md)
+        : base_event(kAooNetEventPeerUpdate), group_(group), user_(user), md_(&md) {}
+
+    void dispatch(const event_handler &fn) const override {
+        AooNetEventPeerUpdate e;
+        e.type = type_;
+        e.flags = 0; // TODO
+        e.groupId = group_;
+        e.userId = user_;
+        e.userMetadata.type = md_.type();
+        e.userMetadata.data = md_.data();
+        e.userMetadata.size = md_.size();
+
+        fn(e);
+    }
+
+    AooId group_;
+    AooId user_;
+    metadata md_;
+};
+
+struct user_update_event : base_event
+{
+    user_update_event(AooId group, AooId user, const AooDataView& md)
+        : base_event(kAooNetEventClientUserUpdate), group_(group), user_(user), md_(&md) {}
+
+    void dispatch(const event_handler &fn) const override {
+        AooNetEventClientUserUpdate e;
+        e.type = type_;
+        e.flags = 0; // TODO
+        e.groupId = group_;
+        e.userId = user_;
+        e.userMetadata.type = md_.type();
+        e.userMetadata.data = md_.data();
+        e.userMetadata.size = md_.size();
+
+        fn(e);
+    }
+
+    AooId group_;
+    AooId user_;
+    metadata md_;
+};
+
+struct group_update_event : base_event
+{
+    group_update_event(AooId group, const AooDataView& md)
+        : base_event(kAooNetEventClientGroupUpdate), group_(group), md_(&md) {}
+
+    void dispatch(const event_handler &fn) const override {
+        AooNetEventClientGroupUpdate e;
+        e.type = type_;
+        e.flags = 0; // TODO
+        e.groupId = group_;
+        e.groupMetadata.type = md_.type();
+        e.groupMetadata.data = md_.data();
+        e.groupMetadata.size = md_.size();
+
+        fn(e);
+    }
+
+    AooId group_;
+    metadata md_;
+};
+
 struct notification_event : base_event
 {
     notification_event(const AooDataView& msg)
@@ -411,6 +478,12 @@ public:
 
     AooError AOO_CALL leaveGroup(AooId group, AooNetCallback cb, void *context) override;
 
+    AooError AOO_CALL updateGroup(AooId group, const AooDataView& metadata,
+                                  AooNetCallback cb, void *context) override;
+
+    AooError AOO_CALL updateUser(AooId group, AooId user, const AooDataView& metadata,
+                                 AooNetCallback cb, void *context) override;
+
     AooError AOO_CALL customRequest(const AooDataView& data, AooFlag flags,
                                     AooNetCallback cb, void *context) override;
 
@@ -481,6 +554,16 @@ public:
     void perform(const group_leave_cmd& cmd);
 
     void handle_response(const group_leave_cmd& cmd, const osc::ReceivedMessage& msg);
+
+    struct group_update_cmd;
+    void perform(const group_update_cmd& cmd);
+
+    void handle_response(const group_update_cmd& cmd, const osc::ReceivedMessage& msg);
+
+    struct user_update_cmd;
+    void perform(const user_update_cmd& cmd);
+
+    void handle_response(const user_update_cmd& cmd, const osc::ReceivedMessage& msg);
 
     struct custom_request_cmd;
     void perform(const custom_request_cmd& cmd);
@@ -604,6 +687,12 @@ private:
     void handle_login(const osc::ReceivedMessage& msg);
 
     void handle_server_notification(const osc::ReceivedMessage& msg);
+
+    void handle_group_changed(const osc::ReceivedMessage& msg);
+
+    void handle_user_changed(const osc::ReceivedMessage& msg);
+
+    void handle_peer_changed(const osc::ReceivedMessage& msg);
 
     void handle_peer_add(const osc::ReceivedMessage& msg);
 
@@ -773,6 +862,69 @@ public:
         }
     public:
         AooId group_;
+    };
+
+    struct group_update_cmd : callback_cmd
+    {
+        group_update_cmd(AooId group, const AooDataView &md, AooNetCallback cb, void *context)
+            : callback_cmd(cb, context),
+              group_(group), md_(&md) {}
+
+        void perform(Client& obj) override {
+            obj.perform(*this);
+        }
+
+        void handle_response(Client &client, const osc::ReceivedMessage &msg) override {
+            client.handle_response(*this, msg);
+        }
+
+        void reply(AooError result, const AooNetResponse* response) const override {
+            AooNetRequestGroupUpdate request;
+            request.type = kAooNetRequestGroupUpdate;
+            request.flags = 0; // TODO
+            request.groupId = group_;
+            request.groupMetadata.type = md_.type();
+            request.groupMetadata.data = md_.data();
+            request.groupMetadata.size = md_.size();
+
+            callback((AooNetRequest&)request, result, response);
+        }
+    public:
+        AooId group_;
+        aoo::metadata md_;
+    };
+
+    struct user_update_cmd : callback_cmd
+    {
+        user_update_cmd(AooId group, AooId user,
+                        const AooDataView &md, AooNetCallback cb, void *context)
+            : callback_cmd(cb, context),
+              group_(group), user_(user), md_(&md) {}
+
+        void perform(Client& obj) override {
+            obj.perform(*this);
+        }
+
+        void handle_response(Client &client, const osc::ReceivedMessage &msg) override {
+            client.handle_response(*this, msg);
+        }
+
+        void reply(AooError result, const AooNetResponse* response) const override {
+            AooNetRequestUserUpdate request;
+            request.type = kAooNetRequestUserUpdate;
+            request.flags = 0; // TODO
+            request.groupId = group_;
+            request.userId = user_;
+            request.userMetadata.type = md_.type();
+            request.userMetadata.data = md_.data();
+            request.userMetadata.size = md_.size();
+
+            callback((AooNetRequest&)request, result, response);
+        }
+    public:
+        AooId group_;
+        AooId user_;
+        aoo::metadata md_;
     };
 
     struct custom_request_cmd : callback_cmd

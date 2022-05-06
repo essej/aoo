@@ -69,11 +69,32 @@
 #define kAooNetMsgGroupLeave \
     kAooNetMsgGroup kAooNetMsgLeave
 
+#define kAooNetMsgGroupUpdate \
+    kAooNetMsgGroup kAooNetMsgUpdate
+
+#define kAooNetMsgUserUpdate \
+    kAooNetMsgUser kAooNetMsgUpdate
+
+#define kAooNetMsgGroupChanged \
+    kAooNetMsgGroup kAooNetMsgChanged
+
+#define kAooNetMsgUserChanged \
+    kAooNetMsgUser kAooNetMsgChanged
+
+#define kAooNetMsgPeerChanged \
+    kAooNetMsgPeer kAooNetMsgChanged
+
 #define kAooNetMsgServerGroupJoin \
     kAooMsgDomain kAooNetMsgServer kAooNetMsgGroupJoin
 
 #define kAooNetMsgServerGroupLeave \
     kAooMsgDomain kAooNetMsgServer kAooNetMsgGroupLeave
+
+#define kAooNetMsgServerGroupUpdate \
+    kAooMsgDomain kAooNetMsgServer kAooNetMsgGroupUpdate
+
+#define kAooNetMsgServerUserUpdate \
+    kAooMsgDomain kAooNetMsgServer kAooNetMsgUserUpdate
 
 #define kAooNetMsgServerRequest \
     kAooMsgDomain kAooNetMsgServer kAooNetMsgRequest
@@ -337,6 +358,41 @@ AooError AOO_CALL aoo::net::Client::leaveGroup(
     push_command(std::move(cmd));
     return kAooOk;
 }
+
+AOO_API AooError AOO_CALL AooClient_updateGroup(
+        AooClient *client, AooId group, const AooDataView *metadata,
+        AooNetCallback cb, void *context) {
+    if (!metadata) {
+        return kAooErrorBadArgument;
+    }
+    return client->updateGroup(group, *metadata, cb, context);
+}
+
+AooError AOO_CALL aoo::net::Client::updateGroup(
+        AooId group, const AooDataView& metadata,
+        AooNetCallback cb, void *context) {
+    auto cmd = std::make_unique<group_update_cmd>(group, metadata, cb, context);
+    push_command(std::move(cmd));
+    return kAooOk;
+}
+
+AOO_API AooError AOO_CALL AooClient_updateUser(
+        AooClient *client, AooId group, AooId user, const AooDataView *metadata,
+        AooNetCallback cb, void *context) {
+    if (!metadata) {
+        return kAooErrorBadArgument;
+    }
+    return client->updateUser(group, user, *metadata, cb, context);
+}
+
+AooError AOO_CALL aoo::net::Client::updateUser(
+        AooId group, AooId user, const AooDataView& metadata,
+        AooNetCallback cb, void *context) {
+    auto cmd = std::make_unique<user_update_cmd>(group, user, metadata, cb, context);
+    push_command(std::move(cmd));
+    return kAooOk;
+}
+
 AOO_API AooError AOO_CALL AooClient_customRequest(
         AooClient *client, const AooDataView *data, AooFlag flags,
         AooNetCallback cb, void *context) {
@@ -699,6 +755,8 @@ bool Client::handle_peer_message(const osc::ReceivedMessage& msg, int onset,
     }
 }
 
+//------------------ connect/login -----------------------//
+
 void Client::perform(const connect_cmd& cmd)
 {
     auto state = state_.load();
@@ -827,6 +885,8 @@ void Client::perform(const timeout_cmd& cmd) {
     }
 }
 
+//------------------ disconnect -----------------------//
+
 void Client::perform(const disconnect_cmd& cmd) {
     auto state = state_.load();
     if (state != client_state::connected) {
@@ -842,6 +902,8 @@ void Client::perform(const disconnect_cmd& cmd) {
 
     cmd.reply(kAooOk, nullptr); // always succeeds
 }
+
+//------------------ group_join -----------------------//
 
 void Client::perform(const group_join_cmd& cmd)
 {
@@ -929,8 +991,12 @@ void Client::handle_response(const group_join_cmd& cmd,
     }
 }
 
+//------------------ group_leave -----------------------//
+
 void Client::perform(const group_leave_cmd& cmd)
 {
+    // TODO check for group membership?
+
     auto token = next_token_++;
     pending_requests_.emplace(token, std::make_unique<group_leave_cmd>(cmd));
 
@@ -978,6 +1044,89 @@ void Client::handle_response(const group_leave_cmd& cmd,
                     << cmd.group_ << ": " << msg);
     }
 }
+
+//------------------ group_update -----------------------//
+
+void Client::perform(const group_update_cmd& cmd) {
+    // TODO check for group membership?
+
+    auto token = next_token_++;
+    pending_requests_.emplace(token, std::make_unique<group_update_cmd>(cmd));
+
+    auto msg = start_server_message(cmd.md_.size());
+
+    msg << osc::BeginMessage(kAooNetMsgServerGroupUpdate)
+        << token << cmd.group_ << cmd.md_ << osc::EndMessage;
+
+    send_server_message(msg);
+}
+
+void Client::handle_response(const group_update_cmd& cmd,
+                             const osc::ReceivedMessage& msg) {
+    auto it = msg.ArgumentsBegin();
+    auto token = (it++)->AsInt32(); // skip
+    auto result = (it++)->AsInt32();
+    if (result == kAooOk) {
+        AooNetResponseGroupUpdate response;
+        response.type = kAooNetRequestGroupUpdate;
+        response.flags = 0;
+        response.groupMetadata.type = cmd.md_.type();
+        response.groupMetadata.data = cmd.md_.data();
+        response.groupMetadata.size = cmd.md_.size();
+
+        cmd.reply(result, (AooNetResponse *)&response);
+        LOG_VERBOSE("AooClient: successfully updated group " << cmd.group_);
+    } else {
+        auto code = (it++)->AsInt32();
+        auto msg = (it++)->AsString();
+        cmd.reply_error(result, msg, code);
+        LOG_WARNING("AooClient: could not update group "
+                    << cmd.group_ << ": " << msg);
+    }
+}
+
+//------------------ user_update -----------------------//
+
+void Client::perform(const user_update_cmd& cmd) {
+    // TODO check for group membership?
+
+    auto token = next_token_++;
+    pending_requests_.emplace(token, std::make_unique<user_update_cmd>(cmd));
+
+    auto msg = start_server_message(cmd.md_.size());
+
+    msg << osc::BeginMessage(kAooNetMsgServerUserUpdate)
+        << token << cmd.group_ << cmd.user_ << cmd.md_ << osc::EndMessage;
+
+    send_server_message(msg);
+}
+
+void Client::handle_response(const user_update_cmd& cmd,
+                             const osc::ReceivedMessage& msg) {
+    auto it = msg.ArgumentsBegin();
+    auto token = (it++)->AsInt32(); // skip
+    auto result = (it++)->AsInt32();
+    if (result == kAooOk) {
+        AooNetResponseUserUpdate response;
+        response.type = kAooNetRequestUserUpdate;
+        response.flags = 0;
+        response.userMetadata.type = cmd.md_.type();
+        response.userMetadata.data = cmd.md_.data();
+        response.userMetadata.size = cmd.md_.size();
+
+        cmd.reply(result, (AooNetResponse *)&response);
+        LOG_VERBOSE("AooClient: successfully updated user "
+                    << cmd.user_ << " in group " << cmd.group_);
+    } else {
+        auto code = (it++)->AsInt32();
+        auto msg = (it++)->AsString();
+        cmd.reply_error(result, msg, code);
+        LOG_WARNING("AooClient: could not update user " << cmd.user_
+                    << " in group " << cmd.group_ << ": " << msg);
+    }
+}
+
+//------------------ custom_request -----------------------//
 
 void Client::perform(const custom_request_cmd& cmd) {
     if (state_.load() != client_state::connected) {
@@ -1164,12 +1313,20 @@ void Client::handle_server_message(const osc::ReceivedMessage& msg, int32_t n){
                 handle_peer_add(msg);
             } else if (!strcmp(pattern, kAooNetMsgPeerLeave)) {
                 handle_peer_remove(msg);
+            } else if (!strcmp(pattern, kAooNetMsgPeerChanged)) {
+                handle_peer_changed(msg);
             } else if (!strcmp(pattern, kAooNetMsgLogin)) {
                 handle_login(msg);
             } else if (!strcmp(pattern, kAooNetMsgMessage)) {
                 handle_server_notification(msg);
+            } else if (!strcmp(pattern, kAooNetMsgGroupChanged)) {
+                handle_group_changed(msg);
+            } else if (!strcmp(pattern, kAooNetMsgUserChanged)) {
+                handle_user_changed(msg);
             } else if (!strcmp(pattern, kAooNetMsgGroupJoin) ||
                        !strcmp(pattern, kAooNetMsgGroupLeave) ||
+                       !strcmp(pattern, kAooNetMsgGroupUpdate) ||
+                       !strcmp(pattern, kAooNetMsgUserUpdate) ||
                        !strcmp(pattern, kAooNetMsgRequest)) {
                 // handle response
                 auto token = msg.ArgumentsBegin()->AsInt32();
@@ -1180,6 +1337,8 @@ void Client::handle_server_message(const osc::ReceivedMessage& msg, int32_t n){
                 } else {
                     LOG_ERROR("AooClient: couldn't find matching request");
                 }
+            } else {
+                LOG_WARNING("AooClient: got unspported server message " << msg.AddressPattern());
             }
         } else {
             LOG_WARNING("AooClient: got unsupported message " << msg.AddressPattern());
@@ -1240,6 +1399,29 @@ void Client::handle_server_notification(const osc::ReceivedMessage& msg) {
     send_event(std::move(e));
 
     LOG_DEBUG("AooClient: received server notification (" << message.type << ")");
+}
+
+void Client::handle_group_changed(const osc::ReceivedMessage& msg) {
+    auto it = msg.ArgumentsBegin();
+    auto group = (it++)->AsInt32();
+    auto md = osc_read_metadata(it);
+
+    auto e = std::make_unique<group_update_event>(group, md);
+    send_event(std::move(e));
+
+    LOG_VERBOSE("AooClient: group " << group << " has been updated");
+}
+
+void Client::handle_user_changed(const osc::ReceivedMessage& msg) {
+    auto it = msg.ArgumentsBegin();
+    auto group = (it++)->AsInt32();
+    auto user = (it++)->AsInt32();
+    auto md = osc_read_metadata(it);
+
+    auto e = std::make_unique<user_update_event>(group, user, md);
+    send_event(std::move(e));
+
+    LOG_VERBOSE("AooClient: user " << user << " has been updated");
 }
 
 static osc::ReceivedPacket unwrap_message(const osc::ReceivedMessage& msg,
@@ -1365,6 +1547,28 @@ void Client::handle_peer_remove(const osc::ReceivedMessage& msg){
     peers_.erase(peer);
 
     LOG_VERBOSE("AooClient: peer " << group << "|" << user << " left");
+}
+
+void Client::handle_peer_changed(const osc::ReceivedMessage& msg) {
+    auto it = msg.ArgumentsBegin();
+    auto group = (it++)->AsInt32();
+    auto user = (it++)->AsInt32();
+    auto md = osc_read_metadata(it);
+
+    peer_lock lock(peers_);
+    for (auto& peer : peers_) {
+        if (peer.match(group, user)) {
+            auto e = std::make_unique<peer_update_event>(group, user, md);
+            send_event(std::move(e));
+
+            LOG_VERBOSE("AooClient: peer " << peer << " has been updated");
+
+            return;
+        }
+    }
+
+    LOG_WARNING("AooClient: peer " << group << "|" << user
+                << " updated, but not found in list");
 }
 
 bool Client::signal() {
