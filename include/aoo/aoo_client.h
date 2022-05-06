@@ -75,6 +75,11 @@ AOO_API AooError AooClient_leaveGroup(
         AooClient *client, AooId group,
         AooNetCallback cb, void *context);
 
+/** \copydoc AooClient::customRequest() */
+AOO_API AooError AOO_CALL AooClient_customRequest(
+        AooClient *client, const AooDataView *data, AooFlag flags,
+        AooNetCallback cb, void *context);
+
 /** \copydoc AooClient::getPeerByName() */
 AOO_API AooError AOO_CALL AooClient_getPeerByName(
         AooClient *client, const AooChar *group, const AooChar *user,
@@ -136,17 +141,4 @@ AOO_API AooError AOO_CALL AooClient_control(
 /*         type-safe request functions        */
 /*--------------------------------------------*/
 
-/** \copydoc AooClient::sendCustomRequest() */
-AOO_INLINE AooError AooClient_sendCustomRequest(
-        AooClient *client, const AooDataView *data,
-        AooNetCallback cb, void *context)
-{
-    AooNetRequestCustom request;
-    request.type = kAooNetRequestConnect;
-    request.flags = 0;
-    request.data.type = data->type;
-    request.data.data = data->data;
-    request.data.size = data->size;
-    return AooClient_sendRequest(
-                client, (AooNetRequest *)&request, cb, context, 0);
-}
+/* (empty) */

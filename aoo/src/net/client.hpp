@@ -389,6 +389,9 @@ public:
 
     AooError AOO_CALL leaveGroup(AooId group, AooNetCallback cb, void *context) override;
 
+    AooError AOO_CALL customRequest(const AooDataView& data, AooFlag flags,
+                                    AooNetCallback cb, void *context) override;
+
     AooError AOO_CALL getPeerByName(
             const AooChar *group, const AooChar *user,
             void *address, AooAddrSize *addrlen) override;

@@ -337,6 +337,20 @@ AooError AOO_CALL aoo::net::Client::leaveGroup(
     push_command(std::move(cmd));
     return kAooOk;
 }
+AOO_API AooError AOO_CALL AooClient_customRequest(
+        AooClient *client, const AooDataView *data, AooFlag flags,
+        AooNetCallback cb, void *context) {
+    if (!data) {
+        return kAooErrorBadArgument;
+    }
+    return client->customRequest(*data, flags, cb, context);
+}
+
+AooError AOO_CALL aoo::net::Client::customRequest(
+        const AooDataView& data, AooFlag flags, AooNetCallback cb, void *context) {
+    auto cmd = std::make_unique<custom_request_cmd>(data, flags, cb, context);
+    push_command(std::move(cmd));
+    return kAooOk;
 }
 
 AOO_API AooError AOO_CALL AooClient_getPeerByName(
@@ -598,18 +612,8 @@ AOO_API AooError AOO_CALL AooClient_sendRequest(
 AooError AOO_CALL aoo::net::Client::sendRequest(
         const AooNetRequest& request, AooNetCallback callback, void *user, AooFlag flags)
 {
-    switch (request.type){
-    case kAooNetRequestCustom:
-    {
-        auto& r = (const AooNetRequestCustom&)request;
-        auto cmd = std::make_unique<custom_request_cmd>(r.data, flags, callback, user);
-        push_command(std::move(cmd));
-    }
-    default:
-        LOG_ERROR("AooClient: unknown request " << request.type);
-        return kAooErrorUnknown;
-    }
-    return kAooOk;
+    LOG_ERROR("AooClient: unknown request " << request.type);
+    return kAooErrorUnknown;
 }
 
 AOO_API AooError AOO_CALL AooClient_control(

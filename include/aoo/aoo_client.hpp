@@ -133,6 +133,19 @@ public:
     virtual AooError AOO_CALL leaveGroup(
             AooId group, AooNetCallback cb, void *context) = 0;
 
+    /** \brief send custom request
+     *
+     * \note Threadsafe and RT-safe
+     *
+     * \param data custom request data
+     * \param flags (optional) flags
+     * \param cb function to be called with server reply
+     * \param context user data passed to callback function
+     */
+    virtual AooError AOO_CALL customRequest(
+            const AooDataView& data, AooFlag flags,
+            AooNetCallback cb, void *context) = 0;
+
     /** \brief find peer by name
      *
      * \note Threadsafe
@@ -278,20 +291,7 @@ public:
     /*         type-safe request functions        */
     /*--------------------------------------------*/
 
-    /** \brief send custom request
-     *
-     * \note Threadsafe and RT-safe
-     *
-     * \param data custom request data
-     * \param cb function to be called with server reply
-     * \param context user data passed to callback function
-     */
-    AooError sendCustomRequest(
-            const AooDataView& data, AooNetCallback cb, void *context)
-    {
-        AooNetRequestCustom request = { kAooNetRequestCustom, 0, data };
-        return sendRequest((AooNetRequest&)request, cb, context, 0);
-    }
+    /* (empty) */
 protected:
     ~AooClient(){} // non-virtual!
 };
