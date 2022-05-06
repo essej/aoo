@@ -1166,6 +1166,8 @@ void Client::handle_server_message(const osc::ReceivedMessage& msg, int32_t n){
                 handle_peer_remove(msg);
             } else if (!strcmp(pattern, kAooNetMsgLogin)) {
                 handle_login(msg);
+            } else if (!strcmp(pattern, kAooNetMsgMessage)) {
+                handle_server_notification(msg);
             } else if (!strcmp(pattern, kAooNetMsgGroupJoin) ||
                        !strcmp(pattern, kAooNetMsgGroupLeave) ||
                        !strcmp(pattern, kAooNetMsgRequest)) {
@@ -1228,6 +1230,16 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
             connection->reply_error(kAooErrorUnknown, msg, code);
         }
     }
+}
+
+void Client::handle_server_notification(const osc::ReceivedMessage& msg) {
+    auto it = msg.ArgumentsBegin();
+    auto message = osc_read_metadata(it);
+
+    auto e = std::make_unique<notification_event>(message);
+    send_event(std::move(e));
+
+    LOG_DEBUG("AooClient: received server notification (" << message.type << ")");
 }
 
 static osc::ReceivedPacket unwrap_message(const osc::ReceivedMessage& msg,

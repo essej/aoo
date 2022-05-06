@@ -252,6 +252,28 @@ struct peer_message_event : base_event
     metadata msg_;
 };
 
+struct notification_event : base_event
+{
+    notification_event(const AooDataView& msg)
+        : base_event(kAooNetEventClientNotification), msg_(&msg) {}
+
+    void dispatch(const event_handler &fn) const override {
+        AooNetEventClientNotification e;
+        e.type = type_;
+        e.flags = 0; // TODO
+        e.message.type = msg_.type();
+        e.message.data = msg_.data();
+        e.message.size = msg_.size();
+
+        fn(e);
+    }
+
+    AooId group_;
+    AooId user_;
+    time_tag tt_;
+    metadata msg_;
+};
+
 //---------------------------- peer_message ---------------------------------//
 
 // peer/group messages
@@ -580,6 +602,8 @@ private:
     void handle_server_message(const osc::ReceivedMessage& msg, int32_t n);
 
     void handle_login(const osc::ReceivedMessage& msg);
+
+    void handle_server_notification(const osc::ReceivedMessage& msg);
 
     void handle_peer_add(const osc::ReceivedMessage& msg);
 
