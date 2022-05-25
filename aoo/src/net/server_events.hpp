@@ -51,7 +51,7 @@ struct group_add_event : ievent
         e.type = kAooNetEventServerGroupAdd;
         e.id = id_;
         e.name = name_.c_str();
-        AooDataView md { metadata_.type(), metadata_.data(), metadata_.size() };
+        AooData md { metadata_.type(), metadata_.data(), metadata_.size() };
         e.metadata = md.size > 0 ? &md : nullptr;
         e.flags = 0;
 
@@ -98,7 +98,7 @@ struct group_join_event : ievent
         e.userName = user_name_.c_str();
         e.clientId = client_id_;
         e.userFlags = 0;
-        AooDataView md { metadata_.type(), metadata_.data(), metadata_.size() };
+        AooData md { metadata_.type(), metadata_.data(), metadata_.size() };
         e.userMetadata = md.size > 0 ? &md : nullptr;
 
         fn(e);

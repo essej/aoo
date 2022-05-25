@@ -57,7 +57,7 @@ struct t_aoo_send
     AooId x_id = 0;
     std::unique_ptr<t_float *[]> x_vec;
     // metadata
-    t_symbol *x_metadata_type;
+    AooDataType x_metadata_type;
     std::vector<AooByte> x_metadata;
     // sinks
     std::vector<t_sink> x_sinks;
@@ -501,7 +501,7 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
                 // copy endpoint
                 memcpy(vec, msg, 3 * sizeof(t_atom));
                 // type
-                SETSYMBOL(vec + 3, gensym(e->metadata->type));
+                datatype_to_atom(e->metadata->type, vec[3]);
                 // data
                 for (int i = 0; i < e->metadata->size; ++i){
                     SETFLOAT(vec + 4 + i, (uint8_t)e->metadata->data[i]);
@@ -746,9 +746,9 @@ static void aoo_send_remove(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_send_start(t_aoo_send *x)
 {
-    if (x->x_metadata_type){
-        AooDataView md;
-        md.type = x->x_metadata_type->s_name;
+    if (!x->x_metadata.empty()){
+        AooData md;
+        md.type = x->x_metadata_type;
         md.data = x->x_metadata.data();
         md.size = x->x_metadata.size();
 
@@ -778,38 +778,33 @@ static void aoo_send_active(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
 static void aoo_send_metadata(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
-    if (argc > 0){
-        // metadata type
-        t_symbol *type;
-        if (argv->a_type == A_SYMBOL){
-            type = argv->a_w.w_symbol;
-        } else {
-            pd_error(x, "%s: bad metadata type", classname(x));
-        #if 1
-            x->x_metadata_type = nullptr;
-        #endif
-            return;
-        }
-        // metadata content
-        if (argc > 1){
-            // set new stream metadata
-            auto size = argc - 1;
-            x->x_metadata.resize(size);
-            for (int i = 0; i < size; ++i){
-                x->x_metadata[i] = (AooByte)atom_getfloat(argv + i + 1);
-            }
-        } else {
-            // empty metadata is not allowed
-            pd_error(x, "%s: metadata must not be empty", classname(x));
-        #if 1
-            x->x_metadata_type = nullptr;
-        #endif
-            return;
-        }
-        x->x_metadata_type = type;
-    } else {
-        // clear stream metadata
-        x->x_metadata_type = nullptr;
+    if (!argc){
+        return;
+    }
+    if (argc < 2) {
+        // empty metadata is not allowed
+        pd_error(x, "%s: metadata must not be empty", classname(x));
+    #if 1
+        x->x_metadata_type = kAooDataUnspecified;
+        x->x_metadata.clear();
+    #endif
+        return;
+    }
+    // metadata type
+    AooDataType type;
+    if (!atom_to_datatype(*argv, type, x)) {
+    #if 1
+        x->x_metadata_type = kAooDataUnspecified;
+        x->x_metadata.clear();
+    #endif
+        return;
+    }
+    x->x_metadata_type = type;
+    // metadata content
+    auto size = argc - 1;
+    x->x_metadata.resize(size);
+    for (int i = 0; i < size; ++i){
+        x->x_metadata[i] = (AooByte)atom_getfloat(argv + i + 1);
     }
 }
 
@@ -936,7 +931,7 @@ static void * aoo_send_new(t_symbol *s, int argc, t_atom *argv)
 t_aoo_send::t_aoo_send(int argc, t_atom *argv)
 {
     x_clock = clock_new(this, (t_method)aoo_send_tick);
-    x_metadata_type = nullptr;
+    x_metadata_type = kAooDataUnspecified;
 
     // arg #1: port number
     x_port = atom_getfloatarg(0, argc, argv);

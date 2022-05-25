@@ -237,13 +237,13 @@ AooError AOO_CALL aoo::net::Client::removeSink(
 
 AOO_API AooError AOO_CALL AooClient_connect(
         AooClient *client, const AooChar *hostName, AooInt32 port, const AooChar *password,
-        const AooDataView *metadata, AooNetCallback cb, void *context) {
+        const AooData *metadata, AooNetCallback cb, void *context) {
     return client->connect(hostName, port, password, metadata, cb, context);
 }
 
 AooError AOO_CALL aoo::net::Client::connect(
         const AooChar *hostName, AooInt32 port, const AooChar *password,
-        const AooDataView *metadata, AooNetCallback cb, void *context) {
+        const AooData *metadata, AooNetCallback cb, void *context) {
     auto cmd = std::make_unique<connect_cmd>(hostName, port, password, metadata, cb, context);
     push_command(std::move(cmd));
     return kAooOk;
@@ -262,16 +262,16 @@ AooError AOO_CALL aoo::net::Client::disconnect(AooNetCallback cb, void *context)
 
 AOO_API AooError AOO_CALL AooClient_joinGroup(
         AooClient *client,
-        const AooChar *groupName, const AooChar *groupPwd, const AooDataView *groupMetadata,
-        const AooChar *userName, const AooChar *userPwd, const AooDataView *userMetadata,
+        const AooChar *groupName, const AooChar *groupPwd, const AooData *groupMetadata,
+        const AooChar *userName, const AooChar *userPwd, const AooData *userMetadata,
         const AooIpEndpoint *relayAddress, AooNetCallback cb, void *context) {
     return client->joinGroup(groupName, groupPwd, groupMetadata, userName, userPwd,
                              userMetadata, relayAddress, cb, context);
 }
 
 AooError AOO_CALL aoo::net::Client::joinGroup(
-        const AooChar *groupName, const AooChar *groupPwd, const AooDataView *groupMetadata,
-        const AooChar *userName, const AooChar *userPwd, const AooDataView *userMetadata,
+        const AooChar *groupName, const AooChar *groupPwd, const AooData *groupMetadata,
+        const AooChar *userName, const AooChar *userPwd, const AooData *userMetadata,
         const AooIpEndpoint *relayAddress, AooNetCallback cb, void *context) {
     auto cmd = std::make_unique<group_join_cmd>(groupName, groupPwd, groupMetadata,
                                                 userName, userPwd, userMetadata,
@@ -294,7 +294,7 @@ AooError AOO_CALL aoo::net::Client::leaveGroup(
 }
 
 AOO_API AooError AOO_CALL AooClient_updateGroup(
-        AooClient *client, AooId group, const AooDataView *metadata,
+        AooClient *client, AooId group, const AooData *metadata,
         AooNetCallback cb, void *context) {
     if (!metadata) {
         return kAooErrorBadArgument;
@@ -303,7 +303,7 @@ AOO_API AooError AOO_CALL AooClient_updateGroup(
 }
 
 AooError AOO_CALL aoo::net::Client::updateGroup(
-        AooId group, const AooDataView& metadata,
+        AooId group, const AooData& metadata,
         AooNetCallback cb, void *context) {
     auto cmd = std::make_unique<group_update_cmd>(group, metadata, cb, context);
     push_command(std::move(cmd));
@@ -311,7 +311,7 @@ AooError AOO_CALL aoo::net::Client::updateGroup(
 }
 
 AOO_API AooError AOO_CALL AooClient_updateUser(
-        AooClient *client, AooId group, AooId user, const AooDataView *metadata,
+        AooClient *client, AooId group, AooId user, const AooData *metadata,
         AooNetCallback cb, void *context) {
     if (!metadata) {
         return kAooErrorBadArgument;
@@ -320,7 +320,7 @@ AOO_API AooError AOO_CALL AooClient_updateUser(
 }
 
 AooError AOO_CALL aoo::net::Client::updateUser(
-        AooId group, AooId user, const AooDataView& metadata,
+        AooId group, AooId user, const AooData& metadata,
         AooNetCallback cb, void *context) {
     auto cmd = std::make_unique<user_update_cmd>(group, user, metadata, cb, context);
     push_command(std::move(cmd));
@@ -328,7 +328,7 @@ AooError AOO_CALL aoo::net::Client::updateUser(
 }
 
 AOO_API AooError AOO_CALL AooClient_customRequest(
-        AooClient *client, const AooDataView *data, AooFlag flags,
+        AooClient *client, const AooData *data, AooFlag flags,
         AooNetCallback cb, void *context) {
     if (!data) {
         return kAooErrorBadArgument;
@@ -337,7 +337,7 @@ AOO_API AooError AOO_CALL AooClient_customRequest(
 }
 
 AooError AOO_CALL aoo::net::Client::customRequest(
-        const AooDataView& data, AooFlag flags, AooNetCallback cb, void *context) {
+        const AooData& data, AooFlag flags, AooNetCallback cb, void *context) {
     auto cmd = std::make_unique<custom_request_cmd>(data, flags, cb, context);
     push_command(std::move(cmd));
     return kAooOk;
@@ -449,7 +449,7 @@ AooError AOO_CALL aoo::net::Client::getPeerName(
 
 AOO_API AooError AOO_CALL AooClient_sendMessage(
         AooClient *client, AooId group, AooId user,
-        const AooDataView *message, AooNtpTime timeStamp, AooFlag flags)
+        const AooData *message, AooNtpTime timeStamp, AooFlag flags)
 {
     if (!message) {
         return kAooErrorBadArgument;
@@ -458,7 +458,7 @@ AOO_API AooError AOO_CALL AooClient_sendMessage(
 }
 
 AooError AOO_CALL aoo::net::Client::sendMessage(
-        AooId group, AooId user, const AooDataView& msg,
+        AooId group, AooId user, const AooData& msg,
         AooNtpTime timeStamp, AooFlag flags)
 {
     // TODO implement ack mechanism over UDP.

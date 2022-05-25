@@ -88,12 +88,12 @@ public:
 
     /** \brief send custom push notification to client */
     virtual AooError AOO_CALL notifyClient(
-            AooId client, const AooDataView *data) = 0;
+            AooId client, const AooData *data) = 0;
 
     /** \brief send custom push notification to group member(s);
         if `user` is `kAooIdInvalid`, all group members are notified. */
     virtual AooError AOO_CALL notifyGroup(
-            AooId group, AooId user, const AooDataView *data) = 0;
+            AooId group, AooId user, const AooData *data) = 0;
 
     /* group management */
 
@@ -106,7 +106,7 @@ public:
      * via AooNetResponseGroupJoin::groupMetadata. */
     virtual AooError AOO_CALL addGroup(
             const AooChar *name, const AooChar *password,
-            const AooDataView *metadata, const AooIpEndpoint *relayAddress,
+            const AooData *metadata, const AooIpEndpoint *relayAddress,
             AooFlag flags, AooId *groupId) = 0;
 
     /** \brief remove a group */
@@ -121,7 +121,7 @@ public:
      * By default, the metadata is passed to peers via AooNetEventPeer::metadata. */
     virtual AooError AOO_CALL addUserToGroup(
             AooId group, const AooChar *userName, const AooChar *userPwd,
-            const AooDataView *metadata, AooFlag flags, AooId *userId) = 0;
+            const AooData *metadata, AooFlag flags, AooId *userId) = 0;
 
     /** \brief remove user from group */
     virtual AooError AOO_CALL removeUserFromGroup(
@@ -215,12 +215,12 @@ public:
     /*         type-safe group control functions        */
     /*--------------------------------------------------*/
 
-    AooError updateGroup(AooId group, const AooDataView *metadata)
+    AooError updateGroup(AooId group, const AooData *metadata)
     {
         return groupControl(group, kAooCtlUpdateGroup, 0, AOO_ARG(metadata));
     }
 
-    AooError updateUser(AooId group, AooId user, const AooDataView *metadata)
+    AooError updateUser(AooId group, AooId user, const AooData *metadata)
     {
         return groupControl(group, kAooCtlUpdateUser, user, AOO_ARG(metadata));
     }

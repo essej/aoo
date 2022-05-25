@@ -121,7 +121,7 @@ public:
      *        before accepting the invitation
      */
     virtual AooError AOO_CALL inviteSource(
-            const AooEndpoint& source, const AooDataView *metadata) = 0;
+            const AooEndpoint& source, const AooData *metadata) = 0;
 
     /** \brief uninvite source
      *

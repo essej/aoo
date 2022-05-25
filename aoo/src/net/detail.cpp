@@ -9,11 +9,11 @@ namespace net {
 //------------------------------ OSC utilities ---------------------------------//
 
 // see comment in "detail.hpp"
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const AooDataView *md) {
+osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const AooData *md) {
     if (md) {
         msg << md->type << osc::Blob(md->data, md->size);
     } else {
-        msg << "" << osc::Blob(msg.Data(), 0); // HACK: do not use nullptr because of memcpy()
+        msg << kAooDataUnspecified << osc::Blob(msg.Data(), 0); // HACK: do not use nullptr because of memcpy()
     }
     return msg;
 }

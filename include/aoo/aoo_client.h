@@ -54,7 +54,7 @@ AOO_API AooError AOO_CALL AooClient_removeSink(
 AOO_API AooError AooClient_connect(
         AooClient *client,
         const AooChar *hostName, AooInt32 port, const AooChar *password,
-        const AooDataView *metadata, AooNetCallback cb, void *context);
+        const AooData *metadata, AooNetCallback cb, void *context);
 
 /** \copydoc AooClient::disconnect() */
 AOO_API AooError AooClient_disconnect(
@@ -64,9 +64,9 @@ AOO_API AooError AooClient_disconnect(
 AOO_API AooError AooClient_joinGroup(
         AooClient *client,
         const AooChar *groupName, const AooChar *groupPwd,
-        const AooDataView *groupMetadata,
+        const AooData *groupMetadata,
         const AooChar *userName, const AooChar *userPwd,
-        const AooDataView *userMetadata,
+        const AooData *userMetadata,
         const AooIpEndpoint *relayAddress,
         AooNetCallback cb, void *context);
 
@@ -78,18 +78,18 @@ AOO_API AooError AooClient_leaveGroup(
 /** \copydoc AooClient::updateGroup() */
 AOO_API AooError AOO_CALL AooClient_updateGroup(
         AooClient *client,
-        AooId group, const AooDataView *metadata,
+        AooId group, const AooData *metadata,
         AooNetCallback cb, void *context);
 
 /** \copydoc AooClient::updateUser() */
 AOO_API AooError AOO_CALL AooClient_updateUser(
         AooClient *client, AooId group,
-        AooId user, const AooDataView *metadata,
+        AooId user, const AooData *metadata,
         AooNetCallback cb, void *context);
 
 /** \copydoc AooClient::customRequest() */
 AOO_API AooError AOO_CALL AooClient_customRequest(
-        AooClient *client, const AooDataView *data, AooFlag flags,
+        AooClient *client, const AooData *data, AooFlag flags,
         AooNetCallback cb, void *context);
 
 /** \copydoc AooClient::findPeerByName() */
@@ -111,7 +111,7 @@ AOO_API AooError AOO_CALL AooClient_getPeerName(
 /** \copydoc AooClient::sendMessage() */
 AOO_API AooError AOO_CALL AooClient_sendMessage(
         AooClient *client, AooId group, AooId user,
-        const AooDataView *msg, AooNtpTime timeStamp, AooFlag flags);
+        const AooData *msg, AooNtpTime timeStamp, AooFlag flags);
 
 /** \copydoc AooClient::handleMessage() */
 AOO_API AooError AOO_CALL AooClient_handleMessage(

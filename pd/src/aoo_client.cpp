@@ -22,12 +22,12 @@ t_class *aoo_client_class;
 
 struct t_peer_message
 {
-    t_peer_message(AooId grp, AooId usr, const AooDataView& msg)
-        : group(grp), user(usr), type(gensym(msg.type)),
+    t_peer_message(AooId grp, AooId usr, const AooData& msg)
+        : group(grp), user(usr), type(msg.type),
           data(msg.data, msg.data + msg.size) {}
     AooId group;
     AooId user;
-    t_symbol *type;
+    AooDataType type;
     std::vector<AooByte> data;
 };
 
@@ -81,9 +81,9 @@ struct t_aoo_client
 
     bool check(int argc, t_atom *argv, int minargs, const char *name) const;
 
-    void handle_message(AooId group, AooId user, AooNtpTime time, const AooDataView& msg);
+    void handle_message(AooId group, AooId user, AooNtpTime time, const AooData& msg);
 
-    void dispatch_message(AooId group, AooId user, const AooDataView& msg, double delay) const;
+    void dispatch_message(AooId group, AooId user, const AooData& msg, double delay) const;
 
     void send_message(int argc, t_atom *argv, AooId group, AooId user);
 
@@ -245,8 +245,11 @@ void t_aoo_client::send_message(int argc, t_atom *argv, AooId group, AooId user)
         return;
     }
 
-    // TODO should we rather set the type via a message?
-    t_symbol *type = atom_getsymbol(argv);
+    // TODO: should we rather set the type via a message?
+    AooDataType type;
+    if (!atom_to_datatype(*argv, type, this)) {
+        return;
+    }
     argv++; argc--;
 
     // schedule OSC message as bundle (not needed for OSC bundles!)
@@ -267,7 +270,7 @@ void t_aoo_client::send_message(int argc, t_atom *argv, AooId group, AooId user)
     for (int i = 0; i < argc; ++i){
         buf[i] = (AooByte)atom_getfloat(argv + i);
     }
-    AooDataView data { type->s_name, buf, (AooSize)argc };
+    AooData data { type, buf, (AooSize)argc };
 
     AooFlag flags = x_reliable ? kAooNetMessageReliable : 0;
     x_node->client()->sendMessage(group, user, data, time.value(), flags);
@@ -450,7 +453,7 @@ static void aoo_client_target(t_aoo_client *x, t_symbol *s, int argc, t_atom *ar
 
 // handle incoming peer message
 void t_aoo_client::dispatch_message(AooId group, AooId user,
-                                    const AooDataView& msg, double delay) const
+                                    const AooData& msg, double delay) const
 {
     // 1) peer + delay
     t_atom info[3];
@@ -470,7 +473,7 @@ void t_aoo_client::dispatch_message(AooId group, AooId user,
     // 2) message
     auto size = msg.size + 1;
     auto vec = (t_atom *)alloca(size * sizeof(t_atom));
-    SETSYMBOL(vec, gensym(msg.type));
+    datatype_to_atom(msg.type, vec[0]);
     for (int i = 0; i < msg.size; ++i){
         SETFLOAT(vec + i + 1, (uint8_t)msg.data[i]);
     }
@@ -486,8 +489,7 @@ static void aoo_client_queue_tick(t_aoo_client *x)
     while (!queue.empty()){
         if (queue.top().time <= now) {
             auto& msg = queue.top().message;
-            AooDataView data { msg.type->s_name,
-                        msg.data.data(), msg.data.size() };
+            AooData data { msg.type, msg.data.data(), msg.data.size() };
             x->dispatch_message(msg.group, msg.user, data, 0);
             queue.pop();
         } else {
@@ -502,7 +504,7 @@ static void aoo_client_queue_tick(t_aoo_client *x)
 }
 
 void t_aoo_client::handle_message(AooId group, AooId user, AooNtpTime time,
-                                  const AooDataView& data)
+                                  const AooData& data)
 {
     aoo::time_tag tt(time);
     if (!tt.is_empty() && !tt.is_immediate()){

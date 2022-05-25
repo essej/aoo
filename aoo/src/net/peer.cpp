@@ -18,18 +18,18 @@ namespace net {
 const int32_t kMessageMaxAddrSize = kAooMsgDomainLen + kAooNetMsgPeerLen + 16 + kAooMsgDataLen;
 // address pattern string: max 16 bytes
 // typetag string: max. 12 bytes
-// args (without type and blob data): max. 36 bytes
-const int32_t kMessageHeaderSize = kMessageMaxAddrSize + 48 + kAooDataTypeMaxLen + 1;
+// args (including type + blob size): max. 44 bytes
+const int32_t kMessageHeaderSize = kMessageMaxAddrSize + 56;
 
 // binary peer message:
-// args (without type and blob data): 24 bytes (max.)
-const int32_t kBinMessageHeaderSize = kAooBinMsgLargeHeaderSize + 24 + kAooDataTypeMaxLen + 1;
+// args: 28 bytes (max.)
+const int32_t kBinMessageHeaderSize = kAooBinMsgLargeHeaderSize + 28;
 
 //------------------------- peer ------------------------------//
 
 peer::peer(const std::string& groupname, AooId groupid,
            const std::string& username, AooId userid, AooId localid,
-           ip_address_list&& addrlist, const AooDataView *metadata,
+           ip_address_list&& addrlist, const AooData *metadata,
            ip_address_list&& user_relay, const ip_address_list& group_relay)
     : group_name_(groupname), user_name_(username), group_id_(groupid), user_id_(userid),
       local_id_(localid), metadata_(metadata), addrlist_(std::move(addrlist)),
@@ -386,7 +386,7 @@ void peer::send_packet_bin(const message_packet& p, const sendfn& fn) const {
         if (flags & kAooBinMsgMessageTimestamp) {
             aoo::write_bytes<uint64_t>(p.tt, ptr);
         }
-        ptr += binmsg_write_string(ptr, end - ptr, p.type);
+        aoo::write_bytes<int32_t>(p.type, ptr);
     }
     // write actual data
     assert((end - ptr) >= p.size);
@@ -603,7 +603,7 @@ void peer::handle_client_message(Client &client, const AooByte *data, AooSize si
         p.frame = 0;
     }
     // type and timetag is only sent with first frame
-    p.type = nullptr;
+    p.type = kAooDataUnspecified;
     p.tt = 0;
     if (p.frame == 0) {
         if (flags & kAooBinMsgMessageTimestamp) {
@@ -613,10 +613,8 @@ void peer::handle_client_message(Client &client, const AooByte *data, AooSize si
             p.tt = aoo::read_bytes<uint64_t>(ptr);
             remaining -= 8;
         }
-        p.type = (const char *)ptr;
-        auto len = binmsg_skip_string(ptr, remaining);
-        ptr += len;
-        remaining -= len;
+        p.type = aoo::read_bytes<int32_t>(ptr);
+        remaining -= 4;
     }
 
     if (remaining < p.size) {
@@ -673,7 +671,7 @@ void peer::do_handle_client_message(Client& client, const message_packet& p, Aoo
             msg.init(p.nframes, p.totalsize);
             msg.add_frame(p.frame, p.data, p.size);
             if (p.frame == 0) {
-                assert(p.type != nullptr);
+                assert(p.type != kAooDataUnspecified);
                 msg.set_info(p.type, p.tt);
             }
         } else {
@@ -689,7 +687,7 @@ void peer::do_handle_client_message(Client& client, const message_packet& p, Aoo
                 if (!msg->has_frame(p.frame)) {
                     msg->add_frame(p.frame, p.data, p.size);
                     if (p.frame == 0) {
-                        assert(p.type != nullptr);
+                        assert(p.type != kAooDataUnspecified);
                         msg->set_info(p.type, p.tt);
                     }
                 } else {
@@ -707,7 +705,7 @@ void peer::do_handle_client_message(Client& client, const message_packet& p, Aoo
         while (!receive_buffer_.empty()) {
             auto& msg = receive_buffer_.front();
             if (msg.complete()) {
-                AooDataView md { msg.type(), msg.data(), (AooSize)msg.size() };
+                AooData md { msg.type(), msg.data(), (AooSize)msg.size() };
                 auto e = std::make_unique<peer_message_event>(
                             group_id(), user_id(), msg.tt_, md);
                 client.send_event(std::move(e));
@@ -732,18 +730,18 @@ void peer::do_handle_client_message(Client& client, const message_packet& p, Aoo
             }
             current_msg_.add_frame(p.frame, p.data, p.size);
             if (p.frame == 0) {
-                assert(p.type != nullptr);
+                assert(p.type != kAooDataUnspecified);
                 current_msg_.set_info(p.type, p.tt);
             }
             if (current_msg_.complete()) {
-                AooDataView d { current_msg_.type(), current_msg_.data(), (AooSize)current_msg_.size() };
+                AooData d { current_msg_.type(), current_msg_.data(), (AooSize)current_msg_.size() };
                 auto e = std::make_unique<peer_message_event>(
                             group_id(), user_id(), p.tt, d);
                 client.send_event(std::move(e));
             }
         } else {
             // output immediately
-            AooDataView d { p.type, p.data, (AooSize)p.size };
+            AooData d { p.type, p.data, (AooSize)p.size };
             auto e = std::make_unique<peer_message_event>(
                         group_id(), user_id(), p.tt, d);
             client.send_event(std::move(e));

@@ -227,12 +227,12 @@ AooError AOO_CALL aoo::net::Server::declineRequest(
 }
 
 AOO_API AooError AOO_CALL AooServer_notifyClient(
-        AooServer *server, AooId client, const AooDataView *data) {
+        AooServer *server, AooId client, const AooData *data) {
     return  server->notifyClient(client, data);
 }
 
 AooError AOO_CALL aoo::net::Server::notifyClient(
-        AooId client, const AooDataView *data) {
+        AooId client, const AooData *data) {
     if (auto c = find_client(client)) {
         c->send_notification(*this, *data);
         return kAooOk;
@@ -244,12 +244,12 @@ AooError AOO_CALL aoo::net::Server::notifyClient(
 
 AOO_API AooError AOO_CALL AooServer_notifyGroup(
         AooServer *server, AooId group, AooId user,
-        const AooDataView *data) {
+        const AooData *data) {
     return server->notifyGroup(group, user, data);
 }
 
 AooError AOO_CALL aoo::net::Server::notifyGroup(
-        AooId group, AooId user, const AooDataView *data) {
+        AooId group, AooId user, const AooData *data) {
     if (auto g = find_group(group)) {
         if (user == kAooIdInvalid) {
             // all users
@@ -300,12 +300,12 @@ AooError AOO_CALL aoo::net::Server::findGroup(
 
 AOO_API AooError AOO_CALL AooServer_addGroup(
         AooServer *server, const AooChar *name, const AooChar *password,
-        const AooDataView *metadata, const AooIpEndpoint *relayAddress, AooFlag flags, AooId *groupId) {
+        const AooData *metadata, const AooIpEndpoint *relayAddress, AooFlag flags, AooId *groupId) {
     return server->addGroup(name, password, metadata, relayAddress, flags, groupId);
 }
 
 AooError AOO_CALL aoo::net::Server::addGroup(
-        const AooChar *name, const AooChar *password, const AooDataView *metadata,
+        const AooChar *name, const AooChar *password, const AooData *metadata,
         const AooIpEndpoint *relayAddress, AooFlag flags, AooId *groupId) {
     // this might "waste" a group ID, but we don't care.
     auto id = get_next_group_id();
@@ -358,13 +358,13 @@ AooError AOO_CALL aoo::net::Server::findUserInGroup(
 AOO_API AooError AOO_CALL AooServer_addUserToGroup(
         AooServer *server, AooId group,
         const AooChar *userName, const AooChar *userPwd,
-        const AooDataView *metadata, AooFlag flags, AooId *userId) {
+        const AooData *metadata, AooFlag flags, AooId *userId) {
     return server->addUserToGroup(group, userName, userPwd, metadata, flags, userId);
 }
 
 AooError AOO_CALL aoo::net::Server::addUserToGroup(
         AooId group, const AooChar *userName, const AooChar *userPwd,
-        const AooDataView *metadata, AooFlag flags, AooId *userId) {
+        const AooData *metadata, AooFlag flags, AooId *userId) {
     if (auto g = find_group(group)) {
         auto id = g->get_next_user_id();
         std::string hashed_pwd = userPwd ? aoo::net::encrypt(userPwd) : "";
@@ -440,8 +440,8 @@ AooError AOO_CALL aoo::net::Server ::groupControl(
     switch (ctl) {
     case kAooCtlUpdateGroup:
     {
-        CHECKARG(AooDataView*);
-        auto md = as<const AooDataView*>(ptr);
+        CHECKARG(AooData*);
+        auto md = as<const AooData*>(ptr);
         if (md) {
             update_group(*grp, *md);
         } else {
@@ -457,8 +457,8 @@ AooError AOO_CALL aoo::net::Server ::groupControl(
                       << index << " in group " << group);
             return kAooErrorNotFound;
         }
-        CHECKARG(AooDataView*);
-        auto md = as<const AooDataView*>(ptr);
+        CHECKARG(AooData*);
+        auto md = as<const AooData*>(ptr);
         if (md) {
             update_user(*grp, *usr, *md);
         } else {
@@ -671,7 +671,7 @@ bool Server::remove_group(AooId id) {
     return true;
 }
 
-void Server::update_group(group& grp, const AooDataView& md) {
+void Server::update_group(group& grp, const AooData& md) {
     LOG_DEBUG("AooServer: update group " << grp);
 
     grp.set_metadata(md);
@@ -686,7 +686,7 @@ void Server::update_group(group& grp, const AooDataView& md) {
     }
 }
 
-void Server::update_user(const group& grp, user& usr, const AooDataView& md) {
+void Server::update_user(const group& grp, user& usr, const AooData& md) {
     LOG_DEBUG("AooServer: update group " << grp);
 
     usr.set_metadata(md);

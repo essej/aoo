@@ -56,7 +56,7 @@ class Client;
 struct message {
     message() = default;
 
-    message(AooId group, AooId user, time_tag tt, const AooDataView& data, bool reliable)
+    message(AooId group, AooId user, time_tag tt, const AooData& data, bool reliable)
         : group_(group), user_(user), tt_(tt), data_(&data), reliable_(reliable) {}
     // data
     AooId group_ = kAooIdInvalid;
@@ -155,24 +155,24 @@ public:
 
     AooError AOO_CALL connect(
             const AooChar *hostName, AooInt32 port, const AooChar *password,
-            const AooDataView *metadata, AooNetCallback cb, void *context) override;
+            const AooData *metadata, AooNetCallback cb, void *context) override;
 
     AooError AOO_CALL disconnect(AooNetCallback cb, void *context) override;
 
     AooError AOO_CALL joinGroup(
-            const AooChar *groupName, const AooChar *groupPwd, const AooDataView *groupMetadata,
-            const AooChar *userName, const AooChar *userPwd, const AooDataView *userMetadata,
+            const AooChar *groupName, const AooChar *groupPwd, const AooData *groupMetadata,
+            const AooChar *userName, const AooChar *userPwd, const AooData *userMetadata,
             const AooIpEndpoint *relayAddress, AooNetCallback cb, void *context) override;
 
     AooError AOO_CALL leaveGroup(AooId group, AooNetCallback cb, void *context) override;
 
-    AooError AOO_CALL updateGroup(AooId group, const AooDataView& metadata,
+    AooError AOO_CALL updateGroup(AooId group, const AooData& metadata,
                                   AooNetCallback cb, void *context) override;
 
-    AooError AOO_CALL updateUser(AooId group, AooId user, const AooDataView& metadata,
+    AooError AOO_CALL updateUser(AooId group, AooId user, const AooData& metadata,
                                  AooNetCallback cb, void *context) override;
 
-    AooError AOO_CALL customRequest(const AooDataView& data, AooFlag flags,
+    AooError AOO_CALL customRequest(const AooData& data, AooFlag flags,
                                     AooNetCallback cb, void *context) override;
 
     AooError AOO_CALL findPeerByName(
@@ -187,7 +187,7 @@ public:
                                   AooChar *userNameBuffer, AooSize *userNameSize) override;
 
     AooError AOO_CALL sendMessage(
-            AooId group, AooId user, const AooDataView& msg,
+            AooId group, AooId user, const AooData& msg,
             AooNtpTime timeStamp, AooFlag flags) override;
 
 
@@ -430,7 +430,7 @@ public:
     struct connect_cmd : callback_cmd
     {
         connect_cmd(const std::string& hostname, int port, const char * pwd,
-                    const AooDataView *metadata, AooNetCallback cb, void *user)
+                    const AooData *metadata, AooNetCallback cb, void *user)
             : callback_cmd(cb, user),
               host_(hostname, port), pwd_(pwd ? pwd : ""), metadata_(metadata) {}
 
@@ -449,7 +449,7 @@ public:
             request.address.hostName = host_.name.c_str();
             request.address.port = host_.port;
             request.password = pwd_.empty() ? nullptr : pwd_.c_str();
-            AooDataView md { metadata_.type(), metadata_.data(), metadata_.size() };
+            AooData md { metadata_.type(), metadata_.data(), metadata_.size() };
             request.metadata = (md.size > 0) ? &md : nullptr;
 
             callback((AooNetRequest&)request, result, response);
@@ -504,8 +504,8 @@ public:
 
     struct group_join_cmd : callback_cmd
     {
-        group_join_cmd(const std::string& group_name, const char * group_pwd, const AooDataView *group_md,
-                       const std::string& user_name, const char * user_pwd, const AooDataView *user_md,
+        group_join_cmd(const std::string& group_name, const char * group_pwd, const AooData *group_md,
+                       const std::string& user_name, const char * user_pwd, const AooData *user_md,
                        const ip_host& relay, AooNetCallback cb, void *user)
             : callback_cmd(cb, user),
               group_name_(group_name), group_pwd_(group_pwd ? group_pwd : ""), group_md_(group_md),
@@ -526,12 +526,12 @@ public:
 
             request.groupName = group_name_.c_str();
             request.groupPwd = group_pwd_.empty() ? nullptr : group_pwd_.c_str();
-            AooDataView group_md { group_md_.type(), group_md_.data(), group_md_.size() };
+            AooData group_md { group_md_.type(), group_md_.data(), group_md_.size() };
             request.groupMetadata = (group_md.size > 0) ? &group_md : nullptr;
 
             request.userName = user_name_.c_str();
             request.userPwd = user_pwd_.empty() ? nullptr : user_pwd_.c_str();
-            AooDataView user_md { user_md_.type(), user_md_.data(), user_md_.size() };
+            AooData user_md { user_md_.type(), user_md_.data(), user_md_.size() };
             request.userMetadata = (user_md.size > 0) ? &user_md : nullptr;
 
             AooIpEndpoint relay;
@@ -581,7 +581,7 @@ public:
 
     struct group_update_cmd : callback_cmd
     {
-        group_update_cmd(AooId group, const AooDataView &md, AooNetCallback cb, void *context)
+        group_update_cmd(AooId group, const AooData &md, AooNetCallback cb, void *context)
             : callback_cmd(cb, context),
               group_(group), md_(&md) {}
 
@@ -612,7 +612,7 @@ public:
     struct user_update_cmd : callback_cmd
     {
         user_update_cmd(AooId group, AooId user,
-                        const AooDataView &md, AooNetCallback cb, void *context)
+                        const AooData &md, AooNetCallback cb, void *context)
             : callback_cmd(cb, context),
               group_(group), user_(user), md_(&md) {}
 
@@ -644,7 +644,7 @@ public:
 
     struct custom_request_cmd : callback_cmd
     {
-        custom_request_cmd(const AooDataView& data, AooFlag flags, AooNetCallback cb, void *user)
+        custom_request_cmd(const AooData& data, AooFlag flags, AooNetCallback cb, void *user)
             : callback_cmd(cb, user), data_(&data), flags_(flags) {}
 
         void perform(Client& obj) override {

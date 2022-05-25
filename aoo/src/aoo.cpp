@@ -86,20 +86,20 @@ osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const aoo:
     if (md.size() > 0) {
         msg << md.type() << osc::Blob(md.data(), md.size());
     } else {
-        msg << "" << osc::Blob(msg.Data(), 0); // HACK: do not use nullptr because of memcpy()
+        msg << kAooDataUnspecified << osc::Blob(msg.Data(), 0); // HACK: do not use nullptr because of memcpy()
     }
     return msg;
 }
 
-AooDataView osc_read_metadata(osc::ReceivedMessageArgumentIterator& it) {
-    auto type = (it++)->AsString();
+AooData osc_read_metadata(osc::ReceivedMessageArgumentIterator& it) {
+    auto type = (it++)->AsInt32();
     const void *blobdata;
     osc::osc_bundle_element_size_t blobsize;
     (it++)->AsBlob(blobdata, blobsize);
     if (blobsize) {
-        return AooDataView { type, (const AooByte *)blobdata, (AooSize)blobsize };
+        return AooData { type, (const AooByte *)blobdata, (AooSize)blobsize };
     } else {
-        return AooDataView { type, nullptr, 0 };
+        return AooData { type, nullptr, 0 };
     }
 }
 
@@ -343,22 +343,22 @@ uint64_t AOO_CALL aoo_getCurrentNtpTime(void){
     return aoo::time_tag::now();
 }
 
-double AOO_CALL aoo_osctime_to_seconds(uint64_t t){
+double AOO_CALL aoo_osctime_to_seconds(AooNtpTime t){
     return aoo::time_tag(t).to_seconds();
 }
 
-uint64_t AOO_CALL aoo_osctime_from_seconds(double s){
+uint64_t AOO_CALL aoo_osctime_from_seconds(AooSeconds s){
     return aoo::time_tag::from_seconds(s);
 }
 
-double AOO_CALL aoo_ntpTimeDuration(uint64_t t1, uint64_t t2){
+double AOO_CALL aoo_ntpTimeDuration(AooNtpTime t1, AooNtpTime t2){
     return aoo::time_tag::duration(t1, t2);
 }
 
 //---------------------- version -------------------------//
 
-void aoo_getVersion(int32_t *major, int32_t *minor,
-                    int32_t *patch, int32_t *test){
+void AOO_CALLaoo_getVersion(AooInt32 *major, AooInt32 *minor,
+                            AooInt32 *patch, AooInt32 *test){
     if (major) *major = kAooVersionMajor;
     if (minor) *minor = kAooVersionMinor;
     if (patch) *patch = kAooVersionPatch;
@@ -378,6 +378,56 @@ const char *aoo_getVersionString() {
     #endif
         ;
 }
+
+//---------------------- AooData ----------------------//
+
+static std::unordered_map<std::string, AooDataType> g_data_type_map = {
+    { "unspecified", kAooDataUnspecified },
+    { "raw", kAooDataRaw },
+    { "binary", kAooDataBinary },
+    { "text", kAooDataText },
+    { "osc", kAooDataOSC },
+    { "midi", kAooDataMIDI },
+    { "fudi", kAooDataFUDI },
+    { "json", kAooDataJSON },
+    { "xml", kAooDataXML }
+};
+
+AooDataType AOO_CALL aoo_dataTypeFromString(const AooChar *str) {
+    auto it = g_data_type_map.find(str);
+    if (it != g_data_type_map.end()) {
+        return it->second;
+    } else {
+        return kAooDataUnspecified;
+    }
+}
+
+const AooChar * AOO_CALL aoo_dataTypeToString(AooDataType type) {
+    const AooChar *result;
+    switch (type) {
+    case kAooDataRaw:
+        return "raw";
+    case kAooDataText:
+        return "text";
+    case kAooDataOSC:
+        return "osc";
+    case kAooDataMIDI:
+        return "midi";
+    case kAooDataFUDI:
+        return "fudi";
+    case kAooDataJSON:
+        return "json";
+    case kAooDataXML:
+        return "xml";
+    default:
+        if (type >= kAooDataUser) {
+            return "user";
+        } else {
+            return nullptr;
+        }
+    }
+}
+
 
 namespace aoo {
 

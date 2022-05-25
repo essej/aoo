@@ -178,69 +178,61 @@ struct decoder_deleter {
 
 struct metadata {
     metadata() = default;
-    metadata(const AooDataView* md) {
+    metadata(const AooData* md) {
         if (md) {
             type_ = md->type;
             data_.assign(md->data, md->data + md->size);
         }
     }
-    const char *type() const { return type_.c_str(); }
+    AooDataType type() const { return type_; }
     const AooByte *data() const { return data_.data(); }
     AooSize size() const { return data_.size(); }
 private:
-    std::string type_;
+    AooDataType type_ = kAooDataUnspecified;
     std::vector<AooByte> data_;
 };
 
-// HACK: declare the AooDataView overload in "net" namespace and then import into "aoo"
+// HACK: declare the AooData overload in "net" namespace and then import into "aoo"
 // namespace to prevent the compiler from picking OutboundPacketStream::operator<<bool
 namespace net {
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const AooDataView *md);
+osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const AooData *md);
 } // net
-osc::OutboundPacketStream& net::operator<<(osc::OutboundPacketStream& msg, const AooDataView *md);
+osc::OutboundPacketStream& net::operator<<(osc::OutboundPacketStream& msg, const AooData *md);
 
 osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const aoo::metadata& md);
 
-AooDataView osc_read_metadata(osc::ReceivedMessageArgumentIterator& it);
+AooData osc_read_metadata(osc::ReceivedMessageArgumentIterator& it);
 
-inline AooSize flat_metadata_maxsize(int32_t size) {
-    return sizeof(AooDataView) + size + kAooDataTypeMaxLen + 1;
-}
-
-inline AooSize flat_metadata_size(const AooDataView& data){
-    return sizeof(data) + data.size + strlen(data.type) + 1;
+inline AooSize flat_metadata_size(const AooData& data){
+    return sizeof(data) + data.size;
 }
 
 struct flat_metadata_deleter {
     void operator() (void *x) const {
-        auto md = static_cast<AooDataView *>(x);
+        auto md = static_cast<AooData *>(x);
         auto size = flat_metadata_size(*md);
         aoo::deallocate(x, size);
     }
 };
 
-using metadata_ptr = std::unique_ptr<AooDataView, flat_metadata_deleter>;
+using metadata_ptr = std::unique_ptr<AooData, flat_metadata_deleter>;
 
 struct rt_flat_metadata_deleter {
     void operator() (void *x) const {
-        auto md = static_cast<AooDataView *>(x);
+        auto md = static_cast<AooData *>(x);
         auto size = flat_metadata_size(*md);
         aoo::rt_deallocate(x, size);
     }
 };
 
-using rt_metadata_ptr = std::unique_ptr<AooDataView, rt_flat_metadata_deleter>;
+using rt_metadata_ptr = std::unique_ptr<AooData, rt_flat_metadata_deleter>;
 
-inline void flat_metadata_copy(const AooDataView& src, AooDataView& dst) {
-    auto data = (AooByte *)(&dst) + sizeof(AooDataView);
+inline void flat_metadata_copy(const AooData& src, AooData& dst) {
+    auto data = reinterpret_cast<AooByte *>(&dst) + sizeof(dst);
     memcpy(data, src.data, src.size);
-
-    auto type = (AooChar *)(data + src.size);
-    memcpy(type, src.type, strlen(src.type) + 1);
-
-    dst.type = type;
-    dst.data = data;
+    dst.type = src.type;
     dst.size = src.size;
+    dst.data = data;
 }
 
 } // aoo

@@ -59,15 +59,15 @@ public:
             AooError errorCode, const AooChar *errorMessage) override;
 
     AooError AOO_CALL notifyClient(
-            AooId client, const AooDataView *data) override;
+            AooId client, const AooData *data) override;
 
     AooError AOO_CALL notifyGroup(
-            AooId group, AooId user, const AooDataView *data) override;
+            AooId group, AooId user, const AooData *data) override;
 
     AooError AOO_CALL findGroup(const AooChar *name, AooId *id) override;
 
     AooError AOO_CALL addGroup(
-            const AooChar *name, const AooChar *password, const AooDataView *metadata,
+            const AooChar *name, const AooChar *password, const AooData *metadata,
             const AooIpEndpoint *relayAddress, AooFlag flags, AooId *groupId) override;
 
     AooError AOO_CALL removeGroup(AooId group) override;
@@ -77,7 +77,7 @@ public:
 
     AooError AOO_CALL addUserToGroup(
             AooId group, const AooChar *userName, const AooChar *userPwd,
-            const AooDataView *metadata, AooFlag flags, AooId *userId) override;
+            const AooData *metadata, AooFlag flags, AooId *userId) override;
 
     AooError AOO_CALL removeUserFromGroup(
             AooId group, AooId user) override;
@@ -124,9 +124,9 @@ public:
 
     bool remove_group(AooId id);
 
-    void update_group(group& grp, const AooDataView& md);
+    void update_group(group& grp, const AooData& md);
 
-    void update_user(const group& grp, user& usr, const AooDataView& md);
+    void update_user(const group& grp, user& usr, const AooData& md);
 
     void on_user_joined_group(const group& grp, const user& usr,
                               const client_endpoint& client);

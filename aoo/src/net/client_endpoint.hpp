@@ -17,7 +17,7 @@ class Server;
 class user {
 public:
     user(const std::string& name, const std::string& pwd, AooId id,
-         AooId group, AooId client, const AooDataView *md,
+         AooId group, AooId client, const AooData *md,
          const ip_host& relay, bool persistent)
         : name_(name), pwd_(pwd), id_(id), group_(group),
           client_(client), md_(md), relay_(relay), persistent_(persistent) {}
@@ -33,7 +33,7 @@ public:
 
     AooId id() const { return id_; }
 
-    void set_metadata(const AooDataView& md) {
+    void set_metadata(const AooData& md) {
         md_ = aoo::metadata(&md);
     }
 
@@ -81,7 +81,7 @@ using user_list = std::vector<user>;
 class group {
 public:
     group(const std::string& name, const std::string& pwd, AooId id,
-         const AooDataView *md, const ip_host& relay, bool persistent)
+         const AooData *md, const ip_host& relay, bool persistent)
         : name_(name), pwd_(pwd), id_(id), md_(md), relay_(relay), persistent_(persistent) {}
 
     const std::string& name() const { return name_; }
@@ -94,7 +94,7 @@ public:
 
     AooId id() const { return id_; }
 
-    void set_metadata(const AooDataView& md) {
+    void set_metadata(const AooData& md) {
         md_ = aoo::metadata(&md);
     }
 
@@ -173,7 +173,7 @@ public:
     void send_error(Server& server, AooId token, AooNetRequestType type,
                     AooError result, int32_t errcode, const char *errmsg);
 
-    void send_notification(Server& server, const AooDataView& data) const;
+    void send_notification(Server& server, const AooData& data) const;
 
     void send_peer_add(Server& server, const group& grp, const user& usr,
                        const client_endpoint& client) const;

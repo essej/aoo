@@ -42,7 +42,7 @@ struct t_aoo_receive
     AooId x_id = 0;
     std::unique_ptr<t_sample *[]> x_vec;
     // metadata
-    t_symbol *x_metadata_type;
+    AooDataType x_metadata_type;
     std::vector<AooByte> x_metadata;
     // sources
     std::vector<t_source> x_sources;
@@ -151,9 +151,9 @@ static void aoo_receive_invite(t_aoo_receive *x, t_symbol *s, int argc, t_atom *
     if (x->get_source_arg(argc, argv, addr, id, false)) {
         AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
 
-        if (x->x_metadata_type){
-            AooDataView md;
-            md.type = x->x_metadata_type->s_name;
+        if (!x->x_metadata.empty()){
+            AooData md;
+            md.type = x->x_metadata_type;
             md.data = x->x_metadata.data();
             md.size = x->x_metadata.size();
 
@@ -192,38 +192,33 @@ static void aoo_receive_uninvite(t_aoo_receive *x, t_symbol *s, int argc, t_atom
 
 static void aoo_receive_metadata(t_aoo_receive *x, t_symbol *s, int argc, t_atom *argv)
 {
-    if (argc > 0){
-        // metadata type
-        t_symbol *type;
-        if (argv->a_type == A_SYMBOL){
-            type = argv->a_w.w_symbol;
-        } else {
-            pd_error(x, "%s: bad metadata type", classname(x));
-        #if 1
-            x->x_metadata_type = nullptr;
-        #endif
-            return;
-        }
-        // metadata content
-        if (argc > 1){
-            // set new stream metadata
-            auto size = argc - 1;
-            x->x_metadata.resize(size);
-            for (int i = 0; i < size; ++i){
-                x->x_metadata[i] = (AooByte)atom_getfloat(argv + i + 1);
-            }
-        } else {
-            // empty metadata is not allowed
-            pd_error(x, "%s: metadata must not be empty", classname(x));
-        #if 1
-            x->x_metadata_type = nullptr;
-        #endif
-            return;
-        }
-        x->x_metadata_type = type;
-    } else {
-        // clear stream metadata
-        x->x_metadata_type = nullptr;
+    if (!argc){
+        return;
+    }
+    if (argc < 2) {
+        // empty metadata is not allowed
+        pd_error(x, "%s: metadata must not be empty", classname(x));
+    #if 1
+        x->x_metadata_type = kAooDataUnspecified;
+        x->x_metadata.clear();
+    #endif
+        return;
+    }
+    // metadata type
+    AooDataType type;
+    if (!atom_to_datatype(*argv, type, x)) {
+    #if 1
+        x->x_metadata_type = kAooDataUnspecified;
+        x->x_metadata.clear();
+    #endif
+        return;
+    }
+    x->x_metadata_type = type;
+    // metadata content
+    auto size = argc - 1;
+    x->x_metadata.resize(size);
+    for (int i = 0; i < size; ++i){
+        x->x_metadata[i] = (AooByte)atom_getfloat(argv + i + 1);
     }
 }
 
@@ -404,7 +399,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
                 // copy endpoint + event name
                 memcpy(vec, msg, 4 * sizeof(t_atom));
                 // type
-                SETSYMBOL(vec + 4, gensym(e->metadata->type));
+                datatype_to_atom(e->metadata->type, vec[4]);
                 // data
                 for (int i = 0; i < e->metadata->size; ++i){
                     SETFLOAT(vec + 5 + i, (uint8_t)e->metadata->data[i]);
@@ -494,7 +489,7 @@ static t_int * aoo_receive_perform(t_int *w)
     int n = (int)(w[2]);
 
     if (x->x_node){
-        auto err = x->x_sink->process(x->x_vec.get(), n, get_osctime());
+        auto err = x->x_sink->process(x->x_vec.get(), n, get_osctime(), nullptr, nullptr);
         if (err != kAooErrorIdle){
             x->x_node->notify();
         }
@@ -600,7 +595,7 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
 t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
 {
     x_clock = clock_new(this, (t_method)aoo_receive_tick);
-    x_metadata_type = nullptr;
+    x_metadata_type = kAooDataUnspecified;
 
     // arg #1: port number
     x_port = atom_getfloatarg(0, argc, argv);

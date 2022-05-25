@@ -11,9 +11,9 @@ class Client;
 struct message;
 
 struct message_packet {
-    const char *type;
-    const AooByte *data;
+    int32_t type;
     int32_t size;
+    const AooByte *data;
     time_tag tt;
     int32_t sequence;
     int32_t totalsize;
@@ -31,7 +31,7 @@ class peer {
 public:
     peer(const std::string& groupname, AooId groupid,
          const std::string& username, AooId userid, AooId localid,
-         ip_address_list&& addrlist, const AooDataView *metadata,
+         ip_address_list&& addrlist, const AooData *metadata,
          ip_address_list&& user_relay, const ip_address_list& group_relay);
 
     ~peer();

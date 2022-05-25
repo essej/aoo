@@ -57,7 +57,7 @@ AOO_API AooError AOO_CALL AooSource_pollEvents(AooSource *source);
 
 /** \copydoc AooSource::startStream() */
 AOO_API AooError AOO_CALL AooSource_startStream(
-        AooSource *source, const AooDataView *metadata);
+        AooSource *source, const AooData *metadata);
 
 /** \copydoc AooSource::stopStream() */
 AOO_API AooError AOO_CALL AooSource_stopStream(AooSource *source);

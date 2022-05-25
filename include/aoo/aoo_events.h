@@ -124,7 +124,7 @@ typedef struct AooEventStreamStart
 {
     AooEventType type;
     AooEndpoint endpoint;
-    const AooDataView * metadata;
+    const AooData * metadata;
 } AooEventStreamStart;
 
 /** \brief a stream has stopped */
@@ -137,7 +137,7 @@ typedef struct AooEventInvite
     AooEndpoint endpoint;
     AooId token;
     AooInt32 reserved;
-    const AooDataView * metadata;
+    const AooData * metadata;
 } AooEventInvite;
 
 /** \brief received uninvitation by sink */
@@ -279,7 +279,7 @@ typedef struct AooNetEventClientNotification
 {
     AooEventType type;
     AooFlag flags;
-    AooDataView message;
+    AooData message;
 } AooNetEventClientNotification;
 
 /** \brief group metadata has been updated */
@@ -288,7 +288,7 @@ typedef struct AooNetEventClientGroupUpdate
     AooEventType type;
     AooFlag flags;
     AooId groupId;
-    AooDataView groupMetadata;
+    AooData groupMetadata;
 } AooNetEventClientGroupUpdate;
 
 /** \brief user metadata has been updated */
@@ -298,7 +298,7 @@ typedef struct AooNetEventClientUserUpdate
     AooFlag flags;
     AooId groupId;
     AooId userId;
-    AooDataView userMetadata;
+    AooData userMetadata;
 } AooNetEventClientUserUpdate;
 
 /* peer events */
@@ -314,7 +314,7 @@ typedef struct AooNetEventPeer
     const AooChar *userName;
     AooSockAddr address;
     /** See AooNetResponseGroupJoin::userMetadata */
-    const AooDataView *metadata;
+    const AooData *metadata;
 #if 0
     /** relay address provided by this peer,
      * see AooClient::joinGroup() */
@@ -373,7 +373,7 @@ typedef struct AooNetEventPeerMessage
     AooId groupId;
     AooId userId;
     AooNtpTime timeStamp;
-    AooDataView data;
+    AooData data;
 } AooNetEventPeerMessage;
 
 /** \brief peer metadata has been updated */
@@ -383,7 +383,7 @@ typedef struct AooNetEventPeerUpdate
     AooFlag flags;
     AooId groupId;
     AooId userId;
-    AooDataView userMetadata;
+    AooData userMetadata;
 } AooNetEventPeerUpdate;
 
 /* server events */
@@ -410,7 +410,7 @@ typedef struct AooNetEventServerGroupAdd
     AooEventType type;
     AooId id;
     const AooChar *name;
-    const AooDataView *metadata;
+    const AooData *metadata;
 #if 0
     const AooIpEndpoint *relayAddress;
 #endif
@@ -440,7 +440,7 @@ typedef struct AooNetEventServerGroupJoin
     const AooChar *userName;
     AooId clientId;
     AooFlag userFlags;
-    const AooDataView *userMetadata;
+    const AooData *userMetadata;
 #if 0
     const AooIpEndpoint *relayAddress;
 #endif
@@ -465,7 +465,7 @@ typedef struct AooNetEventServerGroupUpdate
     AooEventType type;
     AooFlag flags;
     AooId groupId;
-    AooDataView groupMetadata;
+    AooData groupMetadata;
 } AooNetEventServerGroupUpdate;
 
 /** \brief a user has been updated */
@@ -475,7 +475,7 @@ typedef struct AooNetEventServerUserUpdate
     AooFlag flags;
     AooId groupId;
     AooId userId;
-    AooDataView userMetadata;
+    AooData userMetadata;
 } AooNetEventServerUserUpdate;
 
 #endif /* USE_AOO_NET */

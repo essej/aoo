@@ -34,7 +34,7 @@ private:
                    const AooNetResponse *response = nullptr);
 
     void handlePeerMessage(AooId group, AooId user, AooNtpTime time,
-                           const AooDataView& data);
+                           const AooData& data);
 
     template<typename T>
     T * createCommand(int port, int token);

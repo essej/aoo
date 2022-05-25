@@ -23,7 +23,7 @@ struct peer_event : ievent
         e.userName = user_name_.c_str();
         e.address.data = addr_.valid() ? addr_.address() : nullptr;
         e.address.size = addr_.length();
-        AooDataView md { metadata_.type(), metadata_.data(), metadata_.size() };
+        AooData md { metadata_.type(), metadata_.data(), metadata_.size() };
         e.metadata = md.size > 0 ? &md : nullptr;
 
         fn(e);
@@ -71,7 +71,7 @@ using peer_ping_reply_event = peer_ping_base_event<kAooNetEventPeerPingReply>;
 
 struct peer_message_event : ievent
 {
-    peer_message_event(AooId group, AooId user, time_tag tt, const AooDataView& msg)
+    peer_message_event(AooId group, AooId user, time_tag tt, const AooData& msg)
         : group_(group), user_(user), tt_(tt), msg_(&msg) {}
 
     void dispatch(const event_handler &fn) const override {
@@ -96,7 +96,7 @@ struct peer_message_event : ievent
 
 struct peer_update_event : ievent
 {
-    peer_update_event(AooId group, AooId user, const AooDataView& md)
+    peer_update_event(AooId group, AooId user, const AooData& md)
         : group_(group), user_(user), md_(&md) {}
 
     void dispatch(const event_handler &fn) const override {
@@ -119,7 +119,7 @@ struct peer_update_event : ievent
 
 struct user_update_event : ievent
 {
-    user_update_event(AooId group, AooId user, const AooDataView& md)
+    user_update_event(AooId group, AooId user, const AooData& md)
         : group_(group), user_(user), md_(&md) {}
 
     void dispatch(const event_handler &fn) const override {
@@ -142,7 +142,7 @@ struct user_update_event : ievent
 
 struct group_update_event : ievent
 {
-    group_update_event(AooId group, const AooDataView& md)
+    group_update_event(AooId group, const AooData& md)
         : group_(group), md_(&md) {}
 
     void dispatch(const event_handler &fn) const override {
@@ -163,7 +163,7 @@ struct group_update_event : ievent
 
 struct notification_event : ievent
 {
-    notification_event(const AooDataView& msg)
+    notification_event(const AooData& msg)
         : msg_(&msg) {}
 
     void dispatch(const event_handler &fn) const override {

@@ -110,12 +110,12 @@ public:
      *
      * \note Threadsafe, RT-safe and reentrant
      *
-     * You can pass an optional AooDataView structure which will be sent as
+     * You can pass an optional AooData structure which will be sent as
      * additional stream metadata. For example, it could contain information
      * about the channel layout, the musical content, etc.
      */
     virtual AooError AOO_CALL startStream(
-            const AooDataView *metadata) = 0;
+            const AooData *metadata) = 0;
 
     /** \brief Stop the current stream */
     virtual AooError AOO_CALL stopStream() = 0;

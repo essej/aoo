@@ -58,7 +58,7 @@ AOO_API AooError AOO_CALL AooSink_pollEvents(AooSink *sink);
 /** \copydoc AooSink::inviteSource() */
 AOO_API AooError AOO_CALL AooSink_inviteSource(
         AooSink *sink, const AooEndpoint *source,
-        const AooDataView *metadata);
+        const AooData *metadata);
 
 /** \copydoc AooSink::uninviteSource() */
 AOO_API AooError AOO_CALL AooSink_uninviteSource(

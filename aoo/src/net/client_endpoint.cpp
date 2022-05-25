@@ -117,7 +117,7 @@ void client_endpoint::send_error(Server& server, AooId token, AooNetRequestType 
     send_message(msg);
 }
 
-void client_endpoint::send_notification(Server& server, const AooDataView &data) const {
+void client_endpoint::send_notification(Server& server, const AooData &data) const {
     auto msg = server.start_message(data.size);
 
     msg << osc::BeginMessage(kAooNetMsgClientMessage)

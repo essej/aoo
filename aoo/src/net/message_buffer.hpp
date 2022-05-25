@@ -133,12 +133,12 @@ public:
     bool initialized() const {
         return nframes_ > 0;
     }
-    void set_info(const char *type, time_tag tt) {
+    void set_info(AooDataType type, time_tag tt) {
         type_ = type;
         tt_ = tt;
     }
     // methods
-    const char *type() const { return type_.c_str(); }
+    AooDataType type() const { return type_; }
     const AooByte* data() const { return buffer_.data(); }
     int32_t size() const { return buffer_.size(); }
 
@@ -153,8 +153,8 @@ public:
     int32_t sequence_ = -1;
     aoo::time_tag tt_;
 protected:
-    aoo::string type_;
     aoo::vector<AooByte> buffer_;
+    AooDataType type_;
     int32_t nframes_ = 0;
     int32_t framesize_ = 0;
     std::bitset<256> frames_ = 0;

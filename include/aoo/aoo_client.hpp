@@ -86,7 +86,7 @@ public:
      */
     virtual AooError AOO_CALL connect(
             const AooChar *hostName, AooInt32 port, const AooChar *password,
-            const AooDataView *metadata, AooNetCallback cb, void *context) = 0;
+            const AooData *metadata, AooNetCallback cb, void *context) = 0;
 
     /** \brief disconnect from AOO server
      *
@@ -116,9 +116,9 @@ public:
      */
     virtual AooError AOO_CALL joinGroup(
             const AooChar *groupName, const AooChar *groupPwd,
-            const AooDataView *groupMetadata,
+            const AooData *groupMetadata,
             const AooChar *userName, const AooChar *userPwd,
-            const AooDataView *userMetadata,
+            const AooData *userMetadata,
             const AooIpEndpoint *relayAddress,
             AooNetCallback cb, void *context) = 0;
 
@@ -143,7 +143,7 @@ public:
      * \param context user data passed to callback function
      */
     virtual AooError AOO_CALL updateGroup(
-            AooId group, const AooDataView &metadata,
+            AooId group, const AooData &metadata,
             AooNetCallback cb, void *context) = 0;
 
     /** \brief update user metadata
@@ -157,7 +157,7 @@ public:
      * \param context user data passed to callback function
      */
     virtual AooError AOO_CALL updateUser(
-            AooId group, AooId user, const AooDataView &metadata,
+            AooId group, AooId user, const AooData &metadata,
             AooNetCallback cb, void *context) = 0;
 
     /** \brief send custom request
@@ -170,7 +170,7 @@ public:
      * \param context user data passed to callback function
      */
     virtual AooError AOO_CALL customRequest(
-            const AooDataView& data, AooFlag flags,
+            const AooData& data, AooFlag flags,
             AooNetCallback cb, void *context) = 0;
 
     // TODO: findGroupByName() and getGroupName()?
@@ -233,7 +233,7 @@ public:
      * \param flags contains one or more values from AooNetMessageFlags
      */
     virtual AooError AOO_CALL sendMessage(
-            AooId group, AooId user, const AooDataView &msg,
+            AooId group, AooId user, const AooData &msg,
             AooNtpTime timeStamp, AooFlag flags) = 0;
 
     /** \brief handle messages from peers

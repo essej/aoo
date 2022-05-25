@@ -79,7 +79,7 @@ struct source_request {
     union {
         struct {
             AooId token;
-            AooDataView *metadata;
+            AooData *metadata;
         } invite;
     };
 };
@@ -134,7 +134,7 @@ public:
     void reset(const Sink& s);
 
     AooError handle_start(const Sink& s, int32_t stream, uint32_t flags, int32_t format_id,
-                          const AooFormat& f, const AooByte *settings, int32_t size, const AooDataView& md);
+                          const AooFormat& f, const AooByte *settings, int32_t size, const AooData& md);
 
     AooError handle_stop(const Sink& s, int32_t stream);
 
@@ -146,7 +146,7 @@ public:
 
     bool process(const Sink& s, AooSample **buffer, int32_t nsamples);
 
-    void invite(const Sink& s, AooId token, AooDataView *metadata);
+    void invite(const Sink& s, AooId token, AooData *metadata);
 
     void uninvite(const Sink& s);
 
@@ -281,7 +281,7 @@ public:
     AooError AOO_CALL pollEvents() override;
 
     AooError AOO_CALL inviteSource(
-            const AooEndpoint& source, const AooDataView *metadata) override;
+            const AooEndpoint& source, const AooData *metadata) override;
 
     AooError AOO_CALL uninviteSource(const AooEndpoint& source) override;
 

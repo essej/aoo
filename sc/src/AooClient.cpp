@@ -289,7 +289,12 @@ void AooClient::forwardMessage(const char *data, int32_t size,
     AooId user = args.geti();
     auto offset = args.getf();
     auto flags = (AooFlag)args.geti();
-    auto type = args.gets();
+    auto typestr = args.gets();
+    auto type = aoo_dataTypeFromString(typestr);
+    if (type == kAooDataUnspecified) {
+        LOG_ERROR("bad data type '" << typestr << "'");
+        return;
+    }
     // get message content
     if (args.nextTag() != 'b'){
         return;
@@ -302,7 +307,7 @@ void AooClient::forwardMessage(const char *data, int32_t size,
     args.skipb();
 
     aoo::time_tag abstime = time + aoo::time_tag::from_seconds(offset);
-    AooDataView msg { type, (AooByte *)blobdata, (AooSize)blobsize };
+    AooData msg { type, (AooByte *)blobdata, (AooSize)blobsize };
 
     node_->client()->sendMessage(group, user, msg, abstime.value(), flags);
 }
@@ -310,7 +315,7 @@ void AooClient::forwardMessage(const char *data, int32_t size,
 // Called with NRT lock (see handleEvent()), although probably
 // not necessary...
 void AooClient::handlePeerMessage(AooId groupId, AooId userId, AooNtpTime time,
-                                  const AooDataView& data)
+                                  const AooData& data)
 {
     LOG_DEBUG("handlePeerMessage: " << data.type);
     aoo::time_tag tt(time);
@@ -325,7 +330,7 @@ void AooClient::handlePeerMessage(AooId groupId, AooId userId, AooNtpTime time,
     msg << osc::BeginMessage("/aoo/msg")
         << node_->port() << groupId << userId << data.type;
 
-    if (!strcmp(data.type, kAooDataTypeOSC)) {
+    if (data.type == kAooDataOSC) {
         // HACK to avoid manually parsing OSC messages in SCLang:
         // parse inner OSC message and append its address pattern and
         // arguments to our message. The Client can simply look at the

@@ -299,3 +299,17 @@ AOO_API AooSeconds AOO_CALL aoo_ntpTimeDuration(AooNtpTime t1, AooNtpTime t2);
 AOO_API AooError AOO_CALL aoo_parsePattern(
         const AooByte *msg, AooInt32 size, AooMsgType *type, AooId *id, AooInt32 *offset);
 
+/**
+ * \brief get AooData type from string representation
+ *
+ * \param str the string
+ * \return error the data type on success, kAooDataUnspecified on failure
+ */
+AOO_API AooDataType AOO_CALL aoo_dataTypeFromString(const AooChar *str);
+
+/**
+ * \brief convert AooData type to string representation
+ * \param type the data type
+ * \return a C string on success, NULL if the data type is not valid
+ */
+AOO_API const AooChar * AOO_CALL aoo_dataTypeToString(AooDataType type);

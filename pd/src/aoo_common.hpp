@@ -69,3 +69,7 @@ bool format_parse(t_pd *x, AooFormatStorage &f, int argc, t_atom *argv,
                   int maxnumchannels);
 
 int format_to_atoms(const AooFormat &f, int argc, t_atom *argv);
+
+bool atom_to_datatype(const t_atom &a, AooDataType& type, void *x);
+
+void datatype_to_atom(AooDataType type, t_atom& a);

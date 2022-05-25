@@ -88,13 +88,13 @@ using sink_event = endpoint_event<AooEventEndpoint>;
 struct invite_event : endpoint_event<AooEventInvite> {
     RT_CLASS(invite_event)
 
-    invite_event(const ip_address& addr, AooId id, AooId token, const AooDataView *md)
+    invite_event(const ip_address& addr, AooId id, AooId token, const AooData *md)
         : endpoint_event(kAooEventInvite, addr, id) {
         this->token = token;
         this->reserved = 0;
         if (md) {
             auto size = flat_metadata_size(*md);
-            auto metadata = (AooDataView *)rt_allocate(size);
+            auto metadata = (AooData *)rt_allocate(size);
             flat_metadata_copy(*md, *metadata);
             this->metadata = metadata;
         } else {
@@ -171,7 +171,7 @@ struct format_change_event : endpoint_event<AooEventFormatChange> {
 struct stream_start_event : endpoint_event<AooEventStreamStart> {
     RT_CLASS(stream_start_event)
 
-    stream_start_event(const aoo::endpoint& ep, const AooDataView *md)
+    stream_start_event(const aoo::endpoint& ep, const AooData *md)
         : endpoint_event(kAooEventStreamStart, ep) {
         this->metadata = md; // metadata is moved!
     }

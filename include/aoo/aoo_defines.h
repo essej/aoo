@@ -380,45 +380,45 @@ enum AooMsgTypes
     kAooTypeSentinel
 };
 
-/*------------- AOO data view ---------------*/
+/*------------- AOO data ---------------*/
+
+/** \brief AooStreamMessage type */
+typedef AooInt32 AooDataType;
+
+enum AooDataTypes
+{
+    /** \brief unspecified data type */
+    kAooDataUnspecified = -1,
+    /** \brief raw or binary data */
+    kAooDataRaw = 0,
+    kAooDataBinary = kAooDataRaw,
+    /** \brief plain text (UTF-8 encoded) */
+    kAooDataText,
+    /** \brief OSC message (Open Sound Control) */
+    kAooDataOSC,
+    /** \brief MIDI */
+    kAooDataMIDI,
+    /** \brief FUDI (Pure Data) */
+    kAooDataFUDI,
+    /** \brief JSON (UTF-8 encoded) */
+    kAooDataJSON,
+    /** \brief XML (UTF-8 encoded) */
+    kAooDataXML,
+    /** \brief start of user specified types */
+    kAooDataUser = 1000
+};
 
 /** \brief view on arbitrary structured data */
-typedef struct AooDataView
+typedef struct AooData
 {
-    /** C string describing the data format */
-    const AooChar *type;
+    /** the data type */
+    AooDataType type;
     /** the data content */
     const AooByte *data;
     /** the data size in bytes */
     AooSize size;
-} AooDataView;
+} AooData;
 
-/** \brief max. length of data type strings (excluding the trailing `\0`) */
-#define kAooDataTypeMaxLen 63
-
-/* pre-defined data type names */
-
-/** \brief plain text (UTF-8 encoded) */
-#define kAooDataTypeText "text"
-/** \brief JSON (UTF-8 encoded) */
-#define kAooDataTypeJSON "json"
-/** \brief XML (UTF-8 encoded) */
-#define kAooDataTypeXML "xml"
-/** \brief OSC message (Open Sound Control) */
-#define kAooDataTypeOSC "osc"
-/** \brief FUDI (Pure Data) */
-#define kAooDataTypeFUDI "fudi"
-/** \brief raw bytes */
-#define kAooDataTypeRaw "raw"
-/** \brief MIDI */
-#define kAooDataTypeMIDI "midi"
-/** \brief unspecified data type */
-#define kAooDataTypeUnspec ""
-
-/* Users may define their own data type names.
- * A type name must be a sequence of ASCII characters,
- * ideally starting with an underscore to avoid
- * clashes with built-in type names. */
 
 /*---------------- AOO format --------------------*/
 

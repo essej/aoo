@@ -751,36 +751,18 @@ AooError AOO_CALL aoo::Source::pollEvents(){
 }
 
 AOO_API AooError AOO_CALL AooSource_startStream(
-        AooSource *source, const AooDataView *metadata)
+        AooSource *source, const AooData *metadata)
 {
     return source->startStream(metadata);
 }
 
-#define STREAM_METADATA_WARN 1
-
-AooError AOO_CALL aoo::Source::startStream(const AooDataView *md) {
+AooError AOO_CALL aoo::Source::startStream(const AooData *md) {
     // check metadata
     if (md) {
-        // check type name length
-        if (strlen(md->type) > kAooDataTypeMaxLen){
-            LOG_ERROR("AooSource: stream metadata type name must not be larger than "
-                      << kAooDataTypeMaxLen << " characters!");
-        #if STREAM_METADATA_WARN
-            LOG_WARNING("AooSource: ignoring stream metadata");
-            md = nullptr;
-        #else
-            return kAooErrorBadArgument;
-        #endif
-        }
         // check data size
-        if (md && md->size == 0){
+        if (md->size == 0){
             LOG_ERROR("AooSource: stream metadata cannot be empty!");
-        #if STREAM_METADATA_WARN
-            LOG_WARNING("AooSource: ignoring stream metadata");
-            md = nullptr;
-        #else
             return kAooErrorBadArgument;
-        #endif
         }
 
         LOG_DEBUG("AooSource: start stream with " << md->type << " metadata");
@@ -789,10 +771,10 @@ AooError AOO_CALL aoo::Source::startStream(const AooDataView *md) {
     }
 
     // copy metadata
-    AooDataView *metadata = nullptr;
+    AooData *metadata = nullptr;
     if (md && md->size > 0) {
         auto size = flat_metadata_size(*md);
-        metadata = (AooDataView *)rt_allocate(size);
+        metadata = (AooData *)rt_allocate(size);
         flat_metadata_copy(*md, *metadata);
     }
     // exchange metadata
@@ -1217,7 +1199,7 @@ void Source::update_historybuffer(){
 // [<metadata_type> <metadata_content>]
 void send_start_msg(const endpoint& ep, int32_t id, int32_t stream, int32_t lastformat,
                     const AooFormat& f, const AooByte *extension, AooInt32 size,
-                    const AooDataView* metadata, const sendfn& fn) {
+                    const AooData* metadata, const sendfn& fn) {
     LOG_DEBUG("AooSource: send " kAooMsgStart " to " << ep
               << " (stream = " << stream << ")");
 
@@ -1300,7 +1282,7 @@ void Source::send_start(const sendfn& fn){
     }
 
     // cache stream metadata
-    AooDataView *md = nullptr;
+    AooData *md = nullptr;
     {
         scoped_spinlock lock(metadata_lock_);
         // only send metadata if "accepted" in make_new_stream().
@@ -1308,7 +1290,7 @@ void Source::send_start(const sendfn& fn){
             assert(metadata_ != nullptr);
             assert(metadata_->size > 0);
             auto mdsize = flat_metadata_size(*metadata_);
-            md = (AooDataView *)alloca(mdsize);
+            md = (AooData *)alloca(mdsize);
             flat_metadata_copy(*metadata_, *md);
         }
     }
@@ -1906,12 +1888,12 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
 
     auto token = (it++)->AsInt32();
 
-    const char *type = nullptr;
+    AooInt32 type = kAooDataUnspecified;
     const void *ptr = nullptr;
     osc::osc_bundle_element_size_t size = 0;
 
     if (msg.ArgumentCount() > 2){
-        type = (it++)->AsString();
+        type = (it++)->AsInt32();
         (it++)->AsBlob(ptr, size);
     }
 
@@ -1934,7 +1916,7 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
         lock1.unlock(); // !
 
         // push "invite" event
-        AooDataView md;
+        AooData md;
         md.type = type;
         md.data = (AooByte *)ptr;
         md.size = size;
