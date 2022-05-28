@@ -304,6 +304,42 @@ static void aoo_client_port(t_aoo_client *x, t_floatarg f)
     }
 }
 
+static void aoo_client_sim_packet_drop(t_aoo_client *x, t_floatarg f)
+{
+    if (x->x_node) {
+        float val = f;
+        auto e = x->x_node->client()->control(kAooCtlSetSimulatePacketDrop, 0, AOO_ARG(val));
+        if (e != kAooOk) {
+            pd_error(x, "%s: 'sim_packet_drop' message failed (%s)",
+                     classname(x), aoo_strerror(e));
+        }
+    }
+}
+
+static void aoo_client_sim_packet_reorder(t_aoo_client *x, t_floatarg f)
+{
+    if (x->x_node) {
+        AooSeconds val = f * 0.001;
+        auto e = x->x_node->client()->control(kAooCtlSetSimulatePacketReorder, 0, AOO_ARG(val));
+        if (e != kAooOk) {
+            pd_error(x, "%s: 'sim_packet_reorder' message failed (%s)",
+                     classname(x), aoo_strerror(e));
+        }
+    }
+}
+
+static void aoo_client_sim_packet_jitter(t_aoo_client *x, t_floatarg f)
+{
+    if (x->x_node) {
+        AooBool val = f;
+        auto e = x->x_node->client()->control(kAooCtlSetSimulatePacketJitter, 0, AOO_ARG(val));
+        if (e != kAooOk) {
+            pd_error(x, "%s: 'sim_packet_jitter' message failed (%s)",
+                     classname(x), aoo_strerror(e));
+        }
+    }
+}
+
 static void aoo_client_target(t_aoo_client *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (x->x_node){
@@ -867,4 +903,11 @@ void aoo_client_setup(void)
                     gensym("reliable"), A_FLOAT, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_port,
                     gensym("port"), A_FLOAT, A_NULL);
+    // debug/simulate
+    class_addmethod(aoo_client_class, (t_method)aoo_client_sim_packet_reorder,
+                    gensym("sim_packet_reorder"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_sim_packet_drop,
+                    gensym("sim_packet_drop"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_sim_packet_jitter,
+                    gensym("sim_packet_jitter"), A_FLOAT, A_NULL);
 }
