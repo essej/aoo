@@ -7,7 +7,21 @@
 #include <algorithm>
 #include <cmath>
 
-const size_t kAooEventQueueSize = 8;
+namespace aoo {
+
+// OSC data message
+const int32_t kDataMaxAddrSize = kAooMsgDomainLen + kAooMsgSourceLen + 16 + kAooMsgDataLen;
+// typetag string: 4 bytes
+// args: 8 bytes (sink ID + stream ID)
+const int32_t kDataHeaderSize = kDataMaxAddrSize + 8;
+
+// binary data message:
+// args: 8 bytes (stream ID + count)
+const int32_t kBinDataHeaderSize = kAooBinMsgLargeHeaderSize + 8;
+
+const int32_t kEventQueueSize = 8;
+
+} // aoo
 
 //------------------------- Sink ------------------------------//
 
@@ -18,7 +32,7 @@ AOO_API AooSink * AOO_CALL AooSink_new(
 
 aoo::Sink::Sink(AooId id, AooFlag flags, AooError *err)
     : id_(id) {
-    eventqueue_.reserve(kAooEventQueueSize);
+    eventqueue_.reserve(kEventQueueSize);
 }
 
 AOO_API void AOO_CALL AooSink_free(AooSink *sink) {
@@ -199,7 +213,7 @@ AooError AOO_CALL aoo::Sink::control(
     case kAooCtlSetPacketSize:
     {
         CHECKARG(int32_t);
-        const int32_t minpacketsize = 64;
+        const int32_t minpacketsize = kDataHeaderSize + 64;
         auto packetsize = as<int32_t>(ptr);
         if (packetsize < minpacketsize){
             LOG_WARNING("AooSink: packet size too small! setting to " << minpacketsize);
@@ -936,7 +950,7 @@ source_desc::source_desc(const ip_address& addr, AooId id, double time)
 {
     // reserve some memory, so we don't have to allocate memory
     // when pushing events in the audio thread.
-    eventqueue_.reserve(kAooEventQueueSize);
+    eventqueue_.reserve(kEventQueueSize);
     // resendqueue_.reserve(256);
     LOG_DEBUG("AooSink: source_desc");
 }
@@ -2142,8 +2156,7 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
 
     if (binary_.load(std::memory_order_relaxed)){
         // --- binary version ---
-        const int32_t maxdatasize = s.packetsize()
-                - (kAooBinMsgLargeHeaderSize + 8); // header + stream_id + count
+        const int32_t maxdatasize = s.packetsize() - kBinDataHeaderSize;
         const int32_t maxrequests = maxdatasize / 8; // 2 * int32
 
         // write header
@@ -2188,14 +2201,12 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
         osc::OutboundPacketStream msg(buf, sizeof(buf));
 
         // make OSC address pattern
-        const int32_t maxaddrsize = kAooMsgDomainLen +
-                kAooMsgSourceLen + 16 + kAooMsgDataLen;
-        char pattern[maxaddrsize];
+        char pattern[kDataMaxAddrSize];
         snprintf(pattern, sizeof(pattern), "%s%s/%d%s",
                  kAooMsgDomain, kAooMsgSource, ep.id, kAooMsgData);
 
-        const int32_t maxdatasize = s.packetsize() - maxaddrsize - 16; // id + stream_id + padding
-        const int32_t maxrequests = maxdatasize / 10; // 2 * (int32_t + typetag)
+        const int32_t maxdatasize = s.packetsize() - kDataHeaderSize;
+        const int32_t maxrequests = maxdatasize / 10; // 2 * (int32_t + typetag + padding)
         int32_t numrequests = 0;
 
         msg << osc::BeginMessage(pattern) << s.id() << stream_id;

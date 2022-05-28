@@ -8,22 +8,21 @@
 #include <algorithm>
 #include <cmath>
 
-const size_t kAooEventQueueSize = 8;
+namespace aoo {
+
+const int32_t kEventQueueSize = 8;
 
 // OSC data message
-// address pattern string: max 32 bytes
+const int32_t kDataMaxAddrSize = kAooMsgDomainLen + kAooMsgSinkLen + 16 + kAooMsgDataLen;
 // typetag string: max. 12 bytes
 // args (without blob data): 36 bytes
-#define kAooMsgDataHeaderSize 80
+const int32_t kDataHeaderSize = kDataMaxAddrSize + 48;
 
 // binary data message:
-// header: 12 bytes
-// args: 48 bytes (max.)
-#define kAooBinMsgDataHeaderSize 48
+// args: 28 bytes (max.)
+const int32_t kBinDataHeaderSize = kAooBinMsgLargeHeaderSize + 28;
 
 //-------------------- sink_desc ------------------------//
-
-namespace aoo {
 
 // called while locked
 void sink_desc::start(){
@@ -142,7 +141,7 @@ aoo::Source::Source(AooId id, AooFlag flags, AooError *err)
     : id_(id)
 {
     // event queue
-    eventqueue_.reserve(kAooEventQueueSize);
+    eventqueue_.reserve(kEventQueueSize);
     // request queues
     // formatrequestqueue_.resize(64);
     // datarequestqueue_.resize(1024);
@@ -284,7 +283,7 @@ AooError AOO_CALL aoo::Source::control(
     case kAooCtlSetPacketSize:
     {
         CHECKARG(int32_t);
-        const int32_t minpacketsize = kAooMsgDataHeaderSize + 64;
+        const int32_t minpacketsize = kDataHeaderSize + 64;
         auto packetsize = as<int32_t>(ptr);
         if (packetsize < minpacketsize){
             LOG_WARNING("AooSource: packet size too small! setting to " << minpacketsize);
@@ -1479,9 +1478,7 @@ void send_packet_osc(const endpoint& ep, AooId id, int32_t stream_id,
     char buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
-    const int32_t max_addr_size = kAooMsgDomainLen
-            + kAooMsgSinkLen + 16 + kAooMsgDataLen;
-    char address[max_addr_size];
+    char address[kDataMaxAddrSize];
     snprintf(address, sizeof(address), "%s%s/%d%s",
              kAooMsgDomain, kAooMsgSink, ep.id, kAooMsgData);
 
@@ -1669,7 +1666,7 @@ void Source::send_data(const sendfn& fn){
             bool binary = binary_.load();
             auto packetsize = packetsize_.load();
             auto maxpacketsize = packetsize -
-                    (binary ? kAooBinMsgDataHeaderSize : kAooMsgDataHeaderSize);
+                    (binary ? kDataHeaderSize : kBinDataHeaderSize);
             auto dv = div(d.totalsize, maxpacketsize);
             d.nframes = dv.quot + (dv.rem != 0);
 
