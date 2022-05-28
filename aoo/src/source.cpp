@@ -1327,8 +1327,8 @@ void send_start_msg(const endpoint& ep, int32_t id, int32_t stream, int32_t last
     const int32_t max_addr_size = kAooMsgDomainLen
             + kAooMsgSinkLen + 16 + kAooMsgStartLen;
     char address[max_addr_size];
-    snprintf(address, sizeof(address), "%s%s/%d%s",
-             kAooMsgDomain, kAooMsgSink, ep.id, kAooMsgStart);
+    snprintf(address, sizeof(address), "%s/%d%s",
+             kAooMsgDomain kAooMsgSink, ep.id, kAooMsgStart);
 
     // stream specific flags (for future use)
     AooFlag flags = 0;
@@ -1356,8 +1356,8 @@ void send_stop_msg(const endpoint& ep, int32_t id, int32_t stream, const sendfn&
     const int32_t max_addr_size = kAooMsgDomainLen
             + kAooMsgSinkLen + 16 + kAooMsgStopLen;
     char address[max_addr_size];
-    snprintf(address, sizeof(address), "%s%s/%d%s",
-             kAooMsgDomain, kAooMsgSink, ep.id, kAooMsgStop);
+    snprintf(address, sizeof(address), "%s/%d%s",
+             kAooMsgDomain kAooMsgSink, ep.id, kAooMsgStop);
 
     msg << osc::BeginMessage(address) << id << stream << osc::EndMessage;
 
@@ -1479,8 +1479,8 @@ void send_packet_osc(const endpoint& ep, AooId id, int32_t stream_id,
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
     char address[kDataMaxAddrSize];
-    snprintf(address, sizeof(address), "%s%s/%d%s",
-             kAooMsgDomain, kAooMsgSink, ep.id, kAooMsgData);
+    snprintf(address, sizeof(address), "%s/%d%s",
+             kAooMsgDomain kAooMsgSink, ep.id, kAooMsgData);
 
     msg << osc::BeginMessage(address) << id << stream_id << d.sequence << d.samplerate
         << d.channel << d.totalsize << d.nframes << d.frame << osc::Blob(d.data, d.size)
@@ -1861,8 +1861,8 @@ void Source::send_ping(const sendfn& fn){
                 const int32_t max_addr_size = kAooMsgDomainLen
                         + kAooMsgSinkLen + 16 + kAooMsgPingLen;
                 char address[max_addr_size];
-                snprintf(address, sizeof(address), "%s%s/%d%s",
-                         kAooMsgDomain, kAooMsgSink, sink.ep.id, kAooMsgPing);
+                snprintf(address, sizeof(address), "%s/%d%s",
+                         kAooMsgDomain kAooMsgSink, sink.ep.id, kAooMsgPing);
 
                 msg << osc::BeginMessage(address) << id() << osc::TimeTag(tt)
                     << osc::EndMessage;
