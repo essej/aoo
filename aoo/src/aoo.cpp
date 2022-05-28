@@ -68,13 +68,11 @@ int32_t get_random_id(){
         defined(__arm__) || defined(__aarch64__)
     // Don't use on embedded platforms because it can cause issues,
     // e.g. ESP-IDF stores thread_local variables on the stack!
-    thread_local std::random_device dev;
-    thread_local std::mt19937 mt(dev());
+    thread_local std::mt19937 mt(std::random_device{}());
 #else
     // fallback for embedded platforms
     static sync::padded_spinlock spinlock;
-    static std::random_device dev;
-    static std::mt19937 mt(dev());
+    static std::mt19937 mt(std::random_device{}());
     sync::scoped_lock<sync::padded_spinlock> lock(spinlock);
 #endif
     std::uniform_int_distribution<int32_t> dist;
