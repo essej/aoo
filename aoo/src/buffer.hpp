@@ -21,7 +21,7 @@ struct data_packet {
     double samplerate;
 };
 
-//---------------------- history_buffer ---------------------------//
+//---------------------- sent_block ---------------------------//
 
 class sent_block {
 public:
@@ -46,6 +46,8 @@ protected:
     int32_t framesize_ = 0;
 };
 
+//---------------------------- history_buffer ------------------------------//
+
 class history_buffer {
 public:
     void clear();
@@ -67,7 +69,7 @@ private:
     int32_t size_ = 0;
 };
 
-//---------------------------- jitter_buffer ------------------------------//
+//---------------------------- received_block ------------------------------//
 
 // LATER use a (sorted) linked list of data frames (coming from the network thread)
 // which are eventually written sequentially into a contiguous client-size buffer.
@@ -88,13 +90,17 @@ public:
     int32_t size() const { return buffer_.size(); }
 
     int32_t num_frames() const { return numframes_; }
-    bool has_frame(int32_t which) const;
-    int32_t count_frames() const;
+    bool has_frame(int32_t which) const {
+        return !frames_[which];
+    }
+    int32_t count_frames() const {
+        return std::max<int32_t>(0, numframes_ - frames_.count());
+    }
     void add_frame(int32_t which, const AooByte *data, int32_t n);
 
-    int32_t resend_count() const;
-    bool dropped() const;
-    bool complete() const;
+    int32_t resend_count() const { return numtries_; }
+    bool dropped() const { return dropped_; }
+    bool complete() const { return frames_.none(); }
     bool update(double time, double interval);
 
     // data
@@ -110,6 +116,8 @@ protected:
     int32_t numtries_ = 0;
     bool dropped_ = false;
 };
+
+//---------------------------- jitter_buffer ------------------------------//
 
 class jitter_buffer {
 public:
@@ -173,8 +181,8 @@ public:
     }
 
     received_block* find(int32_t seq);
-    received_block* push_back(int32_t seq);
-    void pop_front();
+    received_block* push(int32_t seq);
+    void pop();
 
     int32_t last_pushed() const {
         return last_pushed_;

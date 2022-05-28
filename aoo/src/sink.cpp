@@ -1861,12 +1861,12 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
 
             // fill gaps with empty blocks
             for (int32_t i = newest + 1; i < d.sequence; ++i){
-                jitterbuffer_.push_back(i)->init(i, false);
+                jitterbuffer_.push(i)->init(i, false);
             }
         }
 
         // add new block
-        block = jitterbuffer_.push_back(d.sequence);
+        block = jitterbuffer_.push(d.sequence);
 
         if (d.totalsize == 0){
             // dropped block
@@ -1997,7 +1997,7 @@ void source_desc::process_blocks(const Sink& s, stream_stats& stats){
         }
     #endif
 
-        jitterbuffer_.pop_front();
+        jitterbuffer_.pop();
     }
 }
 
@@ -2005,7 +2005,7 @@ void source_desc::skip_blocks(const Sink& s){
     auto n = std::min<int>(skipblocks_, jitterbuffer_.size());
     LOG_VERBOSE("AooSink: skip " << n << " blocks");
     while (n--){
-        jitterbuffer_.pop_front();
+        jitterbuffer_.pop();
     }
 }
 

@@ -148,6 +148,7 @@ void received_block::init(int32_t seq, double sr, int32_t chn,
     int32_t nbytes, int32_t nframes)
 {
     assert(nbytes > 0);
+    // LATER support blocks with arbitrary number of frames
     assert(nframes <= (int32_t)frames_.size());
     // keep timestamp and numtries if we're actually reiniting
     if (seq != sequence){
@@ -185,24 +186,7 @@ void received_block::init(int32_t seq, bool dropped)
     }
 }
 
-bool received_block::dropped() const {
-    return dropped_;
-}
-
-bool received_block::complete() const {
-    return frames_.none();
-}
-
-int32_t received_block::count_frames() const {
-    return std::max<int32_t>(0, numframes_ - frames_.count());
-}
-
-int32_t received_block::resend_count() const {
-    return numtries_;
-}
-
-void received_block::add_frame(int32_t which,
-                               const AooByte *data, int32_t n){
+void received_block::add_frame(int32_t which, const AooByte *data, int32_t n){
     assert(!buffer_.empty());
     assert(which < numframes_);
     if (which == numframes_ - 1){
@@ -218,10 +202,6 @@ void received_block::add_frame(int32_t which,
         framesize_ = n; // LATER allow varying framesizes
     }
     frames_[which] = false;
-}
-
-bool received_block::has_frame(int32_t which) const {
-    return !frames_[which];
 }
 
 bool received_block::update(double time, double interval){
@@ -311,7 +291,7 @@ received_block* jitter_buffer::find(int32_t seq){
 #endif
 }
 
-received_block* jitter_buffer::push_back(int32_t seq){
+received_block* jitter_buffer::push(int32_t seq){
     assert(!full());
     auto old = head_;
     if (++head_ == capacity()){
@@ -322,7 +302,7 @@ received_block* jitter_buffer::push_back(int32_t seq){
     return &data_[old];
 }
 
-void jitter_buffer::pop_front(){
+void jitter_buffer::pop(){
     assert(!empty());
     last_popped_ = data_[tail_].sequence;
     if (++tail_ == capacity()){
