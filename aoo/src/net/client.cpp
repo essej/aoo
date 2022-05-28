@@ -12,6 +12,10 @@
 #include <algorithm>
 #include <sstream>
 
+#if AOO_NET_CLIENT_SIMULATE
+#include <random>
+#endif
+
 #ifndef _WIN32
 #include <sys/poll.h>
 #include <sys/select.h>
@@ -596,6 +600,88 @@ AOO_API AooError AOO_CALL AooClient_send(
 AooError AOO_CALL aoo::net::Client::send(
         AooSendFunc fn, void *user)
 {
+    auto now = time_tag::now();
+    sendfn reply(fn, user);
+
+#if AOO_NET_CLIENT_SIMULATE
+    auto drop = sim_packet_drop_.load();
+    auto reorder = sim_packet_reorder_.load();
+    auto jitter = sim_packet_jitter_.load();
+
+    // dispatch delayed packets - *before* replacing the send function!
+    // - unless we want to simulate jitter
+    if (!jitter) {
+        while (!packetqueue_.empty()) {
+            auto& p = packetqueue_.top();
+            if (p.tt <= now) {
+                reply(p.data.data(), p.data.size(), p.addr);
+                packetqueue_.pop();
+            } else {
+                break;
+            }
+        }
+    }
+
+    if (drop > 0 || reorder > 0 || jitter) {
+        // wrap send function
+        struct wrap_state {
+            Client *client;
+            sendfn reply;
+            time_tag now;
+            float drop;
+            float reorder;
+            bool jitter;
+        } state;
+        state.client = this;
+        state.reply = reply;
+        state.now = now;
+        state.drop = drop;
+        state.reorder = reorder;
+        state.jitter = jitter;
+
+        auto wrapfn = [](void *user, const AooByte *data, AooInt32 size,
+                const void *address, AooAddrSize addrlen, AooFlag flag) -> AooInt32 {
+            auto state = (wrap_state *)user;
+
+            thread_local std::default_random_engine gen(std::random_device{}());
+            std::uniform_real_distribution dist;
+
+            if (state->drop > 0) {
+                if (dist(gen) <= state->drop) {
+                    // LOG_DEBUG("AooClient: drop packet");
+                    return 0; // drop packet
+                }
+            }
+
+            aoo::ip_address addr((const struct sockaddr *)address, addrlen);
+
+            if (state->jitter || (state->reorder > 0)) {
+                // queue for later
+                netpacket p;
+                p.data.assign(data, data + size);
+                p.addr = addr;
+                p.tt = state->now;
+                if (state->reorder > 0) {
+                    // add random delay
+                    auto delay = dist(gen) * state->reorder;
+                    p.tt += time_tag::from_seconds(delay);
+                }
+                p.sequence = state->client->packet_sequence_++;
+                // LOG_DEBUG("AooClient: delay packet (tt: " << p.tt << ")");
+                state->client->packetqueue_.push(std::move(p));
+            } else {
+                // send immediately
+                state->reply(data, size, addr);
+            }
+
+            return 0;
+        };
+
+        // replace
+        reply = sendfn(wrapfn, &state);
+    }
+#endif
+
     // send sources and sinks
     for (auto& s : sources_){
         s.source->send(fn, user);
@@ -603,11 +689,8 @@ AooError AOO_CALL aoo::net::Client::send(
     for (auto& s : sinks_){
         s.sink->send(fn, user);
     }
-    // send server messages
-    if (state_.load() != client_state::disconnected){
-        time_tag now = time_tag::now();
-        sendfn reply(fn, user);
-
+    // send server/peer messages
+    if (state_.load() != client_state::disconnected) {
         udp_client_.update(*this, reply, now);
 
         // update peers
@@ -616,6 +699,7 @@ AooError AOO_CALL aoo::net::Client::send(
             p.send(*this, reply, now);
         }
     }
+
     return kAooOk;
 }
 
@@ -717,6 +801,20 @@ AooError AOO_CALL aoo::net::Client::control(
         }
         return kAooErrorUnknown;
     }
+#if AOO_NET_CLIENT_SIMULATE
+    case kAooCtlSetSimulatePacketReorder:
+        CHECKARG(AooSeconds);
+        sim_packet_reorder_.store(as<AooSeconds>(ptr));
+        break;
+    case kAooCtlSetSimulatePacketDrop:
+        CHECKARG(float);
+        sim_packet_drop_.store(as<float>(ptr));
+        break;
+    case kAooCtlSetSimulatePacketJitter:
+        CHECKARG(AooBool);
+        sim_packet_jitter_.store(as<AooBool>(ptr));
+        break;
+#endif
     default:
         LOG_WARNING("AooClient: unsupported control " << ctl);
         return kAooErrorNotImplemented;

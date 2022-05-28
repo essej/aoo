@@ -107,5 +107,8 @@ enum AooPrivateControls
 {
     kAooCtlSetClient = -1000,
     kAooCtlNeedRelay,
-    kAooCtlGetRelayAddress
+    kAooCtlGetRelayAddress,
+    kAooCtlSetSimulatePacketReorder,
+    kAooCtlSetSimulatePacketDrop,
+    kAooCtlSetSimulatePacketJitter
 };

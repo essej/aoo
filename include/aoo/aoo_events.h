@@ -219,9 +219,9 @@ enum AooNetEventTypes
     kAooNetEventClientNotification,
     /** need to call AooClient_send() */
     kAooNetEventClientNeedSend,
-    /** a group has been updated */
+    /** a group has been updated (by a peer or by the server) */
     kAooNetEventClientGroupUpdate,
-    /** user has been updated */
+    /** our user has been updated (by the server) */
     kAooNetEventClientUserUpdate,
     /* peer events */
     /** received ping */
@@ -236,7 +236,7 @@ enum AooNetEventTypes
     kAooNetEventPeerJoin,
     /** peer has left the group */
     kAooNetEventPeerLeave,
-    /** received peer message */
+    /** received message from peer */
     kAooNetEventPeerMessage,
     /** peer has been updated */
     kAooNetEventPeerUpdate,
@@ -253,9 +253,9 @@ enum AooNetEventTypes
     kAooNetEventServerGroupJoin,
     /** a user has left a group */
     kAooNetEventServerGroupLeave,
-    /** a group has been updated */
+    /** a group has been updated (by a client) */
     kAooNetEventServerGroupUpdate,
-    /** a user has been updated */
+    /** a user has been updated (by the client) */
     kAooNetEventServerUserUpdate
 };
 

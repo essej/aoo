@@ -26,6 +26,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <queue>
 
 #ifndef AOO_NET_CLIENT_PING_INTERVAL
  #define AOO_NET_CLIENT_PING_INTERVAL 5000
@@ -37,6 +38,10 @@
 
 #ifndef AOO_NET_CLIENT_QUERY_TIMEOUT
  #define AOO_NET_CLIENT_QUERY_TIMEOUT 5000
+#endif
+
+#ifndef AOO_NET_CLIENT_SIMULATE
+#define AOO_NET_CLIENT_SIMULATE 0
 #endif
 
 struct AooSource;
@@ -670,6 +675,30 @@ private:
     parameter<AooSeconds> ping_interval_{AOO_NET_CLIENT_PING_INTERVAL * 0.001};
     parameter<AooSeconds> query_interval_{AOO_NET_CLIENT_QUERY_INTERVAL * 0.001};
     parameter<AooSeconds> query_timeout_{AOO_NET_CLIENT_QUERY_TIMEOUT * 0.001};
+#if AOO_NET_CLIENT_SIMULATE
+    parameter<float> sim_packet_drop_{0};
+    parameter<float> sim_packet_reorder_{0};
+    parameter<bool> sim_packet_jitter_{false};
+
+    struct netpacket {
+        std::vector<AooByte> data;
+        aoo::ip_address addr;
+        time_tag tt;
+        uint64_t sequence;
+
+        bool operator>(const netpacket& other) const {
+            // preserve FIFO ordering for packets with the same timestamp
+            if (tt == other.tt) {
+                return sequence > other.sequence;
+            } else {
+                return tt > other.tt;
+            }
+        }
+    };
+    using packet_queue = std::priority_queue<netpacket, std::vector<netpacket>, std::greater<netpacket>>;
+    packet_queue packetqueue_;
+    uint64_t packet_sequence_ = 0;
+#endif
 
     // methods
     bool wait_for_event(float timeout);
