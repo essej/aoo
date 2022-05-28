@@ -392,7 +392,7 @@ typedef struct AooDataView
 /** \brief max. length of data type strings (excluding the trailing `\0`) */
 #define kAooDataTypeMaxLen 63
 
-/* pre-defined data formats */
+/* pre-defined data type names */
 
 /** \brief plain text (UTF-8 encoded) */
 #define kAooDataTypeText "text"
@@ -404,12 +404,17 @@ typedef struct AooDataView
 #define kAooDataTypeOSC "osc"
 /** \brief FUDI (Pure Data) */
 #define kAooDataTypeFUDI "fudi"
-/** \brief invalid data type */
-#define kAooDataTypeInvalid ""
+/** \brief raw bytes */
+#define kAooDataTypeRaw "raw"
+/** \brief MIDI */
+#define kAooDataTypeMIDI "midi"
+/** \brief unspecified data type */
+#define kAooDataTypeUnspec ""
 
-/* Users can define their own data formats.
- * Make sure to use a unique type name!
- * HINT: you can use an ASCII encoded UUID. */
+/* Users may define their own data type names.
+ * A type name must be a sequence of ASCII characters,
+ * ideally starting with an underscore to avoid
+ * clashes with built-in type names. */
 
 /*---------------- AOO format --------------------*/
 

@@ -848,7 +848,7 @@ AooError AOO_CALL aoo::Source::startStream(const AooDataView *md) {
                 flat_metadata_copy(*md, *metadata_);
             } else {
                 // clear previous metadata
-                metadata_->type = kAooDataTypeInvalid;
+                metadata_->type = kAooDataTypeUnspec;
                 metadata_->data = nullptr;
                 metadata_->size = 0;
             }
@@ -1227,7 +1227,7 @@ void Source::allocate_metadata(int32_t size){
         auto maxsize = flat_metadata_maxsize(size);
         metadata = (AooDataView *)aoo::allocate(maxsize);
         if (metadata){
-            metadata->type = kAooDataTypeInvalid;
+            metadata->type = kAooDataTypeUnspec;
             metadata->data = nullptr;
             metadata->size = 0;
         } else {

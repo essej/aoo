@@ -1298,7 +1298,7 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
                                AooNetResponseGroupJoin& response) {
     // prefer response group metadata
     auto group_md = response.groupMetadata ? response.groupMetadata : request.groupMetadata;
-    // prefer group relay address (set in request handler) over server relay
+    // prefer response group relay address over server relay
     auto group_relay = response.relayAddress ? ip_host(*response.relayAddress) : relay_addr_;
     // find group or create it if necessary
     auto grp = find_group(request.groupId);

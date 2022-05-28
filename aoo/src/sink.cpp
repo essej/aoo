@@ -772,7 +772,7 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
         md.data = (const AooByte *)md_data;
         md.size = md_size;
     } else {
-        md.type = kAooDataTypeInvalid;
+        md.type = kAooDataTypeUnspec;
         md.data = nullptr;
         md.size = 0;
     }
