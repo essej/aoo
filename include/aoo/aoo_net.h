@@ -44,6 +44,11 @@ AOO_PACK_BEGIN
 #define AOO_DEBUG_RELAY 0
 #endif
 
+/** \brief debug client messages */
+#ifndef AOO_DEBUG_CLIENT_MESSAGE
+#define AOO_DEBUG_CLIENT_MESSAGE 0
+#endif
+
 /*-------------- default values ---------------------*/
 
 /** \brief enable/disable server relay by default */
@@ -59,6 +64,11 @@ AOO_PACK_BEGIN
 /** \brief enable/disable automatic user creation by default */
 #ifndef AOO_NET_USER_AUTO_CREATE
 #define AOO_NET_USER_AUTO_CREATE 1
+#endif
+
+/** \brief enable/disable binary format for peer messages */
+#ifndef AOO_NET_BINARY_PEER_MSG
+ #define AOO_NET_BINARY_PEER_MSG 0
 #endif
 
 /*-------------- public OSC interface ---------------*/
@@ -83,6 +93,9 @@ AOO_PACK_BEGIN
 
 #define kAooNetMsgMessage "/msg"
 #define kAooNetMsgMessageLen 4
+
+#define kAooNetMsgAck "/ack"
+#define kAooNetMsgAckLen 4
 
 #define kAooNetMsgLogin "/login"
 #define kAooNetMsgLoginLen 6

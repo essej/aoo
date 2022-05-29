@@ -1267,7 +1267,7 @@ void Source::update_audioqueue(){
     if (encoder_ && samplerate_ > 0){
         // recalculate buffersize from seconds to samples
         int32_t bufsize = buffersize_.load() * format_->sampleRate;
-        auto d = div(bufsize, format_->blockSize);
+        auto d = std::div(bufsize, format_->blockSize);
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         // minimum buffer size depends on resampling and reblocking!
         auto downsample = (double)format_->sampleRate / (double)samplerate_;
@@ -1302,7 +1302,7 @@ void Source::update_historybuffer(){
     if (encoder_){
         // bufsize can also be 0 (= don't resend)!
         int32_t bufsize = resend_buffersize_.load() * format_->sampleRate;
-        auto d = div(bufsize, format_->blockSize);
+        auto d = std::div(bufsize, format_->blockSize);
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         history_.resize(nbuffers);
         LOG_DEBUG("AooSource: history buffersize (ms): "
@@ -1667,7 +1667,7 @@ void Source::send_data(const sendfn& fn){
             auto packetsize = packetsize_.load();
             auto maxpacketsize = packetsize -
                     (binary ? kDataHeaderSize : kBinDataHeaderSize);
-            auto dv = div(d.totalsize, maxpacketsize);
+            auto dv = std::div(d.totalsize, maxpacketsize);
             d.nframes = dv.quot + (dv.rem != 0);
 
             // save block (if we have a history buffer)
