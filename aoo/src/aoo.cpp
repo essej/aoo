@@ -335,7 +335,7 @@ void
         break;
     }
 #endif
-    auto size = Log::buffer_size;
+    const auto size = Log::buffer_size;
     char buffer[size];
     int count = 0;
     if (label) {
