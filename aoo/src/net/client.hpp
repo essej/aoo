@@ -161,6 +161,7 @@ private:
     time_tag start_time_;
     double last_pingtime_ = 0;
     time_tag ping_tt1_;
+    std::atomic<float> average_rtt_{0};
     std::atomic<bool> connected_{false};
     std::atomic<bool> got_ping_{false};
     bool timeout_ = false;

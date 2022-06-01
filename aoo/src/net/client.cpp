@@ -2256,6 +2256,10 @@ void peer::do_send(Client& client, const sendfn& fn, time_tag now) {
 // seq1 (int32), offset1 (int16), bitset1 (int16), etc. // offset < 0 -> all
 
 // NB: we send *our* user ID, see /aoo/peer/ping
+
+// prevent excessive resending in low-latency networks
+#define AOO_NET_CLIENT_MIN_RESEND_TIME 0.02
+
 void peer::send_message(const message& m, const sendfn& fn) {
     // LATER make packet size settable at runtime, see AooSource::send_data()
     const int32_t maxsize = AOO_PACKET_SIZE - kMessageHeaderSize;
@@ -2275,7 +2279,9 @@ void peer::send_message(const message& m, const sendfn& fn) {
     if (p.reliable) {
         p.sequence = next_sequence_reliable_++;
         auto framesize = d.quot ? maxsize : d.rem;
-        auto interval = 0.1; // TODO use average ping time
+        // wait twice the average RTT before resending
+        auto rtt = average_rtt_.load(std::memory_order_relaxed);
+        auto interval = std::max<float>(rtt * 2, AOO_NET_CLIENT_MIN_RESEND_TIME);
         sent_message sm(m.data_, m.tt_, p.sequence, p.nframes, framesize, interval);
         send_buffer_.push(std::move(sm));
     } else {
@@ -2375,12 +2381,30 @@ void peer::handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
             time_tag tt2 = (it++)->AsTimeTag();
             time_tag tt3 = time_tag::now();
 
+            auto rtt = time_tag::duration(tt1, tt3);
+        #if 1
+            // NB: we are the only thread writing to average_rtt_, so we don't need a CAS loop!
+            auto avg = average_rtt_.load(std::memory_order_relaxed);
+            if (avg > 0) {
+                // simple low-pass filtering; maybe use cumulative average instead?
+                const float coeff = 0.5;
+                auto newval = avg * coeff + rtt * (1.0 - coeff);
+                average_rtt_.store(newval);
+            } else {
+                // first ping
+                average_rtt_.store(rtt);
+            }
+        #else
+            average_rtt_.store(rtt);
+        #endif
+
             // only send event for regular ping reply!
             auto e = std::make_unique<peer_ping_reply_event>(*this, tt1, tt2, tt3);
             client.send_event(std::move(e));
 
             LOG_DEBUG("AooClient: got ping reply from " << *this
-                      << "(" << tt1 << " " << tt2 << " " << tt3);
+                      << "(tt1: " << tt1 << ", tt2: " << tt2 << ", tt3: " << tt3
+                      << ", rtt: " << rtt << ", average: " << average_rtt_.load() << ")");
         } else {
             // handshake ping reply
             LOG_DEBUG("AooClient: got handshake ping reply from " << *this);
@@ -2400,7 +2424,8 @@ void peer::handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
             auto e = std::make_unique<peer_ping_event>(*this, tt1, tt2);
             client.send_event(std::move(e));
 
-            LOG_DEBUG("AooClient: got ping from " << *this << "(" << tt1 << " " << tt2);
+            LOG_DEBUG("AooClient: got ping from " << *this
+                      << "(tt1: " << tt1 << ", tt2: " << tt2 << ")");
         } else {
             // handshake ping
             LOG_DEBUG("AooClient: got handshake ping from " << *this);
