@@ -75,6 +75,11 @@ struct message_packet {
     bool reliable;
 };
 
+struct message_ack {
+    int32_t seq;
+    int32_t frame;
+};
+
 class peer {
 public:
     peer(const std::string& groupname, AooId groupid,
@@ -124,27 +129,49 @@ public:
 
     void send(Client& client, const sendfn& fn, time_tag now);
 
-    void send_message(const message& msg, const sendfn& fn);
+    void send_message(const message& msg, const sendfn& fn, bool binary);
 
-    void handle_message(Client& client, const char *pattern,
-                        osc::ReceivedMessageArgumentIterator it,
-                        const ip_address& addr);
+    void handle_osc_message(Client& client, const char *pattern,
+                            osc::ReceivedMessageArgumentIterator it,
+                            const ip_address& addr);
+
+    void handle_bin_message(Client& client, const AooByte *data,
+                            AooSize size, int onset, const ip_address& addr);
 private:
     void handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
                      const ip_address& addr, bool reply);
 
     void handle_client_message(Client& client, osc::ReceivedMessageArgumentIterator it);
 
+    void handle_client_message(Client& client, const AooByte *data, AooSize size);
+
+    void do_handle_client_message(Client& client, const message_packet& p, AooFlag flags);
+
     void handle_ack(Client& client, osc::ReceivedMessageArgumentIterator it);
+
+    void handle_ack(Client& client, const AooByte *data, AooSize size);
 
     void do_send(Client& client, const sendfn& fn, time_tag now);
 
-    void send_message(const osc::OutboundPacketStream& msg, const sendfn& fn);
+    void send_packet_osc(const message_packet& frame, const sendfn& fn) const;
 
-    void send_message(const osc::OutboundPacketStream &msg,
-                      const ip_address& addr, const sendfn &fn);
+    void send_packet_bin(const message_packet& frame, const sendfn& fn) const;
 
-    void send_packet(const message_packet& frame, const sendfn& fn);
+    void send_ack(const message_ack& ack, const sendfn& fn);
+
+    void send(const osc::OutboundPacketStream& msg, const sendfn& fn) const {
+        send((const AooByte *)msg.Data(), msg.Size(), fn);
+    }
+
+    void send(const AooByte *data, AooSize size, const sendfn& fn) const;
+
+    void send(const osc::OutboundPacketStream& msg,
+              const ip_address& addr, const sendfn& fn) const {
+        send((const AooByte *)msg.Data(), msg.Size(), addr, fn);
+    }
+
+    void send(const AooByte *data, AooSize size,
+              const ip_address& addr, const sendfn &fn) const;
 
     const std::string group_name_;
     const std::string user_name_;
@@ -164,18 +191,15 @@ private:
     std::atomic<float> average_rtt_{0};
     std::atomic<bool> connected_{false};
     std::atomic<bool> got_ping_{false};
+    std::atomic<bool> binary_{false};
     bool timeout_ = false;
     int32_t next_sequence_reliable_ = 0;
     int32_t next_sequence_unreliable_ = 0;
     aoo::message_send_buffer send_buffer_;
     aoo::message_receive_buffer receive_buffer_;
     received_message current_msg_;
-    struct msg_ack {
-        int32_t seq;
-        int32_t frame;
-    };
-    aoo::unbounded_mpsc_queue<msg_ack> send_acks_;
-    aoo::unbounded_mpsc_queue<msg_ack> received_acks_;
+    aoo::unbounded_mpsc_queue<message_ack> send_acks_;
+    aoo::unbounded_mpsc_queue<message_ack> received_acks_;
 };
 
 inline std::ostream& operator<<(std::ostream& os, const peer& p) {
@@ -549,8 +573,11 @@ public:
 
     //---------------------------------------------------------------------//
 
-    bool handle_peer_message(const osc::ReceivedMessage& msg, int onset,
-                             const ip_address& addr);
+    bool handle_peer_osc_message(const osc::ReceivedMessage& msg, int onset,
+                                 const ip_address& addr);
+
+    bool handle_peer_bin_message(const AooByte *data, AooSize size, int onset,
+                                 const ip_address& addr);
 
     struct connect_cmd;
     void perform(const connect_cmd& cmd);
@@ -598,6 +625,8 @@ public:
     double query_interval() const { return query_interval_.load(); }
 
     double query_timeout() const { return query_timeout_.load(); }
+
+    bool binary() const { return binary_.load(); }
 
     void send_event(event_ptr e);
 
@@ -691,6 +720,7 @@ private:
     parameter<AooSeconds> ping_interval_{AOO_NET_CLIENT_PING_INTERVAL * 0.001};
     parameter<AooSeconds> query_interval_{AOO_NET_CLIENT_QUERY_INTERVAL * 0.001};
     parameter<AooSeconds> query_timeout_{AOO_NET_CLIENT_QUERY_TIMEOUT * 0.001};
+    parameter<bool> binary_{AOO_NET_CLIENT_BINARY_MSG};
 #if AOO_NET_CLIENT_SIMULATE
     parameter<float> sim_packet_drop_{0};
     parameter<float> sim_packet_reorder_{0};

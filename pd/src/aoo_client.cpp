@@ -283,6 +283,13 @@ static void aoo_client_reliable(t_aoo_client *x, t_floatarg f)
     x->x_reliable = (f != 0);
 }
 
+static void aoo_client_binary(t_aoo_client *x, t_floatarg f)
+{
+    if (x->x_node) {
+        x->x_node->client()->setBinaryMsg(f != 0);
+    }
+}
+
 static void aoo_client_port(t_aoo_client *x, t_floatarg f)
 {
     int port = f;
@@ -903,6 +910,8 @@ void aoo_client_setup(void)
                     gensym("reliable"), A_FLOAT, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_port,
                     gensym("port"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_binary,
+                    gensym("binary"), A_FLOAT, A_NULL);
     // debug/simulate
     class_addmethod(aoo_client_class, (t_method)aoo_client_sim_packet_reorder,
                     gensym("sim_packet_reorder"), A_FLOAT, A_NULL);

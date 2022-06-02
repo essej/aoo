@@ -147,7 +147,17 @@ AOO_API AooError AOO_CALL AooClient_control(
 /*         type-safe control functions        */
 /*--------------------------------------------*/
 
-/* (empty) */
+/** \copydoc AooClient::setBinaryMsg() */
+AOO_INLINE AooError AooClient_setBinaryMsg(AooClient *client, AooBool b)
+{
+    return AooClient_control(client, kAooCtlSetBinaryClientMsg, 0, AOO_ARG(b));
+}
+
+/** \copydoc AooClient::getBinaryMsg() */
+AOO_INLINE AooError AooClient_getBinaryMsg(AooClient *client, AooBool *b)
+{
+    return AooClient_control(client, kAooCtlGetBinaryClientMsg, 0, AOO_ARG(*b));
+}
 
 /*--------------------------------------------*/
 /*         type-safe request functions        */

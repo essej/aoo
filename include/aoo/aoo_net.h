@@ -66,9 +66,9 @@ AOO_PACK_BEGIN
 #define AOO_NET_USER_AUTO_CREATE 1
 #endif
 
-/** \brief enable/disable binary format for peer messages */
-#ifndef AOO_NET_BINARY_PEER_MSG
- #define AOO_NET_BINARY_PEER_MSG 0
+/** \brief enable/disable binary format for client messages */
+#ifndef AOO_NET_CLIENT_BINARY_MSG
+ #define AOO_NET_CLIENT_BINARY_MSG 1
 #endif
 
 /*-------------- public OSC interface ---------------*/

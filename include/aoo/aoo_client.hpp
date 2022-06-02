@@ -312,7 +312,18 @@ public:
     /*         type-safe control functions        */
     /*--------------------------------------------*/
 
-    /* (empty) */
+    /** \brief Enable/disable binary messages
+     *
+     * Use a more compact (and faster) binary format for peer messages
+     */
+    AooError setBinaryMsg(AooBool b) {
+        return control(kAooCtlSetBinaryClientMsg, 0, AOO_ARG(b));
+    }
+
+    /** \brief Check if binary messages are enabled */
+    AooError getBinaryMsg(AooBool& b) {
+        return control(kAooCtlGetBinaryClientMsg, 0, AOO_ARG(b));
+    }
 
     /*--------------------------------------------*/
     /*         type-safe request functions        */

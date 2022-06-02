@@ -72,6 +72,8 @@ enum AooControls
     kAooCtlGetServerRelay,
     kAooCtlSetGroupAutoCreate,
     kAooCtlGetGroupAutoCreate,
+    kAooCtlSetBinaryClientMsg,
+    kAooCtlGetBinaryClientMsg,
     /* server group controls */
     kAooCtlUpdateGroup,
     kAooCtlUpdateUser,
