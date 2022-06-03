@@ -414,10 +414,14 @@ const char *aoo_strerror(AooError e){
         return "no error";
     case kAooErrorNotImplemented:
         return "not implemented";
+    case kAooErrorBadArgument:
+        return "bad argument";
     case kAooErrorIdle:
         return "idle";
     case kAooErrorOutOfMemory:
         return "out of memory";
+    case kAooErrorInsufficientBuffer:
+        return "insufficient buffer";
     default:
         return "unknown error code";
     }
