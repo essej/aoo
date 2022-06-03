@@ -1089,20 +1089,21 @@ void Client::handle_response(const group_join_cmd& cmd,
         // add group membership
         if (!find_group_membership(cmd.group_name_)) {
             group_membership m { cmd.group_name_, cmd.user_name_, group, user };
-            if (server_relay_) {
-                // use UDP server as relay
-                auto& host = connection_->host_;
-                auto addrlist = ip_address::resolve(host.name, host.port, udp_client_.type());
-                m.relay_list.insert(m.relay_list.end(), addrlist.begin(), addrlist.end());
-            }
-            // add our own relay
+            // add relay servers (in descending priority)
+            // 1) our own relay
             if (cmd.relay_.valid()) {
                 auto addrlist = ip_address::resolve(cmd.relay_.name, cmd.relay_.port, udp_client_.type());
                 m.relay_list.insert(m.relay_list.end(), addrlist.begin(), addrlist.end());
             }
-            // add server group relay
+            // 2) server group relay
             if (relay.port > 0) {
                 auto addrlist = ip_address::resolve(cmd.relay_.name, cmd.relay_.port, udp_client_.type());
+                m.relay_list.insert(m.relay_list.end(), addrlist.begin(), addrlist.end());
+            }
+            // 3) use UDP server as relay
+            if (server_relay_) {
+                auto& host = connection_->host_;
+                auto addrlist = ip_address::resolve(host.name, host.port, udp_client_.type());
                 m.relay_list.insert(m.relay_list.end(), addrlist.begin(), addrlist.end());
             }
             memberships_.push_back(std::move(m));
@@ -1411,9 +1412,7 @@ void Client::send_server_message(const osc::OutboundPacketStream& msg) {
         auto result = ::send(socket_, data + nbytes, size - nbytes, 0);
         if (result >= 0){
             nbytes += result;
-        #if 0
-            LOG_DEBUG("AooClient: sent " << res << " bytes");
-        #endif
+            // LOG_DEBUG("AooClient: sent " << res << " bytes");
         } else {
             auto err = socket_errno();
 

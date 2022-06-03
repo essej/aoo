@@ -187,7 +187,7 @@ int format_to_atoms(const AooFormat &f, int argc, t_atom *argv)
             nbits = 8;
             break;
         default:
-            pd_error(0, "format_to_atoms: bad bitdepth argument %d", nbits);
+            pd_error(0, "format_to_atoms: bad bitdepth argument %d", fmt.bitDepth);
             return 0;
         }
         SETFLOAT(argv + 4, nbits);
