@@ -431,28 +431,38 @@ AooError AOO_CALL aoo::net::Client::customRequest(
     return kAooOk;
 }
 
-AOO_API AooError AOO_CALL AooClient_getPeerByName(
-        AooClient *client, const AooChar *group,
-        const AooChar *user, void *address, AooAddrSize *addrlen)
+AOO_API AooError AOO_CALL AooClient_findPeerByName(
+        AooClient *client, const AooChar *group, const AooChar *user,
+        AooId *groupId, AooId *userId, void *address, AooAddrSize *addrlen)
 {
-    return client->getPeerByName(group, user, address, addrlen);
+    return client->findPeerByName(group, user, groupId, userId, address, addrlen);
 }
 
-AooError AOO_CALL aoo::net::Client::getPeerByName(
-        const char *group, const char *user,
+AooError AOO_CALL aoo::net::Client::findPeerByName(
+        const char *group, const char *user, AooId *groupId, AooId *userId,
         void *address, AooAddrSize *addrlen)
 {
     peer_lock lock(peers_);
     for (auto& p : peers_){
-        // we can only access the address if the peer is connected!
-        if (p.match(group, user) && p.connected()){
-            if (address){
-                auto& addr = p.address();
-                if (*addrlen < (AooAddrSize)addr.length()){
-                    return kAooErrorUnknown;
+        if (p.match(group, user)){
+            if (groupId) {
+                *groupId = p.group_id();
+            }
+            if (userId) {
+                *userId = p.user_id();
+            }
+            if (address && addrlen) {
+                // we may only access the address if the peer is connected!
+                if (p.connected()) {
+                    if (*addrlen >= p.address().length()) {
+                        memcpy(address, p.address().address(), p.address().length());
+                        *addrlen = p.address().length();
+                    } else {
+                        return kAooErrorInsufficientBuffer;
+                    }
+                } else {
+                    *addrlen = 0;
                 }
-                memcpy(address, addr.address(), addr.length());
-                *addrlen = addr.length();
             }
             return kAooOk;
         }
@@ -460,55 +470,18 @@ AooError AOO_CALL aoo::net::Client::getPeerByName(
     return kAooErrorUnknown;
 }
 
-AOO_API AooError AOO_CALL AooClient_getPeerById(
-        AooClient *client, AooId group, AooId user,
-        void *address, AooAddrSize *addrlen)
-{
-    return client->getPeerById(group, user, address, addrlen);
-}
-
-AooError AOO_CALL aoo::net::Client::getPeerById(
-        AooId group, AooId user,
-        void *address, AooAddrSize *addrlen)
-{
-    peer_lock lock(peers_);
-    for (auto& p : peers_){
-        // we can only access the address if the peer is connected!
-        if (p.match(group, user) && p.connected()){
-            if (address){
-                auto& addr = p.address();
-                if (*addrlen < (AooAddrSize)addr.length()){
-                    return kAooErrorUnknown;
-                }
-                memcpy(address, addr.address(), addr.length());
-                *addrlen = addr.length();
-            }
-            return kAooOk;
-        }
-    }
-    return kAooErrorUnknown;
-}
-
-AOO_API AooError AOO_CALL AooClient_getPeerByAddress(
+AOO_API AooError AOO_CALL AooClient_findPeerByAddress(
         AooClient *client, const void *address, AooAddrSize addrlen,
-        AooId *groupId, AooId *userId,
-        AooChar *groupNameBuf, AooSize *groupNameSize,
-        AooChar *userNameBuf, AooSize *userNameSize)
-{
-    return client->getPeerByAddress(address, addrlen, groupId, userId,
-        groupNameBuf, groupNameSize, userNameBuf, userNameSize);
+        AooId *groupId, AooId *userId) {
+    return client->findPeerByAddress(address, addrlen, groupId, userId);
 }
 
-AooError AOO_CALL aoo::net::Client::getPeerByAddress(
-        const void *address, AooAddrSize addrlen,
-        AooId *groupId, AooId *userId,
-        AooChar *groupNameBuf, AooSize *groupNameSize,
-        AooChar *userNameBuf, AooSize *userNameSize)
+AooError AOO_CALL aoo::net::Client::findPeerByAddress(
+        const void *address, AooAddrSize addrlen, AooId *groupId, AooId *userId)
 {
     ip_address addr((const struct sockaddr *)address, addrlen);
     peer_lock lock(peers_);
     for (auto& p : peers_){
-        // we can only access the address if the peer is connected!
         if (p.match(addr)) {
             if (groupId) {
                 *groupId = p.group_id();
@@ -516,21 +489,45 @@ AooError AOO_CALL aoo::net::Client::getPeerByAddress(
             if (userId) {
                 *userId = p.user_id();
             }
-            if (groupNameBuf && groupNameSize) {
-                auto size = p.group_name().size() + 1;
-                if (*groupNameSize < size) {
+            return kAooOk;
+        }
+    }
+    return kAooErrorUnknown;
+}
+
+AOO_API AooError AOO_CALL AooClient_getPeerName(
+        AooClient *client, AooId group, AooId user,
+        AooChar *groupNameBuffer, AooSize *groupNameSize,
+        AooChar *userNameBuffer, AooSize *userNameSize) {
+    return client->getPeerName(group, user, groupNameBuffer, groupNameSize,
+                               userNameBuffer, userNameSize);
+}
+
+AooError AOO_CALL aoo::net::Client::getPeerName(
+        AooId group, AooId user,
+        AooChar *groupNameBuffer, AooSize *groupNameSize,
+        AooChar *userNameBuffer, AooSize *userNameSize)
+{
+    peer_lock lock(peers_);
+    for (auto& p : peers_){
+        if (p.match(group, user)) {
+            if (groupNameBuffer && groupNameSize) {
+                auto len = p.group_name().size() + 1;
+                if (*groupNameSize >= len) {
+                    memcpy(groupNameBuffer, p.group_name().c_str(), len);
+                    *groupNameSize = len;
+                } else {
                     return kAooErrorInsufficientBuffer;
                 }
-                memcpy(groupNameBuf, p.group_name().data(), size);
-                *groupNameSize = size;
             }
-            if (userNameBuf && userNameSize) {
-                auto size = p.user_name().size() + 1;
-                if (*userNameSize < size) {
+            if (userNameBuffer && userNameSize) {
+                auto len = p.user_name().size() + 1;
+                if (*userNameSize >= len) {
+                    memcpy(groupNameBuffer, p.user_name().c_str(), len);
+                    *userNameSize = len;
+                } else {
                     return kAooErrorInsufficientBuffer;
                 }
-                memcpy(userNameBuf, p.user_name().data(), size);
-                *userNameSize = size;
             }
             return kAooOk;
         }

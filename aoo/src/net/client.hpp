@@ -532,19 +532,16 @@ public:
     AooError AOO_CALL customRequest(const AooDataView& data, AooFlag flags,
                                     AooNetCallback cb, void *context) override;
 
-    AooError AOO_CALL getPeerByName(
-            const AooChar *group, const AooChar *user,
-            void *address, AooAddrSize *addrlen) override;
+    AooError AOO_CALL findPeerByName(
+            const AooChar *group, const AooChar *user, AooId *groupId,
+            AooId *userId, void *address, AooAddrSize *addrlen) override;
 
-    AooError AOO_CALL getPeerById(
-            AooId group, AooId user,
-            void *address, AooAddrSize *addrlen) override;
+    AooError AOO_CALL findPeerByAddress(const void *address, AooAddrSize addrlen,
+                                        AooId *groupId, AooId *userId) override;
 
-    AooError AOO_CALL getPeerByAddress(
-            const void *address, AooAddrSize addrlen,
-            AooId *groupId, AooId *userId,
-            AooChar *groupNameBuf, AooSize *groupNameSize,
-            AooChar *userNameBuf, AooSize *userNameSize) override;
+    AooError AOO_CALL getPeerName(AooId group, AooId user,
+                                  AooChar *groupNameBuffer, AooSize *groupNameSize,
+                                  AooChar *userNameBuffer, AooSize *userNameSize) override;
 
     AooError AOO_CALL sendMessage(
             AooId group, AooId user, const AooDataView& msg,

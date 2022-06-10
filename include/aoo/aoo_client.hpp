@@ -173,61 +173,56 @@ public:
             const AooDataView& data, AooFlag flags,
             AooNetCallback cb, void *context) = 0;
 
+    // TODO: findGroupByName() and getGroupName()?
+
     /** \brief find peer by name
      *
      * \note Threadsafe
      *
-     * Find peer by its group/user name and return its IP endpoint address.
+     * Find peer by its group/user name and return its group/user ID and/or its IP address
      *
-     * \param group the group name
-     * \param user the user name
-     * \param[out] address pointer to socket address storage (`sockaddr_storage`)
-     * \param[in,out] addrlen socket address storage size;
-     *       initialized with max. storage size, updated to actual size
-     */
-    virtual AooError AOO_CALL getPeerByName(
-            const AooChar *group, const AooChar *user,
-            void *address, AooAddrSize *addrlen) = 0;
-
-    /** \brief find peer by ID
-     *
-     * \note Threadsafe
-     *
-     * Find peer by group/user ID and return its IP endpoint address
-     *
-     * \param group group ID
-     * \param user user ID
-     * \param[out] address pointer to socket address storage (`sockaddr_storage`)
-     * \param[in,out] addrlen socket address storage size;
-     *       initialized with max. storage size, updated to actual size
-     */
-    virtual AooError AOO_CALL getPeerById(
-            AooId group, AooId user,
-            void *address, AooAddrSize *addrlen) = 0;
-
-    /** \brief find peer by address
-     *
-     * \note Threadsafe
-     *
-     * Find peer by its IP endpoint address and return the group/user IDs
-     * and/or the group/user names.
-     *
-     * \param address pointer to socket address (`sockaddr`)
-     * \param addrlen socket address size
+     * \param groupName the group name
+     * \param userName the user name
      * \param[out] groupId (optional) group ID
      * \param[out] userId (optional) user ID
-     * \param[out] groupNameBuf (optional) group name buffer
-     * \param[in,out] groupNameSize group name buffer size;
+     * \param[out] address (optional) pointer to sockaddr storage
+     * \param[in][out] addrlen (optional) sockaddr storage size, updated to actual size
+     */
+    virtual AooError AOO_CALL findPeerByName(
+            const AooChar *groupName, const AooChar *userName,
+            AooId *groupId, AooId *userId, void *address, AooAddrSize *addrlen) = 0;
+
+    /** \brief find peer by IP address
+     *
+     * \note Threadsafe
+     *
+     * Find peer by its IP address and return the group ID and user ID
+     *
+     * \param address the sockaddr
+     * \param addrlen the sockaddr size
+     * \param[out] groupId group ID
+     * \param[out] userId user ID
+     */
+    virtual AooError AOO_CALL findPeerByAddress(
+            const void *address, AooAddrSize addrlen, AooId *groupId, AooId *userId) = 0;
+
+    /** \brief get a peer's group and user name
+     *
+     * \note Threadsafe
+     *
+     * \param group the group ID
+     * \param user the user ID
+     * \param[out] groupNameBuf group name buffer
+     * \param[in,out] groupNameSize the group name buffer size;
      *        updated to the actual size (including the 0 terminator)
-     * \param[out] userNameBuf (optional) user name buffer
+     * \param[out] userNameBuf user name buffer
      * \param[in,out] userNameSize user name buffer size
      *        updated to the actual size (including 0 terminator)
      */
-    virtual AooError AOO_CALL getPeerByAddress(
-            const void *address, AooAddrSize addrlen,
-            AooId *groupId, AooId *userId,
-            AooChar *groupNameBuf, AooSize *groupNameSize,
-            AooChar *userNameBuf, AooSize *userNameSize) = 0;
+    virtual AooError AOO_CALL getPeerName(
+            AooId group, AooId user,
+            AooChar *groupNameBuffer, AooSize *groupNameSize,
+            AooChar *userNameBuffer, AooSize *userNameSize) = 0;
 
     /** \brief send a message to a peer or group
      *

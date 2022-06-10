@@ -92,23 +92,21 @@ AOO_API AooError AOO_CALL AooClient_customRequest(
         AooClient *client, const AooDataView *data, AooFlag flags,
         AooNetCallback cb, void *context);
 
-/** \copydoc AooClient::getPeerByName() */
-AOO_API AooError AOO_CALL AooClient_getPeerByName(
+/** \copydoc AooClient::findPeerByName() */
+AOO_API AooError AOO_CALL AooClient_findPeerByName(
         AooClient *client, const AooChar *group, const AooChar *user,
-        void *address, AooAddrSize *addrlen);
+        AooId *groupId, AooId *userId, void *address, AooAddrSize *addrlen);
 
-/** \copydoc AooClient::getPeerById() */
-AOO_API AooError AOO_CALL AooClient_getPeerById(
+/** \copydoc AooClient::findPeerByAddress() */
+AOO_API AooError AOO_CALL AooClient_findPeerByAddress(
+        AooClient *client, const void *address, AooAddrSize addrlen,
+        AooId *groupId, AooId *userId);
+
+/** \copydoc AooClient::getPeerName() */
+AOO_API AooError AOO_CALL AooClient_getPeerName(
         AooClient *client, AooId group, AooId user,
-        void *address, AooAddrSize *addrlen);
-
-/** \copydoc AooClient::getPeerByAddress() */
-AOO_API AooError AOO_CALL AooClient_getPeerByAddress(
-        AooClient *client,
-        const void *address, AooAddrSize addrlen,
-        AooId *group, AooId *user,
-        AooChar *groupNameBuf, AooSize *groupNameSize,
-        AooChar *userNameBuf, AooSize *userNameSize);
+        AooChar *groupNameBuffer, AooSize *groupNameSize,
+        AooChar *userNameBuffer, AooSize *userNameSize);
 
 /** \copydoc AooClient::sendMessage() */
 AOO_API AooError AOO_CALL AooClient_sendMessage(
