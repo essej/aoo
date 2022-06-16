@@ -298,7 +298,7 @@ static void aoo_client_send_peer(t_aoo_client *x, t_symbol *s, int argc, t_atom 
         auto group = argv[0].a_w.w_symbol;
         auto user = argv[1].a_w.w_symbol;
         if (auto peer = x->find_peer(group, user)) {
-            x->send_message(argc - 1, argv + 1, peer->group_id, peer->user_id);
+            x->send_message(argc - 2, argv + 2, peer->group_id, peer->user_id);
         } else {
             pd_error(x, "%s: could not find peer %s|%s",
                      classname(x), group->s_name, user->s_name);
@@ -412,7 +412,7 @@ static void aoo_client_target(t_aoo_client *x, t_symbol *s, int argc, t_atom *ar
         t_symbol *username = atom_getsymbol(argv + 1);
         if (auto peer = x->find_peer(groupname, username)) {
             x->x_target_group = peer->group_id;
-            x->x_target_user = peer->group_id;
+            x->x_target_user = peer->user_id;
             x->x_target = true;
         } else {
             pd_error(x, "%s: could not find peer '%s|%s'",
