@@ -958,6 +958,7 @@ AOO_API AooError AOO_CALL AooSource_acceptInvitation(
 
 AooError AOO_CALL aoo::Source::acceptInvitation(const AooEndpoint& ep, AooId token) {
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
+    sink_lock lock(sinks_);
     auto sink = find_sink(addr, ep.id);
     if (sink){
         sink->accept_invitation(*this, token);
@@ -980,6 +981,7 @@ AOO_API AooError AOO_CALL AooSource_acceptUninvitation(
 
 AooError AOO_CALL aoo::Source::acceptUninvitation(const AooEndpoint& ep, AooId token) {
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
+    sink_lock lock(sinks_);
     auto sink = find_sink(addr, ep.id);
     if (sink){
         sink->accept_uninvitation(*this, token);
@@ -2096,7 +2098,7 @@ void Source::handle_uninvite(const osc::ReceivedMessage& msg,
                 // if the sink is inactive, it probably means that we have
                 // accepted the uninvitation, but the /stop message got lost.
                 LOG_DEBUG("AooSource: ignoring '" << kAooMsgUninvite << "' message: "
-                          << " sink not active (/stop message got loast?)");
+                          << " sink not active (/stop message got lost?)");
             }
         } else {
             LOG_VERBOSE("AooSource: ignoring '" << kAooMsgUninvite
