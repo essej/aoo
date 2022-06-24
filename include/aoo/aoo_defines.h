@@ -108,6 +108,10 @@ AOO_PACK_BEGIN
 # define AOO_MAX_PACKET_SIZE 4096
 #endif
 
+#if AOO_PACKET_SIZE > AOO_MAX_PACKET_SIZE
+#error "AOO_PACKET_SIZE must exceed AOO_MAX_PACKET_SIZE"
+#endif
+
 /** \brief debug memory usage */
 #ifndef AOO_DEBUG_MEMORY
 # define AOO_DEBUG_MEMORY 0

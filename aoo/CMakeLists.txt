@@ -8,6 +8,10 @@ message(STATUS "Default UDP packet size: ${AOO_PACKET_SIZE}")
 set(AOO_MAX_PACKET_SIZE 4096 CACHE STRING "max. UDP packet size")
 message(STATUS "Max. UDP packet size: ${AOO_MAX_PACKET_SIZE}")
 
+if (AOO_PACKET_SIZE GREATER AOO_MAX_PACKET_SIZE)
+    message(FATAL_ERROR "AOO_PACKET_SIZE must not exceed AOO_MAX_PACKET_SIZE")
+endif()
+
 option(AOO_DYNAMIC_RESAMPLING "enable/disable dynamic resampling" ON)
 message(STATUS "Use dynamic resampling: ${AOO_DYNAMIC_RESAMPLING}")
 
