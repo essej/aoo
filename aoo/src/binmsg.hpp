@@ -135,6 +135,8 @@ inline AooId binmsg_user(const AooByte *data, AooSize size) {
     return binmsg_from(data, size);
 }
 
+#if USE_AOO_NET
+
 // type + domain bit (uint8), cmd [IPv6|IPv4] (uint8), port (uint16),
 // a) IPv4 address (4 bytes)
 // b) IPv6 address (16 bytes)
@@ -183,5 +185,7 @@ inline int binmsg_read_relay(const AooByte *buffer, AooSize size,
     }
     return 0;
 }
+
+#endif // USE_AOO_NET
 
 } // aoo
