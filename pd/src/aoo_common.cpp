@@ -39,27 +39,6 @@ int endpoint_to_atoms(const aoo::ip_address& addr, AooId id, int argc, t_atom *a
     return 3;
 }
 
-static bool getarg(const char *name, void *x, int which,
-                      int argc, const t_atom *argv, t_float &f, t_float def)
-{
-    if (argc > which){
-        if (argv[which].a_type == A_SYMBOL){
-            t_symbol *sym = argv[which].a_w.w_symbol;
-            if (sym == gensym("auto")){
-                f = def;
-            } else {
-                pd_error(x, "%s: bad '%s' argument '%s'", classname(x), name, sym->s_name);
-                return false;
-            }
-        } else {
-            f = atom_getfloat(argv + which);
-        }
-    } else {
-        f = def;
-    }
-    return true;
-}
-
 void format_makedefault(AooFormatStorage &f, int nchannels)
 {
     AooFormatPcm_init((AooFormatPcm *)&f, nchannels,

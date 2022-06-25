@@ -165,7 +165,7 @@ private:
     bool persistent_;
     bool user_auto_create_ = AOO_NET_USER_AUTO_CREATE; // TODO
     user_list users_;
-    uint32_t next_user_id_{0};
+    AooId next_user_id_{0};
 };
 
 inline std::ostream& operator<<(std::ostream& os, const group& g) {
@@ -178,7 +178,7 @@ inline std::ostream& operator<<(std::ostream& os, const group& g) {
 class client_endpoint {
 public:
     client_endpoint(int sockfd, AooId id, AooNetReplyFunc replyfn, void *context)
-        : sockfd_(sockfd), id_(id), replyfn_(replyfn), context_(context) {}
+        : id_(id), sockfd_(sockfd), replyfn_(replyfn), context_(context) {}
 
     ~client_endpoint() {}
 

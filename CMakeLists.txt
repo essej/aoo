@@ -147,6 +147,10 @@ if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANG)
     endif()
 
     # warnings/errors
+    add_compile_options("-Wall" "-Wextra")
+    # disable some useless and noisy warnings
+    add_compile_options("-Wno-unused-parameter" "-Wno-unused-variable" "-Wno-sign-compare")
+    # some warnings should be errors
     add_compile_options("-Werror=return-type")
 endif()
 

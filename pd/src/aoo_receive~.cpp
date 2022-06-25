@@ -309,28 +309,6 @@ static void aoo_receive_source_list(t_aoo_receive *x)
     }
 }
 
-static void aoo_receive_listen(t_aoo_receive *x, t_floatarg f)
-{
-    int port = f;
-    if (x->x_node){
-        if (x->x_node->port() == port){
-            return;
-        }
-        // release old node
-        x->x_node->release((t_pd *)x, x->x_sink.get());
-    }
-    // add new node
-    if (port){
-        x->x_node = t_node::get((t_pd *)x, port, x->x_sink.get(), x->x_id);
-        if (x->x_node){
-            post("listening on port %d", x->x_node->port());
-        }
-    } else {
-        // stop listening
-        x->x_node = 0;
-    }
-}
-
 static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, int32_t)
 {
     switch (event->type){

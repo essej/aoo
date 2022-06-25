@@ -1085,7 +1085,7 @@ void Client::handle_response(const group_join_cmd& cmd,
 
         // add group membership
         if (!find_group_membership(cmd.group_name_)) {
-            group_membership m { cmd.group_name_, cmd.user_name_, group, user };
+            group_membership m { cmd.group_name_, cmd.user_name_, group, user, {} };
             // add relay servers (in descending priority)
             // 1) our own relay
             if (cmd.relay_.valid()) {
@@ -2032,7 +2032,7 @@ peer::peer(const std::string& groupname, AooId groupid,
            ip_address_list&& addrlist, const AooDataView *metadata,
            ip_address_list&& user_relay, const ip_address_list& group_relay)
     : group_name_(groupname), user_name_(username), group_id_(groupid), user_id_(userid),
-      local_id_(localid), addrlist_(std::move(addrlist)), metadata_(metadata),
+      local_id_(localid), metadata_(metadata), addrlist_(std::move(addrlist)),
       user_relay_(std::move(user_relay)), group_relay_(group_relay)
 {
     start_time_ = time_tag::now();

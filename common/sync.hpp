@@ -12,7 +12,7 @@
 #endif
 
 #ifdef __APPLE__
-// macOS doesn't support unnamed pthread semaphores,
+// macOS doesn't support unnamed posix semaphores,
 // so we use Mach semaphores instead
 #include <mach/mach.h>
 #endif
