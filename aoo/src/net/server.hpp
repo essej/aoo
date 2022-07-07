@@ -189,6 +189,10 @@ public:
 
     AooSocket sockfd() const { return sockfd_; }
 
+    bool valid() const {
+        return !public_addresses_.empty();
+    }
+
     void add_public_address(const ip_address& addr) {
         public_addresses_.push_back(addr);
     }

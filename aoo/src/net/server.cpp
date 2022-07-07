@@ -917,11 +917,15 @@ bool Server::remove_client(AooId id) {
     if (it == clients_.end()) {
         return false;
     }
+    // only send event if client has actually logged in!
+    auto valid = it->second.valid();
     it->second.on_close(*this);
     clients_.erase(it);
 
-    auto e = std::make_unique<client_remove_event>(id);
-    send_event(std::move(e));
+    if (valid) {
+        auto e = std::make_unique<client_remove_event>(id);
+        send_event(std::move(e));
+    }
 
     return true;
 }
