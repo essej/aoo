@@ -229,6 +229,7 @@ private:
     jitter_buffer jitterbuffer_;
     int32_t wait_blocks_ = 0;
     int32_t latency_blocks_ = 0;
+	int32_t ignoreblocks_ = 0;
     // stream messages
     stream_message_header *stream_messages_ = nullptr;
     double stream_samples_ = 0;
