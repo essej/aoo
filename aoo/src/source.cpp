@@ -2119,7 +2119,12 @@ void Source::handle_uninvite(const osc::ReceivedMessage& msg,
     // tell the remote side that we have stopped.
     // don't use the sink because it can be NULL!
 #if USE_AOO_NET
-    sink_request r(request_type::stop, endpoint(addr, id, sink->ep.relay));
+    sink_request r;
+    if (sink) {
+        r = {request_type::stop, endpoint(addr, id, sink->ep.relay)};
+    } else {
+        r =  { request_type::stop, endpoint(addr, id) };
+    }
 #else
     sink_request r(request_type::stop, endpoint(addr, id));
 #endif
