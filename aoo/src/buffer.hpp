@@ -8,6 +8,7 @@
 #include <vector>
 #include <bitset>
 #include <list>
+#include <algorithm>
 
 namespace aoo {
 
