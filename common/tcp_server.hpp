@@ -56,7 +56,7 @@ private:
 
     int listen_socket_;
     int event_socket_;
-    std::atomic<bool> running_ = false;
+    std::atomic<bool> running_{false};
 
     std::vector<pollfd> poll_array_;
     static const size_t listen_index = 0;

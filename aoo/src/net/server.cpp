@@ -87,7 +87,8 @@ namespace net {
 
 user* group::add_user(user&& usr) {
     if (!find_user(usr.name())) {
-        return &users_.emplace_back(std::move(usr));
+        users_.emplace_back(std::move(usr));
+        return &users_.back();
     } else {
         return nullptr;
     }

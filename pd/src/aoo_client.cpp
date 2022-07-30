@@ -584,9 +584,8 @@ void aoo_client_handle_event(t_aoo_client *x, const AooEvent *event, int32_t lev
             }
 
             // add peer
-            auto& peer = x->x_peers.emplace_back(
-                        t_peer { group_name, user_name, group_id, user_id, addr });
-            peer_to_atoms(peer, 5, msg);
+            x->x_peers.emplace_back(t_peer { group_name, user_name, group_id, user_id, addr });
+            peer_to_atoms(x->x_peers.back(), 5, msg);
 
             outlet_anything(x->x_msgout, gensym("peer_join"), 5, msg);
 

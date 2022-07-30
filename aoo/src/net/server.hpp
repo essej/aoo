@@ -51,7 +51,8 @@ using ip_address_list = std::vector<ip_address>;
 
 //--------------------------- user -----------------------------//
 
-struct user {
+class user {
+public:
     user(const std::string& name, const std::string& pwd, AooId id,
          AooId group, AooId client, const AooDataView *md,
          const ip_host& relay, bool persistent)
@@ -114,7 +115,8 @@ inline std::ostream& operator<<(std::ostream& os, const user& u) {
 
 using user_list = std::vector<user>;
 
-struct group {
+class group {
+public:
     group(const std::string& name, const std::string& pwd, AooId id,
          const AooDataView *md, const ip_host& relay, bool persistent)
         : name_(name), pwd_(pwd), id_(id), md_(md), relay_(relay), persistent_(persistent) {}
