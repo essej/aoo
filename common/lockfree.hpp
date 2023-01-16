@@ -459,6 +459,11 @@ public:
 
     template<typename... U>
     iterator emplace_front(U&&... args){
+        // "lock" the list to avoid the ABA problem
+        // (otherwise two other threads might concurrently free the list
+        // and push a new node with the same address as the current head;
+        // highly unlikely, but not impossible.)
+        lock();
         auto n = base::allocate();
         new (n) node(std::forward<U>(args)...);
         auto next = head_.load(std::memory_order_relaxed);
@@ -467,6 +472,7 @@ public:
             // check if the head has changed and update it atomically.
             // (if the CAS fails, 'next' is updated to the current head)
         } while (!head_.compare_exchange_weak(next, n, std::memory_order_acq_rel)) ;
+        unlock();
         return iterator(n);
     }
 
