@@ -8,6 +8,7 @@
 
 #include "binmsg.hpp"
 #include "imp.hpp"
+#include "rt_memory_pool.hpp"
 
 #include "common/sync.hpp"
 #include "common/time.hpp"
@@ -583,6 +584,37 @@ uint32_t make_version(){
             | ((uint32_t)kAooVersionPatch << 8);
 }
 
+//---------------------- RT memory --------------------------//
+
+static rt_memory_pool<true, aoo::allocator<char>> g_rt_memory_pool;
+
+void * rt_allocate(size_t size) {
+    auto ptr = g_rt_memory_pool.allocate(size);
+    if (!ptr && (size > 0)) {
+        throw std::bad_alloc{};
+    }
+    return ptr;
+}
+
+void rt_deallocate(void *ptr, size_t size) {
+    g_rt_memory_pool.deallocate(ptr, size);
+}
+
+sync::mutex g_rt_memory_pool_lock;
+size_t g_rt_memory_pool_refcount = 0;
+
+void rt_memory_pool_ref() {
+    sync::scoped_lock<sync::mutex> l(g_rt_memory_pool_lock);
+    g_rt_memory_pool_refcount++;
+}
+
+void rt_memory_pool_unref() {
+    sync::scoped_lock<sync::mutex> l(g_rt_memory_pool_lock);
+    if (--g_rt_memory_pool_refcount == 0) {
+        g_rt_memory_pool.reset();
+    }
+}
+
 //---------------------- memory -----------------------------//
 
 #define DEBUG_MEMORY_LIST 0
@@ -720,6 +752,10 @@ AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
             LOG_WARNING("aoo_initializeEx: custom allocator not supported");
     #endif
         }
+
+        // TODO: make default value a compile time option
+        // and allow to set it dynamically with AooSettings
+        aoo::g_rt_memory_pool.resize(1 << 20); // 1 MB
 
         // register codecs
         aoo_pcmLoad(&aoo::g_interface);

@@ -315,13 +315,13 @@ public:
 };
 
 template <class T, class U>
-bool operator==(allocator<T> const&, allocator<U> const&) noexcept
+bool operator==(const allocator<T>&, const allocator<U>&) noexcept
 {
     return true;
 }
 
 template <class T, class U>
-bool operator!=(allocator<T> const& x, allocator<U> const& y) noexcept
+bool operator!=(const allocator<T>& x, const allocator<U>& y) noexcept
 {
     return !(x == y);
 }
@@ -350,6 +350,90 @@ template<typename T>
 using allocator = std::allocator<T>;
 
 #endif
+
+template<typename T>
+class deleter {
+public:
+    void operator() (void *p) const {
+        aoo::deallocate(p, sizeof(T));
+    }
+};
+
+//------------- RT memory allocator ---------------//
+
+void * rt_allocate(size_t size);
+
+template<class T, class... U>
+T * rt_construct(U&&... args){
+    auto ptr = rt_allocate(sizeof(T));
+    return new (ptr) T(std::forward<U>(args)...);
+}
+
+void rt_deallocate(void *ptr, size_t size);
+
+template<typename T>
+void rt_destroy(T *x){
+    if (x) {
+        x->~T();
+        rt_deallocate(x, sizeof(T));
+    }
+}
+
+template<class T>
+class rt_allocator {
+public:
+    using value_type = T;
+
+    rt_allocator() noexcept = default;
+
+    template<typename U>
+    rt_allocator(const rt_allocator<U>&) noexcept {}
+
+    template<typename U>
+    rt_allocator& operator=(const rt_allocator<U>&) noexcept {}
+
+    value_type* allocate(size_t n) {
+        return (value_type *)aoo::rt_allocate(sizeof(T) * n);
+    }
+
+    void deallocate(value_type* p, size_t n) noexcept {
+        aoo::rt_deallocate(p, sizeof(T) * n);
+    }
+};
+
+template <class T, class U>
+bool operator==(const rt_allocator<T>&, const rt_allocator<U>&) noexcept
+{
+    return true;
+}
+
+template <class T, class U>
+bool operator!=(const rt_allocator<T>& x, const rt_allocator<U>& y) noexcept
+{
+    return !(x == y);
+}
+
+template<typename T>
+class rt_deleter {
+public:
+    void operator() (void *p) const {
+        aoo::rt_deallocate(p, sizeof(T));
+    }
+};
+
+void rt_memory_pool_ref();
+void rt_memory_pool_unref();
+
+class rt_memory_pool_client {
+public:
+    rt_memory_pool_client() {
+        rt_memory_pool_ref();
+    }
+
+    ~rt_memory_pool_client() {
+        rt_memory_pool_unref();
+    }
+};
 
 //------------- common data structures ------------//
 
