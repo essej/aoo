@@ -272,7 +272,7 @@ typedef struct AooNetEventError
 /* client events */
 
 /** \brief client has been disconnected from server */
-#define AooNetEventDisconnect AooNetEventError
+#define AooNetEventClientDisconnect AooNetEventError
 
 /** \brief client received server notification */
 typedef struct AooNetEventClientNotification

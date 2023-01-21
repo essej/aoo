@@ -212,7 +212,7 @@ void AooClient::handleEvent(const AooEvent* event) {
     }
     case kAooNetEventClientDisconnect:
     {
-        auto e = (const AooNetEventDisconnect *)event;
+        auto e = (const AooNetEventClientDisconnect *)event;
         msg << "/disconnect" << e->errorCode << e->errorMessage;
         break;
     }
