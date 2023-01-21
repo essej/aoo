@@ -51,6 +51,11 @@
 
 /*---------------- default values --------------*/
 
+/** \brief default size of the RT memory pool */
+#ifndef AOO_MEM_POOL_SIZE
+ #define AOO_MEM_POOL_SIZE (1 << 20) /* 1 MB */
+#endif
+
 /** \brief default source buffer size in seconds */
 #ifndef AOO_SOURCE_BUFFER_SIZE
  #define AOO_SOURCE_BUFFER_SIZE 0.025
@@ -197,6 +202,7 @@ typedef struct AooSettings
     AooSize size; /** `sizeof(AooSettings)` */
     AooAllocFunc allocFunc; /** custom allocator function, or `NULL` */
     AooLogFunc logFunc; /** custom log function, or `NULL` */
+    AooSize memPoolSize; /** size of RT memory pool */
 } AooSettings;
 
 /** \brief default initialization for AooSettings struct */
@@ -205,6 +211,7 @@ AOO_INLINE void AooSettings_init(AooSettings *settings)
     settings->size = sizeof(AooSettings);
     settings->allocFunc = NULL;
     settings->logFunc = NULL;
+    settings->memPoolSize = AOO_MEM_POOL_SIZE;
 }
 
 /**

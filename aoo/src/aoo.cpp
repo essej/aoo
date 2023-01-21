@@ -753,9 +753,11 @@ AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
     #endif
         }
 
-        // TODO: make default value a compile time option
-        // and allow to set it dynamically with AooSettings
-        aoo::g_rt_memory_pool.resize(1 << 20); // 1 MB
+        if (HAVE_SETTING(settings, memPoolSize) && settings->memPoolSize > 0) {
+            aoo::g_rt_memory_pool.resize(settings->memPoolSize);
+        } else {
+            aoo::g_rt_memory_pool.resize(AOO_MEM_POOL_SIZE);
+        }
 
         // register codecs
         aoo_pcmLoad(&aoo::g_interface);
@@ -770,6 +772,9 @@ AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
 }
 
 void AOO_CALL aoo_terminate() {
+#if AOO_LOG_LEVEL >= kAooLogLevelDebug
+    aoo::g_rt_memory_pool.print();
+#endif
     // unload codecs
     aoo_pcmUnload();
 #if USE_CODEC_OPUS
