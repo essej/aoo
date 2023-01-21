@@ -16,8 +16,9 @@
 #include "common/utils.hpp"
 
 #include "binmsg.hpp"
-#include "buffer.hpp"
-#include "imp.hpp"
+#include "packet_buffer.hpp"
+#include "detail.hpp"
+#include "events.hpp"
 #include "resampler.hpp"
 #include "timer.hpp"
 #include "time_dll.hpp"

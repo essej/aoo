@@ -5,7 +5,7 @@
 #include "aoo/aoo_codec.h"
 #include "aoo/codec/aoo_opus.h"
 
-#include "../imp.hpp"
+#include "../detail.hpp"
 
 #include "common/utils.hpp"
 

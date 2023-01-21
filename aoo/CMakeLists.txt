@@ -99,8 +99,13 @@ if (AOO_CODEC_OPUS)
 endif()
 
 if (AOO_NET)
-    list(APPEND HEADERS "src/net/server.hpp" "src/net/client.hpp")
-    list(APPEND SOURCES "src/net/client.cpp" "src/net/server.cpp")
+    file(GLOB NET_HEADERS "src/net/*.hpp")
+
+    file(GLOB NET_SOURCES "src/net/*.cpp")
+
+    list(APPEND HEADERS ${NET_HEADERS})
+    list(APPEND SOURCES ${NET_SOURCES})
+
     if (NOT AOO_SYSTEM_MD5)
         list(APPEND HEADERS "${DEPS}/md5/md5.h")
         list(APPEND SOURCES "${DEPS}/md5/md5.c")

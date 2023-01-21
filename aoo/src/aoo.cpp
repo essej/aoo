@@ -2,12 +2,11 @@
 #if USE_AOO_NET
 # include "aoo/aoo_net.h"
 # include "common/net_utils.hpp"
-# include "md5/md5.h"
 #endif
 #include "aoo/aoo_codec.h"
 
 #include "binmsg.hpp"
-#include "imp.hpp"
+#include "detail.hpp"
 #include "rt_memory_pool.hpp"
 
 #include "common/sync.hpp"
@@ -81,123 +80,7 @@ int32_t get_random_id(){
 #endif
 }
 
-#if USE_AOO_NET
-namespace net {
-
-std::string encrypt(const std::string& input) {
-    // pass empty password unchanged
-    if (input.empty()) {
-        return "";
-    }
-
-    uint8_t result[16];
-    MD5_CTX ctx;
-    MD5_Init(&ctx);
-    MD5_Update(&ctx, (uint8_t *)input.data(), input.size());
-    MD5_Final(result, &ctx);
-
-    char output[33];
-    for (int i = 0; i < 16; ++i){
-        snprintf(&output[i * 2], 3, "%02X", result[i]);
-    }
-
-    return output;
-}
-
-// optimized version of aoo_parse_pattern() for client/server
-AooError parse_pattern(const AooByte *msg, int32_t n, AooMsgType& type, int32_t& offset)
-{
-    int32_t count = 0;
-    if (aoo::binmsg_check(msg, n))
-    {
-        type = aoo::binmsg_type(msg, n);
-        offset = aoo::binmsg_headersize(msg, n);
-        return kAooOk;
-    } else if (n >= kAooMsgDomainLen
-            && !memcmp(msg, kAooMsgDomain, kAooMsgDomainLen))
-    {
-        count += kAooMsgDomainLen;
-        if (n >= (count + kAooNetMsgServerLen)
-            && !memcmp(msg + count, kAooNetMsgServer, kAooNetMsgServerLen))
-        {
-            type = kAooTypeServer;
-            count += kAooNetMsgServerLen;
-        }
-        else if (n >= (count + kAooNetMsgClientLen)
-            && !memcmp(msg + count, kAooNetMsgClient, kAooNetMsgClientLen))
-        {
-            type = kAooTypeClient;
-            count += kAooNetMsgClientLen;
-        }
-        else if (n >= (count + kAooNetMsgPeerLen)
-            && !memcmp(msg + count, kAooNetMsgPeer, kAooNetMsgPeerLen))
-        {
-            type = kAooTypePeer;
-            count += kAooNetMsgPeerLen;
-        }
-        else if (n >= (count + kAooNetMsgRelayLen)
-            && !memcmp(msg + count, kAooNetMsgRelay, kAooNetMsgRelayLen))
-        {
-            type = kAooTypeRelay;
-            count += kAooNetMsgRelayLen;
-        } else {
-            return kAooErrorUnknown;
-        }
-
-        offset = count;
-
-        return kAooOk;
-    } else {
-        return kAooErrorUnknown; // not an AOO message
-    }
-}
-
-AooSize write_relay_message(AooByte *buffer, AooSize bufsize,
-                            const AooByte *msg, AooSize msgsize,
-                            const ip_address& addr) {
-    if (aoo::binmsg_check(msg, msgsize)) {
-    #if AOO_DEBUG_RELAY && 0
-        LOG_DEBUG("write binary relay message");
-    #endif
-        auto onset = aoo::binmsg_write_relay(buffer, bufsize, addr);
-        auto total = msgsize + onset;
-        // NB: we do not write the message size itself because it is implicit
-        if (bufsize >= total) {
-            memcpy(buffer + onset, msg, msgsize);
-            return total;
-        } else {
-            return 0;
-        }
-    } else {
-    #if AOO_DEBUG_RELAY && 0
-        LOG_DEBUG("write OSC relay message " << msg);
-    #endif
-        osc::OutboundPacketStream msg2((char *)buffer, bufsize);
-        msg2 << osc::BeginMessage(kAooMsgDomain kAooNetMsgRelay)
-             << addr << osc::Blob(msg, msgsize)
-             << osc::EndMessage;
-        return msg2.Size();
-    }
-}
-
-} // net
-#endif // USE_AOO_NET
-
 //------------------------------ OSC utilities ---------------------------------//
-
-#if USE_AOO_NET
-// see comment in "imp.hpp"
-namespace net {
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const AooDataView *md) {
-    if (md) {
-        msg << md->type << osc::Blob(md->data, md->size);
-    } else {
-        msg << "" << osc::Blob(msg.Data(), 0); // HACK: do not use nullptr because of memcpy()
-    }
-    return msg;
-}
-} // net
-#endif // USE_AOO_NET
 
 osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const aoo::metadata& md) {
     if (md.size() > 0) {
@@ -236,72 +119,7 @@ ip_address osc_read_address(osc::ReceivedMessageArgumentIterator& it, ip_address
     return ip_address(host, port, type);
 }
 
-#if USE_AOO_NET
-namespace net {
-
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_host& addr) {
-    msg << addr.name.c_str() << addr.port;
-    return msg;
-}
-
-ip_host osc_read_host(osc::ReceivedMessageArgumentIterator& it) {
-    auto host = (it++)->AsString();
-    auto port = (it++)->AsInt32();
-    return net::ip_host { host, port };
-}
-
-} // net
-#endif // USE_AOO_NET
-
-//------------------- allocator ------------------//
-
-#if AOO_DEBUG_MEMORY
-std::atomic<ptrdiff_t> total_memory{0};
-#endif
-
-void * AOO_CALL def_allocator(void *ptr, AooSize oldsize, AooSize newsize) {
-    if (newsize > 0) {
-        // allocate new memory
-        // NOTE: we never reallocate
-        assert(ptr == nullptr && oldsize == 0);
-    #if AOO_DEBUG_MEMORY
-        auto total = total_memory.fetch_add(newsize, std::memory_order_relaxed) + (ptrdiff_t)newsize;
-        LOG_ALL("allocate " << newsize << " bytes (total: " << total << ")");
-    #endif
-        return operator new(newsize);
-    } else if (oldsize > 0) {
-        // free memory
-    #if AOO_DEBUG_MEMORY
-        auto total = total_memory.fetch_sub(oldsize, std::memory_order_relaxed) - (ptrdiff_t)oldsize;
-        LOG_ALL("deallocate " << oldsize << " bytes (total: " << total << ")");
-    #endif
-        operator delete(ptr);
-    } else {
-        // (de)allocating memory of size 0: do nothing.
-        assert(ptr == nullptr);
-    }
-    return nullptr;
-}
-
-#if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
-
-void * allocate(size_t size) {
-    auto result = g_interface.allocFunc(nullptr, 0, size);
-    if (!result && size > 0) {
-        throw std::bad_alloc{};
-    }
-    return result;
-}
-
-void deallocate(void *ptr, size_t size){
-    g_interface.allocFunc(ptr, size, 0);
-}
-
-#endif
-
-
 //----------------------- logging --------------------------//
-
 
 #if CERR_LOG_FUNCTION
 
@@ -584,6 +402,52 @@ uint32_t make_version(){
             | ((uint32_t)kAooVersionPatch << 8);
 }
 
+//------------------- allocator ------------------//
+
+#if AOO_DEBUG_MEMORY
+std::atomic<ptrdiff_t> total_memory{0};
+#endif
+
+void * AOO_CALL def_allocator(void *ptr, AooSize oldsize, AooSize newsize) {
+    if (newsize > 0) {
+        // allocate new memory
+        // NOTE: we never reallocate
+        assert(ptr == nullptr && oldsize == 0);
+    #if AOO_DEBUG_MEMORY
+        auto total = total_memory.fetch_add(newsize, std::memory_order_relaxed) + (ptrdiff_t)newsize;
+        LOG_ALL("allocate " << newsize << " bytes (total: " << total << ")");
+    #endif
+        return operator new(newsize);
+    } else if (oldsize > 0) {
+        // free memory
+    #if AOO_DEBUG_MEMORY
+        auto total = total_memory.fetch_sub(oldsize, std::memory_order_relaxed) - (ptrdiff_t)oldsize;
+        LOG_ALL("deallocate " << oldsize << " bytes (total: " << total << ")");
+    #endif
+        operator delete(ptr);
+    } else {
+        // (de)allocating memory of size 0: do nothing.
+        assert(ptr == nullptr);
+    }
+    return nullptr;
+}
+
+#if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
+
+void * allocate(size_t size) {
+    auto result = g_interface.allocFunc(nullptr, 0, size);
+    if (!result && size > 0) {
+        throw std::bad_alloc{};
+    }
+    return result;
+}
+
+void deallocate(void *ptr, size_t size){
+    g_interface.allocFunc(ptr, size, 0);
+}
+
+#endif
+
 //---------------------- RT memory --------------------------//
 
 static rt_memory_pool<true, aoo::allocator<char>> g_rt_memory_pool;
@@ -613,75 +477,6 @@ void rt_memory_pool_unref() {
     if (--g_rt_memory_pool_refcount == 0) {
         g_rt_memory_pool.reset();
     }
-}
-
-//---------------------- memory -----------------------------//
-
-#define DEBUG_MEMORY_LIST 0
-
-memory_list::block * memory_list::block::alloc(size_t size){
-    auto fullsize = sizeof(block::header) + size;
-    auto b = (block *)aoo::allocate(fullsize);
-    b->header.next = nullptr;
-    b->header.size = size;
-#if DEBUG_MEMORY_LIST
-    LOG_ALL("allocate memory block (" << size << " bytes)");
-#endif
-    return b;
-}
-
-void memory_list::block::free(memory_list::block *b){
-#if DEBUG_MEMORY_LIST
-    LOG_ALL("deallocate memory block (" << b->header.size << " bytes)");
-#endif
-    auto fullsize = sizeof(block::header) + b->header.size;
-    aoo::deallocate(b, fullsize);
-}
-
-memory_list::~memory_list(){
-    // free memory blocks
-    auto b = list_.load(std::memory_order_relaxed);
-    while (b){
-        auto next = b->header.next;
-        block::free(b);
-        b = next;
-    }
-}
-
-void* memory_list::allocate(size_t size) {
-    for (;;){
-        // try to pop existing block
-        auto head = list_.load(std::memory_order_relaxed);
-        if (head){
-            auto next = head->header.next;
-            if (list_.compare_exchange_weak(head, next, std::memory_order_acq_rel)){
-                if (head->header.size >= size){
-                #if DEBUG_MEMORY_LIST
-                    LOG_ALL("reuse memory block (" << head->header.size << " bytes)");
-                #endif
-                    return head->data;
-                } else {
-                    // free block
-                    block::free(head);
-                }
-            } else {
-                // try again
-                continue;
-            }
-        }
-        // allocate new block
-        return block::alloc(size)->data;
-    }
-}
-void memory_list::deallocate(void* ptr) {
-    auto b = block::from_bytes(ptr);
-    b->header.next = list_.load(std::memory_order_relaxed);
-    // check if the head has changed and update it atomically.
-    // (if the CAS fails, 'next' is updated to the current head)
-    while (!list_.compare_exchange_weak(b->header.next, b, std::memory_order_acq_rel)) ;
-#if DEBUG_MEMORY_LIST
-    LOG_ALL("return memory block (" << b->header.size << " bytes)");
-#endif
 }
 
 } // aoo
@@ -749,7 +544,7 @@ AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
     #if AOO_CUSTOM_ALLOCATOR
             aoo::g_interface.allocFunc = settings->allocFunc;
     #else
-            LOG_WARNING("aoo_initializeEx: custom allocator not supported");
+            LOG_WARNING("aoo_initialize: custom allocator not supported");
     #endif
         }
 

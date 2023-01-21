@@ -5,15 +5,15 @@
 #include <atomic>
 
 #ifdef _WIN32
-#include <winsock2.h>
+# include <winsock2.h>
 #else
-#include <sys/poll.h>
-#include <unistd.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
-#include <errno.h>
+# include <sys/poll.h>
+# include <unistd.h>
+# include <netdb.h>
+# include <netinet/in.h>
+# include <netinet/tcp.h>
+# include <arpa/inet.h>
+# include <errno.h>
 #endif
 
 #include "common/net_utils.hpp"

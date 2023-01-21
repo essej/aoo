@@ -116,10 +116,6 @@ void ip_address::check() {
     if (!ok) {
         fprintf(stderr, "bad address family: %d\n", f);
         fflush(stderr);
-        volatile char foo[64];
-        memcpy((void *)foo, (void *)1, 64);
-        // so we can put a break point
-        assert(false);
     }
 }
 
