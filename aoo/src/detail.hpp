@@ -126,8 +126,6 @@ inline void endpoint::send(const AooByte *data, AooSize size, const sendfn& fn) 
 }
 #endif
 
-
-
 //------------- common data structures ------------//
 
 template<typename T>
@@ -150,6 +148,13 @@ struct format_deleter {
     void operator() (void *x) const {
         auto f = static_cast<AooFormat *>(x);
         aoo::deallocate(x, f->size);
+    }
+};
+
+struct rt_format_deleter {
+    void operator() (void *x) const {
+        auto f = static_cast<AooFormat *>(x);
+        aoo::rt_deallocate(x, f->size);
     }
 };
 
@@ -209,10 +214,22 @@ inline AooSize flat_metadata_size(const AooDataView& data){
 struct flat_metadata_deleter {
     void operator() (void *x) const {
         auto md = static_cast<AooDataView *>(x);
-        auto mdsize = flat_metadata_size(*md);
-        aoo::deallocate(x, mdsize);
+        auto size = flat_metadata_size(*md);
+        aoo::deallocate(x, size);
     }
 };
+
+using metadata_ptr = std::unique_ptr<AooDataView, flat_metadata_deleter>;
+
+struct rt_flat_metadata_deleter {
+    void operator() (void *x) const {
+        auto md = static_cast<AooDataView *>(x);
+        auto size = flat_metadata_size(*md);
+        aoo::rt_deallocate(x, size);
+    }
+};
+
+using rt_metadata_ptr = std::unique_ptr<AooDataView, rt_flat_metadata_deleter>;
 
 inline void flat_metadata_copy(const AooDataView& src, AooDataView& dst) {
     auto data = (AooByte *)(&dst) + sizeof(AooDataView);

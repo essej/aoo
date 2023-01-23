@@ -66,11 +66,6 @@
  #define AOO_SINK_BUFFER_SIZE 0.05
 #endif
 
-/** \brief default sink buffer size in seconds */
-#ifndef AOO_STREAM_METADATA_SIZE
- #define AOO_STREAM_METADATA_SIZE 256
-#endif
-
 /** \brief use binary data message format by default */
 #ifndef AOO_BINARY_DATA_MSG
  #define AOO_BINARY_DATA_MSG 1

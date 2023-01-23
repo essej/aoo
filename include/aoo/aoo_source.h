@@ -255,18 +255,6 @@ AOO_INLINE AooError AooSource_getBinaryDataMsg(AooSource *source, AooBool *b)
     return AooSource_control(source, kAooCtlGetBinaryDataMsg, 0, AOO_ARG(*b));
 }
 
-/** \copydoc AooSource::setStreamMetaDataSize() */
-AOO_INLINE AooError AooSource_setStreamMetadataSize(AooSource *source, AooInt32 size)
-{
-    return AooSource_control(source, kAooCtlSetStreamMetadataSize, 0, AOO_ARG(size));
-}
-
-/** \copydoc AooSource::getStreamMetaDataSize() */
-AOO_INLINE AooError AooSource_getStreamMetadataSize(AooSource *source, AooInt32 *size)
-{
-    return AooSource_control(source, kAooCtlGetStreamMetadataSize, 0, AOO_ARG(*size));
-}
-
 /** \copydoc AooSource::setSinkChannelOnset() */
 AOO_INLINE AooError AooSource_setSinkChannelOnset(
         AooSource *source, const AooEndpoint *sink, AooInt32 onset)

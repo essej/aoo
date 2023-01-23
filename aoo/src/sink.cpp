@@ -19,8 +19,6 @@ const int32_t kDataHeaderSize = kDataMaxAddrSize + 8;
 // args: 8 bytes (stream ID + count)
 const int32_t kBinDataHeaderSize = kAooBinMsgLargeHeaderSize + 8;
 
-const int32_t kEventQueueSize = 8;
-
 } // aoo
 
 //------------------------- Sink ------------------------------//
@@ -31,9 +29,7 @@ AOO_API AooSink * AOO_CALL AooSink_new(
 }
 
 aoo::Sink::Sink(AooId id, AooFlag flags, AooError *err)
-    : id_(id) {
-    eventqueue_.reserve(kEventQueueSize);
-}
+    : id_(id) {}
 
 AOO_API void AOO_CALL AooSink_free(AooSink *sink) {
     // cast to correct type because base class
@@ -49,8 +45,8 @@ aoo::Sink::~Sink(){
             // free metadata
             auto md = r.invite.metadata;
             if (md != nullptr){
-                auto mdsize = flat_metadata_size(*md);
-                aoo::deallocate(md, mdsize);
+                auto size = flat_metadata_size(*md);
+                aoo::rt_deallocate(md, size);
             }
         }
     }
@@ -435,9 +431,9 @@ AooError AOO_CALL aoo::Sink::process(
             s.add_xrun(xrunsamples);
         }
 
-        endpoint_event e(kAooEventXRun);
-        e.xrun.count = (float)xrunsamples / (float)blocksize_;
-        send_event(e, kAooThreadLevelAudio);
+        int count = (float)xrunsamples / (float)blocksize_;
+        auto e = make_event<xrun_event>(count);
+        send_event(std::move(e), kAooThreadLevelAudio);
 
         timer_.reset();
     } else if (dynamic_resampling) {
@@ -465,8 +461,8 @@ AooError AOO_CALL aoo::Sink::process(
             didsomething = true;
         } else if (!it->check_active(*this)){
             LOG_VERBOSE("AooSink: removed inactive source " << it->ep);
-            endpoint_event e(kAooEventSourceRemove, it->ep);
-            send_event(e, kAooThreadLevelAudio);
+            auto e = make_event<source_event>(kAooEventSourceRemove, it->ep);
+            send_event(std::move(e), kAooThreadLevelAudio);
             // move source to garbage list (will be freed in send())
             it = sources_.erase(it);
             continue;
@@ -533,9 +529,9 @@ AOO_API AooError AOO_CALL AooSink_pollEvents(AooSink *sink){
 
 AooError AOO_CALL aoo::Sink::pollEvents(){
     int total = 0;
-    endpoint_event e;
+    event_ptr e;
     while (eventqueue_.try_pop(e)){
-        eventhandler_(eventcontext_, &e.event, kAooThreadLevelUnknown);
+        eventhandler_(eventcontext_, &e->cast(), kAooThreadLevelUnknown);
         total++;
     }
     // we only need to protect against source removal
@@ -565,8 +561,8 @@ AooError AOO_CALL aoo::Sink::inviteSource(
 
     AooDataView *metadata = nullptr;
     if (md) {
-        auto mdsize = flat_metadata_size(*md);
-        metadata = (AooDataView *)aoo::allocate(mdsize);
+        auto size = flat_metadata_size(*md);
+        metadata = (AooDataView *)aoo::rt_allocate(size);
         flat_metadata_copy(*md, *metadata);
     }
 
@@ -606,13 +602,13 @@ AooError AOO_CALL aoo::Sink::uninviteAll() {
 
 namespace aoo {
 
-void Sink::send_event(const endpoint_event &e, AooThreadLevel level) const {
+void Sink::send_event(event_ptr e, AooThreadLevel level) const {
     switch (eventmode_){
     case kAooEventModePoll:
-        eventqueue_.push(e);
+        eventqueue_.push(std::move(e));
         break;
     case kAooEventModeCallback:
-        eventhandler_(eventcontext_, &e.event, level);
+        eventhandler_(eventcontext_, &e->cast(), level);
         break;
     default:
         break;
@@ -620,8 +616,8 @@ void Sink::send_event(const endpoint_event &e, AooThreadLevel level) const {
 }
 
 // only called if mode is kAooEventModeCallback
-void Sink::call_event(const source_event &e, AooThreadLevel level) const {
-    eventhandler_(eventcontext_, &e.event, level);
+void Sink::call_event(event_ptr e, AooThreadLevel level) const {
+    eventhandler_(eventcontext_, &e->cast(), level);
 }
 
 void Sink::dispatch_requests(){
@@ -948,27 +944,15 @@ source_desc::source_desc(const ip_address& addr, AooId id, double time)
     : ep(addr, id), last_packet_time_(time)
 #endif
 {
-    // reserve some memory, so we don't have to allocate memory
-    // when pushing events in the audio thread.
-    eventqueue_.reserve(kEventQueueSize);
     // resendqueue_.reserve(256);
     LOG_DEBUG("AooSink: source_desc");
 }
 
-source_desc::~source_desc(){
-    // flush event queue
-    source_event e;
-    while (eventqueue_.try_pop(e)){
-        free_event(e);
-    }
+source_desc::~source_desc() {
     // flush packet queue
     net_packet d;
     while (packetqueue_.try_pop(d)){
         memory_.deallocate((void *)d.data);
-    }
-    // free metadata
-    if (metadata_){
-        memory_.deallocate((void *)metadata_);
     }
     LOG_DEBUG("AooSink: ~source_desc");
 }
@@ -1219,8 +1203,8 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
         LOG_DEBUG("AooSink: stream metadata: "
                   << md.type << ", " << md.size << " bytes");
         // allocate flat metadata
-        auto mdsize = flat_metadata_size(md);
-        metadata = (AooDataView *)memory_.allocate(mdsize);
+        auto md_size = flat_metadata_size(md);
+        metadata = (AooDataView *)rt_allocate(md_size);
         flat_metadata_copy(md, *metadata);
     }
 
@@ -1239,12 +1223,8 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
         decoder_ = std::move(new_decoder);
     }
 
-    // free old metadata
-    if (metadata_){
-        memory_.deallocate((void *)metadata_);
-    }
-    // set new metadata (can be NULL!)
-    metadata_ = metadata;
+    // replace metadata
+    metadata_.reset(metadata);
 
     // always update!
     update(s);
@@ -1257,27 +1237,15 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
     // possible wrong ordering with subsequent "start" event
     if (first_stream){
         // first /start message -> source added.
-        source_event e(kAooEventSourceAdd, ep);
-        send_event(s, e, kAooThreadLevelNetwork);
+        auto e = make_event<source_event>(kAooEventSourceAdd, ep);
+        send_event(s, std::move(e), kAooThreadLevelNetwork);
         LOG_DEBUG("AooSink: add new source " << ep);
     }
 
     if (format_changed){
         // send "format" event
-        source_event e(kAooEventFormatChange, ep);
-
-        auto mode = s.event_mode();
-        if (mode == kAooEventModeCallback){
-            // use stack
-            e.format.format = &fmt.header;
-        } else if (kAooEventModePoll){
-            // use heap
-            auto fp = (AooFormat *)memory_.allocate(fmt.header.size);
-            memcpy(fp, &fmt, fmt.header.size);
-            e.format.format = fp;
-        }
-
-        send_event(s, e, kAooThreadLevelNetwork);
+        auto e = make_event<format_change_event>(ep, fmt.header);
+        send_event(s, std::move(e), kAooThreadLevelNetwork);
     }
 
     return kAooOk;
@@ -1341,8 +1309,8 @@ AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
             }
             // always send timeout event
             LOG_VERBOSE(ep << ": uninvitation timed out");
-            endpoint_event e(kAooEventUninviteTimeout, ep);
-            s.send_event(e, kAooThreadLevelNetwork);
+            auto e = make_event<sink_event>(kAooEventUninviteTimeout, ep);
+            s.send_event(std::move(e), kAooThreadLevelNetwork);
         }
         return kAooOk;
     } else if (state == source_state::timeout) {
@@ -1437,10 +1405,8 @@ AooError source_desc::handle_ping(const Sink& s, time_tag tt){
     push_request(r);
 
     // push "ping" event
-    source_event e(kAooEventPing, ep);
-    e.ping.t1 = tt;
-    e.ping.t2 = tt2;
-    send_event(s, e, kAooThreadLevelNetwork);
+    auto e = make_event<ping_event>(ep, tt, tt2);
+    send_event(s, std::move(e), kAooThreadLevelNetwork);
 
     return kAooOk;
 }
@@ -1507,21 +1473,13 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples)
                     streamstate_ = kAooStreamStateInactive;
                 #endif
                     // send missing /stop message
-                    source_event e(kAooEventStreamStop, ep);
-                    send_event(s, e, kAooThreadLevelAudio);
+                    auto e = make_event<stream_stop_event>(ep);
+                    send_event(s, std::move(e), kAooThreadLevelAudio);
                 }
 
-                source_event e(kAooEventStreamStart, ep);
-                // move metadata into event
-                e.stream_start.metadata = metadata_;
-                metadata_ = nullptr;
-
-                send_event(s, e, kAooThreadLevelAudio);
-
-                // deallocate metadata if we don't need it anymore, see also poll_events().
-                if (s.event_mode() != kAooEventModePoll && e.stream_start.metadata){
-                    memory_.deallocate((void *)e.stream_start.metadata);
-                }
+                // *move* metadata into event
+                auto e = make_event<stream_start_event>(ep, metadata_.release());
+                send_event(s, std::move(e), kAooThreadLevelAudio);
 
                 // stream state is handled at the end of the function
 
@@ -1537,13 +1495,12 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples)
                 if (streamstate_ != kAooStreamStateInactive){
                     streamstate_ = kAooStreamStateInactive;
 
-                    source_event e(kAooEventStreamState, ep);
-                    e.stream_state.state = kAooStreamStateInactive;
-                    send_event(s, e, kAooThreadLevelAudio);
+                    auto e = make_event<stream_state_event>(ep, kAooStreamStateInactive);
+                    send_event(s, std::move(e), kAooThreadLevelAudio);
                 }
 
-                source_event e(kAooEventStreamStop, ep);
-                send_event(s, e, kAooThreadLevelAudio);
+                auto e = make_event<stream_stop_event>(ep);
+                send_event(s, std::move(e), kAooThreadLevelAudio);
 
                 return false;
             }
@@ -1554,9 +1511,8 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples)
 
                 streamstate_ = kAooStreamStateInactive;
 
-                source_event e(kAooEventStreamState, ep);
-                e.stream_state.state = kAooStreamStateInactive;
-                send_event(s, e, kAooThreadLevelAudio);
+                auto e = make_event<stream_state_event>(ep, kAooStreamStateInactive);
+                send_event(s, std::move(e), kAooThreadLevelAudio);
             }
 
             return false;
@@ -1609,27 +1565,23 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples)
 
     if (stats.lost > 0){
         // push packet loss event
-        source_event e(kAooEventBlockLost, ep);
-        e.block_lost.count = stats.lost;
-        send_event(s, e, kAooThreadLevelAudio);
+        auto e = make_event<block_lost_event>(ep, stats.lost);
+        send_event(s, std::move(e), kAooThreadLevelAudio);
     }
     if (stats.reordered > 0){
         // push packet reorder event
-        source_event e(kAooEventBlockReordered, ep);
-        e.block_reordered.count = stats.reordered;
-        send_event(s, e, kAooThreadLevelAudio);
+        auto e = make_event<block_reordered_event>(ep, stats.reordered);
+        send_event(s, std::move(e), kAooThreadLevelAudio);
     }
     if (stats.resent > 0){
         // push packet resend event
-        source_event e(kAooEventBlockResent, ep);
-        e.block_resent.count = stats.resent;
-        send_event(s, e, kAooThreadLevelAudio);
+        auto e = make_event<block_resent_event>(ep, stats.resent);
+        send_event(s, std::move(e), kAooThreadLevelAudio);
     }
     if (stats.dropped > 0){
         // push packet resend event
-        source_event e(kAooEventBlockDropped, ep);
-        e.block_dropped.count = stats.dropped;
-        send_event(s, e, kAooThreadLevelAudio);
+        auto e = make_event<block_dropped_event>(ep, stats.dropped);
+        send_event(s, std::move(e), kAooThreadLevelAudio);
     }
 
     auto nchannels = format_->numChannels;
@@ -1676,9 +1628,8 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples)
             if (streamstate_ != kAooStreamStateInactive){
                 streamstate_ = kAooStreamStateInactive;
 
-                source_event e(kAooEventStreamState, ep);
-                e.stream_state.state = kAooStreamStateInactive;
-                send_event(s, e, kAooThreadLevelAudio);
+                auto e = make_event<stream_state_event>(ep, kAooStreamStateInactive);
+                send_event(s, std::move(e), kAooThreadLevelAudio);
             }
             underrun_ = true;
 
@@ -1705,9 +1656,8 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples)
     if (streamstate_ != kAooStreamStateActive){
         streamstate_ = kAooStreamStateActive;
 
-        source_event e(kAooEventStreamState, ep);
-        e.stream_state.state = kAooStreamStateActive;
-        send_event(s, e, kAooThreadLevelAudio);
+        auto e = make_event<stream_state_event>(ep, kAooStreamStateActive);
+        send_event(s, std::move(e), kAooThreadLevelAudio);
     }
 
     return true;
@@ -1716,10 +1666,9 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples)
 int32_t source_desc::poll_events(Sink& s, AooEventHandler fn, void *user){
     // always lockfree!
     int count = 0;
-    source_event e;
-    while (eventqueue_.try_pop(e)){
-        fn(user, &e.event, kAooThreadLevelUnknown);
-        free_event(e);
+    event_ptr e;
+    while (eventqueue_.try_pop(e)) {
+        fn(user, &e->cast(), kAooThreadLevelUnknown);
         count++;
     }
     return count;
@@ -1776,8 +1725,8 @@ void source_desc::handle_underrun(const Sink& s){
     #endif
     }
 
-    source_event e(kAooEventBufferUnderrun, ep);
-    send_event(s, e, kAooThreadLevelAudio);
+    auto e = make_event<source_event>(kAooEventBufferUnderrun, ep);
+    send_event(s, std::move(e), kAooThreadLevelAudio);
 
     underrun_ = false;
 }
@@ -1817,9 +1766,8 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
         // report gap to source
         lost_blocks_.fetch_add(diff - 1);
         // send event
-        source_event e(kAooEventBlockLost, ep);
-        e.block_lost.count = diff - 1;
-        send_event(s, e, kAooThreadLevelAudio);
+        auto e = make_event<block_lost_event>(ep, diff - 1);
+        send_event(s, std::move(e), kAooThreadLevelAudio);
     }
 
     auto block = jitterbuffer_.find(d.sequence);
@@ -2309,8 +2257,8 @@ void source_desc::send_invitations(const Sink &s, const sendfn &fn){
         }
         // always send timeout event
         LOG_VERBOSE(ep << ": invitation timed out");
-        endpoint_event e(kAooEventInviteTimeout, ep);
-        s.send_event(e, kAooThreadLevelNetwork);
+        auto e = make_event<sink_event>(kAooEventUninviteTimeout, ep);
+        s.send_event(std::move(e), kAooThreadLevelNetwork);
     } else {
         delta = now - last_invite_time_.load(std::memory_order_relaxed);
         if (delta >= INVITE_INTERVAL){
@@ -2325,27 +2273,16 @@ void source_desc::send_invitations(const Sink &s, const sendfn &fn){
     }
 }
 
-void source_desc::send_event(const Sink& s, const source_event& e,
-                             AooThreadLevel level){
+void source_desc::send_event(const Sink& s, event_ptr e, AooThreadLevel level){
     switch (s.event_mode()){
     case kAooEventModePoll:
-        eventqueue_.push(e);
+        eventqueue_.push(std::move(e));
         break;
     case kAooEventModeCallback:
-        s.call_event(e, level);
+        s.call_event(std::move(e), level);
         break;
     default:
         break;
-    }
-}
-
-void source_desc::free_event(const source_event &e){
-    if (e.type == kAooEventFormatChange){
-        memory_.deallocate((void *)e.format.format);
-    } else if (e.type == kAooEventStreamStart){
-        if (e.stream_start.metadata){
-            memory_.deallocate((void *)e.stream_start.metadata);
-        }
     }
 }
 

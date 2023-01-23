@@ -470,13 +470,18 @@ size_t g_rt_memory_pool_refcount = 0;
 void rt_memory_pool_ref() {
     sync::scoped_lock<sync::mutex> l(g_rt_memory_pool_lock);
     g_rt_memory_pool_refcount++;
+    LOG_DEBUG("rt_memory_pool_ref: " << g_rt_memory_pool_refcount);
 }
 
 void rt_memory_pool_unref() {
     sync::scoped_lock<sync::mutex> l(g_rt_memory_pool_lock);
     if (--g_rt_memory_pool_refcount == 0) {
+    #if AOO_LOG_LEVEL >= kAooLogLevelDebug
+        g_rt_memory_pool.print();
+    #endif
         g_rt_memory_pool.reset();
     }
+    LOG_DEBUG("rt_memory_pool_unref: " << g_rt_memory_pool_refcount);
 }
 
 } // aoo

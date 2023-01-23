@@ -601,7 +601,6 @@ t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
 {
     x_clock = clock_new(this, (t_method)aoo_receive_tick);
     x_metadata_type = nullptr;
-    x_metadata.reserve(AOO_STREAM_METADATA_SIZE);
 
     // arg #1: port number
     x_port = atom_getfloatarg(0, argc, argv);

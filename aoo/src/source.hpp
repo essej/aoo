@@ -140,7 +140,7 @@ struct cached_sink {
     int32_t channel;
 };
 
-class Source final : public AooSource {
+class Source final : public AooSource, rt_memory_pool_client {
  public:
     Source(AooId id, AooFlag flags, AooError *err);
 
@@ -229,8 +229,7 @@ class Source final : public AooSource {
     };
     std::atomic<stream_state> state_{stream_state::idle};
     // metadata
-    AooDataView *metadata_{nullptr};
-    std::atomic<int32_t> metadata_size_{ AOO_STREAM_METADATA_SIZE };
+    rt_metadata_ptr metadata_;
     bool metadata_accepted_{false};
     sync::spinlock metadata_lock_;
     // timing
@@ -247,7 +246,8 @@ class Source final : public AooSource {
     aoo::spsc_queue<char> audioqueue_;
     history_buffer history_;
     // events
-    aoo::unbounded_mpsc_queue<endpoint_event> eventqueue_;
+    using event_queue = lockfree::unbounded_mpsc_queue<event_ptr, aoo::rt_allocator<event_ptr>>;
+    event_queue eventqueue_;
     AooEventHandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;
     AooEventMode eventmode_ = kAooEventModeNone;
@@ -259,8 +259,6 @@ class Source final : public AooSource {
     sink_list sinks_;
     sync::mutex sink_mutex_;
     aoo::vector<cached_sink> cached_sinks_; // only for the send thread
-    // memory
-    memory_list memory_;
     // thread synchronization
     sync::shared_mutex update_mutex_;
     // options
@@ -287,15 +285,11 @@ class Source final : public AooSource {
 
     sink_desc *get_sink_arg(intptr_t index);
 
-    void send_event(const endpoint_event& e, AooThreadLevel level);
-
-    void free_event(const endpoint_event& e);
+    void send_event(event_ptr event, AooThreadLevel level);
 
     bool need_resampling() const;
 
     void make_new_stream();
-
-    void allocate_metadata(int32_t size);
 
     void add_xrun(float n);
 

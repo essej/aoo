@@ -62,8 +62,6 @@ enum AooControls
     kAooCtlGetBufferFillRatio,
     kAooCtlSetBinaryDataMsg,
     kAooCtlGetBinaryDataMsg,
-    kAooCtlSetStreamMetadataSize,
-    kAooCtlGetStreamMetadataSize,
 #if USE_AOO_NET
     kAooCtlSetPassword = 1000,
     kAooCtlSetTcpHost,

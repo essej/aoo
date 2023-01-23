@@ -10,8 +10,6 @@
 
 namespace aoo {
 
-const int32_t kEventQueueSize = 8;
-
 // OSC data message
 const int32_t kDataMaxAddrSize = kAooMsgDomainLen + kAooMsgSinkLen + 16 + kAooMsgDataLen;
 // typetag string: max. 12 bytes
@@ -138,15 +136,7 @@ AOO_API AooSource * AOO_CALL AooSource_new(
 }
 
 aoo::Source::Source(AooId id, AooFlag flags, AooError *err)
-    : id_(id)
-{
-    // event queue
-    eventqueue_.reserve(kEventQueueSize);
-    // request queues
-    // formatrequestqueue_.resize(64);
-    // datarequestqueue_.resize(1024);
-    allocate_metadata(metadata_size_.load());
-}
+    : id_(id) {}
 
 AOO_API void AOO_CALL AooSource_free(AooSource *src){
     // cast to correct type because base class
@@ -154,18 +144,7 @@ AOO_API void AOO_CALL AooSource_free(AooSource *src){
     aoo::destroy(static_cast<aoo::Source *>(src));
 }
 
-aoo::Source::~Source() {
-    // flush event queue
-    endpoint_event e;
-    while (eventqueue_.try_pop(e)) {
-        free_event(e);
-    }
-    // free metadata
-    if (metadata_){
-        auto size = flat_metadata_maxsize(metadata_size_.load());
-        aoo::deallocate(metadata_, size);
-    }
-}
+aoo::Source::~Source() {}
 
 template<typename T>
 T& as(void *p){
@@ -191,19 +170,6 @@ AooError AOO_CALL aoo::Source::control(
         AooCtl ctl, AooIntPtr index, void *ptr, AooSize size)
 {
     switch (ctl){
-    // stream meta data
-    case kAooCtlSetStreamMetadataSize:
-    {
-        CHECKARG(AooInt32);
-        auto size = as<AooInt32>(ptr);
-        if (size < 0){
-            return kAooErrorBadArgument;
-        }
-        // the lock simplifies start_stream()
-        unique_lock lock(update_mutex_);
-        allocate_metadata(size);
-        break;
-    }
     case kAooCtlActivate:
     {
         CHECKARG(AooBool);
@@ -220,10 +186,6 @@ AooError AOO_CALL aoo::Source::control(
         as<AooBool>(ptr) = sink->is_active();
         break;
     }
-    case kAooCtlGetStreamMetadataSize:
-        CHECKARG(AooInt32);
-        as<AooInt32>(ptr) = metadata_size_.load();
-        break;
     // set/get format
     case kAooCtlSetFormat:
         assert(size >= sizeof(AooFormat));
@@ -634,9 +596,8 @@ AooError AOO_CALL aoo::Source::process(
         }
         LOG_DEBUG("AooSource: xrun: " << nblocks << " blocks");
 
-        endpoint_event e(kAooEventXRun);
-        e.xrun.count = nblocks + 0.5; // ?
-        send_event(e, kAooThreadLevelAudio);
+        auto count = nblocks + 0.5; // ?
+        send_event(make_event<xrun_event>(count), kAooThreadLevelAudio);
 
         timer_.reset();
     } else if (dynamic_resampling){
@@ -782,10 +743,9 @@ AOO_API AooError AOO_CALL AooSource_pollEvents(AooSource *src){
 
 AooError AOO_CALL aoo::Source::pollEvents(){
     // always thread-safe
-    endpoint_event e;
+    event_ptr e;
     while (eventqueue_.try_pop(e)) {
-        eventhandler_(eventcontext_, &e.event, kAooThreadLevelUnknown);
-        free_event(e);
+        eventhandler_(eventcontext_, &e->cast(), kAooThreadLevelUnknown);
     }
     return kAooOk;
 }
@@ -822,37 +782,23 @@ AooError AOO_CALL aoo::Source::startStream(const AooDataView *md) {
             return kAooErrorBadArgument;
         #endif
         }
-        // the metadata size can only be changed while locking the update mutex!
-        auto maxsize = metadata_size_.load(std::memory_order_relaxed);
-        if (md && md->size > maxsize){
-            LOG_ERROR("AooSource: stream metadata exceeds size limit ("
-                      << maxsize << " bytes)!");
-        #if STREAM_METADATA_WARN
-            LOG_WARNING("AooSource: ignoring stream metadata");
-            md = nullptr;
-        #else
-            return kAooErrorBadArgument;
-        #endif
-        }
 
         LOG_DEBUG("AooSource: start stream with " << md->type << " metadata");
     } else {
         LOG_DEBUG("AooSource: start stream");
     }
 
-    // copy/reset metadata
+    // copy metadata
+    AooDataView *metadata = nullptr;
+    if (md && md->size > 0) {
+        auto size = flat_metadata_size(*md);
+        metadata = (AooDataView *)rt_allocate(size);
+        flat_metadata_copy(*md, *metadata);
+    }
+    // exchange metadata
     {
         scoped_spinlock lock(metadata_lock_);
-        if (metadata_) {
-            if (md) {
-                flat_metadata_copy(*md, *metadata_);
-            } else {
-                // clear previous metadata
-                metadata_->type = kAooDataTypeUnspec;
-                metadata_->data = nullptr;
-                metadata_->size = 0;
-            }
-        }
+        metadata_.reset(metadata);
         // metadata needs to be "accepted" in make_new_stream()
         metadata_accepted_ = false;
     }
@@ -1160,25 +1106,16 @@ void Source::notify_start(){
     needstart_.exchange(true, std::memory_order_release);
 }
 
-void Source::send_event(const endpoint_event& e, AooThreadLevel level){
+void Source::send_event(event_ptr e, AooThreadLevel level){
     switch (eventmode_){
     case kAooEventModePoll:
-        eventqueue_.push(e);
+        eventqueue_.push(std::move(e));
         break;
     case kAooEventModeCallback:
-        eventhandler_(eventcontext_, &e.event, level);
+        eventhandler_(eventcontext_, &e->cast(), level);
         break;
     default:
         break;
-    }
-}
-
-void Source::free_event(const endpoint_event &e){
-    if (e.type == kAooEventInvite){
-        // free metadata
-        if (e.invite.metadata){
-            memory_.deallocate((void *)e.invite.metadata);
-        }
     }
 }
 
@@ -1194,7 +1131,7 @@ void Source::make_new_stream(){
     // "accept" stream metadata, see send_start()
     {
         scoped_spinlock lock(metadata_lock_);
-        if (metadata_ && metadata_->size > 0) {
+        if (metadata_) {
             metadata_accepted_ = true;
         }
     }
@@ -1217,45 +1154,6 @@ void Source::make_new_stream(){
     }
 
     notify_start();
-}
-
-void Source::allocate_metadata(int32_t size){
-    assert(size >= 0);
-
-    LOG_DEBUG("AooSource: allocate metadata (" << size << " bytes)");
-
-    AooDataView * metadata = nullptr;
-    if (size > 0){
-        auto maxsize = flat_metadata_maxsize(size);
-        metadata = (AooDataView *)aoo::allocate(maxsize);
-        if (metadata){
-            metadata->type = kAooDataTypeUnspec;
-            metadata->data = nullptr;
-            metadata->size = 0;
-        } else {
-            // TODO report error
-            return;
-        }
-    }
-
-    AooDataView *olddata;
-    AooInt32 oldsize;
-
-    // swap metadata
-    {
-        scoped_spinlock lock(metadata_lock_);
-        olddata = metadata_;
-        metadata_ = metadata;
-        oldsize = metadata_size_.exchange(size);
-        metadata_accepted_ = false;
-    }
-
-    // free old metadata
-    if (olddata){
-        assert(oldsize >= 0);
-        auto oldmaxsize = flat_metadata_maxsize(oldsize);
-        aoo::deallocate(metadata_, oldmaxsize);
-    }
 }
 
 void Source::add_xrun(float n){
@@ -2028,42 +1926,22 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
         sink = do_add_sink(addr, id, kAooIdInvalid);
 
         // push "add" event
-        endpoint_event e(kAooEventSinkAdd, addr, id);
-
-        send_event(e, kAooThreadLevelNetwork);
+        auto e = make_event<sink_event>(kAooEventSinkAdd, addr, id);
+        send_event(std::move(e), kAooThreadLevelNetwork);
     }
     // make sure that the event is only sent once per invitation.
     if (sink->need_invite(token)) {
         lock1.unlock(); // !
 
         // push "invite" event
-        endpoint_event e(kAooEventInvite, addr, id);
-        e.invite.token = token;
-        e.invite.reserved = 0;
+        AooDataView md;
+        md.type = type;
+        md.data = (AooByte *)ptr;
+        md.size = size;
 
-        if (type){
-            // with metadata
-            AooDataView src;
-            src.type = type;
-            src.data = (AooByte *)ptr;
-            src.size = size;
-
-            if (eventmode_ == kAooEventModePoll){
-                // make copy on heap
-                auto mdsize = flat_metadata_size(src);
-                auto md = (AooDataView *)memory_.allocate(mdsize);
-                flat_metadata_copy(src, *md);
-                e.invite.metadata = md;
-            } else {
-                // use stack
-                e.invite.metadata = &src;
-            }
-        } else {
-            // without metadata
-            e.invite.metadata = nullptr;
-        }
-
-        send_event(e, kAooThreadLevelNetwork);
+        auto e = make_event<invite_event>(addr, id, token,
+                                          type ? &md : nullptr);
+        send_event(std::move(e), kAooThreadLevelNetwork);
     }
 }
 
@@ -2088,10 +1966,8 @@ void Source::handle_uninvite(const osc::ReceivedMessage& msg,
             if (sink->is_active()){
                 // push "uninvite" event
                 if (sink->need_uninvite(token)) {
-                    endpoint_event e(kAooEventUninvite, addr, id);
-                    e.uninvite.token = token;
-
-                    send_event(e, kAooThreadLevelNetwork);
+                    auto e = make_event<uninvite_event>(addr, id, token);
+                    send_event(std::move(e), kAooThreadLevelNetwork);
                 }
                 return; // don't send /stop message!
             } else {
@@ -2107,10 +1983,12 @@ void Source::handle_uninvite(const osc::ReceivedMessage& msg,
     } else {
         LOG_VERBOSE("ignoring '" << kAooMsgUninvite << "' message: sink not found");
     }
+    // TODO: figure out what to do if sink is NULL...
     // tell the remote side that we have stopped.
     // don't use the sink because it can be NULL!
 #if USE_AOO_NET
-    sink_request r(request_type::stop, endpoint(addr, id, sink->ep.relay));
+    auto relay = sink ? sink->ep.relay : false; // ?
+    sink_request r(request_type::stop, endpoint(addr, id, relay));
 #else
     sink_request r(request_type::stop, endpoint(addr, id));
 #endif
@@ -2137,18 +2015,13 @@ void Source::handle_ping(const osc::ReceivedMessage& msg,
     auto sink = find_sink(addr, id);
     if (sink) {
         if (sink->is_active()){
-            // push "ping" event
-            endpoint_event e(kAooEventPingReply, addr, id);
-            e.ping_reply.t1 = tt1;
-            e.ping_reply.t2 = tt2;
         #if 0
-            e.ping_reply.tt3 = timer_.get_absolute(); // use last stream time
+            auto tt3 = timer_.get_absolute(); // use last stream time
         #else
-            e.ping_reply.t3 = aoo::time_tag::now(); // use real system time
+            auto tt3 = aoo::time_tag::now(); // use real system time
         #endif
-            e.ping_reply.packetLoss = packet_loss;
-
-            send_event(e, kAooThreadLevelNetwork);
+            auto e = make_event<ping_reply_event>(sink->ep, tt1, tt2, tt3, packet_loss);
+            send_event(std::move(e), kAooThreadLevelNetwork);
         } else {
             LOG_VERBOSE("AooSource: ignoring '" << kAooMsgPing << "' message: sink not active");
         }

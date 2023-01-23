@@ -369,20 +369,6 @@ public:
         return control(kAooCtlGetBinaryDataMsg, 0, AOO_ARG(b));
     }
 
-    /** \brief Set the max. size of stream metadata
-     *
-     * Setting this property will allocate enough memory to hold any stream metadata
-     * up to the given size. Use this to avoid allocating memory in kAooCtlStartStream.
-     */
-    AooError setStreamMetaDataSize(AooInt32 size) {
-        return control(kAooCtlSetStreamMetadataSize, 0, AOO_ARG(size));
-    }
-
-    /** \brief Get the current max. size of stream metadata. */
-    AooError getStreamMetaDataSize(AooInt32& size) {
-        return control(kAooCtlGetStreamMetadataSize, 0, AOO_ARG(size));
-    }
-
     /** \brief Set the sink channel onset
      *
      * Set channel onset of the given sink where the source signal should be received.

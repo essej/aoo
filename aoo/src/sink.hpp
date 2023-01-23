@@ -35,40 +35,6 @@ struct stream_stats {
     int32_t dropped = 0;
 };
 
-// 'source_event' is always used inside 'source_desc', so we can safely
-// store a pointer to the sockaddr. the ip_address itself
-// never changes during lifetime of the 'source_desc'!
-// NOTE: this assumes that the event queue is polled regularly,
-// i.e. before a source_desc can be possibly autoremoved.
-struct source_event
-{
-    source_event() = default;
-
-    source_event(AooEventType _type) : type(_type) {}
-
-    source_event(AooEventType _type, const endpoint& _ep)
-        : type(_type) {
-        source.endpoint.address = _ep.address.address();
-        source.endpoint.addrlen = _ep.address.length();
-        source.endpoint.id = _ep.id;
-    }
-
-    union {
-        AooEventType type;
-        AooEvent event;
-        AooEventEndpoint source;
-        AooEventFormatChange format;
-        AooEventPing ping;
-        AooEventStreamStart stream_start;
-        AooEventStreamStop stream_stop;
-        AooEventStreamState stream_state;
-        AooEventBlockLost block_lost;
-        AooEventBlockReordered block_reordered;
-        AooEventBlockResent block_resent;
-        AooEventBlockDropped block_dropped;
-    };
-};
-
 enum class request_type {
     none,
     start,
@@ -232,9 +198,8 @@ private:
     std::atomic<bool> binary_{false};
 
     std::atomic<source_state> state_{source_state::idle};
-    AooDataView *metadata_{nullptr};
-
-    std::unique_ptr<AooDataView, flat_metadata_deleter> invite_metadata_{nullptr};
+    rt_metadata_ptr metadata_;
+    rt_metadata_ptr invite_metadata_;
     std::atomic<int32_t> invite_token_{kAooIdInvalid};
 
     // timing
@@ -282,16 +247,16 @@ private:
         datarequestqueue_.push(r);
     }
     // events
-    aoo::unbounded_mpsc_queue<source_event> eventqueue_;
-    void send_event(const Sink& s, const source_event& e, AooThreadLevel level);
-    void free_event(const source_event& e);
+    using event_queue = lockfree::unbounded_mpsc_queue<event_ptr, aoo::rt_allocator<event_ptr>>;
+    event_queue eventqueue_;
+    void send_event(const Sink& s, event_ptr e, AooThreadLevel level);
     // memory
     aoo::memory_list memory_;
     // thread synchronization
     sync::shared_mutex mutex_; // LATER replace with a spinlock?
 };
 
-class Sink final : public AooSink {
+class Sink final : public AooSink, rt_memory_pool_client {
 public:
     Sink(AooId id, AooFlag flags, AooError *err);
 
@@ -361,9 +326,9 @@ public:
 
     AooEventMode event_mode() const { return eventmode_; }
 
-    void send_event(const endpoint_event& e, AooThreadLevel level) const;
+    void send_event(event_ptr e, AooThreadLevel level) const;
 
-    void call_event(const source_event& e, AooThreadLevel level) const;
+    void call_event(event_ptr e, AooThreadLevel level) const;
 private:
     // settings
     parameter<AooId> id_;
@@ -394,7 +359,8 @@ private:
     parameter<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
     parameter<bool> timer_check_{ AOO_XRUN_DETECTION };
     // events
-    mutable aoo::unbounded_mpsc_queue<endpoint_event> eventqueue_;
+    using event_queue = lockfree::unbounded_mpsc_queue<event_ptr, aoo::rt_allocator<event_ptr>>;
+    mutable event_queue eventqueue_;
     AooEventHandler eventhandler_ = nullptr;
     void *eventcontext_ = nullptr;
     AooEventMode eventmode_ = kAooEventModeNone;
