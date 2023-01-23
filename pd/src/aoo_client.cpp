@@ -4,6 +4,7 @@
 
 #include "aoo_common.hpp"
 
+#include "common/priority_queue.hpp"
 #include "common/sync.hpp"
 #include "common/time.hpp"
 
@@ -29,6 +30,15 @@ struct t_peer_message
     t_symbol *type;
     std::vector<AooByte> data;
 };
+
+struct t_queue_item {
+    t_peer_message message;
+    double time;
+};
+
+bool operator> (const t_queue_item& a, const t_queue_item& b) {
+    return a.time > b.time;
+}
 
 struct t_group
 {
@@ -64,7 +74,8 @@ struct t_aoo_client
     bool x_target = true;
     AooId x_target_group = kAooIdInvalid; // broadcast
     AooId x_target_user = kAooIdInvalid; // broadcast
-    std::multimap<float, t_peer_message> x_queue; // TODO replace with heap
+
+    aoo::priority_queue<t_queue_item, std::greater<t_queue_item>> x_queue;
 
     bool check(const char *name) const;
 
@@ -472,22 +483,21 @@ static void aoo_client_queue_tick(t_aoo_client *x)
     auto& queue = x->x_queue;
     auto now = clock_getlogicaltime();
 
-    for (auto it = queue.begin(); it != queue.end();){
-        auto time = it->first;
-        auto& msg = it->second;
-        if (time <= now) {
+    while (!queue.empty()){
+        if (queue.top().time <= now) {
+            auto& msg = queue.top().message;
             AooDataView data { msg.type->s_name,
                         msg.data.data(), msg.data.size() };
             x->dispatch_message(msg.group, msg.user, data, 0);
-            it = queue.erase(it);
+            queue.pop();
         } else {
-            ++it;
+            break;
         }
     }
-    // reset clock
+    // reschedule
     if (!queue.empty()){
         // make sure update_jitter_offset() is called once per DSP tick!
-        clock_set(x->x_queue_clock, queue.begin()->first);
+        clock_set(x->x_queue_clock, queue.top().time);
     }
 }
 
@@ -503,13 +513,14 @@ void t_aoo_client::handle_message(AooId group, AooId user, AooNtpTime time,
                 // put on queue and schedule on clock (using logical time)
                 t_peer_message msg(group, user, data);
                 auto abstime = clock_getsystimeafter(delay);
-                auto pos = x_queue.emplace(abstime, std::move(msg));
-                // only set clock if we're the first element in the queue
-                if (pos == x_queue.begin()){
+                // reschedule if we are the next due element
+                if (x_queue.empty() || abstime < x_queue.top().time) {
                     clock_set(x_queue_clock, abstime);
                 }
+                x_queue.push(t_queue_item { std::move(msg), abstime });
             } else if (!x_discard){
                 // treat like immediate message
+                // TODO: should we maybe output a negative delay time?
                 dispatch_message(group, user, data, 0);
             }
         } else {
