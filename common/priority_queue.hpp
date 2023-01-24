@@ -72,8 +72,8 @@ private:
         }
         Comp comp_;
     };
-
-    std::vector<proxy, Alloc> queue_;
+    using rebind_alloc = typename std::allocator_traits<Alloc>::template rebind_alloc<proxy>;
+    std::vector<proxy, rebind_alloc> queue_;
     proxy_comp comp_;
     size_t counter_ = 0;
 };
