@@ -61,7 +61,7 @@ endif()
 
 # check for Clang or AppleClang
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	set(CMAKE_COMPILER_IS_CLANG 1)
+    set(CMAKE_COMPILER_IS_CLANG 1)
 endif()
 message(STATUS "CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
 
@@ -155,8 +155,11 @@ if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_COMPILER_IS_CLANG)
 endif()
 
 # global optimization flags
-
-add_compile_options("-ffast-math" "-funroll-loops" "-fomit-frame-pointer")
+if (MSVC)
+    add_compile_options("/fp:fast")
+else()
+    add_compile_options("-ffast-math" "-funroll-loops" "-fomit-frame-pointer")
+endif()
 if (HAVE_CXX_SSE)
     add_compile_options("-msse")
 endif()

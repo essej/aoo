@@ -68,7 +68,7 @@ template<typename T>
 struct endpoint_event : base_event<T> {
     RT_CLASS(endpoint_event)
 
-    endpoint_event(AooEventType type, const endpoint& ep)
+    endpoint_event(AooEventType type, const aoo::endpoint& ep)
         : endpoint_event(type, ep.address, ep.id) {}
 
     endpoint_event(AooEventType type_, const ip_address& addr, AooId id)
