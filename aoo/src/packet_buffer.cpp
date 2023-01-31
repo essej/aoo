@@ -10,14 +10,15 @@ namespace aoo {
 //-------------------------- sent_block -----------------------------//
 
 void sent_block::set(int32_t seq, double sr,
-                     const AooByte *data, int32_t nbytes,
-                     int32_t nframes, int32_t framesize)
+                     const AooByte *data, int32_t totalsize,
+                     int32_t msgsize, int32_t nframes, int32_t framesize)
 {
     sequence = seq;
+    message_size = msgsize;
     samplerate = sr;
     numframes_ = nframes;
     framesize_ = framesize;
-    buffer_.assign(data, data + nbytes);
+    buffer_.assign(data, data + totalsize);
 }
 
 int32_t sent_block::get_frame(int32_t which, AooByte *data, int32_t n){
@@ -145,9 +146,9 @@ void received_block::reserve(int32_t size){
 }
 
 void received_block::init(int32_t seq, double sr, int32_t chn,
-    int32_t nbytes, int32_t nframes)
+    int32_t totalsize, int32_t msgsize, int32_t nframes)
 {
-    assert(nbytes > 0);
+    assert(totalsize > 0);
     // LATER support blocks with arbitrary number of frames
     assert(nframes <= (int32_t)frames_.size());
     // keep timestamp and numtries if we're actually reiniting
@@ -157,8 +158,9 @@ void received_block::init(int32_t seq, double sr, int32_t chn,
     }
     sequence = seq;
     samplerate = sr;
+    message_size = msgsize;
     channel = chn;
-    buffer_.resize(nbytes);
+    buffer_.resize(totalsize);
     numframes_ = nframes;
     framesize_ = 0;
     dropped_ = false;
@@ -172,6 +174,7 @@ void received_block::init(int32_t seq, bool dropped)
 {
     sequence = seq;
     samplerate = 0;
+    message_size = 0;
     channel = 0;
     buffer_.clear();
     numframes_ = 0;

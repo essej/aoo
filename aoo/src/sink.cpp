@@ -401,12 +401,14 @@ AooError AOO_CALL aoo::Sink::send(AooSendFunc fn, void *user){
 }
 
 AOO_API AooError AOO_CALL AooSink_process(
-        AooSink *sink, AooSample **data, AooInt32 nsamples, AooNtpTime t) {
-    return sink->process(data, nsamples, t);
+        AooSink *sink, AooSample **data, AooInt32 nsamples, AooNtpTime t,
+        AooStreamMessageHandler messageHandler, void *user) {
+    return sink->process(data, nsamples, t, messageHandler, user);
 }
 
 AooError AOO_CALL aoo::Sink::process(
-        AooSample **data, AooInt32 nsamples, AooNtpTime t){
+        AooSample **data, AooInt32 nsamples, AooNtpTime t,
+        AooStreamMessageHandler messageHandler, void *user) {
     // clear outputs
     for (int i = 0; i < nchannels_; ++i){
         std::fill(data[i], data[i] + nsamples, 0);
@@ -436,6 +438,8 @@ AooError AOO_CALL aoo::Sink::process(
         send_event(std::move(e), kAooThreadLevelAudio);
 
         timer_.reset();
+
+        // TODO: flush stream messages?
     } else if (dynamic_resampling) {
         // update time DLL, but only if n matches blocksize!
         auto elapsed = timer_.get_elapsed();
@@ -457,7 +461,7 @@ AooError AOO_CALL aoo::Sink::process(
 
     // no lock needed - sources are only removed in this thread!
     for (auto it = sources_.begin(); it != sources_.end();){
-        if (it->process(*this, data, nsamples)){
+        if (it->process(*this, data, nsamples, messageHandler, user)){
             didsomething = true;
         } else if (!it->check_active(*this)){
             LOG_VERBOSE("AooSink: removed inactive source " << it->ep);
@@ -812,6 +816,9 @@ AooError Sink::handle_stop_message(const osc::ReceivedMessage& msg,
     }
 }
 
+// /aoo/sink/<id>/data <src> <stream_id> <seq> <sr> <channel_onset>
+// <totalsize> <msgsize> <nframes> <frame> <data>
+
 AooError Sink::handle_data_message(const osc::ReceivedMessage& msg,
                                    const ip_address& addr)
 {
@@ -825,6 +832,7 @@ AooError Sink::handle_data_message(const osc::ReceivedMessage& msg,
     d.samplerate = (it++)->AsDouble();
     d.channel = (it++)->AsInt32();
     d.totalsize = (it++)->AsInt32();
+    d.msgsize = (it++)->AsInt32();
     d.nframes = (it++)->AsInt32();
     d.frame = (it++)->AsInt32();
     const void *blobdata;
@@ -838,7 +846,7 @@ AooError Sink::handle_data_message(const osc::ReceivedMessage& msg,
 
 // binary data message:
 // stream_id (int32), seq (int32), channel (uint8), flags (uint8), size (uint16)
-// [total (int32), nframes (int16), frame (int16)], [sr (float64)], data...
+// [total (int32), nframes (int16), frame (int16)], [msgsize (int32)], [sr (float64)], data...
 
 AooError Sink::handle_data_message(const AooByte *msg, int32_t n,
                                    AooId id, const ip_address& addr)
@@ -868,6 +876,14 @@ AooError Sink::handle_data_message(const AooByte *msg, int32_t n,
         d.totalsize = d.size;
         d.nframes = 1;
         d.frame = 0;
+    }
+    if (flags & kAooBinMsgDataStreamMessage) {
+        if ((end - it) < 4) {
+            goto wrong_size;
+        }
+        d.msgsize = aoo::read_bytes<uint32_t>(it);
+    } else {
+        d.msgsize = 0;
     }
     if (flags & kAooBinMsgDataSampleRate) {
         if ((end - it) < 8) {
@@ -954,6 +970,8 @@ source_desc::~source_desc() {
     while (packetqueue_.try_pop(d)){
         memory_.deallocate((void *)d.data);
     }
+    // flush stream message queue
+    reset_stream_messages();
     LOG_DEBUG("AooSink: ~source_desc");
 }
 
@@ -1046,6 +1064,10 @@ void source_desc::update(const Sink& s){
             audioqueue_.write_commit();
         }
 
+        reset_stream_messages();
+        // advance network time
+        network_time_ += (double)format_->blockSize / (double)format_->sampleRate * nbuffers;
+
         // setup resampler
         resampler_.setup(format_->blockSize, s.blocksize(),
                          format_->sampleRate, s.samplerate(),
@@ -1131,7 +1153,7 @@ float source_desc::get_buffer_fill_ratio(){
 }
 
 // /aoo/sink/<id>/start <src> <version> <stream_id> <flags>
-// <lastformat> <nchannels> <samplerate> <blocksize> <codec> <options>
+// <lastformat> <nchannels> <samplerate> <blocksize> <codec> <options> <metadata>
 
 AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags,
                                    int32_t format_id, const AooFormat& f,
@@ -1274,7 +1296,8 @@ AooError source_desc::handle_stop(const Sink& s, int32_t stream) {
     return kAooOk;
 }
 
-// /aoo/sink/<id>/data <src> <stream_id> <seq> <sr> <channel_onset> <totalsize> <numpackets> <packetnum> <data>
+// /aoo/sink/<id>/data <src> <stream_id> <seq> <sr> <channel_onset>
+// <totalsize> <msgsize> <numpackets> <packetnum> <data>
 
 AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
 {
@@ -1372,8 +1395,9 @@ AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
 
 #if AOO_DEBUG_DATA
     LOG_DEBUG("AooSink: got block: seq = " << d.sequence << ", sr = " << d.samplerate
-              << ", chn = " << d.channel << ", totalsize = " << d.totalsize
-              << ", nframes = " << d.nframes << ", frame = " << d.frame << ", size " << d.size);
+              << ", chn = " << d.channel << ", msgsize = " << d.msgsize
+              << ", totalsize = " << d.totalsize << ", nframes = " << d.nframes
+              << ", frame = " << d.frame << ", size " << d.size);
 #endif
 
     return kAooOk;
@@ -1441,7 +1465,8 @@ void source_desc::send(const Sink& s, const sendfn& fn){
 
 // TODO: make sure not to send events while holding a lock!
 
-bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples)
+bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
+                          AooStreamMessageHandler handler, void *user)
 {
     // synchronize with update()!
     // the mutex should be uncontended most of the time.
@@ -1607,6 +1632,8 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples)
             if (xrun_ > XRUN_THRESHOLD){
                 // skip audio and decrement xrun counter proportionally
                 xrun_ -= sr / format_->sampleRate;
+
+                process_time_ += (double)nsamples / sr;
             } else {
                 // try to write audio into resampler
                 if (resampler_.write(d->data, insize)){
@@ -1633,9 +1660,48 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples)
             }
             underrun_ = true;
 
+            process_time_ += (double)nsamples / sr;
+
             return false;
         }
     }
+
+    auto deadline = process_time_ + (double)nsamples / sr;
+    while (stream_messages_) {
+        auto it = stream_messages_;
+        if (it->time < deadline) {
+            AooStreamMessage msg;
+            auto delta = it->time - process_time_;
+            auto offset = (int32_t)(delta * sr + 0.5);
+            if (offset >= nsamples) {
+                break;
+            }
+            if (offset < 0) {
+                LOG_ERROR("AooSink: bug: stream message with negative sample offset ("
+                          << offset << ")");
+                offset = 0;
+            }
+            msg.sampleOffset = offset;
+            msg.type = it->type;
+            msg.size = it->size;
+            msg.data = (const AooByte *)reinterpret_cast<flat_stream_message *>(it)->data;
+
+            AooEndpoint ep;
+            ep.address = this->ep.address.address();
+            ep.addrlen = this->ep.address.length();
+            ep.id = this->ep.id;
+
+            handler(user, &msg, &ep);
+
+            auto next = it->next;
+            auto alloc_size = sizeof(stream_message_header) + it->size;
+            aoo::rt_deallocate(it, alloc_size);
+            stream_messages_ = next;
+        } else {
+            break;
+        }
+    }
+    process_time_ = deadline;
 
     // sum source into sink (interleaved -> non-interleaved),
     // starting at the desired sink channel offset.
@@ -1714,6 +1780,8 @@ void source_desc::handle_underrun(const Sink& s){
             }
         #endif
             audioqueue_.write_commit();
+
+            network_time_ += (double)format_->blockSize / (double)format_->sampleRate;
         }
 
         LOG_DEBUG("AooSink: write " << n << " empty blocks to audio buffer");
@@ -1821,8 +1889,8 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
             block->init(d.sequence, true);
             return true;
         } else {
-            block->init(d.sequence, d.samplerate,
-                        d.channel, d.totalsize, d.nframes);
+            block->init(d.sequence, d.samplerate, d.channel,
+                        d.totalsize, d.msgsize, d.nframes);
         }
     } else {
         if (d.totalsize == 0){
@@ -1839,8 +1907,8 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
 
         if (block->num_frames() == 0){
             // placeholder block
-            block->init(d.sequence, d.samplerate,
-                        d.channel, d.totalsize, d.nframes);
+            block->init(d.sequence, d.samplerate, d.channel,
+                        d.totalsize, d.msgsize, d.nframes);
         } else if (block->has_frame(d.frame)){
             // frame already received
             LOG_VERBOSE("AooSink: frame " << d.frame << " of block " << d.sequence << " already received");
@@ -1876,6 +1944,7 @@ void source_desc::process_blocks(const Sink& s, stream_stats& stats){
     while (!jitterbuffer_.empty() && audioqueue_.write_available()){
         const AooByte *data;
         int32_t size;
+        int32_t msgsize;
         double sr;
         int32_t channel;
 
@@ -1883,7 +1952,7 @@ void source_desc::process_blocks(const Sink& s, stream_stats& stats){
         if (b.complete()){
             if (b.dropped()){
                 data = nullptr;
-                size = 0;
+                size = msgsize = 0;
                 sr = format_->sampleRate; // nominal samplerate
                 channel = -1; // current channel
             #if AOO_DEBUG_JITTER_BUFFER
@@ -1896,6 +1965,7 @@ void source_desc::process_blocks(const Sink& s, stream_stats& stats){
                 // block is ready
                 data = b.data();
                 size = b.size();
+                msgsize = b.message_size;
                 sr = b.samplerate; // real samplerate
                 channel = b.channel;
             #if AOO_DEBUG_JITTER_BUFFER
@@ -1911,7 +1981,7 @@ void source_desc::process_blocks(const Sink& s, stream_stats& stats){
                 LOG_DEBUG("AooSink: remaining: " << remaining << " / " << audioqueue_.capacity()
                           << ", limit: " << minblocks_);
                 data = nullptr;
-                size = 0;
+                size = msgsize = 0;
                 sr = format_->sampleRate; // nominal samplerate
                 channel = -1; // current channel
                 add_lost(stats, 1);
@@ -1931,11 +2001,13 @@ void source_desc::process_blocks(const Sink& s, stream_stats& stats){
         d->header.channel = channel;
         // decode and push audio data
         AooInt32 n = nsamples;
-        if (AooDecoder_decode(decoder_.get(), data, size, d->data, &n) != kAooOk){
+        if (AooDecoder_decode(decoder_.get(), data + msgsize, size - msgsize,
+                              d->data, &n) != kAooOk) {
             LOG_WARNING("AooSink: couldn't decode block!");
             // decoder failed - fill with zeros
             std::fill(d->data, d->data + nsamples, 0);
         }
+        assert(n == nsamples);
         audioqueue_.write_commit();
 
     #if 0
@@ -1944,6 +2016,38 @@ void source_desc::process_blocks(const Sink& s, stream_stats& stats){
             log << d->data[i] << " ";
         }
     #endif
+        // push messages
+        if (msgsize > 0) {
+            int32_t num_messages = aoo::from_bytes<int32_t>(data);
+            auto msgptr = data + 4;
+            for (int32_t i = 0; i < num_messages; ++i) {
+                auto offset = aoo::read_bytes<uint16_t>(msgptr);
+                auto type = aoo::read_bytes<uint16_t>(msgptr);
+                auto size = aoo::read_bytes<uint32_t>(msgptr);
+                auto aligned_size = (size + 3) & ~3; // aligned to 4 bytes
+                auto alloc_size = sizeof(stream_message_header) + size;
+                auto msg = (flat_stream_message *)aoo::rt_allocate(alloc_size);
+                msg->header.next = nullptr;
+                msg->header.time = network_time_ + (double)offset / sr;
+                msg->header.type = type;
+                msg->header.size = size;
+                // TODO bound checking
+                memcpy(msg->data, msgptr, size);
+                if (stream_messages_) {
+                    // append to list; LATER cache list tail
+                    auto it = stream_messages_;
+                    while (it->next) {
+                        it = it->next;
+                    }
+                    it->next = &msg->header;
+                } else {
+                    stream_messages_ = &msg->header;
+                }
+                msgptr += aligned_size;
+            }
+        }
+
+        network_time_ += (double)format_->blockSize / sr;
 
         jitterbuffer_.pop();
     }
@@ -1954,6 +2058,7 @@ void source_desc::skip_blocks(const Sink& s){
     LOG_VERBOSE("AooSink: skip " << n << " blocks");
     while (n--){
         jitterbuffer_.pop();
+        network_time_ += (double)format_->blockSize / (double)format_->sampleRate;
     }
 }
 
@@ -2274,6 +2379,17 @@ void source_desc::send_invitations(const Sink &s, const sendfn &fn){
             last_invite_time_.store(now);
         }
     }
+}
+
+void source_desc::reset_stream_messages() {
+    for (auto it = stream_messages_; it; ){
+        auto next = it->next;
+        auto alloc_size = sizeof(stream_message_header) + it->size;
+        aoo::rt_deallocate(it, alloc_size);
+        it = next;
+    }
+    stream_messages_ = nullptr;
+    process_time_ = network_time_ = 0;
 }
 
 void source_desc::send_event(const Sink& s, event_ptr e, AooThreadLevel level){

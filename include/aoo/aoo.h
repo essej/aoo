@@ -177,7 +177,8 @@
 enum AooBinMsgDataFlags
 {
     kAooBinMsgDataSampleRate = 0x01,
-    kAooBinMsgDataFrames = 0x02
+    kAooBinMsgDataFrames = 0x02,
+    kAooBinMsgDataStreamMessage = 0x04
 };
 
 #if USE_AOO_NET

@@ -419,6 +419,34 @@ typedef struct AooData
     AooSize size;
 } AooData;
 
+/*------------- AOO stream message ---------------*/
+
+/** \brief a message that is sent together with an audio stream */
+typedef struct AooStreamMessage
+{
+    /** sample offset */
+    AooInt32 sampleOffset;
+    /** the message type */
+    AooDataType type;
+    /** the data content */
+    const AooByte *data;
+    /** the data size in bytes */
+    AooSize size;
+} AooStreamMessage;
+
+/** \brief stream message handler
+ *
+ * The type of function that is passed to #AooSink::process
+ * for handling stream messages.
+ */
+typedef void (AOO_CALL *AooStreamMessageHandler)(
+        /** the user data */
+        void *user,
+        /** the stream message */
+        const AooStreamMessage *message,
+        /** the AOO source that sent the message */
+        const AooEndpoint *source
+);
 
 /*---------------- AOO format --------------------*/
 

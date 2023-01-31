@@ -9,12 +9,13 @@ namespace aoo {
 struct data_packet {
     int32_t sequence;
     int32_t channel;
+    double samplerate;
     int32_t totalsize;
+    int32_t msgsize;
     int32_t nframes;
     int32_t frame;
-    int32_t size;
     const AooByte *data;
-    double samplerate;
+    int32_t size;
 };
 
 //---------------------- sent_block ---------------------------//
@@ -22,9 +23,8 @@ struct data_packet {
 class sent_block {
 public:
     // methods
-    void set(int32_t seq, double sr,
-             const AooByte *data, int32_t nbytes,
-             int32_t nframes, int32_t framesize);
+    void set(int32_t seq, double sr, const AooByte *data, int32_t totalsize,
+             int32_t msgsize, int32_t nframes, int32_t framesize);
 
     const AooByte* data() const { return buffer_.data(); }
     int32_t size() const { return buffer_.size(); }
@@ -35,6 +35,7 @@ public:
 
     // data
     int32_t sequence = -1;
+    int32_t message_size = 0;
     double samplerate = 0;
 protected:
     aoo::vector<AooByte> buffer_;
@@ -73,6 +74,8 @@ private:
 // handle arbitrary number of data frames. We can still use the bitset as an optimization,
 // but only up to a certain number of frames (e.g. 32); above that we do a linear search
 // over the linked list.
+// NB: the current practice of reserving blocksize * nchannels * sizeof(double) is
+// not appropriate for stream message!
 
 class received_block {
 public:
@@ -80,7 +83,7 @@ public:
 
     void init(int32_t seq, bool dropped);
     void init(int32_t seq, double sr, int32_t chn,
-              int32_t nbytes, int32_t nframes);
+              int32_t totalsize, int32_t msgsize, int32_t nframes);
 
     const AooByte* data() const { return buffer_.data(); }
     int32_t size() const { return buffer_.size(); }
@@ -103,6 +106,7 @@ public:
     int32_t sequence = -1;
     int32_t channel = 0;
     double samplerate = 0;
+    int32_t message_size = 0;
 protected:
     aoo::vector<AooByte> buffer_;
     int32_t numframes_ = 0;

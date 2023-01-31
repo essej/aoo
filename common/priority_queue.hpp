@@ -18,6 +18,11 @@ public:
         return queue_.size();
     }
 
+    void clear() {
+        queue_.clear();
+        counter_ = 0;
+    }
+
     const T& top() const {
         return queue_.front().object_;
     }

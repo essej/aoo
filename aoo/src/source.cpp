@@ -8,17 +8,20 @@
 #include <algorithm>
 #include <cmath>
 
+// avoid processing if there are no sinks
+#define IDLE_IF_NO_SINKS 1
+
 namespace aoo {
 
 // OSC data message
 const int32_t kDataMaxAddrSize = kAooMsgDomainLen + kAooMsgSinkLen + 16 + kAooMsgDataLen;
 // typetag string: max. 12 bytes
-// args (without blob data): 36 bytes
-const int32_t kDataHeaderSize = kDataMaxAddrSize + 48;
+// args (without blob data): 40 bytes
+const int32_t kDataHeaderSize = kDataMaxAddrSize + 52;
 
 // binary data message:
-// args: 28 bytes (max.)
-const int32_t kBinDataHeaderSize = kAooBinMsgLargeHeaderSize + 28;
+// args: 32 bytes (max.)
+const int32_t kBinDataHeaderSize = kAooBinMsgLargeHeaderSize + 32;
 
 //-------------------- sink_desc ------------------------//
 
@@ -524,12 +527,37 @@ AooError AOO_CALL aoo::Source::send(AooSendFunc fn, void *user) {
     return kAooOk;
 }
 
+/** \copydoc AooSource::addMessage() */
+AOO_API AooError AOO_CALL AooSource_addStreamMessage(
+        AooSource *src, const AooStreamMessage *message) {
+    if (message) {
+        return src->addStreamMessage(*message);
+    } else {
+        return kAooErrorBadArgument;
+    }
+}
+
+AooError AOO_CALL aoo::Source::addStreamMessage(const AooStreamMessage& message) {
+#if 1
+    // avoid piling up stream messages
+    if (state_.load(std::memory_order_relaxed) == stream_state::idle) {
+        return kAooErrorIdle;
+    }
+#endif
+#if IDLE_IF_NO_SINKS
+    if (sinks_.empty()) {
+        return kAooErrorIdle;
+    }
+#endif
+    auto offset = process_samples_ + message.sampleOffset;
+    message_queue_.push(offset, message.type, (char *)message.data, message.size);
+    return kAooErrorNone;
+}
+
 AOO_API AooError AOO_CALL AooSource_process(
         AooSource *src, AooSample **data, AooInt32 n, AooNtpTime t) {
     return src->process(data, n, t);
 }
-
-#define NO_SINKS_IDLE 1
 
 AooError AOO_CALL aoo::Source::process(
         AooSample **data, AooInt32 nsamples, AooNtpTime t) {
@@ -587,7 +615,7 @@ AooError AOO_CALL aoo::Source::process(
     } else if (timerstate == timer::state::error){
         // calculate xrun blocks
         double nblocks = error * (double)samplerate_ / (double)blocksize_;
-    #if NO_SINKS_IDLE
+    #if IDLE_IF_NO_SINKS
         // only when we have sinks, to avoid accumulating empty blocks
         if (!sinks_.empty())
     #endif
@@ -617,7 +645,7 @@ AooError AOO_CALL aoo::Source::process(
         realsr_.store(dll_.samplerate());
     }
 
-#if NO_SINKS_IDLE
+#if IDLE_IF_NO_SINKS
     if (sinks_.empty()){
         // nothing to do. users still have to check for pending events,
         // but there is no reason to call send()
@@ -672,6 +700,7 @@ AooError AOO_CALL aoo::Source::process(
               << ", resampler: " << resampler_size / resampler_.ratio()
               << ", capacity: " << audioqueue_.capacity() / resampler_.ratio());
 #endif
+    process_samples_ += nsamples;
     if (need_resampling()){
         // *first* try to move samples from resampler to audiobuffer
         while (audioqueue_.write_available()){
@@ -1125,6 +1154,10 @@ void Source::make_new_stream(){
 
     history_.clear(); // !
 
+    message_queue_.clear();
+    message_prio_queue_.clear();
+    process_samples_ = network_samples_ = 0;
+
     // reset encoder to avoid garbage from previous stream
     if (encoder_) {
         AooEncoder_control(encoder_.get(), kAooCodecCtlReset, nullptr, 0);
@@ -1316,8 +1349,8 @@ void Source::send_start(const sendfn& fn){
 }
 
 // binary data message:
-// stream_id (int32), seq (int32), channel (uint8), flags (uint8), size (uint16)
-// [total (int32), nframes (int16), frame (int16)],  [sr (float64)], data...
+// stream_id (int32), seq (int32), channel (uint8), flags (uint8), data_size (uint16),
+// [total (int32), nframes (int16), frame (int16)], [msgsize (int32)], [sr (float64)], data...
 
 AooSize write_bin_data(AooByte *buffer, AooSize size,
                        AooId stream_id, const data_packet& d)
@@ -1331,6 +1364,9 @@ AooSize write_bin_data(AooByte *buffer, AooSize size,
     if (d.nframes > 1){
         flags |= kAooBinMsgDataFrames;
     }
+    if (d.msgsize > 0){
+        flags |= kAooBinMsgDataStreamMessage;
+    }
     // write arguments
     auto it = buffer;
     aoo::write_bytes<int32_t>(stream_id, it);
@@ -1343,6 +1379,9 @@ AooSize write_bin_data(AooByte *buffer, AooSize size,
         aoo::write_bytes<uint16_t>(d.nframes, it);
         aoo::write_bytes<uint16_t>(d.frame, it);
     }
+    if (flags & kAooBinMsgDataStreamMessage){
+        aoo::write_bytes<uint32_t>(d.msgsize, it);
+    }
     if (flags & kAooBinMsgDataSampleRate){
          aoo::write_bytes<double>(d.samplerate, it);
     }
@@ -1353,7 +1392,8 @@ AooSize write_bin_data(AooByte *buffer, AooSize size,
     return (it - buffer);
 }
 
-// /aoo/sink/<id>/data <src> <stream_id> <seq> <sr> <channel_onset> <totalsize> <nframes> <frame> <data>
+// /aoo/sink/<id>/data <src> <stream_id> <seq> <sr> <channel_onset>
+// <totalsize> <msgsize> <nframes> <frame> <data>
 
 void send_packet_osc(const endpoint& ep, AooId id, int32_t stream_id,
                      const aoo::data_packet& d, const sendfn& fn) {
@@ -1365,21 +1405,50 @@ void send_packet_osc(const endpoint& ep, AooId id, int32_t stream_id,
              kAooMsgDomain kAooMsgSink, ep.id, kAooMsgData);
 
     msg << osc::BeginMessage(address) << id << stream_id << d.sequence << d.samplerate
-        << d.channel << d.totalsize << d.nframes << d.frame << osc::Blob(d.data, d.size)
-        << osc::EndMessage;
+        << d.channel << d.totalsize << d.msgsize << d.nframes << d.frame
+        << osc::Blob(d.data, d.size) << osc::EndMessage;
 
 #if AOO_DEBUG_DATA
-    LOG_DEBUG("AooSource: send block: seq = " << d.sequence << ", sr = "
-              << d.samplerate << ", chn = " << d.channel << ", totalsize = "
-              << d.totalsize << ", nframes = " << d.nframes
+    LOG_DEBUG("AooSource: send block: seq = " << d.sequence << ", sr = " << d.samplerate
+              << ", chn = " << d.channel << ", totalsize = " << d.totalsize
+              << ", msgsize = " << d.msgsize << ", nframes = " << d.nframes
               << ", frame = " << d.frame << ", size " << d.size);
 #endif
     ep.send(msg, fn);
 }
 
+// binary data message:
+// stream_id (int32), seq (int32), channel (uint8), flags (uint8), size (uint16)
+// [total (int32), nframes (int16), frame (int16)], [msgsize (int32)], [sr (float64)], data...
+
+void send_packet_bin(const endpoint& ep, AooId id, AooId stream_id,
+                     const aoo::data_packet& d, const sendfn& fn) {
+    AooByte buf[AOO_MAX_PACKET_SIZE];
+
+    auto onset = aoo::binmsg_write_header(buf, sizeof(buf), kAooTypeSink,
+                                          kAooBinMsgCmdData, ep.id, id);
+    auto argsize = write_bin_data(buf + onset, sizeof(buf) - onset, stream_id, d);
+    auto size = onset + argsize;
+
+#if AOO_DEBUG_DATA
+    LOG_DEBUG("AooSource: send block: seq = " << d.sequence << ", sr = "
+              << d.samplerate << ", chn = " << s.channel << ", msgsize = "
+              << d.msgsize << ", totalsize = " << d.totalsize << ", nframes = "
+              << d.nframes << ", frame = " << d.frame << ", size " << d.size);
+#endif
+
+    ep.send(buf, size, fn);
+}
+
 void send_packet(const aoo::vector<cached_sink>& sinks, const AooId id,
                  data_packet& d, const sendfn &fn, bool binary) {
     if (binary){
+    #if AOO_DEBUG_DATA
+        LOG_DEBUG("AooSource: send block: seq = " << d.sequence << ", sr = "
+                  << d.samplerate << ", chn = " << s.channel << ", msgsize = "
+                  << d.msgsize << ", totalsize = " << d.totalsize << ", nframes = "
+                  << d.nframes << ", frame = " << d.frame << ", size " << d.size);
+    #endif
         AooByte buf[AOO_MAX_PACKET_SIZE];
 
         // start at max. header size
@@ -1398,12 +1467,6 @@ void send_packet(const aoo::vector<cached_sink>& sinks, const AooId id,
             aoo::to_bytes(s.stream_id, args);
             args[8] = s.channel;
 
-        #if AOO_DEBUG_DATA
-            LOG_DEBUG("AooSource: send block: seq = " << d.sequence << ", sr = "
-                      << d.samplerate << ", chn = " << s.channel << ", totalsize = "
-                      << d.totalsize << ", nframes = " << d.nframes
-                      << ", frame = " << d.frame << ", size " << d.size);
-        #endif
             s.ep.send(start, end - start, fn);
         }
     } else {
@@ -1413,25 +1476,6 @@ void send_packet(const aoo::vector<cached_sink>& sinks, const AooId id,
             send_packet_osc(s.ep, id, s.stream_id, d, fn);
         }
     }
-}
-
-void send_packet_bin(const endpoint& ep, AooId id, AooId stream_id,
-                     const aoo::data_packet& d, const sendfn& fn) {
-    AooByte buf[AOO_MAX_PACKET_SIZE];
-
-    auto onset = aoo::binmsg_write_header(buf, sizeof(buf), kAooTypeSink,
-                                          kAooBinMsgCmdData, ep.id, id);
-    auto argsize = write_bin_data(buf + onset, sizeof(buf) - onset, stream_id, d);
-    auto size = onset + argsize;
-
-#if AOO_DEBUG_DATA
-    LOG_DEBUG("AooSource: send block: seq = " << d.sequence << ", sr = "
-              << d.samplerate << ", chn = " << d.channel << ", totalsize = "
-              << d.totalsize << ", nframes = " << d.nframes
-              << ", frame = " << d.frame << ", size " << d.size);
-#endif
-
-    ep.send(buf, size, fn);
 }
 
 #define XRUN_THRESHOLD 0.1
@@ -1445,8 +1489,10 @@ void Source::send_data(const sendfn& fn){
 
     // *first* check for dropped blocks
     if (xrun_.load(std::memory_order_relaxed) > XRUN_THRESHOLD){
+        auto xrunblocks = xrun_.exchange(0.0);
+        network_samples_ += xrunblocks * blocksize_;
         // calculate number of xrun blocks (after resampling)
-        float drop = xrun_.exchange(0.0) * (float)resampler_.ratio();
+        float drop = xrunblocks * (float)resampler_.ratio();
         // round up
         int nblocks = std::ceil(drop);
         // subtract diff with a CAS loop
@@ -1471,6 +1517,7 @@ void Source::send_data(const sendfn& fn){
             d.samplerate = format_->sampleRate; // use nominal samplerate
             d.channel = 0;
             d.totalsize = 0;
+            d.msgsize = 0;
             d.nframes = 0;
             d.frame = 0;
             d.data = nullptr;
@@ -1503,17 +1550,70 @@ void Source::send_data(const sendfn& fn){
         }
     }
 
+    // handle stream messages
+    // do extra copy to avoid draining the RT memory pool when
+    // scheduling many messages in the future.
+    message_queue_.consume_all([&](auto& msg) {
+    #if 1
+        if (msg.time < (uint64_t)network_samples_) {
+            // skip outdated message; can happen with xrun blocks
+            LOG_VERBOSE("AooSource: skip stream message");
+
+        } else
+    #endif
+        message_prio_queue_.emplace(msg.time, msg.type, msg.data, msg.size);
+    });
+
     // now send audio
     while (audioqueue_.read_available()){
         if (!encoder_){
             return;
         }
+        // reset and reserve space for message count
+        sendbuffer_.resize(4);
+        uint32_t msg_count = 0;
+        double deadline = network_samples_ + (double)format_->blockSize / resampler_.ratio();
 
-        if (!sinks_.empty()){
+        while (!message_prio_queue_.empty()) {
+            auto& msg = message_prio_queue_.top();
+            if (msg.time < (uint64_t)deadline) {
+                // add header
+                std::array<char, 8> buffer;
+                // offset should not be negative in the first place... see above
+                auto offset = std::max<int32_t>(0,
+                    (msg.time - network_samples_) * resampler_.ratio());
+                aoo::to_bytes<uint16_t>(offset, &buffer[0]);
+                aoo::to_bytes<uint16_t>(msg.type, &buffer[2]);
+                aoo::to_bytes<uint32_t>(msg.size, &buffer[4]);
+                sendbuffer_.insert(sendbuffer_.end(), buffer.begin(), buffer.end());
+                // add data
+                sendbuffer_.insert(sendbuffer_.end(), msg.data, msg.data + msg.size);
+                // add padding bytes (total size is rounded up to 4 bytes.)
+                auto remainder = msg.size & 3;
+                if (remainder > 0) {
+                    sendbuffer_.resize(sendbuffer_.size() + 4 - remainder);
+                }
+                msg_count++;
+                message_prio_queue_.pop();
+            } else {
+                break;
+            }
+        }
+        // finally write message count
+        aoo::to_bytes<uint32_t>(msg_count, sendbuffer_.data());
+        network_samples_ = deadline;
+
+        if (sinks_.empty()){
+            // just drain buffer
+            audioqueue_.read_commit();
+        } else {
             auto ptr = (block_data *)audioqueue_.read_data();
 
             data_packet d;
             d.samplerate = ptr->sr;
+            d.msgsize = sendbuffer_.size();
+            // message size must be aligned to 4 byte boundary!
+            assert((d.msgsize & 3) == 0);
 
             // copy and convert audio samples to blob data
             auto nchannels = format_->numChannels;
@@ -1526,12 +1626,12 @@ void Source::send_data(const sendfn& fn){
             }
         #endif
 
-            sendbuffer_.resize(sizeof(double) * nsamples); // overallocate
+            int32_t audio_size = sizeof(double) * nsamples; // overallocate
+            sendbuffer_.resize(d.msgsize + audio_size);
 
-            AooInt32 size = sendbuffer_.size();
             auto err = AooEncoder_encode(encoder_.get(), ptr->data, nsamples,
-                                         sendbuffer_.data(), &size);
-            d.totalsize = size;
+                sendbuffer_.data() + d.msgsize, &audio_size);
+            d.totalsize = d.msgsize + audio_size;
 
             audioqueue_.read_commit(); // always commit!
 
@@ -1548,14 +1648,14 @@ void Source::send_data(const sendfn& fn){
             bool binary = binary_.load();
             auto packetsize = packetsize_.load();
             auto maxpacketsize = packetsize -
-                    (binary ? kDataHeaderSize : kBinDataHeaderSize);
+                    (binary ? kBinDataHeaderSize : kDataHeaderSize);
             auto dv = std::div(d.totalsize, maxpacketsize);
             d.nframes = dv.quot + (dv.rem != 0);
 
             // save block (if we have a history buffer)
             if (history_.capacity() > 0){
                 history_.push()->set(d.sequence, d.samplerate, sendbuffer_.data(),
-                                     d.totalsize, d.nframes, maxpacketsize);
+                                     d.totalsize, d.msgsize, d.nframes, maxpacketsize);
             }
 
             // cache sinks
@@ -1577,7 +1677,7 @@ void Source::send_data(const sendfn& fn){
 
             // send a single frame to all sinks
             // /aoo/<sink>/data <src> <stream_id> <seq> <sr> <channel_onset>
-            // <totalsize> <numpackets> <packetnum> <data>
+            // <totalsize> <msgsize> <numframes> <frame> <data>
             auto dosend = [&](int32_t frame, const AooByte* data, auto n){
                 d.frame = frame;
                 d.data = data;
@@ -1600,9 +1700,6 @@ void Source::send_data(const sendfn& fn){
             }
 
             updatelock.lock();
-        } else {
-            // drain buffer anyway
-            audioqueue_.read_commit();
         }
     }
 
@@ -1648,6 +1745,7 @@ void Source::resend_data(const sendfn &fn){
 
                 aoo::data_packet d;
                 d.sequence = block->sequence;
+                d.msgsize = block->message_size;
                 d.samplerate = block->samplerate;
                 d.channel = s.channel();
                 d.totalsize = block->size();

@@ -98,6 +98,18 @@ struct net_packet : data_packet {
     int32_t stream_id;
 };
 
+struct stream_message_header {
+    stream_message_header *next;
+    double time;
+    AooDataType type;
+    AooSize size;
+};
+
+struct flat_stream_message {
+    stream_message_header header;
+    char data[1];
+};
+
 class Sink;
 
 class source_desc {
@@ -144,7 +156,8 @@ public:
 
     void send(const Sink& s, const sendfn& fn);
 
-    bool process(const Sink& s, AooSample **buffer, int32_t nsamples);
+    bool process(const Sink& s, AooSample **buffer, int32_t nsamples,
+                 AooStreamMessageHandler handler, void *user);
 
     void invite(const Sink& s, AooId token, AooData *metadata);
 
@@ -233,6 +246,11 @@ private:
     // packet queue and jitter buffer
     aoo::unbounded_mpsc_queue<net_packet> packetqueue_;
     jitter_buffer jitterbuffer_;
+    // stream messages
+    stream_message_header *stream_messages_ = nullptr;
+    double network_time_ = 0;
+    double process_time_ = 0;
+    void reset_stream_messages();
     // requests
     aoo::unbounded_mpsc_queue<request> requestqueue_;
     void push_request(const request& r){
@@ -270,8 +288,8 @@ public:
 
     AooError AOO_CALL send(AooSendFunc fn, void *user) override;
 
-    AooError AOO_CALL process(AooSample **data, AooInt32 nsamples,
-                              AooNtpTime t) override;
+    AooError AOO_CALL process(AooSample **data, AooInt32 nsamples, AooNtpTime t,
+                              AooStreamMessageHandler messageHandler, void *user) override;
 
     AooError AOO_CALL setEventHandler(AooEventHandler fn, void *user,
                                       AooEventMode mode) override;

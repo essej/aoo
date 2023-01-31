@@ -41,6 +41,10 @@ AOO_API AooError AOO_CALL AooSource_handleMessage(
 AOO_API AooError AOO_CALL AooSource_send(
         AooSource *source, AooSendFunc fn, void *user);
 
+/** \copydoc AooSource::addStreamMessage() */
+AOO_API AooError AOO_CALL addStreamMessage(
+        AooSource *source, const AooStreamMessage *message);
+
 /** \copydoc AooSource::process() */
 AOO_API AooError AOO_CALL AooSource_process(
         AooSource *source, AooSample **data, AooInt32 numSamples, AooNtpTime t);

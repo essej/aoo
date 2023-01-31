@@ -77,13 +77,20 @@ public:
      *
      * \note Threadsafe and RT-safe; call on the audio thread
      *
+     * The audio output for the next N samples is copied into the provided buffers.
+     * After that, any incoming stream messages that fall into this sample interval
+     * are dispatched to the message handler function (if provided).
+     *
      * \param data an array of audio channels; the number of
      *        channels must match the number in #AooSource_setup.
      * \param numSamples the number of samples per channel
      * \param t current NTP time; \see aoo_getCurrentNtpTime
+     * \param messageHandler an optional stream message handler function
+     * \param user optional user data that will be passed to the message handler
      */
-    virtual AooError AOO_CALL process(AooSample **data, AooInt32 numSamples,
-                                      AooNtpTime t) = 0;
+    virtual AooError AOO_CALL process(
+            AooSample **data, AooInt32 numSamples, AooNtpTime t,
+            AooStreamMessageHandler messageHandler, void *user) = 0;
 
     /** \brief set event handler function and event handling mode
      *

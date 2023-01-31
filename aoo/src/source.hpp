@@ -11,6 +11,7 @@
 
 #include "common/lockfree.hpp"
 #include "common/net_utils.hpp"
+#include "common/priority_queue.hpp"
 #include "common/sync.hpp"
 #include "common/time.hpp"
 #include "common/utils.hpp"
@@ -140,6 +141,55 @@ struct cached_sink {
     int32_t channel;
 };
 
+template<typename Alloc>
+struct stream_message : Alloc {
+    stream_message() = default;
+    stream_message(uint64_t _time, AooDataType _type,
+                   const char *_data, AooSize _size)
+        : time(_time), type(_type), size(_size) {
+        data = (char *)Alloc::allocate(size);
+        memcpy(data, _data, size);
+    }
+
+    ~stream_message() {
+        if (data) Alloc::deallocate(data, size);
+    }
+
+    stream_message(stream_message&& other)
+        : time(other.time), type(other.type),
+          data(other.data), size(other.size) {
+        other.data = nullptr;
+        other.size = 0;
+    }
+
+    stream_message& operator=(stream_message&& other) {
+        time = other.time;
+        type = other.type;
+        data = other.data;
+        size = other.size;
+        other.data = nullptr;
+        other.size = 0;
+        return *this;
+    }
+
+    uint64_t time = 0;
+    AooDataType type = 0;
+    char *data = nullptr;
+    AooSize size = 0;
+};
+
+using rt_stream_message = stream_message<rt_allocator<char>>;
+using nrt_stream_message = stream_message<aoo::allocator<char>>;
+
+class stream_message_comp {
+public:
+    template<typename T>
+    bool operator()(const T& a, const T& b) const {
+        return a.time > b.time;
+    }
+};
+
+
 class Source final : public AooSource, rt_memory_pool_client {
  public:
     Source(AooId id, AooFlag flags, AooError *err);
@@ -156,17 +206,17 @@ class Source final : public AooSource, rt_memory_pool_client {
 
     AooError AOO_CALL send(AooSendFunc fn, void *user) override;
 
-    AooError AOO_CALL process(AooSample **data, AooInt32 n,
-                              AooNtpTime t) override;
+    AooError AOO_CALL addStreamMessage(const AooStreamMessage& message) override;
 
-    AooError AOO_CALL setEventHandler(AooEventHandler fn, void *user,
-                                      AooEventMode mode) override;
+    AooError AOO_CALL process(AooSample **data, AooInt32 n, AooNtpTime t) override;
+
+    AooError AOO_CALL setEventHandler(AooEventHandler fn, void *user, AooEventMode mode) override;
 
     AooBool AOO_CALL eventsAvailable() override;
 
     AooError AOO_CALL pollEvents() override;
 
-    AooError AOO_CALL startStream(const AooDataView *metadata) override;
+    AooError AOO_CALL startStream(const AooData *metadata) override;
 
     AooError AOO_CALL stopStream() override;
 
@@ -183,8 +233,7 @@ class Source final : public AooSource, rt_memory_pool_client {
     AooError AOO_CALL control(AooCtl ctl, AooIntPtr index,
                               void *ptr, AooSize size) override;
 
-    AooError AOO_CALL codecControl(AooCtl ctl, AooIntPtr index,
-                                   void *ptr, AooSize size) override;
+    AooError AOO_CALL codecControl(AooCtl ctl, AooIntPtr index, void *ptr, AooSize size) override;
 
     //----------------------- semi-public methods -------------------//
 
@@ -217,6 +266,8 @@ class Source final : public AooSource, rt_memory_pool_client {
     std::unique_ptr<AooCodec, encoder_deleter> encoder_;
     AooId format_id_ {kAooIdInvalid};
     // state
+    uint64_t process_samples_ = 0;
+    double network_samples_ = 0;
     int32_t sequence_ = 0;
     std::atomic<float> xrun_{0};
     std::atomic<float> lastpingtime_{0};
@@ -245,6 +296,10 @@ class Source final : public AooSource, rt_memory_pool_client {
     };
     aoo::spsc_queue<char> audioqueue_;
     history_buffer history_;
+    using message_queue = lockfree::unbounded_mpsc_queue<rt_stream_message, aoo::rt_allocator<rt_stream_message>>;
+    message_queue message_queue_;
+    using message_prio_queue = priority_queue<nrt_stream_message, stream_message_comp, aoo::allocator<nrt_stream_message>>;
+    message_prio_queue message_prio_queue_;
     // events
     using event_queue = lockfree::unbounded_mpsc_queue<event_ptr, aoo::rt_allocator<event_ptr>>;
     event_queue eventqueue_;

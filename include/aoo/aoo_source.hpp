@@ -74,6 +74,19 @@ public:
      */
     virtual AooError AOO_CALL send(AooSendFunc fn, void *user) = 0;
 
+    /** \brief add a stream message
+     *
+     * \note Threadsafe and RT-safe; call on the audio thread
+     *
+     * Call this function to add messages for the \em next process block.
+     *
+     * \note if the sample offset is larger than the next process block,
+     *       the message will be scheduled for later.
+     *
+     * \param message the message
+     */
+    virtual AooError AOO_CALL addStreamMessage(const AooStreamMessage& message) = 0;
+
     /** \brief process audio
      *
      * \note Threadsafe and RT-safe; call on the audio thread
