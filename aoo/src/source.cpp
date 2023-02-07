@@ -1479,6 +1479,7 @@ void send_packet(const aoo::vector<cached_sink>& sinks, const AooId id,
 }
 
 #define XRUN_THRESHOLD 0.1
+#define SKIP_OUTDATED_MESSAGES 1
 
 void Source::send_data(const sendfn& fn){
     int32_t last_sequence = 0;
@@ -1550,20 +1551,6 @@ void Source::send_data(const sendfn& fn){
         }
     }
 
-    // handle stream messages
-    // do extra copy to avoid draining the RT memory pool when
-    // scheduling many messages in the future.
-    message_queue_.consume_all([&](auto& msg) {
-    #if 1
-        if (msg.time < (uint64_t)network_samples_) {
-            // skip outdated message; can happen with xrun blocks
-            LOG_VERBOSE("AooSource: skip stream message");
-
-        } else
-    #endif
-        message_prio_queue_.emplace(msg.time, msg.type, msg.data, msg.size);
-    });
-
     // now send audio
     while (audioqueue_.read_available()){
         if (!encoder_){
@@ -1574,14 +1561,32 @@ void Source::send_data(const sendfn& fn){
         uint32_t msg_count = 0;
         double deadline = network_samples_ + (double)format_->blockSize / resampler_.ratio();
 
+        // handle stream messages.
+        // Copy into priority queue to avoid draining the RT memory pool
+        // when scheduling many messages in the future.
+        // NB: we have to pop messages in sync with the audio queue!
+        message_queue_.consume_all([&](auto& msg) {
+            auto offset = (int64_t)msg.time - (int64_t)network_samples_;
+        #if SKIP_OUTDATED_MESSAGES
+            if (offset < 0) {
+                // skip outdated message; can happen with xrun blocks
+                LOG_VERBOSE("AooSource: skip stream message (offset: " << offset << ")");
+            } else
+        #endif
+            message_prio_queue_.emplace(msg.time, msg.type, msg.data, msg.size);
+        });
+
         while (!message_prio_queue_.empty()) {
             auto& msg = message_prio_queue_.top();
             if (msg.time < (uint64_t)deadline) {
                 // add header
                 std::array<char, 8> buffer;
-                // offset should not be negative in the first place... see above
-                auto offset = std::max<int32_t>(0,
-                    (msg.time - network_samples_) * resampler_.ratio());
+                auto offset = ((int64_t)msg.time - (int64_t)network_samples_) * resampler_.ratio();
+            #if SKIP_OUTDATED_MESSAGES
+                assert(offset >= 0);
+            #else
+                offset = std::max(0.0, offset);
+            #endif
                 aoo::to_bytes<uint16_t>(offset, &buffer[0]);
                 aoo::to_bytes<uint16_t>(msg.type, &buffer[2]);
                 aoo::to_bytes<uint32_t>(msg.size, &buffer[4]);
