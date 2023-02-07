@@ -55,6 +55,7 @@ struct t_aoo_send
     int32_t x_nchannels = 0;
     int32_t x_port = 0;
     AooId x_id = 0;
+    double x_logicaltime = 0;
     std::unique_ptr<t_float *[]> x_vec;
     // metadata
     AooDataType x_metadata_type;
@@ -822,6 +823,29 @@ static void aoo_send_sink_list(t_aoo_send *x)
     }
 }
 
+static void aoo_send_list(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
+{
+    if (!x->check("list")) return;
+
+    if (argc < 2) {
+        return;
+    }
+    AooStreamMessage msg;
+    if (!atom_to_datatype(argv[0], msg.type, x)) {
+        return;
+    }
+    auto delta = clock_gettimesince(x->x_logicaltime) * 0.001;
+    msg.sampleOffset = delta * x->x_samplerate;
+    msg.size = argc - 1;
+    auto buffer = (AooByte *)alloca(msg.size);
+    for (int i = 0; i < msg.size; ++i) {
+        buffer[i] = (AooByte)atom_getfloat(argv + i + 1);
+    }
+    msg.data = buffer;
+
+    x->x_source->addStreamMessage(msg);
+}
+
 static t_int * aoo_send_perform(t_int *w)
 {
     t_aoo_send *x = (t_aoo_send *)(w[1]);
@@ -841,6 +865,8 @@ static t_int * aoo_send_perform(t_int *w)
             clock_delay(x->x_clock, 0);
         }
     }
+
+    x->x_logicaltime = clock_getlogicaltime();
 
     return w + 3;
 }
@@ -1001,6 +1027,7 @@ void aoo_send_tilde_setup(void)
     aoo_send_class = class_new(gensym("aoo_send~"), (t_newmethod)(void *)aoo_send_new,
         (t_method)aoo_send_free, sizeof(t_aoo_send), 0, A_GIMME, A_NULL);
     CLASS_MAINSIGNALIN(aoo_send_class, t_aoo_send, x_f);
+    class_addlist(aoo_send_class, (t_method)aoo_send_list);
     class_addmethod(aoo_send_class, (t_method)aoo_send_dsp,
                     gensym("dsp"), A_CANT, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_port,

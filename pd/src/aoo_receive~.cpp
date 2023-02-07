@@ -26,6 +26,17 @@ struct t_source
     t_symbol *s_user;
 };
 
+struct t_stream_message
+{
+    t_stream_message(const AooStreamMessage& msg, const AooEndpoint& ep)
+        : address((const sockaddr *)ep.address, ep.addrlen), id(ep.id),
+          type(msg.type), data(msg.data, msg.data + msg.size) {}
+    aoo::ip_address address;
+    AooId id;
+    AooDataType type;
+    std::vector<AooByte> data;
+};
+
 struct t_aoo_receive
 {
     t_aoo_receive(int argc, t_atom *argv);
@@ -51,6 +62,9 @@ struct t_aoo_receive
     // events
     t_outlet *x_msgout = nullptr;
     t_clock *x_clock = nullptr;
+    t_clock *x_queue_clock = nullptr;
+
+    t_priority_queue<t_stream_message> x_queue;
 
     bool get_source_arg(int argc, t_atom *argv,
                         aoo::ip_address& addr, AooId& id, bool check) const;
@@ -58,6 +72,8 @@ struct t_aoo_receive
     bool check(const char *name) const;
 
     bool check(int argc, t_atom *argv, int minargs, const char *name) const;
+
+    void dispatch_stream_message(const AooStreamMessage& msg, const aoo::ip_address& address, AooId id);
 };
 
 bool t_aoo_receive::get_source_arg(int argc, t_atom *argv,
@@ -483,13 +499,72 @@ static void aoo_receive_tick(t_aoo_receive *x)
     x->x_sink->pollEvents();
 }
 
+static void aoo_receive_queue_tick(t_aoo_receive *x)
+{
+    auto& queue = x->x_queue;
+    auto now = clock_getlogicaltime();
+
+    while (!queue.empty()){
+        if (queue.top().time <= now) {
+            auto& m = queue.top().data;
+            AooStreamMessage msg { 0, m.type, m.data.data(), m.data.size() };
+            x->dispatch_stream_message(msg, m.address, m.id);
+            queue.pop();
+        } else {
+            break;
+        }
+    }
+    // reschedule
+    if (!queue.empty()){
+        clock_set(x->x_queue_clock, queue.top().time);
+    }
+}
+
+void t_aoo_receive::dispatch_stream_message(const AooStreamMessage& msg,
+                                            const aoo::ip_address& address, AooId id) {
+    auto size = msg.size + 4;
+    auto vec = (t_atom *)alloca(sizeof(t_atom) * size);
+    if (!x_node->serialize_endpoint(address, id, 3, vec)) {
+        bug("dispatch_stream_message: serialize_endpoint");
+        return;
+    }
+    // message type
+    datatype_to_atom(msg.type, vec[3]);
+    // message content
+    for (int i = 0; i < msg.size; ++i) {
+        SETFLOAT(&vec[i + 4], msg.data[i]);
+    }
+
+    outlet_anything(x_msgout, gensym("msg"), size, vec);
+}
+
+static void aoo_receive_handle_stream_message(t_aoo_receive *x, const AooStreamMessage *msg, const AooEndpoint *ep)
+{
+    auto delay = (double)msg->sampleOffset / (double)x->x_samplerate * 1000.0;
+    if (delay > 0) {
+        // put on queue and schedule on clock (using logical time)
+        auto abstime = clock_getsystimeafter(delay);
+        // reschedule if we are the next due element
+        if (x->x_queue.empty() || abstime < x->x_queue.top().time) {
+            clock_set(x->x_queue_clock, abstime);
+        }
+        x->x_queue.emplace(t_stream_message(*msg, *ep), abstime);
+    } else {
+        // dispatch immediately
+        aoo::ip_address addr((const sockaddr *)ep->address, ep->addrlen);
+        x->dispatch_stream_message(*msg, addr, ep->id);
+    }
+
+}
+
 static t_int * aoo_receive_perform(t_int *w)
 {
     t_aoo_receive *x = (t_aoo_receive *)(w[1]);
     int n = (int)(w[2]);
 
     if (x->x_node){
-        auto err = x->x_sink->process(x->x_vec.get(), n, get_osctime(), nullptr, nullptr);
+        auto err = x->x_sink->process(x->x_vec.get(), n, get_osctime(),
+                                      (AooStreamMessageHandler)aoo_receive_handle_stream_message, x);
         if (err != kAooErrorIdle){
             x->x_node->notify();
         }
@@ -595,6 +670,7 @@ static void * aoo_receive_new(t_symbol *s, int argc, t_atom *argv)
 t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
 {
     x_clock = clock_new(this, (t_method)aoo_receive_tick);
+    x_queue_clock = clock_new(this, (t_method)aoo_receive_queue_tick);
     x_metadata_type = kAooDataUnspecified;
 
     // arg #1: port number
@@ -652,6 +728,7 @@ t_aoo_receive::~t_aoo_receive()
     }
 
     clock_free(x_clock);
+    clock_free(x_queue_clock);
 }
 
 void aoo_receive_tilde_setup(void)

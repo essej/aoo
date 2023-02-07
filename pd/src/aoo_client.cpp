@@ -4,7 +4,6 @@
 
 #include "aoo_common.hpp"
 
-#include "common/priority_queue.hpp"
 #include "common/sync.hpp"
 #include "common/time.hpp"
 
@@ -30,15 +29,6 @@ struct t_peer_message
     AooDataType type;
     std::vector<AooByte> data;
 };
-
-struct t_queue_item {
-    t_peer_message message;
-    double time;
-};
-
-bool operator> (const t_queue_item& a, const t_queue_item& b) {
-    return a.time > b.time;
-}
 
 struct t_group
 {
@@ -75,7 +65,7 @@ struct t_aoo_client
     AooId x_target_group = kAooIdInvalid; // broadcast
     AooId x_target_user = kAooIdInvalid; // broadcast
 
-    aoo::priority_queue<t_queue_item, std::greater<t_queue_item>> x_queue;
+    t_priority_queue<t_peer_message> x_queue;
 
     bool check(const char *name) const;
 
@@ -488,7 +478,7 @@ static void aoo_client_queue_tick(t_aoo_client *x)
 
     while (!queue.empty()){
         if (queue.top().time <= now) {
-            auto& msg = queue.top().message;
+            auto& msg = queue.top().data;
             AooData data { msg.type, msg.data.data(), msg.data.size() };
             x->dispatch_message(msg.group, msg.user, data, 0);
             queue.pop();
@@ -513,13 +503,12 @@ void t_aoo_client::handle_message(AooId group, AooId user, AooNtpTime time,
         if (x_schedule) {
             if (delay > 0){
                 // put on queue and schedule on clock (using logical time)
-                t_peer_message msg(group, user, data);
                 auto abstime = clock_getsystimeafter(delay);
                 // reschedule if we are the next due element
                 if (x_queue.empty() || abstime < x_queue.top().time) {
                     clock_set(x_queue_clock, abstime);
                 }
-                x_queue.push(t_queue_item { std::move(msg), abstime });
+                x_queue.emplace(t_peer_message(group, user, data), abstime);
             } else if (!x_discard){
                 // treat like immediate message
                 // TODO: should we maybe output a negative delay time?
