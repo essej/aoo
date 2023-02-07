@@ -547,16 +547,55 @@ AooError AOO_CALL aoo::net::Client::send(
         }
     }
 
+    struct wrap_state {
+        Client *client;
+        sendfn reply;
+        time_tag now;
+        float drop;
+        float reorder;
+        bool jitter;
+    } state;
+
+    auto wrapfn = [](void *user, const AooByte *data, AooInt32 size,
+            const void *address, AooAddrSize addrlen, AooFlag flag) -> AooInt32 {
+        auto state = (wrap_state *)user;
+
+        thread_local std::default_random_engine gen(std::random_device{}());
+        std::uniform_real_distribution dist;
+
+        if (state->drop > 0) {
+            if (dist(gen) <= state->drop) {
+                // LOG_DEBUG("AooClient: drop packet");
+                return 0; // drop packet
+            }
+        }
+
+        aoo::ip_address addr((const struct sockaddr *)address, addrlen);
+
+        if (state->jitter || (state->reorder > 0)) {
+            // queue for later
+            netpacket p;
+            p.data.assign(data, data + size);
+            p.addr = addr;
+            p.tt = state->now;
+            if (state->reorder > 0) {
+                // add random delay
+                auto delay = dist(gen) * state->reorder;
+                p.tt += time_tag::from_seconds(delay);
+            }
+            p.sequence = state->client->packet_sequence_++;
+            // LOG_DEBUG("AooClient: delay packet (tt: " << p.tt << ")");
+            state->client->packetqueue_.push(std::move(p));
+        } else {
+            // send immediately
+            state->reply(data, size, addr);
+        }
+
+        return 0;
+    };
+
     if (drop > 0 || reorder > 0 || jitter) {
         // wrap send function
-        struct wrap_state {
-            Client *client;
-            sendfn reply;
-            time_tag now;
-            float drop;
-            float reorder;
-            bool jitter;
-        } state;
         state.client = this;
         state.reply = reply;
         state.now = now;
@@ -564,46 +603,10 @@ AooError AOO_CALL aoo::net::Client::send(
         state.reorder = reorder;
         state.jitter = jitter;
 
-        auto wrapfn = [](void *user, const AooByte *data, AooInt32 size,
-                const void *address, AooAddrSize addrlen, AooFlag flag) -> AooInt32 {
-            auto state = (wrap_state *)user;
-
-            thread_local std::default_random_engine gen(std::random_device{}());
-            std::uniform_real_distribution dist;
-
-            if (state->drop > 0) {
-                if (dist(gen) <= state->drop) {
-                    // LOG_DEBUG("AooClient: drop packet");
-                    return 0; // drop packet
-                }
-            }
-
-            aoo::ip_address addr((const struct sockaddr *)address, addrlen);
-
-            if (state->jitter || (state->reorder > 0)) {
-                // queue for later
-                netpacket p;
-                p.data.assign(data, data + size);
-                p.addr = addr;
-                p.tt = state->now;
-                if (state->reorder > 0) {
-                    // add random delay
-                    auto delay = dist(gen) * state->reorder;
-                    p.tt += time_tag::from_seconds(delay);
-                }
-                p.sequence = state->client->packet_sequence_++;
-                // LOG_DEBUG("AooClient: delay packet (tt: " << p.tt << ")");
-                state->client->packetqueue_.push(std::move(p));
-            } else {
-                // send immediately
-                state->reply(data, size, addr);
-            }
-
-            return 0;
-        };
-
         // replace
         reply = sendfn(wrapfn, &state);
+        fn = wrapfn;
+        user = &state;
     }
 #endif
 
