@@ -12,7 +12,7 @@ if (AOO_PACKET_SIZE GREATER AOO_MAX_PACKET_SIZE)
     message(FATAL_ERROR "AOO_PACKET_SIZE must not exceed AOO_MAX_PACKET_SIZE")
 endif()
 
-option(AOO_DYNAMIC_RESAMPLING "enable/disable dynamic resampling" ON)
+option(AOO_DYNAMIC_RESAMPLING "enable/disable dynamic resampling" OFF)
 message(STATUS "Use dynamic resampling: ${AOO_DYNAMIC_RESAMPLING}")
 
 set(AOO_DLL_BANDWIDTH 0.0001 CACHE STRING "default DLL filter bandwidth")
