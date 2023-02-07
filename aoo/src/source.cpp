@@ -1156,7 +1156,7 @@ void Source::make_new_stream(){
 
     message_queue_.clear();
     message_prio_queue_.clear();
-    process_samples_ = network_samples_ = 0;
+    process_samples_ = stream_samples_ = 0;
 
     // reset encoder to avoid garbage from previous stream
     if (encoder_) {
@@ -1491,7 +1491,7 @@ void Source::send_data(const sendfn& fn){
     // *first* check for dropped blocks
     if (xrun_.load(std::memory_order_relaxed) > XRUN_THRESHOLD){
         auto xrunblocks = xrun_.exchange(0.0);
-        network_samples_ += xrunblocks * blocksize_;
+        stream_samples_ += xrunblocks * blocksize_;
         // calculate number of xrun blocks (after resampling)
         float drop = xrunblocks * (float)resampler_.ratio();
         // round up
@@ -1559,14 +1559,14 @@ void Source::send_data(const sendfn& fn){
         // reset and reserve space for message count
         sendbuffer_.resize(4);
         uint32_t msg_count = 0;
-        double deadline = network_samples_ + (double)format_->blockSize / resampler_.ratio();
+        double deadline = stream_samples_ + (double)format_->blockSize / resampler_.ratio();
 
         // handle stream messages.
         // Copy into priority queue to avoid draining the RT memory pool
         // when scheduling many messages in the future.
         // NB: we have to pop messages in sync with the audio queue!
         message_queue_.consume_all([&](auto& msg) {
-            auto offset = (int64_t)msg.time - (int64_t)network_samples_;
+            auto offset = (int64_t)msg.time - (int64_t)stream_samples_;
         #if SKIP_OUTDATED_MESSAGES
             if (offset < 0) {
                 // skip outdated message; can happen with xrun blocks
@@ -1581,7 +1581,7 @@ void Source::send_data(const sendfn& fn){
             if (msg.time < (uint64_t)deadline) {
                 // add header
                 std::array<char, 8> buffer;
-                auto offset = ((int64_t)msg.time - (int64_t)network_samples_) * resampler_.ratio();
+                auto offset = ((int64_t)msg.time - (int64_t)stream_samples_) * resampler_.ratio();
             #if SKIP_OUTDATED_MESSAGES
                 assert(offset >= 0);
             #else
@@ -1606,7 +1606,7 @@ void Source::send_data(const sendfn& fn){
         }
         // finally write message count
         aoo::to_bytes<uint32_t>(msg_count, sendbuffer_.data());
-        network_samples_ = deadline;
+        stream_samples_ = deadline;
 
         if (sinks_.empty()){
             // just drain buffer

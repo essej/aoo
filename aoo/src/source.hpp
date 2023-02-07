@@ -267,7 +267,7 @@ class Source final : public AooSource, rt_memory_pool_client {
     AooId format_id_ {kAooIdInvalid};
     // state
     uint64_t process_samples_ = 0;
-    double network_samples_ = 0;
+    double stream_samples_ = 0;
     int32_t sequence_ = 0;
     std::atomic<float> xrun_{0};
     std::atomic<float> lastpingtime_{0};

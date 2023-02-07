@@ -248,7 +248,7 @@ private:
     jitter_buffer jitterbuffer_;
     // stream messages
     stream_message_header *stream_messages_ = nullptr;
-    double network_time_ = 0;
+    double stream_time_ = 0;
     double process_time_ = 0;
     void reset_stream_messages();
     // requests

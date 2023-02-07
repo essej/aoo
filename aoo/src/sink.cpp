@@ -1066,7 +1066,7 @@ void source_desc::update(const Sink& s){
 
         reset_stream_messages();
         // advance network time
-        network_time_ += (double)format_->blockSize / (double)format_->sampleRate * nbuffers;
+        stream_time_ += (double)format_->blockSize / (double)format_->sampleRate * nbuffers;
 
         // setup resampler
         resampler_.setup(format_->blockSize, s.blocksize(),
@@ -1781,7 +1781,7 @@ void source_desc::handle_underrun(const Sink& s){
         #endif
             audioqueue_.write_commit();
 
-            network_time_ += (double)format_->blockSize / (double)format_->sampleRate;
+            stream_time_ += (double)format_->blockSize / (double)format_->sampleRate;
         }
 
         LOG_DEBUG("AooSink: write " << n << " empty blocks to audio buffer");
@@ -2010,12 +2010,6 @@ void source_desc::process_blocks(const Sink& s, stream_stats& stats){
         assert(n == nsamples);
         audioqueue_.write_commit();
 
-    #if 0
-        Log log;
-        for (int i = 0; i < nsamples; ++i){
-            log << d->data[i] << " ";
-        }
-    #endif
         // push messages
         if (msgsize > 0) {
             int32_t num_messages = aoo::from_bytes<int32_t>(data);
@@ -2028,7 +2022,7 @@ void source_desc::process_blocks(const Sink& s, stream_stats& stats){
                 auto alloc_size = sizeof(stream_message_header) + size;
                 auto msg = (flat_stream_message *)aoo::rt_allocate(alloc_size);
                 msg->header.next = nullptr;
-                msg->header.time = network_time_ + (double)offset / sr;
+                msg->header.time = stream_time_ + (double)offset / sr;
                 msg->header.type = type;
                 msg->header.size = size;
                 // TODO bound checking
@@ -2047,7 +2041,7 @@ void source_desc::process_blocks(const Sink& s, stream_stats& stats){
             }
         }
 
-        network_time_ += (double)format_->blockSize / sr;
+        stream_time_ += (double)format_->blockSize / sr;
 
         jitterbuffer_.pop();
     }
@@ -2058,7 +2052,7 @@ void source_desc::skip_blocks(const Sink& s){
     LOG_VERBOSE("AooSink: skip " << n << " blocks");
     while (n--){
         jitterbuffer_.pop();
-        network_time_ += (double)format_->blockSize / (double)format_->sampleRate;
+        stream_time_ += (double)format_->blockSize / (double)format_->sampleRate;
     }
 }
 
@@ -2389,7 +2383,7 @@ void source_desc::reset_stream_messages() {
         it = next;
     }
     stream_messages_ = nullptr;
-    process_time_ = network_time_ = 0;
+    process_time_ = stream_time_ = 0;
 }
 
 void source_desc::send_event(const Sink& s, event_ptr e, AooThreadLevel level){
