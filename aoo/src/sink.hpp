@@ -165,9 +165,7 @@ public:
 
     float get_buffer_fill_ratio();
 
-    void add_xrun(int32_t nsamples){
-        xrunsamples_ += nsamples;
-    }
+    void add_xrun(double nblocks);
 private:
     using shared_lock = sync::shared_lock<sync::shared_mutex>;
     using unique_lock = sync::unique_lock<sync::shared_mutex>;
@@ -228,8 +226,7 @@ private:
     // processing state
     int32_t channel_ = 0; // recent channel onset
     int32_t skipblocks_ = 0;
-    float xrun_ = 0;
-    int32_t xrunsamples_ = 0;
+    double xrunblocks_ = 0;
     // resampler
     dynamic_resampler resampler_;
     // queues and buffers

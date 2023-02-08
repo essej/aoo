@@ -269,7 +269,7 @@ class Source final : public AooSource, rt_memory_pool_client {
     uint64_t process_samples_ = 0;
     double stream_samples_ = 0;
     int32_t sequence_ = 0;
-    std::atomic<float> xrun_{0};
+    std::atomic<float> xrunblocks_{0};
     std::atomic<float> lastpingtime_{0};
     std::atomic<bool> needstart_{false};
     enum class stream_state {
@@ -346,7 +346,7 @@ class Source final : public AooSource, rt_memory_pool_client {
 
     void make_new_stream();
 
-    void add_xrun(float n);
+    void add_xrun(double nblocks);
 
     void update_audioqueue();
 

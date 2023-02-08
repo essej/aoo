@@ -624,7 +624,7 @@ AooError AOO_CALL aoo::Source::process(
         }
         LOG_DEBUG("AooSource: xrun: " << nblocks << " blocks");
 
-        auto count = nblocks + 0.5; // ?
+        auto count = std::ceil(nblocks); // ?
         send_event(make_event<xrun_event>(count), kAooThreadLevelAudio);
 
         timer_.reset();
@@ -1077,7 +1077,7 @@ AooError Source::set_format(AooFormat &f){
     // could answer a format request by an existing stream with
     // the wrong format, before process() starts the new stream.
     //
-    // NOTE: there's a slight race condition because 'xrun_'
+    // NOTE: there's a slight race condition because 'xrunblocks_'
     // might be incremented right afterwards, but I'm not
     // sure if this could cause any real problems..
     make_new_stream();
@@ -1102,6 +1102,7 @@ AooError Source::get_format(AooFormat &fmt){
 bool Source::need_resampling() const {
 #if 1
     // always go through resampler, so we can use a variable block size
+    // LATER add an option for fixed block sizes
     return true;
 #else
     return blocksize_ != format_->blockSize || samplerate_ != format_->sampleRate;
@@ -1137,7 +1138,7 @@ void Source::make_new_stream(){
     timer_.reset();
 
     sequence_ = 0;
-    xrun_.store(0.0); // !
+    xrunblocks_.store(0.0); // !
 
     // "accept" stream metadata, see send_start()
     {
@@ -1171,11 +1172,12 @@ void Source::make_new_stream(){
     notify_start();
 }
 
-void Source::add_xrun(float n){
+void Source::add_xrun(double nblocks){
     // add with CAS loop
-    auto current = xrun_.load(std::memory_order_relaxed);
-    while (!xrun_.compare_exchange_weak(current, current + n))
+    auto current = xrunblocks_.load(std::memory_order_relaxed);
+    while (!xrunblocks_.compare_exchange_weak(current, current + nblocks))
         ;
+    // NB: do not advance process_samples_! See send_data().
 }
 
 void Source::update_audioqueue(){
@@ -1185,9 +1187,9 @@ void Source::update_audioqueue(){
         auto d = std::div(bufsize, format_->blockSize);
         int32_t nbuffers = d.quot + (d.rem != 0); // round up
         // minimum buffer size depends on resampling and reblocking!
-        auto downsample = (double)format_->sampleRate / (double)samplerate_;
+        auto resample = (double)format_->sampleRate / (double)samplerate_;
         auto reblock = (double)format_->blockSize / (double)blocksize_;
-        int32_t minblocks = std::ceil(downsample * reblock);
+        int32_t minblocks = std::ceil(resample * reblock);
         nbuffers = std::max<int32_t>(nbuffers, minblocks);
         LOG_DEBUG("AooSource: buffersize (ms): " << (buffersize_.load() * 1000.0)
                   << ", samples: " << bufsize << ", nbuffers: " << nbuffers
@@ -1480,6 +1482,7 @@ void send_packet(const aoo::vector<cached_sink>& sinks, const AooId id,
 
 #define XRUN_THRESHOLD 0.1
 #define SKIP_OUTDATED_MESSAGES 1
+#define XRUN_BLOCKS_CEIL 1
 
 void Source::send_data(const sendfn& fn){
     int32_t last_sequence = 0;
@@ -1489,22 +1492,41 @@ void Source::send_data(const sendfn& fn){
     shared_lock updatelock(update_mutex_); // reader lock
 
     // *first* check for dropped blocks
-    if (xrun_.load(std::memory_order_relaxed) > XRUN_THRESHOLD){
-        auto xrunblocks = xrun_.exchange(0.0);
-        stream_samples_ += xrunblocks * blocksize_;
-        // calculate number of xrun blocks (after resampling)
-        float drop = xrunblocks * (float)resampler_.ratio();
-        // round up
-        int nblocks = std::ceil(drop);
+    if (xrunblocks_.load(std::memory_order_relaxed) > XRUN_THRESHOLD){
+        // send empty stream blocks for xrun blocks to fill up the missing time.
+        // NB: do not advance stream_samples_! See also add_xrun().
+        // (We *could* advance process and stream time proportionally,
+        // but at the moment it wouldn't help with anything. On the contrary:
+        // the stream time might accidentally run ahead of the process time,
+        // causing issues with negative stream message sample offsets...)
+        auto xrunblocks = xrunblocks_.exchange(0.0);
+        auto convert = resampler_.ratio() * (double)blocksize_ / (double)format_->blockSize;
+        // convert xrunblocks to stream blocks.
+        // If the format uses a larger blocksize, the stream might run a little bit ahead
+        // of time. To mitigate this problem, the block difference is subtracted from
+        // xrunblocks_ so that processing may catch up with subsequent calls to add_xrun().
+        // NB: if XRUN_BLOCK_CEIL is 0, the difference may be negative, in which case
+        // it is effectively added back to xrunblocks_.
+    #if XRUN_BLOCKS_CEIL
+        int stream_blocks = std::ceil(xrunblocks * convert);
+    #else
+        int stream_blocks = xrunblocks * convert + 0.5;
+    #endif
+        auto process_blocks = stream_blocks / convert;
+        auto diff = process_blocks - xrunblocks;
+    #if XRUN_BLOCKS_CEIL
+        assert(diff >= 0);
+    #endif
         // subtract diff with a CAS loop
-        float diff = (float)nblocks - drop;
-        auto current = xrun_.load(std::memory_order_relaxed);
-        while (!xrun_.compare_exchange_weak(current, current - diff))
+        auto current = xrunblocks_.load(std::memory_order_relaxed);
+        while (!xrunblocks_.compare_exchange_weak(current, current - diff))
             ;
-        // drop blocks
-        LOG_DEBUG("AooSource: send " << nblocks << " empty blocks for "
-                  "xrun (" << (int)drop << " blocks)");
-        while (nblocks--){
+        // send empty blocks
+        if (stream_blocks > 0) {
+            LOG_DEBUG("AooSource: send " << stream_blocks << " empty blocks for "
+                      "xrun (" << xrunblocks << " blocks)");
+        }
+        while (stream_blocks--){
             // check the encoder and make snapshost of stream_id
             // in every iteration because we release the lock
             if (!encoder_){

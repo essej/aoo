@@ -426,14 +426,14 @@ AooError AOO_CALL aoo::Sink::process(
         realsr_.store(samplerate_);
     } else if (state == timer::state::error){
         // recover sources
-        int32_t xrunsamples = error * samplerate_ + 0.5;
+        double xrunblocks = error * (double)samplerate_ / (double)blocksize_;
 
         // no lock needed - sources are only removed in this thread!
         for (auto& s : sources_){
-            s.add_xrun(xrunsamples);
+            s.add_xrun(xrunblocks);
         }
 
-        int count = (float)xrunsamples / (float)blocksize_;
+        int count = std::ceil(xrunblocks); // ?
         auto e = make_event<xrun_event>(count);
         send_event(std::move(e), kAooThreadLevelAudio);
 
@@ -1152,6 +1152,10 @@ float source_desc::get_buffer_fill_ratio(){
     }
 }
 
+void source_desc::add_xrun(double nblocks){
+    xrunblocks_ += nblocks;
+}
+
 // /aoo/sink/<id>/start <src> <version> <stream_id> <flags>
 // <lastformat> <nchannels> <samplerate> <blocksize> <codec> <options> <metadata>
 
@@ -1473,10 +1477,8 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
     shared_lock lock(mutex_, sync::try_to_lock);
     if (!lock.owns_lock()) {
         if (streamstate_ == kAooStreamStateActive) {
-            xrun_ += 1.0;
+            add_xrun(1);
             LOG_VERBOSE("AooSink: source_desc::process() would block");
-        } else {
-            // I'm not sure if this can happen...
         }
         // how to report this to the client?
         return false;
@@ -1546,15 +1548,10 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
 
     // check for sink xruns
     if (didupdate_){
-        xrunsamples_ = 0;
-        xrun_ = 0;
+        xrunblocks_ = 0;
         assert(underrun_ == false);
         assert(skipblocks_ == 0);
         didupdate_ = false;
-    } else if (xrunsamples_ > 0) {
-        auto xrunblocks = (float)xrunsamples_ / (float)format_->blockSize;
-        xrun_ += xrunblocks;
-        xrunsamples_ = 0;
     }
 
     stream_stats stats;
@@ -1623,18 +1620,20 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
 
     // try to read samples from resampler
     auto buf = (AooSample *)alloca(outsize * sizeof(AooSample));
-
-    while (!resampler_.read(buf, outsize)){
-        // try to write samples from buffer into resampler
-        if (audioqueue_.read_available()){
-            auto d = (block_data *)audioqueue_.read_data();
-
-            if (xrun_ > XRUN_THRESHOLD){
-                // skip audio and decrement xrun counter proportionally
-                xrun_ -= sr / format_->sampleRate;
-
+    for (;;) {
+        if (resampler_.read(buf, outsize)){
+            // if there have been xruns, skip one block of audio and try again.
+            if (xrunblocks_ > XRUN_THRESHOLD){
+                // decrement xrun counter and advance process time
+                xrunblocks_ -= 1.0;
                 process_time_ += (double)nsamples / sr;
             } else {
+                break; // got a block
+            }
+        } else {
+            // try to write samples from buffer into resampler
+            if (audioqueue_.read_available()){
+                auto d = (block_data *)audioqueue_.read_data();
                 // try to write audio into resampler
                 if (resampler_.write(d->data, insize)){
                     // update resampler
@@ -1647,22 +1646,19 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
                     LOG_ERROR("AooSink: bug: couldn't write to resampler");
                     // let the buffer run out
                 }
+                audioqueue_.read_commit();
+            } else {
+                // buffer ran out -> "inactive"
+                if (streamstate_ != kAooStreamStateInactive){
+                    streamstate_ = kAooStreamStateInactive;
+
+                    auto e = make_event<stream_state_event>(ep, kAooStreamStateInactive);
+                    send_event(s, std::move(e), kAooThreadLevelAudio);
+                }
+                underrun_ = true;
+
+                return false;
             }
-
-            audioqueue_.read_commit();
-        } else {
-            // buffer ran out -> "inactive"
-            if (streamstate_ != kAooStreamStateInactive){
-                streamstate_ = kAooStreamStateInactive;
-
-                auto e = make_event<stream_state_event>(ep, kAooStreamStateInactive);
-                send_event(s, std::move(e), kAooThreadLevelAudio);
-            }
-            underrun_ = true;
-
-            process_time_ += (double)nsamples / sr;
-
-            return false;
         }
     }
 
@@ -1676,22 +1672,22 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
             if (offset >= nsamples) {
                 break;
             }
-            if (offset < 0) {
-                LOG_ERROR("AooSink: bug: stream message with negative sample offset ("
-                          << offset << ")");
-                offset = 0;
+            if (offset >= 0) {
+                msg.sampleOffset = offset;
+                msg.type = it->type;
+                msg.size = it->size;
+                msg.data = (const AooByte *)reinterpret_cast<flat_stream_message *>(it)->data;
+
+                AooEndpoint ep;
+                ep.address = this->ep.address.address();
+                ep.addrlen = this->ep.address.length();
+                ep.id = this->ep.id;
+
+                handler(user, &msg, &ep);
+            } else {
+                // this may happen with xruns
+                LOG_VERBOSE("AooSink: skip stream message (offset: " << offset << ")");
             }
-            msg.sampleOffset = offset;
-            msg.type = it->type;
-            msg.size = it->size;
-            msg.data = (const AooByte *)reinterpret_cast<flat_stream_message *>(it)->data;
-
-            AooEndpoint ep;
-            ep.address = this->ep.address.address();
-            ep.addrlen = this->ep.address.length();
-            ep.id = this->ep.id;
-
-            handler(user, &msg, &ep);
 
             auto next = it->next;
             auto alloc_size = sizeof(stream_message_header) + it->size;
