@@ -1065,7 +1065,7 @@ void source_desc::update(const Sink& s){
         }
 
         reset_stream_messages();
-        // advance network time
+        // advance stream time
         stream_time_ += (double)format_->blockSize / (double)format_->sampleRate * nbuffers;
 
         // setup resampler
@@ -1780,8 +1780,6 @@ void source_desc::handle_underrun(const Sink& s){
             }
         #endif
             audioqueue_.write_commit();
-
-            stream_time_ += (double)format_->blockSize / (double)format_->sampleRate;
         }
 
         LOG_DEBUG("AooSink: write " << n << " empty blocks to audio buffer");
@@ -1792,6 +1790,10 @@ void source_desc::handle_underrun(const Sink& s){
         LOG_DEBUG("AooSink: skip next " << n << " blocks");
     #endif
     }
+
+    reset_stream_messages();
+    // advance stream time
+    stream_time_ += n * (double)format_->blockSize / (double)format_->sampleRate;
 
     auto e = make_event<source_event>(kAooEventBufferUnderrun, ep);
     send_event(s, std::move(e), kAooThreadLevelAudio);
