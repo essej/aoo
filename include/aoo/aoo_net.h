@@ -143,7 +143,7 @@ enum AooNetServerFlags
 /** \brief type for client requests */
 typedef AooInt32 AooNetRequestType;
 
-/** \brief client request constants */
+/** \brief client request type constants */
 enum AooNetRequestTypes
 {
     /** error response */
@@ -168,12 +168,7 @@ enum AooNetRequestTypes
     kAooNetRequestCustom
 };
 
-/** \brief generic request */
-typedef struct AooNetRequest
-{
-    /** the request type */
-    AooNetRequestType type;
-} AooNetRequest;
+typedef union AooNetRequest AooNetRequest;
 
 /** \brief request handler (to intercept client requests)
  * \param user user data
@@ -189,13 +184,7 @@ typedef AooBool (AOO_CALL *AooNetRequestHandler)(
         const AooNetRequest *request
 );
 
-/** \brief generic response */
-typedef struct AooNetResponse
-{
-    /** the response type */
-    AooNetRequestType type;
-    AooFlag flags;
-} AooNetResponse;
+typedef union AooNetResponse AooNetResponse;
 
 /** \brief callback for client requests */
 typedef void (AOO_CALL *AooNetCallback)(
@@ -209,6 +198,16 @@ typedef void (AOO_CALL *AooNetCallback)(
         const AooNetResponse *response
 );
 
+/* generic request/response */
+
+typedef struct AooNetRequestBase
+{
+    AooNetRequestType type;
+    AooFlag flags;
+} AooNetRequestBase;
+
+typedef AooNetRequestBase AooNetResponseBase;
+
 /* error */
 
 /** \brief error response */
@@ -216,15 +215,15 @@ typedef struct AooNetResponseError
 {
     AooNetRequestType type;
     AooFlag flags;
-    /** discriptive error message */
-    const AooChar *errorMessage;
     /** platform- or user-specific error code */
     AooInt32 errorCode;
+    /** discriptive error message */
+    const AooChar *errorMessage;
 } AooNetResponseError;
 
 /* connect (client-side) */
 
-/** \brief login request */
+/** \brief connect request */
 typedef struct AooNetRequestConnect
 {
     AooNetRequestType type;
@@ -234,7 +233,7 @@ typedef struct AooNetRequestConnect
     const AooData *metadata;
 } AooNetRequestConnect;
 
-/** \brief login response */
+/** \brief connect response */
 typedef struct AooNetResponseConnect
 {
     AooNetRequestType type;
@@ -242,6 +241,10 @@ typedef struct AooNetResponseConnect
     AooId clientId; /* client-only */
     const AooData *metadata;
 } AooNetResponseConnect;
+
+/* disconnect (client-side) */
+typedef AooNetRequestBase AooNetRequestDisconnect;
+typedef AooNetResponseBase AooNetResponseDisconnect;
 
 /* query (server-side) */
 
@@ -308,7 +311,7 @@ typedef struct AooNetRequestGroupJoin
     AooFlag userFlags;
     /** Each client may provide user metadata in AooClient::joinGroup().
      * By default, the server just stores the metadata and sends it to all
-     * peers via AooNetEventPeer::metadata. However, it may also intercept
+     * peers via AooEventPeer::metadata. However, it may also intercept
      * the request and validate/modify the metadata, or provide any kind of
      * metadata it wants, by setting AooNetResponseGroupJoin::userMetadata. */
     const AooData *userMetadata;
@@ -355,7 +358,8 @@ typedef struct AooNetRequestGroupLeave
     AooId group;
 } AooNetRequestGroupLeave;
 
-#define AooNetResponseGroupLeave AooNetResponse
+/** \brief response for leaving a group */
+typedef AooNetResponseBase AooNetResponseGroupLeave;
 
 /* update group metadata */
 
@@ -413,6 +417,41 @@ typedef struct AooNetResponseCustom
     AooFlag flags;
     AooData data;
 } AooNetResponseCustom;
+
+/*--------------------------------------------*/
+
+/** \brief union of all client requests */
+union AooNetRequest
+{
+    AooNetRequestType type; /** request type */
+    AooNetRequestConnect connect;
+    AooNetRequestDisconnect disconnect;
+    AooNetRequestQuery query;
+    AooNetRequestLogin login;
+    AooNetRequestGroupJoin groupJoin;
+    AooNetRequestGroupLeave groupLeave;
+    AooNetRequestGroupUpdate groupUpdate;
+    AooNetRequestUserUpdate userUpdate;
+    AooNetRequestCustom custom;
+};
+
+/*--------------------------------------------*/
+
+/** \brief union of all client requests */
+union AooNetResponse
+{
+    AooNetRequestType type; /** request type */
+    AooNetResponseError error;
+    AooNetResponseConnect connect;
+    AooNetResponseDisconnect disconnect;
+    AooNetResponseQuery query;
+    AooNetResponseLogin login;
+    AooNetResponseGroupJoin groupJoin;
+    AooNetResponseGroupLeave groupLeave;
+    AooNetResponseGroupUpdate groupUpdate;
+    AooNetResponseUserUpdate userUpdate;
+    AooNetResponseCustom custom;
+};
 
 /*--------------------------------------------*/
 

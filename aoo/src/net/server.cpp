@@ -158,8 +158,7 @@ AooError AOO_CALL aoo::net::Server::acceptRequest(
     }
     // query request needs to handled specially
     if (request->type == kAooNetRequestQuery) {
-        do_query((const AooNetRequestQuery&)request,
-                 (AooNetResponseQuery&)response);
+        do_query(request->query, response->query);
         return kAooOk; // always succeeds
     }
     // client requests
@@ -167,24 +166,17 @@ AooError AOO_CALL aoo::net::Server::acceptRequest(
     if (c) {
         switch (request->type) {
         case kAooNetRequestLogin:
-            return do_login(*c, token, (const AooNetRequestLogin&)*request,
-                            (AooNetResponseLogin&)*response);
+            return do_login(*c, token, request->login, response->login);
         case kAooNetRequestGroupJoin:
-            return do_group_join(*c, token, (const AooNetRequestGroupJoin&)*request,
-                                 (AooNetResponseGroupJoin&)*response);
+            return do_group_join(*c, token, request->groupJoin, response->groupJoin);
         case kAooNetRequestGroupLeave:
-            return do_group_leave(*c, token, (const AooNetRequestGroupLeave&)*request,
-                                  (AooNetResponseGroupLeave&)*response);
-            break;
+            return do_group_leave(*c, token, request->groupLeave, response->groupLeave);
         case kAooNetRequestGroupUpdate:
-            return do_group_update(*c, token, (const AooNetRequestGroupUpdate&)*request,
-                                   (AooNetResponseGroupUpdate&)*response);
+            return do_group_update(*c, token, request->groupUpdate, response->groupUpdate);
         case kAooNetRequestUserUpdate:
-            return do_user_update(*c, token, (const AooNetRequestUserUpdate&)*request,
-                                  (AooNetResponseUserUpdate&)*response);
+            return do_user_update(*c, token, request->userUpdate, response->userUpdate);
         case kAooNetRequestCustom:
-            return do_custom_request(*c, token, (const AooNetRequestCustom&)*request,
-                                     (AooNetResponseCustom&)*response);
+            return do_custom_request(*c, token, request->custom, response->custom);
         default:
             return kAooErrorUnknown;
         }

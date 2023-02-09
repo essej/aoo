@@ -952,7 +952,11 @@ void Client::perform(const disconnect_cmd& cmd) {
 
     close(true);
 
-    cmd.reply(kAooOk, nullptr); // always succeeds
+    AooNetResponseDisconnect response;
+    response.type = kAooNetRequestDisconnect;
+    response.flags = 0;
+
+    cmd.reply(kAooOk, (AooNetResponse&)response); // always succeeds
 }
 
 //------------------ group_join -----------------------//
@@ -1033,7 +1037,7 @@ void Client::handle_response(const group_join_cmd& cmd,
         response.privateMetadata = private_md.size ? &private_md : nullptr;
         response.relayAddress = relay.port > 0 ? &relay : nullptr;
 
-        cmd.reply(result, (AooNetResponse *)&response);
+        cmd.reply(result, (AooNetResponse&)response);
         LOG_VERBOSE("AooClient: successfully joined group " << cmd.group_name_);
     } else {
         auto code = (it++)->AsInt32();
@@ -1087,7 +1091,11 @@ void Client::handle_response(const group_leave_cmd& cmd,
             LOG_ERROR("AooClient: group leave response: not a member of group " << cmd.group_);
         }
 
-        cmd.reply(result, nullptr);
+        AooNetResponseGroupLeave response;
+        response.type = kAooNetRequestGroupLeave;
+        response.flags = 0;
+
+        cmd.reply(result, (AooNetResponse&)response);
         LOG_VERBOSE("AooClient: successfully left group " << cmd.group_);
     } else {
         auto code = (it++)->AsInt32();
@@ -1127,7 +1135,7 @@ void Client::handle_response(const group_update_cmd& cmd,
         response.groupMetadata.data = cmd.md_.data();
         response.groupMetadata.size = cmd.md_.size();
 
-        cmd.reply(result, (AooNetResponse *)&response);
+        cmd.reply(result, (AooNetResponse&)response);
         LOG_VERBOSE("AooClient: successfully updated group " << cmd.group_);
     } else {
         auto code = (it++)->AsInt32();
@@ -1167,7 +1175,7 @@ void Client::handle_response(const user_update_cmd& cmd,
         response.userMetadata.data = cmd.md_.data();
         response.userMetadata.size = cmd.md_.size();
 
-        cmd.reply(result, (AooNetResponse *)&response);
+        cmd.reply(result, (AooNetResponse&)response);
         LOG_VERBOSE("AooClient: successfully updated user "
                     << cmd.user_ << " in group " << cmd.group_);
     } else {
@@ -1415,11 +1423,11 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
             // notify
             AooNetResponseConnect response;
             response.type = kAooNetRequestConnect;
-            response.clientId = id;
             response.flags = 0;
+            response.clientId = id;
             response.metadata = metadata.data ? &metadata : nullptr;
 
-            connection_->reply(kAooOk, (AooNetResponse*)&response);
+            connection_->reply(kAooOk, (AooNetResponse&)response);
         } else {
             auto code = (it++)->AsInt32();
             auto msg = (it++)->AsString();

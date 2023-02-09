@@ -327,19 +327,19 @@ private:
 
         virtual void handle_response(Client& client, const osc::ReceivedMessage& msg) = 0;
 
-        virtual void reply(AooError result, const AooNetResponse *response) const = 0;
+        virtual void reply(AooError result, const AooNetResponse& response) const = 0;
 
         void reply_error(AooError result, const char *msg, int32_t code) const {
             AooNetResponseError response;
             response.type = kAooNetRequestError;
             response.errorCode = code;
             response.errorMessage = msg;
-            reply(result, (AooNetResponse*)&response);
+            reply(result, reinterpret_cast<AooNetResponse&>(response));
         }
     protected:
-        void callback(const AooNetRequest& request, AooError result, const AooNetResponse* response) const {
+        void callback(const AooNetRequest& request, AooError result, const AooNetResponse& response) const {
             if (cb_) {
-                cb_(user_, &request, result, response);
+                cb_(user_, &request, result, &response);
             }
         }
     private:
@@ -442,7 +442,7 @@ public:
             // dummy
         }
 
-        void reply(AooError result, const AooNetResponse *response) const override {
+        void reply(AooError result, const AooNetResponse& response) const override {
             AooNetRequestConnect request;
             request.type = kAooNetRequestConnect;
             request.flags = 0; // TODO
@@ -473,9 +473,10 @@ public:
             // dummy
         }
 
-        void reply(AooError result, const AooNetResponse* response) const override {
-            AooNetRequest request;
+        void reply(AooError result, const AooNetResponse& response) const override {
+            AooNetRequestDisconnect request;
             request.type = kAooNetRequestConnect;
+            request.flags = 0;
 
             callback((AooNetRequest&)request, result, response);
         }
@@ -519,7 +520,7 @@ public:
             client.handle_response(*this, msg);
         }
 
-        void reply(AooError result, const AooNetResponse* response) const override {
+        void reply(AooError result, const AooNetResponse& response) const override {
             AooNetRequestGroupJoin request;
             request.type = kAooNetRequestGroupJoin;
             request.flags = 0; // TODO
@@ -568,7 +569,7 @@ public:
             client.handle_response(*this, msg);
         }
 
-        void reply(AooError result, const AooNetResponse* response) const override {
+        void reply(AooError result, const AooNetResponse& response) const override {
             AooNetRequestGroupLeave request;
             request.type = kAooNetRequestGroupLeave;
             request.group = group_;
@@ -593,7 +594,7 @@ public:
             client.handle_response(*this, msg);
         }
 
-        void reply(AooError result, const AooNetResponse* response) const override {
+        void reply(AooError result, const AooNetResponse& response) const override {
             AooNetRequestGroupUpdate request;
             request.type = kAooNetRequestGroupUpdate;
             request.flags = 0; // TODO
@@ -624,7 +625,7 @@ public:
             client.handle_response(*this, msg);
         }
 
-        void reply(AooError result, const AooNetResponse* response) const override {
+        void reply(AooError result, const AooNetResponse& response) const override {
             AooNetRequestUserUpdate request;
             request.type = kAooNetRequestUserUpdate;
             request.flags = 0; // TODO
@@ -661,7 +662,7 @@ public:
                 response.flags = (AooFlag)(it++)->AsInt32();
                 response.data = osc_read_metadata(it);
 
-                reply(result, (AooNetResponse*)&response);
+                reply(result, (AooNetResponse&)response);
             } else {
                 auto code = (it++)->AsInt32();
                 auto msg = (it++)->AsString();
@@ -669,7 +670,7 @@ public:
             }
         }
 
-        void reply(AooError result, const AooNetResponse* response) const override {
+        void reply(AooError result, const AooNetResponse& response) const override {
             AooNetRequestCustom request;
             request.type = kAooNetRequestCustom;
             request.flags = flags_;

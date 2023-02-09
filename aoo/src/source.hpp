@@ -31,7 +31,7 @@
 
 namespace aoo {
 
-struct Source;
+class Source;
 
 struct data_request {
     int32_t sequence;

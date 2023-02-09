@@ -87,7 +87,7 @@ void AooClient::connect(int token, const char* host, int port, const char *pwd) 
             osc::OutboundPacketStream msg(buf, sizeof(buf));
             msg << osc::BeginMessage("/aoo/client/connect")
                 << client->node_->port() << token << result
-                << reinterpret_cast<const AooNetResponseConnect *>(response)->clientId
+                << response->connect.clientId
                 << osc::EndMessage;
 
             ::sendMsgNRT(client->world_, msg);
@@ -145,13 +145,11 @@ void AooClient::joinGroup(int token, const char* groupName, const char *groupPwd
         auto token = data->token;
 
         if (result == kAooOk) {
-            auto r = (const AooNetResponseGroupJoin *)response;
-
             char buf[1024];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
             msg << osc::BeginMessage("/aoo/client/group/join")
                 << client->node_->port() << token << result
-                << r->groupId << r->userId
+                << response->groupJoin.groupId << response->groupJoin.userId
                 << osc::EndMessage;
 
             ::sendMsgNRT(client->world_, msg);

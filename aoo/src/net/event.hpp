@@ -14,7 +14,7 @@ struct event_handler {
 
     template<typename T>
     void operator()(const T& event) const {
-        fn_(user_, &reinterpret_cast<const AooEvent&>(event), level_);
+        fn_(user_, reinterpret_cast<const AooEvent *>(&event), level_);
     }
 private:
     AooEventHandler fn_;
