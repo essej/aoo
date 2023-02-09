@@ -118,7 +118,7 @@ public:
             AooId group, const AooChar *userName, AooId *userId) = 0;
 
     /** \brief add user to group
-     * By default, the metadata is passed to peers via AooNetEventPeer::metadata. */
+     * By default, the metadata is passed to peers via AooEventPeer::metadata. */
     virtual AooError AOO_CALL addUserToGroup(
             AooId group, const AooChar *userName, const AooChar *userPwd,
             const AooData *metadata, AooFlag flags, AooId *userId) = 0;

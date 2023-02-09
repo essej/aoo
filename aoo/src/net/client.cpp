@@ -1532,7 +1532,7 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
                                      metadata.size > 0 ? &metadata : nullptr,
                                      std::move(relaylist), membership->relay_list);
 
-    auto e = std::make_unique<peer_event>(kAooNetEventPeerHandshake, *peer);
+    auto e = std::make_unique<peer_event>(kAooEventPeerHandshake, *peer);
     send_event(std::move(e));
 
     LOG_VERBOSE("AooClient: peer " << *peer << " joined");
@@ -1552,9 +1552,9 @@ void Client::handle_peer_remove(const osc::ReceivedMessage& msg){
     }
 
     // only send event if we're connected, which means
-    // that an kAooNetEventPeerJoin event has been sent.
+    // that an kAooEventPeerJoin event has been sent.
     if (peer->connected()){
-        auto e = std::make_unique<peer_event>(kAooNetEventPeerLeave, *peer);
+        auto e = std::make_unique<peer_event>(kAooEventPeerLeave, *peer);
         send_event(std::move(e));
     }
 
@@ -1574,7 +1574,7 @@ void Client::handle_peer_remove(const osc::ReceivedMessage& msg){
                 std::stringstream ss;
                 ss << p << " uses a relay provided by " << *peer
                    << ", so the connection might stop working";
-                auto e = std::make_unique<net_error_event>(0, ss.str());
+                auto e = std::make_unique<error_event>(0, ss.str());
                 send_event(std::move(e));
             }
         }
@@ -1674,7 +1674,7 @@ void Client::on_socket_error(int err){
     } else {
         snprintf(msg, sizeof(msg), "connection closed by server");
     }
-    auto e = std::make_unique<net_error_event>(err, msg);
+    auto e = std::make_unique<error_event>(err, msg);
 
     send_event(std::move(e));
 
@@ -1692,7 +1692,7 @@ void Client::on_exception(const char *what, const osc::Exception &err,
                  what, err.what());
     }
 
-    auto e = std::make_unique<net_error_event>(0, msg);
+    auto e = std::make_unique<error_event>(0, msg);
 
     send_event(std::move(e));
 

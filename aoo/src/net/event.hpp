@@ -30,14 +30,14 @@ struct ievent {
 
 using event_ptr = std::unique_ptr<ievent>;
 
-struct net_error_event : ievent
+struct error_event : ievent
 {
-    net_error_event(int32_t code, std::string msg)
+    error_event(int32_t code, std::string msg)
         : code_(code), msg_(std::move(msg)) {}
 
     void dispatch(const event_handler& fn) const override {
-        AooNetEventError e;
-        e.type = kAooNetEventError;
+        AooEventError e;
+        e.type = kAooEventError;
         e.errorCode = code_;
         e.errorMessage = msg_.c_str();
 

@@ -251,11 +251,7 @@ enum AooErrorCodes
 typedef AooInt32 AooEventType;
 
 /** \brief generic AOO event */
-typedef struct AooEvent
-{
-    /** the event type; \see AooEventTypes */
-    AooEventType type;
-} AooEvent;
+typedef union AooEvent AooEvent;
 
 /** \brief thread level type */
 typedef AooInt32 AooThreadLevel;

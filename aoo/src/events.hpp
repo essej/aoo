@@ -56,12 +56,13 @@ struct base_event : ievent, T {
 };
 
 // only for casting
-struct generic_event : base_event<AooEvent> {
-    generic_event() = delete;
+struct cast_event : base_event<AooEventBase> {
+    cast_event() = delete;
 };
 
 inline AooEvent& ievent::cast() {
-    return *static_cast<AooEvent *>(static_cast<generic_event *>(this));
+    auto ptr = static_cast<AooEventBase *>(static_cast<cast_event *>(this));
+    return *reinterpret_cast<AooEvent *>(ptr);
 }
 
 template<typename T>

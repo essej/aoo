@@ -104,11 +104,11 @@ void peer::send(Client& client, const sendfn& fn, time_tag now) {
             ss << "couldn't establish connection with peer " << *this;
 
             // TODO: do we really need to send the error event?
-            auto e1 = std::make_unique<net_error_event>(0, ss.str());
+            auto e1 = std::make_unique<error_event>(0, ss.str());
             client.send_event(std::move(e1));
 
             auto e2 = std::make_unique<peer_event>(
-                        kAooNetEventPeerTimeout, *this);
+                        kAooEventPeerTimeout, *this);
             client.send_event(std::move(e2));
 
             timeout_ = true;
@@ -487,7 +487,7 @@ void peer::handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
         connected_.store(true, std::memory_order_release);
 
         // push event
-        auto e = std::make_unique<peer_event>(kAooNetEventPeerJoin, *this);
+        auto e = std::make_unique<peer_event>(kAooEventPeerJoin, *this);
         client.send_event(std::move(e));
 
         LOG_VERBOSE("AooClient: successfully established connection with "

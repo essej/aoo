@@ -465,9 +465,8 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
     switch (event->type){
     case kAooEventXRun:
     {
-        auto e = (const AooEventXRun *)event;
         t_atom msg;
-        SETFLOAT(&msg, e->count);
+        SETFLOAT(&msg, event->xrun.count);
         outlet_anything(x->x_msgout, gensym("xrun"), 1, &msg);
         break;
     }
@@ -478,7 +477,7 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
     case kAooEventSinkRemove:
     {
         // common endpoint header
-        auto& ep = ((const AooEventEndpoint *)event)->endpoint;
+        auto& ep = event->endpoint.endpoint;
         aoo::ip_address addr((const sockaddr *)ep.address, ep.addrlen);
         t_atom msg[12];
         if (!x->x_node->serialize_endpoint(addr, ep.id, 3, msg)) {
@@ -489,23 +488,23 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
         switch (event->type){
         case kAooEventInvite:
         {
-            auto e = (const AooEventInvite *)event;
+            auto& e = event->invite;
 
-            x->x_invite_token = e->token;
+            x->x_invite_token = e.token;
             if (x->x_auto_invite) {
-                x->x_source->acceptInvitation(ep, e->token);
+                x->x_source->acceptInvitation(ep, e.token);
             }
 
-            if (e->metadata){
-                auto count = e->metadata->size + 4;
+            if (e.metadata){
+                auto count = e.metadata->size + 4;
                 t_atom *vec = (t_atom *)alloca(count * sizeof(t_atom));
                 // copy endpoint
                 memcpy(vec, msg, 3 * sizeof(t_atom));
                 // type
-                datatype_to_atom(e->metadata->type, vec[3]);
+                datatype_to_atom(e.metadata->type, vec[3]);
                 // data
-                for (int i = 0; i < e->metadata->size; ++i){
-                    SETFLOAT(vec + 4 + i, (uint8_t)e->metadata->data[i]);
+                for (int i = 0; i < e.metadata->size; ++i){
+                    SETFLOAT(vec + 4 + i, (uint8_t)e.metadata->data[i]);
                 }
                 outlet_anything(x->x_msgout, gensym("invite"), count, vec);
             } else {
@@ -515,11 +514,9 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
         }
         case kAooEventUninvite:
         {
-            auto e = (const AooEventUninvite *)event;
-
-            x->x_invite_token = e->token;
+            x->x_invite_token = event->uninvite.token;
             if (x->x_auto_invite) {
-                x->x_source->acceptUninvitation(ep, e->token);
+                x->x_source->acceptUninvitation(ep, event->uninvite.token);
             }
 
             outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
@@ -551,17 +548,17 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
         //--------------------- sink events -----------------------//
         case kAooEventPingReply:
         {
-            auto e = (const AooEventPingReply *)event;
+            auto& e = event->pingReply;
 
-            double diff1 = aoo_ntpTimeDuration(e->t1, e->t2) * 1000.0;
-            double diff2 = aoo_ntpTimeDuration(e->t2, e->t3) * 1000.0;
-            double rtt = aoo_ntpTimeDuration(e->t1, e->t3) * 1000.0;
+            double diff1 = aoo_ntpTimeDuration(e.t1, e.t2) * 1000.0;
+            double diff2 = aoo_ntpTimeDuration(e.t2, e.t3) * 1000.0;
+            double rtt = aoo_ntpTimeDuration(e.t1, e.t3) * 1000.0;
 
             SETSYMBOL(msg + 3, gensym("ping"));
             SETFLOAT(msg + 4, diff1);
             SETFLOAT(msg + 5, diff2);
             SETFLOAT(msg + 6, rtt);
-            SETFLOAT(msg + 7, e->packetLoss);
+            SETFLOAT(msg + 7, e.packetLoss);
 
             outlet_anything(x->x_msgout, gensym("event"), 8, msg);
 

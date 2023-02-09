@@ -12,8 +12,8 @@ struct client_login_event : ievent
         : id_(c.id()), sockfd_(c.sockfd()) {}
 
     void dispatch(const event_handler& fn) const override {
-        AooNetEventServerClientLogin e;
-        e.type = kAooNetEventServerClientLogin;
+        AooEventServerClientLogin e;
+        e.type = kAooEventServerClientLogin;
         e.flags = 0;
         e.id = id_;
         e.sockfd = sockfd_;
@@ -31,8 +31,8 @@ struct client_remove_event : ievent
         : id_(id) {}
 
     void dispatch(const event_handler& fn) const override {
-        AooNetEventServerClientRemove e;
-        e.type = kAooNetEventServerClientRemove;
+        AooEventServerClientRemove e;
+        e.type = kAooEventServerClientRemove;
         e.id = id_;
 
         fn(e);
@@ -47,8 +47,8 @@ struct group_add_event : ievent
         : id_(grp.id()), name_(grp.name()), metadata_(grp.metadata()) {}
 
     void dispatch(const event_handler& fn) const override {
-        AooNetEventServerGroupAdd e;
-        e.type = kAooNetEventServerGroupAdd;
+        AooEventServerGroupAdd e;
+        e.type = kAooEventServerGroupAdd;
         e.id = id_;
         e.name = name_.c_str();
         AooData md { metadata_.type(), metadata_.data(), metadata_.size() };
@@ -69,8 +69,8 @@ struct group_remove_event : ievent
         : id_(grp.id()), name_(grp.name()) {}
 
     void dispatch(const event_handler& fn) const override {
-        AooNetEventServerGroupRemove e;
-        e.type = kAooNetEventServerGroupRemove;
+        AooEventServerGroupRemove e;
+        e.type = kAooEventServerGroupRemove;
         e.id = id_;
         e.name = name_.c_str();
 
@@ -89,8 +89,8 @@ struct group_join_event : ievent
           metadata_(usr.metadata()), client_id_(usr.client()) {}
 
     void dispatch(const event_handler& fn) const override {
-        AooNetEventServerGroupJoin e;
-        e.type = kAooNetEventServerGroupJoin;
+        AooEventServerGroupJoin e;
+        e.type = kAooEventServerGroupJoin;
         e.flags = 0;
         e.groupId = group_id_;
         e.userId = user_id_;
@@ -119,8 +119,8 @@ struct group_leave_event : ievent
           group_name_(grp.name()), user_name_(usr.name()) {}
 
     void dispatch(const event_handler& fn) const override {
-        AooNetEventServerGroupLeave e;
-        e.type = kAooNetEventServerGroupLeave;
+        AooEventServerGroupLeave e;
+        e.type = kAooEventServerGroupLeave;
         e.flags = 0;
         e.groupId = group_id_;
         e.userId = user_id_;
@@ -142,8 +142,8 @@ struct group_update_event : ievent
         : group_(grp.id()), md_(grp.metadata()) {}
 
     void dispatch(const event_handler& fn) const override {
-        AooNetEventServerGroupUpdate e;
-        e.type = kAooNetEventServerGroupUpdate;
+        AooEventServerGroupUpdate e;
+        e.type = kAooEventServerGroupUpdate;
         e.flags = 0;
         e.groupId = group_;
         e.groupMetadata.type = md_.type();
@@ -164,8 +164,8 @@ struct user_update_event : ievent
           md_(usr.metadata()) {}
 
     void dispatch(const event_handler& fn) const override {
-        AooNetEventServerUserUpdate e;
-        e.type = kAooNetEventServerUserUpdate;
+        AooEventServerUserUpdate e;
+        e.type = kAooEventServerUserUpdate;
         e.flags = 0;
         e.groupId = group_;
         e.userId = user_;

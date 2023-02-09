@@ -204,46 +204,45 @@ void AooClient::handleEvent(const AooEvent* event) {
     msg << osc::BeginMessage("/aoo/client/event") << node_->port();
 
     switch (event->type) {
-    case kAooNetEventPeerMessage:
+    case kAooEventPeerMessage:
     {
-        auto e = (const AooNetEventPeerMessage *)event;
-        handlePeerMessage(e->groupId, e->userId, e->timeStamp, e->data);
+        auto& e = event->peerMessage;
+        handlePeerMessage(e.groupId, e.userId, e.timeStamp, e.data);
         return; // don't send event
     }
-    case kAooNetEventClientDisconnect:
+    case kAooEventClientDisconnect:
     {
-        auto e = (const AooNetEventClientDisconnect *)event;
-        msg << "/disconnect" << e->errorCode << e->errorMessage;
+        msg << "/disconnect" << event->clientDisconnect.errorCode
+            << event->clientDisconnect.errorMessage;
         break;
     }
-    case kAooNetEventPeerHandshake:
-    case kAooNetEventPeerTimeout:
+    case kAooEventPeerHandshake:
+    case kAooEventPeerTimeout:
         // ignore for now
         return;
-    case kAooNetEventPeerJoin:
+    case kAooEventPeerJoin:
     {
-        auto e = (const AooNetEventPeer*)event;
-        aoo::ip_address addr(e->address);
-        msg << "/peer/join" << e->groupId << e->userId
-            << e->groupName << e->userName << addr.name() << addr.port();
+        auto& e = event->peerJoin;
+        aoo::ip_address addr(e.address);
+        msg << "/peer/join" << e.groupId << e.userId
+            << e.groupName << e.userName << addr.name() << addr.port();
         break;
     }
-    case kAooNetEventPeerLeave:
+    case kAooEventPeerLeave:
     {
-        auto e = (const AooNetEventPeer*)event;
-        aoo::ip_address addr(e->address);
-        msg << "/peer/leave" << e->groupId << e->userId
-            << e->groupName << e->userName << addr.name() << addr.port();
+        auto& e = event->peerLeave;
+        aoo::ip_address addr(e.address);
+        msg << "/peer/leave" << e.groupId << e.userId
+            << e.groupName << e.userName << addr.name() << addr.port();
         break;
     }
-    case kAooNetEventPeerPing:
-    case kAooNetEventPeerPingReply:
+    case kAooEventPeerPing:
+    case kAooEventPeerPingReply:
         // TODO
         return;
-    case kAooNetEventError:
+    case kAooEventError:
     {
-        auto e = (const AooNetEventError*)event;
-        msg << "/error" << e->errorCode << e->errorMessage;
+        msg << "/error" << event->error.errorCode << event->error.errorMessage;
         break;
     }
     default:

@@ -326,8 +326,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
     case kAooEventXRun:
     {
         t_atom msg;
-        auto e = (const AooEventXRun *)event;
-        SETFLOAT(&msg, e->count);
+        SETFLOAT(&msg, event->xrun.count);
         outlet_anything(x->x_msgout, gensym("xrun"), 1, &msg);
         break;
     }
@@ -347,7 +346,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
     case kAooEventPing:
     {
         // common endpoint header
-        auto& ep = ((const AooEventEndpoint *)event)->endpoint;
+        auto& ep = event->endpoint.endpoint;
         aoo::ip_address addr((const sockaddr *)ep.address, ep.addrlen);
         t_atom msg[32];
         if (!x->x_node->serialize_endpoint(addr, ep.id, 3, msg)) {
@@ -399,26 +398,26 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
         }
         case kAooEventFormatChange:
         {
-            auto e = (const AooEventFormatChange *)event;
             SETSYMBOL(msg + 3, gensym("format"));
-            int n = format_to_atoms(*e->format, 29, msg + 4); // skip first 4 atoms
+            // skip first 4 atoms
+            int n = format_to_atoms(*event->formatChange.format, 29, msg + 4);
             outlet_anything(x->x_msgout, gensym("event"), n + 4, msg);
             break;
         }
         case kAooEventStreamStart:
         {
-            auto e = (const AooEventStreamStart *)event;
+            auto& e = event->streamStart;
             SETSYMBOL(msg + 3, gensym("start"));
-            if (e->metadata){
-                auto count = e->metadata->size + 5;
+            if (e.metadata){
+                auto count = e.metadata->size + 5;
                 t_atom *vec = (t_atom *)alloca(count * sizeof(t_atom));
                 // copy endpoint + event name
                 memcpy(vec, msg, 4 * sizeof(t_atom));
                 // type
-                datatype_to_atom(e->metadata->type, vec[4]);
+                datatype_to_atom(e.metadata->type, vec[4]);
                 // data
-                for (int i = 0; i < e->metadata->size; ++i){
-                    SETFLOAT(vec + 5 + i, (uint8_t)e->metadata->data[i]);
+                for (int i = 0; i < e.metadata->size; ++i){
+                    SETFLOAT(vec + 5 + i, (uint8_t)e.metadata->data[i]);
                 }
                 outlet_anything(x->x_msgout, gensym("event"), count, vec);
             } else {
@@ -434,48 +433,42 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
         }
         case kAooEventStreamState:
         {
-            auto e = (const AooEventStreamState *)event;
             SETSYMBOL(msg + 3, gensym("state"));
-            SETFLOAT(msg + 4, e->state);
+            SETFLOAT(msg + 4, event->streamState.state);
             outlet_anything(x->x_msgout, gensym("event"), 5, msg);
             break;
         }
         case kAooEventBlockLost:
         {
-            auto e = (const AooEventBlockLost *)event;
             SETSYMBOL(msg + 3, gensym("block_lost"));
-            SETFLOAT(msg + 4, e->count);
+            SETFLOAT(msg + 4, event->blockLost.count);
             outlet_anything(x->x_msgout, gensym("event"), 5, msg);
             break;
         }
         case kAooEventBlockDropped:
         {
-            auto e = (const AooEventBlockDropped *)event;
             SETSYMBOL(msg + 3, gensym("block_dropped"));
-            SETFLOAT(msg + 4, e->count);
+            SETFLOAT(msg + 4, event->blockDropped.count);
             outlet_anything(x->x_msgout, gensym("event"), 5, msg);
             break;
         }
         case kAooEventBlockReordered:
         {
-            auto e = (const AooEventBlockReordered *)event;
             SETSYMBOL(msg + 3, gensym("block_reordered"));
-            SETFLOAT(msg + 4, e->count);
+            SETFLOAT(msg + 4, event->blockReordered.count);
             outlet_anything(x->x_msgout, gensym("event"), 5, msg);
             break;
         }
         case kAooEventBlockResent:
         {
-            auto e = (const AooEventBlockResent *)event;
             SETSYMBOL(msg + 3, gensym("block_resent"));
-            SETFLOAT(msg + 4, e->count);
+            SETFLOAT(msg + 4, event->blockResent.count);
             outlet_anything(x->x_msgout, gensym("event"), 5, msg);
             break;
         }
         case kAooEventPing:
         {
-            auto e = (const AooEventPing *)event;
-            double diff = aoo_ntpTimeDuration(e->t1, e->t2) * 1000.0;
+            double diff = aoo_ntpTimeDuration(event->ping.t1, event->ping.t2) * 1000.0;
             SETSYMBOL(msg + 3, gensym("ping"));
             SETFLOAT(msg + 4, diff);
             outlet_anything(x->x_msgout, gensym("event"), 5, msg);

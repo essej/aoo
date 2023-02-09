@@ -14,7 +14,7 @@ struct peer_event : ievent
           addr_(p.address()), metadata_(p.metadata()) {}
 
     void dispatch(const event_handler &fn) const override {
-        AooNetEventPeer e;
+        AooEventPeer e;
         e.type = type_;
         e.flags = 0;
         e.groupId = group_id_;
@@ -46,8 +46,8 @@ struct peer_ping_base_event : ievent
           tt1_(tt1), tt2_(tt2), tt3_(tt3) {}
 
     void dispatch(const event_handler &fn) const override {
-        // AooNetEventPeerPing and AooNetEventPeerPingReply are layout compatible
-        AooNetEventPeerPingReply e;
+        // AooEventPeerPing and AooEventPeerPingReply are layout compatible
+        AooEventPeerPingReply e;
         e.type = type;
         e.flags = 0;
         e.group = group_;
@@ -66,8 +66,8 @@ struct peer_ping_base_event : ievent
     time_tag tt3_;
 };
 
-using peer_ping_event = peer_ping_base_event<kAooNetEventPeerPing>;
-using peer_ping_reply_event = peer_ping_base_event<kAooNetEventPeerPingReply>;
+using peer_ping_event = peer_ping_base_event<kAooEventPeerPing>;
+using peer_ping_reply_event = peer_ping_base_event<kAooEventPeerPingReply>;
 
 struct peer_message_event : ievent
 {
@@ -75,8 +75,8 @@ struct peer_message_event : ievent
         : group_(group), user_(user), tt_(tt), msg_(&msg) {}
 
     void dispatch(const event_handler &fn) const override {
-        AooNetEventPeerMessage e;
-        e.type = kAooNetEventPeerMessage;
+        AooEventPeerMessage e;
+        e.type = kAooEventPeerMessage;
         e.flags = 0; // TODO
         e.groupId = group_;
         e.userId = user_;
@@ -100,8 +100,8 @@ struct peer_update_event : ievent
         : group_(group), user_(user), md_(&md) {}
 
     void dispatch(const event_handler &fn) const override {
-        AooNetEventPeerUpdate e;
-        e.type = kAooNetEventPeerUpdate;
+        AooEventPeerUpdate e;
+        e.type = kAooEventPeerUpdate;
         e.flags = 0; // TODO
         e.groupId = group_;
         e.userId = user_;
@@ -123,8 +123,8 @@ struct user_update_event : ievent
         : group_(group), user_(user), md_(&md) {}
 
     void dispatch(const event_handler &fn) const override {
-        AooNetEventClientUserUpdate e;
-        e.type = kAooNetEventClientUserUpdate;
+        AooEventClientUserUpdate e;
+        e.type = kAooEventClientUserUpdate;
         e.flags = 0; // TODO
         e.groupId = group_;
         e.userId = user_;
@@ -146,8 +146,8 @@ struct group_update_event : ievent
         : group_(group), md_(&md) {}
 
     void dispatch(const event_handler &fn) const override {
-        AooNetEventClientGroupUpdate e;
-        e.type = kAooNetEventClientGroupUpdate;
+        AooEventClientGroupUpdate e;
+        e.type = kAooEventClientGroupUpdate;
         e.flags = 0; // TODO
         e.groupId = group_;
         e.groupMetadata.type = md_.type();
@@ -167,8 +167,8 @@ struct notification_event : ievent
         : msg_(&msg) {}
 
     void dispatch(const event_handler &fn) const override {
-        AooNetEventClientNotification e;
-        e.type = kAooNetEventClientNotification;
+        AooEventClientNotification e;
+        e.type = kAooEventClientNotification;
         e.flags = 0; // TODO
         e.message.type = msg_.type();
         e.message.data = msg_.data();
@@ -189,8 +189,8 @@ struct disconnect_event : ievent
         : error_(error), msg_(std::move(msg)) {}
 
     void dispatch(const event_handler &fn) const override {
-        AooNetEventClientDisconnect e;
-        e.type = kAooNetEventClientDisconnect;
+        AooEventClientDisconnect e;
+        e.type = kAooEventClientDisconnect;
         e.errorCode = error_;
         e.errorMessage = msg_.c_str();
         fn(e);

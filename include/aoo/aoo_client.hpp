@@ -109,7 +109,7 @@ public:
      * \param userPwd (optional) user password
      * \param userMetadata (optional) user metadata
      *        See AooNetResponseGroupJoin::userMetadata resp.
-     *        AooNetEventPeer::metadata.
+     *        AooEventPeer::metadata.
      * \param relayAddress relay address
      * \param cb function to be called with server reply
      * \param context user data passed to callback function

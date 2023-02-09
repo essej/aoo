@@ -94,131 +94,84 @@ void AooReceive::handleEvent(const AooEvent *event){
     switch (event->type){
     case kAooEventSourceAdd:
     {
-        auto e = (const AooEventSourceAdd *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        beginEvent(msg, "/add", addr, e->endpoint.id);
+        beginEvent(msg, "/add", event->sourceAdd.endpoint);
         sendMsgRT(msg);
         break;
     }
     case kAooEventSourceRemove:
     {
-        auto e = (const AooEventSourceRemove *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        beginEvent(msg, "/remove", addr, e->endpoint.id);
+        beginEvent(msg, "/remove", event->sourceRemove.endpoint);
         sendMsgRT(msg);
         break;
     }
     case kAooEventInviteTimeout:
     {
-        auto e = (const AooEventInviteTimeout *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        beginEvent(msg, "/invite/timeout", addr, e->endpoint.id);
+        beginEvent(msg, "/invite/timeout", event->inviteTimeout.endpoint);
         sendMsgRT(msg);
         break;
     }
     case kAooEventFormatChange:
     {
-        auto e = (const AooEventFormatChange *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        beginEvent(msg, "/format", addr, e->endpoint.id);
-        serializeFormat(msg, *e->format);
+        auto& e = event->formatChange;
+        beginEvent(msg, "/format", e.endpoint);
+        serializeFormat(msg, *e.format);
         sendMsgRT(msg);
         break;
     }
     case kAooEventStreamStart:
     {
-        auto e = (const AooEventStreamStart *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        beginEvent(msg, "/start", addr, e->endpoint.id);
+        auto& e = event->streamStart;
+        beginEvent(msg, "/start", e.endpoint);
         // TODO metadata
         sendMsgRT(msg);
         break;
     }
     case kAooEventStreamStop:
     {
-        auto e = (const AooEventStreamStop *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        beginEvent(msg, "/stop", addr, e->endpoint.id);
+        beginEvent(msg, "/stop", event->streamStop.endpoint);
         sendMsgRT(msg);
         break;
     }
     case kAooEventStreamState:
     {
-        auto e = (const AooEventStreamState *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        beginEvent(msg, "/state", addr, e->endpoint.id);
-        msg << e->state;
+        beginEvent(msg, "/state", event->streamState.endpoint);
+        msg << event->streamState.state;
         sendMsgRT(msg);
         break;
     }
     case kAooEventBlockLost:
     {
-        auto e = (const AooEventBlockLost *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        beginEvent(msg, "/block/lost", addr, e->endpoint.id);
-        msg << e->count;
+        beginEvent(msg, "/block/lost", event->blockLost.endpoint);
+        msg << event->blockLost.count;
         sendMsgRT(msg);
         break;
     }
     case kAooEventBlockDropped:
     {
-        auto e = (const AooEventBlockDropped *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        beginEvent(msg, "/block/dropped", addr, e->endpoint.id);
-        msg << e->count;
+        beginEvent(msg, "/block/dropped", event->blockDropped.endpoint);
+        msg << event->blockDropped.count;
         sendMsgRT(msg);
         break;
     }
     case kAooEventBlockReordered:
     {
-        auto e = (const AooEventBlockReordered *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        beginEvent(msg, "/block/reordered", addr, e->endpoint.id);
-        msg << e->count;
+        beginEvent(msg, "/block/reordered", event->blockReordered.endpoint);
+        msg << event->blockReordered.count;
         sendMsgRT(msg);
         break;
     }
     case kAooEventBlockResent:
     {
-        auto e = (const AooEventBlockResent *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        beginEvent(msg, "/block/resent", addr, e->endpoint.id);
-        msg << e->count;
+        beginEvent(msg, "/block/resent", event->blockResent.endpoint);
+        msg << event->blockResent.count;
         sendMsgRT(msg);
         break;
     }
     case kAooEventPing:
     {
-        auto e = (const AooEventPing *)event;
-        aoo::ip_address addr((const sockaddr *)e->endpoint.address,
-                             e->endpoint.addrlen);
-
-        double diff = aoo_ntpTimeDuration(e->t1, e->t2);
-
-        beginEvent(msg, "/ping", addr, e->endpoint.id);
-        msg << diff;
+        auto& e = event->ping;
+        beginEvent(msg, "/ping", e.endpoint);
+        msg << aoo_ntpTimeDuration(e.t1, e.t2); // diff
         sendMsgRT(msg);
         break;
     }
