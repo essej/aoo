@@ -181,9 +181,7 @@ private:
     bool add_packet(const Sink& s, const net_packet& d,
                     stream_stats& stats);
 
-    void process_blocks(const Sink& s, stream_stats& stats);
-
-    void skip_blocks(const Sink& s);
+    bool try_decode_block(const Sink& s, stream_stats& stats);
 
     void check_missing_blocks(const Sink& s);
 
@@ -203,10 +201,13 @@ private:
     AooId stream_id_ = kAooIdInvalid;
     AooId format_id_ = kAooIdInvalid;
 
+    int32_t channel_ = 0; // recent channel onset
     AooStreamState streamstate_{kAooStreamStateInactive};
     bool underrun_{false};
     bool didupdate_{false};
+    bool wait_for_buffer_{false};
     std::atomic<bool> binary_{false};
+    double xrunblocks_ = 0;
 
     std::atomic<source_state> state_{source_state::idle};
     rt_metadata_ptr metadata_;
@@ -223,30 +224,17 @@ private:
     // audio decoder
     std::unique_ptr<AooFormat, format_deleter> format_;
     std::unique_ptr<AooCodec, decoder_deleter> decoder_;
-    // processing state
-    int32_t channel_ = 0; // recent channel onset
-    int32_t skipblocks_ = 0;
-    double xrunblocks_ = 0;
     // resampler
     dynamic_resampler resampler_;
-    // queues and buffers
-    struct block_data {
-        struct {
-            double samplerate;
-            int32_t channel;
-            int32_t padding;
-        } header;
-        AooSample data[1];
-    };
-    aoo::spsc_queue<char> audioqueue_;
-    int32_t minblocks_ = 0;
     // packet queue and jitter buffer
     aoo::unbounded_mpsc_queue<net_packet> packetqueue_;
     jitter_buffer jitterbuffer_;
+    int32_t numbuffers_ = 0;
+    int32_t wait_min_buffers_ = 0;
     // stream messages
     stream_message_header *stream_messages_ = nullptr;
-    double stream_time_ = 0;
-    double process_time_ = 0;
+    double stream_samples_ = 0;
+    uint64_t process_samples_ = 0;
     void reset_stream_messages();
     // requests
     aoo::unbounded_mpsc_queue<request> requestqueue_;

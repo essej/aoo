@@ -39,11 +39,6 @@
 # define AOO_DEBUG_RESAMPLING 0
 #endif
 
-/** \brief debug the state of the audio buffer */
-#ifndef AOO_DEBUG_AUDIO_BUFFER
-# define AOO_DEBUG_AUDIO_BUFFER 0
-#endif
-
 /** \brief debug the state of the jitter buffer */
 #ifndef AOO_DEBUG_JITTER_BUFFER
 # define AOO_DEBUG_JITTER_BUFFER 0
