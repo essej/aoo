@@ -146,6 +146,20 @@ AooError AOO_CALL aoo::Sink::control(
         GETSOURCEARG
         return src->get_format(as<AooFormat>(ptr));
     }
+    // latency
+    case kAooCtlSetLatency:
+    {
+        CHECKARG(AooSeconds);
+        auto bufsize = std::max<AooSeconds>(0, as<AooSeconds>(ptr));
+        if (latency_.exchange(bufsize) != bufsize){
+            reset_sources();
+        }
+        break;
+    }
+    case kAooCtlGetLatency:
+        CHECKARG(AooSeconds);
+        as<AooSeconds>(ptr) = latency_.load();
+        break;
     // buffer size
     case kAooCtlSetBufferSize:
     {
@@ -1018,25 +1032,35 @@ void source_desc::reset(const Sink& s){
     update(s);
 }
 
-#define MAXHWBUFSIZE 2048
-#define MINSAMPLERATE 44100
-
 void source_desc::update(const Sink& s){
     // resize audio ring buffer
     if (format_ && format_->blockSize > 0 && format_->sampleRate > 0){
         assert(decoder_ != nullptr);
-        // recalculate buffersize from seconds to samples
-        int32_t bufsize = s.buffersize() * format_->sampleRate;
-        // number of buffers (round up!)
-        int32_t nbuffers = std::ceil((double)bufsize / (double)format_->blockSize);
+        // calculate latency
+        auto latency = s.latency();
+        int32_t latency_samples = latency * format_->sampleRate;
+        int32_t latency_buffers = std::ceil((double)latency_samples / (double)format_->blockSize);
         // minimum buffer size depends on resampling and reblocking!
         auto downsample = (double)format_->sampleRate / (double)s.samplerate();
         auto reblock = (double)s.blocksize() / (double)format_->blockSize;
-        auto minblocks = std::ceil(downsample * reblock);
-        numbuffers_ = std::max<int32_t>(nbuffers, minblocks);
-        LOG_DEBUG("AooSink: source_desc: buffersize (ms): " << (s.buffersize() * 1000)
-                  << ", samples: " << bufsize << ", nbuffers: " << numbuffers_
-                  << ", minimum: " << minblocks);
+        auto min_latency_blocks = std::ceil(downsample * reblock);
+        latency_blocks_ = std::max<int32_t>(latency_buffers, min_latency_blocks);
+        // calculate jitter buffer size
+        auto buffersize = s.buffersize();
+        if (buffersize <= 0) {
+            buffersize = latency * 2; // default
+        } else if (buffersize < latency) {
+            LOG_VERBOSE("AooSink: buffer size (" << (buffersize * 1000)
+                        << " ms) smaller than latency (" << (latency * 1000) << " ms)");
+            buffersize = latency;
+        }
+        int32_t jitter_buffersize = std::ceil(buffersize *
+            (double)format_->sampleRate / (double)format_->blockSize);
+        LOG_DEBUG("AooSink: latency (ms): " << (latency * 1000)
+                  << ", num blocks: " << latency_blocks_
+                  << ", min. blocks: " << min_latency_blocks
+                  << ", jitter buffersize: " << (buffersize * 1000)
+                  << ", num blocks: " << jitter_buffersize);
 
     #if 0
         // don't touch the event queue once constructed
@@ -1050,27 +1074,14 @@ void source_desc::update(const Sink& s){
                          format_->sampleRate, s.samplerate(),
                          format_->numChannels);
 
-        // setup jitter buffer.
-        // if we use a very small audio buffer size, we have to make sure that
-        // we have enough space in the jitter buffer in case the source uses
-        // a larger hardware buffer size and consequently sends packets in batches.
-        // we don't know the actual source samplerate and hardware buffer size,
-        // so we have to make a pessimistic guess.
-        auto hwsamples = (double)format_->sampleRate / MINSAMPLERATE * MAXHWBUFSIZE;
-        auto minbufsize = std::ceil(hwsamples / (double)format_->blockSize);
-        // use twice the number of buffers!
-        // one half is for pre-filling, the other is for jitter compensation.
         // NB: the actual latency is still numbuffers_ because that is the number
         // of buffers we wait before we start decoding, see try_decode_block().
-        auto jitterbufsize = std::max<int32_t>(numbuffers_ * 2, minbufsize);
         // LATER optimize max. block size, see remark in packet_buffer.hpp.
         auto nbytes = format_->numChannels * format_->blockSize * sizeof(double);
-        jitterbuffer_.resize(jitterbufsize, nbytes);
-        LOG_DEBUG("AooSink: jitter buffer size: " << jitterbufsize
-                  << ", min size: " << minbufsize);
+        jitterbuffer_.resize(jitter_buffersize, nbytes);
 
         wait_for_buffer_ = true;
-        wait_min_buffers_ = numbuffers_;
+        wait_blocks_ = latency_blocks_;
         lost_blocks_.store(0);
         channel_ = 0;
         underrun_ = false;
@@ -1126,7 +1137,7 @@ float source_desc::get_buffer_fill_ratio(){
         auto nsamples = format_->numChannels * format_->blockSize;
         auto available = (double)jitterbuffer_.size() +
                 (double)resampler_.size() / (double)nsamples;
-        auto ratio = available / (double)numbuffers_;
+        auto ratio = available / (double)jitterbuffer_.capacity();
         LOG_DEBUG("AooSink: fill ratio: " << ratio << ", jitter buffer: " << jitterbuffer_.size()
                   << ", resampler: " << (double)resampler_.size() / (double)nsamples);
         return std::min<float>(1.0, ratio);
@@ -1721,9 +1732,9 @@ void source_desc::handle_underrun(const Sink& s){
 
     wait_for_buffer_ = true;
 #if 0
-    wait_min_buffers_ = numbuffers_;
+    wait_blocks_ = latency_blocks_;
 #else
-    wait_min_buffers_ = 0;
+    wait_blocks_ = 0;
 #endif
 
     reset_stream_messages();
@@ -1812,6 +1823,7 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
                         d.totalsize, d.msgsize, d.nframes);
         }
     } else {
+        // add frame to existing block
         if (d.totalsize == 0){
             if (!block->dropped()){
                 // dropped block arrived out of order
@@ -1860,11 +1872,11 @@ bool source_desc::try_decode_block(const Sink& s, stream_stats& stats){
     // but also wait for a certain number of times to avoid draining
     // the buffer too early - which would cause an underrun shortly after.
     if (wait_for_buffer_) {
-        if ((wait_min_buffers_ > 0) || (jitterbuffer_.size() < numbuffers_)) {
-            if (wait_min_buffers_ > 0) {
-                wait_min_buffers_--;
+        if ((wait_blocks_ > 0) || (jitterbuffer_.size() < latency_blocks_)) {
+            if (wait_blocks_ > 0) {
+                wait_blocks_--;
             }
-            LOG_DEBUG("AooSink: prefill (remaining: " << wait_min_buffers_ << ")");
+            LOG_DEBUG("AooSink: prefill (remaining: " << wait_blocks_ << ")");
             // use nominal sample rate
             resampler_.update(format_->sampleRate, s.samplerate());
 

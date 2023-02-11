@@ -229,8 +229,8 @@ private:
     // packet queue and jitter buffer
     aoo::unbounded_mpsc_queue<net_packet> packetqueue_;
     jitter_buffer jitterbuffer_;
-    int32_t numbuffers_ = 0;
-    int32_t wait_min_buffers_ = 0;
+    int32_t wait_blocks_ = 0;
+    int32_t latency_blocks_ = 0;
     // stream messages
     stream_message_header *stream_messages_ = nullptr;
     double stream_samples_ = 0;
@@ -309,6 +309,8 @@ public:
 
     int32_t blocksize() const { return blocksize_; }
 
+    AooSeconds latency() const { return latency_.load(); }
+
     AooSeconds buffersize() const { return buffersize_.load(); }
 
     int32_t packetsize() const { return packetsize_.load(); }
@@ -351,7 +353,8 @@ private:
     time_dll dll_;
     timer timer_;
     // options
-    parameter<float> buffersize_{ AOO_SINK_BUFFER_SIZE };
+    parameter<float> latency_{ AOO_SINK_LATENCY };
+    parameter<float> buffersize_{ 0 };
     parameter<float> resend_interval_{ AOO_RESEND_INTERVAL };
     parameter<int32_t> packetsize_{ AOO_PACKET_SIZE };
     parameter<int32_t> resend_limit_{ AOO_RESEND_LIMIT };

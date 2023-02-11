@@ -118,7 +118,7 @@ struct _OpenCmd : CmdData {
     AooSampleRate sampleRate;
     int32_t blockSize;
     int32_t numChannels;
-    AooSeconds bufferSize;
+    AooSeconds latency;
 };
 
 struct OptionCmd : CmdData {

@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-#define DEFBUFSIZE 25
+#define DEFAULT_LATENCY 25
 
 /*///////////////////// aoo_receive~ ////////////////////*/
 
@@ -238,6 +238,11 @@ static void aoo_receive_metadata(t_aoo_receive *x, t_symbol *s, int argc, t_atom
     }
 }
 
+static void aoo_receive_latency(t_aoo_receive *x, t_floatarg f)
+{
+    x->x_sink->setLatency(f * 0.001);
+}
+
 static void aoo_receive_buffersize(t_aoo_receive *x, t_floatarg f)
 {
     x->x_sink->setBufferSize(f * 0.001);
@@ -334,6 +339,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
     case kAooEventSourceRemove:
     case kAooEventInviteTimeout:
     case kAooEventUninviteTimeout:
+    case kAooEventBufferOverrun:
     case kAooEventBufferUnderrun:
     case kAooEventFormatChange:
     case kAooEventStreamStart:
@@ -685,7 +691,7 @@ t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
     x_nchannels = nchannels;
 
     // arg #4: buffer size (ms)
-    float buffersize = argc > 3 ? atom_getfloat(argv + 3) : DEFBUFSIZE;
+    float latency = argc > 3 ? atom_getfloat(argv + 3) : DEFAULT_LATENCY;
 
     // make signal outlets
     for (int i = 0; i < nchannels; ++i){
@@ -703,7 +709,7 @@ t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
     x_sink->setEventHandler((AooEventHandler)aoo_receive_handle_event,
                              this, kAooEventModePoll);
 
-    x_sink->setBufferSize(buffersize * 0.001);
+    x_sink->setLatency(latency * 0.001);
 
     // finally we're ready to receive messages
     aoo_receive_port(this, x_port);
@@ -740,8 +746,10 @@ void aoo_receive_tilde_setup(void)
                     gensym("uninvite"), A_GIMME, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_metadata,
                     gensym("metadata"), A_GIMME, A_NULL);
+    class_addmethod(aoo_receive_class, (t_method)aoo_receive_latency,
+                    gensym("latency"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_buffersize,
-                    gensym("bufsize"), A_FLOAT, A_NULL);
+                    gensym("buffersize"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_dynamic_resampling,
                     gensym("dynamic_resampling"), A_FLOAT, A_NULL);
     class_addmethod(aoo_receive_class, (t_method)aoo_receive_dll_bandwidth,

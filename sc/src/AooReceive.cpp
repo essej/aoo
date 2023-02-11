@@ -4,7 +4,7 @@ static InterfaceTable* ft;
 
 /*////////////////// AooReceive ////////////////*/
 
-void AooReceive::init(int32_t port, AooId id, AooSeconds bufsize) {
+void AooReceive::init(int32_t port, AooId id, AooSeconds latency) {
     auto data = CmdData::create<OpenCmd>(world());
     if (data){
         data->port = port;
@@ -12,7 +12,7 @@ void AooReceive::init(int32_t port, AooId id, AooSeconds bufsize) {
         data->sampleRate = unit().sampleRate();
         data->blockSize = unit().bufferSize();
         data->numChannels = unit().numOutputs();
-        data->bufferSize = bufsize;
+        data->latency = latency;
 
         doCmd(data,
             [](World *world, void *data){
@@ -32,10 +32,10 @@ void AooReceive::init(int32_t port, AooId id, AooSeconds bufsize) {
                                     static_cast<AooReceive *>(user)->handleEvent(event);
                                 }, cmd->owner.get(), kAooEventModePoll);
 
-                            if (cmd->bufferSize <= 0) {
-                                sink->setBufferSize(DEFBUFSIZE);
+                            if (cmd->latency <= 0) {
+                                sink->setBufferSize(DEFAULT_LATENCY);
                             } else {
-                                sink->setBufferSize(cmd->bufferSize);
+                                sink->setBufferSize(cmd->latency);
                             }
 
                             cmd->node = std::move(node);
@@ -167,6 +167,18 @@ void AooReceive::handleEvent(const AooEvent *event){
         sendMsgRT(msg);
         break;
     }
+    case kAooEventBufferOverrun:
+    {
+        beginEvent(msg, "/buffer/overrun", event->bufferOverrrun.endpoint);
+        sendMsgRT(msg);
+        break;
+    }
+    case kAooEventBufferUnderrun:
+    {
+        beginEvent(msg, "/buffer/underrun", event->bufferUnderrun.endpoint);
+        sendMsgRT(msg);
+        break;
+    }
     case kAooEventPing:
     {
         auto& e = event->ping;
@@ -285,7 +297,20 @@ void aoo_recv_uninvite(AooReceiveUnit *unit, sc_msg_iter *args){
         });
 }
 
-void aoo_recv_bufsize(AooReceiveUnit *unit, sc_msg_iter *args){
+void aoo_recv_latency(AooReceiveUnit *unit, sc_msg_iter *args){
+    auto cmd = CmdData::create<OptionCmd>(unit->mWorld);
+    cmd->f = args->getf();
+    unit->delegate().doCmd(cmd,
+        [](World *world, void *cmdData){
+            auto data = (OptionCmd *)cmdData;
+            auto& owner = static_cast<AooReceive&>(*data->owner);
+            owner.sink()->setLatency(data->f);
+
+            return false; // done
+        });
+}
+
+void aoo_recv_buffersize(AooReceiveUnit *unit, sc_msg_iter *args){
     auto cmd = CmdData::create<OptionCmd>(unit->mWorld);
     cmd->f = args->getf();
     unit->delegate().doCmd(cmd,
@@ -371,9 +396,10 @@ void AooReceiveLoad(InterfaceTable* inTable) {
 
     AooUnitCmd(invite);
     AooUnitCmd(uninvite);
-    AooUnitCmd(bufsize);
+    AooUnitCmd(latency);
     AooUnitCmd(dll_bw);
     AooUnitCmd(packetsize);
+    AooUnitCmd(buffersize);
     AooUnitCmd(resend);
     AooUnitCmd(resend_limit);
     AooUnitCmd(resend_interval);

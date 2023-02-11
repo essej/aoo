@@ -30,6 +30,8 @@ enum AooControls
     kAooCtlReset,
     kAooCtlActivate,
     kAooCtlIsActive,
+    kAooCtlSetLatency,
+    kAooCtlGetLatency,
     kAooCtlSetBufferSize,
     kAooCtlGetBufferSize,
     kAooCtlSetDynamicResampling,

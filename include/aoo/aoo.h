@@ -56,14 +56,14 @@
  #define AOO_MEM_POOL_SIZE (1 << 20) /* 1 MB */
 #endif
 
-/** \brief default source buffer size in seconds */
+/** \brief default source send buffer size in seconds */
 #ifndef AOO_SOURCE_BUFFER_SIZE
  #define AOO_SOURCE_BUFFER_SIZE 0.025
 #endif
 
-/** \brief default sink buffer size in seconds */
-#ifndef AOO_SINK_BUFFER_SIZE
- #define AOO_SINK_BUFFER_SIZE 0.05
+/** \brief default sink latency in seconds */
+#ifndef AOO_SINK_LATENCY
+ #define AOO_SINK_LATENCY 0.05
 #endif
 
 /** \brief use binary data message format by default */
