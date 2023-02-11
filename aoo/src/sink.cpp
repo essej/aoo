@@ -1565,6 +1565,12 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
     auto nchannels = format_->numChannels;
     auto outsize = nsamples * nchannels;
     auto buf = (AooSample *)alloca(outsize * sizeof(AooSample));
+#if AOO_DEBUG_STREAM_MESSAGE
+    LOG_ALL("AooSink: process samples: " << process_samples_
+            << ", stream samples: " << stream_samples_
+            << ", diff: " << (stream_samples_ - (double)process_samples_)
+            << ", resampler size: " << resampler_.size());
+#endif
     // try to read samples from resampler
     for (;;) {
         if (resampler_.read(buf, outsize)){
@@ -1610,6 +1616,13 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
                 ep.address = this->ep.address.address();
                 ep.addrlen = this->ep.address.length();
                 ep.id = this->ep.id;
+
+            #if AOO_DEBUG_STREAM_MESSAGE
+                LOG_ALL("AooSink: dispatch stream message "
+                        << "(type: " << aoo_dataTypeToString(msg.type)
+                        << ", size: " << msg.size
+                        << ", offset: " << msg.sampleOffset << ")");
+            #endif
 
                 handler(user, &msg, &ep);
             } else {
@@ -1981,6 +1994,12 @@ bool source_desc::try_decode_block(const Sink& s, stream_stats& stats){
             msg->header.time = stream_samples_ + offset * resample;
             msg->header.type = type;
             msg->header.size = size;
+        #if AOO_DEBUG_STREAM_MESSAGE
+            LOG_ALL("AooSink: schedule stream message "
+                    << "(type: " << aoo_dataTypeToString(type)
+                    << ", size: " << size << ", offset: " << offset
+                    << ", time: " << (int64_t)msg->header.time << ")");
+        #endif
             memcpy(msg->data, msgptr, size);
             if (stream_messages_) {
                 // append to list; LATER cache list tail

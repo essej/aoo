@@ -44,6 +44,11 @@
 # define AOO_DEBUG_JITTER_BUFFER 0
 #endif
 
+/** \brief debug stream message scheduling */
+#ifndef AOO_DEBUG_STREAM_MESSAGE
+# define AOO_DEBUG_STREAM_MESSAGE 0
+#endif
+
 /*---------------- default values --------------*/
 
 /** \brief default size of the RT memory pool */

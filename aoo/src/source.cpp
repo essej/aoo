@@ -570,8 +570,15 @@ AooError AOO_CALL aoo::Source::addStreamMessage(const AooStreamMessage& message)
         return kAooErrorIdle;
     }
 #endif
-    auto offset = process_samples_ + message.sampleOffset;
-    message_queue_.push(offset, message.type, (char *)message.data, message.size);
+    auto time = process_samples_ + message.sampleOffset;
+    message_queue_.push(time, message.type, (char *)message.data, message.size);
+#if AOO_DEBUG_STREAM_MESSAGE
+    LOG_ALL("AooSource: add stream message "
+            << "(type: " << aoo_dataTypeToString(message.type)
+            << ", size: " << message.size
+            << ", offset: " << message.sampleOffset
+            << ", time: " << time<< ")");
+#endif
     return kAooErrorNone;
 }
 
@@ -1617,6 +1624,12 @@ void Source::send_data(const sendfn& fn){
             } else
         #endif
             message_prio_queue_.emplace(msg.time, msg.type, msg.data, msg.size);
+        #if AOO_DEBUG_STREAM_MESSAGE
+            LOG_ALL("AooSource: schedule stream message "
+                    << "(type: " << aoo_dataTypeToString(msg.type)
+                    << ", size: " << msg.size
+                    << ", time: " << msg.time << ")");
+        #endif
         });
 
         while (!message_prio_queue_.empty()) {
@@ -1641,6 +1654,12 @@ void Source::send_data(const sendfn& fn){
                 if (remainder > 0) {
                     sendbuffer_.resize(sendbuffer_.size() + 4 - remainder);
                 }
+            #if AOO_DEBUG_STREAM_MESSAGE
+                LOG_ALL("AooSource: send stream message "
+                        << "(type: " << aoo_dataTypeToString(msg.type)
+                        << ", size: " << msg.size
+                        << ", offset: " << offset << ")");
+            #endif
                 msg_count++;
                 message_prio_queue_.pop();
             } else {

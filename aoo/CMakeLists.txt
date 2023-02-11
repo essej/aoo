@@ -40,6 +40,8 @@ option(AOO_DEBUG_RESAMPLER "debug resampler" OFF)
 
 option(AOO_DEBUG_JITTER_BUFFER "debug jitter buffer" OFF)
 
+option(AOO_DEBUG_STREAM_MESSAGE "debug jitter buffer" OFF)
+
 option(AOO_DEBUG_RELAY "debug relay" OFF)
 
 option(AOO_DEBUG_CLIENT_MESSAGE "debug client message" OFF)
