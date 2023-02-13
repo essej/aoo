@@ -54,6 +54,7 @@ AooServer::AooServer(World *world, int port, const char *password)
     : world_(world), port_(port)
 {
     // setup UDP server
+    // TODO: increase socket receive buffer for relay? Use threaded receive?
     udpserver_.start(port,
                      [this](auto&&... args) { handleUdpReceive(args...); });
 

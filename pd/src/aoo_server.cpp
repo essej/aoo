@@ -241,6 +241,7 @@ static void aoo_server_port(t_aoo_server *x, t_floatarg f)
     if (port > 0) {
         try {
             // setup UDP server
+            // TODO: increase socket receive buffer for relay? Use threaded receive?
             x->x_udpserver.start(port,
                 [x](auto&&... args) { x->handle_udp_receive(args...); });
 
