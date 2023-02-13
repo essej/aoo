@@ -163,9 +163,9 @@ AooError AOO_CALL aoo::Sink::control(
     // get buffer fill ratio
     case kAooCtlGetBufferFillRatio:
     {
-        CHECKARG(float);
+        CHECKARG(double);
         GETSOURCEARG
-        as<float>(ptr) = src->get_buffer_fill_ratio();
+        as<double>(ptr) = src->get_buffer_fill_ratio();
         break;
     }
     // timer check
