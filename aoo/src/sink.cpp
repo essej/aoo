@@ -1478,7 +1478,7 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
     if (!lock.owns_lock()) {
         if (streamstate_ == kAooStreamStateActive) {
             add_xrun(1);
-            LOG_VERBOSE("AooSink: source_desc::process() would block");
+            LOG_DEBUG("AooSink: source_desc::process() would block");
         }
         // how to report this to the client?
         return false;

@@ -493,6 +493,9 @@ AooError AOO_CALL aoo::Source::handleMessage(
     }
 }
 
+// find out if sendto() blocks
+#define DEBUG_SEND_TIME 0
+
 AOO_API AooError AOO_CALL AooSource_send(
         AooSource *src, AooSendFunc fn, void *user) {
     return src->send(fn, user);
@@ -514,9 +517,27 @@ AooError AOO_CALL aoo::Source::send(AooSendFunc fn, void *user) {
 
     send_start(reply);
 
+#if DEBUG_SEND_TIME
+    auto t1 = aoo::time_tag::now();
+#endif
     send_data(reply);
+#if DEBUG_SEND_TIME
+    auto t2 = aoo::time_tag::now();
+    auto delta1 = (t2 - t1).to_seconds() * 1000.0;
+    if (delta1 > 1.0) {
+        LOG_DEBUG("AooSource: send_data took " << delta1 << " ms");
+    }
 
+    auto t3 = aoo::time_tag::now();
+#endif
     resend_data(reply);
+#if DEBUG_SEND_TIME
+    auto t4 = aoo::time_tag::now();
+    auto delta2 = (t4 - t3).to_seconds() * 1000.0;
+    if (delta2 > 1.0) {
+        LOG_DEBUG("AooSource: resend_data took " << delta2 << " ms");
+    }
+#endif
 
     send_ping(reply);
 
@@ -583,7 +604,7 @@ AooError AOO_CALL aoo::Source::process(
         // returns early if we're not already playing.
         unique_lock lock(update_mutex_, sync::try_to_lock); // writer lock!
         if (!lock.owns_lock()){
-            LOG_VERBOSE("AooSource: process would block");
+            LOG_DEBUG("AooSource: process would block");
             // no need to call xrun()!
             return kAooErrorIdle; // ?
         }
@@ -658,7 +679,7 @@ AooError AOO_CALL aoo::Source::process(
     // e.g. changing the buffer size.
     shared_lock lock(update_mutex_, sync::try_to_lock); // reader lock!
     if (!lock.owns_lock()){
-        LOG_VERBOSE("AooSource: process would block");
+        LOG_DEBUG("AooSource: process would block");
         add_xrun(1);
         return kAooErrorIdle; // ?
     }
