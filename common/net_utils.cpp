@@ -721,25 +721,28 @@ int socket_receive(int socket, void *buf, int size,
     }
 }
 
+#define DEBUG_SOCKET_BUFFER 0
+
 int socket_set_sendbufsize(int socket, int bufsize)
 {
     int val = 0;
     socklen_t len;
     len = sizeof(val);
     getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char *)&val, &len);
-#if 0
+#if DEBUG_SOCKET_BUFFER
     fprintf(stderr, "old recvbufsize: %d\n", val);
     fflush(stderr);
 #endif
+    // don't set a smaller buffer size than the default
     if (val > bufsize){
         return 0;
     }
     val = bufsize;
     int result = setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char *)&val, sizeof(val));
-#if 0
+#if DEBUG_SOCKET_BUFFER
     if (result == 0){
         len = sizeof(val);
-        getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (void *)&val, &len);
+        getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char *)&val, &len);
         fprintf(stderr, "new recvbufsize: %d\n", val);
         fflush(stderr);
     }
@@ -753,19 +756,20 @@ int socket_set_recvbufsize(int socket, int bufsize)
     socklen_t len;
     len = sizeof(val);
     getsockopt(socket, SOL_SOCKET, SO_RCVBUF, (char *)&val, &len);
-#if 0
+#if DEBUG_SOCKET_BUFFER
     fprintf(stderr, "old recvbufsize: %d\n", val);
     fflush(stderr);
 #endif
+    // don't set a smaller buffer size than the default
     if (val > bufsize){
         return 0;
     }
     val = bufsize;
     int result = setsockopt(socket, SOL_SOCKET, SO_RCVBUF, (char *)&val, sizeof(val));
-#if 0
+#if DEBUG_SOCKET_BUFFER
     if (result == 0){
         len = sizeof(val);
-        getsockopt(socket, SOL_SOCKET, SO_RCVBUF, (void *)&val, &len);
+        getsockopt(socket, SOL_SOCKET, SO_RCVBUF, (char *)&val, &len);
         fprintf(stderr, "new recvbufsize: %d\n", val);
         fflush(stderr);
     }
