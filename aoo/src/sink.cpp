@@ -1036,15 +1036,15 @@ void source_desc::update(const Sink& s){
     // resize audio ring buffer
     if (format_ && format_->blockSize > 0 && format_->sampleRate > 0){
         assert(decoder_ != nullptr);
+        auto convert = (double)format_->sampleRate / (double)format_->blockSize;
         // calculate latency
         auto latency = s.latency();
-        int32_t latency_samples = latency * format_->sampleRate;
-        int32_t latency_buffers = std::ceil((double)latency_samples / (double)format_->blockSize);
+        int32_t latency_blocks = std::ceil(latency * convert);
         // minimum buffer size depends on resampling and reblocking!
         auto downsample = (double)format_->sampleRate / (double)s.samplerate();
         auto reblock = (double)s.blocksize() / (double)format_->blockSize;
         auto min_latency_blocks = std::ceil(downsample * reblock);
-        latency_blocks_ = std::max<int32_t>(latency_buffers, min_latency_blocks);
+        latency_blocks_ = std::max<int32_t>(latency_blocks, min_latency_blocks);
         // calculate jitter buffer size
         auto buffersize = s.buffersize();
         if (buffersize <= 0) {
@@ -1054,8 +1054,8 @@ void source_desc::update(const Sink& s){
                         << " ms) smaller than latency (" << (latency * 1000) << " ms)");
             buffersize = latency;
         }
-        int32_t jitter_buffersize = std::ceil(buffersize *
-            (double)format_->sampleRate / (double)format_->blockSize);
+        auto jitter_buffersize = std::max<int32_t>(latency_blocks_,
+                                                   std::ceil(buffersize * convert));
         LOG_DEBUG("AooSink: latency (ms): " << (latency * 1000)
                   << ", num blocks: " << latency_blocks_
                   << ", min. blocks: " << min_latency_blocks
