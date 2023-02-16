@@ -1255,8 +1255,6 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
     // always update!
     update(s);
 
-    state_.store(source_state::start);
-
     lock.unlock();
 
     // send "add" event *before* setting the state to avoid
@@ -1273,6 +1271,8 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
         auto e = make_event<format_change_event>(ep, fmt.header);
         send_event(s, std::move(e), kAooThreadLevelNetwork);
     }
+
+    state_.store(source_state::start);
 
     return kAooOk;
 }
