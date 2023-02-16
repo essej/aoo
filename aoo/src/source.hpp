@@ -334,7 +334,7 @@ class Source final : public AooSource, rt_memory_pool_client {
 
     AooError set_format(AooFormat& fmt);
 
-    AooError get_format(AooFormat& fmt);
+    AooError get_format(AooFormat& fmt, size_t size);
 
     sink_desc * find_sink(const ip_address& addr, AooId id);
 

@@ -195,7 +195,7 @@ AooError AOO_CALL aoo::Source::control(
         return set_format(as<AooFormat>(ptr));
     case kAooCtlGetFormat:
         assert(size >= sizeof(AooFormat));
-        return get_format(as<AooFormat>(ptr));
+        return get_format(as<AooFormat>(ptr), size);
     // set/get channel onset
     case kAooCtlSetChannelOnset:
     {
@@ -1106,10 +1106,10 @@ AooError Source::set_format(AooFormat &f){
     return kAooOk;
 }
 
-AooError Source::get_format(AooFormat &fmt){
+AooError Source::get_format(AooFormat &fmt, size_t size){
     shared_lock lock(update_mutex_); // read lock!
     if (format_){
-        if (fmt.size >= format_->size){
+        if (size >= format_->size){
             memcpy(&fmt, format_.get(), format_->size);
             return kAooOk;
         } else {

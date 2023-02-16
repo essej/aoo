@@ -128,7 +128,7 @@ AOO_INLINE AooError AooSource_setFormat(AooSource *source, AooFormat *format)
 }
 
 /** \copydoc AooSource::getFormat() */
-AOO_INLINE AooError AooSource_getFormat(AooSource *source, AooFormat *format)
+AOO_INLINE AooError AooSource_getFormat(AooSource *source, AooFormatStorage *format)
 {
     return AooSource_control(source, kAooCtlGetFormat, 0, AOO_ARG(*format));
 }

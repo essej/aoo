@@ -217,10 +217,7 @@ public:
 
     /** \brief Get the stream format
      *
-     * \param[out] format Pointer to an instance of `AooFormatStorage` or a similar
-     * struct that is large enough to hold any codec format.
-     * The `size` member in the format header should contain the storage size;
-     * on success it is updated to the actual format size
+     * \param[out] format Pointer to an instance of `AooFormatStorage`
      */
     AooError getFormat(AooFormatStorage& format) {
         return control(kAooCtlGetFormat, 0, AOO_ARG(format));
