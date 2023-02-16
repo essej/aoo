@@ -1758,24 +1758,11 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
         return false;
     }
 
-    // check for large gap between incoming block and most recent block
-    // (either network problem or stream has temporarily stopped.)
     auto newest = jitterbuffer_.last_pushed();
-    auto numblocks = newest >= 0 ? d.sequence - newest : 1;
-    if (numblocks > jitterbuffer_.capacity()){
-        // jitter buffer should be empty...
-        if (!jitterbuffer_.empty()){
-            LOG_VERBOSE("AooSink: transmission gap, but jitter buffer is not empty");
-            stats.lost += jitterbuffer_.size();
-            jitterbuffer_.clear();
-            newest = -1; // !
-            numblocks = 1;
-        }
-        stats.lost += numblocks - 1; // report gap
-    }
 
     auto block = jitterbuffer_.find(d.sequence);
     if (!block){
+        // add new block
     #if 1
         // can this ever happen!?
         if (d.sequence <= newest){
@@ -1784,8 +1771,9 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
             return false;
         }
     #endif
-
         if (newest >= 0){
+            auto numblocks = newest >= 0 ? d.sequence - newest : 1;
+
             // notify for gap
             if (numblocks > 1){
                 LOG_VERBOSE("AooSink: skipped " << (numblocks - 1) << " blocks");
@@ -1796,7 +1784,6 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
             auto space = jitterbuffer_.capacity() - jitterbuffer_.size();
             if (numblocks > space){
                 LOG_VERBOSE("AooSink: jitter buffer overrun!");
-            #if 1
                 // reset the buffer to latency_blocks_, considering both the stored blocks
                 // and the incoming block(s)
                 auto excess_blocks = numblocks + jitterbuffer_.size() - latency_blocks_;
@@ -1822,14 +1809,6 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
                 // TODO: should we report these as lost blocks? or only the incomplete ones?
                 stats.lost += excess_blocks;
               #endif
-            #else
-                // just clear the jitter buffer and let it underrun
-              #if 0
-                // TODO: should we report these as lost blocks? or only the incomplete ones?
-                stats.lost += jitterbuffer_.size();
-              #endif
-                jitterbuffer_.clear();
-            #endif
                 auto e = make_event<source_event>(kAooEventBufferOverrun, ep);
                 send_event(s, std::move(e), kAooThreadLevelAudio);
             }
