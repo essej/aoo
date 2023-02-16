@@ -748,6 +748,7 @@ AooError AOO_CALL aoo::Source::process(
             add_xrun(1);
             // don't return kAooErrorIdle, otherwise the send thread
             // wouldn't drain the buffer.
+            // TODO: send event?
             return kAooErrorUnknown;
         }
     } else {

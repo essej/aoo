@@ -50,6 +50,8 @@ enum AooEventTypes
     kAooEventInviteTimeout,
     /** sink: uninvitation timed out */
     kAooEventUninviteTimeout,
+    /** sink: buffer overrun */
+    kAooEventBufferOverrun,
     /** sink: buffer underrun */
     kAooEventBufferUnderrun,
     /** sink: blocks have been lost */
@@ -176,6 +178,9 @@ typedef AooEventEndpoint AooEventSinkAdd;
 
 /** \brief a sink has been removed */
 typedef AooEventEndpoint AooEventSinkRemove;
+
+/** \brief buffer overrun occurred */
+typedef AooEventEndpoint AooEventBufferOverrun;
 
 /** \brief buffer underrun occurred */
 typedef AooEventEndpoint AooEventBufferUnderrun;
@@ -510,6 +515,7 @@ union AooEvent
     AooEventFormatChange formatChange;
     AooEventInviteTimeout inviteTimeout;
     AooEventUninviteTimeout uninviteTimeout;
+    AooEventBufferOverrun bufferOverrrun;
     AooEventBufferUnderrun bufferUnderrun;
     AooEventBlockLost blockLost;
     AooEventBlockReordered blockReordered;

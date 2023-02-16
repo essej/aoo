@@ -1668,22 +1668,24 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
     // send events
 
     if (stats.lost > 0){
-        // push packet loss event
+        // add to lost blocks for packet loss reporting
+        lost_blocks_.fetch_add(stats.lost, std::memory_order_relaxed);
+        // push block loss event
         auto e = make_event<block_lost_event>(ep, stats.lost);
         send_event(s, std::move(e), kAooThreadLevelAudio);
     }
     if (stats.reordered > 0){
-        // push packet reorder event
+        // push block reorder event
         auto e = make_event<block_reordered_event>(ep, stats.reordered);
         send_event(s, std::move(e), kAooThreadLevelAudio);
     }
     if (stats.resent > 0){
-        // push packet resend event
+        // push block resent event
         auto e = make_event<block_resent_event>(ep, stats.resent);
         send_event(s, std::move(e), kAooThreadLevelAudio);
     }
     if (stats.dropped > 0){
-        // push packet resend event
+        // push block dropped event
         auto e = make_event<block_dropped_event>(ep, stats.dropped);
         send_event(s, std::move(e), kAooThreadLevelAudio);
     }
@@ -1709,11 +1711,6 @@ int32_t source_desc::poll_events(Sink& s, AooEventHandler fn, void *user){
         count++;
     }
     return count;
-}
-
-void source_desc::add_lost(stream_stats& stats, int32_t n) {
-    stats.lost += n;
-    lost_blocks_.fetch_add(n, std::memory_order_relaxed);
 }
 
 #define SILENT_PREFILL 0
@@ -1764,17 +1761,17 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
     // check for large gap between incoming block and most recent block
     // (either network problem or stream has temporarily stopped.)
     auto newest = jitterbuffer_.last_pushed();
-    auto diff = d.sequence - newest;
-    if (newest >= 0 && diff > jitterbuffer_.capacity()){
-        // jitter buffer should be empty.
+    auto numblocks = newest >= 0 ? d.sequence - newest : 1;
+    if (numblocks > jitterbuffer_.capacity()){
+        // jitter buffer should be empty...
         if (!jitterbuffer_.empty()){
-            // For now, just clear the jitter buffer, causing a buffer
-            // underrun. This will also reset process and stream timers.
             LOG_VERBOSE("AooSink: transmission gap, but jitter buffer is not empty");
+            stats.lost += jitterbuffer_.size();
             jitterbuffer_.clear();
             newest = -1; // !
+            numblocks = 1;
         }
-        add_lost(stats, diff - 1); // report gap
+        stats.lost += numblocks - 1; // report gap
     }
 
     auto block = jitterbuffer_.find(d.sequence);
@@ -1790,24 +1787,55 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
 
         if (newest >= 0){
             // notify for gap
-            if (diff > 1){
-                LOG_VERBOSE("AooSink: skipped " << (diff - 1) << " blocks");
+            if (numblocks > 1){
+                LOG_VERBOSE("AooSink: skipped " << (numblocks - 1) << " blocks");
             }
 
-            // check for jitter buffer overrun
-            // can happen if the sink blocks for a longer time
-            // or with extreme network jitter (packets have piled up)
+            // check for jitter buffer overrun.
+            // can happen if the latency resp. buffer size is too small.
             auto space = jitterbuffer_.capacity() - jitterbuffer_.size();
-            if (diff > space){
+            if (numblocks > space){
                 LOG_VERBOSE("AooSink: jitter buffer overrun!");
-                // For now, just clear the jitter buffer, causing a buffer
-                // underrun. This will also reset process and stream timers.
-                jitterbuffer_.clear();
-            } else {
-                // fill gaps with empty blocks
-                for (int32_t i = newest + 1; i < d.sequence; ++i){
-                    jitterbuffer_.push(i)->init(i, false);
+            #if 1
+                // reset the buffer to latency_blocks_, considering both the stored blocks
+                // and the incoming block(s)
+                auto excess_blocks = numblocks + jitterbuffer_.size() - latency_blocks_;
+                assert(excess_blocks > 0);
+                // *first* discard stored blocks
+                // remove one extra block to make space for new block
+                auto discard_stored = std::min(jitterbuffer_.size(), latency_blocks_ + 1);
+                if (discard_stored > 0) {
+                    LOG_DEBUG("AooSink: discard " << discard_stored << " stored blocks");
+                    // TODO: consider popping blocks from the back of the queue
+                    for (int32_t i = 0; i < discard_stored; ++i) {
+                        jitterbuffer_.pop();
+                    }
                 }
+                // then discard incoming blocks (except for the most recent one)
+                auto discard_incoming = std::min(numblocks - 1, excess_blocks - discard_stored);
+                if (discard_incoming > 0) {
+                    LOG_DEBUG("AooSink: discard " << discard_incoming << " incoming blocks");
+                    newest += discard_incoming;
+                    jitterbuffer_.reset_head(); // !
+                }
+              #if 0
+                // TODO: should we report these as lost blocks? or only the incomplete ones?
+                stats.lost += excess_blocks;
+              #endif
+            #else
+                // just clear the jitter buffer and let it underrun
+              #if 0
+                // TODO: should we report these as lost blocks? or only the incomplete ones?
+                stats.lost += jitterbuffer_.size();
+              #endif
+                jitterbuffer_.clear();
+            #endif
+                auto e = make_event<source_event>(kAooEventBufferOverrun, ep);
+                send_event(s, std::move(e), kAooThreadLevelAudio);
+            }
+            // fill gaps with empty blocks
+            for (int32_t i = newest + 1; i < d.sequence; ++i){
+                jitterbuffer_.push(i)->init(i, false);
             }
         }
 
@@ -1951,7 +1979,7 @@ bool source_desc::try_decode_block(const Sink& s, stream_stats& stats){
         size = msgsize = 0;
         sr = format_->sampleRate; // nominal samplerate
         channel = -1; // current channel
-        add_lost(stats, 1);
+        stats.lost++;
         LOG_VERBOSE("AooSink: dropped block " << b.sequence);
         LOG_DEBUG("AooSink: remaining blocks: " << jitterbuffer_.size() - 1);
     }

@@ -174,8 +174,6 @@ private:
 
     void update(const Sink& s);
 
-    void add_lost(stream_stats& stats, int32_t n);
-
     void handle_underrun(const Sink& s);
 
     bool add_packet(const Sink& s, const net_packet& d,

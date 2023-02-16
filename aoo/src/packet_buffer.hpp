@@ -181,12 +181,19 @@ public:
     }
 
     received_block* find(int32_t seq);
+
     received_block* push(int32_t seq);
+
     void pop();
+
+    void reset_head() {
+        last_pushed_ = -1;
+    }
 
     int32_t last_pushed() const {
         return last_pushed_;
     }
+
     int32_t last_popped() const {
         return last_popped_;
     }

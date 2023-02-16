@@ -396,6 +396,12 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
             break;
         }
         //---------------------- source events ------------------------------//
+        case kAooEventBufferOverrun:
+        {
+            SETSYMBOL(msg + 3, gensym("overrun"));
+            outlet_anything(x->x_msgout, gensym("event"), 4, msg);
+            break;
+        }
         case kAooEventBufferUnderrun:
         {
             SETSYMBOL(msg + 3, gensym("underrun"));

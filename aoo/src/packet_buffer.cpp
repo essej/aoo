@@ -301,6 +301,7 @@ received_block* jitter_buffer::push(int32_t seq){
         head_ = 0;
     }
     size_++;
+    assert((last_pushed_ == -1) || ((seq - last_pushed_) == 1));
     last_pushed_ = seq;
     return &data_[old];
 }
