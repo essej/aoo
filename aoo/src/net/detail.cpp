@@ -64,29 +64,29 @@ AooError parse_pattern(const AooByte *msg, int32_t n, AooMsgType& type, int32_t&
             && !memcmp(msg, kAooMsgDomain, kAooMsgDomainLen))
     {
         count += kAooMsgDomainLen;
-        if (n >= (count + kAooNetMsgServerLen)
-            && !memcmp(msg + count, kAooNetMsgServer, kAooNetMsgServerLen))
+        if (n >= (count + kAooMsgServerLen)
+            && !memcmp(msg + count, kAooMsgServer, kAooMsgServerLen))
         {
             type = kAooTypeServer;
-            count += kAooNetMsgServerLen;
+            count += kAooMsgServerLen;
         }
-        else if (n >= (count + kAooNetMsgClientLen)
-            && !memcmp(msg + count, kAooNetMsgClient, kAooNetMsgClientLen))
+        else if (n >= (count + kAooMsgClientLen)
+            && !memcmp(msg + count, kAooMsgClient, kAooMsgClientLen))
         {
             type = kAooTypeClient;
-            count += kAooNetMsgClientLen;
+            count += kAooMsgClientLen;
         }
-        else if (n >= (count + kAooNetMsgPeerLen)
-            && !memcmp(msg + count, kAooNetMsgPeer, kAooNetMsgPeerLen))
+        else if (n >= (count + kAooMsgPeerLen)
+            && !memcmp(msg + count, kAooMsgPeer, kAooMsgPeerLen))
         {
             type = kAooTypePeer;
-            count += kAooNetMsgPeerLen;
+            count += kAooMsgPeerLen;
         }
-        else if (n >= (count + kAooNetMsgRelayLen)
-            && !memcmp(msg + count, kAooNetMsgRelay, kAooNetMsgRelayLen))
+        else if (n >= (count + kAooMsgRelayLen)
+            && !memcmp(msg + count, kAooMsgRelay, kAooMsgRelayLen))
         {
             type = kAooTypeRelay;
-            count += kAooNetMsgRelayLen;
+            count += kAooMsgRelayLen;
         } else {
             return kAooErrorUnknown;
         }
@@ -120,7 +120,7 @@ AooSize write_relay_message(AooByte *buffer, AooSize bufsize,
         LOG_DEBUG("write OSC relay message " << msg);
     #endif
         osc::OutboundPacketStream msg2((char *)buffer, bufsize);
-        msg2 << osc::BeginMessage(kAooMsgDomain kAooNetMsgRelay)
+        msg2 << osc::BeginMessage(kAooMsgDomain kAooMsgRelay)
              << addr << osc::Blob(msg, msgsize)
              << osc::EndMessage;
         return msg2.Size();

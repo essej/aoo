@@ -231,7 +231,7 @@ endif()
 # networking support
 option(AOO_NET "Build with networking support" ON)
 message(STATUS "Use AOO NET: ${AOO_NET}")
-add_definitions(-DUSE_AOO_NET=$<BOOL:${AOO_NET}>)
+add_definitions(-DAOO_NET=$<BOOL:${AOO_NET}>)
 
 # platform specific linker flags
 if (LINUX)

@@ -128,7 +128,7 @@ private:
     aoo::metadata md_;
     ip_host relay_;
     bool persistent_;
-    bool user_auto_create_ = AOO_NET_USER_AUTO_CREATE; // TODO
+    bool user_auto_create_ = AOO_USER_AUTO_CREATE; // TODO
     user_list users_;
     AooId next_user_id_{0};
 };
@@ -142,7 +142,7 @@ inline std::ostream& operator<<(std::ostream& os, const group& g) {
 
 class client_endpoint {
 public:
-    client_endpoint(int sockfd, AooId id, AooNetReplyFunc replyfn, void *context)
+    client_endpoint(int sockfd, AooId id, AooServerReplyFunc replyfn, void *context)
         : id_(id), sockfd_(sockfd), replyfn_(replyfn), context_(context) {}
 
     ~client_endpoint() {}
@@ -170,7 +170,7 @@ public:
 
     void send_message(const osc::OutboundPacketStream& msg) const;
 
-    void send_error(Server& server, AooId token, AooNetRequestType type,
+    void send_error(Server& server, AooId token, AooRequestType type,
                     AooError result, int32_t errcode, const char *errmsg);
 
     void send_notification(Server& server, const AooData& data) const;
@@ -196,7 +196,7 @@ public:
 private:
     AooId id_;
     int sockfd_; // LATER use this to get information about the client (e.g. IP protocol)
-    AooNetReplyFunc replyfn_;
+    AooServerReplyFunc replyfn_;
     void *context_;
     osc_stream_receiver receiver_;
     ip_address_list public_addresses_;

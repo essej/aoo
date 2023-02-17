@@ -262,7 +262,7 @@ void t_aoo_client::send_message(int argc, t_atom *argv, AooId group, AooId user)
     }
     AooData data { type, buf, (AooSize)argc };
 
-    AooFlag flags = x_reliable ? kAooNetMessageReliable : 0;
+    AooFlag flags = x_reliable ? kAooMessageReliable : 0;
     x_node->client()->sendMessage(group, user, data, time.value(), flags);
 
     x_node->notify();
@@ -692,8 +692,8 @@ struct t_error_response {
     std::string msg;
 };
 
-static void AOO_CALL connect_cb(t_aoo_client *x, const AooNetRequestConnect *request,
-                                AooError result, const AooNetResponseConnect *response) {
+static void AOO_CALL connect_cb(t_aoo_client *x, const AooRequestConnect *request,
+                                AooError result, const AooResponseConnect *response) {
     if (result == kAooOk) {
         x->push_reply([x](){
             // remove all peers and groups (to be sure)
@@ -704,7 +704,7 @@ static void AOO_CALL connect_cb(t_aoo_client *x, const AooNetRequestConnect *req
             outlet_float(x->x_stateout, 1); // connected
         });
     } else {
-        auto e = (const AooNetResponseError *)response;
+        auto e = (const AooResponseError *)response;
         t_error_response error { e->errorCode, e->errorMessage };
 
         x->push_reply([x, error=std::move(error)](){
@@ -734,7 +734,7 @@ static void aoo_client_connect(t_aoo_client *x, t_symbol *s, int argc, t_atom *a
         const char *pwd = argc > 2 ? atom_getsymbol(argv + 2)->s_name : nullptr;
 
         x->x_node->client()->connect(host->s_name, port, pwd, nullptr,
-                                     (AooNetCallback)connect_cb, x);
+                                     (AooResponseHandler)connect_cb, x);
     }
 }
 
@@ -756,8 +756,8 @@ static void aoo_client_disconnect(t_aoo_client *x)
     outlet_float(x->x_stateout, 0);
 }
 
-static void AOO_CALL group_join_cb(t_aoo_client *x, const AooNetRequestGroupJoin *request,
-                                   AooError result, const AooNetResponseGroupJoin *response){
+static void AOO_CALL group_join_cb(t_aoo_client *x, const AooRequestGroupJoin *request,
+                                   AooError result, const AooResponseGroupJoin *response){
     if (result == kAooOk) {
         x->push_reply([x, group=std::string(request->groupName), id=response->groupId](){
             // add group
@@ -774,7 +774,7 @@ static void AOO_CALL group_join_cb(t_aoo_client *x, const AooNetRequestGroupJoin
             outlet_anything(x->x_msgout, gensym("group_join"), 2, msg);
         });
     } else {
-        auto e = (const AooNetResponseError *)response;
+        auto e = (const AooResponseError *)response;
         t_error_response error { e->errorCode, e->errorMessage };
 
         x->push_reply([x, group=std::string(request->groupName), error=std::move(error)](){
@@ -806,12 +806,12 @@ static void aoo_client_group_join(t_aoo_client *x, t_symbol *s, int argc, t_atom
         auto user_pwd = argc > 3 ? atom_getsymbol(argv + 3)->s_name : nullptr;
 
         x->x_node->client()->joinGroup(group, group_pwd, nullptr, user, user_pwd, nullptr, nullptr,
-                                       (AooNetCallback)group_join_cb, x);
+                                       (AooResponseHandler)group_join_cb, x);
     }
 }
 
-static void AOO_CALL group_leave_cb(t_aoo_client *x, const AooNetRequestGroupLeave *request,
-                                    AooError result, const AooNetResponseError *e) {
+static void AOO_CALL group_leave_cb(t_aoo_client *x, const AooRequestGroupLeave *request,
+                                    AooError result, const AooResponseError *e) {
     if (result == kAooOk){
         x->push_reply([x, id=request->group]() {
             // remove group
@@ -870,7 +870,7 @@ static void aoo_client_group_leave(t_aoo_client *x, t_symbol *group)
     if (x->x_node) {
         auto g = x->find_group(group);
         if (g) {
-            x->x_node->client()->leaveGroup(g->id, (AooNetCallback)group_leave_cb, x);
+            x->x_node->client()->leaveGroup(g->id, (AooResponseHandler)group_leave_cb, x);
         } else {
             pd_error(x, "%s: can't leave group %s: not a group member",
                      classname(x), group->s_name);

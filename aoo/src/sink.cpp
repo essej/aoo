@@ -282,7 +282,7 @@ AooError AOO_CALL aoo::Sink::control(
         CHECKARG(AooSeconds);
         as<AooSeconds>(ptr) = invite_timeout_.load();
         break;
-#if USE_AOO_NET
+#if AOO_NET
     case kAooCtlSetClient:
         client_ = reinterpret_cast<AooClient *>(index);
         break;
@@ -696,7 +696,7 @@ aoo::source_desc * Sink::get_source_arg(intptr_t index){
 
 source_desc * Sink::add_source(const ip_address& addr, AooId id){
     // add new source
-#if USE_AOO_NET
+#if AOO_NET
     ip_address relay;
     // check if the peer needs to be relayed
     if (client_){
@@ -951,7 +951,7 @@ AooError Sink::handle_ping_message(const osc::ReceivedMessage& msg,
 
 //----------------------- source_desc --------------------------//
 
-#if USE_AOO_NET
+#if AOO_NET
 source_desc::source_desc(const ip_address& addr, AooId id,
                          const ip_address& relay, double time)
     : ep(addr, id, relay), last_packet_time_(time)

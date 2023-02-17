@@ -1,5 +1,5 @@
 #include "aoo/aoo.h"
-#if USE_AOO_NET
+#if AOO_NET
 # include "aoo/aoo_net.h"
 # include "common/net_utils.hpp"
 #endif
@@ -281,27 +281,27 @@ AooError AOO_CALL aoo_parsePattern(
             *type = kAooTypeSink;
             count += kAooMsgSinkLen;
         } else {
-        #if USE_AOO_NET
-            if (size >= (count + kAooNetMsgClientLen)
-                && !memcmp(msg + count, kAooNetMsgClient, kAooNetMsgClientLen))
+        #if AOO_NET
+            if (size >= (count + kAooMsgClientLen)
+                && !memcmp(msg + count, kAooMsgClient, kAooMsgClientLen))
             {
                 *type = kAooTypeClient;
-                count += kAooNetMsgClientLen;
-            } else if (size >= (count + kAooNetMsgServerLen)
-                && !memcmp(msg + count, kAooNetMsgServer, kAooNetMsgServerLen))
+                count += kAooMsgClientLen;
+            } else if (size >= (count + kAooMsgServerLen)
+                && !memcmp(msg + count, kAooMsgServer, kAooMsgServerLen))
             {
                 *type = kAooTypeServer;
-                count += kAooNetMsgServerLen;
-            } else if (size >= (count + kAooNetMsgPeerLen)
-                && !memcmp(msg + count, kAooNetMsgPeer, kAooNetMsgPeerLen))
+                count += kAooMsgServerLen;
+            } else if (size >= (count + kAooMsgPeerLen)
+                && !memcmp(msg + count, kAooMsgPeer, kAooMsgPeerLen))
             {
                 *type = kAooTypePeer;
-                count += kAooNetMsgPeerLen;
-            } else if (size >= (count + kAooNetMsgRelayLen)
-                && !memcmp(msg + count, kAooNetMsgRelay, kAooNetMsgRelayLen))
+                count += kAooMsgPeerLen;
+            } else if (size >= (count + kAooMsgRelayLen)
+                && !memcmp(msg + count, kAooMsgRelay, kAooMsgRelayLen))
             {
                 *type = kAooTypeRelay;
-                count += kAooNetMsgRelayLen;
+                count += kAooMsgRelayLen;
             } else {
                 return kAooErrorUnknown;
             }
@@ -309,7 +309,7 @@ AooError AOO_CALL aoo_parsePattern(
             if (offset){
                 *offset = count;
             }
-        #endif // USE_AOO_NET
+        #endif // AOO_NET
 
             return kAooOk;
         }
@@ -588,7 +588,7 @@ void aoo_opusUnload();
 AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
     static bool initialized = false;
     if (!initialized) {
-    #if USE_AOO_NET
+    #if AOO_NET
         aoo::socket_init();
     #endif
         // optional settings

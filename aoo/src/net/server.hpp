@@ -39,7 +39,7 @@ public:
             AooSendFunc replyFn, void *user) override;
 
     AooError AOO_CALL addClient(
-            AooNetReplyFunc replyFn, void *user,
+            AooServerReplyFunc replyFn, void *user,
             AooSocket sockfd, AooId *id) override;
 
     AooError AOO_CALL removeClient(AooId clientId) override;
@@ -48,14 +48,14 @@ public:
             AooId client, const AooByte *data, AooInt32 size) override;
 
     AooError AOO_CALL setRequestHandler(
-            AooNetRequestHandler cb, void *user, AooFlag flags) override;
+            AooRequestHandler cb, void *user, AooFlag flags) override;
 
     AooError AOO_CALL acceptRequest(
-            AooId client, AooId token, const AooNetRequest *request,
-            AooNetResponse *response) override;
+            AooId client, AooId token, const AooRequest *request,
+            AooResponse *response) override;
 
     AooError AOO_CALL declineRequest(
-            AooId client, AooId token, const AooNetRequest *request,
+            AooId client, AooId token, const AooRequest *request,
             AooError errorCode, const AooChar *errorMessage) override;
 
     AooError AOO_CALL notifyClient(
@@ -152,8 +152,8 @@ private:
     void handle_query(const osc::ReceivedMessage& msg,
                       const ip_address& addr, const sendfn& fn);
 
-    void do_query(const AooNetRequestQuery& request,
-                  const AooNetResponseQuery& response) const;
+    void do_query(const AooRequestQuery& request,
+                  const AooResponseQuery& response) const;
 
     // TCP
     void handle_ping(const client_endpoint& client, const osc::ReceivedMessage& msg);
@@ -161,38 +161,38 @@ private:
     void handle_login(client_endpoint& client, const osc::ReceivedMessage& msg);
 
     AooError do_login(client_endpoint& client, AooId token,
-                      const AooNetRequestLogin& request,
-                      AooNetResponseLogin& response);
+                      const AooRequestLogin& request,
+                      AooResponseLogin& response);
 
     void handle_group_join(client_endpoint& client, const osc::ReceivedMessage& msg);
 
     AooError do_group_join(client_endpoint& client, AooId token,
-                           const AooNetRequestGroupJoin& request,
-                           AooNetResponseGroupJoin& response);
+                           const AooRequestGroupJoin& request,
+                           AooResponseGroupJoin& response);
 
     void handle_group_leave(client_endpoint& client, const osc::ReceivedMessage& msg);
 
     AooError do_group_leave(client_endpoint& client, AooId token,
-                            const AooNetRequestGroupLeave& request,
-                            AooNetResponseGroupLeave& response);
+                            const AooRequestGroupLeave& request,
+                            AooResponseGroupLeave& response);
 
     void handle_group_update(client_endpoint& client, const osc::ReceivedMessage& msg);
 
     AooError do_group_update(client_endpoint& client, AooId token,
-                             const AooNetRequestGroupUpdate& request,
-                             AooNetResponseGroupUpdate& response);
+                             const AooRequestGroupUpdate& request,
+                             AooResponseGroupUpdate& response);
 
     void handle_user_update(client_endpoint& client, const osc::ReceivedMessage& msg);
 
     AooError do_user_update(client_endpoint& client, AooId token,
-                            const AooNetRequestUserUpdate& request,
-                            AooNetResponseUserUpdate& response);
+                            const AooRequestUserUpdate& request,
+                            AooResponseUserUpdate& response);
 
     void handle_custom_request(client_endpoint& client, const osc::ReceivedMessage& msg);
 
     AooError do_custom_request(client_endpoint& client, AooId token,
-                               const AooNetRequestCustom& request,
-                               AooNetResponseCustom& response);
+                               const AooRequestCustom& request,
+                               AooResponseCustom& response);
 
     AooId get_next_client_id();
 
@@ -202,13 +202,13 @@ private:
     bool handle_request(const Request& request) {
         return request_handler_ &&
                 request_handler_(request_context_, kAooIdInvalid,
-                                 kAooIdInvalid, (const AooNetRequest *)&request);
+                                 kAooIdInvalid, (const AooRequest *)&request);
     }
 
     template<typename Request>
     bool handle_request(const client_endpoint& client, AooId token, const Request& request) {
         return request_handler_ &&
-                request_handler_(request_context_, client.id(), token, (const AooNetRequest *)&request);
+                request_handler_(request_context_, client.id(), token, (const AooRequest *)&request);
     }
 
     void send_event(event_ptr event);
@@ -226,7 +226,7 @@ private:
     // network
     std::vector<char> sendbuffer_;
     // request handler
-    AooNetRequestHandler request_handler_{nullptr};
+    AooRequestHandler request_handler_{nullptr};
     void *request_context_{nullptr};
     // event handler
     using event_queue = aoo::unbounded_mpsc_queue<event_ptr>;
@@ -238,8 +238,8 @@ private:
     ip_host tcp_addr_;
     ip_host relay_addr_;
     std::string password_;
-    parameter<bool> allow_relay_{AOO_NET_SERVER_RELAY};
-    parameter<bool> group_auto_create_{AOO_NET_GROUP_AUTO_CREATE};
+    parameter<bool> allow_relay_{AOO_SERVER_RELAY};
+    parameter<bool> group_auto_create_{AOO_GROUP_AUTO_CREATE};
 };
 
 } // net

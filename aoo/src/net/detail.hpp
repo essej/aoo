@@ -4,122 +4,119 @@
 
 // OSC address patterns
 
-#define kAooNetMsgPingReply \
-    kAooNetMsgPing kAooNetMsgReply
+#define kAooMsgPingReply \
+    kAooMsgPing kAooMsgReply
 
-#define kAooNetMsgClientPingReply \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgPingReply
+#define kAooMsgGroupJoin \
+    kAooMsgGroup kAooMsgJoin
 
-#define kAooNetMsgClientQuery \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgQuery
+#define kAooMsgGroupLeave \
+    kAooMsgGroup kAooMsgLeave
 
-#define kAooNetMsgClientLogin \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgLogin
+#define kAooMsgGroupUpdate \
+    kAooMsgGroup kAooMsgUpdate
 
-#define kAooNetMsgGroupJoin \
-    kAooNetMsgGroup kAooNetMsgJoin
+#define kAooMsgGroupChanged \
+    kAooMsgGroup kAooMsgChanged
 
-#define kAooNetMsgGroupLeave \
-    kAooNetMsgGroup kAooNetMsgLeave
+#define kAooMsgUserUpdate \
+    kAooMsgUser kAooMsgUpdate
 
-#define kAooNetMsgGroupUpdate \
-    kAooNetMsgGroup kAooNetMsgUpdate
+#define kAooMsgUserChanged \
+    kAooMsgUser kAooMsgChanged
 
-#define kAooNetMsgGroupChanged \
-    kAooNetMsgGroup kAooNetMsgChanged
+#define kAooMsgPeerJoin \
+    kAooMsgPeer kAooMsgJoin
 
-#define kAooNetMsgUserUpdate \
-    kAooNetMsgUser kAooNetMsgUpdate
+#define kAooMsgPeerLeave \
+    kAooMsgPeer kAooMsgLeave
 
-#define kAooNetMsgUserChanged \
-    kAooNetMsgUser kAooNetMsgChanged
-
-#define kAooNetMsgPeerJoin \
-    kAooNetMsgPeer kAooNetMsgJoin
-
-#define kAooNetMsgPeerLeave \
-    kAooNetMsgPeer kAooNetMsgLeave
-
-#define kAooNetMsgPeerChanged \
-    kAooNetMsgPeer kAooNetMsgChanged
+#define kAooMsgPeerChanged \
+    kAooMsgPeer kAooMsgChanged
 
 // peer messages
 
-#define kAooNetMsgPeerPing \
-    kAooMsgDomain kAooNetMsgPeer kAooNetMsgPing
+#define kAooMsgPeerPing \
+    kAooMsgDomain kAooMsgPeer kAooMsgPing
 
-#define kAooNetMsgPeerPingReply \
-    kAooMsgDomain kAooNetMsgPeer kAooNetMsgPingReply
+#define kAooMsgPeerPingReply \
+    kAooMsgDomain kAooMsgPeer kAooMsgPingReply
 
-#define kAooNetMsgPeerMessage \
-    kAooMsgDomain kAooNetMsgPeer kAooNetMsgMessage
+#define kAooMsgPeerMessage \
+    kAooMsgDomain kAooMsgPeer kAooMsgMessage
 
-#define kAooNetMsgPeerAck \
-    kAooMsgDomain kAooNetMsgPeer kAooNetMsgAck
+#define kAooMsgPeerAck \
+    kAooMsgDomain kAooMsgPeer kAooMsgAck
 
 // client messages
 
-#define kAooNetMsgClientQuery \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgQuery
+#define kAooMsgClientPingReply \
+    kAooMsgDomain kAooMsgClient kAooMsgPingReply
 
-#define kAooNetMsgClientGroupJoin \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgGroupJoin
+#define kAooMsgClientLogin \
+    kAooMsgDomain kAooMsgClient kAooMsgLogin
 
-#define kAooNetMsgClientGroupLeave \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgGroupLeave
+#define kAooMsgClientQuery \
+    kAooMsgDomain kAooMsgClient kAooMsgQuery
 
-#define kAooNetMsgClientGroupUpdate \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgGroupUpdate
+#define kAooMsgClientGroupJoin \
+    kAooMsgDomain kAooMsgClient kAooMsgGroupJoin
 
-#define kAooNetMsgClientUserUpdate \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgUserUpdate
+#define kAooMsgClientGroupLeave \
+    kAooMsgDomain kAooMsgClient kAooMsgGroupLeave
 
-#define kAooNetMsgClientGroupChanged \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgGroupChanged
+#define kAooMsgClientGroupUpdate \
+    kAooMsgDomain kAooMsgClient kAooMsgGroupUpdate
 
-#define kAooNetMsgClientUserChanged \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgUserChanged
+#define kAooMsgClientUserUpdate \
+    kAooMsgDomain kAooMsgClient kAooMsgUserUpdate
 
-#define kAooNetMsgClientPeerChanged \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgPeerChanged
+#define kAooMsgClientGroupChanged \
+    kAooMsgDomain kAooMsgClient kAooMsgGroupChanged
 
-#define kAooNetMsgClientRequest \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgRequest
+#define kAooMsgClientUserChanged \
+    kAooMsgDomain kAooMsgClient kAooMsgUserChanged
 
-#define kAooNetMsgClientPeerJoin \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgPeerJoin
+#define kAooMsgClientPeerChanged \
+    kAooMsgDomain kAooMsgClient kAooMsgPeerChanged
 
-#define kAooNetMsgClientPeerLeave \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgPeerLeave
+#define kAooMsgClientRequest \
+    kAooMsgDomain kAooMsgClient kAooMsgRequest
 
-#define kAooNetMsgClientMessage \
-    kAooMsgDomain kAooNetMsgClient kAooNetMsgMessage
+#define kAooMsgClientPeerJoin \
+    kAooMsgDomain kAooMsgClient kAooMsgPeerJoin
+
+#define kAooMsgClientPeerLeave \
+    kAooMsgDomain kAooMsgClient kAooMsgPeerLeave
+
+#define kAooMsgClientMessage \
+    kAooMsgDomain kAooMsgClient kAooMsgMessage
 
 // server messages
 
-#define kAooNetMsgServerLogin \
-    kAooMsgDomain kAooNetMsgServer kAooNetMsgLogin
+#define kAooMsgServerLogin \
+    kAooMsgDomain kAooMsgServer kAooMsgLogin
 
-#define kAooNetMsgServerQuery \
-    kAooMsgDomain kAooNetMsgServer kAooNetMsgQuery
+#define kAooMsgServerQuery \
+    kAooMsgDomain kAooMsgServer kAooMsgQuery
 
-#define kAooNetMsgServerPing \
-    kAooMsgDomain kAooNetMsgServer kAooNetMsgPing
+#define kAooMsgServerPing \
+    kAooMsgDomain kAooMsgServer kAooMsgPing
 
-#define kAooNetMsgServerGroupJoin \
-    kAooMsgDomain kAooNetMsgServer kAooNetMsgGroupJoin
+#define kAooMsgServerGroupJoin \
+    kAooMsgDomain kAooMsgServer kAooMsgGroupJoin
 
-#define kAooNetMsgServerGroupLeave \
-    kAooMsgDomain kAooNetMsgServer kAooNetMsgGroupLeave
+#define kAooMsgServerGroupLeave \
+    kAooMsgDomain kAooMsgServer kAooMsgGroupLeave
 
-#define kAooNetMsgServerGroupUpdate \
-    kAooMsgDomain kAooNetMsgServer kAooNetMsgGroupUpdate
+#define kAooMsgServerGroupUpdate \
+    kAooMsgDomain kAooMsgServer kAooMsgGroupUpdate
 
-#define kAooNetMsgServerUserUpdate \
-    kAooMsgDomain kAooNetMsgServer kAooNetMsgUserUpdate
+#define kAooMsgServerUserUpdate \
+    kAooMsgDomain kAooMsgServer kAooMsgUserUpdate
 
-#define kAooNetMsgServerRequest \
-    kAooMsgDomain kAooNetMsgServer kAooNetMsgRequest
+#define kAooMsgServerRequest \
+    kAooMsgDomain kAooMsgServer kAooMsgRequest
 
 namespace aoo {
 namespace net {

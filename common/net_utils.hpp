@@ -15,8 +15,8 @@ struct sockaddr;
 #include <errno.h>
 #endif
 
-#ifndef AOO_NET_USE_IPv6
-#define AOO_NET_USE_IPv6 1
+#ifndef AOO_USE_IPv6
+#define AOO_USE_IPv6 1
 #endif
 
 namespace aoo {

@@ -15,7 +15,7 @@ namespace aoo {
 namespace net {
 
 // OSC peer message:
-const int32_t kMessageMaxAddrSize = kAooMsgDomainLen + kAooNetMsgPeerLen + 16 + kAooMsgDataLen;
+const int32_t kMessageMaxAddrSize = kAooMsgDomainLen + kAooMsgPeerLen + 16 + kAooMsgDataLen;
 // address pattern string: max 16 bytes
 // typetag string: max. 12 bytes
 // args (including type + blob size): max. 44 bytes
@@ -128,7 +128,7 @@ void peer::send(Client& client, const sendfn& fn, time_tag now) {
             // we're behind a symmetric NAT. This trick doesn't work
             // if both parties are behind a symmetrict NAT; in that case,
             // UDP hole punching simply doesn't work.
-            msg << osc::BeginMessage(kAooNetMsgPeerPing)
+            msg << osc::BeginMessage(kAooMsgPeerPing)
                 << group_id_ << local_id_ << osc::TimeTag(0)
                 << osc::EndMessage;
 
@@ -154,7 +154,7 @@ void peer::do_send(Client& client, const sendfn& fn, time_tag now) {
         // sufficient. (There can only be one user per client in a group.)
         char buf[64];
         osc::OutboundPacketStream msg(buf, sizeof(buf));
-        msg << osc::BeginMessage(kAooNetMsgPeerPing)
+        msg << osc::BeginMessage(kAooMsgPeerPing)
             << group_id_ << local_id_ << osc::TimeTag(now)
             << osc::EndMessage;
 
@@ -174,7 +174,7 @@ void peer::do_send(Client& client, const sendfn& fn, time_tag now) {
             // regular ping reply
             char buf[64];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
-            msg << osc::BeginMessage(kAooNetMsgPeerPingReply)
+            msg << osc::BeginMessage(kAooMsgPeerPingReply)
                 << group_id_ << local_id_
                 << osc::TimeTag(tt1) << osc::TimeTag(now)
                 << osc::EndMessage;
@@ -187,7 +187,7 @@ void peer::do_send(Client& client, const sendfn& fn, time_tag now) {
             // handshake ping reply
             char buf[64];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
-            msg << osc::BeginMessage(kAooNetMsgPeerPingReply)
+            msg << osc::BeginMessage(kAooMsgPeerPingReply)
                 << group_id_ << local_id_
                 << osc::TimeTag(0) << osc::TimeTag(0)
                 << osc::EndMessage;
@@ -277,7 +277,7 @@ void peer::do_send(Client& client, const sendfn& fn, time_tag now) {
 // 'total', 'nframes' and 'frame' are omitted for single-frame messages.
 // 'tt' and 'type' are only sent with the first frame. 'tt' might be ommited if zero.
 
-// if 'flags' contains kAooNetMessageReliable, the other end sends an ack messages:
+// if 'flags' contains kAooMessageReliable, the other end sends an ack messages:
 //
 // OSC:
 // /aoo/peer/ack <count> <seq1> <frame1> <seq2> <frame2> etc. // frame < 0 -> all
@@ -288,7 +288,7 @@ void peer::do_send(Client& client, const sendfn& fn, time_tag now) {
 // LATER: seq1 (int32), offset1 (int16), bitset1 (int16), etc. // offset < 0 -> all
 
 // prevent excessive resending in low-latency networks
-#define AOO_NET_CLIENT_MIN_RESEND_TIME 0.02
+#define AOO_CLIENT_MIN_RESEND_TIME 0.02
 
 void peer::send_message(const message& m, const sendfn& fn, bool binary) {
     // LATER make packet size settable at runtime, see AooSource::send_data()
@@ -311,7 +311,7 @@ void peer::send_message(const message& m, const sendfn& fn, bool binary) {
         auto framesize = d.quot ? maxsize : d.rem;
         // wait twice the average RTT before resending
         auto rtt = average_rtt_.load(std::memory_order_relaxed);
-        auto interval = std::max<float>(rtt * 2, AOO_NET_CLIENT_MIN_RESEND_TIME);
+        auto interval = std::max<float>(rtt * 2, AOO_CLIENT_MIN_RESEND_TIME);
         sent_message sm(m.data_, m.tt_, p.sequence, p.nframes, framesize, interval);
         send_buffer_.push(std::move(sm));
     } else {
@@ -351,9 +351,9 @@ void peer::send_message(const message& m, const sendfn& fn, bool binary) {
 void peer::send_packet_osc(const message_packet& p, const sendfn& fn) const {
     char buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
-    AooFlag flags = p.reliable * kAooNetMessageReliable;
+    AooFlag flags = p.reliable * kAooMessageReliable;
     // NB: we send *our* ID (= the sender)
-    msg << osc::BeginMessage(kAooNetMsgPeerMessage)
+    msg << osc::BeginMessage(kAooMsgPeerMessage)
         << group_id() << local_id() << (int32_t)flags
         << p.sequence << p.totalsize << p.nframes << p.frame
         << osc::TimeTag(p.tt) << p.type << osc::Blob(p.data, p.size)
@@ -418,7 +418,7 @@ void peer::send_ack(const message_ack &ack, const sendfn& fn) {
     } else {
         char buf[64];
         osc::OutboundPacketStream msg(buf, sizeof(buf));
-        msg << osc::BeginMessage(kAooNetMsgPeerAck)
+        msg << osc::BeginMessage(kAooMsgPeerAck)
             << group_id_ << local_id_
             << (int32_t)1 << ack.seq << ack.frame
             << osc::EndMessage;
@@ -432,13 +432,13 @@ void peer::handle_osc_message(Client& client, const char *pattern,
                               const ip_address& addr) {
     LOG_DEBUG("AooClient: got OSC message " << pattern << " from " << *this);
 
-    if (!strcmp(pattern, kAooNetMsgPing)) {
+    if (!strcmp(pattern, kAooMsgPing)) {
         handle_ping(client, it, addr, false);
-    } else if (!strcmp(pattern, kAooNetMsgPingReply)) {
+    } else if (!strcmp(pattern, kAooMsgPingReply)) {
         handle_ping(client, it, addr, true);
-    } else if (!strcmp(pattern, kAooNetMsgMessage)) {
+    } else if (!strcmp(pattern, kAooMsgMessage)) {
         handle_client_message(client, it);
-    } else if (!strcmp(pattern, kAooNetMsgAck)) {
+    } else if (!strcmp(pattern, kAooMsgAck)) {
         handle_ack(client, it);
     } else {
         LOG_WARNING("AooClient: got unknown message "
@@ -634,7 +634,7 @@ bad_message:
 }
 
 void peer::do_handle_client_message(Client& client, const message_packet& p, AooFlag flags) {
-    if (flags & kAooNetMessageReliable) {
+    if (flags & kAooMessageReliable) {
         // *** reliable message ***
         auto last_pushed = receive_buffer_.last_pushed();
         auto last_popped = receive_buffer_.last_popped();

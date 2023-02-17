@@ -89,8 +89,8 @@ AOO_PACK_BEGIN
 /*---------- global compile time settings ----------*/
 
 /** \brief AOO_NET support */
-#ifndef USE_AOO_NET
-# define USE_AOO_NET 1
+#ifndef AOO_NET
+# define AOO_NET 1
 #endif
 
 /** \brief custom allocator support  */
@@ -363,7 +363,7 @@ enum AooMsgTypes
     kAooTypeSource = 0,
     /** AOO sink */
     kAooTypeSink,
-#if USE_AOO_NET
+#if AOO_NET
     /** AOO server */
     kAooTypeServer,
     /** AOO client */

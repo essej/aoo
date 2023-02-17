@@ -60,7 +60,7 @@ public:
 
     /** \brief add a new client */
     virtual AooError AOO_CALL addClient(
-            AooNetReplyFunc replyFn, void *user,
+            AooServerReplyFunc replyFn, void *user,
             AooSocket sockfd, AooId *id) = 0;
 
     /** \brief remove a client */
@@ -72,16 +72,16 @@ public:
 
     /** \brief set request handler (to intercept client requests) */
     virtual AooError AOO_CALL setRequestHandler(
-            AooNetRequestHandler cb, void *user, AooFlag flags) = 0;
+            AooRequestHandler cb, void *user, AooFlag flags) = 0;
 
     /** \brief accept request */
     virtual AooError AOO_CALL acceptRequest(
-            AooId client, AooId token, const AooNetRequest *request,
-            AooNetResponse *response) = 0;
+            AooId client, AooId token, const AooRequest *request,
+            AooResponse *response) = 0;
 
     /** \brief decline request */
     virtual AooError AOO_CALL declineRequest(
-            AooId client, AooId token, const AooNetRequest *request,
+            AooId client, AooId token, const AooRequest *request,
             AooError errorCode, const AooChar *errorMessage) = 0;
 
     /* push notifications */
@@ -103,7 +103,7 @@ public:
 
     /** \brief add a group
      * By default, the metadata is passed to clients
-     * via AooNetResponseGroupJoin::groupMetadata. */
+     * via AooResponseGroupJoin::groupMetadata. */
     virtual AooError AOO_CALL addGroup(
             const AooChar *name, const AooChar *password,
             const AooData *metadata, const AooIpEndpoint *relayAddress,

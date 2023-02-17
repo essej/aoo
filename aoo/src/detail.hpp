@@ -1,7 +1,7 @@
 #pragma once
 
 #include "aoo/aoo.h"
-#if USE_AOO_NET
+#if AOO_NET
 # include "aoo/aoo_net.h"
 #endif
 #include "aoo/aoo_codec.h"
@@ -72,13 +72,13 @@ struct endpoint {
     endpoint() = default;
     endpoint(const ip_address& _address, int32_t _id)
         : address(_address), id(_id) {}
-#if USE_AOO_NET
+#if AOO_NET
     endpoint(const ip_address& _address, int32_t _id, const ip_address& _relay)
         : address(_address), relay(_relay), id(_id) {}
 #endif
     // data
     ip_address address;
-#if USE_AOO_NET
+#if AOO_NET
     ip_address relay;
 #endif
     AooId id = 0;
@@ -86,7 +86,7 @@ struct endpoint {
     void send(const osc::OutboundPacketStream& msg, const sendfn& fn) const {
         send((const AooByte *)msg.Data(), msg.Size(), fn);
     }
-#if USE_AOO_NET
+#if AOO_NET
     void send(const AooByte *data, AooSize size, const sendfn& fn) const;
 #else
     void send(const AooByte *data, AooSize size, const sendfn& fn) const {
@@ -100,7 +100,7 @@ inline std::ostream& operator<<(std::ostream& os, const endpoint& ep){
     return os;
 }
 
-#if USE_AOO_NET
+#if AOO_NET
 namespace net {
 AooSize write_relay_message(AooByte *buffer, AooSize bufsize,
                             const AooByte *msg, AooSize msgsize,

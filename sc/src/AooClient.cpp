@@ -76,8 +76,8 @@ void AooClient::connect(int token, const char* host, int port, const char *pwd) 
         return;
     }
 
-    auto cb = [](void* x, const AooNetRequest *request,
-                 AooError result, const AooNetResponse *response) {
+    auto cb = [](void* x, const AooRequest *request,
+                 AooError result, const AooResponse *response) {
         auto data = (RequestData *)x;
         auto client = data->client;
         auto token = data->token;
@@ -107,8 +107,8 @@ void AooClient::disconnect(int token) {
         return;
     }
 
-    auto cb = [](void* x, const AooNetRequest *request,
-            AooError result, const AooNetResponse *response) {
+    auto cb = [](void* x, const AooRequest *request,
+            AooError result, const AooResponse *response) {
         auto data = (RequestData *)x;
         auto client = data->client;
         auto token = data->token;
@@ -138,8 +138,8 @@ void AooClient::joinGroup(int token, const char* groupName, const char *groupPwd
         return;
     }
 
-    auto cb = [](void* x, const AooNetRequest *request,
-            AooError result, const AooNetResponse* response) {
+    auto cb = [](void* x, const AooRequest *request,
+            AooError result, const AooResponse* response) {
         auto data = (RequestData *)x;
         auto client = data->client;
         auto token = data->token;
@@ -171,8 +171,8 @@ void AooClient::leaveGroup(int token, AooId group) {
         return;
     }
 
-    auto cb = [](void* x, const AooNetRequest *request,
-            AooError result, const AooNetResponse* response) {
+    auto cb = [](void* x, const AooRequest *request,
+            AooError result, const AooResponse* response) {
         auto data = (RequestData *)x;
         auto client = data->client;
         auto token = data->token;
@@ -252,12 +252,12 @@ void AooClient::handleEvent(const AooEvent* event) {
     ::sendMsgNRT(world_, msg);
 }
 
-void AooClient::sendError(const char *cmd, AooId token, AooError result, const AooNetResponse *response) {
+void AooClient::sendError(const char *cmd, AooId token, AooError result, const AooResponse *response) {
     char buf[1024];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
     msg << osc::BeginMessage(cmd) << node_->port() << token << result;
     if (response) {
-        msg << reinterpret_cast<const AooNetResponseError *>(response)->errorMessage;
+        msg << reinterpret_cast<const AooResponseError *>(response)->errorMessage;
     } else {
         msg << "internal error";
     }

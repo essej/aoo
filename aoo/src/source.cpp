@@ -350,7 +350,7 @@ AooError AOO_CALL aoo::Source::control(
         CHECKARG(AooBool);
         as<AooBool>(ptr) = binary_.load();
         break;
-#if USE_AOO_NET
+#if AOO_NET
     case kAooCtlSetClient:
         client_ = reinterpret_cast<AooClient *>(index);
         break;
@@ -999,7 +999,7 @@ aoo::sink_desc * Source::get_sink_arg(intptr_t index){
 
 sink_desc * Source::do_add_sink(const ip_address& addr, AooId id, AooId stream_id)
 {
-#if USE_AOO_NET
+#if AOO_NET
     ip_address relay;
     // check if the peer needs to be relayed
     if (client_){
@@ -2114,7 +2114,7 @@ void Source::handle_uninvite(const osc::ReceivedMessage& msg,
     // TODO: figure out what to do if sink is NULL...
     // tell the remote side that we have stopped.
     // don't use the sink because it can be NULL!
-#if USE_AOO_NET
+#if AOO_NET
     auto relay = sink ? sink->ep.relay : false; // ?
     sink_request r(request_type::stop, endpoint(addr, id, relay));
 #else

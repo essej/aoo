@@ -54,11 +54,11 @@ AOO_API AooError AOO_CALL AooClient_removeSink(
 AOO_API AooError AooClient_connect(
         AooClient *client,
         const AooChar *hostName, AooInt32 port, const AooChar *password,
-        const AooData *metadata, AooNetCallback cb, void *context);
+        const AooData *metadata, AooResponseHandler cb, void *context);
 
 /** \copydoc AooClient::disconnect() */
 AOO_API AooError AooClient_disconnect(
-        AooClient *client, AooNetCallback cb, void *context);
+        AooClient *client, AooResponseHandler cb, void *context);
 
 /** \copydoc AooClient::joinGroup() */
 AOO_API AooError AooClient_joinGroup(
@@ -68,29 +68,29 @@ AOO_API AooError AooClient_joinGroup(
         const AooChar *userName, const AooChar *userPwd,
         const AooData *userMetadata,
         const AooIpEndpoint *relayAddress,
-        AooNetCallback cb, void *context);
+        AooResponseHandler cb, void *context);
 
 /** \copydoc AooClient::leaveGroup() */
 AOO_API AooError AooClient_leaveGroup(
         AooClient *client, AooId group,
-        AooNetCallback cb, void *context);
+        AooResponseHandler cb, void *context);
 
 /** \copydoc AooClient::updateGroup() */
 AOO_API AooError AOO_CALL AooClient_updateGroup(
         AooClient *client,
         AooId group, const AooData *metadata,
-        AooNetCallback cb, void *context);
+        AooResponseHandler cb, void *context);
 
 /** \copydoc AooClient::updateUser() */
 AOO_API AooError AOO_CALL AooClient_updateUser(
         AooClient *client, AooId group,
         AooId user, const AooData *metadata,
-        AooNetCallback cb, void *context);
+        AooResponseHandler cb, void *context);
 
 /** \copydoc AooClient::customRequest() */
 AOO_API AooError AOO_CALL AooClient_customRequest(
         AooClient *client, const AooData *data, AooFlag flags,
-        AooNetCallback cb, void *context);
+        AooResponseHandler cb, void *context);
 
 /** \copydoc AooClient::findPeerByName() */
 AOO_API AooError AOO_CALL AooClient_findPeerByName(
@@ -134,8 +134,8 @@ AOO_API AooError AOO_CALL AooClient_pollEvents(AooClient *client);
 
 /** \copydoc AooClient::sendRequest() */
 AOO_API AooError AOO_CALL AooClient_sendRequest(
-        AooClient *client, const AooNetRequest *request,
-        AooNetCallback callback, void *user, AooFlag flags);
+        AooClient *client, const AooRequest *request,
+        AooResponseHandler callback, void *user, AooFlag flags);
 
 /** \copydoc AooClient::control */
 AOO_API AooError AOO_CALL AooClient_control(

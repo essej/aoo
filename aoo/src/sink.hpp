@@ -5,7 +5,7 @@
 #pragma once
 
 #include "aoo/aoo_sink.hpp"
-#if USE_AOO_NET
+#if AOO_NET
 # include "aoo/aoo_client.hpp"
 #endif
 
@@ -114,7 +114,7 @@ class Sink;
 
 class source_desc {
 public:
-#if USE_AOO_NET
+#if AOO_NET
     source_desc(const ip_address& addr, AooId id,
                 const ip_address& relay, double time);
 #else
@@ -350,7 +350,7 @@ private:
     int32_t nchannels_ = 0;
     int32_t samplerate_ = 0;
     int32_t blocksize_ = 0;
-#if USE_AOO_NET
+#if AOO_NET
     AooClient *client_ = nullptr;
 #endif
     // the sources

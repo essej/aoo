@@ -62,7 +62,7 @@ enum AooControls
     kAooCtlGetBufferFillRatio,
     kAooCtlSetBinaryDataMsg,
     kAooCtlGetBinaryDataMsg,
-#if USE_AOO_NET
+#if AOO_NET
     kAooCtlSetPassword = 1000,
     kAooCtlSetTcpHost,
     kAooCtlSetRelayHost,

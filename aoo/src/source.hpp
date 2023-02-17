@@ -5,7 +5,7 @@
 #pragma once
 
 #include "aoo/aoo_source.hpp"
-#if USE_AOO_NET
+#if AOO_NET
 # include "aoo/aoo_client.hpp"
 #endif
 
@@ -64,7 +64,7 @@ struct sink_request {
 // NOTE: the stream ID can change anytime, it only
 // has to be synchronized with any format change.
 struct sink_desc {
-#if USE_AOO_NET
+#if AOO_NET
     sink_desc(const ip_address& addr, int32_t id,
               AooId stream_id, const ip_address& relay)
         : ep(addr, id, relay), stream_id_(stream_id) {}
@@ -258,7 +258,7 @@ class Source final : public AooSource, rt_memory_pool_client {
     int32_t nchannels_ = 0;
     int32_t blocksize_ = 0;
     int32_t samplerate_ = 0;
-#if USE_AOO_NET
+#if AOO_NET
     AooClient *client_ = nullptr;
 #endif
     // audio encoder

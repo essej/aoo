@@ -181,7 +181,7 @@ enum AooBinMsgDataFlags
     kAooBinMsgDataStreamMessage = 0x04
 };
 
-#if USE_AOO_NET
+#if AOO_NET
 enum AooBinMsgMessageFlags
 {
     kAooBinMsgMessageReliable = 0x01,

@@ -88,21 +88,21 @@ void client_endpoint::send_message(const osc::OutboundPacketStream& msg) const {
     }
 }
 
-void client_endpoint::send_error(Server& server, AooId token, AooNetRequestType type,
+void client_endpoint::send_error(Server& server, AooId token, AooRequestType type,
                                  AooError result, int32_t errcode, const char *errmsg) {
     const char *pattern;
     switch (type) {
-    case kAooNetRequestLogin:
-        pattern = kAooNetMsgClientLogin;
+    case kAooRequestLogin:
+        pattern = kAooMsgClientLogin;
         break;
-    case kAooNetRequestGroupJoin:
-        pattern = kAooNetMsgClientGroupJoin;
+    case kAooRequestGroupJoin:
+        pattern = kAooMsgClientGroupJoin;
         break;
-    case kAooNetRequestGroupLeave:
-        pattern = kAooNetMsgClientGroupLeave;
+    case kAooRequestGroupLeave:
+        pattern = kAooMsgClientGroupLeave;
         break;
-    case kAooNetRequestCustom:
-        pattern = kAooNetMsgClientRequest;
+    case kAooRequestCustom:
+        pattern = kAooMsgClientRequest;
         break;
     default:
         // TODO bug
@@ -120,7 +120,7 @@ void client_endpoint::send_error(Server& server, AooId token, AooNetRequestType 
 void client_endpoint::send_notification(Server& server, const AooData &data) const {
     auto msg = server.start_message(data.size);
 
-    msg << osc::BeginMessage(kAooNetMsgClientMessage)
+    msg << osc::BeginMessage(kAooMsgClientMessage)
         << osc::Blob(data.data, data.size) << osc::EndMessage;
 
     send_message(msg);
@@ -134,7 +134,7 @@ void client_endpoint::send_peer_add(Server& server, const group& grp, const user
 
     auto msg = server.start_message(usr.metadata().size());
 
-    msg << osc::BeginMessage(kAooNetMsgClientPeerJoin)
+    msg << osc::BeginMessage(kAooMsgClientPeerJoin)
         << grp.name().c_str() << grp.id()
         << usr.name().c_str() << usr.id() << usr.metadata()
     // addresses
@@ -152,7 +152,7 @@ void client_endpoint::send_peer_remove(Server& server, const group& grp, const u
 
     auto msg = server.start_message();
 
-    msg << osc::BeginMessage(kAooNetMsgClientPeerLeave)
+    msg << osc::BeginMessage(kAooMsgClientPeerLeave)
         << grp.id() << usr.id() << osc::EndMessage;
 
     send_message(msg);
@@ -161,7 +161,7 @@ void client_endpoint::send_peer_remove(Server& server, const group& grp, const u
 void client_endpoint::send_group_update(Server& server, const group& grp) {
     auto msg = server.start_message();
 
-    msg << osc::BeginMessage(kAooNetMsgClientGroupChanged)
+    msg << osc::BeginMessage(kAooMsgClientGroupChanged)
         << grp.id() << grp.metadata() << osc::EndMessage;
 
     send_message(msg);
@@ -170,7 +170,7 @@ void client_endpoint::send_group_update(Server& server, const group& grp) {
 void client_endpoint::send_user_update(Server& server, const user& usr) {
     auto msg = server.start_message();
 
-    msg << osc::BeginMessage(kAooNetMsgUserChanged)
+    msg << osc::BeginMessage(kAooMsgUserChanged)
         << usr.group() << usr.id() << usr.metadata() << osc::EndMessage;
 
     send_message(msg);
@@ -179,7 +179,7 @@ void client_endpoint::send_user_update(Server& server, const user& usr) {
 void client_endpoint::send_peer_update(Server& server, const user& peer) {
     auto msg = server.start_message();
 
-    msg << osc::BeginMessage(kAooNetMsgClientPeerChanged)
+    msg << osc::BeginMessage(kAooMsgClientPeerChanged)
         << peer.group() << peer.id() << peer.metadata() << osc::EndMessage;
 
     send_message(msg);

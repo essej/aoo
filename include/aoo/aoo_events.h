@@ -60,7 +60,7 @@ enum AooEventTypes
     kAooEventBlockResent,
     /** sink: block has been dropped by source */
     kAooEventBlockDropped,
-#if USE_AOO_NET
+#if AOO_NET
     /*----------------------------------*/
     /*         AooClient events         */
     /*----------------------------------*/
@@ -270,7 +270,7 @@ typedef struct AooEventFormatChange
 /*            AOO server/client events             */
 /*-------------------------------------------------*/
 
-#if USE_AOO_NET
+#if AOO_NET
 
 /* client events */
 
@@ -483,7 +483,7 @@ typedef struct AooEventServerUserUpdate
     AooData userMetadata;
 } AooEventServerUserUpdate;
 
-#endif /* USE_AOO_NET */
+#endif /* AOO_NET */
 
 /*----------------------------------------------------*/
 

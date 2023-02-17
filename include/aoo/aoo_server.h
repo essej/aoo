@@ -23,7 +23,7 @@
  * \param flags send flags
  * \return number of bytes written, or -1 on error
  */
-typedef AooInt32 (AOO_CALL *AooNetReplyFunc)(
+typedef AooInt32 (AOO_CALL *AooServerReplyFunc)(
         /** the user data */
         void *user,
         /** the client ID */
@@ -68,7 +68,7 @@ AOO_API AooError AOO_CALL AooServer_handleUdpMessage(
 
 /** \copydoc AooServer::addClient() */
 AOO_API AooError AOO_CALL AooServer_addClient(
-        AooServer *server, AooNetReplyFunc replyFn,
+        AooServer *server, AooServerReplyFunc replyFn,
         void *user, AooSocket sockfd, AooId *id);
 
 /** \copydoc AooServer::removeClient() */
@@ -82,19 +82,19 @@ AOO_API AooError AOO_CALL AooServer_handleClientMessage(
 
 /** \copydoc AooServer::setRequestHandler() */
 AOO_API AooError AOO_CALL AooServer_setRequestHandler(
-        AooServer *server, AooNetRequestHandler cb,
+        AooServer *server, AooRequestHandler cb,
         void *user, AooFlag flags);
 
 /** \copydoc AooServer::acceptRequest */
 AOO_API AooError AOO_CALL acceptRequest(
         AooServer *server,
-        AooId client, AooId token, const AooNetRequest *request,
-        const AooNetResponse *response);
+        AooId client, AooId token, const AooRequest *request,
+        const AooResponse *response);
 
 /** \copydoc AooServer::declineRequest */
 AOO_API AooError AOO_CALL declineRequest(
         AooServer *server,
-        AooId client, AooId token, const AooNetRequest *request,
+        AooId client, AooId token, const AooRequest *request,
         AooError errorCode, const AooChar *errorMessage);
 
 /* push notifications */
