@@ -775,7 +775,7 @@ void Server::handle_ping(const client_endpoint& client,
     // send reply
     auto reply = start_message();
 
-    reply << osc::BeginMessage(kAooMsgClientPingReply) << osc::EndMessage;
+    reply << osc::BeginMessage(kAooMsgClientPong) << osc::EndMessage;
 
     client.send_message(reply);
 }
@@ -1405,11 +1405,11 @@ AooError Server::handle_relay(const AooByte *data, AooSize size,
 
 void Server::handle_ping(const osc::ReceivedMessage& msg,
                          const ip_address& addr, const sendfn& fn) const {
-    // reply with /ping message
+    // reply with /pong message
     // NB: don't prepend size for UDP message!
     char buf[512];
     osc::OutboundPacketStream reply(buf, sizeof(buf));
-    reply << osc::BeginMessage(kAooMsgClientPingReply)
+    reply << osc::BeginMessage(kAooMsgClientPong)
           << osc::EndMessage;
 
     fn((const AooByte *)reply.Data(), reply.Size(), addr);

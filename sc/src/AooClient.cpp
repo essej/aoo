@@ -235,7 +235,7 @@ void AooClient::handleEvent(const AooEvent* event) {
         break;
     }
     case kAooEventPeerPing:
-    case kAooEventPeerPingReply:
+    case kAooEventPeerPong:
         // TODO
         return;
     case kAooEventError:

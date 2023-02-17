@@ -139,20 +139,28 @@
 /* OSC address patterns */
 #define kAooMsgDomain "/aoo"
 #define kAooMsgDomainLen 4
+
 #define kAooMsgSource "/src"
 #define kAooMsgSourceLen 4
+
 #define kAooMsgSink "/sink"
 #define kAooMsgSinkLen 5
+
 #define kAooMsgStart "/start"
 #define kAooMsgStartLen 6
+
 #define kAooMsgStop "/stop"
 #define kAooMsgStopLen 5
+
 #define kAooMsgData "/data"
 #define kAooMsgDataLen 5
+
 #define kAooMsgPing "/ping"
 #define kAooMsgPingLen 5
+
 #define kAooMsgInvite "/invite"
 #define kAooMsgInviteLen 7
+
 #define kAooMsgUninvite "/uninvite"
 #define kAooMsgUninviteLen 9
 

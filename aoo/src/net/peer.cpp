@@ -168,13 +168,13 @@ void peer::do_send(Client& client, const sendfn& fn, time_tag now) {
     // NB: we send *our* user ID, see above.
     if (got_ping_.exchange(false, std::memory_order_acquire)) {
         // The empty timetag distinguishes a handshake
-        // ping (reply) from a regular ping (reply).
+        // pong from a regular pong.
         auto tt1 = ping_tt1_;
         if (!tt1.is_empty()) {
-            // regular ping reply
+            // regular pong
             char buf[64];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
-            msg << osc::BeginMessage(kAooMsgPeerPingReply)
+            msg << osc::BeginMessage(kAooMsgPeerPong)
                 << group_id_ << local_id_
                 << osc::TimeTag(tt1) << osc::TimeTag(now)
                 << osc::EndMessage;
@@ -184,10 +184,10 @@ void peer::do_send(Client& client, const sendfn& fn, time_tag now) {
             LOG_DEBUG("AooClient: send ping reply to " << *this
                       << " (" << time_tag(tt1) << " " << now << ")");
         } else {
-            // handshake ping reply
+            // handshake pong
             char buf[64];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
-            msg << osc::BeginMessage(kAooMsgPeerPingReply)
+            msg << osc::BeginMessage(kAooMsgPeerPong)
                 << group_id_ << local_id_
                 << osc::TimeTag(0) << osc::TimeTag(0)
                 << osc::EndMessage;
@@ -399,7 +399,7 @@ void peer::send_packet_bin(const message_packet& p, const sendfn& fn) const {
 // if the message is reliable, the other end sends an ack messages:
 // /aoo/peer/ack <group> <user> <count> <seq1> <frame1> <seq2> <frame2> etc.
 // resp.
-// header, count (int32), seq1 (int32), offset1 (int16), bitset1 (int16), etc. // offset < 0 -> all
+// header, count (int32), seq1 (int32), frame1 (int32), seq2 (int32), frame2 (int32), etc. // frame < 0 -> all
 void peer::send_ack(const message_ack &ack, const sendfn& fn) {
 #if AOO_DEBUG_CLIENT_MESSAGE
     LOG_DEBUG("AooClient: send ack (seq: " << ack.seq << ", frame: " << ack.frame
@@ -433,9 +433,9 @@ void peer::handle_osc_message(Client& client, const char *pattern,
     LOG_DEBUG("AooClient: got OSC message " << pattern << " from " << *this);
 
     if (!strcmp(pattern, kAooMsgPing)) {
-        handle_ping(client, it, addr, false);
-    } else if (!strcmp(pattern, kAooMsgPingReply)) {
-        handle_ping(client, it, addr, true);
+        handle_ping(client, it, addr);
+    } else if (!strcmp(pattern, kAooMsgPong)) {
+        handle_pong(client, it, addr);
     } else if (!strcmp(pattern, kAooMsgMessage)) {
         handle_client_message(client, it);
     } else if (!strcmp(pattern, kAooMsgAck)) {
@@ -462,96 +462,105 @@ void peer::handle_bin_message(Client& client, const AooByte *data, AooSize size,
     }
 }
 
-void peer::handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
-                       const ip_address& addr, bool reply) {
-    if (!connected()) {
-        // first ping
-    #if FORCE_RELAY
-        // force relay
-        if (!relay()){
-            return;
-        }
-    #endif
-        // Try to find matching address.
-        // If we receive a message from a peer behind a symmetric NAT,
-        // its IP address will be different from the one we obtained
-        // from the server, that's why we're sending and checking the
-        // group/user ID in the first place.
-        // NB: this only works if *we* are behind a full cone or restricted cone NAT.
-        if (std::find(addrlist_.begin(), addrlist_.end(), addr) == addrlist_.end()) {
-            LOG_WARNING("AooClient: peer " << *this << " is located behind a symmetric NAT!");
-        }
-
-        real_address_ = addr;
-
-        connected_.store(true, std::memory_order_release);
-
-        // push event
-        auto e = std::make_unique<peer_event>(kAooEventPeerJoin, *this);
-        client.send_event(std::move(e));
-
-        LOG_VERBOSE("AooClient: successfully established connection with "
-                    << *this << " " << addr << (relay() ? " (relayed)" : ""));
+void peer::handle_first_ping(Client &client, const aoo::ip_address& addr) {
+    // first ping
+#if FORCE_RELAY
+    // force relay
+    if (!relay()){
+        return;
+    }
+#endif
+    // Try to find matching address.
+    // If we receive a message from a peer behind a symmetric NAT,
+    // its IP address will be different from the one we obtained
+    // from the server, that's why we're sending and checking the
+    // group/user ID in the first place.
+    // NB: this only works if *we* are behind a full cone or restricted cone NAT.
+    if (std::find(addrlist_.begin(), addrlist_.end(), addr) == addrlist_.end()) {
+        LOG_WARNING("AooClient: peer " << *this << " is located behind a symmetric NAT!");
     }
 
-    if (reply) {
-        time_tag tt1 = (it++)->AsTimeTag();
-        if (!tt1.is_empty()) {
-            // regular ping reply
-            time_tag tt2 = (it++)->AsTimeTag();
-            time_tag tt3 = time_tag::now();
+    real_address_ = addr;
 
-            auto rtt = time_tag::duration(tt1, tt3);
-        #if 1
-            // NB: we are the only thread writing to average_rtt_, so we don't need a CAS loop!
-            auto avg = average_rtt_.load(std::memory_order_relaxed);
-            if (avg > 0) {
-                // simple low-pass filtering; maybe use cumulative average instead?
-                const float coeff = 0.5;
-                auto newval = avg * coeff + rtt * (1.0 - coeff);
-                average_rtt_.store(newval);
-            } else {
-                // first ping
-                average_rtt_.store(rtt);
-            }
-        #else
-            average_rtt_.store(rtt);
-        #endif
+    connected_.store(true, std::memory_order_release);
 
-            // only send event for regular ping reply!
-            auto e = std::make_unique<peer_ping_reply_event>(*this, tt1, tt2, tt3);
-            client.send_event(std::move(e));
+    // push event
+    auto e = std::make_unique<peer_event>(kAooEventPeerJoin, *this);
+    client.send_event(std::move(e));
 
-            LOG_DEBUG("AooClient: got ping reply from " << *this
-                      << "(tt1: " << tt1 << ", tt2: " << tt2 << ", tt3: " << tt3
-                      << ", rtt: " << rtt << ", average: " << average_rtt_.load() << ")");
-        } else {
-            // handshake ping reply
-            LOG_DEBUG("AooClient: got handshake ping reply from " << *this);
-        }
+    LOG_VERBOSE("AooClient: successfully established connection with "
+                << *this << " " << addr << (relay() ? " (relayed)" : ""));
+}
+
+void peer::handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
+                       const ip_address& addr) {
+    if (!connected()) {
+        handle_first_ping(client, addr);
+    }
+
+    time_tag tt1 = (it++)->AsTimeTag();
+    // reply to both handshake and regular pings!!!
+    // otherwise, the handshake might fail on the other side.
+    // This is not 100% threadsafe, but regular pings will never
+    // be sent fast enough to actually cause a race condition.
+    // TODO: maybe use a queue instead?
+    ping_tt1_ = tt1;
+    got_ping_.store(true, std::memory_order_release);
+    if (!tt1.is_empty()) {
+        // regular ping
+        time_tag tt2 = time_tag::now();
+
+        // only send event for regular ping!
+        auto e = std::make_unique<peer_ping_event>(*this, tt1, tt2);
+        client.send_event(std::move(e));
+
+        LOG_DEBUG("AooClient: got ping from " << *this
+                  << "(tt1: " << tt1 << ", tt2: " << tt2 << ")");
     } else {
-        time_tag tt1 = (it++)->AsTimeTag();
-        // reply to both handshake and regular pings!!!
-        // otherwise, the handshake might fail on the other side.
-        // This is not 100% threadsafe, but regular pings will never
-        // be sent fast enough to actually cause a race condition.
-        // TODO: maybe use a queue instead?
-        ping_tt1_ = tt1;
-        got_ping_.store(true, std::memory_order_release);
-        if (!tt1.is_empty()) {
-            // regular ping
-            time_tag tt2 = time_tag::now();
+        // handshake ping
+        LOG_DEBUG("AooClient: got handshake ping from " << *this);
+    }
+}
 
-            // only send event for regular ping!
-            auto e = std::make_unique<peer_ping_event>(*this, tt1, tt2);
-            client.send_event(std::move(e));
+void peer::handle_pong(Client& client, osc::ReceivedMessageArgumentIterator it,
+                       const ip_address& addr) {
+    if (!connected()) {
+        handle_first_ping(client, addr);
+    }
 
-            LOG_DEBUG("AooClient: got ping from " << *this
-                      << "(tt1: " << tt1 << ", tt2: " << tt2 << ")");
+    time_tag tt1 = (it++)->AsTimeTag();
+    if (!tt1.is_empty()) {
+        // regular pong
+        time_tag tt2 = (it++)->AsTimeTag();
+        time_tag tt3 = time_tag::now();
+
+        auto rtt = time_tag::duration(tt1, tt3);
+    #if 1
+        // NB: we are the only thread writing to average_rtt_, so we don't need a CAS loop!
+        auto avg = average_rtt_.load(std::memory_order_relaxed);
+        if (avg > 0) {
+            // simple low-pass filtering; maybe use cumulative average instead?
+            const float coeff = 0.5;
+            auto newval = avg * coeff + rtt * (1.0 - coeff);
+            average_rtt_.store(newval);
         } else {
-            // handshake ping
-            LOG_DEBUG("AooClient: got handshake ping from " << *this);
+            // first ping
+            average_rtt_.store(rtt);
         }
+    #else
+        average_rtt_.store(rtt);
+    #endif
+
+        // only send event for regular pong!
+        auto e = std::make_unique<peer_pong_event>(*this, tt1, tt2, tt3);
+        client.send_event(std::move(e));
+
+        LOG_DEBUG("AooClient: got pong from " << *this
+                  << "(tt1: " << tt1 << ", tt2: " << tt2 << ", tt3: " << tt3
+                  << ", rtt: " << rtt << ", average: " << average_rtt_.load() << ")");
+    } else {
+        // handshake pong
+        LOG_DEBUG("AooClient: got handshake pong from " << *this);
     }
 }
 

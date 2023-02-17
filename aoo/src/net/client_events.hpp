@@ -46,8 +46,8 @@ struct peer_ping_base_event : ievent
           tt1_(tt1), tt2_(tt2), tt3_(tt3) {}
 
     void dispatch(const event_handler &fn) const override {
-        // AooEventPeerPing and AooEventPeerPingReply are layout compatible
-        AooEventPeerPingReply e;
+        // HACK: AooEventPeerPing and AooEventPeerPong are layout compatible
+        AooEventPeerPong e;
         e.type = type;
         e.flags = 0;
         e.group = group_;
@@ -67,7 +67,7 @@ struct peer_ping_base_event : ievent
 };
 
 using peer_ping_event = peer_ping_base_event<kAooEventPeerPing>;
-using peer_ping_reply_event = peer_ping_base_event<kAooEventPeerPingReply>;
+using peer_pong_event = peer_ping_base_event<kAooEventPeerPong>;
 
 struct peer_message_event : ievent
 {

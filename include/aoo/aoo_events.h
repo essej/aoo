@@ -76,8 +76,8 @@ enum AooEventTypes
     kAooEventClientUserUpdate,
     /** received ping from peer */
     kAooEventPeerPing,
-    /** received ping reply from peer */
-    kAooEventPeerPingReply,
+    /** received pong from peer */
+    kAooEventPeerPong,
     /** peer handshake has started */
     kAooEventPeerHandshake,
     /** peer handshake has timed out */
@@ -358,8 +358,8 @@ typedef struct AooEventPeerPing
     AooNtpTime tt2;
 } AooEventPeerPing;
 
-/** \brief received ping reply */
-typedef struct AooEventPeerPingReply
+/** \brief received pong */
+typedef struct AooEventPeerPong
 {
     AooEventType type;
     AooFlag flags;
@@ -368,7 +368,7 @@ typedef struct AooEventPeerPingReply
     AooNtpTime tt1;
     AooNtpTime tt2;
     AooNtpTime tt3;
-} AooEventPeerPingReply;
+} AooEventPeerPong;
 
 /** \brief received peer message */
 typedef struct AooEventPeerMessage
@@ -525,7 +525,7 @@ union AooEvent
     AooEventClientUserUpdate clientUserUpdate;
     AooEventPeer peer;
     AooEventPeerPing peerPing;
-    AooEventPeerPingReply peerPingReply;
+    AooEventPeerPong peerPong;
     AooEventPeerHandshake peerHandshake;
     AooEventPeerTimeout peerTimeout;
     AooEventPeerJoin peerJoin;

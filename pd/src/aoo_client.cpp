@@ -617,24 +617,24 @@ void aoo_client_handle_event(t_aoo_client *x, const AooEvent *event, int32_t lev
         break; // !
     }
     case kAooEventPeerPing:
-    case kAooEventPeerPingReply:
+    case kAooEventPeerPong:
     {
-        // AooEventPeerPingReply is compatible with AooEventPeerPing
-        auto& e = event->peerPingReply;
-        bool reply = e.type == kAooEventPeerPingReply;
+        // HACK: AooEventPeerPong is compatible with AooEventPeerPing
+        auto& e = event->peerPong;
+        bool pong = e.type == kAooEventPeerPong;
         t_atom msg[8];
 
         auto peer = x->find_peer(e.group, e.user);
         if (!peer) {
             bug("aoo_client: can't find peer %d|%d for %s event",
-                e.group, e.user, reply ? "ping reply" : "ping");
+                e.group, e.user, pong ? "pong" : "ping");
             return;
         }
 
         peer_to_atoms(*peer, 5, msg);
 
-        if (reply) {
-            // ping reply
+        if (pong) {
+            // pong
             auto delta1 = aoo::time_tag::duration(e.tt1, e.tt2) * 1000;
             auto delta2 = aoo::time_tag::duration(e.tt2, e.tt3) * 1000;
             auto rtt = aoo::time_tag::duration(e.tt1, e.tt3) * 1000;
@@ -644,7 +644,7 @@ void aoo_client_handle_event(t_aoo_client *x, const AooEvent *event, int32_t lev
             SETFLOAT(msg + 6, delta2);
             SETFLOAT(msg + 7, rtt);
 
-            outlet_anything(x->x_msgout, gensym("peer_ping_reply"), 8, msg);
+            outlet_anything(x->x_msgout, gensym("peer_pong"), 8, msg);
         } else {
             // ping
             auto delta = aoo::time_tag::duration(e.tt1, e.tt2) * 1000;

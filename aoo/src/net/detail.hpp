@@ -4,9 +4,6 @@
 
 // OSC address patterns
 
-#define kAooMsgPingReply \
-    kAooMsgPing kAooMsgReply
-
 #define kAooMsgGroupJoin \
     kAooMsgGroup kAooMsgJoin
 
@@ -39,8 +36,8 @@
 #define kAooMsgPeerPing \
     kAooMsgDomain kAooMsgPeer kAooMsgPing
 
-#define kAooMsgPeerPingReply \
-    kAooMsgDomain kAooMsgPeer kAooMsgPingReply
+#define kAooMsgPeerPong \
+    kAooMsgDomain kAooMsgPeer kAooMsgPong
 
 #define kAooMsgPeerMessage \
     kAooMsgDomain kAooMsgPeer kAooMsgMessage
@@ -50,8 +47,8 @@
 
 // client messages
 
-#define kAooMsgClientPingReply \
-    kAooMsgDomain kAooMsgClient kAooMsgPingReply
+#define kAooMsgClientPong \
+    kAooMsgDomain kAooMsgClient kAooMsgPong
 
 #define kAooMsgClientLogin \
     kAooMsgDomain kAooMsgClient kAooMsgLogin

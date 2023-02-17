@@ -86,7 +86,12 @@ public:
                             AooSize size, int onset, const ip_address& addr);
 private:
     void handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
-                     const ip_address& addr, bool reply);
+                     const ip_address& addr);
+
+    void handle_pong(Client& client, osc::ReceivedMessageArgumentIterator it,
+                     const ip_address& addr);
+
+    void handle_first_ping(Client& client, const aoo::ip_address& addr);
 
     void handle_client_message(Client& client, osc::ReceivedMessageArgumentIterator it);
 

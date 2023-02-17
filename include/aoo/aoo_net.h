@@ -85,8 +85,8 @@ AOO_PACK_BEGIN
 #define kAooMsgRelay "/relay"
 #define kAooMsgRelayLen 6
 
-#define kAooMsgReply "/r"
-#define kAooMsgReplyLen 2
+#define kAooMsgPong "/pong"
+#define kAooMsgReplyLen 5
 
 #define kAooMsgMessage "/msg"
 #define kAooMsgMessageLen 4

@@ -1359,8 +1359,8 @@ void Client::handle_server_message(const osc::ReceivedMessage& msg, int32_t n){
             auto pattern = msg.AddressPattern() + onset;
             LOG_DEBUG("AooClient: got message " << pattern << " from server");
 
-            if (!strcmp(pattern, kAooMsgPingReply)){
-                LOG_DEBUG("AooClient: got TCP ping reply from server");
+            if (!strcmp(pattern, kAooMsgPong)){
+                LOG_DEBUG("AooClient: got TCP pong from server");
             } else if (!strcmp(pattern, kAooMsgPeerJoin)) {
                 handle_peer_add(msg);
             } else if (!strcmp(pattern, kAooMsgPeerLeave)) {
@@ -1871,8 +1871,8 @@ void udp_client::handle_server_message(Client& client, const osc::ReceivedMessag
     LOG_DEBUG("AooClient: got server OSC message " << pattern);
 
     try {
-        if (!strcmp(pattern, kAooMsgPingReply)){
-            LOG_DEBUG("AooClient: got UDP ping from server");
+        if (!strcmp(pattern, kAooMsgPong)){
+            LOG_DEBUG("AooClient: got UDP pong from server");
         } else if (!strcmp(pattern, kAooMsgQuery)){
             if (client.current_state() == client_state::handshake){
                 auto it = msg.ArgumentsBegin();
