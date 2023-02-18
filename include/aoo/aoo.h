@@ -163,6 +163,9 @@
 #define kAooMsgPing "/ping"
 #define kAooMsgPingLen 5
 
+#define kAooMsgPong "/pong"
+#define kAooMsgPongLen 5
+
 #define kAooMsgInvite "/invite"
 #define kAooMsgInviteLen 7
 

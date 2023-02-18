@@ -38,11 +38,10 @@ struct stream_stats {
 enum class request_type {
     none,
     start,
-    ping_reply,
+    pong,
     invite,
     uninvite,
-    uninvite_all,
-    // format
+    uninvite_all
 };
 
 // used in 'source_desc'
@@ -53,13 +52,18 @@ struct request {
     request_type type;
     union {
         struct {
-            AooNtpTime tt1;
-            AooNtpTime tt2;
-        } ping;
+            AooNtpTime time;
+        } pong;
         struct {
             AooId token;
         } uninvite;
     };
+};
+
+struct data_request {
+    int32_t sequence;
+    int16_t offset;
+    uint16_t bitset;
 };
 
 // used in 'sink'
@@ -162,6 +166,8 @@ public:
 
     AooError handle_ping(const Sink& s, time_tag tt);
 
+    AooError handle_pong(const Sink& s, time_tag tt1, time_tag tt2);
+
     void send(const Sink& s, const sendfn& fn);
 
     bool process(const Sink& s, AooSample **buffer, int32_t nsamples,
@@ -192,8 +198,9 @@ private:
     void check_missing_blocks(const Sink& s);
 
     // send messages
-    void send_ping_reply(const Sink& s, AooNtpTime tt1, AooNtpTime tt2,
-                         const sendfn& fn);
+    void send_ping(const Sink&s, const sendfn& fn);
+
+    void send_pong(const Sink& s, AooNtpTime tt1, const sendfn& fn);
 
     void send_start_request(const Sink& s, const sendfn& fn);
 
@@ -224,6 +231,7 @@ private:
     std::atomic<float> invite_start_time_{0};
     std::atomic<float> last_invite_time_{0};
     std::atomic<float> last_packet_time_{0};
+    std::atomic<float> last_ping_time_{0};
     // statistics
     std::atomic<int32_t> lost_blocks_{0};
     time_tag last_ping_reply_time_;
@@ -247,11 +255,6 @@ private:
     void push_request(const request& r){
         request_queue_.push(r);
     }
-    struct data_request {
-        int32_t sequence;
-        int16_t offset;
-        uint16_t bitset;
-    };
     aoo::unbounded_mpsc_queue<data_request> data_requests_;
     void push_data_request(const data_request& r){
     #if AOO_DEBUG_RESEND && 0
@@ -333,6 +336,8 @@ public:
 
     AooSeconds resend_interval() const { return resend_interval_.load(); }
 
+    AooSeconds ping_interval() const { return ping_interval_.load(); }
+
     int32_t resend_limit() const { return resend_limit_.load(); }
 
     AooSeconds source_timeout() const { return source_timeout_.load(); }
@@ -370,6 +375,7 @@ private:
     parameter<float> latency_{ AOO_SINK_LATENCY };
     parameter<float> buffersize_{ 0 };
     parameter<float> resend_interval_{ AOO_RESEND_INTERVAL };
+    parameter<float> ping_interval_{ AOO_PING_INTERVAL };
     parameter<int32_t> packetsize_{ AOO_PACKET_SIZE };
     parameter<int32_t> resend_limit_{ AOO_RESEND_LIMIT };
     parameter<float> source_timeout_{ AOO_SOURCE_TIMEOUT };
@@ -420,6 +426,9 @@ private:
                                 const ip_address& addr, AooId id);
 
     AooError handle_ping_message(const osc::ReceivedMessage& msg,
+                                 const ip_address& addr);
+
+    AooError handle_pong_message(const osc::ReceivedMessage& msg,
                                  const ip_address& addr);
 };
 

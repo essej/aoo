@@ -42,7 +42,8 @@ struct data_request {
 enum class request_type {
     none,
     stop,
-    decline
+    decline,
+    pong
 };
 
 struct sink_request {
@@ -63,6 +64,9 @@ struct sink_request {
         struct {
             int32_t token;
         } decline;
+        struct {
+            AooNtpTime time;
+        } pong;
     };
 };
 
@@ -275,7 +279,7 @@ class Source final : public AooSource, rt_memory_pool_client {
     double stream_samples_ = 0;
     int32_t sequence_ = 0;
     std::atomic<float> xrunblocks_{0};
-    std::atomic<float> lastpingtime_{0};
+    std::atomic<float> last_ping_time_{0};
     std::atomic<bool> needstart_{false};
     enum class stream_state {
         stop,
@@ -381,6 +385,9 @@ class Source final : public AooSource, rt_memory_pool_client {
                              AooId id, const ip_address& addr);
 
     void handle_ping(const osc::ReceivedMessage& msg,
+                     const ip_address& addr);
+
+    void handle_pong(const osc::ReceivedMessage& msg,
                      const ip_address& addr);
 
     void handle_invite(const osc::ReceivedMessage& msg,

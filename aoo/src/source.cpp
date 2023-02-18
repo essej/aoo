@@ -307,8 +307,8 @@ AooError AOO_CALL aoo::Source::control(
         break;
     }
     case kAooCtlGetPingInterval:
-        CHECKARG(int32_t);
-        as<int32_t>(ptr) = ping_interval_.load() * 1000.0;
+        CHECKARG(AooSeconds);
+        as<AooSeconds>(ptr) = ping_interval_.load();
         break;
     // set/get resend buffer size
     case kAooCtlSetResendBufferSize:
@@ -479,6 +479,8 @@ AooError AOO_CALL aoo::Source::handleMessage(
                 handle_uninvite(msg, addr);
             } else if (!strcmp(pattern, kAooMsgPing)){
                 handle_ping(msg, addr);
+            } else if (!strcmp(pattern, kAooMsgPong)){
+                handle_pong(msg, addr);
             } else {
                 LOG_WARNING("AooSource: unknown message " << pattern);
                 return kAooErrorUnknown;
@@ -634,10 +636,10 @@ AooError AOO_CALL aoo::Source::process(
         auto bw = dll_bandwidth_.load();
         dll_.setup(samplerate_, blocksize_, bw, 0);
         realsr_.store(samplerate_);
-        // it is safe to set 'lastpingtime' after updating
+        // it is safe to set 'last_ping_time' after updating
         // the timer, because in the worst case the ping
         // is simply sent the next time.
-        lastpingtime_.store(-1e007); // force first ping
+        last_ping_time_.store(-1e007); // force first ping
     } else if (timerstate == timer::state::error){
         // calculate xrun blocks
         double nblocks = error * (double)samplerate_ / (double)blocksize_;
@@ -1345,6 +1347,28 @@ void send_decline_msg(const endpoint& ep, int32_t id, int32_t token, const sendf
     ep.send(msg, fn);
 }
 
+// /aoo/sink/<id>/pong <src> <tt1> <tt2>
+void send_pong_msg(const endpoint& ep, int32_t id, aoo::time_tag tt1, const sendfn& fn) {
+    LOG_DEBUG("AooSource: send " kAooMsgPong " to " << ep);
+
+    auto tt2 = aoo::time_tag::now(); // use real system time
+
+    char buf[AOO_MAX_PACKET_SIZE];
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+    const int32_t max_addr_size = kAooMsgDomainLen
+            + kAooMsgSinkLen + 16 + kAooMsgDeclineLen;
+    char address[max_addr_size];
+    snprintf(address, sizeof(address), "%s/%d%s",
+             kAooMsgDomain kAooMsgSink, ep.id, kAooMsgPong);
+
+    msg << osc::BeginMessage(address) << id
+        << osc::TimeTag(tt1) << osc::TimeTag(tt2)
+        << osc::EndMessage;
+
+    ep.send(msg, fn);
+}
+
 void Source::dispatch_requests(const sendfn& fn){
     sink_request r;
     while (requests_.try_pop(r)){
@@ -1354,6 +1378,9 @@ void Source::dispatch_requests(const sendfn& fn){
             break;
         case request_type::decline:
             send_decline_msg(r.ep, id(), r.decline.token, fn);
+            break;
+        case request_type::pong:
+            send_pong_msg(r.ep, id(), r.pong.time, fn);
             break;
         default:
             LOG_ERROR("AooSource: unknown request type");
@@ -1964,7 +1991,7 @@ void Source::resend_data(const sendfn &fn){
 void Source::send_ping(const sendfn& fn){
     // if stream is stopped, the timer won't increment anyway
     auto elapsed = timer_.get_elapsed();
-    auto pingtime = lastpingtime_.load();
+    auto pingtime = last_ping_time_.load();
     auto interval = ping_interval_.load(); // 0: no ping
     if (interval > 0 && (elapsed - pingtime) >= interval){
         auto tt = timer_.get_absolute();
@@ -1995,7 +2022,7 @@ void Source::send_ping(const sendfn& fn){
             }
         }
 
-        lastpingtime_.store(elapsed);
+        last_ping_time_.store(elapsed);
     }
 }
 
@@ -2244,7 +2271,7 @@ void Source::handle_uninvite(const osc::ReceivedMessage& msg,
     LOG_DEBUG("AooSource: resend " << kAooMsgStop << " message");
 }
 
-// /aoo/src/<id>/ping <id> <tt1> <tt2> <packetloss>
+// /aoo/src/<id>/ping <id> <tt1>
 
 void Source::handle_ping(const osc::ReceivedMessage& msg,
                          const ip_address& addr)
@@ -2252,10 +2279,38 @@ void Source::handle_ping(const osc::ReceivedMessage& msg,
     auto it = msg.ArgumentsBegin();
     AooId id = (it++)->AsInt32();
     time_tag tt1 = (it++)->AsTimeTag();
-    time_tag tt2 = (it++)->AsTimeTag();
-    float packet_loss = (it++)->AsFloat();
 
     LOG_DEBUG("AooSource: handle ping");
+
+    // check if sink exists (not strictly necessary, but might help catch errors)
+    sink_lock lock(sinks_);
+    auto sink = find_sink(addr, id);
+    if (sink) {
+        if (sink->is_active()){
+            // push pong request
+            sink_request r(request_type::pong, sink->ep);
+            r.pong.time = tt1;
+            push_request(r);
+        } else {
+            LOG_VERBOSE("AooSource: ignoring '" << kAooMsgPing << "' message: sink not active");
+        }
+    } else {
+        LOG_VERBOSE("AooSource: ignoring '" << kAooMsgPing << "' message: sink not found");
+    }
+}
+
+// /aoo/src/<id>/pong <id> <tt1> <tt2> <packetloss>
+
+void Source::handle_pong(const osc::ReceivedMessage& msg,
+                         const ip_address& addr)
+{
+    auto it = msg.ArgumentsBegin();
+    AooId id = (it++)->AsInt32();
+    time_tag tt1 = (it++)->AsTimeTag();
+    time_tag tt2 = (it++)->AsTimeTag();
+    float packetloss = (it++)->AsFloat();
+
+    LOG_DEBUG("AooSource: handle pong");
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     sink_lock lock(sinks_);
@@ -2267,13 +2322,14 @@ void Source::handle_ping(const osc::ReceivedMessage& msg,
         #else
             auto tt3 = aoo::time_tag::now(); // use real system time
         #endif
-            auto e = make_event<ping_reply_event>(sink->ep, tt1, tt2, tt3, packet_loss);
+            // send ping event
+            auto e = make_event<ping_event>(sink->ep, tt1, tt2, tt3, packetloss);
             send_event(std::move(e), kAooThreadLevelNetwork);
         } else {
-            LOG_VERBOSE("AooSource: ignoring '" << kAooMsgPing << "' message: sink not active");
+            LOG_VERBOSE("AooSource: ignoring '" << kAooMsgPong << "' message: sink not active");
         }
     } else {
-        LOG_VERBOSE("AooSource: ignoring '" << kAooMsgPing << "' message: sink not found");
+        LOG_VERBOSE("AooSource: ignoring '" << kAooMsgPong << "' message: sink not found");
     }
 }
 

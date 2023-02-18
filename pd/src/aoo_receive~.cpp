@@ -406,6 +406,23 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
             break;
         }
         //---------------------- source events ------------------------------//
+        case kAooEventPing:
+        {
+            auto& e = event->ping;
+
+            double diff1 = aoo_ntpTimeDuration(e.t1, e.t2) * 1000.0;
+            double diff2 = aoo_ntpTimeDuration(e.t2, e.t3) * 1000.0;
+            double rtt = aoo_ntpTimeDuration(e.t1, e.t3) * 1000.0;
+
+            SETSYMBOL(msg + 3, gensym("ping"));
+            SETFLOAT(msg + 4, diff1);
+            SETFLOAT(msg + 5, diff2);
+            SETFLOAT(msg + 6, rtt);
+
+            outlet_anything(x->x_msgout, gensym("event"), 7, msg);
+
+            break;
+        }
         case kAooEventBufferOverrun:
         {
             SETSYMBOL(msg + 3, gensym("overrun"));
@@ -498,14 +515,6 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
         {
             SETSYMBOL(msg + 3, gensym("block_resent"));
             SETFLOAT(msg + 4, event->blockResent.count);
-            outlet_anything(x->x_msgout, gensym("event"), 5, msg);
-            break;
-        }
-        case kAooEventPing:
-        {
-            double diff = aoo_ntpTimeDuration(event->ping.t1, event->ping.t2) * 1000.0;
-            SETSYMBOL(msg + 3, gensym("ping"));
-            SETFLOAT(msg + 4, diff);
             outlet_anything(x->x_msgout, gensym("event"), 5, msg);
             break;
         }

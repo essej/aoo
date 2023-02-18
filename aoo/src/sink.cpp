@@ -219,6 +219,18 @@ AooError AOO_CALL aoo::Sink::control(
         CHECKARG(double);
         as<double>(ptr) = realsr_.load();
         break;
+    // set/get ping interval
+    case kAooCtlSetPingInterval:
+    {
+        CHECKARG(AooSeconds);
+        auto interval = std::max<AooSeconds>(0, as<AooSeconds>(ptr));
+        ping_interval_.store(interval);
+        break;
+    }
+    case kAooCtlGetPingInterval:
+        CHECKARG(AooSeconds);
+        as<AooSeconds>(ptr) = ping_interval_.load();
+        break;
     // packetsize
     case kAooCtlSetPacketSize:
     {
@@ -382,6 +394,8 @@ AooError AOO_CALL aoo::Sink::handleMessage(
                 return handle_data_message(msg, addr);
             } else if (!strcmp(pattern, kAooMsgPing)){
                 return handle_ping_message(msg, addr);
+            } else if (!strcmp(pattern, kAooMsgPong)){
+                return handle_pong_message(msg, addr);
             } else {
                 LOG_WARNING("AooSink: unknown message " << pattern);
             }
@@ -971,10 +985,8 @@ AooError Sink::handle_ping_message(const osc::ReceivedMessage& msg,
     auto id = (it++)->AsInt32();
     time_tag tt = (it++)->AsTimeTag();
 
-    if (id < 0){
-        LOG_WARNING("AooSink: bad ID for " << kAooMsgPing << " message");
-        return kAooErrorUnknown;
-    }
+    LOG_DEBUG("AooSink: handle ping");
+
     // try to find existing source
     source_lock lock(sources_);
     auto src = find_source(addr, id);
@@ -983,6 +995,28 @@ AooError Sink::handle_ping_message(const osc::ReceivedMessage& msg,
     } else {
         LOG_WARNING("AooSink: couldn't find source " << addr << "|" << id
                     << " for " << kAooMsgPing << " message");
+        return kAooErrorUnknown;
+    }
+}
+
+AooError Sink::handle_pong_message(const osc::ReceivedMessage& msg,
+                                   const ip_address& addr)
+{
+    auto it = msg.ArgumentsBegin();
+    AooId id = (it++)->AsInt32();
+    time_tag tt1 = (it++)->AsTimeTag();
+    time_tag tt2 = (it++)->AsTimeTag();
+
+    LOG_DEBUG("AooSink: handle pong");
+
+    // try to find existing source
+    source_lock lock(sources_);
+    auto src = find_source(addr, id);
+    if (src){
+        return src->handle_pong(*this, tt1, tt2);
+    } else {
+        LOG_WARNING("AooSink: couldn't find source " << addr << "|" << id
+                    << " for " << kAooMsgPong << " message");
         return kAooErrorUnknown;
     }
 }
@@ -1108,6 +1142,7 @@ void source_desc::update(const Sink& s){
         did_update_ = true;
 
         lost_blocks_.store(0);
+        last_ping_time_.store(-1e007); // force ping
 
         // reset decoder to avoid garbage from previous stream
         AooDecoder_control(decoder_.get(), kAooCodecCtlReset, nullptr, 0);
@@ -1457,21 +1492,37 @@ AooError source_desc::handle_ping(const Sink& s, time_tag tt){
     }
 #endif
 
-#if 0
-    time_tag tt2 = s.absolute_time(); // use last stream time
-#else
-    time_tag tt2 = aoo::time_tag::now(); // use real system time
-#endif
-
-    // push ping reply request
-    request r(request_type::ping_reply);
-    r.ping.tt1 = tt;
-    r.ping.tt2 = tt2;
+    // push pong request
+    request r(request_type::pong);
+    r.pong.time = tt;
     push_request(r);
 
-    // push "ping" event
-    auto e = make_event<ping_event>(ep, tt, tt2);
-    send_event(s, std::move(e), kAooThreadLevelNetwork);
+    return kAooOk;
+}
+
+
+// /aoo/sink/<id>/pong <src> <tt1> <tt2>
+
+AooError source_desc::handle_pong(const Sink& s, time_tag tt1, time_tag tt2){
+    LOG_DEBUG("AooSink: handle ping");
+
+#if 1
+    // only handle pongs if active
+    auto state = state_.load(std::memory_order_acquire);
+    if (!(state == source_state::start || state == source_state::run)){
+        return kAooOk;
+    }
+#endif
+
+#if 0
+    time_tag tt3 = s.absolute_time(); // use last stream time
+#else
+    time_tag tt3 = aoo::time_tag::now(); // use real system time
+#endif
+
+    // send ping event
+    auto e = make_event<ping_event>(ep, tt1, tt2, tt3);
+    s.send_event(std::move(e), kAooThreadLevelNetwork);
 
     return kAooOk;
 }
@@ -1480,11 +1531,12 @@ void send_uninvitation(const Sink& s, const endpoint& ep,
                        AooId token, const sendfn &fn);
 
 void source_desc::send(const Sink& s, const sendfn& fn){
+    // handle requests
     request r;
     while (request_queue_.try_pop(r)){
         switch (r.type){
-        case request_type::ping_reply:
-            send_ping_reply(s, r.ping.tt1, r.ping.tt2, fn);
+        case request_type::pong:
+            send_pong(s, r.pong.time, fn);
             break;
         case request_type::start:
             send_start_request(s, fn);
@@ -1496,6 +1548,8 @@ void source_desc::send(const Sink& s, const sendfn& fn){
             break;
         }
     }
+
+    send_ping(s, fn);
 
     send_invitations(s, fn);
 
@@ -1790,6 +1844,8 @@ void source_desc::handle_underrun(const Sink& s){
     }
 
     resampler_.reset(); // !
+
+    last_ping_time_.store(-1e007); // force ping
 
     reset_stream_messages();
 
@@ -2239,31 +2295,61 @@ resend_done:
     }
 }
 
-// /aoo/<id>/ping <id> <tt1> <tt2> <packetloss>
+// /aoo/src/<id>/ping <id> <tt1>
+void source_desc::send_ping(const Sink&s, const sendfn& fn) {
+    if (state_.load(std::memory_order_relaxed) != source_state::run) {
+        return;
+    }
+    auto elapsed = s.elapsed_time();
+    auto pingtime = last_ping_time_.load();
+    auto interval = s.ping_interval(); // 0: no ping
+    if (interval > 0 && (elapsed - pingtime) >= interval){
+        auto tt = s.absolute_time();
+        // send ping to source
+        LOG_DEBUG("AooSink: send " kAooMsgPing " to " << ep);
+
+        char buf[AOO_MAX_PACKET_SIZE];
+        osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+        const int32_t max_addr_size = kAooMsgDomainLen
+                + kAooMsgSourceLen + 16 + kAooMsgPingLen;
+        char address[max_addr_size];
+        snprintf(address, sizeof(address), "%s/%d%s",
+                 kAooMsgDomain kAooMsgSource, ep.id, kAooMsgPing);
+
+        msg << osc::BeginMessage(address) << s.id() << osc::TimeTag(tt)
+            << osc::EndMessage;
+
+        ep.send(msg, fn);
+
+        last_ping_time_.store(elapsed);
+    }
+}
+
+// /aoo/src/<id>/pong <id> <tt1> <tt2> <packetloss>
 // called without lock!
-void source_desc::send_ping_reply(const Sink &s, AooNtpTime tt1,
-                                  AooNtpTime tt2, const sendfn &fn) {
-    LOG_DEBUG("AooSink: send " kAooMsgPing " to " << ep);
+void source_desc::send_pong(const Sink &s, AooNtpTime tt1, const sendfn &fn) {
+    LOG_DEBUG("AooSink: send " kAooMsgPong " to " << ep);
+
+    time_tag tt2 = aoo::time_tag::now(); // use real system time
 
     // cache samplerate and blocksize
     shared_lock lock(mutex_);
     if (!format_){
-        LOG_DEBUG("AooSink: send_ping_reply: no format");
+        LOG_DEBUG("AooSink: send_pong: no format");
         return; // shouldn't happen
     }
     auto sr = format_->sampleRate;
     auto blocksize = format_->blockSize;
     lock.unlock();
 
-    // get lost blocks since last ping reply and calculate
-    // packet loss percentage.
+    // get lost blocks since last pong and calculate packet loss percentage.
     auto lost_blocks = lost_blocks_.exchange(0);
     auto last_ping_time = std::exchange(last_ping_reply_time_, tt2);
     // NOTE: the delta can be very large for the first ping in a stream,
-    // but this is not an issue because there's no packetloss anyway.
+    // but this is not an issue because there's no packet loss anyway.
     auto delta = time_tag::duration(last_ping_time, tt2);
-    float packetloss = (float)lost_blocks * (float)blocksize
-            / ((float)sr * delta);
+    float packetloss = (float)lost_blocks * (float)blocksize / ((float)sr * delta);
     if (packetloss > 1.0){
         LOG_DEBUG("AooSink: packet loss percentage larger than 1");
         packetloss = 1.0;
@@ -2275,10 +2361,10 @@ void source_desc::send_ping_reply(const Sink &s, AooNtpTime tt1,
 
     // make OSC address pattern
     const int32_t max_addr_size = kAooMsgDomainLen
-            + kAooMsgSourceLen + 16 + kAooMsgPingLen;
+            + kAooMsgSourceLen + 16 + kAooMsgPongLen;
     char address[max_addr_size];
     snprintf(address, sizeof(address), "%s/%d%s",
-             kAooMsgDomain kAooMsgSource, ep.id, kAooMsgPing);
+             kAooMsgDomain kAooMsgSource, ep.id, kAooMsgPong);
 
     msg << osc::BeginMessage(address) << s.id()
         << osc::TimeTag(tt1) << osc::TimeTag(tt2) << packetloss

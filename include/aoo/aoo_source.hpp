@@ -321,13 +321,7 @@ public:
         return control(kAooCtlGetPacketSize, 0, AOO_ARG(n));
     }
 
-    /** \brief Set the ping interval (in seconds)
-     *
-     * The source sends a periodic ping message to each sink which the sink has
-     * to answer to signify that it is actually receiving data.
-     * For example, a application might choose to remove a sink after the source
-     * hasn't received a ping for a certain amount of time.
-     */
+    /** \brief Set the ping interval (in seconds) */
     AooError setPingInterval(AooSeconds s) {
         return control(kAooCtlSetPingInterval, 0, AOO_ARG(s));
     }
