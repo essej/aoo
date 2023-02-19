@@ -167,7 +167,7 @@ enum AooRequestTypes
 
 typedef union AooRequest AooRequest;
 
-/** \brief request handler (to intercept client requests)
+/** \brief server request handler (to intercept client requests)
  * \param user user data
  * \param client client ID
  * \param token request token
@@ -183,15 +183,20 @@ typedef AooBool (AOO_CALL *AooRequestHandler)(
 
 typedef union AooResponse AooResponse;
 
-/** \brief callback for client requests */
+/** \brief client response handler
+ *
+ * In the handler function the user must check the response type.
+ * If the type is `kAooRequestError`, the request has failed and
+ * the user may inspect the `error` member to gather more information.
+ * Otherwise the user can safely use the actual response data,
+ * e.g. `connect` for a connection request.
+ */
 typedef void (AOO_CALL *AooResponseHandler)(
         /** the user data */
         void *user,
         /** the original request */
         const AooRequest *request,
-        /** the result */
-        AooError result,
-        /** the response data */
+        /** the response */
         const AooResponse *response
 );
 
