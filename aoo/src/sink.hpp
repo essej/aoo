@@ -94,6 +94,12 @@ enum class source_state {
     timeout
 };
 
+enum class stream_state {
+    active,
+    inactive,
+    buffering
+};
+
 struct net_packet : data_packet {
     int32_t stream_id;
 };
@@ -199,11 +205,11 @@ private:
     AooId stream_id_ = kAooIdInvalid;
     AooId format_id_ = kAooIdInvalid;
 
-    int32_t channel_ = 0; // recent channel onset
-    AooStreamState streamstate_{kAooStreamStateInactive};
+    int16_t channel_ = 0; // recent channel onset
+    stream_state stream_state_ = stream_state::inactive;
+    bool did_update_{false};
     bool underrun_{false};
-    bool didupdate_{false};
-    bool wait_for_buffer_{false};
+    bool stopped_{false};
     std::atomic<bool> binary_{false};
     double xrunblocks_ = 0;
 
@@ -227,8 +233,8 @@ private:
     // packet queue and jitter buffer
     aoo::unbounded_mpsc_queue<net_packet> packetqueue_;
     jitter_buffer jitterbuffer_;
-    int32_t wait_blocks_ = 0;
     int32_t latency_blocks_ = 0;
+    int32_t latency_samples_ = 0;
     // stream messages
     stream_message_header *stream_messages_ = nullptr;
     double stream_samples_ = 0;
@@ -250,7 +256,10 @@ private:
     // events
     using event_queue = lockfree::unbounded_mpsc_queue<event_ptr, aoo::rt_allocator<event_ptr>>;
     event_queue eventqueue_;
+    using event_buffer = std::vector<event_ptr, aoo::allocator<event_ptr>>;
+    event_buffer eventbuffer_;
     void send_event(const Sink& s, event_ptr e, AooThreadLevel level);
+    void flush_event_buffer(const Sink& s);
     // memory
     aoo::memory_list memory_;
     // thread synchronization

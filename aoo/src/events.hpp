@@ -195,9 +195,10 @@ struct stream_stop_event : endpoint_event<AooEventStreamStop> {
 struct stream_state_event : endpoint_event<AooEventStreamState> {
     RT_CLASS(stream_state_event)
 
-    stream_state_event(const aoo::endpoint& ep, AooStreamState state)
+    stream_state_event(const aoo::endpoint& ep, AooStreamState state, int32_t offset)
         : endpoint_event(kAooEventStreamState, ep) {
         this->state = state;
+        this->sampleOffset = offset;
     }
 };
 

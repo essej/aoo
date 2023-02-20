@@ -229,7 +229,9 @@ enum AooStreamStates
     /** \brief stream is (temporarily) inactive */
     kAooStreamStateInactive = 0,
     /** \brief stream is active */
-    kAooStreamStateActive = 1
+    kAooStreamStateActive = 1,
+    /** \brief stream is buffering */
+    kAooStreamStateBuffering = 2
 };
 
 /** \brief the stream state has changed */
@@ -238,6 +240,7 @@ typedef struct AooEventStreamState
     AooEventType type;
     AooEndpoint endpoint;
     AooStreamState state;
+    AooInt32 sampleOffset;
 } AooEventStreamState;
 
 /** \brief generic stream diagnostic event */
