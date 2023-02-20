@@ -411,7 +411,7 @@ AooError AOO_CALL aoo::Source::setup(
                 update_historybuffer();
             }
 
-            make_new_stream();
+            make_new_stream(state_.load() == stream_state::run);
         }
 
         // always reset timer + time DLL filter
@@ -616,7 +616,7 @@ AooError AOO_CALL aoo::Source::process(
             return kAooErrorIdle; // ?
         }
 
-        make_new_stream();
+        make_new_stream(true);
 
         // check if we have been stopped in the meantime
         auto expected = stream_state::start;
@@ -1103,13 +1103,13 @@ AooError Source::set_format(AooFormat &f){
     // we need to start a new stream while holding the lock.
     // it might be tempting to just (atomically) set 'state_'
     // to 'stream_start::start', but then the send() method
-    // could answer a format request by an existing stream with
+    // could answer a /start request by an existing stream with
     // the wrong format, before process() starts the new stream.
     //
-    // NOTE: there's a slight race condition because 'xrunblocks_'
+    // NB: there's a slight race condition because 'xrunblocks_'
     // might be incremented right afterwards, but I'm not
-    // sure if this could cause any real problems..
-    make_new_stream();
+    // sure if this could cause any real problems...
+    make_new_stream(state_.load() == stream_state::run);
 
     return kAooOk;
 }
@@ -1162,7 +1162,7 @@ void Source::send_event(event_ptr e, AooThreadLevel level){
 
 // must be real-time safe because it might be called in process()!
 // always called with update lock!
-void Source::make_new_stream(){
+void Source::make_new_stream(bool notify){
     // implicitly reset time DLL to be on the safe side
     timer_.reset();
 
@@ -1198,7 +1198,9 @@ void Source::make_new_stream(){
         s.start();
     }
 
-    notify_start();
+    if (notify) {
+        notify_start();
+    }
 }
 
 void Source::add_xrun(double nblocks){

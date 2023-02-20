@@ -344,7 +344,7 @@ class Source final : public AooSource, rt_memory_pool_client {
 
     bool need_resampling() const;
 
-    void make_new_stream();
+    void make_new_stream(bool notify);
 
     void add_xrun(double nblocks);
 
