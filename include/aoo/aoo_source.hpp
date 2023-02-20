@@ -339,7 +339,9 @@ public:
     /** \brief Set the resend buffer size (in seconds)
      *
      * The source keeps the last N seconds of audio in a buffer, so it can resend
-     * parts of it if requested (to handle packet loss)
+     * parts of it if requested by the sink (because of packet loss).
+     *
+     * If set to 0.0, resending is disabled.
      */
     AooError setResendBufferSize(AooSeconds s) {
         return control(kAooCtlSetResendBufferSize, 0, AOO_ARG(s));

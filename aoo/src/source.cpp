@@ -1795,6 +1795,8 @@ void Source::send_data(const sendfn& fn){
 void Source::resend_data(const sendfn &fn){
     shared_lock updatelock(update_mutex_); // reader lock for history buffer!
     if (!history_.capacity()){
+        // TODO: we should actually drain request queues - or make sure
+        // that we don't add request if resend_buffersize is 0.
         return;
     }
 
@@ -1968,6 +1970,11 @@ void Source::handle_data_request(const osc::ReceivedMessage& msg,
     auto it = msg.ArgumentsBegin();
     auto id = (it++)->AsInt32();
     auto stream_id = (it++)->AsInt32(); // we can ignore the stream_id
+
+    if (resend_buffersize_.load() <= 0) {
+        LOG_DEBUG("AooSource: ignore data request");
+        return;
+    }
 
     LOG_DEBUG("AooSource: handle data request");
 
