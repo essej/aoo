@@ -1470,7 +1470,7 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
     if (!lock.owns_lock()) {
         if (stream_state_ != stream_state::inactive) {
             add_xrun(1);
-            LOG_DEBUG("AooSink: source_desc::process() would block");
+            LOG_DEBUG("AooSink: process would block");
         }
         // how to report this to the client?
         return false;
@@ -1521,8 +1521,14 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
 
                 break; // continue processing
             }
+        } else if (state == source_state::uninvite) {
+            // NB: we keep processing data during the 'uninvite' state to flush
+            // the packet buffer. If we receive a /stop message (= the sink has
+            // accepted our uninvitation), we will enter the 'idle' state.
+            // Otherwise it will eventually enter the 'timeout' state.
+            break;
         } else {
-            // invite, uninvite, timeout or idle
+            // invite, timeout or idle
             if (stream_state_ != stream_state::inactive) {
                 // deactivate stream immediately
                 stream_state_ = stream_state::inactive;
@@ -1973,7 +1979,9 @@ bool source_desc::try_decode_block(const Sink& s, stream_stats& stats){
     }
 
     if (jitterbuffer_.empty()) {
+    #if 0
         LOG_DEBUG("AooSink: jitter buffer empty");
+    #endif
         // buffer empty -> underrun
         return false;
     }
