@@ -358,6 +358,8 @@ class Source final : public AooSource, rt_memory_pool_client {
 
     void send_start(const sendfn& fn);
 
+    void handle_xruns(const sendfn& fn);
+
     void send_data(const sendfn& fn);
 
     void resend_data(const sendfn& fn);

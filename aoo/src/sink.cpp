@@ -1772,11 +1772,18 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
         return false;
     }
 
-    if (d.sequence <= jitterbuffer_.last_popped()){
-        // block too old, discard!
-        LOG_VERBOSE("AooSink: discard old block " << d.sequence);
-        LOG_DEBUG("AooSink: oldest: " << jitterbuffer_.last_popped());
-        return false;
+    if (d.sequence <= jitterbuffer_.last_popped()) {
+        // try to detect wrap around
+        if ((jitterbuffer_.last_popped() - d.sequence) >= (INT32_MAX / 2)) {
+            LOG_VERBOSE("AooSink: stream sequence has wrapped around!");
+            jitterbuffer_.clear();
+            // continue!
+        } else {
+            // block too old, discard!
+            LOG_VERBOSE("AooSink: discard old block " << d.sequence);
+            LOG_DEBUG("AooSink: oldest: " << jitterbuffer_.last_popped());
+            return false;
+        }
     }
 
     auto newest = jitterbuffer_.last_pushed();
