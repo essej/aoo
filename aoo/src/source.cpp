@@ -2118,7 +2118,8 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
         md.data = (AooByte *)ptr;
         md.size = size;
 
-        e2 = make_event<invite_event>(addr, id, token, type ? &md : nullptr);
+        e2 = make_event<invite_event>(addr, id, token,
+                                      (type != kAooDataUnspecified) ? &md : nullptr);
     }
 
     lock1.unlock(); // unlock before sending events
