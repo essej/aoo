@@ -341,6 +341,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
     }
     case kAooEventSourceAdd:
     case kAooEventSourceRemove:
+    case kAooEventInviteDecline:
     case kAooEventInviteTimeout:
     case kAooEventUninviteTimeout:
     case kAooEventBufferOverrun:
@@ -387,6 +388,11 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
                 }
             }
             outlet_anything(x->x_msgout, gensym("remove"), 3, msg);
+            break;
+        }
+        case kAooEventInviteDecline:
+        {
+            outlet_anything(x->x_msgout, gensym("invite_decline"), 3, msg);
             break;
         }
         case kAooEventInviteTimeout:

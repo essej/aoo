@@ -156,6 +156,8 @@ public:
 
     AooError handle_stop(const Sink& s, int32_t stream);
 
+    AooError handle_decline(const Sink& s, int32_t token);
+
     AooError handle_data(const Sink& s, net_packet& d, bool binary);
 
     AooError handle_ping(const Sink& s, time_tag tt);
@@ -399,6 +401,9 @@ private:
 
     AooError handle_stop_message(const osc::ReceivedMessage& msg,
                                  const ip_address& addr);
+
+    AooError handle_decline_message(const osc::ReceivedMessage& msg,
+                                    const ip_address& addr);
 
     AooError handle_data_message(const osc::ReceivedMessage& msg,
                                  const ip_address& addr);

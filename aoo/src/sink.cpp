@@ -376,6 +376,8 @@ AooError AOO_CALL aoo::Sink::handleMessage(
                 return handle_start_message(msg, addr);
             } else if (!strcmp(pattern, kAooMsgStop)){
                 return handle_stop_message(msg, addr);
+            } else if (!strcmp(pattern, kAooMsgDecline)){
+                return handle_decline_message(msg, addr);
             } else if (!strcmp(pattern, kAooMsgData)){
                 return handle_data_message(msg, addr);
             } else if (!strcmp(pattern, kAooMsgPing)){
@@ -825,6 +827,28 @@ AooError Sink::handle_stop_message(const osc::ReceivedMessage& msg,
     auto src = find_source(addr, id);
     if (src){
         return src->handle_stop(*this, stream);
+    } else {
+        return kAooErrorUnknown;
+    }
+}
+
+// /aoo/sink/<id>/decline <src> <token>
+AooError Sink::handle_decline_message(const osc::ReceivedMessage& msg,
+                                      const ip_address& addr) {
+    auto it = msg.ArgumentsBegin();
+
+    AooId id = (it++)->AsInt32();
+    AooId token = (it++)->AsInt32();
+
+    if (id < 0){
+        LOG_WARNING("AooSink: bad ID for " << kAooMsgDecline << " message");
+        return kAooErrorUnknown;
+    }
+    // try to find existing source
+    source_lock lock(sources_);
+    auto src = find_source(addr, id);
+    if (src){
+        return src->handle_decline(*this, token);
     } else {
         return kAooErrorUnknown;
     }
@@ -1292,6 +1316,27 @@ AooError source_desc::handle_stop(const Sink& s, int32_t stream) {
     return kAooOk;
 }
 
+// /aoo/sink/<id>/decline <src> <token>
+
+AooError source_desc::handle_decline(const Sink& s, int32_t token) {
+    LOG_DEBUG("AooSink: handle decline (" << token << ")");
+    // ignore /decline messages that don't match the token
+    if (token != invite_token_.load()){
+        LOG_DEBUG("AooSink: /decline message doesn't match invite token");
+        return kAooOk;
+    }
+
+    auto expected = source_state::invite;
+    if (state_.compare_exchange_strong(expected, source_state::timeout)) {
+        auto e = make_event<sink_event>(kAooEventInviteDecline, ep);
+        s.send_event(std::move(e), kAooThreadLevelNetwork);
+    } else {
+        LOG_DEBUG("AooSink: received /decline while not inviting");
+    }
+
+    return kAooOk;
+}
+
 // /aoo/sink/<id>/data <src> <stream_id> <seq> <sr> <channel_onset>
 // <totalsize> <msgsize> <numpackets> <packetnum> <data>
 
@@ -1306,7 +1351,7 @@ AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
     if (state == source_state::invite) {
         // ignore data messages that don't match the desired stream id.
         if (d.stream_id != invite_token_.load()){
-            LOG_DEBUG("AooSink: handle_data: doesn't match invite token");
+            LOG_DEBUG("AooSink: /data message doesn't match invite token");
             return kAooOk;
         }
     } else if (state == source_state::uninvite) {
@@ -1314,7 +1359,7 @@ AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
         // amount of time to avoid spamming the source.
         auto delta = s.elapsed_time() - invite_start_time_.load(std::memory_order_relaxed);
         if (delta < s.invite_timeout()){
-            LOG_DEBUG("AooSink: handle data: uninvite (elapsed: " << delta << ")");
+            LOG_DEBUG("AooSink: request uninvite (elapsed: " << delta << ")");
             request r(request_type::uninvite);
             r.uninvite.token = d.stream_id;
             push_request(r);
@@ -1322,12 +1367,12 @@ AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
             // transition into 'timeout' state, but only if the state
             // hasn't changed in between.
             if (state_.compare_exchange_strong(state, source_state::timeout)) {
-                LOG_DEBUG("AooSink: handle data: uninvite -> timeout");
+                LOG_DEBUG("AooSink: uninvite -> timeout");
             } else {
-                LOG_DEBUG("AooSink: handle data: uninvite -> timeout failed");
+                LOG_DEBUG("AooSink: uninvite -> timeout failed");
             }
             // always send timeout event
-            LOG_VERBOSE(ep << ": uninvitation timed out");
+            LOG_VERBOSE("AooSink: " << ep << ": uninvitation timed out");
             auto e = make_event<sink_event>(kAooEventUninviteTimeout, ep);
             s.send_event(std::move(e), kAooThreadLevelNetwork);
         }

@@ -61,8 +61,8 @@ bool sink_desc::need_invite(AooId token){
     }
 }
 
-void sink_desc::accept_invitation(Source &s, AooId token){
-    if (token != kAooIdInvalid){
+void sink_desc::handle_invite(Source &s, AooId token, bool accept){
+    if (accept){
         stream_id_.store(token); // activates sink
         LOG_DEBUG("AooSource: " << ep << ": accept invitation (" << token << ")");
         if (s.is_running()){
@@ -70,9 +70,12 @@ void sink_desc::accept_invitation(Source &s, AooId token){
             s.notify_start();
         }
     } else {
-        // nothing to do, just let the remote side timeout
-        // TODO: send /decline message
-        LOG_DEBUG("AooSource: " << ep << ": don't accept invitation (" << token << ")");
+        LOG_DEBUG("AooSource: " << ep << ": decline invitation (" << token << ")");
+        if (s.is_running()){
+            sink_request r(request_type::decline, ep);
+            r.decline.token = token;
+            s.push_request(r);
+        }
     }
 }
 
@@ -90,24 +93,18 @@ bool sink_desc::need_uninvite(AooId token){
     }
 }
 
-void sink_desc::accept_uninvitation(Source &s, AooId token){
-    if (token != kAooIdInvalid){
-        // deactivate the source, but check if we're still on the
-        // same stream as the remote end (probably not necessary).
-        auto expected = token;
-        if (stream_id_.compare_exchange_strong(expected, kAooIdInvalid)) {
-            LOG_DEBUG("AooSource: " << ep << ": accept uninvitation (" << token << ")");
-            if (s.is_running()){
-                sink_request r(request_type::stop, ep);
-                r.stop.stream = token;
-                s.push_request(r);
-            }
-        } else {
-            LOG_DEBUG("AooSource: " << ep << ": invitation already accepted (" << token << ")");
+void sink_desc::handle_uninvite(Source &s, AooId token, bool accept){
+    if (accept) {
+        stream_id_.store(kAooIdInvalid); // deactivates sink
+        LOG_DEBUG("AooSource: " << ep << ": accept uninvitation (" << token << ")");
+        if (s.is_running()){
+            sink_request r(request_type::stop, ep);
+            r.stop.stream = token;
+            s.push_request(r);
         }
     } else {
         // nothing to do, just let the remote side timeout
-        LOG_DEBUG("AooSource: " << ep << ": don't accept uninvitation (" << token << ")");
+        LOG_DEBUG("AooSource: " << ep << ": decline uninvitation (" << token << ")");
     }
 }
 
@@ -933,22 +930,22 @@ AooError AOO_CALL aoo::Source::removeAll() {
     return kAooOk;
 }
 
-AOO_API AooError AOO_CALL AooSource_acceptInvitation(
-        AooSource *source, const AooEndpoint *sink, AooId token)
+AOO_API AooError AOO_CALL AooSource_handleInvite(
+        AooSource *source, const AooEndpoint *sink, AooId token, AooBool accept)
 {
     if (sink) {
-        return source->acceptInvitation(*sink, token);
+        return source->handleInvite(*sink, token, accept);
     } else {
         return kAooErrorBadArgument;
     }
 }
 
-AooError AOO_CALL aoo::Source::acceptInvitation(const AooEndpoint& ep, AooId token) {
+AooError AOO_CALL aoo::Source::handleInvite(const AooEndpoint& ep, AooId token, AooBool accept) {
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
     sink_lock lock(sinks_);
     auto sink = find_sink(addr, ep.id);
     if (sink){
-        sink->accept_invitation(*this, token);
+        sink->handle_invite(*this, token, accept);
         return kAooOk;
     } else {
         LOG_ERROR("AooSource: couldn't find sink");
@@ -956,22 +953,22 @@ AooError AOO_CALL aoo::Source::acceptInvitation(const AooEndpoint& ep, AooId tok
     }
 }
 
-AOO_API AooError AOO_CALL AooSource_acceptUninvitation(
-        AooSource *source, const AooEndpoint *sink, AooId token)
+AOO_API AooError AOO_CALL AooSource_handleUninvite(
+        AooSource *source, const AooEndpoint *sink, AooId token, AooBool accept)
 {
     if (sink) {
-        return source->acceptUninvitation(*sink, token);
+        return source->handleUninvite(*sink, token, accept);
     } else {
         return kAooErrorBadArgument;
     }
 }
 
-AooError AOO_CALL aoo::Source::acceptUninvitation(const AooEndpoint& ep, AooId token) {
+AooError AOO_CALL aoo::Source::handleUninvite(const AooEndpoint& ep, AooId token, AooBool accept) {
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
     sink_lock lock(sinks_);
     auto sink = find_sink(addr, ep.id);
     if (sink){
-        sink->accept_uninvitation(*this, token);
+        sink->handle_uninvite(*this, token, accept);
         return kAooOk;
     } else {
         LOG_ERROR("AooSource: couldn't find sink");
@@ -1329,11 +1326,37 @@ void send_stop_msg(const endpoint& ep, int32_t id, int32_t stream, const sendfn&
     ep.send(msg, fn);
 }
 
+// /aoo/sink/<id>/decline <src> <token>
+void send_decline_msg(const endpoint& ep, int32_t id, int32_t token, const sendfn& fn) {
+    LOG_DEBUG("AooSource: send " kAooMsgDecline " to " << ep
+              << " (stream = " << token << ")");
+
+    char buf[AOO_MAX_PACKET_SIZE];
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
+
+    const int32_t max_addr_size = kAooMsgDomainLen
+            + kAooMsgSinkLen + 16 + kAooMsgDeclineLen;
+    char address[max_addr_size];
+    snprintf(address, sizeof(address), "%s/%d%s",
+             kAooMsgDomain kAooMsgSink, ep.id, kAooMsgDecline);
+
+    msg << osc::BeginMessage(address) << id << token << osc::EndMessage;
+
+    ep.send(msg, fn);
+}
+
 void Source::dispatch_requests(const sendfn& fn){
     sink_request r;
     while (requests_.try_pop(r)){
-        if (r.type == request_type::stop){
+        switch (r.type) {
+        case request_type::stop:
             send_stop_msg(r.ep, id(), r.stop.stream, fn);
+            break;
+        case request_type::decline:
+            send_decline_msg(r.ep, id(), r.decline.token, fn);
+            break;
+        default:
+            LOG_ERROR("AooSource: unknown request type");
         }
     }
 }

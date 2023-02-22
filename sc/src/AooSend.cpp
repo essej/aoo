@@ -111,7 +111,8 @@ void AooSend::handleEvent(const AooEvent *event){
     case kAooEventInvite:
     {
         if (accept_){
-            // TODO
+            // accept by default
+            source_->handleInvite(event->invite.endpoint, event->invite.token, true);
         } else {
             beginEvent(msg, "/invite", event->invite.endpoint);
             sendMsgRT(msg);
@@ -121,7 +122,8 @@ void AooSend::handleEvent(const AooEvent *event){
     case kAooEventUninvite:
     {
         if (accept_){
-            // TODO
+            // accept by default
+            source_->handleUninvite(event->uninvite.endpoint, event->uninvite.token, true);
         } else {
             beginEvent(msg, "/uninvite", event->uninvite.endpoint);
             sendMsgRT(msg);

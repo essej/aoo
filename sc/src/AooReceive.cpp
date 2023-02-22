@@ -104,6 +104,12 @@ void AooReceive::handleEvent(const AooEvent *event){
         sendMsgRT(msg);
         break;
     }
+    case kAooEventInviteDecline:
+    {
+        beginEvent(msg, "/invite/decline", event->inviteDecline.endpoint);
+        sendMsgRT(msg);
+        break;
+    }
     case kAooEventInviteTimeout:
     {
         beginEvent(msg, "/invite/timeout", event->inviteTimeout.endpoint);

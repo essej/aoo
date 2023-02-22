@@ -492,7 +492,8 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
 
             x->x_invite_token = e.token;
             if (x->x_auto_invite) {
-                x->x_source->acceptInvitation(ep, e.token);
+                // accept by default
+                x->x_source->handleInvite(ep, e.token, true);
             }
 
             if (e.metadata){
@@ -516,7 +517,8 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
         {
             x->x_invite_token = event->uninvite.token;
             if (x->x_auto_invite) {
-                x->x_source->acceptUninvitation(ep, event->uninvite.token);
+                // accept by default
+                x->x_source->handleUninvite(ep, event->uninvite.token, true);
             }
 
             outlet_anything(x->x_msgout, gensym("uninvite"), 3, msg);
@@ -600,13 +602,10 @@ static void aoo_send_invite(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
     aoo::ip_address addr;
     AooId id;
-    if (x->get_sink_arg(argc, argv, addr, id, true)){
-        // interpret non-float argument as 'yes', so we can simply
-        // pass the original 'invite' message - including the metadata!
-        bool accept = ((argc > 3) && (argv[3].a_type == A_FLOAT)) ?
-                    argv[3].a_w.w_float : true;
+    if (x->get_sink_arg(argc, argv, addr, id, true)) {
+        bool accept = argc > 3 ? atom_getfloat(argv + 3) : true; // default: true
         AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
-        x->x_source->acceptInvitation(ep, accept ? x->x_invite_token : kAooIdInvalid);
+        x->x_source->handleInvite(ep, x->x_invite_token, accept);
     }
 }
 
@@ -617,12 +616,9 @@ static void aoo_send_uninvite(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv
     aoo::ip_address addr;
     AooId id;
     if (x->get_sink_arg(argc, argv, addr, id, true)){
-        // interpret non-float argument as 'yes', so we can simply
-        // pass the original 'invite' message - including the metadata!
-        bool accept = ((argc > 3) && (argv[3].a_type == A_FLOAT)) ?
-                    argv[3].a_w.w_float : true;
+        bool accept = argc > 3 ? atom_getfloat(argv + 3) : true; // default: true
         AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
-        x->x_source->acceptUninvitation(ep, accept ? x->x_invite_token : kAooIdInvalid);
+        x->x_source->handleUninvite(ep, x->x_invite_token, accept);
     }
 }
 

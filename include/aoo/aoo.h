@@ -164,6 +164,9 @@
 #define kAooMsgUninvite "/uninvite"
 #define kAooMsgUninviteLen 9
 
+#define kAooMsgDecline "/decline"
+#define kAooMsgDeclineLen 8
+
 /*------------------- binary message ---------------------*/
 
 /* domain bit + type (uint8), size bit + cmd (uint8)

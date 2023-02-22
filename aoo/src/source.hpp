@@ -40,7 +40,8 @@ struct data_request {
 
 enum class request_type {
     none,
-    stop
+    stop,
+    decline
 };
 
 struct sink_request {
@@ -58,6 +59,9 @@ struct sink_request {
         struct {
             int32_t stream;
         } stop;
+        struct {
+            int32_t token;
+        } decline;
     };
 };
 
@@ -102,11 +106,11 @@ struct sink_desc {
 
     bool need_invite(AooId token);
 
-    void accept_invitation(Source& s, AooId token);
+    void handle_invite(Source& s, AooId token, bool accept);
 
     bool need_uninvite(AooId stream_id);
 
-    void accept_uninvitation(Source& s, AooId token);
+    void handle_uninvite(Source& s, AooId token, bool accept);
 
     void notify_start() {
         needstart_.exchange(true, std::memory_order_release);
@@ -226,9 +230,9 @@ class Source final : public AooSource, rt_memory_pool_client {
 
     AooError AOO_CALL removeAll() override;
 
-    AooError AOO_CALL acceptInvitation(const AooEndpoint& sink, AooId token) override;
+    AooError AOO_CALL handleInvite(const AooEndpoint& sink, AooId token, AooBool accept) override;
 
-    AooError AOO_CALL acceptUninvitation(const AooEndpoint& sink, AooId token) override;
+    AooError AOO_CALL handleUninvite(const AooEndpoint& sink, AooId token, AooBool accept) override;
 
     AooError AOO_CALL control(AooCtl ctl, AooIntPtr index,
                               void *ptr, AooSize size) override;

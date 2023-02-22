@@ -46,6 +46,8 @@ enum AooEventTypes
     kAooEventStreamState,
     /** sink: source format changed */
     kAooEventFormatChange,
+    /** sink: invitation has been declined */
+    kAooEventInviteDecline,
     /** sink: invitation timed out */
     kAooEventInviteTimeout,
     /** sink: uninvitation timed out */
@@ -213,6 +215,9 @@ typedef struct AooEventUninvite
     AooEndpoint endpoint;
     AooId token;
 } AooEventUninvite;
+
+/** \brief invitation has been declined */
+typedef AooEventEndpoint AooEventInviteDecline;
 
 /** \brief invitation has timed out */
 typedef AooEventEndpoint AooEventInviteTimeout;
@@ -516,6 +521,7 @@ union AooEvent
     AooEventStreamStop streamStop;
     AooEventStreamState streamState;
     AooEventFormatChange formatChange;
+    AooEventInviteDecline inviteDecline;
     AooEventInviteTimeout inviteTimeout;
     AooEventUninviteTimeout uninviteTimeout;
     AooEventBufferOverrun bufferOverrrun;
