@@ -2424,8 +2424,8 @@ void source_desc::send_invitations(const Sink &s, const sendfn &fn){
             LOG_DEBUG("AooSink: send_invitation: invite -> timeout failed");
         }
         // always send timeout event
-        LOG_VERBOSE(ep << ": invitation timed out");
-        auto e = make_event<sink_event>(kAooEventUninviteTimeout, ep);
+        LOG_VERBOSE("AooSink: " << ep << ": invitation timed out");
+        auto e = make_event<sink_event>(kAooEventInviteTimeout, ep);
         s.send_event(std::move(e), kAooThreadLevelNetwork);
     } else {
         delta = now - last_invite_time_.load(std::memory_order_relaxed);
