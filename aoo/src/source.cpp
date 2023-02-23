@@ -1729,8 +1729,14 @@ void Source::send_data(const sendfn& fn){
                 break;
             }
         }
-        // finally write message count
-        aoo::to_bytes<uint32_t>(msg_count, sendbuffer_.data());
+        if (msg_count > 0) {
+            // finally write message count
+            aoo::to_bytes<uint32_t>(msg_count, sendbuffer_.data());
+        } else {
+            // no stream message data
+            sendbuffer_.clear();
+        }
+
         stream_samples_ = deadline;
 
         // cache sinks
