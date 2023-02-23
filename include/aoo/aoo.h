@@ -12,6 +12,12 @@
 
 #include "aoo_defines.h"
 
+/*----------------- utilities ---------------------*/
+
+/** \brief check if a struct has a specific field */
+#define AOO_CHECK_FIELD(type, size, field) \
+    ((size) >= (offsetof(type, field) + sizeof(((type*)NULL)->field)))
+
 /*------------- compile time settings -------------*/
 
 /** \brief clip audio output between -1 and 1 */

@@ -574,7 +574,7 @@ void aoo_opusUnload();
 #endif
 
 #define HAVE_SETTING(settings, field) \
-    (settings && (settings->size >= (offsetof(AooSettings, field) + sizeof(settings->field))))
+    (settings && AOO_CHECK_FIELD(AooSettings, settings->size, field))
 
 AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
     static bool initialized = false;
