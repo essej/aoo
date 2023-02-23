@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
@@ -35,7 +35,8 @@ class Source;
 
 struct data_request {
     int32_t sequence;
-    int32_t frame;
+    int16_t offset;
+    uint16_t bitset;
 };
 
 enum class request_type {
@@ -120,8 +121,8 @@ struct sink_desc {
         return needstart_.exchange(false, std::memory_order_acquire);
     }
 
-    void add_data_request(int32_t sequence, int32_t frame){
-        data_requests_.push(sequence, frame);
+    void push_data_request(const data_request& r){
+        data_requests_.push(r);
     }
 
     bool get_data_request(data_request& r){

@@ -29,6 +29,11 @@
 # define AOO_DEBUG_DATA 0
 #endif
 
+/** \brief debug data resending */
+#ifndef AOO_DEBUG_RESEND
+# define AOO_DEBUG_RESEND 0
+#endif
+
 /** \brief debug the state of the xrun detector */
 #ifndef AOO_DEBUG_TIMER
 # define AOO_DEBUG_TIMER 0

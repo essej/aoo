@@ -1842,8 +1842,8 @@ void Source::send_data(const sendfn& fn){
 void Source::resend_data(const sendfn &fn){
     shared_lock updatelock(update_mutex_); // reader lock for history buffer!
     if (!history_.capacity()){
-        // TODO: we should actually drain request queues - or make sure
-        // that we don't add request if resend_buffersize is 0.
+        // NB: there should not be any requests if resending is disabled,
+        // see handle_data_request().
         return;
     }
 
@@ -1854,9 +1854,13 @@ void Source::resend_data(const sendfn &fn){
 #endif
     // send block to sinks
     for (auto& s : sinks_){
-        data_request request;
-        while (s.get_data_request(request)){
-            auto block = history_.find(request.sequence);
+        data_request r;
+        while (s.get_data_request(r)){
+        #if AOO_DEBUG_RESEND && 0
+            LOG_DEBUG("AooSource: dispatch data request (" << r.sequence
+                      << " " << r.offset << " " << r.bitset << ")");
+        #endif
+            auto block = history_.find(r.sequence);
             if (block){
                 bool binary = binary_.load();
 
@@ -1869,68 +1873,83 @@ void Source::resend_data(const sendfn &fn){
                 d.channel = s.channel();
                 d.totalsize = block->size();
                 d.nframes = block->num_frames();
+                // We need to copy all (requested) frames before sending
+                // because we temporarily release the update lock!
                 // We use a buffer on the heap because blocks and even frames
                 // can be quite large and we don't want them to sit on the stack.
-                if (request.frame < 0){
-                    // Copy whole block and save frame pointers.
-                    sendbuffer_.resize(d.totalsize);
-                    AooByte *buf = sendbuffer_.data();
-                    AooByte *frameptr[256];
-                    int32_t framesize[256];
-                    int32_t onset = 0;
+                sendbuffer_.resize(d.totalsize);
+                AooByte *buf = sendbuffer_.data();
+                // Keep track of the frames we will eventually send.
+                struct frame_data {
+                    int32_t index;
+                    int32_t size;
+                    AooByte *data;
+                };
+                auto framevec = (frame_data *)alloca(d.nframes * sizeof(frame_data));
+                int32_t numframes = 0;
+                int32_t buf_offset = 0;
 
-                    for (int i = 0; i < d.nframes; ++i){
-                        auto nbytes = block->get_frame(i, buf + onset, d.totalsize - onset);
-                        if (nbytes > 0){
-                            frameptr[i] = buf + onset;
-                            framesize[i] = nbytes;
-                            onset += nbytes;
-                        } else {
-                            LOG_ERROR("AooSource: empty frame!");
-                        }
-                    }
-                    // unlock before sending
-                    updatelock.unlock();
+                auto copy_frame = [&](int32_t index) {
+                    auto nbytes = block->get_frame(index, buf + buf_offset,
+                                                   d.totalsize - buf_offset);
+                    if (nbytes > 0) {
+                        auto& frame = framevec[numframes];
+                        frame.index = index;
+                        frame.size = nbytes;
+                        frame.data = buf + buf_offset;
 
-                    // send frames to sink
-                    for (int i = 0; i < d.nframes; ++i){
-                        d.frame = i;
-                        d.data = frameptr[i];
-                        d.size = framesize[i];
-                        if (binary){
-                            send_packet_bin(s.ep, id(), stream_id, d, fn);
-                        } else {
-                            send_packet_osc(s.ep, id(), stream_id, d, fn);
-                        }
-                    }
-
-                    // lock again
-                    updatelock.lock();
-                } else {
-                    // Copy a single frame
-                    if (request.frame >= 0 && request.frame < d.nframes){
-                        int32_t size = block->frame_size(request.frame);
-                        sendbuffer_.resize(size);
-                        block->get_frame(request.frame, sendbuffer_.data(), size);
-                        // unlock before sending
-                        updatelock.unlock();
-
-                        // send frame to sink
-                        d.frame = request.frame;
-                        d.data = sendbuffer_.data();
-                        d.size = size;
-                        if (binary){
-                            send_packet_bin(s.ep, id(), stream_id, d, fn);
-                        } else {
-                            send_packet_osc(s.ep, id(), stream_id, d, fn);
-                        }
-
-                        // lock again
-                        updatelock.lock();
+                        buf_offset += nbytes;
+                        numframes++;
                     } else {
-                        LOG_ERROR("AooSource: frame number " << request.frame << " out of range!");
+                        LOG_ERROR("AooSource: empty frame!");
+                    }
+                };
+
+                if (r.offset < 0) {
+                    // a) whole block: copy all frames
+                    for (int i = 0; i < d.nframes; ++i){
+                        copy_frame(i);
+                    }
+                } else {
+                    // b) only copy requested frames
+                    uint16_t bitset = r.bitset;
+                    for (int i = 0; bitset != 0; ++i, bitset >>= 1) {
+                        if (bitset & 1) {
+                            auto index = r.offset + i;
+                            if (index < d.nframes) {
+                                copy_frame(index);
+                            } else {
+                                LOG_ERROR("AooSource: frame number " << index << " out of range!");
+                            }
+                        }
                     }
                 }
+                // unlock before sending
+                updatelock.unlock();
+
+                // send frames to sink
+                for (int i = 0; i < numframes; ++i) {
+                    auto& frame = framevec[i];
+                    d.frame = frame.index;
+                    d.size = frame.size;
+                    d.data = frame.data;
+                #if AOO_DEBUG_RESEND
+                    LOG_DEBUG("AooSource: resend " << d.sequence
+                              << " (" << d.frame << " / " << d.nframes << ")");
+                #endif
+                    if (binary){
+                        send_packet_bin(s.ep, id(), stream_id, d, fn);
+                    } else {
+                        send_packet_osc(s.ep, id(), stream_id, d, fn);
+                    }
+                }
+
+                // lock again
+                updatelock.lock();
+            } else {
+            #if AOO_DEBUG_RESEND
+                LOG_DEBUG("AooSource: cannot find block " << r.sequence);
+            #endif
             }
         }
     }
@@ -2019,11 +2038,15 @@ void Source::handle_data_request(const osc::ReceivedMessage& msg,
     auto stream_id = (it++)->AsInt32(); // we can ignore the stream_id
 
     if (resend_buffersize_.load() <= 0) {
+    #if AOO_DEBUG_RESEND
         LOG_DEBUG("AooSource: ignore data request");
+    #endif
         return;
     }
 
+#if AOO_DEBUG_RESEND
     LOG_DEBUG("AooSource: handle data request");
+#endif
 
     sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
@@ -2037,9 +2060,11 @@ void Source::handle_data_request(const osc::ReceivedMessage& msg,
             // get pairs of sequence + frame
             int npairs = (msg.ArgumentCount() - 2) / 2;
             while (npairs--){
-                int32_t sequence = (it++)->AsInt32();
-                int32_t frame = (it++)->AsInt32();
-                sink->add_data_request(sequence, frame);
+                data_request r;
+                r.sequence = (it++)->AsInt32();
+                r.offset = (it++)->AsInt32(); // -1: whole block
+                r.bitset = r.offset >= 0; // only first bit
+                sink->push_data_request(r);
             }
         } else {
             LOG_VERBOSE("AooSource: ignoring '" << kAooMsgData << "' message: sink not active");
@@ -2050,11 +2075,7 @@ void Source::handle_data_request(const osc::ReceivedMessage& msg,
 }
 
 // (header), stream_id (int32), count (int32),
-// seq1 (int32), frame1(int32), seq2(int32), frame2(seq), etc.
-
-// TODO:
-// header, stream_id (int32), count (int32),
-// seq1 (int32), offset1 (int16), bitset1 (uint16) etc. // offset < 0 -> all
+// seq1 (int32), offset1 (int16), bitset1 (uint16), ... // offset < 0 -> all
 
 void Source::handle_data_request(const AooByte *msg, int32_t n,
                                  AooId id, const ip_address& addr)
@@ -2065,12 +2086,21 @@ void Source::handle_data_request(const AooByte *msg, int32_t n,
         return;
     }
 
+    if (resend_buffersize_.load() <= 0) {
+    #if AOO_DEBUG_RESEND
+        LOG_DEBUG("AooSource: ignore data request");
+    #endif
+        return;
+    }
+
     auto it = msg;
     auto end = it + n;
 
     auto stream_id = aoo::read_bytes<int32_t>(it);
 
+#if AOO_DEBUG_RESEND
     LOG_DEBUG("AooSource: handle data request");
+#endif
 
     sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
@@ -2087,9 +2117,11 @@ void Source::handle_data_request(const AooByte *msg, int32_t n,
                 return;
             }
             while (count--){
-                int32_t sequence = aoo::read_bytes<int32_t>(it);
-                int32_t frame = aoo::read_bytes<int32_t>(it);
-                sink->add_data_request(sequence, frame);
+                data_request r;
+                r.sequence = aoo::read_bytes<int32_t>(it);
+                r.offset = aoo::read_bytes<int16_t>(it);
+                r.bitset = aoo::read_bytes<uint16_t>(it);
+                sink->push_data_request(r);
             }
         } else {
             LOG_VERBOSE("AooSource: ignore binary data message: sink not active");

@@ -243,17 +243,22 @@ private:
     uint64_t process_samples_ = 0;
     void reset_stream_messages();
     // requests
-    aoo::unbounded_mpsc_queue<request> requestqueue_;
+    aoo::unbounded_mpsc_queue<request> request_queue_;
     void push_request(const request& r){
-        requestqueue_.push(r);
+        request_queue_.push(r);
     }
     struct data_request {
         int32_t sequence;
-        int32_t frame;
+        int16_t offset;
+        uint16_t bitset;
     };
-    aoo::unbounded_mpsc_queue<data_request> datarequestqueue_;
+    aoo::unbounded_mpsc_queue<data_request> data_requests_;
     void push_data_request(const data_request& r){
-        datarequestqueue_.push(r);
+    #if AOO_DEBUG_RESEND && 0
+        LOG_DEBUG("AooSink: push data request (" << r.sequence
+                  << " " << r.offset << " " << r.bitset << ")");
+    #endif
+        data_requests_.push(r);
     }
     // events
     using event_queue = lockfree::unbounded_mpsc_queue<event_ptr, aoo::rt_allocator<event_ptr>>;

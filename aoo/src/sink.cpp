@@ -1481,7 +1481,7 @@ void send_uninvitation(const Sink& s, const endpoint& ep,
 
 void source_desc::send(const Sink& s, const sendfn& fn){
     request r;
-    while (requestqueue_.try_pop(r)){
+    while (request_queue_.try_pop(r)){
         switch (r.type){
         case request_type::ping_reply:
             send_ping_reply(s, r.ping.tt1, r.ping.tt2, fn);
@@ -1503,8 +1503,6 @@ void source_desc::send(const Sink& s, const sendfn& fn){
 }
 
 #define XRUN_THRESHOLD 0.1
-
-// TODO: make sure not to send events while holding a lock!
 
 bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
                           AooStreamMessageHandler handler, void *user)
@@ -2187,29 +2185,47 @@ void source_desc::check_missing_blocks(const Sink& s){
             auto nframes = b->num_frames();
 
             if (b->count_frames() > 0){
-                // only some frames missing
-                for (int i = 0; i < nframes; ++i){
-                    if (!b->has_frame(i)){
-                        if (resent < maxnumframes){
-                            push_data_request({ b->sequence, i });
-                        #if 0
-                            DO_LOG_DEBUG("AooSink: request " << b->sequence << " (" << i << ")");
-                        #endif
-                            resent++;
-                        } else {
-                            goto resend_done;
+                // a) only some frames missing
+                // we use a frame offset + bitset to indicate which frames are missing
+                for (int16_t offset = 0; offset < nframes; offset += 16){
+                    uint16_t bitset = 0;
+                    // fill the bitset with missing frames
+                    for (int i = 0; i < 16; ++i) {
+                        auto frame = offset + i;
+                        if (frame >= nframes) {
+                            break;
                         }
+                        if (!b->has_frame(frame)){
+                            if (resent < maxnumframes) {
+                            #if AOO_DEBUG_RESEND
+                                LOG_DEBUG("AooSink: request " << b->sequence
+                                          << " (" << frame << " / " << nframes << ")");
+                            #endif
+                                bitset |= (uint16_t)1 << i;
+                                resent++;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    if (bitset != 0) {
+                        push_data_request({ b->sequence, offset, bitset });
+                    }
+                    if (resent >= maxnumframes) {
+                        LOG_DEBUG("AooSource: resend limit reached");
+                        goto resend_done;
                     }
                 }
             } else {
-                // all frames missing
+                // b) all frames missing
                 if (resent + nframes <= maxnumframes){
-                    push_data_request({ b->sequence, -1 }); // whole block
-                #if 0
-                    DO_LOG_DEBUG("AooSink: request " << b->sequence << " (all)");
+                    push_data_request({ b->sequence, -1, 0 }); // whole block
+                #if AOO_DEBUG_RESEND
+                    LOG_DEBUG("AooSink: request " << b->sequence << " (all)");
                 #endif
                     resent += nframes;
                 } else {
+                    LOG_DEBUG("AooSource: resend limit reached");
                     goto resend_done;
                 }
             }
@@ -2295,17 +2311,10 @@ void source_desc::send_start_request(const Sink& s, const sendfn& fn) {
 // /aoo/src/<id>/data <id> <stream_id> <seq1> <frame1> <seq2> <frame2> etc.
 // or
 // header, stream_id (int32), count (int32),
-// seq1 (int32), frame1(int32), seq2(int32), frame2(int32), etc.
-
-// TODO:
-// header, stream_id (int32), count (int32),
-// seq1 (int32), offset1 (int16), bitset1 (uint16) etc. // offset < 0 -> all
-
-// NB: resend_request should already be a 16-bit bitset, so we don't have to
-// reassemble the bitset from individual requests.
+// seq1 (int32), offset1 (int16), bitset1 (uint16), ... // offset < 0 -> all
 
 void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
-    if (datarequestqueue_.empty()){
+    if (data_requests_.empty()){
         return;
     }
 
@@ -2333,15 +2342,17 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
 
         int32_t numrequests = 0;
         data_request r;
-        while (datarequestqueue_.try_pop(r)){
-            LOG_DEBUG("AooSink: send binary data request ("
-                      << r.sequence << " " << r.frame << ")");
-
+        while (data_requests_.try_pop(r)){
             aoo::write_bytes<int32_t>(r.sequence, it);
-            aoo::write_bytes<int32_t>(r.frame, it);
+            aoo::write_bytes<int16_t>(r.offset, it);
+            aoo::write_bytes<uint16_t>(r.bitset, it);
             if (++numrequests >= maxrequests){
                 // write 'count' field
                 aoo::to_bytes<int32_t>(numrequests, head - sizeof(int32_t));
+            #if AOO_DEBUG_RESEND
+                LOG_DEBUG("AooSink: send binary data request ("
+                          << r.sequence << " " << r.offset << " " << r.bitset << ")");
+            #endif
                 // send it off
                 ep.send(buf, it - buf, fn);
                 // prepare next message (just rewind)
@@ -2373,21 +2384,48 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
         msg << osc::BeginMessage(pattern) << s.id() << stream_id;
 
         data_request r;
-        while (datarequestqueue_.try_pop(r)){
-            LOG_DEBUG("AooSink: send data request (" << r.sequence
-                      << " " << r.frame << ")");
+        while (data_requests_.try_pop(r)){
+            if (r.offset < 0) {
+                // request whole block
+            #if AOO_DEBUG_RESEND
+                LOG_DEBUG("AooSink: send data request (" << r.sequence << " -1)");
+            #endif
+                msg << r.sequence << (int32_t)-1;
+                if (++numrequests >= maxrequests){
+                    // send it off
+                    msg << osc::EndMessage;
 
-            msg << r.sequence << r.frame;
-            if (++numrequests >= maxrequests){
-                // send it off
-                msg << osc::EndMessage;
+                    ep.send(msg, fn);
 
-                ep.send(msg, fn);
+                    // prepare next message
+                    msg.Clear();
+                    msg << osc::BeginMessage(pattern) << s.id() << stream_id;
+                    numrequests = 0;
+                }
+            } else {
+                // get frames from offset and bitset
+                uint16_t bitset = r.bitset;
+                for (int i = 0; bitset != 0; ++i, bitset >>= 1) {
+                    if (bitset & 1) {
+                        auto frame = r.offset + i;
+                    #if AOO_DEBUG_RESEND
+                        LOG_DEBUG("AooSink: send data request ("
+                                  << r.sequence << " " << frame << ")");
+                    #endif
+                        msg << r.sequence << frame;
+                        if (++numrequests >= maxrequests){
+                            // send it off
+                            msg << osc::EndMessage;
 
-                // prepare next message
-                msg.Clear();
-                msg << osc::BeginMessage(pattern) << s.id() << stream_id;
-                numrequests = 0;
+                            ep.send(msg, fn);
+
+                            // prepare next message
+                            msg.Clear();
+                            msg << osc::BeginMessage(pattern) << s.id() << stream_id;
+                            numrequests = 0;
+                        }
+                    }
+                }
             }
         }
 
