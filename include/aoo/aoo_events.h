@@ -76,10 +76,8 @@ enum AooEventTypes
     kAooEventClientGroupUpdate,
     /** our user has been updated (by the server) */
     kAooEventClientUserUpdate,
-    /** received ping from peer */
+    /** received ping (reply) from peer */
     kAooEventPeerPing,
-    /** received pong from peer */
-    kAooEventPeerPong,
     /** peer handshake has started */
     kAooEventPeerHandshake,
     /** peer handshake has timed out */
@@ -365,28 +363,18 @@ typedef struct AooEventPeerLeave
 } AooEventPeerLeave;
 #endif
 
-/** \brief received ping from peer */
+/** \brief received ping (reply) from peer */
 typedef struct AooEventPeerPing
 {
     AooEventType type;
     AooFlag flags;
     AooId group;
     AooId user;
-    AooNtpTime tt1;
-    AooNtpTime tt2;
+    AooNtpTime tt1; /** send time */
+    AooNtpTime tt2; /** remote time */
+    AooNtpTime tt3; /** receive time */
+    AooSize reserved;
 } AooEventPeerPing;
-
-/** \brief received pong */
-typedef struct AooEventPeerPong
-{
-    AooEventType type;
-    AooFlag flags;
-    AooId group;
-    AooId user;
-    AooNtpTime tt1;
-    AooNtpTime tt2;
-    AooNtpTime tt3;
-} AooEventPeerPong;
 
 /** \brief received peer message */
 typedef struct AooEventPeerMessage
@@ -544,7 +532,6 @@ union AooEvent
     AooEventClientUserUpdate clientUserUpdate;
     AooEventPeer peer;
     AooEventPeerPing peerPing;
-    AooEventPeerPong peerPong;
     AooEventPeerHandshake peerHandshake;
     AooEventPeerTimeout peerTimeout;
     AooEventPeerJoin peerJoin;

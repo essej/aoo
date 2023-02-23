@@ -211,9 +211,21 @@ void AooClient::handleEvent(const AooEvent* event) {
         break;
     }
     case kAooEventPeerHandshake:
+    {
+        auto& e = event->peerHandshake;
+        aoo::ip_address addr(e.address);
+        msg << "/peer/handshake" << e.groupId << e.userId
+            << e.groupName << e.userName << addr.name() << addr.port();
+        break;
+    }
     case kAooEventPeerTimeout:
-        // ignore for now
-        return;
+    {
+        auto& e = event->peerTimeout;
+        aoo::ip_address addr(e.address);
+        msg << "/peer/timeout" << e.groupId << e.userId
+            << e.groupName << e.userName << addr.name() << addr.port();
+        break;
+    }
     case kAooEventPeerJoin:
     {
         auto& e = event->peerJoin;
@@ -231,9 +243,14 @@ void AooClient::handleEvent(const AooEvent* event) {
         break;
     }
     case kAooEventPeerPing:
-    case kAooEventPeerPong:
-        // TODO
-        return;
+    {
+        auto& e = event->peerPing;
+        auto delta1 = aoo_ntpTimeDuration(e.tt1, e.tt2);
+        auto delta2 = aoo_ntpTimeDuration(e.tt2, e.tt3);
+        auto rtt = aoo_ntpTimeDuration(e.tt1, e.tt3);
+        msg << "/peer/ping" << e.group << e.user << delta1 << delta2 << rtt;
+        break;
+    }
     case kAooEventError:
     {
         msg << "/error" << event->error.errorCode << event->error.errorMessage;
