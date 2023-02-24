@@ -434,11 +434,6 @@ AOO_API AooError AOO_CALL AooSink_process(
 AooError AOO_CALL aoo::Sink::process(
         AooSample **data, AooInt32 nsamples, AooNtpTime t,
         AooStreamMessageHandler messageHandler, void *user) {
-    // clear outputs
-    for (int i = 0; i < nchannels_; ++i){
-        std::fill(data[i], data[i] + nsamples, 0);
-    }
-
     // Always update timer and DLL, even if there are no sinks.
     // Do it *before* trying to lock the mutex.
     // (The DLL is only ever touched in this method.)
@@ -474,6 +469,16 @@ AooError AOO_CALL aoo::Sink::process(
         }
     }
 
+    // clear outputs
+    for (int i = 0; i < nchannels_; ++i){
+        std::fill(data[i], data[i] + nsamples, 0);
+    }
+#if 1
+    if (sources_.empty() && requestqueue_.empty()) {
+        // nothing to process and no need to call send()
+        return kAooErrorIdle;
+    }
+#endif
     bool didsomething = false;
 
     // no lock needed - sources are only removed in this thread!
