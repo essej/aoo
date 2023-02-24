@@ -870,7 +870,8 @@ AOO_API AooError AOO_CALL AooSource_addSink(
 
 AooError AOO_CALL aoo::Source::addSink(const AooEndpoint& ep, AooFlag flags) {
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
-    // sinks can be added/removed from different threads
+    // NB: sinks can be added/removed from different threads,
+    // so we have to lock a mutex to avoid the ABA problem!
     sync::scoped_lock<sync::mutex> lock1(sink_mutex_);
     sink_lock lock2(sinks_);
     // check if sink exists!
@@ -897,7 +898,8 @@ AOO_API AooError AOO_CALL AooSource_removeSink(
 AooError AOO_CALL aoo::Source::removeSink(const AooEndpoint& ep) {
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
 
-    // sinks can be added/removed from different threads
+    // NB: sinks can be added/removed from different threads,
+    // so we have to lock a mutex to avoid the ABA problem!
     sync::scoped_lock<sync::mutex> lock1(sink_mutex_);
     sink_lock lock2(sinks_);
     if (do_remove_sink(addr, ep.id)){
@@ -918,7 +920,8 @@ AooError AOO_CALL aoo::Source::removeAll() {
 
     bool running = is_running();
 
-    // sinks can be added/removed from different threads
+    // NB: sinks can be added/removed from different threads,
+    // so we have to lock a mutex to avoid the ABA problem!
     sync::scoped_lock<sync::mutex> lock2(sink_mutex_);
     sink_lock lock3(sinks_);
     // send /stop messages
@@ -1007,6 +1010,7 @@ aoo::sink_desc * Source::get_sink_arg(intptr_t index){
 }
 
 // always called with sink mutex locked
+// NB: do not call with update mutex locked!
 sink_desc * Source::do_add_sink(const ip_address& addr, AooId id, AooId stream_id)
 {
 #if IDLE_IF_NO_SINKS
@@ -1058,6 +1062,7 @@ sink_desc * Source::do_add_sink(const ip_address& addr, AooId id, AooId stream_i
 }
 
 // always called with sink mutex locked
+// NB: do not call with update mutex locked!
 bool Source::do_remove_sink(const ip_address& addr, AooId id){
     for (auto it = sinks_.begin(); it != sinks_.end(); ++it){
         if (it->ep.address == addr && it->ep.id == id){
@@ -1437,10 +1442,6 @@ void Source::send_start(const sendfn& fn){
     }
 
     // cache sinks that need to send a /start message
-#if 0
-    // we only free sinks in this thread, so we don't have to lock
-    sink_lock lock(sinks_);
-#endif
     if (cached_sinks_.empty()) {
         // if there were no (active) sinks, we need to reset the encoder to
         // prevent nasty artifacts. (For efficiency reasons, we skip the encoding
@@ -1449,6 +1450,7 @@ void Source::send_start(const sendfn& fn){
         LOG_DEBUG("AooSource: sinks previously empty/inactive - reset encoder");
     }
     cached_sinks_.clear();
+    sink_lock lock(sinks_);
     for (auto& s : sinks_){
         if (s.need_start()){
             cached_sinks_.emplace_back(s);
@@ -1631,16 +1633,14 @@ void Source::send_xruns(const sendfn &fn) {
             ;
 
         // cache sinks
-    #if 0
-        // we only free sinks in this thread, so we don't have to lock
-        sink_lock lock(sinks_);
-    #endif
         cached_sinks_.clear();
+        sink_lock lock(sinks_);
         for (auto& s : sinks_){
             if (s.is_active()){
                 cached_sinks_.emplace_back(s);
             }
         }
+        lock.unlock();
         // if we don't have any (active) sinks, we do not actually need to send anything!
         if (cached_sinks_.empty()) {
             return;
@@ -1679,11 +1679,6 @@ void Source::send_xruns(const sendfn &fn) {
             // now we can unlock
             updatelock.unlock();
 
-            // we only free sources in this thread, so we don't have to lock
-        #if 0
-            // this is not a real lock, so we don't have worry about dead locks
-            sink_lock lock(sinks_);
-        #endif
             // send block to all sinks
             send_packet(cached_sinks_, id(), d, fn, binary_.load());
 
@@ -1775,16 +1770,14 @@ void Source::send_data(const sendfn& fn){
         stream_samples_ = deadline;
 
         // cache sinks
-    #if 0
-        // we only free sinks in this thread, so we don't have to lock
-        sink_lock lock(sinks_);
-    #endif
         cached_sinks_.clear();
+        sink_lock lock(sinks_);
         for (auto& s : sinks_){
             if (s.is_active()){
                 cached_sinks_.emplace_back(s);
             }
         }
+        lock.unlock();
         // if we don't have any (active) sinks, we do not actually need
         // to encode and send the data!
         if (cached_sinks_.empty()) {
@@ -1888,12 +1881,8 @@ void Source::resend_data(const sendfn &fn){
         return;
     }
 
-    // we only free sources in this thread, so we don't have to lock
-#if 0
-    // this is not a real lock, so we don't have worry about dead locks
-    sink_lock lock(sinks_);
-#endif
     // send block to sinks
+    sink_lock lock(sinks_);
     for (auto& s : sinks_){
         data_request r;
         while (s.get_data_request(r)){
@@ -2003,12 +1992,8 @@ void Source::send_ping(const sendfn& fn){
     auto interval = ping_interval_.load(); // 0: no ping
     if (interval > 0 && (elapsed - pingtime) >= interval){
         auto tt = aoo::time_tag::now();
-        // we only free sources in this thread, so we don't have to lock
-    #if 0
-        // this is not a real lock, so we don't have worry about dead locks
-        sink_lock lock(sinks_);
-    #endif
         // send ping to sinks
+        sink_lock lock(sinks_);
         for (auto& sink : sinks_){
             if (sink.is_active()){
                 // /aoo/sink/<id>/ping <src> <time>
@@ -2054,7 +2039,6 @@ void Source::handle_start_request(const osc::ReceivedMessage& msg,
     // check if sink exists (not strictly necessary, but might help catch errors)
     sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
-
     if (sink){
         if (sink->is_active()){
             // just resend /start message
@@ -2196,7 +2180,8 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
 
     event_ptr e1, e2;
 
-    // sinks can be added/removed from different threads
+    // NB: sinks can be added/removed from different threads,
+    // so we have to lock a mutex to avoid the ABA problem!
     sync::unique_lock<sync::mutex> lock1(sink_mutex_);
     sink_lock lock2(sinks_);
     auto sink = find_sink(addr, id);

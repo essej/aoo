@@ -415,9 +415,9 @@ AooError AOO_CALL aoo::Sink::send(AooSendFunc fn, void *user){
     for (auto& s : sources_){
         s.send(*this, reply);
     }
-    lock.unlock();
+    lock.unlock(); // !
 
-    // free unused source_descs
+    // free unused sources
     if (!sources_.try_free()){
         // LOG_DEBUG("AooSink: try_free() would block");
     }
@@ -481,7 +481,9 @@ AooError AOO_CALL aoo::Sink::process(
 #endif
     bool didsomething = false;
 
-    // no lock needed - sources are only removed in this thread!
+    // NB: we only remove sources in this thread,
+    // so we do not need to lock the source mutex!
+    source_lock lock(sources_);
     for (auto it = sources_.begin(); it != sources_.end();){
         if (it->process(*this, data, nsamples, messageHandler, user)){
             didsomething = true;
@@ -560,7 +562,6 @@ AooError AOO_CALL aoo::Sink::pollEvents(){
         eventhandler_(eventcontext_, &e->cast(), kAooThreadLevelUnknown);
         total++;
     }
-    // we only need to protect against source removal
     source_lock lock(sources_);
     for (auto& src : sources_){
         total += src.poll_events(*this, eventhandler_, eventcontext_);
@@ -655,9 +656,9 @@ void Sink::dispatch_requests(){
             // try to find existing source
             // we might want to invite an existing source,
             // e.g. when it is currently uninviting
-            // NOTE that sources can also be added in the network
-            // receive thread (see handle_data() or handle_format()),
-            // so we have to lock a mutex to avoid the ABA problem.
+            // NB: sources can also be added in the network receive
+            // thread - see handle_data() or handle_format() -, so we
+            // have to lock the source mutex to avoid the ABA problem.
             sync::scoped_lock<sync::mutex> lock1(source_mutex_);
             source_lock lock2(sources_);
             auto src = find_source(r.address, r.id);
@@ -716,6 +717,7 @@ aoo::source_desc * Sink::get_source_arg(intptr_t index){
     return src;
 }
 
+// called with source mutex locked
 source_desc * Sink::add_source(const ip_address& addr, AooId id){
     // add new source
 #if AOO_NET
@@ -815,8 +817,8 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
         return kAooErrorUnknown;
     }
     // try to find existing source
-    // NOTE: sources can also be added in the network send thread,
-    // so we have to lock a mutex to avoid the ABA problem!
+    // NB: sources can also be added in the network send thread,
+    // so we have to lock the source mutex to avoid the ABA problem!
     sync::scoped_lock<sync::mutex> lock1(source_mutex_);
     source_lock lock2(sources_);
     auto src = find_source(addr, id);
