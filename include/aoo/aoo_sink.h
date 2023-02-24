@@ -97,7 +97,7 @@ AOO_INLINE AooError AooSink_getId(AooSink *sink, AooId *id)
 /** \copydoc AooSink::reset() */
 AOO_INLINE AooError AooSink_reset(AooSink *sink)
 {
-    return AooSink_control(sink, kAooCtlReset, 0, 0, 0);
+    return AooSink_control(sink, kAooCtlReset, 0, NULL, 0);
 }
 
 /** \copydoc AooSink::setLatency() */
@@ -124,16 +124,10 @@ AOO_INLINE AooError AooSink_getBufferSize(AooSink *sink, AooSeconds *s)
     return AooSink_control(sink, kAooCtlGetBufferSize, 0, AOO_ARG(*s));
 }
 
-/** \copydoc AooSink::setXRunDetection() */
-AOO_INLINE AooError AooSink_setXRunDetection(AooSink *sink, AooBool b)
+/** \copydoc AooSink::reportXRun() */
+AOO_INLINE AooError AooSink_reportXRun(AooSink *sink, AooInt32 numSamples)
 {
-    return AooSink_control(sink, kAooCtlSetXRunDetection, 0, AOO_ARG(b));
-}
-
-/** \copydoc AooSink::getXRunDetection() */
-AOO_INLINE AooError AooSink_getXRunDetection(AooSink *sink, AooBool *b)
-{
-    return AooSink_control(sink, kAooCtlGetXRunDetection, 0, AOO_ARG(*b));
+    return AooSink_control(sink, kAooCtlReportXRun, 0, AOO_ARG(numSamples));
 }
 
 /** \copydoc AooSink::setDynamicResampling() */
@@ -164,6 +158,12 @@ AOO_INLINE AooError AooSink_setDllBandwidth(AooSink *sink, double q)
 AOO_INLINE AooError AooSink_getDllBandwidth(AooSink *sink, double *q)
 {
     return AooSink_control(sink, kAooCtlGetDllBandwidth, 0, AOO_ARG(*q));
+}
+
+/** \copydoc AooSink::resetDll() */
+AOO_INLINE AooError AooSink_resetDll(AooSink *sink)
+{
+    return AooSink_control(sink, kAooCtlResetDll, 0, NULL, 0);
 }
 
 /** \copydoc AooSink::setPacketSize() */

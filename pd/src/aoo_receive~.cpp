@@ -332,13 +332,6 @@ static void aoo_receive_handle_stream_message(t_aoo_receive *x, const AooStreamM
 static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, int32_t)
 {
     switch (event->type){
-    case kAooEventXRun:
-    {
-        t_atom msg;
-        SETFLOAT(&msg, event->xrun.count);
-        outlet_anything(x->x_msgout, gensym("xrun"), 1, &msg);
-        break;
-    }
     case kAooEventSourceAdd:
     case kAooEventSourceRemove:
     case kAooEventInviteDecline:

@@ -21,7 +21,6 @@
 #include "detail.hpp"
 #include "events.hpp"
 #include "resampler.hpp"
-#include "timer.hpp"
 #include "time_dll.hpp"
 
 #include "oscpack/osc/OscOutboundPacketStream.h"
@@ -295,7 +294,11 @@ class Source final : public AooSource, rt_memory_pool_client {
     // timing
     parameter<AooSampleRate> realsr_{0};
     time_dll dll_;
-    timer timer_;
+    std::atomic<AooNtpTime> start_time_{0};
+    std::atomic<float> elapsed_time_ = 0;
+    void reset_timer() {
+        start_time_.store(0);
+    }
     // buffers and queues
     aoo::vector<AooByte> sendbuffer_;
     dynamic_resampler resampler_;
@@ -333,7 +336,6 @@ class Source final : public AooSource, rt_memory_pool_client {
     parameter<float> ping_interval_{ AOO_PING_INTERVAL };
     parameter<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
     parameter<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
-    parameter<bool> timer_check_{ AOO_XRUN_DETECTION };
     parameter<bool> binary_{ AOO_BINARY_DATA_MSG };
 
     // helper methods
@@ -357,6 +359,8 @@ class Source final : public AooSource, rt_memory_pool_client {
 
     void add_xrun(double nblocks);
 
+    void handle_xrun(int32_t nsamples);
+
     void update_audioqueue();
 
     void update_resampler();
@@ -367,7 +371,7 @@ class Source final : public AooSource, rt_memory_pool_client {
 
     void send_start(const sendfn& fn);
 
-    void handle_xruns(const sendfn& fn);
+    void send_xruns(const sendfn& fn);
 
     void send_data(const sendfn& fn);
 

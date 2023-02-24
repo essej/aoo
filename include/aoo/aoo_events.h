@@ -20,8 +20,6 @@ enum AooEventTypes
     /*----------------------------------*/
     /*     AooSource/AooSink events     */
     /*----------------------------------*/
-    /** source/sink: xruns occured */
-    kAooEventXRun,
     /** source/sink: received a ping */
     kAooEventPing,
     /** source: invited by sink */
@@ -132,13 +130,6 @@ typedef struct AooEventError
 /*-------------------------------------------------*/
 /*              AOO source/sink events             */
 /*-------------------------------------------------*/
-
-/** \brief xrun occured */
-typedef struct AooEventXRun
-{
-    AooEventType type;
-    AooInt32 count;
-} AooEventXRun;
 
 /** \brief generic source/sink event */
 typedef struct AooEventEndpoint
@@ -500,7 +491,6 @@ union AooEvent
     AooEventBase base;
     AooEventError error;
     /* AOO source/sink events */
-    AooEventXRun xrun;
     AooEventEndpoint endpoint;
     AooEventPing ping;
     AooEventInvite invite;

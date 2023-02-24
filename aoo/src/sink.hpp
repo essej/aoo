@@ -20,7 +20,6 @@
 #include "detail.hpp"
 #include "events.hpp"
 #include "resampler.hpp"
-#include "timer.hpp"
 #include "time_dll.hpp"
 
 #include "oscpack/osc/OscOutboundPacketStream.h"
@@ -320,6 +319,8 @@ public:
 
     int32_t samplerate() const { return samplerate_; }
 
+    float elapsed_time() const { return elapsed_time_.load(std::memory_order_relaxed); }
+
     AooSampleRate real_samplerate() const { return realsr_.load(); }
 
     bool dynamic_resampling() const { return dynamic_resampling_.load();}
@@ -344,10 +345,6 @@ public:
 
     AooSeconds invite_timeout() const { return invite_timeout_.load(); }
 
-    AooSeconds elapsed_time() const { return timer_.get_elapsed(); }
-
-    time_tag absolute_time() const { return timer_.get_absolute(); }
-
     AooEventMode event_mode() const { return eventmode_; }
 
     void send_event(event_ptr e, AooThreadLevel level) const;
@@ -370,7 +367,11 @@ private:
     // timing
     parameter<AooSampleRate> realsr_{0};
     time_dll dll_;
-    timer timer_;
+    std::atomic<AooNtpTime> start_time_{0};
+    std::atomic<float> elapsed_time_ = 0;
+    void reset_timer() {
+        start_time_.store(0);
+    }
     // options
     parameter<float> latency_{ AOO_SINK_LATENCY };
     parameter<float> buffersize_{ 0 };
@@ -383,7 +384,6 @@ private:
     parameter<float> dll_bandwidth_{ AOO_DLL_BANDWIDTH };
     parameter<bool> resend_{AOO_RESEND_DATA};
     parameter<bool> dynamic_resampling_{ AOO_DYNAMIC_RESAMPLING };
-    parameter<bool> timer_check_{ AOO_XRUN_DETECTION };
     // events
     using event_queue = lockfree::unbounded_mpsc_queue<event_ptr, aoo::rt_allocator<event_ptr>>;
     mutable event_queue eventqueue_;
@@ -406,6 +406,8 @@ private:
     source_desc *add_source(const ip_address& addr, AooId id);
 
     void reset_sources();
+
+    void handle_xrun(int32_t nsamples);
 
     AooError handle_start_message(const osc::ReceivedMessage& msg,
                                   const ip_address& addr);

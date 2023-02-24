@@ -251,20 +251,14 @@ public:
         return control(kAooCtlGetBufferSize, 0, AOO_ARG(s));
     }
 
-    /** \brief Enable/disable xrun detection
+    /** \brief Report xruns
      *
-     * xrun detection helps to catch timing problems, e.g. when the host accidentally
-     * blocks the audio callback, which would confuse the time DLL filter.
-     * Also, timing gaps are handled by sending empty blocks.
-     * \attention: only takes effect after calling AooSource::setup()!
+     * If your audio backend notifies you about xruns, you may report
+     * them to AooSink. "Missing" samples will be substituted with empty
+     * blocks and the dynamic resampler (if enabled) will be reset.
      */
-    AooError setXRunDetection(AooBool b) {
-        return control(kAooCtlSetXRunDetection, 0, AOO_ARG(b));
-    }
-
-    /** \brief Check if xrun detection is enabled */
-    AooError getXRunDetection(AooBool& b) {
-        return control(kAooCtlGetXRunDetection, 0, AOO_ARG(b));
+    AooError reportXRun(AooInt32 numSamples) {
+        return control(kAooCtlReportXRun, 0, AOO_ARG(numSamples));
     }
 
     /** \brief Enable/disable dynamic resampling
@@ -303,6 +297,16 @@ public:
     /** \brief get DLL filter bandwidth */
     AooError getDllBandwidth(double& q) {
         return control(kAooCtlGetDllBandwidth, 0, AOO_ARG(q));
+    }
+
+    /** \brief Reset the time DLL filter
+     *
+     * Use this if the audio thread experiences timing irregularities,
+     * but you cannot use AooSource::reportXRun(). This function only
+     * has an effect if dynamic resampling is enabled.
+     */
+    AooError resetDll() {
+        return control(kAooCtlResetDll, 0, nullptr, 0);
     }
 
     /** \brief Set the max. UDP packet size in bytes

@@ -145,15 +145,6 @@ struct ping_event : endpoint_event<AooEventPing> {
     }
 };
 
-struct xrun_event : base_event<AooEventXRun> {
-    RT_CLASS(xrun_event)
-
-    xrun_event(int32_t count)
-        : base_event(kAooEventXRun) {
-        this->count = count;
-    }
-};
-
 struct format_change_event : endpoint_event<AooEventFormatChange> {
     RT_CLASS(format_change_event)
 

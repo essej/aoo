@@ -463,13 +463,6 @@ static void aoo_send_setformat(t_aoo_send *x, AooFormat& f)
 static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
 {
     switch (event->type){
-    case kAooEventXRun:
-    {
-        t_atom msg;
-        SETFLOAT(&msg, event->xrun.count);
-        outlet_anything(x->x_msgout, gensym("xrun"), 1, &msg);
-        break;
-    }
     case kAooEventPing:
     case kAooEventInvite:
     case kAooEventUninvite:

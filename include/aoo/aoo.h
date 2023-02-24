@@ -92,19 +92,6 @@
  #define AOO_DLL_BANDWIDTH 0.012
 #endif
 
-/** \brief default enable/disable xrun detection by default */
-#ifndef AOO_XRUN_DETECTIOIN
- #define AOO_XRUN_DETECTION 1
-#endif
-
-/** \brief timer tolerance
- *
- * This is the tolerance for deviations from the nominal block
- * period in (fractional) blocks used by the xrun detection algorithm. */
-#ifndef AOO_TIMER_TOLERANCE
- #define AOO_TIMER_TOLERANCE 0.25
-#endif
-
 /** \brief default ping interval in seconds */
 #ifndef AOO_PING_INTERVAL
  #define AOO_PING_INTERVAL 1.0

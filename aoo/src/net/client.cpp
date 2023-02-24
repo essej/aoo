@@ -120,7 +120,7 @@ AooError AOO_CALL aoo::net::Client::run(AooBool nonBlocking){
         }
 
         if (!peers_.try_free()){
-            LOG_DEBUG("AooClient: try_free() would block");
+            // LOG_DEBUG("AooClient: try_free() would block");
         }
     }
     return kAooOk;
