@@ -463,13 +463,6 @@ static void aoo_send_setformat(t_aoo_send *x, AooFormat& f)
 static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
 {
     switch (event->type){
-    case kAooEventXRun:
-    {
-        t_atom msg;
-        SETFLOAT(&msg, event->xrun.count);
-        outlet_anything(x->x_msgout, gensym("xrun"), 1, &msg);
-        break;
-    }
     case kAooEventPing:
     case kAooEventInvite:
     case kAooEventUninvite:
@@ -757,6 +750,11 @@ static void aoo_send_stop(t_aoo_send *x)
     x->x_source->stopStream();
 }
 
+static void aoo_send_reset(t_aoo_send *x)
+{
+    x->x_source->reset();
+}
+
 static void aoo_send_active(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     if (!x->check(argc, argv, 4, "active")) return;
@@ -1037,6 +1035,8 @@ void aoo_send_tilde_setup(void)
                     gensym("start"), A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_stop,
                     gensym("stop"), A_NULL);
+    class_addmethod(aoo_send_class, (t_method)aoo_send_reset,
+                    gensym("reset"), A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_metadata,
                     gensym("metadata"), A_GIMME, A_NULL);
     class_addmethod(aoo_send_class, (t_method)aoo_send_auto_invite,

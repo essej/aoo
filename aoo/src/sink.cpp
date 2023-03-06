@@ -74,8 +74,7 @@ AooError AOO_CALL aoo::Sink::setup(
             reset_sources();
         }
 
-        // always reset timer + time DLL filter
-        timer_.setup(samplerate_, blocksize_, timer_check_.load());
+        reset_timer(); // always reset!
 
         return kAooOk;
     } else {
@@ -132,10 +131,8 @@ AooError AOO_CALL aoo::Sink::control(
             GETSOURCEARG
             src->reset(*this);
         } else {
-            // reset all sources
             reset_sources();
-            // reset time DLL
-            timer_.reset();
+            reset_timer();
         }
         break;
     }
@@ -182,21 +179,19 @@ AooError AOO_CALL aoo::Sink::control(
         as<double>(ptr) = src->get_buffer_fill_ratio();
         break;
     }
-    // timer check
-    case kAooCtlSetXRunDetection:
-        CHECKARG(AooBool);
-        timer_check_.store(as<AooBool>(ptr));
+    case kAooCtlReportXRun:
+        CHECKARG(int32_t);
+        handle_xrun(as<int32_t>(ptr));
         break;
-    case kAooCtlGetXRunDetection:
-        CHECKARG(AooBool);
-        as<AooBool>(ptr) = timer_check_.load();
-        break;
-    // dynamic resampling
+    // set/get dynamic resampling
     case kAooCtlSetDynamicResampling:
+    {
         CHECKARG(AooBool);
-        dynamic_resampling_.store(as<AooBool>(ptr));
-        timer_.reset(); // !
+        bool b = as<AooBool>(ptr);
+        dynamic_resampling_.store(b);
+        reset_timer();
         break;
+    }
     case kAooCtlGetDynamicResampling:
         CHECKARG(AooBool);
         as<AooBool>(ptr) = dynamic_resampling_.load();
@@ -207,7 +202,7 @@ AooError AOO_CALL aoo::Sink::control(
         CHECKARG(float);
         auto bw = std::max<double>(0, std::min<double>(1, as<float>(ptr)));
         dll_bandwidth_.store(bw);
-        timer_.reset(); // will update time DLL and reset timer
+        reset_timer();
         break;
     }
     case kAooCtlGetDllBandwidth:
@@ -420,9 +415,9 @@ AooError AOO_CALL aoo::Sink::send(AooSendFunc fn, void *user){
     for (auto& s : sources_){
         s.send(*this, reply);
     }
-    lock.unlock();
+    lock.unlock(); // !
 
-    // free unused source_descs
+    // free unused sources
     if (!sources_.try_free()){
         // LOG_DEBUG("AooSink: try_free() would block");
     }
@@ -439,57 +434,56 @@ AOO_API AooError AOO_CALL AooSink_process(
 AooError AOO_CALL aoo::Sink::process(
         AooSample **data, AooInt32 nsamples, AooNtpTime t,
         AooStreamMessageHandler messageHandler, void *user) {
+    // Always update timer and DLL, even if there are no sinks.
+    // Do it *before* trying to lock the mutex.
+    // (The DLL is only ever touched in this method.)
+    bool dynamic_resampling = dynamic_resampling_.load();
+    AooNtpTime start_time = 0;
+    if (start_time_.compare_exchange_strong(start_time, t)) {
+        // start timer
+        LOG_DEBUG("AooSource: start timer");
+        elapsed_time_.store(0);
+        // reset DLL
+        auto bw = dll_bandwidth_.load();
+        dll_.setup(samplerate_, blocksize_, bw, 0);
+        realsr_.store(samplerate_);
+    } else {
+        // advance timer
+        // NB: start_time has been updated by the CAS above!
+        auto elapsed = aoo::time_tag::duration(start_time, t);
+        elapsed_time_.store(elapsed, std::memory_order_relaxed);
+        // update time DLL, but only if nsamples matches blocksize!
+        if (dynamic_resampling) {
+            if (nsamples == blocksize_){
+                dll_.update(elapsed);
+            #if AOO_DEBUG_DLL
+                LOG_ALL("AooSource: time elapsed: " << elapsed << ", period: "
+                        << dll_.period() << ", samplerate: " << dll_.samplerate());
+            #endif
+            } else {
+                // reset time DLL with nominal samplerate
+                auto bw = dll_bandwidth_.load();
+                dll_.setup(samplerate_, blocksize_, bw, elapsed);
+            }
+            realsr_.store(dll_.samplerate());
+        }
+    }
+
     // clear outputs
     for (int i = 0; i < nchannels_; ++i){
         std::fill(data[i], data[i] + nsamples, 0);
     }
-
-    // update timer
-    // always do this, even if there are no sources!
-    bool dynamic_resampling = dynamic_resampling_.load();
-    double error;
-    auto state = timer_.update(t, error);
-    if (state == timer::state::reset){
-        LOG_DEBUG("AooSink: setup time DLL filter for sink");
-        auto bw = dll_bandwidth_.load();
-        dll_.setup(samplerate_, blocksize_, bw, 0);
-        realsr_.store(samplerate_);
-    } else if (state == timer::state::error){
-        // recover sources
-        double xrunblocks = error * (double)samplerate_ / (double)blocksize_;
-
-        // no lock needed - sources are only removed in this thread!
-        for (auto& s : sources_){
-            s.add_xrun(xrunblocks);
-        }
-
-        int count = std::ceil(xrunblocks); // ?
-        auto e = make_event<xrun_event>(count);
-        send_event(std::move(e), kAooThreadLevelAudio);
-
-        timer_.reset();
-
-        // TODO: flush stream messages?
-    } else if (dynamic_resampling) {
-        // update time DLL, but only if n matches blocksize!
-        auto elapsed = timer_.get_elapsed();
-        if (nsamples == blocksize_){
-            dll_.update(elapsed);
-        #if AOO_DEBUG_DLL
-            LOG_ALL("time elapsed: " << elapsed << ", period: "
-                    << dll_.period() << ", samplerate: " << dll_.samplerate());
-        #endif
-        } else {
-            // reset time DLL with nominal samplerate
-            auto bw = dll_bandwidth_.load();
-            dll_.setup(samplerate_, blocksize_, bw, elapsed);
-        }
-        realsr_.store(dll_.samplerate());
+#if 1
+    if (sources_.empty() && requestqueue_.empty()) {
+        // nothing to process and no need to call send()
+        return kAooErrorIdle;
     }
-
+#endif
     bool didsomething = false;
 
-    // no lock needed - sources are only removed in this thread!
+    // NB: we only remove sources in this thread,
+    // so we do not need to lock the source mutex!
+    source_lock lock(sources_);
     for (auto it = sources_.begin(); it != sources_.end();){
         if (it->process(*this, data, nsamples, messageHandler, user)){
             didsomething = true;
@@ -568,7 +562,6 @@ AooError AOO_CALL aoo::Sink::pollEvents(){
         eventhandler_(eventcontext_, &e->cast(), kAooThreadLevelUnknown);
         total++;
     }
-    // we only need to protect against source removal
     source_lock lock(sources_);
     for (auto& src : sources_){
         total += src.poll_events(*this, eventhandler_, eventcontext_);
@@ -663,9 +656,9 @@ void Sink::dispatch_requests(){
             // try to find existing source
             // we might want to invite an existing source,
             // e.g. when it is currently uninviting
-            // NOTE that sources can also be added in the network
-            // receive thread (see handle_data() or handle_format()),
-            // so we have to lock a mutex to avoid the ABA problem.
+            // NB: sources can also be added in the network receive
+            // thread - see handle_data() or handle_format() -, so we
+            // have to lock the source mutex to avoid the ABA problem.
             sync::scoped_lock<sync::mutex> lock1(source_mutex_);
             source_lock lock2(sources_);
             auto src = find_source(r.address, r.id);
@@ -724,6 +717,7 @@ aoo::source_desc * Sink::get_source_arg(intptr_t index){
     return src;
 }
 
+// called with source mutex locked
 source_desc * Sink::add_source(const ip_address& addr, AooId id){
     // add new source
 #if AOO_NET
@@ -757,6 +751,17 @@ void Sink::reset_sources(){
     for (auto& src : sources_){
         src.reset(*this);
     }
+}
+
+void Sink::handle_xrun(int32_t nsamples) {
+    LOG_DEBUG("AooSink: handle xrun (" << nsamples << " samples)");
+    auto nblocks = (double)nsamples / (double)blocksize_;
+    source_lock lock(sources_);
+    for (auto& src : sources_){
+        src.add_xrun(nblocks);
+    }
+    // also reset time DLL!
+    reset_timer();
 }
 
 // /aoo/sink/<id>/start <src> <version> <stream_id> <flags> <lastformat>
@@ -812,8 +817,8 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
         return kAooErrorUnknown;
     }
     // try to find existing source
-    // NOTE: sources can also be added in the network send thread,
-    // so we have to lock a mutex to avoid the ABA problem!
+    // NB: sources can also be added in the network send thread,
+    // so we have to lock the source mutex to avoid the ABA problem!
     sync::scoped_lock<sync::mutex> lock1(source_mutex_);
     source_lock lock2(sources_);
     auto src = find_source(addr, id);
@@ -2304,7 +2309,7 @@ void source_desc::send_ping(const Sink&s, const sendfn& fn) {
     auto pingtime = last_ping_time_.load();
     auto interval = s.ping_interval(); // 0: no ping
     if (interval > 0 && (elapsed - pingtime) >= interval){
-        auto tt = s.absolute_time();
+        auto tt = aoo::time_tag::now();
         // send ping to source
         LOG_DEBUG("AooSink: send " kAooMsgPing " to " << ep);
 

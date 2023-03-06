@@ -157,16 +157,10 @@ AOO_INLINE AooError AooSource_getBufferSize(AooSource *source, AooSeconds *s)
     return AooSource_control(source, kAooCtlGetBufferSize, 0, AOO_ARG(*s));
 }
 
-/** \copydoc AooSource::setXRunDetection() */
-AOO_INLINE AooError AooSource_setXRunDetection(AooSource *source, AooBool b)
+/** \copydoc AooSource::reportXRun() */
+AOO_INLINE AooError AooSource_reportXRun(AooSource *source, AooInt32 numSamples)
 {
-    return AooSource_control(source, kAooCtlSetXRunDetection, 0, AOO_ARG(b));
-}
-
-/** \copydoc AooSource::getXRunDetection() */
-AOO_INLINE AooError AooSource_getXRunDetection(AooSource *source, AooBool *b)
-{
-    return AooSource_control(source, kAooCtlGetXRunDetection, 0, AOO_ARG(*b));
+    return AooSource_control(source, kAooCtlReportXRun, 0, AOO_ARG(numSamples));
 }
 
 /** \copydoc AooSource::setDynamicResampling() */
@@ -197,6 +191,12 @@ AOO_INLINE AooError AooSource_setDllBandwidth(AooSource *source, double q)
 AOO_INLINE AooError AooSource_getDllBandwidth(AooSource *source, double *q)
 {
     return AooSource_control(source, kAooCtlGetDllBandwidth, 0, AOO_ARG(*q));
+}
+
+/** \copydoc AooSource::resetDll() */
+AOO_INLINE AooError AooSource_resetDll(AooSource *source)
+{
+    return AooSource_control(source, kAooCtlResetDll, 0, NULL, 0);
 }
 
 /** \copydoc AooSource::setPacketSize() */
