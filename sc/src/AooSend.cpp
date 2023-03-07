@@ -96,16 +96,15 @@ void AooSend::handleEvent(const AooEvent *event){
     osc::OutboundPacketStream msg(buf, 256);
 
     switch (event->type){
-    case kAooEventPing:
+    case kAooEventSinkPing:
     {
-        auto& e = event->ping;
+        auto& e = event->sinkPing;
         double diff1 = aoo_ntpTimeDuration(e.t1, e.t2);
         double diff2 = aoo_ntpTimeDuration(e.t2, e.t3);
         double rtt = aoo_ntpTimeDuration(e.t1, e.t3);
-        auto packetloss = e.info.source.packetLoss;
 
         beginEvent(msg, "/ping", e.endpoint);
-        msg << diff1 << diff2 << rtt << packetloss;
+        msg << diff1 << diff2 << rtt << e.packetLoss;
         sendMsgRT(msg);
         break;
     }

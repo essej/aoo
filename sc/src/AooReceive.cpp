@@ -92,9 +92,9 @@ void AooReceive::handleEvent(const AooEvent *event){
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
     switch (event->type){
-    case kAooEventPing:
+    case kAooEventSourcePing:
     {
-        auto& e = event->ping;
+        auto& e = event->sourcePing;
         double diff1 = aoo_ntpTimeDuration(e.t1, e.t2);
         double diff2 = aoo_ntpTimeDuration(e.t2, e.t3);
         double rtt = aoo_ntpTimeDuration(e.t1, e.t3);

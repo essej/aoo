@@ -629,9 +629,9 @@ void aoo_client_handle_event(t_aoo_client *x, const AooEvent *event, int32_t lev
 
         peer_to_atoms(*peer, 5, msg);
 
-        auto delta1 = aoo::time_tag::duration(e.tt1, e.tt2) * 1000;
-        auto delta2 = aoo::time_tag::duration(e.tt2, e.tt3) * 1000;
-        auto rtt = aoo::time_tag::duration(e.tt1, e.tt3) * 1000;
+        auto delta1 = aoo::time_tag::duration(e.t1, e.t2) * 1000;
+        auto delta2 = aoo::time_tag::duration(e.t2, e.t3) * 1000;
+        auto rtt = aoo::time_tag::duration(e.t1, e.t3) * 1000;
 
         peer_to_atoms(*peer, 5, msg);
         SETFLOAT(msg + 5, delta1);

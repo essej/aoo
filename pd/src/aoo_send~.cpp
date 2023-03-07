@@ -463,7 +463,7 @@ static void aoo_send_setformat(t_aoo_send *x, AooFormat& f)
 static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
 {
     switch (event->type){
-    case kAooEventPing:
+    case kAooEventSinkPing:
     case kAooEventInvite:
     case kAooEventUninvite:
     case kAooEventSinkAdd:
@@ -541,9 +541,9 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
             break;
         }
         //--------------------- sink events -----------------------//
-        case kAooEventPing:
+        case kAooEventSinkPing:
         {
-            auto& e = event->ping;
+            auto& e = event->sinkPing;
 
             double diff1 = aoo_ntpTimeDuration(e.t1, e.t2) * 1000.0;
             double diff2 = aoo_ntpTimeDuration(e.t2, e.t3) * 1000.0;
@@ -553,7 +553,7 @@ static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
             SETFLOAT(msg + 4, diff1);
             SETFLOAT(msg + 5, diff2);
             SETFLOAT(msg + 6, rtt);
-            SETFLOAT(msg + 7, e.info.source.packetLoss);
+            SETFLOAT(msg + 7, e.packetLoss);
 
             outlet_anything(x->x_msgout, gensym("event"), 8, msg);
 

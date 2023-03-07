@@ -2189,7 +2189,7 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
         // the sink is initially deactivated.
         sink = do_add_sink(addr, id, kAooIdInvalid);
         // push "add" event
-        e1 = make_event<sink_event>(kAooEventSinkAdd, addr, id);
+        e1 = make_event<sink_add_event>(addr, id);
     }
     // make sure that the event is only sent once per invitation.
     if (sink->need_invite(token)) {
@@ -2316,7 +2316,7 @@ void Source::handle_pong(const osc::ReceivedMessage& msg,
             auto tt3 = aoo::time_tag::now(); // use real system time
         #endif
             // send ping event
-            auto e = make_event<ping_event>(sink->ep, tt1, tt2, tt3, packetloss);
+            auto e = make_event<sink_ping_event>(sink->ep, tt1, tt2, tt3, packetloss);
             send_event(std::move(e), kAooThreadLevelNetwork);
         } else {
             LOG_VERBOSE("AooSource: ignoring '" << kAooMsgPong << "' message: sink not active");

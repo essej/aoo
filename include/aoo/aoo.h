@@ -12,11 +12,19 @@
 
 #include "aoo_defines.h"
 
-/*----------------- utilities ---------------------*/
+/*------------------- utilities ------------------*/
 
-/** \brief check if a struct has a specific field */
-#define AOO_CHECK_FIELD(type, size, field) \
-    ((size) >= (offsetof(type, field) + sizeof(((type*)NULL)->field)))
+/** \brief check if a versioned struct has a specific field */
+#define AOO_CHECK_FIELD(ptr, type, field) \
+    (((ptr)->structSize) > (offsetof(type, field)))
+
+/** \brief calculate the size of a versioned struct */
+#define AOO_STRUCT_SIZE(type, field) \
+    (offsetof(type, field) + sizeof(((type *)NULL)->field))
+
+/** \brief initialize a versioned struct */
+#define AOO_STRUCT_INIT(ptr, type, field) \
+    (ptr)->structSize = AOO_STRUCT_SIZE(type, field)
 
 /*------------- compile time settings -------------*/
 
@@ -204,10 +212,13 @@ enum AooBinMsgMessageFlags
 
 /*------------------ library functions --------------------*/
 
-/** \brief settings for aoo_initializeEx() */
+/** \brief settings for aoo_initialize()
+ *
+ * \attention Always call AooSettings_init()!
+ */
 typedef struct AooSettings
 {
-    AooSize size; /** `sizeof(AooSettings)` */
+    AooSize structSize;
     AooAllocFunc allocFunc; /** custom allocator function, or `NULL` */
     AooLogFunc logFunc; /** custom log function, or `NULL` */
     AooSize memPoolSize; /** size of RT memory pool */
@@ -216,7 +227,7 @@ typedef struct AooSettings
 /** \brief default initialization for AooSettings struct */
 AOO_INLINE void AooSettings_init(AooSettings *settings)
 {
-    settings->size = sizeof(AooSettings);
+    AOO_STRUCT_INIT(settings, AooSettings, memPoolSize);
     settings->allocFunc = NULL;
     settings->logFunc = NULL;
     settings->memPoolSize = AOO_MEM_POOL_SIZE;

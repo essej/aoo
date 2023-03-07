@@ -347,7 +347,7 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
     case kAooEventBlockDropped:
     case kAooEventBlockReordered:
     case kAooEventBlockResent:
-    case kAooEventPing:
+    case kAooEventSourcePing:
     {
         // common endpoint header
         auto& ep = event->endpoint.endpoint;
@@ -399,9 +399,9 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
             break;
         }
         //---------------------- source events ------------------------------//
-        case kAooEventPing:
+        case kAooEventSourcePing:
         {
-            auto& e = event->ping;
+            auto& e = event->sourcePing;
 
             double diff1 = aoo_ntpTimeDuration(e.t1, e.t2) * 1000.0;
             double diff2 = aoo_ntpTimeDuration(e.t2, e.t3) * 1000.0;

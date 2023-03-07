@@ -247,7 +247,7 @@ enum AooErrorCodes
 
 /*---------------- AOO events --------------------*/
 
-/** \brief  AOO event type */
+/** \brief AOO event type */
 typedef AooInt32 AooEventType;
 
 /** \brief generic AOO event */
@@ -535,6 +535,6 @@ typedef void
     (AOO_CALL *AooLogFunc)
         (AooLogLevel level, const AooChar *fmt, ...);
 
-/*--------------------------------------*/
+/*--------------------------------------------------*/
 
 AOO_PACK_END

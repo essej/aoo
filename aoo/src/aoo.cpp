@@ -573,8 +573,8 @@ void aoo_opusLoad(const AooCodecHostInterface *);
 void aoo_opusUnload();
 #endif
 
-#define HAVE_SETTING(settings, field) \
-    (settings && AOO_CHECK_FIELD(AooSettings, settings->size, field))
+#define CHECK_SETTING(ptr, field) \
+    (ptr && AOO_CHECK_FIELD(ptr, AooSettings, field))
 
 AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
     static bool initialized = false;
@@ -583,10 +583,10 @@ AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
         aoo::socket_init();
     #endif
         // optional settings
-        if (HAVE_SETTING(settings, logFunc) && settings->logFunc) {
+        if (CHECK_SETTING(settings, logFunc) && settings->logFunc) {
             aoo::g_interface.logFunc = settings->logFunc;
         }
-        if (HAVE_SETTING(settings, allocFunc) && settings->allocFunc) {
+        if (CHECK_SETTING(settings, allocFunc) && settings->allocFunc) {
     #if AOO_CUSTOM_ALLOCATOR
             aoo::g_interface.allocFunc = settings->allocFunc;
     #else
@@ -594,7 +594,7 @@ AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
     #endif
         }
 
-        if (HAVE_SETTING(settings, memPoolSize) && settings->memPoolSize > 0) {
+        if (CHECK_SETTING(settings, memPoolSize) && settings->memPoolSize > 0) {
             aoo::g_rt_memory_pool.resize(settings->memPoolSize);
         } else {
             aoo::g_rt_memory_pool.resize(AOO_MEM_POOL_SIZE);

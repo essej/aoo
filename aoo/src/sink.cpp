@@ -1368,7 +1368,7 @@ AooError source_desc::handle_decline(const Sink& s, int32_t token) {
 
     auto expected = source_state::invite;
     if (state_.compare_exchange_strong(expected, source_state::timeout)) {
-        auto e = make_event<sink_event>(kAooEventInviteDecline, ep);
+        auto e = make_event<source_event>(kAooEventInviteDecline, ep);
         s.send_event(std::move(e), kAooThreadLevelNetwork);
     } else {
         LOG_DEBUG("AooSink: received /decline while not inviting");
@@ -1413,7 +1413,7 @@ AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
             }
             // always send timeout event
             LOG_VERBOSE("AooSink: " << ep << ": uninvitation timed out");
-            auto e = make_event<sink_event>(kAooEventUninviteTimeout, ep);
+            auto e = make_event<source_event>(kAooEventUninviteTimeout, ep);
             s.send_event(std::move(e), kAooThreadLevelNetwork);
         }
         return kAooOk;
@@ -1526,7 +1526,7 @@ AooError source_desc::handle_pong(const Sink& s, time_tag tt1, time_tag tt2){
 #endif
 
     // send ping event
-    auto e = make_event<ping_event>(ep, tt1, tt2, tt3);
+    auto e = make_event<source_ping_event>(ep, tt1, tt2, tt3);
     s.send_event(std::move(e), kAooThreadLevelNetwork);
 
     return kAooOk;
@@ -2599,7 +2599,7 @@ void source_desc::send_invitations(const Sink &s, const sendfn &fn){
         }
         // always send timeout event
         LOG_VERBOSE("AooSink: " << ep << ": invitation timed out");
-        auto e = make_event<sink_event>(kAooEventInviteTimeout, ep);
+        auto e = make_event<source_event>(kAooEventInviteTimeout, ep);
         s.send_event(std::move(e), kAooThreadLevelNetwork);
     } else {
         delta = now - last_invite_time_.load(std::memory_order_relaxed);

@@ -245,9 +245,9 @@ void AooClient::handleEvent(const AooEvent* event) {
     case kAooEventPeerPing:
     {
         auto& e = event->peerPing;
-        auto delta1 = aoo_ntpTimeDuration(e.tt1, e.tt2);
-        auto delta2 = aoo_ntpTimeDuration(e.tt2, e.tt3);
-        auto rtt = aoo_ntpTimeDuration(e.tt1, e.tt3);
+        auto delta1 = aoo_ntpTimeDuration(e.t1, e.t2);
+        auto delta2 = aoo_ntpTimeDuration(e.t2, e.t3);
+        auto rtt = aoo_ntpTimeDuration(e.t1, e.t3);
         msg << "/peer/ping" << e.group << e.user << delta1 << delta2 << rtt;
         break;
     }
