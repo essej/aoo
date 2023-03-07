@@ -18,14 +18,6 @@
 #define AOO_CHECK_FIELD(ptr, type, field) \
     (((ptr)->structSize) > (offsetof(type, field)))
 
-/** \brief calculate the size of a versioned struct */
-#define AOO_STRUCT_SIZE(type, field) \
-    (offsetof(type, field) + sizeof(((type *)NULL)->field))
-
-/** \brief initialize a versioned struct */
-#define AOO_STRUCT_INIT(ptr, type, field) \
-    (ptr)->structSize = AOO_STRUCT_SIZE(type, field)
-
 /*------------- compile time settings -------------*/
 
 /** \brief clip audio output between -1 and 1 */

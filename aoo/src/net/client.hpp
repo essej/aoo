@@ -444,8 +444,7 @@ public:
 
         void reply(const AooResponse& response) const override {
             AooRequestConnect request;
-            request.type = kAooRequestConnect;
-            request.flags = 0; // TODO
+            AOO_REQUEST_INIT(&request, Connect, metadata);
             request.address.hostName = host_.name.c_str();
             request.address.port = host_.port;
             request.password = pwd_.empty() ? nullptr : pwd_.c_str();
@@ -475,8 +474,7 @@ public:
 
         void reply(const AooResponse& response) const override {
             AooRequestDisconnect request;
-            request.type = kAooRequestConnect;
-            request.flags = 0;
+            AOO_RESPONSE_INIT(&request, Disconnect, structSize);
 
             callback((AooRequest&)request, response);
         }
@@ -522,8 +520,7 @@ public:
 
         void reply(const AooResponse& response) const override {
             AooRequestGroupJoin request;
-            request.type = kAooRequestGroupJoin;
-            request.flags = 0; // TODO
+            AOO_REQUEST_INIT(&request, GroupJoin, relayAddress);
 
             request.groupName = group_name_.c_str();
             request.groupPwd = group_pwd_.empty() ? nullptr : group_pwd_.c_str();
@@ -571,7 +568,7 @@ public:
 
         void reply(const AooResponse& response) const override {
             AooRequestGroupLeave request;
-            request.type = kAooRequestGroupLeave;
+            AOO_REQUEST_INIT(&request, GroupLeave, group);
             request.group = group_;
 
             callback((AooRequest&)request, response);
@@ -596,8 +593,7 @@ public:
 
         void reply(const AooResponse& response) const override {
             AooRequestGroupUpdate request;
-            request.type = kAooRequestGroupUpdate;
-            request.flags = 0; // TODO
+            AOO_REQUEST_INIT(&request, GroupUpdate, groupMetadata);
             request.groupId = group_;
             request.groupMetadata.type = md_.type();
             request.groupMetadata.data = md_.data();
@@ -627,8 +623,7 @@ public:
 
         void reply(const AooResponse& response) const override {
             AooRequestUserUpdate request;
-            request.type = kAooRequestUserUpdate;
-            request.flags = 0; // TODO
+            AOO_REQUEST_INIT(&request, UserUpdate, userMetadata);
             request.groupId = group_;
             request.userId = user_;
             request.userMetadata.type = md_.type();
@@ -658,7 +653,7 @@ public:
             auto success = (it++)->AsInt32();
             if (success) {
                 AooResponseCustom response;
-                response.type = kAooRequestCustom;
+                AOO_RESPONSE_INIT(&response, Custom, flags);
                 response.flags = (AooFlag)(it++)->AsInt32();
                 response.data = osc_read_metadata(it);
 
@@ -672,7 +667,7 @@ public:
 
         void reply(const AooResponse& response) const override {
             AooRequestCustom request;
-            request.type = kAooRequestCustom;
+            AOO_REQUEST_INIT(&request, Custom, flags);
             request.flags = flags_;
             request.data.type = data_.type();
             request.data.data = data_.data();

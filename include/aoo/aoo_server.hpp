@@ -74,7 +74,10 @@ public:
     virtual AooError AOO_CALL setRequestHandler(
             AooRequestHandler cb, void *user, AooFlag flags) = 0;
 
-    /** \brief accept request */
+    /** \brief accept request
+     *
+     * \attention The response must be properly initialized with `AOO_RESPONSE_INIT`.
+     */
     virtual AooError AOO_CALL acceptRequest(
             AooId client, AooId token, const AooRequest *request,
             AooResponse *response) = 0;

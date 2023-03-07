@@ -86,6 +86,16 @@
 /* begin struct packing */
 AOO_PACK_BEGIN
 
+/*------------------- utilities --------------------*/
+
+/** \brief calculate the size of a versioned struct */
+#define AOO_STRUCT_SIZE(type, field) \
+    (offsetof(type, field) + sizeof(((type *)NULL)->field))
+
+/** \brief initialize a versioned struct */
+#define AOO_STRUCT_INIT(ptr, type, field) \
+    (ptr)->structSize = AOO_STRUCT_SIZE(type, field)
+
 /*---------- global compile time settings ----------*/
 
 /** \brief AOO_NET support */

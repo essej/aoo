@@ -953,8 +953,7 @@ void Client::perform(const disconnect_cmd& cmd) {
     close(true);
 
     AooResponseDisconnect response;
-    response.type = kAooRequestDisconnect;
-    response.flags = 0;
+    AOO_RESPONSE_INIT(&response, Disconnect, structSize);
 
     cmd.reply((AooResponse&)response); // always succeeds
 }
@@ -1028,8 +1027,7 @@ void Client::handle_response(const group_join_cmd& cmd,
         }
 
         AooResponseGroupJoin response;
-        response.type = kAooRequestGroupJoin;
-        response.flags = 0;
+        AOO_RESPONSE_INIT(&response, GroupJoin, relayAddress);
         response.groupId = group;
         response.userId = user;
         response.groupMetadata = group_md.size ? &group_md : nullptr;
@@ -1092,8 +1090,7 @@ void Client::handle_response(const group_leave_cmd& cmd,
         }
 
         AooResponseGroupLeave response;
-        response.type = kAooRequestGroupLeave;
-        response.flags = 0;
+        AOO_RESPONSE_INIT(&response, GroupLeave, structSize);
 
         cmd.reply((AooResponse&)response);
         LOG_VERBOSE("AooClient: successfully left group " << cmd.group_);
@@ -1129,8 +1126,7 @@ void Client::handle_response(const group_update_cmd& cmd,
     auto success = (it++)->AsInt32();
     if (success) {
         AooResponseGroupUpdate response;
-        response.type = kAooRequestGroupUpdate;
-        response.flags = 0;
+        AOO_RESPONSE_INIT(&response, GroupUpdate, groupMetadata);
         response.groupMetadata.type = cmd.md_.type();
         response.groupMetadata.data = cmd.md_.data();
         response.groupMetadata.size = cmd.md_.size();
@@ -1169,8 +1165,7 @@ void Client::handle_response(const user_update_cmd& cmd,
     auto success = (it++)->AsInt32();
     if (success) {
         AooResponseUserUpdate response;
-        response.type = kAooRequestUserUpdate;
-        response.flags = 0;
+        AOO_RESPONSE_INIT(&response, UserUpdate, userMetadata);
         response.userMetadata.type = cmd.md_.type();
         response.userMetadata.data = cmd.md_.data();
         response.userMetadata.size = cmd.md_.size();
@@ -1422,8 +1417,7 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
                         << id << ")");
             // notify
             AooResponseConnect response;
-            response.type = kAooRequestConnect;
-            response.flags = 0;
+            AOO_RESPONSE_INIT(&response, Connect, metadata);
             response.clientId = id;
             response.metadata = metadata.data ? &metadata : nullptr;
 

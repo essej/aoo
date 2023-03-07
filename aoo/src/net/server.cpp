@@ -833,8 +833,7 @@ void Server::handle_login(client_endpoint& client, const osc::ReceivedMessage& m
     }
 
     AooRequestLogin request;
-    request.type = kAooRequestLogin;
-    request.flags = 0;
+    AOO_REQUEST_INIT(&request, Login, metadata);
     request.password = pwd;
     request.metadata = metadata.data ? &metadata : nullptr;
     // check version
@@ -852,8 +851,7 @@ void Server::handle_login(client_endpoint& client, const osc::ReceivedMessage& m
 
     if (!handle_request(client, token, (AooRequest&)request)) {
         AooResponseLogin response;
-        response.type = kAooRequestLogin;
-        response.flags = 0;
+        AOO_RESPONSE_INIT(&response, Login, metadata);
         response.metadata = nullptr;
 
         do_login(client, token, request, response);
@@ -903,8 +901,7 @@ void Server::handle_group_join(client_endpoint& client, const osc::ReceivedMessa
     relay.port = (it++)->AsInt32();
 
     AooRequestGroupJoin request;
-    request.type = kAooRequestGroupJoin;
-    request.flags = 0;
+    AOO_REQUEST_INIT(&request, GroupJoin, relayAddress);
     request.groupName = group_name;
     request.groupPwd = group_pwd;
     request.groupId = kAooIdInvalid; // set later
@@ -960,8 +957,7 @@ void Server::handle_group_join(client_endpoint& client, const osc::ReceivedMessa
 
     if (!handle_request(client, token, (AooRequest&)request)) {
         AooResponseGroupJoin response;
-        response.type = kAooRequestGroupJoin;
-        response.flags = 0;
+        AOO_RESPONSE_INIT(&response, GroupJoin, relayAddress);
         response.groupId = 0;
         response.groupFlags = 0;
         response.groupMetadata = nullptr;
@@ -1049,11 +1045,11 @@ void Server::handle_group_leave(client_endpoint& client, const osc::ReceivedMess
     auto group = (it++)->AsInt32();
 
     AooRequestGroupLeave request;
-    request.type = kAooRequestGroupLeave;
+    AOO_REQUEST_INIT(&request, GroupLeave, group);
     request.group = group;
 
     AooResponseGroupLeave response;
-    response.type = kAooRequestGroupLeave;
+    AOO_RESPONSE_INIT(&response, GroupLeave, structSize);
 
     if (!handle_request(client, token, (AooRequest&)request)) {
         do_group_leave(client, token, request, response);
@@ -1107,8 +1103,7 @@ void Server::handle_group_update(client_endpoint& client, const osc::ReceivedMes
     auto md = osc_read_metadata(it);
 
     AooRequestGroupUpdate request;
-    request.type = kAooRequestGroupUpdate;
-    request.flags = 0;
+    AOO_REQUEST_INIT(&request, GroupUpdate, groupMetadata);
     request.groupId = group_id;
     request.groupMetadata = md;
 
@@ -1120,8 +1115,7 @@ void Server::handle_group_update(client_endpoint& client, const osc::ReceivedMes
 
     if (!handle_request(client, token, (AooRequest&)request)) {
         AooResponseGroupUpdate response;
-        response.type = kAooRequestGroupUpdate;
-        response.flags = 0;
+        AOO_RESPONSE_INIT(&response, GroupUpdate, groupMetadata);
         response.groupMetadata = request.groupMetadata;
 
         do_group_update(client, token, request, response);
@@ -1179,8 +1173,7 @@ void Server::handle_user_update(client_endpoint& client, const osc::ReceivedMess
     auto md = osc_read_metadata(it);
 
     AooRequestUserUpdate request;
-    request.type = kAooRequestUserUpdate;
-    request.flags = 0;
+    AOO_REQUEST_INIT(&request, UserUpdate, userMetadata);
     request.groupId = group_id;
     request.userId = user_id;
     request.userMetadata = md;
@@ -1197,8 +1190,7 @@ void Server::handle_user_update(client_endpoint& client, const osc::ReceivedMess
 
     if (!handle_request(client, token, (AooRequest&)request)) {
         AooResponseUserUpdate response;
-        response.type = kAooRequestUserUpdate;
-        response.flags = 0;
+        AOO_RESPONSE_INIT(&request, UserUpdate, userMetadata);
         response.userMetadata = request.userMetadata;
 
         do_user_update(client, token, request, response);
@@ -1260,9 +1252,9 @@ void Server::handle_custom_request(client_endpoint& client, const osc::ReceivedM
     auto data = osc_read_metadata(it);
 
     AooRequestCustom request;
-    request.type = kAooRequestCustom;
-    request.flags = flags;
+    AOO_REQUEST_INIT(&request, Custom, flags);
     request.data = data;
+    request.flags = flags;
 
     if (!handle_request(client, token, (AooRequest&)request)) {
         // requests must be handled by the user!
@@ -1407,16 +1399,14 @@ void Server::handle_ping(const osc::ReceivedMessage& msg,
 void Server::handle_query(const osc::ReceivedMessage& msg,
                           const ip_address& addr, const sendfn& fn) {
     AooRequestQuery request;
-    request.type = kAooRequestQuery;
-    request.flags = 0;
-    request.replyFunc = fn.fn();
-    request.replyContext = fn.user();
+    AOO_REQUEST_INIT(&request, Query, replyContext);
     request.replyAddr.data = addr.address();
     request.replyAddr.size = addr.length();
+    request.replyFunc = fn.fn();
+    request.replyContext = fn.user();
     if (!handle_request((AooRequest&)request)) {
         AooResponseQuery response;
-        response.type = kAooRequestQuery;
-        response.flags = 0;
+        AOO_RESPONSE_INIT(&response, Query, serverAddress);
         response.serverAddress.hostName = nullptr;
         response.serverAddress.port = 0;
         do_query(request, response);
