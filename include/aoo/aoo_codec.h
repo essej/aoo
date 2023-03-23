@@ -128,7 +128,7 @@ typedef AooError (AOO_CALL *AooCodecDeserializeFunc)(
 /** \brief interface to be implemented by AOO codec classes */
 typedef struct AooCodecInterface
 {
-    AooSize size;
+    AooSize structSize;
     /* encoder methods */
     AooCodecNewFunc encoderNew;
     AooCodecFreeFunc encoderFree;
@@ -193,19 +193,18 @@ AOO_INLINE AooError AooDecoder_reset(AooCodec *dec)
 
 /*----------------- register codecs -----------------------*/
 
-/** \brief The type of #aoo_registerCodec, which gets passed to the
- * entry function of the codec plugin to register itself. */
+/** \brief A function type for registering codecs */
 typedef AooError (AOO_CALL *AooCodecRegisterFunc)(
-        const AooChar *name,                // codec name
-        const AooCodecInterface *cls  // codec interface
+        const AooChar *name,
+        const AooCodecInterface *cls
 );
 
 typedef struct AooCodecHostInterface
 {
-    AooSize size;
-    AooCodecRegisterFunc registerCodec;
-    AooAllocFunc allocFunc;
-    AooLogFunc logFunc;
+    AooSize structSize;
+    AooCodecRegisterFunc registerCodec; /* `register` is a keyword... */
+    AooAllocFunc alloc;
+    AooLogFunc log;
 } AooCodecHostInterface;
 
 /** \brief global codec host interface instance */
@@ -220,9 +219,9 @@ AOO_API AooError AOO_CALL aoo_registerCodec(
  * \note AOO doesn't support dynamic plugin loading out of the box,
  * but it is quite easy to implement on your own.
  * You just have to put one or more codecs in a shared library and export
- * a single function of type AooCodecSetupFunc with the name `aoo_load`:
+ * a single function of type AooCodecLoadFunc with the name `aoo_load`:
  *
- *     void aoo_load(AooCodecRegisterFunc fn, AooLogFunc log, const AooAllocator *alloc);
+ *     void aoo_load(const AooCodecHostInterface *interface);
  *
  * In your host application, you would then scan directories for shared libraries,
  * check if they export a function named `aoo_load`, and if yes, call it with a

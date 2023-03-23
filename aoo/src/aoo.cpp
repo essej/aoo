@@ -217,9 +217,9 @@ std::streamsize Log::xsputn(const char_type *s, std::streamsize n) {
 }
 
 Log::~Log() {
-    if (aoo::g_interface.logFunc) {
+    if (aoo::g_interface.log) {
         buffer_[pos_] = '\0';
-        aoo::g_interface.logFunc(level_, buffer_);
+        aoo::g_interface.log(level_, buffer_);
     }
 }
 
@@ -476,7 +476,7 @@ void * AOO_CALL def_allocator(void *ptr, AooSize oldsize, AooSize newsize) {
 #if AOO_CUSTOM_ALLOCATOR || AOO_DEBUG_MEMORY
 
 void * allocate(size_t size) {
-    auto result = g_interface.allocFunc(nullptr, 0, size);
+    auto result = g_interface.alloc(nullptr, 0, size);
     if (!result && size > 0) {
         throw std::bad_alloc{};
     }
@@ -484,7 +484,7 @@ void * allocate(size_t size) {
 }
 
 void deallocate(void *ptr, size_t size){
-    g_interface.allocFunc(ptr, size, 0);
+    g_interface.alloc(ptr, size, 0);
 }
 
 #endif
@@ -584,11 +584,11 @@ AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
     #endif
         // optional settings
         if (CHECK_SETTING(settings, logFunc) && settings->logFunc) {
-            aoo::g_interface.logFunc = settings->logFunc;
+            aoo::g_interface.log = settings->logFunc;
         }
         if (CHECK_SETTING(settings, allocFunc) && settings->allocFunc) {
     #if AOO_CUSTOM_ALLOCATOR
-            aoo::g_interface.allocFunc = settings->allocFunc;
+            aoo::g_interface.alloc = settings->allocFunc;
     #else
             LOG_WARNING("aoo_initialize: custom allocator not supported");
     #endif
