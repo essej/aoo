@@ -17,8 +17,6 @@
 
 t_class *aoo_client_class;
 
-#define DEJITTER 1
-
 struct t_peer_message
 {
     t_peer_message(AooId grp, AooId usr, const AooData& msg)
@@ -246,11 +244,7 @@ void t_aoo_client::send_message(int argc, t_atom *argv, AooId group, AooId user)
     aoo::time_tag time;
     if (x_offset >= 0) {
         // make timetag relative to current OSC time
-    #if DEJITTER
-        aoo::time_tag now = get_osctime_dejitter(x_dejitter);
-    #else
-        aoo::time_tag now = get_osctime();
-    #endif
+        aoo::time_tag now = x_dejitter ? dejitter_osctime(x_dejitter) : get_osctime();
         time = now + aoo::time_tag::from_seconds(x_offset * 0.001);
     } else {
         time = aoo::time_tag::immediate();
@@ -340,6 +334,17 @@ static void aoo_client_discard_late(t_aoo_client *x, t_floatarg f)
 static void aoo_client_reliable(t_aoo_client *x, t_floatarg f)
 {
     x->x_reliable = (f != 0);
+}
+
+static void aoo_client_dejitter(t_aoo_client *x, t_floatarg f)
+{
+    int dejitter = f != 0;
+    if (dejitter && !x->x_dejitter) {
+        x->x_dejitter = dejitter_get();
+    } else if (!dejitter && x->x_dejitter) {
+        dejitter_release(x->x_dejitter);
+        x->x_dejitter = nullptr;
+    }
 }
 
 static void aoo_client_binary(t_aoo_client *x, t_floatarg f)
@@ -498,10 +503,10 @@ void t_aoo_client::handle_message(AooId group, AooId user, AooNtpTime time,
 {
     aoo::time_tag tt(time);
     if (!tt.is_empty() && !tt.is_immediate()){
-        auto now = get_osctime();
+        aoo::time_tag now = x_dejitter ? dejitter_osctime(x_dejitter) : get_osctime();
         auto delay = aoo::time_tag::duration(now, tt) * 1000.0;
         if (x_schedule) {
-            if (delay > 0){
+            if (delay > 0) {
                 // put on queue and schedule on clock (using logical time)
                 auto abstime = clock_getsystimeafter(delay);
                 // reschedule if we are the next due element
@@ -509,13 +514,12 @@ void t_aoo_client::handle_message(AooId group, AooId user, AooNtpTime time,
                     clock_set(x_queue_clock, abstime);
                 }
                 x_queue.emplace(t_peer_message(group, user, data), abstime);
-            } else if (!x_discard){
-                // treat like immediate message
-                // TODO: should we maybe output a negative delay time?
-                dispatch_message(group, user, data, 0);
+            } else if (!x_discard) {
+                // output late message (negative delay!)
+                dispatch_message(group, user, data, delay);
             }
         } else {
-            // output immediately with delay
+            // output immediately with delay (may be negative!)
             dispatch_message(group, user, data, delay);
         }
     } else {
@@ -873,6 +877,7 @@ static void * aoo_client_new(t_symbol *s, int argc, t_atom *argv)
 
 t_aoo_client::t_aoo_client(int argc, t_atom *argv)
 {
+    x_dejitter = dejitter_get();
     x_clock = clock_new(this, (t_method)aoo_client_tick);
     x_queue_clock = clock_new(this, (t_method)aoo_client_queue_tick);
     x_stateout = outlet_new(&x_obj, 0);
@@ -885,8 +890,6 @@ t_aoo_client::t_aoo_client(int argc, t_atom *argv)
 
     if (x_node){
         verbose(0, "new aoo client on port %d", port);
-        // get dejitter context
-        x_dejitter = get_dejitter();
         // start clock
         clock_delay(x_clock, AOO_CLIENT_POLL_INTERVAL);
     }
@@ -907,7 +910,9 @@ t_aoo_client::~t_aoo_client()
     }
 
     // ignore pending requests (doesn't leak)
-
+    if (x_dejitter) {
+        dejitter_release(x_dejitter);
+    }
     clock_free(x_clock);
     clock_free(x_queue_clock);
 }
@@ -941,13 +946,15 @@ void aoo_client_setup(void)
     class_addmethod(aoo_client_class, (t_method)aoo_client_send,
                     gensym("send"), A_GIMME, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_offset,
-                    gensym("offset"), A_DEFFLOAT, A_NULL);
+                    gensym("offset"), A_FLOAT, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_schedule,
                     gensym("schedule"), A_FLOAT, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_discard_late,
                     gensym("discard_late"), A_FLOAT, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_reliable,
                     gensym("reliable"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_dejitter,
+                    gensym("dejitter"), A_FLOAT, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_port,
                     gensym("port"), A_FLOAT, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_binary,
