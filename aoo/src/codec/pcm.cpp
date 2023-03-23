@@ -84,7 +84,7 @@ void sample_to_int24(AooSample in, AooByte *out)
 {
     convert c;
     // convert to 32 bit range
-    AooSample temp = std::rint(in * INT32_MAX);
+    double temp = std::rint(in * (double)INT32_MAX);
     // check for overflow!
     if (temp > INT32_MAX){
         temp = INT32_MAX;
