@@ -418,7 +418,7 @@ AooError AOO_CALL aoo::Sink::send(AooSendFunc fn, void *user){
     lock.unlock(); // !
 
     // free unused sources
-    if (!sources_.try_free()){
+    if (!sources_.update()){
         // LOG_DEBUG("AooSink: try_free() would block");
     }
 

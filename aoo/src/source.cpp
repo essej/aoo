@@ -552,8 +552,8 @@ AooError AOO_CALL aoo::Source::send(AooSendFunc fn, void *user) {
 
     send_ping(reply);
 
-    if (!sinks_.try_free()){
-        // LOG_DEBUG("AooSource: try_free() would block");
+    if (!sinks_.update()){
+        // LOG_DEBUG("AooSource: update() would block");
     }
 
     return kAooOk;

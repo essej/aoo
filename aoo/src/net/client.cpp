@@ -119,8 +119,8 @@ AooError AOO_CALL aoo::net::Client::run(AooBool nonBlocking){
             cmd->perform(*this);
         }
 
-        if (!peers_.try_free()){
-            // LOG_DEBUG("AooClient: try_free() would block");
+        if (!peers_.update()){
+            // LOG_DEBUG("AooClient: update() would block");
         }
     }
     return kAooOk;
