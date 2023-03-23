@@ -16,7 +16,7 @@
 
 /** \brief check if a versioned struct has a specific field */
 #define AOO_CHECK_FIELD(ptr, type, field) \
-    (((ptr)->structSize) > (offsetof(type, field)))
+    (((ptr)->structSize) >= AOO_STRUCT_SIZE(type, field))
 
 /*------------- compile time settings -------------*/
 
