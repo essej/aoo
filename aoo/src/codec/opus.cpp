@@ -400,45 +400,57 @@ AooError Decoder_decode(
 
 //-------------------------- free functions ------------------------//
 
-AooError serialize(const AooFormat *f, AooByte *buf, AooInt32 *size){
+AooError serialize(const AooFormat *f, AooByte *buf, AooInt32 *size)
+{
+    if (!size) {
+        return kAooErrorBadArgument;
+    }
     if (!buf){
         *size = sizeof(AooInt32);
         return kAooOk;
     }
-    if (*size >= sizeof(AooInt32)){
-        auto fmt = (const AooFormatOpus *)f;
-        aoo::to_bytes<AooInt32>(fmt->applicationType, buf);
-        *size = sizeof(AooInt32);
-
-        return kAooOk;
-    } else {
+    if (*size < sizeof(AooInt32)) {
         LOG_ERROR("Opus: couldn't write settings - buffer too small!");
+        return kAooErrorInsufficientBuffer;
+    }
+    if (!AOO_CHECK_FIELD(f, AooFormatOpus, applicationType)) {
+        LOG_ERROR("Opus: bad format struct size");
         return kAooErrorBadArgument;
     }
+
+    auto fmt = (const AooFormatOpus *)f;
+    aoo::to_bytes<AooInt32>(fmt->applicationType, buf);
+    *size = sizeof(AooInt32);
+
+    return kAooOk;
 }
 
 AooError deserialize(
-        const AooByte *buf, AooInt32 size, AooFormat *f, AooInt32 *fmtsize){
-    if (!f){
+        const AooByte *buf, AooInt32 size, AooFormat *f, AooInt32 *fmtsize)
+{
+    if (!fmtsize) {
+        return kAooErrorBadArgument;
+    }
+    if (!f) {
         *fmtsize = sizeof(AooFormatOpus);
         return kAooOk;
     }
-    if (size < sizeof(AooInt32)){
+    if (size < sizeof(AooInt32)) {
         LOG_ERROR("Opus: couldn't read format - not enough data!");
         return kAooErrorBadArgument;
     }
-    if (*fmtsize < sizeof(AooFormatOpus)){
+    if (*fmtsize < AOO_STRUCT_SIZE(AooFormatOpus, applicationType)) {
         LOG_ERROR("Opus: output format storage too small");
         return kAooErrorBadArgument;
     }
     auto fmt = (AooFormatOpus *)f;
     fmt->applicationType = aoo::from_bytes<AooInt32>(buf);
-    *fmtsize = sizeof(AooFormatOpus);
+    *fmtsize = AOO_STRUCT_SIZE(AooFormatOpus, applicationType);
 
     return kAooOk;
 }
 
-static AooCodecInterface g_interface = {
+AooCodecInterface g_interface = {
     sizeof(AooCodecInterface),
     // encoder
     Encoder_new,
@@ -471,8 +483,8 @@ Decoder::Decoder(OpusMSDecoder *state, size_t size, const AooFormatOpus& f) {
 
 } // namespace
 
-void aoo_opusLoad(const AooCodecHostInterface *ift){
-    ift->registerCodec(kAooCodecOpus, &g_interface);
+void aoo_opusLoad(const AooCodecHostInterface *iface){
+    iface->registerCodec(kAooCodecOpus, &g_interface);
     // the Opus codec is always statically linked, so we can simply use the
     // internal log function and allocator
 }

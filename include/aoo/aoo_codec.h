@@ -111,8 +111,7 @@ typedef AooError (AOO_CALL *AooCodecSerializeFunc)(
  * (= everything after the AooFormat header).
  * On success writes the format extension to the given format structure.
  *
- * \note This function does *not* automatically update the `size` member
- * of the format structure, but you can simply point `fmtsize` to it.
+ * \note This function should *not* update the `size` member of the `format` argument.
  */
 typedef AooError (AOO_CALL *AooCodecDeserializeFunc)(
         /** [in] the extension buffer */

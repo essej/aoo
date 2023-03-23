@@ -357,45 +357,55 @@ AooError AOO_CALL PcmCodec_decode(
 AooError AOO_CALL serialize(
         const AooFormat *f, AooByte *buf, AooInt32 *size)
 {
+    if (!size) {
+        return kAooErrorBadArgument;
+    }
     if (!buf){
         *size = sizeof(AooInt32);
         return kAooOk;
     }
-    if (*size >= sizeof(AooInt32)){
-        auto fmt = (const AooFormatPcm *)f;
-        aoo::to_bytes<AooInt32>(fmt->bitDepth, buf);
-        *size = sizeof(AooInt32);
-
-        return kAooOk;
-    } else {
+    if (*size < sizeof(AooInt32)) {
         LOG_ERROR("PCM: couldn't write settings - buffer too small!");
+        return kAooErrorInsufficientBuffer;
+    }
+    if (!AOO_CHECK_FIELD(f, AooFormatPcm, bitDepth)) {
+        LOG_ERROR("PCM: bad format struct size");
         return kAooErrorBadArgument;
     }
+
+    auto fmt = (const AooFormatPcm *)f;
+    aoo::to_bytes<AooInt32>(fmt->bitDepth, buf);
+    *size = sizeof(AooInt32);
+
+    return kAooOk;
 }
 
 AooError AOO_CALL deserialize(
         const AooByte *buf, AooInt32 size, AooFormat *f, AooInt32 *fmtsize)
 {
-    if (!f){
+    if (!fmtsize) {
+        return kAooErrorBadArgument;
+    }
+    if (!f) {
         *fmtsize = sizeof(AooFormatPcm);
         return kAooOk;
     }
-    if (size < sizeof(AooInt32)){
+    if (size < sizeof(AooInt32)) {
         LOG_ERROR("PCM: couldn't read format - not enough data!");
         return kAooErrorBadArgument;
     }
-    if (*fmtsize < sizeof(AooFormatPcm)){
+    if (*fmtsize < AOO_STRUCT_SIZE(AooFormatPcm, bitDepth)) {
         LOG_ERROR("PCM: output format storage too small");
         return kAooErrorBadArgument;
     }
     auto fmt = (AooFormatPcm *)f;
     fmt->bitDepth = aoo::from_bytes<AooInt32>(buf);
-    *fmtsize = sizeof(AooFormatPcm);
+    *fmtsize = AOO_STRUCT_SIZE(AooFormatPcm, bitDepth);
 
     return kAooOk;
 }
 
-static AooCodecInterface g_interface = {
+AooCodecInterface g_interface = {
     sizeof(AooCodecInterface),
     // encoder
     PcmCodec_new,
@@ -419,8 +429,8 @@ PcmCodec::PcmCodec(const AooFormatPcm& f) {
 
 } // namespace
 
-void aoo_pcmLoad(const AooCodecHostInterface *ift) {
-    ift->registerCodec(kAooCodecPcm, &g_interface);
+void aoo_pcmLoad(const AooCodecHostInterface *iface) {
+    iface->registerCodec(kAooCodecPcm, &g_interface);
     // the PCM codec is always statically linked, so we can simply use the
     // internal log function and allocator
 }
