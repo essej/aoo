@@ -47,7 +47,7 @@ AOO_INLINE void AooFormatPcm_init(
         AooInt32 blockSize, AooPcmBitDepth bitDepth)
 {
     strcpy(fmt->header.codec, kAooCodecPcm);
-    fmt->header.size = sizeof(AooFormatPcm);
+    AOO_STRUCT_INIT(&fmt->header, AooFormatPcm, bitDepth);
     fmt->header.numChannels = numChannels;
     fmt->header.sampleRate = sampleRate;
     fmt->header.blockSize = blockSize;

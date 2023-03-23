@@ -141,7 +141,7 @@ AooError AOO_CALL aoo::Sink::control(
     {
         assert(size >= sizeof(AooFormat));
         GETSOURCEARG
-        return src->get_format(as<AooFormat>(ptr));
+        return src->get_format(as<AooFormat>(ptr), size);
     }
     // latency
     case kAooCtlSetLatency:
@@ -783,7 +783,7 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
 
     AooId stream = (it++)->AsInt32();
     AooFlag flags = (it++)->AsInt32();
-    AooId lastformat = (it++)->AsInt32();
+    AooId format_id = (it++)->AsInt32();
 
     // get stream format
     AooFormat f;
@@ -791,7 +791,7 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
     f.sampleRate = (it++)->AsInt32();
     f.blockSize = (it++)->AsInt32();
     snprintf(f.codec, sizeof(f.codec), "%s", (it++)->AsString());
-    f.size = sizeof(AooFormat);
+    f.structSize = sizeof(AooFormat);
 
     const void *extension;
     osc::osc_bundle_element_size_t size;
@@ -825,8 +825,9 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
     if (!src){
         src = add_source(addr, id);
     }
-    return src->handle_start(*this, stream, flags, lastformat, f,
-                             (const AooByte *)extension, size, md);
+    return src->handle_start(*this, stream, flags, format_id, f,
+                             (const AooByte *)extension, size,
+                             (md.data ? &md : nullptr));
 }
 
 // /aoo/sink/<id>/stop <src> <stream>
@@ -1063,12 +1064,12 @@ bool source_desc::check_active(const Sink& s) {
     return true;
 }
 
-AooError source_desc::get_format(AooFormat &format){
+AooError source_desc::get_format(AooFormat &format, size_t size){
     // synchronize with handle_format() and update()!
     scoped_shared_lock lock(mutex_);
-    if (format_){
-        if (format.size >= format_->size){
-            memcpy(&format, format_.get(), format_->size);
+    if (format_) {
+        if (size >= format_->structSize){
+            memcpy(&format, format_.get(), format_->structSize);
             return kAooOk;
         } else {
             return kAooErrorBadArgument;
@@ -1218,7 +1219,7 @@ void source_desc::add_xrun(double nblocks){
 AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags,
                                    int32_t format_id, const AooFormat& f,
                                    const AooByte *extension, int32_t size,
-                                   const AooData& md) {
+                                   const AooData *md) {
     LOG_DEBUG("AooSink: handle start (" << stream << ")");
     auto state = state_.load(std::memory_order_acquire);
     if (state == source_state::invite) {
@@ -1259,8 +1260,8 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
         memcpy(&fmt, &f, sizeof(AooFormat));
 
         // try to deserialize format extension
-        fmt.header.size = sizeof(AooFormatStorage);
-        auto err = c->deserialize(extension, size, &fmt.header, &fmt.header.size);
+        fmt.header.structSize = sizeof(AooFormatStorage);
+        auto err = c->deserialize(extension, size, &fmt.header, &fmt.header.structSize);
         if (err != kAooOk){
             return err;
         }
@@ -1273,21 +1274,21 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
         new_decoder.reset(dec);
 
         // save validated format
-        auto fp = aoo::allocate(fmt.header.size);
-        memcpy(fp, &fmt, fmt.header.size);
+        auto fp = aoo::allocate(fmt.header.structSize);
+        memcpy(fp, &fmt, fmt.header.structSize);
         new_format.reset((AooFormat *)fp);
     }
 
     // copy metadata
     AooData *metadata = nullptr;
-    if (md.data){
-        assert(md.size > 0);
+    if (md) {
+        assert(md->data && md->size > 0);
         LOG_DEBUG("AooSink: stream metadata: "
-                  << md.type << ", " << md.size << " bytes");
+                  << md->type << ", " << md->size << " bytes");
         // allocate flat metadata
-        auto md_size = flat_metadata_size(md);
+        auto md_size = flat_metadata_size(*md);
         metadata = (AooData *)rt_allocate(md_size);
-        flat_metadata_copy(md, *metadata);
+        flat_metadata_copy(*md, *metadata);
     }
 
     unique_lock lock(mutex_); // writer lock!

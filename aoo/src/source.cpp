@@ -1104,8 +1104,8 @@ AooError Source::set_format(AooFormat &f){
     new_encoder.reset(enc);
 
     // save validated format
-    auto fmt = aoo::allocate(f.size);
-    memcpy(fmt, &f, f.size);
+    auto fmt = aoo::allocate(f.structSize);
+    memcpy(fmt, &f, f.structSize);
     new_format.reset((AooFormat *)fmt);
 
     scoped_lock lock(update_mutex_); // writer lock!
@@ -1139,8 +1139,8 @@ AooError Source::set_format(AooFormat &f){
 AooError Source::get_format(AooFormat &fmt, size_t size){
     shared_lock lock(update_mutex_); // read lock!
     if (format_){
-        if (size >= format_->size){
-            memcpy(&fmt, format_.get(), format_->size);
+        if (size >= format_->structSize){
+            memcpy(&fmt, format_.get(), format_->structSize);
             return kAooOk;
         } else {
             return kAooErrorBadArgument;
@@ -1416,14 +1416,13 @@ void Source::send_start(const sendfn& fn){
     auto format_id = format_id_;
 
     AooFormatStorage f;
-    memcpy(&f, format_.get(), format_->size);
+    memcpy(&f, format_.get(), format_->structSize);
 
     // serialize format extension
     AooByte extension[kAooFormatExtMaxSize];
-    AooInt32 size = sizeof(extension);
+    AooInt32 size = kAooFormatExtMaxSize;
 
-    if (encoder_->cls->serialize(
-                &f.header, extension, &size) != kAooOk) {
+    if (encoder_->cls->serialize(&f.header, extension, &size) != kAooOk) {
         return;
     }
 

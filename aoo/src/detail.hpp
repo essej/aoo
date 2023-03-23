@@ -147,14 +147,14 @@ using rcu_list = lockfree::rcu_list<T, aoo::allocator<T>>;
 struct format_deleter {
     void operator() (void *x) const {
         auto f = static_cast<AooFormat *>(x);
-        aoo::deallocate(x, f->size);
+        aoo::deallocate(x, f->structSize);
     }
 };
 
 struct rt_format_deleter {
     void operator() (void *x) const {
         auto f = static_cast<AooFormat *>(x);
-        aoo::rt_deallocate(x, f->size);
+        aoo::rt_deallocate(x, f->structSize);
     }
 };
 

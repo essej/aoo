@@ -47,7 +47,7 @@ AOO_INLINE void AooFormatOpus_init(
         AooInt32 blockSize, opus_int32 applicationType)
 {
     strcpy(fmt->header.codec, kAooCodecOpus);
-    fmt->header.size = sizeof(AooFormatOpus);
+    AOO_STRUCT_INIT(&fmt->header, AooFormatOpus, applicationType);
     fmt->header.numChannels = numChannels;
     fmt->header.sampleRate = sampleRate;
     fmt->header.blockSize = blockSize;

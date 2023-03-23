@@ -172,7 +172,7 @@ bool validate_format(AooFormatPcm& f, bool loud = true)
         return false;
     }
 
-    if (f.header.size < sizeof(AooFormatPcm)){
+    if (f.header.structSize < AOO_STRUCT_SIZE(AooFormatPcm, bitDepth)) {
         return false;
     }
 

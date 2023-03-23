@@ -162,13 +162,13 @@ struct format_change_event : endpoint_event<AooEventFormatChange> {
 
     format_change_event(const aoo::endpoint& ep, const AooFormat& fmt)
         : endpoint_event(BASE_EVENT(AooEventFormatChange, format), ep) {
-        auto fp = (AooFormat *)rt_allocate(fmt.size);
-        memcpy(fp, &fmt, fmt.size);
+        auto fp = (AooFormat *)rt_allocate(fmt.structSize);
+        memcpy(fp, &fmt, fmt.structSize);
         this->format = fp;
     }
 
     ~format_change_event() {
-        rt_deallocate((void *)this->format, this->format->size);
+        rt_deallocate((void *)this->format, this->format->structSize);
     }
 };
 

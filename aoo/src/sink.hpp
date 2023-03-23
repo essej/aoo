@@ -147,15 +147,17 @@ public:
 
     int32_t poll_events(Sink& s, AooEventHandler fn, void *user);
 
-    AooError get_format(AooFormat& format);
+    AooError get_format(AooFormat& format, size_t size);
 
     AooError codec_control(AooCtl ctl, void *data, AooSize size);
 
     // methods
     void reset(const Sink& s);
 
-    AooError handle_start(const Sink& s, int32_t stream, uint32_t flags, int32_t format_id,
-                          const AooFormat& f, const AooByte *settings, int32_t size, const AooData& md);
+    AooError handle_start(const Sink& s, int32_t stream, uint32_t flags,
+                          int32_t format_id, const AooFormat& f,
+                          const AooByte *extension, int32_t size,
+                          const AooData *md);
 
     AooError handle_stop(const Sink& s, int32_t stream);
 

@@ -467,7 +467,7 @@ typedef struct AooFormat
     /** the codec name */
     AooChar codec[kAooCodecNameMaxLen];
     /** the format structure size (including the header) */
-    AooInt32 size;
+    AooInt32 structSize;
     /** the number of channels */
     AooInt32 numChannels;
     /** the sample rate */

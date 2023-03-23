@@ -47,7 +47,7 @@ bool validate_format(AooFormatOpus& f, bool loud = true)
         return false;
     }
 
-    if (f.header.size < sizeof(AooFormatOpus)){
+    if (f.header.structSize < AOO_STRUCT_SIZE(AooFormatOpus, applicationType)) {
         return false;
     }
 
