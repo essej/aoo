@@ -121,6 +121,8 @@ enum
     /** AOO source/sink is idle;
      * no need to call `send()` resp. notify the send thread */
     kAooErrorIdle,
+    /** operation would overflow */
+    kAooErrorOverflow,
     /** out of memory */
     kAooErrorOutOfMemory,
     /** resource not found */

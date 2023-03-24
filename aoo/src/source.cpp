@@ -636,7 +636,7 @@ AooError AOO_CALL aoo::Source::process(
         }
     }
 
-    // Always update timer and DLL, even if there are no sinks.
+    // Always update DLL filter, even if there are no sinks.
     // Do it *before* trying to lock the mutex.
     // (The DLL is only ever touched in this method.)
     bool dynamic_resampling = dynamic_resampling_.load();
@@ -731,7 +731,14 @@ AooError AOO_CALL aoo::Source::process(
 #endif
     process_samples_ += nsamples;
     if (need_resampling()){
-        // *first* try to move samples from resampler to audiobuffer
+        // try to write to resampler
+        if (!resampler_.write(buf, insize)){
+            LOG_WARNING("AooSource: send buffer overflow");
+            add_xrun(1);
+            // NB: clients are still supposed to call send() to drain the buffer
+            return kAooErrorOverflow;
+        }
+        // try to move samples from resampler to audiobuffer
         while (audioqueue_.write_available()){
             // copy audio samples
             auto ptr = (block_data *)audioqueue_.write_data();
@@ -742,15 +749,6 @@ AooError AOO_CALL aoo::Source::process(
             ptr->sr = sr;
 
             audioqueue_.write_commit();
-        }
-        // now try to write to resampler
-        if (!resampler_.write(buf, insize)){
-            LOG_WARNING("AooSource: send buffer overflow");
-            add_xrun(1);
-            // don't return kAooErrorIdle, otherwise the send thread
-            // wouldn't drain the buffer.
-            // TODO: send event?
-            return kAooErrorUnknown;
         }
     } else {
         // bypass resampler
@@ -765,9 +763,8 @@ AooError AOO_CALL aoo::Source::process(
         } else {
             LOG_WARNING("AooSource: send buffer overflow");
             add_xrun(1);
-            // don't return kAooErrorIdle, otherwise the send thread
-            // wouldn't drain the buffer.
-            return kAooErrorUnknown;
+            // NB: clients are still supposed to call send() to drain the buffer
+            return kAooErrorOverflow;
         }
     }
     return kAooOk;
