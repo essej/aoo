@@ -190,7 +190,7 @@ AOO_INLINE AooError AooDecoder_control(
 /** \brief reset decoder state */
 AOO_INLINE AooError AooDecoder_reset(AooCodec *dec)
 {
-    return dec->cls->encoderControl(dec, kAooCodecCtlReset, NULL, 0);
+    return dec->cls->decoderControl(dec, kAooCodecCtlReset, NULL, 0);
 }
 
 /*----------------- register codecs -----------------------*/
