@@ -265,7 +265,7 @@ typedef void (AOO_CALL *AooStreamMessageHandler)(
 /*------------------ stream format ---------------------*/
 
 /** \brief max. size of codec names (including \0) */
-#define kAooCodecNameMaxSize 16
+#define kAooCodecNameMaxSize 32
 
 /** \brief common header for all AOO format structs */
 typedef struct AooFormat
