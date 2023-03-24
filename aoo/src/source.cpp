@@ -238,7 +238,7 @@ AooError AOO_CALL aoo::Source::control(
         resampler_.reset();
         audioqueue_.reset();
         if (encoder_) {
-            AooEncoder_control(encoder_.get(), kAooCodecCtlReset, nullptr, 0);
+            AooEncoder_reset(encoder_.get());
         }
         LOG_DEBUG("AooSource: reset after no sinks");
         reset_timer();
@@ -1023,7 +1023,7 @@ sink_desc * Source::do_add_sink(const ip_address& addr, AooId id, AooId stream_i
         resampler_.reset();
         audioqueue_.reset();
         if (encoder_) {
-            AooEncoder_control(encoder_.get(), kAooCodecCtlReset, nullptr, 0);
+            AooEncoder_reset(encoder_.get());
         }
         LOG_DEBUG("AooSource: reset after no sinks");
     }
@@ -1210,7 +1210,7 @@ void Source::make_new_stream(bool notify){
 
     // reset encoder to avoid garbage from previous stream
     if (encoder_) {
-        AooEncoder_control(encoder_.get(), kAooCodecCtlReset, nullptr, 0);
+        AooEncoder_reset(encoder_.get());
     }
 
     sink_lock lock(sinks_);
@@ -1445,7 +1445,7 @@ void Source::send_start(const sendfn& fn){
         // if there were no (active) sinks, we need to reset the encoder to
         // prevent nasty artifacts. (For efficiency reasons, we skip the encoding
         // process in send_data() if there are no active sinks.)
-        AooEncoder_control(encoder_.get(), kAooCodecCtlReset, nullptr, 0);
+        AooEncoder_reset(encoder_.get());
         LOG_DEBUG("AooSource: sinks previously empty/inactive - reset encoder");
     }
     cached_sinks_.clear();

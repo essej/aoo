@@ -1,5 +1,7 @@
 #pragma once
 
+#include "common/utils.hpp"
+
 #include <limits.h>
 #include <stdint.h>
 #include <memory>
@@ -14,15 +16,13 @@
 #include <math.h>
 #include <atomic>
 
-#include "common/utils.hpp"
-
 #ifdef _MSC_VER
 #include <intrin.h>
 #endif
 
 namespace aoo {
 
-uint32_t clz(uint32_t i) {
+inline uint32_t clz(uint32_t i) {
 #if defined(_MSC_VER)
     unsigned long msb = 0;
     _BitScanReverse(&msb, i);

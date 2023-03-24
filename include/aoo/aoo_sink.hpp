@@ -8,11 +8,32 @@
 
 #pragma once
 
-#include "aoo_sink.h"
+#include "aoo_config.h"
+#include "aoo_controls.h"
+#include "aoo_defines.h"
+#include "aoo_events.h"
+#include "aoo_types.h"
 
 #if AOO_HAVE_CXX11
 # include <memory>
 #endif
+
+typedef struct AooSink AooSink;
+
+/** \brief create a new AOO sink instance
+ *
+ * \param id the ID
+ * \param flags optional flags
+ * \param[out] err error code on failure
+ * \return new AooSink instance on success; `NULL` on failure
+ */
+AOO_API AooSink * AOO_CALL AooSink_new(
+        AooId id, AooFlag flags, AooError *err);
+
+/** \brief destroy the AOO sink instance */
+AOO_API void AOO_CALL AooSink_free(AooSink *sink);
+
+/*---------------------------------------------------------*/
 
 /** \brief AOO sink interface */
 struct AooSink {

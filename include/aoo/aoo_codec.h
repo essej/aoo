@@ -10,7 +10,9 @@
 
 #pragma once
 
+#include "aoo_config.h"
 #include "aoo_defines.h"
+#include "aoo_types.h"
 
 AOO_PACK_BEGIN
 
@@ -95,7 +97,7 @@ typedef AooError (AOO_CALL *AooCodecControlFunc)
 /** \brief serialize format extension
  *
  * (= everything after the AooFormat header).
- * On success writes the format extension to the given buffer
+ * On success, write the format extension to the given buffer.
  */
 typedef AooError (AOO_CALL *AooCodecSerializeFunc)(
         /** [in] the source format */
@@ -109,7 +111,7 @@ typedef AooError (AOO_CALL *AooCodecSerializeFunc)(
 /** \brief deserialize format extension
  *
  * (= everything after the AooFormat header).
- * On success writes the format extension to the given format structure.
+ * On success, write the format extension to the given format structure.
  *
  * \note This function should *not* update the `size` member of the `format` argument.
  */
@@ -147,39 +149,40 @@ typedef struct AooCodecInterface
 
 /** \brief encode audio samples to bytes
  * \see AooCodecEncodeFunc */
-AOO_INLINE AooError AooEncoder_encode(AooCodec *enc,
-                           const AooSample *input, AooInt32 numSamples,
-                           AooByte *output, AooInt32 *numBytes)
+AOO_INLINE AooError AooEncoder_encode(
+        AooCodec *enc, const AooSample *input, AooInt32 numSamples,
+        AooByte *output, AooInt32 *numBytes)
 {
     return enc->cls->encoderEncode(enc, input, numSamples, output, numBytes);
 }
 
 /** \brief control encoder instance
  * \see AooCodecControlFunc */
-AOO_INLINE AooError AooEncoder_control(AooCodec *enc,
-                           AooCodecCtl ctl, void *data, AooSize size)
+AOO_INLINE AooError AooEncoder_control(
+        AooCodec *enc, AooCodecCtl ctl, void *data, AooSize size)
 {
     return enc->cls->encoderControl(enc, ctl, data, size);
 }
 
 /** \brief reset encoder state */
-AOO_INLINE AooError AooEncoder_reset(AooCodec *enc) {
+AOO_INLINE AooError AooEncoder_reset(AooCodec *enc)
+{
     return enc->cls->encoderControl(enc, kAooCodecCtlReset, NULL, 0);
 }
 
 /** \brief decode bytes to audio samples
  * \see AooCodecDecodeFunc */
-AOO_INLINE AooError AooDecoder_decode(AooCodec *dec,
-                           const AooByte *input, AooInt32 numBytes,
-                           AooSample *output, AooInt32 *numSamples)
+AOO_INLINE AooError AooDecoder_decode(
+        AooCodec *dec, const AooByte *input, AooInt32 numBytes,
+        AooSample *output, AooInt32 *numSamples)
 {
     return dec->cls->decoderDecode(dec, input, numBytes, output, numSamples);
 }
 
 /** \brief control decoder instance
  * \see AooCodecControlFunc */
-AOO_INLINE AooError AooDecoder_control(AooCodec *dec,
-                           AooCodecCtl ctl, void *data, AooSize size)
+AOO_INLINE AooError AooDecoder_control(
+        AooCodec *dec, AooCodecCtl ctl, void *data, AooSize size)
 {
     return dec->cls->decoderControl(dec, ctl, data, size);
 }

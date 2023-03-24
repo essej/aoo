@@ -10,10 +10,7 @@
 
 #pragma once
 
-#include <stdint.h>
-#include <stddef.h>
-
-#include <inttypes.h>
+#include "aoo_config.h"
 
 /* check for C++11
  * NB: MSVC does not correctly set __cplusplus by default! */
@@ -83,9 +80,6 @@
 # define AOO_PACK_END
 #endif
 
-/* begin struct packing */
-AOO_PACK_BEGIN
-
 /*------------------- utilities --------------------*/
 
 /** \brief calculate the size of a versioned struct */
@@ -96,38 +90,11 @@ AOO_PACK_BEGIN
 #define AOO_STRUCT_INIT(ptr, type, field) \
     (ptr)->structSize = AOO_STRUCT_SIZE(type, field)
 
-/*---------- global compile time settings ----------*/
+/** \brief check if a versioned struct has a specific field */
+#define AOO_CHECK_FIELD(ptr, type, field) \
+    (((ptr)->structSize) >= AOO_STRUCT_SIZE(type, field))
 
-/** \brief AOO_NET support */
-#ifndef AOO_NET
-# define AOO_NET 1
-#endif
-
-/** \brief custom allocator support  */
-#ifndef AOO_CUSTOM_ALLOCATOR
-# define AOO_CUSTOM_ALLOCATOR 0
-#endif
-
-/** \brief default UDP packet size */
-#ifndef AOO_PACKET_SIZE
-# define AOO_PACKET_SIZE 512
-#endif
-
-/** \brief max. UDP packet size */
-#ifndef AOO_MAX_PACKET_SIZE
-# define AOO_MAX_PACKET_SIZE 4096
-#endif
-
-#if AOO_PACKET_SIZE > AOO_MAX_PACKET_SIZE
-#error "AOO_PACKET_SIZE must exceed AOO_MAX_PACKET_SIZE"
-#endif
-
-/** \brief debug memory usage */
-#ifndef AOO_DEBUG_MEMORY
-# define AOO_DEBUG_MEMORY 0
-#endif
-
-/*---------------- versioning ----------------*/
+/*-------------------- versioning --------------------*/
 
 /** \brief the AOO major version */
 #define kAooVersionMajor 2
@@ -138,100 +105,10 @@ AOO_PACK_BEGIN
 /** \brief the AOO test version (0: stable release) */
 #define kAooVersionTest 3
 
-/*------------ general data types ----------------*/
+/*-------------------- constants --------------------*/
 
-/** \brief boolean type */
-typedef int32_t AooBool;
-
-/** \brief 'true' boolean constant */
-#define kAooTrue 1
-/** \brief 'false' boolean constant */
-#define kAooFalse 0
-
-/** \brief character type */
-typedef char AooChar;
-
-/** \brief byte type */
-typedef uint8_t AooByte;
-
-/** \brief 16-bit signed integer */
-typedef int16_t AooInt16;
-/** \brief 16-bit unsigned integer */
-typedef uint16_t AooUInt16;
-
-/** \brief 32-bit signed integer */
-typedef int32_t AooInt32;
-/** \brief 32-bit unsigned integer */
-typedef uint32_t AooUInt32;
-
-/** \brief 64-bit signed integer */
-typedef int64_t AooInt64;
-/** \brief 64-bit unsigned integer */
-typedef uint64_t AooUInt64;
-
-/** \brief size type */
-typedef size_t AooSize;
-
-/** \brief pointer-sized signed integer */
-typedef intptr_t AooIntPtr;
-/** \brief pointer-sized unsigned integer */
-typedef uintptr_t AooUIntPtr;
-
-/*------------ semantic data types --------------*/
-
-/** \brief audio sample size in bits */
-#ifndef AOO_SAMPLE_SIZE
-# define AOO_SAMPLE_SIZE 32
-#endif
-
-#if AOO_SAMPLE_SIZE == 32
-/** \brief audio sample type */
-typedef float AooSample;
-#elif AOO_SAMPLE_SIZE == 64
-/** \brief audio sample type */
-typedef double AooSample
-#else
-# error "unsupported value for AOO_SAMPLE_SIZE"
-#endif
-
-/** \brief generic ID type */
-typedef AooInt32 AooId;
-
-/** \brief invalid AooId constant */
-#define kAooIdInvalid -1
-/** \brief smallest valid AooId */
-#define kAooIdMin 0
-/** \brief largest valid AooId */
-#define kAooIdMax INT32_MAX
-
-/** \brief flag/bit map type */
-typedef AooUInt32 AooFlag;
-
-/** \brief NTP time stamp */
-typedef AooUInt64 AooNtpTime;
-
-/** \brief constant representing the current time */
-#define kAooNtpTimeNow 1
-
-/** \brief time point/interval in seconds */
-typedef double AooSeconds;
-
-/** \brief sample rate type */
-typedef double AooSampleRate;
-
-/** \brief AOO control type */
-typedef AooInt32 AooCtl;
-
-/** \brief AOO socket handle type */
-typedef AooInt32 AooSocket;
-
-/*---------------- error codes ----------------*/
-
-/** \brief error code type */
-typedef AooInt32 AooError;
-
-/** \brief list of available error codes */
-enum AooErrorCodes
+/** \brief list of available error codes (`AooError`) */
+enum
 {
     /** unknown/unspecified error */
     kAooErrorUnknown = -1,
@@ -255,125 +132,28 @@ enum AooErrorCodes
 /** \brief alias for success result */
 #define kAooOk kAooErrorNone
 
-/*---------------- AOO events --------------------*/
-
-/** \brief AOO event type */
-typedef AooInt32 AooEventType;
-
-/** \brief generic AOO event */
-typedef union AooEvent AooEvent;
-
-/** \brief thread level type */
-typedef AooInt32 AooThreadLevel;
-
-/** \brief unknown thread level */
-#define kAooThreadLevelUnknown 0
-/** \brief audio thread */
-#define kAooThreadLevelAudio 1
-/** \brief network thread(s) */
-#define kAooThreadLevelNetwork 2
-
-/** \brief event mode type */
-typedef AooInt32 AooEventMode;
-
-/** \brief no events */
-#define kAooEventModeNone 0
-/** \brief use event callback */
-#define kAooEventModeCallback 1
-/** \brief poll for events */
-#define kAooEventModePoll 2
-
-/** \brief event handler function
- *
- * The callback function type that is passed to
- * AooSource, AooSink or AooClient to receive events.
- * If the callback is registered with #kAooEventModeCallback,
- * the function is called immediately when an event occurs.
- * The event should be handled appropriately regarding the
- * current thread level.
- * If the callback is registered with #kAooEventModePoll,
- * the user has to regularly poll for pending events.
- * Polling itself is realtime safe and can be done from
- * any thread.
- */
-typedef void (AOO_CALL *AooEventHandler)(
-        /** the user data */
-        void *user,
-        /** the event */
-        const AooEvent *event,
-        /** the current thread level
-         * (only releveant for #kAooEventModeCallback) */
-        AooThreadLevel level
-);
-
-/*---------------- AOO endpoint ------------------*/
-
-/** \brief socket address size type */
-typedef AooUInt32 AooAddrSize;
-
-typedef struct AooSockAddr
+/** \brief log levels */
+enum
 {
-    const void *data;
-    AooAddrSize size;
-} AooSockAddr;
-
-/** \brief AOO endpoint */
-typedef struct AooEndpoint
-{
-    /** socket address */
-    const void *address;
-    /** socket address length */
-    AooAddrSize addrlen;
-    /** source/sink ID */
-    AooId id;
-} AooEndpoint;
-
-/* TODO do we need this? */
-enum AooEndpointFlags
-{
-    kAooEndpointRelay = 0x01
+    /** no logging */
+    kAooLogLevelNone = 0,
+    /** only errors */
+    kAooLogLevelError = 1,
+    /** only errors and warnings */
+    kAooLogLevelWarning = 2,
+    /** errors, warnings and notifications */
+    kAooLogLevelVerbose = 3,
+    /** errors, warnings, notifications and debug messages */
+    kAooLogLevelDebug = 4
 };
 
-typedef struct AooIpEndpoint
-{
-    const AooChar *hostName;
-    AooInt32 port;
-} AooIpEndpoint;
-
-/** \brief send function
- *
- * The function type that is passed to #AooSource,
- * #AooSink or #AooClient for sending outgoing network packets.
- */
-typedef AooInt32 (AOO_CALL *AooSendFunc)(
-        /** the user data */
-        void *user,
-        /** the packet content */
-        const AooByte *data,
-        /** the packet size in bytes */
-        AooInt32 size,
-        /** the socket address */
-        const void *address,
-        /** the socket address length */
-        AooAddrSize addrlen,
-        /** optional flags */
-        /* TODO do we need this? */
-        AooFlag flags
-);
-
-/*------------- AOO message types ----------------*/
-
-/** \brief type for AOO message destination types */
-typedef AooInt32 AooMsgType;
-
 /** \brief AOO message destination types */
-enum AooMsgTypes
+enum
 {
     /** AOO source */
     kAooTypeSource = 0,
     /** AOO sink */
     kAooTypeSink,
-#if AOO_NET
     /** AOO server */
     kAooTypeServer,
     /** AOO client */
@@ -382,169 +162,199 @@ enum AooMsgTypes
     kAooTypePeer,
     /** relayed message */
     kAooTypeRelay,
-#endif
     kAooTypeSentinel
 };
 
-/*------------- AOO data ---------------*/
-
-/** \brief AooStreamMessage type */
-typedef AooInt32 AooDataType;
-
-enum AooDataTypes
+/** \brief thread levels (`AooThreadLevel`) */
+enum
 {
-    /** \brief unspecified data type */
+    /** unknown thread level */
+    kAooThreadLevelUnknown = 0,
+    /** audio thread */
+    kAooThreadLevelAudio = 1,
+    /** network thread(s) */
+    kAooThreadLevelNetwork = 2
+};
+
+/** \brief event modes (`AooEventMode`) */
+enum
+{
+    /** no events */
+    kAooEventModeNone = 0,
+    /** use event callback */
+    kAooEventModeCallback = 1,
+    /** poll for events */
+    kAooEventModePoll = 2
+};
+
+/** \brief AOO data types */
+enum
+{
+    /** unspecified data type */
     kAooDataUnspecified = -1,
-    /** \brief raw or binary data */
+    /** raw or binary data */
     kAooDataRaw = 0,
-    kAooDataBinary = kAooDataRaw,
-    /** \brief plain text (UTF-8 encoded) */
+    kAooDataBinary = 0,
+    /** plain text (UTF-8 encoded) */
     kAooDataText,
-    /** \brief OSC message (Open Sound Control) */
+    /** OSC message (Open Sound Control) */
     kAooDataOSC,
-    /** \brief MIDI */
+    /** MIDI */
     kAooDataMIDI,
-    /** \brief FUDI (Pure Data) */
+    /** FUDI (Pure Data) */
     kAooDataFUDI,
-    /** \brief JSON (UTF-8 encoded) */
+    /** JSON (UTF-8 encoded) */
     kAooDataJSON,
-    /** \brief XML (UTF-8 encoded) */
+    /** XML (UTF-8 encoded) */
     kAooDataXML,
-    /** \brief start of user specified types */
+    /** start of user specified types */
     kAooDataUser = 1000
 };
 
-/** \brief view on arbitrary structured data */
-typedef struct AooData
+/** \brief flags for AooSource_addSink / AooSource::addSink */
+enum
 {
-    /** the data type */
-    AooDataType type;
-    /** the data content */
-    const AooByte *data;
-    /** the data size in bytes */
-    AooSize size;
-} AooData;
+    /** sink should start active */
+    kAooSinkActive = 0x01
+};
 
-/*------------- AOO stream message ---------------*/
-
-/** \brief a message that is sent together with an audio stream */
-typedef struct AooStreamMessage
+/** \brief flags for AooClient_sendMessage / AooClient::sendMessage */
+enum
 {
-    /** sample offset */
-    AooInt32 sampleOffset;
-    /** the message type */
-    AooDataType type;
-    /** the data content */
-    const AooByte *data;
-    /** the data size in bytes */
-    AooSize size;
-} AooStreamMessage;
+    /** message should be delivered reliable */
+    kAooMessageReliable = 0x01
+};
 
-/** \brief stream message handler
- *
- * The type of function that is passed to #AooSink::process
- * for handling stream messages.
- *
- * \warning Do not call any AOO functions inside the handler function!
+/*---------------- OSC address patterns ----------------*/
+
+#define kAooMsgDomain "/aoo"
+#define kAooMsgDomainLen 4
+
+#define kAooMsgSource "/src"
+#define kAooMsgSourceLen 4
+
+#define kAooMsgSink "/sink"
+#define kAooMsgSinkLen 5
+
+#define kAooMsgStart "/start"
+#define kAooMsgStartLen 6
+
+#define kAooMsgStop "/stop"
+#define kAooMsgStopLen 5
+
+#define kAooMsgData "/data"
+#define kAooMsgDataLen 5
+
+#define kAooMsgPing "/ping"
+#define kAooMsgPingLen 5
+
+#define kAooMsgPong "/pong"
+#define kAooMsgPongLen 5
+
+#define kAooMsgInvite "/invite"
+#define kAooMsgInviteLen 7
+
+#define kAooMsgUninvite "/uninvite"
+#define kAooMsgUninviteLen 9
+
+#define kAooMsgDecline "/decline"
+#define kAooMsgDeclineLen 8
+
+#define kAooMsgServer "/server"
+#define kAooMsgServerLen 7
+
+#define kAooMsgClient "/client"
+#define kAooMsgClientLen 7
+
+#define kAooMsgPeer "/peer"
+#define kAooMsgPeerLen 5
+
+#define kAooMsgRelay "/relay"
+#define kAooMsgRelayLen 6
+
+#define kAooMsgMessage "/msg"
+#define kAooMsgMessageLen 4
+
+#define kAooMsgAck "/ack"
+#define kAooMsgAckLen 4
+
+#define kAooMsgLogin "/login"
+#define kAooMsgLoginLen 6
+
+#define kAooMsgQuery "/query"
+#define kAooMsgQueryLen 6
+
+#define kAooMsgGroup "/group"
+#define kAooMsgGroupLen 6
+
+#define kAooMsgUser "/user"
+#define kAooMsgUserLen 5
+
+#define kAooMsgJoin "/join"
+#define kAooMsgJoinLen 5
+
+#define kAooMsgLeave "/leave"
+#define kAooMsgLeaveLen 6
+
+#define kAooMsgUpdate "/update"
+#define kAooMsgUpdateLen 7
+
+#define kAooMsgChanged "/changed"
+#define kAooMsgChangedLen 8
+
+#define kAooMsgRequest "/request"
+#define kAooMsgRequestLen 8
+
+/** \brief flags for /login message */
+enum
+{
+    kAooLoginServerRelay = 0x01
+};
+
+/*------------------- binary messages ---------------------*/
+
+/* domain bit + type (uint8), size bit + cmd (uint8)
+ * a) sink ID (uint8), source ID (uint8)
+ * b) padding (uint16), sink ID (int32), source ID (int32)
  */
-typedef void (AOO_CALL *AooStreamMessageHandler)(
-        /** the user data */
-        void *user,
-        /** the stream message */
-        const AooStreamMessage *message,
-        /** the AOO source that sent the message */
-        const AooEndpoint *source
-);
 
-/*---------------- AOO format --------------------*/
+#define kAooBinMsgHeaderSize 4
+#define kAooBinMsgLargeHeaderSize 12
+#define kAooBinMsgDomainBit 0x80
+#define kAooBinMsgSizeBit 0x80
 
-/** \brief max. size of codec names */
-#define kAooCodecNameMaxLen 16
-
-/** \brief common header for all AOO format structs */
-typedef struct AooFormat
+/** \brief commands for 'data' binary message */
+enum
 {
-    /** the codec name */
-    AooChar codec[kAooCodecNameMaxLen];
-    /** the format structure size (including the header) */
-    AooInt32 structSize;
-    /** the number of channels */
-    AooInt32 numChannels;
-    /** the sample rate */
-    AooInt32 sampleRate;
-    /** the max. block size */
-    AooInt32 blockSize;
-} AooFormat;
+    kAooBinMsgCmdData = 0
+};
 
-/** \brief the max. size of AOO format header extensions */
-#define kAooFormatExtMaxSize 64
-
-/** \brief helper struct large enough to hold any AOO format struct */
-typedef struct AooFormatStorage
+/** \brief flags for 'data' binary message */
+enum
 {
-    AooFormat header;
-    AooByte data[kAooFormatExtMaxSize];
-} AooFormatStorage;
+    kAooBinMsgDataSampleRate = 0x01,
+    kAooBinMsgDataFrames = 0x02,
+    kAooBinMsgDataStreamMessage = 0x04
+};
 
-/*------------ memory allocation --------------*/
+/** \brief commands for 'message' binary message */
+enum
+{
+    kAooBinMsgCmdMessage = 0,
+    kAooBinMsgCmdAck = 1
+};
 
-/** \brief custom allocator function
- * \param ptr pointer to memory block;
- *    `NULL` if `oldsize` is 0.
- * \param oldsize original size of memory block;
- *    0 for allocating new memory
- * \param newsize size of the memory block;
- *    0 for freeing existing memory.
- * \return pointer to the new memory block;
- *    `NULL` if `newsize` is 0 or the allocation failed.
- *
- * If `oldsize` is 0 and `newsize` is not 0, the function
- * shall behave like `malloc`.
- * If `oldsize` is not 0 and `newsize` is 0, the function
- * shall behave like `free`.
- * If both `oldsize`and `newsize` are not 0, the function
- * shall behave like `realloc`.
- * If both `oldsize` and `newsize` are 0, the function
- * shall have no effect.
- */
-typedef void * (AOO_CALL *AooAllocFunc)
-    (void *ptr, AooSize oldsize, AooSize newsize);
+/** \brief flags for 'message' binary message */
+enum
+{
+    kAooBinMsgMessageReliable = 0x01,
+    kAooBinMsgMessageFrames = 0x02,
+    kAooBinMsgMessageTimestamp = 0x04
+};
 
-/*---------------- logging ----------------*/
-
-/** \brief log level type */
-typedef AooInt32 AooLogLevel;
-
-/** \brief no logging */
-#define kAooLogLevelNone 0
-/** \brief only errors */
-#define kAooLogLevelError 1
-/** \brief only errors and warnings */
-#define kAooLogLevelWarning 2
-/** \brief errors, warnings and notifications */
-#define kAooLogLevelVerbose 3
-/** \brief errors, warnings, notifications and debug messages */
-#define kAooLogLevelDebug 4
-
-/** \brief compile time log level */
-#ifndef AOO_LOG_LEVEL
-#define AOO_LOG_LEVEL kAooLogLevelWarning
-#endif
-
-/** \brief custom log function type
- * \param level the log level
- * \param fmt the format string
- * \param ... arguments
- */
-typedef void
-/** \cond */
-#ifndef _MSC_VER
-    __attribute__((format(printf, 2, 3 )))
-#endif
-/** \endcond */
-    (AOO_CALL *AooLogFunc)
-        (AooLogLevel level, const AooChar *fmt, ...);
-
-/*--------------------------------------------------*/
-
-AOO_PACK_END
+/** \brief commands for 'relay' binary message */
+enum
+{
+    kAooBinMsgCmdRelayIPv4 = 0,
+    kAooBinMsgCmdRelayIPv6 = 1
+};

@@ -1151,7 +1151,7 @@ void source_desc::update(const Sink& s){
         last_ping_time_.store(-1e007); // force ping
 
         // reset decoder to avoid garbage from previous stream
-        AooDecoder_control(decoder_.get(), kAooCodecCtlReset, nullptr, 0);
+        AooDecoder_reset(decoder_.get());
     }
 }
 
@@ -2069,8 +2069,7 @@ bool source_desc::try_decode_block(const Sink& s, stream_stats& stats){
         #else
             // use packet loss concealment
             AooInt32 n = nsamples;
-            if (AooDecoder_decode(decoder_.get(), nullptr, 0,
-                                  buffer, &n) != kAooOk) {
+            if (AooDecoder_decode(decoder_.get(), nullptr, 0, buffer, &n) != kAooOk) {
                 LOG_WARNING("AooSink: couldn't decode block!");
                 // fill with zeros
                 std::fill(buffer, buffer + nsamples, 0);

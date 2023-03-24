@@ -12,11 +12,32 @@
 
 #pragma once
 
-#include "aoo_server.h"
+#include "aoo_config.h"
+#include "aoo_controls.h"
+#include "aoo_defines.h"
+#include "aoo_events.h"
+#include "aoo_requests.h"
+#include "aoo_types.h"
 
 #if AOO_HAVE_CXX11
 # include <memory>
 #endif
+
+typedef struct AooServer AooServer;
+
+/** \brief create a new AOO source instance
+ *
+ * \param flags optional flags
+ * \param[out] err error code on failure
+ * \return new AooServer instance on success; `NULL` on failure
+ */
+AOO_API AooServer * AOO_CALL AooServer_new(
+        AooFlag flags, AooError *err);
+
+/** \brief destroy AOO server instance */
+AOO_API void AOO_CALL AooServer_free(AooServer *server);
+
+/*-----------------------------------------------------------*/
 
 /** \brief AOO server interface */
 struct AooServer {

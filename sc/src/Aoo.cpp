@@ -1,7 +1,7 @@
 #include "Aoo.hpp"
 
 #include "aoo/codec/aoo_pcm.h"
-#if USE_CODEC_OPUS
+#if AOO_USE_CODEC_OPUS
 #include "aoo/codec/aoo_opus.h"
 #endif
 
@@ -342,7 +342,7 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
 
         AooFormatPcm_init((AooFormatPcm *)&f, numChannels, sampleRate, blockSize, bitdepth);
     }
-#if USE_CODEC_OPUS
+#if AOO_USE_CODEC_OPUS
     else if (!strcmp(codec, kAooCodecOpus)){
         auto numChannels = getFormatParam(args, "channels", defNumChannels);
         auto blockSize = getFormatParam(args, "blocksize", 480); // 10ms
@@ -409,7 +409,7 @@ bool serializeFormat(osc::OutboundPacketStream& msg, const AooFormat& f)
         msg << nbytes;
         return true;
     }
-#if USE_CODEC_OPUS
+#if AOO_USE_CODEC_OPUS
     else if (!strcmp(f.codec, kAooCodecOpus)){
         // opus <channels> <blocksize> <samplerate> <application>
         auto& fmt = (AooFormatOpus &)f;

@@ -8,9 +8,12 @@
 
 #pragma once
 
-#include "aoo_net.h"
-#include "aoo_events.h"
+#include "aoo_config.h"
 #include "aoo_controls.h"
+#include "aoo_defines.h"
+#include "aoo_events.h"
+#include "aoo_requests.h"
+#include "aoo_types.h"
 
 typedef struct AooClient AooClient;
 

@@ -1,6 +1,6 @@
 #include "AooSend.hpp"
 
-#if USE_CODEC_OPUS
+#if AOO_USE_CODEC_OPUS
 # include "aoo/codec/aoo_opus.h"
 #endif
 
@@ -312,7 +312,7 @@ void aoo_send_format(AooSendUnit *unit, sc_msg_iter* args){
         });
 }
 
-#if USE_CODEC_OPUS
+#if AOO_USE_CODEC_OPUS
 
 bool get_opus_bitrate(AooSource *src, osc::OutboundPacketStream& msg) {
     // NOTE: because of a bug in opus_multistream_encoder (as of opus v1.3.2)
@@ -445,7 +445,7 @@ void aoo_send_codec_set(AooSendUnit *unit, sc_msg_iter* args){
             auto codec = args.gets();
             auto param = args.gets();
 
-        #if USE_CODEC_OPUS
+        #if AOO_USE_CODEC_OPUS
             if (!strcmp(codec, "opus")){
                 opus_int32 value;
                 if (!strcmp(param ,"bitrate")){
@@ -487,7 +487,7 @@ void aoo_send_codec_get(AooSendUnit *unit, sc_msg_iter* args){
             owner.beginReply(msg, "/aoo/codec/get", replyID);
             msg << codec << param;
 
-        #if USE_CODEC_OPUS
+        #if AOO_USE_CODEC_OPUS
             if (!strcmp(codec, "opus")){
                 if (!strcmp(param, "bitrate")){
                     if (get_opus_bitrate(owner.source(), msg)){

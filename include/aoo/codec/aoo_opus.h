@@ -8,8 +8,9 @@
 
 #pragma once
 
+#include "aoo/aoo_config.h"
 #include "aoo/aoo_defines.h"
-#include "aoo/aoo_source.h"
+#include "aoo/aoo_types.h"
 
 #ifdef AOO_OPUS_MULTISTREAM_H
 # include AOO_OPUS_MULTISTREAM_H
@@ -18,6 +19,12 @@
 #endif
 
 #include <string.h>
+
+struct AooSource;
+
+AOO_API AooError AOO_CALL AooSource_codecControl(
+        AooSource *source,  AooCtl ctl, AooIntPtr index,
+        void *data, AooSize size);
 
 AOO_PACK_BEGIN
 

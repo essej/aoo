@@ -17,8 +17,8 @@ include_directories(deps)
 
 # Opus
 # NOTE: build it first, so we don't pollute it with our own settings
-option(AOO_CODEC_OPUS "use Opus codec" ON)
-if (AOO_CODEC_OPUS)
+option(AOO_USE_CODEC_OPUS "use Opus codec" ON)
+if (AOO_USE_CODEC_OPUS)
     option(AOO_SYSTEM_OPUS "use system provided Opus library" OFF)
     if (AOO_SYSTEM_OPUS)
         set(AOO_OPUS_LDFLAGS "opus" CACHE STRING "Opus linker flags")
@@ -220,9 +220,9 @@ if (AOO_HAVE_PTHREAD_RWLOCK)
 endif()
 
 # opus support
-message(STATUS "Use Opus codec: ${AOO_CODEC_OPUS}")
-add_definitions(-DUSE_CODEC_OPUS=$<BOOL:${AOO_CODEC_OPUS}>)
-if (AOO_CODEC_OPUS AND (NOT AOO_SYSTEM_OPUS))
+message(STATUS "Use Opus codec: ${AOO_USE_CODEC_OPUS}")
+add_definitions(-DAOO_USE_CODEC_OPUS=$<BOOL:${AOO_USE_CODEC_OPUS}>)
+if (AOO_USE_CODEC_OPUS AND (NOT AOO_SYSTEM_OPUS))
     # because of a quirk in the opus source code structure,
     # we can't include "opus/opus_multistream.h"
     add_definitions(-DAOO_OPUS_MULTISTREAM_H=<opus/include/opus_multistream.h>)
@@ -247,7 +247,7 @@ if (MINGW)
     else()
         list(APPEND LIBS "-lpthread")
     endif()
-    if (AOO_CODEC_OPUS)
+    if (AOO_USE_CODEC_OPUS)
         list(APPEND LIBS "ssp") # for fortified functions
     endif()
 endif()

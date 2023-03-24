@@ -8,11 +8,32 @@
 
 #pragma once
 
-#include "aoo_source.h"
+#include "aoo_config.h"
+#include "aoo_controls.h"
+#include "aoo_defines.h"
+#include "aoo_events.h"
+#include "aoo_types.h"
 
 #if AOO_HAVE_CXX11
 # include <memory>
 #endif
+
+typedef struct AooSource AooSource;
+
+/** \brief create a new AOO source instance
+ *
+ * \param id the ID
+ * \param flags optional flags
+ * \param[out] err error code on failure
+ * \return new AooSource instance on success; `NULL` on failure
+ */
+AOO_API AooSource * AOO_CALL AooSource_new(
+        AooId id, AooFlag flags, AooError *err);
+
+/** \brief destroy the AOO source instance */
+AOO_API void AOO_CALL AooSource_free(AooSource *source);
+
+/*------------------------------------------------------------*/
 
 /** \brief AOO source interface */
 struct AooSource {

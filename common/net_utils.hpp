@@ -1,11 +1,12 @@
 #pragma once
 
-#include <stdint.h>
+#include "aoo/aoo_config.h"
+#include "aoo/aoo_defines.h"
+#include "aoo/aoo_types.h"
+
+#include <ostream>
 #include <string>
 #include <vector>
-#include <ostream>
-
-#include "aoo/aoo_defines.h"
 
 #ifdef _WIN32
 typedef int socklen_t;

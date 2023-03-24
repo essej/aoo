@@ -1,10 +1,12 @@
 #pragma once
 
-#include "aoo/aoo.h"
-#if AOO_NET
-# include "aoo/aoo_net.h"
-#endif
 #include "aoo/aoo_codec.h"
+#include "aoo/aoo_config.h"
+#include "aoo/aoo_defines.h"
+#if AOO_NET
+# include "aoo/aoo_requests.h"
+#endif
+#include "aoo/aoo_types.h"
 
 #include "memory.hpp"
 

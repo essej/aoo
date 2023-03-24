@@ -8,9 +8,11 @@
 
 #pragma once
 
-#include "aoo.h"
-#include "aoo_events.h"
+#include "aoo_config.h"
 #include "aoo_controls.h"
+#include "aoo_defines.h"
+#include "aoo_events.h"
+#include "aoo_types.h"
 
 typedef struct AooSource AooSource;
 
@@ -65,10 +67,6 @@ AOO_API AooError AOO_CALL AooSource_startStream(
 
 /** \copydoc AooSource::stopStream() */
 AOO_API AooError AOO_CALL AooSource_stopStream(AooSource *source);
-
-/** \brief sink should start active
- * \see AooSource_addSink */
-#define kAooSinkActive 0x01
 
 /** \copydoc AooSource::addSink() */
 AOO_API AooError AOO_CALL AooSource_addSink(

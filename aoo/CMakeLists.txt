@@ -89,7 +89,7 @@ if (NOT AOO_SYSTEM_OSCPACK)
         "${OSC}/OscTypes.cpp")
 endif()
 
-if (AOO_CODEC_OPUS)
+if (AOO_USE_CODEC_OPUS)
     list(APPEND HEADERS "${INCLUDE}/codec/aoo_opus.h")
     list(APPEND SOURCES "src/codec/opus.cpp")
 endif()

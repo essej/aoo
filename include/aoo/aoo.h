@@ -10,199 +10,13 @@
 
 #pragma once
 
+#include "aoo_config.h"
 #include "aoo_defines.h"
+#include "aoo_types.h"
 
-/*------------------- utilities ------------------*/
+AOO_PACK_BEGIN
 
-/** \brief check if a versioned struct has a specific field */
-#define AOO_CHECK_FIELD(ptr, type, field) \
-    (((ptr)->structSize) >= AOO_STRUCT_SIZE(type, field))
-
-/*------------- compile time settings -------------*/
-
-/** \brief clip audio output between -1 and 1 */
-#ifndef AOO_CLIP_OUTPUT
-# define AOO_CLIP_OUTPUT 0
-#endif
-
-/** \brief debug the state of the DLL filter */
-#ifndef AOO_DEBUG_DLL
-# define AOO_DEBUG_DLL 0
-#endif
-
-/** \brief debug incoming/outgoing data */
-#ifndef AOO_DEBUG_DATA
-# define AOO_DEBUG_DATA 0
-#endif
-
-/** \brief debug data resending */
-#ifndef AOO_DEBUG_RESEND
-# define AOO_DEBUG_RESEND 0
-#endif
-
-/** \brief debug the state of the xrun detector */
-#ifndef AOO_DEBUG_TIMER
-# define AOO_DEBUG_TIMER 0
-#endif
-
-/** \brief debug the state of the dynamic resampler */
-#ifndef AOO_DEBUG_RESAMPLING
-# define AOO_DEBUG_RESAMPLING 0
-#endif
-
-/** \brief debug the state of the jitter buffer */
-#ifndef AOO_DEBUG_JITTER_BUFFER
-# define AOO_DEBUG_JITTER_BUFFER 0
-#endif
-
-/** \brief debug stream message scheduling */
-#ifndef AOO_DEBUG_STREAM_MESSAGE
-# define AOO_DEBUG_STREAM_MESSAGE 0
-#endif
-
-/*---------------- default values --------------*/
-
-/** \brief default size of the RT memory pool */
-#ifndef AOO_MEM_POOL_SIZE
- #define AOO_MEM_POOL_SIZE (1 << 20) /* 1 MB */
-#endif
-
-/** \brief default source send buffer size in seconds */
-#ifndef AOO_SOURCE_BUFFER_SIZE
- #define AOO_SOURCE_BUFFER_SIZE 0.025
-#endif
-
-/** \brief default sink latency in seconds */
-#ifndef AOO_SINK_LATENCY
- #define AOO_SINK_LATENCY 0.05
-#endif
-
-/** \brief use binary data message format by default */
-#ifndef AOO_BINARY_DATA_MSG
- #define AOO_BINARY_DATA_MSG 1
-#endif
-
-/** \brief enable/disable dynamic resampling by default */
-#ifndef AOO_DYNAMIC_RESAMPLING
- #define AOO_DYNAMIC_RESAMPLING 1
-#endif
-
-/** \brief default time DLL filter bandwidth */
-#ifndef AOO_DLL_BANDWIDTH
- #define AOO_DLL_BANDWIDTH 0.012
-#endif
-
-/** \brief default ping interval in seconds */
-#ifndef AOO_PING_INTERVAL
- #define AOO_PING_INTERVAL 1.0
-#endif
-
-/** \brief default resend buffer size in seconds */
-#ifndef AOO_RESEND_BUFFER_SIZE
- #define AOO_RESEND_BUFFER_SIZE 1.0
-#endif
-
-/** \brief default send redundancy */
-#ifndef AOO_SEND_REDUNDANCY
- #define AOO_SEND_REDUNDANCY 1
-#endif
-
-/** \brief enable/disable packet resending by default */
-#ifndef AOO_RESEND_DATA
- #define AOO_RESEND_DATA 1
-#endif
-
-/** \brief default resend interval in seconds */
-#ifndef AOO_RESEND_INTERVAL
- #define AOO_RESEND_INTERVAL 0.01
-#endif
-
-/** \brief default resend limit */
-#ifndef AOO_RESEND_LIMIT
- #define AOO_RESEND_LIMIT 16
-#endif
-
-/** \brief default source timeout */
-#ifndef AOO_SOURCE_TIMEOUT
- #define AOO_SOURCE_TIMEOUT 10.0
-#endif
-
-/** \brief default invite timeout */
-#ifndef AOO_INVITE_TIMEOUT
- #define AOO_INVITE_TIMEOUT 1.0
-#endif
-
-/*---------------- public OSC interface ---------------*/
-
-/* OSC address patterns */
-#define kAooMsgDomain "/aoo"
-#define kAooMsgDomainLen 4
-
-#define kAooMsgSource "/src"
-#define kAooMsgSourceLen 4
-
-#define kAooMsgSink "/sink"
-#define kAooMsgSinkLen 5
-
-#define kAooMsgStart "/start"
-#define kAooMsgStartLen 6
-
-#define kAooMsgStop "/stop"
-#define kAooMsgStopLen 5
-
-#define kAooMsgData "/data"
-#define kAooMsgDataLen 5
-
-#define kAooMsgPing "/ping"
-#define kAooMsgPingLen 5
-
-#define kAooMsgPong "/pong"
-#define kAooMsgPongLen 5
-
-#define kAooMsgInvite "/invite"
-#define kAooMsgInviteLen 7
-
-#define kAooMsgUninvite "/uninvite"
-#define kAooMsgUninviteLen 9
-
-#define kAooMsgDecline "/decline"
-#define kAooMsgDeclineLen 8
-
-/*------------------- binary message ---------------------*/
-
-/* domain bit + type (uint8), size bit + cmd (uint8)
- * a) sink ID (uint8), source ID (uint8)
- * b) padding (uint16), sink ID (int32), source ID (int32)
- */
-
-#define kAooBinMsgHeaderSize 4
-#define kAooBinMsgLargeHeaderSize 12
-#define kAooBinMsgDomainBit 0x80
-#define kAooBinMsgSizeBit 0x80
-
-#define kAooBinMsgCmdData 0
-#define kAooBinMsgCmdRelayIPv4 0
-#define kAooBinMsgCmdRelayIPv6 1
-#define kAooBinMsgCmdMessage 2
-#define kAooBinMsgCmdAck 3
-
-enum AooBinMsgDataFlags
-{
-    kAooBinMsgDataSampleRate = 0x01,
-    kAooBinMsgDataFrames = 0x02,
-    kAooBinMsgDataStreamMessage = 0x04
-};
-
-#if AOO_NET
-enum AooBinMsgMessageFlags
-{
-    kAooBinMsgMessageReliable = 0x01,
-    kAooBinMsgMessageFrames = 0x02,
-    kAooBinMsgMessageTimestamp = 0x04
-};
-#endif
-
-/*------------------ library functions --------------------*/
+/*------------------------------------------------------*/
 
 /** \brief settings for aoo_initialize()
  *
@@ -329,3 +143,7 @@ AOO_API AooDataType AOO_CALL aoo_dataTypeFromString(const AooChar *str);
  * \return a C string on success, NULL if the data type is not valid
  */
 AOO_API const AooChar * AOO_CALL aoo_dataTypeToString(AooDataType type);
+
+/*------------------------------------------------------*/
+
+AOO_PACK_END

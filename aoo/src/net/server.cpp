@@ -864,7 +864,7 @@ AooError Server::do_login(client_endpoint& client, AooId token,
     // flags
     AooFlag flags = 0;
     if (allow_relay_.load()) {
-        flags |= kAooServerRelay;
+        flags |= kAooLoginServerRelay;
     }
 
     // send reply

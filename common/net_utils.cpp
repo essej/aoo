@@ -4,7 +4,9 @@
 
 #include "net_utils.hpp"
 
+#include "aoo/aoo_config.h"
 #include "aoo/aoo_defines.h"
+#include "aoo/aoo_types.h"
 
 #ifdef _WIN32
 #include <ws2tcpip.h>

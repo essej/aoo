@@ -1,6 +1,6 @@
 #include "aoo/aoo.h"
 #if AOO_NET
-# include "aoo/aoo_net.h"
+# include "aoo/aoo_requests.h"
 # include "common/net_utils.hpp"
 #endif
 #include "aoo/aoo_codec.h"
@@ -14,7 +14,7 @@
 #include "common/utils.hpp"
 
 #include "aoo/codec/aoo_pcm.h"
-#if USE_CODEC_OPUS
+#if AOO_USE_CODEC_OPUS
 # include "aoo/codec/aoo_opus.h"
 #endif
 
@@ -348,7 +348,7 @@ double AOO_CALL aoo_ntpTimeDuration(AooNtpTime t1, AooNtpTime t2){
 
 //---------------------- version -------------------------//
 
-void AOO_CALLaoo_getVersion(AooInt32 *major, AooInt32 *minor,
+void AOO_CALL aoo_getVersion(AooInt32 *major, AooInt32 *minor,
                             AooInt32 *patch, AooInt32 *test){
     if (major) *major = kAooVersionMajor;
     if (minor) *minor = kAooVersionMinor;
@@ -568,7 +568,7 @@ AooError AOO_CALL aoo_registerCodec(const char *name, const AooCodecInterface *c
 
 void aoo_pcmLoad(const AooCodecHostInterface *);
 void aoo_pcmUnload();
-#if USE_CODEC_OPUS
+#if AOO_USE_CODEC_OPUS
 void aoo_opusLoad(const AooCodecHostInterface *);
 void aoo_opusUnload();
 #endif
@@ -603,7 +603,7 @@ AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
         // register codecs
         aoo_pcmLoad(&aoo::g_interface);
 
-    #if USE_CODEC_OPUS
+    #if AOO_USE_CODEC_OPUS
         aoo_opusLoad(&aoo::g_interface);
     #endif
 
@@ -618,7 +618,7 @@ void AOO_CALL aoo_terminate() {
 #endif
     // unload codecs
     aoo_pcmUnload();
-#if USE_CODEC_OPUS
+#if AOO_USE_CODEC_OPUS
     aoo_opusUnload();
 #endif
     // free codec pluginlist

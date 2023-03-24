@@ -2,143 +2,18 @@
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
-/** \file
- * \brief AOO NET
- *
- * AOO NET is an embeddable UDP punch hole library for creating dynamic
- * peer-2-peer networks over the public internet. It has been designed
- * to seemlessly interoperate with the AOO streaming library.
- *
- * The implementation is largely based on the techniques described in the paper
- * "Peer-to-Peer Communication Across Network Address Translators"
- * by Ford, Srisuresh and Kegel (https://bford.info/pub/net/p2pnat/)
- *
- * It uses TCP over SLIP to reliable exchange meta information between peers.
- *
- * The UDP punch hole server runs on a public endpoint and manages the public
- * and local IP endpoint addresses of all the clients.
- * It can host multiple peer-2-peer networks which are organized as groups.
- *
- * Each client connects to the server, logs in as a user, joins one ore more groups
- * and in turn receives the public and local IP endpoint addresses from its peers.
- *
- * Currently, users and groups are automatically created on demand, but later
- * we might add the possibility to create persistent users and groups on the server.
- *
- * Later we might add TCP connections between peers, so we can reliably exchange
- * additional data, like chat messages or arbitrary OSC messages.
- *
- * Also we could support sending additional notifications from the server to all clients.
- */
-
 #pragma once
 
+#include "aoo_config.h"
 #include "aoo_defines.h"
+#include "aoo_types.h"
 
 AOO_PACK_BEGIN
 
-/*------------- compile time settings ---------------*/
+/*--------------------------------------------*/
 
-/** \brief debug relay messages */
-#ifndef AOO_DEBUG_RELAY
-#define AOO_DEBUG_RELAY 0
-#endif
-
-/** \brief debug client messages */
-#ifndef AOO_DEBUG_CLIENT_MESSAGE
-#define AOO_DEBUG_CLIENT_MESSAGE 0
-#endif
-
-/*-------------- default values ---------------------*/
-
-/** \brief enable/disable server relay by default */
-#ifndef AOO_SERVER_RELAY
- #define AOO_SERVER_RELAY 0
-#endif
-
-/** \brief enable/disable automatic group creation by default */
-#ifndef AOO_GROUP_AUTO_CREATE
-#define AOO_GROUP_AUTO_CREATE 1
-#endif
-
-/** \brief enable/disable automatic user creation by default */
-#ifndef AOO_USER_AUTO_CREATE
-#define AOO_USER_AUTO_CREATE 1
-#endif
-
-/** \brief enable/disable binary format for client messages */
-#ifndef AOO_CLIENT_BINARY_MSG
- #define AOO_CLIENT_BINARY_MSG 1
-#endif
-
-/*-------------- public OSC interface ---------------*/
-
-#define kAooMsgServer "/server"
-#define kAooMsgServerLen 7
-
-#define kAooMsgClient "/client"
-#define kAooMsgClientLen 7
-
-#define kAooMsgPeer "/peer"
-#define kAooMsgPeerLen 5
-
-#define kAooMsgRelay "/relay"
-#define kAooMsgRelayLen 6
-
-#define kAooMsgMessage "/msg"
-#define kAooMsgMessageLen 4
-
-#define kAooMsgAck "/ack"
-#define kAooMsgAckLen 4
-
-#define kAooMsgLogin "/login"
-#define kAooMsgLoginLen 6
-
-#define kAooMsgQuery "/query"
-#define kAooMsgQueryLen 6
-
-#define kAooMsgGroup "/group"
-#define kAooMsgGroupLen 6
-
-#define kAooMsgUser "/user"
-#define kAooMsgUserLen 5
-
-#define kAooMsgJoin "/join"
-#define kAooMsgJoinLen 5
-
-#define kAooMsgLeave "/leave"
-#define kAooMsgLeaveLen 6
-
-#define kAooMsgUpdate "/update"
-#define kAooMsgUpdateLen 7
-
-#define kAooMsgChanged "/changed"
-#define kAooMsgChangedLen 8
-
-#define kAooMsgRequest "/request"
-#define kAooMsgRequestLen 8
-
-/*------------- defines --------------------------*/
-
-/** \brief used in AooClient_sendMessage / AooClient::sendMessage */
-enum AooMessageFlags
-{
-    kAooMessageReliable = 0x01
-};
-
-/** \brief server flags */
-enum AooServerFlags
-{
-    kAooServerRelay = 0x01
-};
-
-/*------------- requests/replies ----------------*/
-
-/** \brief type for client requests */
-typedef AooInt32 AooRequestType;
-
-/** \brief client request type constants */
-enum AooRequestTypes
+/** \brief request types */
+enum
 {
     /** error response */
     kAooRequestError = 0,
@@ -162,72 +37,37 @@ enum AooRequestTypes
     kAooRequestCustom
 };
 
-typedef union AooRequest AooRequest;
-
-/** \brief server request handler (to intercept client requests)
- * \param user user data
- * \param client client ID
- * \param token request token
- * \param request the client request
- * \return #kAooTrue: handled manually; #kAooFalse: handle automatically.
- */
-typedef AooBool (AOO_CALL *AooRequestHandler)(
-        void *user,
-        AooId client,
-        AooId token,
-        const AooRequest *request
-);
-
-typedef union AooResponse AooResponse;
-
-/** \brief client response handler
- *
- * In the handler function the user must check the response type.
- * If the type is `kAooRequestError`, the request has failed and
- * the user may inspect the `error` member to gather more information.
- * Otherwise the user can safely use the actual response data,
- * e.g. `response->connect` for a connection request.
- */
-typedef void (AOO_CALL *AooResponseHandler)(
-        /** the user data */
-        void *user,
-        /** the original request */
-        const AooRequest *request,
-        /** the response */
-        const AooResponse *response
-);
-
-/* basic request */
-
+/** \brief common header for all request structures */
 #define AOO_REQUEST_HEADER \
     AooRequestType type; \
     AooUInt32 structSize;
 
+/** \brief basic request */
 typedef struct AooRequestBase
 {
     AOO_REQUEST_HEADER
 } AooRequestBase;
 
-/** \brief helper function for initializing a request structures */
+/** \brief helper function for initializing a request structure */
 #define AOO_REQUEST_INIT(ptr, name, field) \
     (ptr)->type = kAooRequest##name; \
     (ptr)->structSize = AOO_STRUCT_SIZE(AooRequest##name, field);
 
-/* basic response */
-
+/** \brief common header for all response structures */
 #define AOO_RESPONSE_HEADER AOO_REQUEST_HEADER
 
+/** \brief basic response */
 typedef struct AooResponseBase
 {
     AOO_RESPONSE_HEADER
 } AooResponseBase;
 
-/** \brief helper function for initializing a reponse structures */
+/** \brief helper function for initializing a reponse structure */
 #define AOO_RESPONSE_INIT(ptr, name, field) \
     (ptr)->type = kAooRequest##name; \
     (ptr)->structSize = AOO_STRUCT_SIZE(AooResponse##name, field);
 
-/* error */
+/*----------------- error ------------------*/
 
 /** \brief error response */
 typedef struct AooResponseError
@@ -239,7 +79,7 @@ typedef struct AooResponseError
     const AooChar *errorMessage;
 } AooResponseError;
 
-/* connect (client-side) */
+/*--------- connect (client-side) ---------*/
 
 /** \brief connection request */
 typedef struct AooRequestConnect
@@ -258,12 +98,13 @@ typedef struct AooResponseConnect
     const AooData *metadata;
 } AooResponseConnect;
 
-/* disconnect (client-side) */
+/*--------- disconnect (client-side) ----------*/
+
 typedef AooRequestBase AooRequestDisconnect;
 
 typedef AooResponseBase AooResponseDisconnect;
 
-/* query (server-side) */
+/*----------- query (server-side) -------------*/
 
 /** \brief query request */
 typedef struct AooRequestQuery
@@ -281,7 +122,7 @@ typedef struct AooResponseQuery
     AooIpEndpoint serverAddress;
 } AooResponseQuery;
 
-/* login (server-side) */
+/*----------- login (server-side) ------------*/
 
 /** \brief login request */
 typedef struct AooRequestLogin
@@ -298,7 +139,7 @@ typedef struct AooResponseLogin
     const AooData *metadata;
 } AooResponseLogin;
 
-/* join group (server/client) */
+/*-------- join group (server/client) -------*/
 
 /** \brief request for joining a group */
 typedef struct AooRequestGroupJoin
@@ -359,7 +200,7 @@ typedef struct AooResponseGroupJoin
     const AooIpEndpoint *relayAddress;
 } AooResponseGroupJoin;
 
-/* leave group (server/client) */
+/*--------- leave group (server/client) ----------*/
 
 /** \brief request for leaving a group */
 typedef struct AooRequestGroupLeave
@@ -371,7 +212,7 @@ typedef struct AooRequestGroupLeave
 /** \brief response for leaving a group */
 typedef AooResponseBase AooResponseGroupLeave;
 
-/* update group metadata */
+/*------------ update group metadata -------------*/
 
 /** \brief request for updating a group */
 typedef struct AooRequestGroupUpdate
@@ -388,7 +229,7 @@ typedef struct AooResponseGroupUpdate
     AooData groupMetadata;
 } AooResponseGroupUpdate;
 
-/* update user metadata */
+/*------------ update user metadata -------------*/
 
 /** \brief request for updating a user */
 typedef struct AooRequestUserUpdate
@@ -406,7 +247,7 @@ typedef struct AooResponseUserUpdate
     AooData userMetadata;
 } AooResponseUserUpdate;
 
-/* custom request (server/client) */
+/*------- custom request (server/client) --------*/
 
 /** \brief custom client request */
 typedef struct AooRequestCustom

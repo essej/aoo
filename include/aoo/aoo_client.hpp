@@ -8,7 +8,12 @@
 
 #pragma once
 
-#include "aoo_client.h"
+#include "aoo_config.h"
+#include "aoo_controls.h"
+#include "aoo_defines.h"
+#include "aoo_events.h"
+#include "aoo_requests.h"
+#include "aoo_types.h"
 
 #if AOO_HAVE_CXX11
 # include <memory>
@@ -16,6 +21,22 @@
 
 struct AooSource;
 struct AooSink;
+typedef struct AooClient AooClient;
+
+/** \brief create a new AOO source instance
+ *
+ * \param udpSocket bound UDP socket handle
+ * \param flags optional flags
+ * \param[out] err error code on failure
+ * \return new AooClient instance on success; `NULL` on failure
+ */
+AOO_API AooClient * AOO_CALL AooClient_new(
+        AooSocket udpSocket, AooFlag flags, AooError *err);
+
+/** \brief destroy AOO client */
+AOO_API void AOO_CALL AooClient_free(AooClient *client);
+
+/*-----------------------------------------------------------*/
 
 /** \brief AOO client interface */
 struct AooClient {

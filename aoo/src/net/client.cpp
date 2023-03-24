@@ -1409,7 +1409,7 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
             auto flags = (AooFlag)(it++)->AsInt32();
             auto metadata = osc_read_metadata(it);
 
-            server_relay_ = flags & kAooServerRelay;
+            server_relay_ = flags & kAooLoginServerRelay;
 
             // connected!
             state_.store(client_state::connected);

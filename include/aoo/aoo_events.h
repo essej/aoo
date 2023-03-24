@@ -8,12 +8,16 @@
 
 #pragma once
 
+#include "aoo_config.h"
 #include "aoo_defines.h"
+#include "aoo_types.h"
 
 AOO_PACK_BEGIN
 
+/*--------------------------------------------*/
+
 /** \brief AOO source/sink event types */
-enum AooEventTypes
+enum
 {
     /** generic error event */
     kAooEventError = 0,
@@ -62,7 +66,6 @@ enum AooEventTypes
     kAooEventBlockResent,
     /** sink: block has been dropped by source */
     kAooEventBlockDropped,
-#if AOO_NET
     /*----------------------------------*/
     /*         AooClient events         */
     /*----------------------------------*/
@@ -109,11 +112,11 @@ enum AooEventTypes
     kAooEventServerGroupUpdate,
     /** a user has been updated (by the client) */
     kAooEventServerUserUpdate,
-#endif
     /** start of user defined events (for custom AOO versions) */
     kAooEventCustom = 10000
 };
 
+/*--------------------------------------------*/
 
 /** \brief common header of all event structs */
 #define AOO_EVENT_HEADER \
@@ -225,14 +228,14 @@ typedef AooEventEndpoint AooEventUninviteTimeout;
 /** \brief AOO stream state type */
 typedef AooInt32 AooStreamState;
 
-/** \brief possible stream states */
-enum AooStreamStates
+/** \brief stream states */
+enum
 {
-    /** \brief stream is (temporarily) inactive */
+    /** stream is (temporarily) inactive */
     kAooStreamStateInactive = 0,
-    /** \brief stream is active */
+    /** stream is active */
     kAooStreamStateActive = 1,
-    /** \brief stream is buffering */
+    /** stream is buffering */
     kAooStreamStateBuffering = 2
 };
 
@@ -279,8 +282,6 @@ typedef struct AooEventFormatChange
 /*-------------------------------------------------*/
 /*            AOO server/client events             */
 /*-------------------------------------------------*/
-
-#if AOO_NET
 
 /* client events */
 
@@ -468,8 +469,6 @@ typedef struct AooEventServerUserUpdate
     AooId userId;
     AooData userMetadata;
 } AooEventServerUserUpdate;
-
-#endif /* AOO_NET */
 
 /*----------------------------------------------------*/
 

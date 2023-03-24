@@ -1,8 +1,5 @@
 #define AOO_RT_MEMORY_POOL_BITSET 1
 
-#undef AOO_LOG_LEVEL
-#define AOO_LOG_LEVEL 0
-
 #include "aoo/src/rt_memory_pool.hpp"
 #include "common/sync.hpp"
 

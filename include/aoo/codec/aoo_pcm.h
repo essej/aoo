@@ -8,9 +8,17 @@
 
 #pragma once
 
+#include "aoo/aoo_config.h"
 #include "aoo/aoo_defines.h"
+#include "aoo/aoo_types.h"
 
 #include <string.h>
+
+struct AooSource;
+
+AOO_API AooError AOO_CALL AooSource_codecControl(
+        AooSource *source,  AooCtl ctl, AooIntPtr index,
+        void *data, AooSize size);
 
 AOO_PACK_BEGIN
 
