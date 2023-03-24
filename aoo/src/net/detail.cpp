@@ -67,25 +67,25 @@ AooError parse_pattern(const AooByte *msg, int32_t n, AooMsgType& type, int32_t&
         if (n >= (count + kAooMsgServerLen)
             && !memcmp(msg + count, kAooMsgServer, kAooMsgServerLen))
         {
-            type = kAooTypeServer;
+            type = kAooMsgTypeServer;
             count += kAooMsgServerLen;
         }
         else if (n >= (count + kAooMsgClientLen)
             && !memcmp(msg + count, kAooMsgClient, kAooMsgClientLen))
         {
-            type = kAooTypeClient;
+            type = kAooMsgTypeClient;
             count += kAooMsgClientLen;
         }
         else if (n >= (count + kAooMsgPeerLen)
             && !memcmp(msg + count, kAooMsgPeer, kAooMsgPeerLen))
         {
-            type = kAooTypePeer;
+            type = kAooMsgTypePeer;
             count += kAooMsgPeerLen;
         }
         else if (n >= (count + kAooMsgRelayLen)
             && !memcmp(msg + count, kAooMsgRelay, kAooMsgRelayLen))
         {
-            type = kAooTypeRelay;
+            type = kAooMsgTypeRelay;
             count += kAooMsgRelayLen;
         } else {
             return kAooErrorUnknown;

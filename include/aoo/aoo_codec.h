@@ -68,14 +68,12 @@ typedef AooError (AOO_CALL *AooCodecDecodeFunc)(
         AooInt32 *numSamples
 );
 
-/** \brief type for AOO codec controls */
-typedef AooInt32 AooCodecCtl;
-
-/** \brief AOO codec control constants
+/** \brief AOO codec controls
  *
  * Negative values are reserved for generic controls;
- * codec specific controls must be positiv */
-enum AooCodecControls
+ * codec specific controls must be positiv.
+ */
+AOO_ENUM(AooCodecCtl)
 {
     /** reset the codec state (`NULL`) */
     kAooCodecCtlReset = -1000
@@ -195,21 +193,22 @@ AOO_INLINE AooError AooDecoder_reset(AooCodec *dec)
 
 /*----------------- register codecs -----------------------*/
 
-/** \brief A function type for registering codecs */
+/** \brief function for registering codecs */
 typedef AooError (AOO_CALL *AooCodecRegisterFunc)(
         const AooChar *name,
         const AooCodecInterface *cls
 );
 
+/** \brief host interface passed to codec plugins */
 typedef struct AooCodecHostInterface
 {
     AooSize structSize;
-    AooCodecRegisterFunc registerCodec; /* `register` is a keyword... */
+    AooCodecRegisterFunc registerCodec;
     AooAllocFunc alloc;
     AooLogFunc log;
 } AooCodecHostInterface;
 
-/** \brief global codec host interface instance */
+/** \brief global host interface instance */
 AOO_API const AooCodecHostInterface * aoo_getCodecHostInterface(void);
 
 /** \brief register an external codec plugin */

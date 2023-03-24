@@ -67,7 +67,7 @@
 # define AOO_API AOO_EXPORT
 #endif
 
-/*---------- struct packing -----------------*/
+/*-------------------- struct packing ----------------------*/
 
 #if defined(__GNUC__)
 # define AOO_PACK_BEGIN _Pragma("pack(push,8)")
@@ -80,7 +80,7 @@
 # define AOO_PACK_END
 #endif
 
-/*------------------- utilities --------------------*/
+/*----------------------- utilities ------------------------*/
 
 /** \brief calculate the size of a versioned struct */
 #define AOO_STRUCT_SIZE(type, field) \
@@ -94,7 +94,7 @@
 #define AOO_CHECK_FIELD(ptr, type, field) \
     (((ptr)->structSize) >= AOO_STRUCT_SIZE(type, field))
 
-/*-------------------- versioning --------------------*/
+/*---------------------- versioning ------------------------*/
 
 /** \brief the AOO major version */
 #define kAooVersionMajor 2
@@ -105,129 +105,7 @@
 /** \brief the AOO test version (0: stable release) */
 #define kAooVersionTest 3
 
-/*-------------------- constants --------------------*/
-
-/** \brief list of available error codes (`AooError`) */
-enum
-{
-    /** unknown/unspecified error */
-    kAooErrorUnknown = -1,
-    /** no error (= success) */
-    kAooErrorNone = 0,
-    /** operation/control not implemented */
-    kAooErrorNotImplemented,
-    /** bad argument for function/method call */
-    kAooErrorBadArgument,
-    /** AOO source/sink is idle;
-     * no need to call `send()` resp. notify the send thread */
-    kAooErrorIdle,
-    /** operation would overflow */
-    kAooErrorOverflow,
-    /** out of memory */
-    kAooErrorOutOfMemory,
-    /** resource not found */
-    kAooErrorNotFound,
-    /** insufficient buffer size */
-    kAooErrorInsufficientBuffer
-};
-
-/** \brief alias for success result */
-#define kAooOk kAooErrorNone
-
-/** \brief log levels */
-enum
-{
-    /** no logging */
-    kAooLogLevelNone = 0,
-    /** only errors */
-    kAooLogLevelError = 1,
-    /** only errors and warnings */
-    kAooLogLevelWarning = 2,
-    /** errors, warnings and notifications */
-    kAooLogLevelVerbose = 3,
-    /** errors, warnings, notifications and debug messages */
-    kAooLogLevelDebug = 4
-};
-
-/** \brief AOO message destination types */
-enum
-{
-    /** AOO source */
-    kAooTypeSource = 0,
-    /** AOO sink */
-    kAooTypeSink,
-    /** AOO server */
-    kAooTypeServer,
-    /** AOO client */
-    kAooTypeClient,
-    /** AOO peer */
-    kAooTypePeer,
-    /** relayed message */
-    kAooTypeRelay,
-    kAooTypeSentinel
-};
-
-/** \brief thread levels (`AooThreadLevel`) */
-enum
-{
-    /** unknown thread level */
-    kAooThreadLevelUnknown = 0,
-    /** audio thread */
-    kAooThreadLevelAudio = 1,
-    /** network thread(s) */
-    kAooThreadLevelNetwork = 2
-};
-
-/** \brief event modes (`AooEventMode`) */
-enum
-{
-    /** no events */
-    kAooEventModeNone = 0,
-    /** use event callback */
-    kAooEventModeCallback = 1,
-    /** poll for events */
-    kAooEventModePoll = 2
-};
-
-/** \brief AOO data types */
-enum
-{
-    /** unspecified data type */
-    kAooDataUnspecified = -1,
-    /** raw or binary data */
-    kAooDataRaw = 0,
-    kAooDataBinary = 0,
-    /** plain text (UTF-8 encoded) */
-    kAooDataText,
-    /** OSC message (Open Sound Control) */
-    kAooDataOSC,
-    /** MIDI */
-    kAooDataMIDI,
-    /** FUDI (Pure Data) */
-    kAooDataFUDI,
-    /** JSON (UTF-8 encoded) */
-    kAooDataJSON,
-    /** XML (UTF-8 encoded) */
-    kAooDataXML,
-    /** start of user specified types */
-    kAooDataUser = 1000
-};
-
-/** \brief flags for AooSource_addSink / AooSource::addSink */
-enum
-{
-    /** sink should start active */
-    kAooSinkActive = 0x01
-};
-
-/** \brief flags for AooClient_sendMessage / AooClient::sendMessage */
-enum
-{
-    /** message should be delivered reliable */
-    kAooMessageReliable = 0x01
-};
-
-/*---------------- OSC address patterns ----------------*/
+/*------------------ OSC address patterns ------------------*/
 
 #define kAooMsgDomain "/aoo"
 #define kAooMsgDomainLen 4
@@ -360,3 +238,5 @@ enum
     kAooBinMsgCmdRelayIPv4 = 0,
     kAooBinMsgCmdRelayIPv6 = 1
 };
+
+/*---------------------------------------------------------*/

@@ -255,7 +255,7 @@ public:
      */
     virtual AooError AOO_CALL sendMessage(
             AooId group, AooId user, const AooData &msg,
-            AooNtpTime timeStamp, AooFlag flags) = 0;
+            AooNtpTime timeStamp, AooMessageFlags flags) = 0;
 
     /** \brief handle messages from peers
      *

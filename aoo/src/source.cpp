@@ -458,7 +458,7 @@ AooError AOO_CALL aoo::Source::handleMessage(
         LOG_WARNING("AooSource: not an AoO message!");
         return kAooErrorBadArgument;
     }
-    if (type != kAooTypeSource){
+    if (type != kAooMsgTypeSource){
         LOG_WARNING("AooSource: not a source message!");
         return kAooErrorBadArgument;
     }
@@ -1538,7 +1538,7 @@ void send_packet_bin(const endpoint& ep, AooId id, AooId stream_id,
                      const aoo::data_packet& d, const sendfn& fn) {
     AooByte buf[AOO_MAX_PACKET_SIZE];
 
-    auto onset = aoo::binmsg_write_header(buf, sizeof(buf), kAooTypeSink,
+    auto onset = aoo::binmsg_write_header(buf, sizeof(buf), kAooMsgTypeSink,
                                           kAooBinMsgCmdData, ep.id, id);
     auto argsize = write_bin_data(buf + onset, sizeof(buf) - onset, stream_id, d);
     auto size = onset + argsize;
@@ -1574,7 +1574,7 @@ void send_packet(const aoo::vector<cached_sink>& sinks, const AooId id,
             // write header
             bool large =  s.ep.id > 255 || id > 255;
             auto start = large ? buf : (args - kAooBinMsgHeaderSize);
-            aoo::binmsg_write_header(start, args - start, kAooTypeSink,
+            aoo::binmsg_write_header(start, args - start, kAooMsgTypeSink,
                                      kAooBinMsgCmdData, s.ep.id, id);
             // replace stream ID and channel
             aoo::to_bytes(s.stream_id, args);

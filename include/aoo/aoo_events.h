@@ -17,7 +17,7 @@ AOO_PACK_BEGIN
 /*--------------------------------------------*/
 
 /** \brief AOO source/sink event types */
-enum
+AOO_ENUM(AooEventType)
 {
     /** generic error event */
     kAooEventError = 0,
@@ -225,11 +225,8 @@ typedef AooEventEndpoint AooEventInviteTimeout;
 /** \brief uninvitation has timed out */
 typedef AooEventEndpoint AooEventUninviteTimeout;
 
-/** \brief AOO stream state type */
-typedef AooInt32 AooStreamState;
-
 /** \brief stream states */
-enum
+AOO_ENUM(AooStreamState)
 {
     /** stream is (temporarily) inactive */
     kAooStreamStateInactive = 0,

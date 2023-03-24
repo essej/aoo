@@ -15,6 +15,9 @@
 #include "aoo_requests.h"
 #include "aoo_types.h"
 
+struct AooSource;
+struct AooSink;
+
 typedef struct AooClient AooClient;
 
 /** \brief create a new AOO source instance
@@ -39,19 +42,19 @@ AOO_API AooError AOO_CALL AooClient_quit(AooClient *client);
 
 /** \copydoc AooClient::addSource() */
 AOO_API AooError AOO_CALL AooClient_addSource(
-        AooClient *client, struct AooSource *source, AooId id);
+        AooClient *client, AooSource *source, AooId id);
 
 /** \copydoc AooClient::removeSource() */
 AOO_API AooError AOO_CALL AooClient_removeSource(
-        AooClient *client, struct AooSource *source);
+        AooClient *client, AooSource *source);
 
 /** \copydoc AooClient::addSink() */
 AOO_API AooError AOO_CALL AooClient_addSink(
-        AooClient *client, struct AooSink *sink, AooId id);
+        AooClient *client, AooSink *sink, AooId id);
 
 /** \copydoc AooClient::removeSink() */
 AOO_API AooError AOO_CALL AooClient_removeSink(
-        AooClient *client, struct AooSink *sink);
+        AooClient *client, AooSink *sink);
 
 /** \copydoc AooClient::connect() */
 AOO_API AooError AooClient_connect(
@@ -114,7 +117,7 @@ AOO_API AooError AOO_CALL AooClient_getPeerName(
 /** \copydoc AooClient::sendMessage() */
 AOO_API AooError AOO_CALL AooClient_sendMessage(
         AooClient *client, AooId group, AooId user,
-        const AooData *msg, AooNtpTime timeStamp, AooFlag flags);
+        const AooData *msg, AooNtpTime timeStamp, AooMessageFlags flags);
 
 /** \copydoc AooClient::handleMessage() */
 AOO_API AooError AOO_CALL AooClient_handleMessage(

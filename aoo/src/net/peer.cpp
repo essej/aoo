@@ -369,7 +369,7 @@ void peer::send_packet_bin(const message_packet& p, const sendfn& fn) const {
             ((!p.tt.is_empty()) * kAooBinMsgMessageTimestamp);
 
     // NB: we send *our* user ID
-    auto offset = aoo::binmsg_write_header(buf, sizeof(buf), kAooTypePeer,
+    auto offset = aoo::binmsg_write_header(buf, sizeof(buf), kAooMsgTypePeer,
                                            kAooBinMsgCmdMessage, group_id(), local_id());
     auto ptr = buf + offset;
     auto end = buf + sizeof(buf);
@@ -407,7 +407,7 @@ void peer::send_ack(const message_ack &ack, const sendfn& fn) {
 #endif
     if (binary_.load(std::memory_order_relaxed)) {
         AooByte buf[64];
-        auto onset = binmsg_write_header(buf, sizeof(buf), kAooTypePeer,
+        auto onset = binmsg_write_header(buf, sizeof(buf), kAooMsgTypePeer,
                                          kAooBinMsgCmdAck, group_id_, local_id_);
         auto ptr = buf + onset;
         aoo::write_bytes<int32_t>(1, ptr);

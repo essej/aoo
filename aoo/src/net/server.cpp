@@ -59,9 +59,9 @@ AooError AOO_CALL aoo::net::Server::handleUdpMessage(
     ip_address addr((const struct sockaddr *)address, addrlen);
     sendfn fn(replyFn, user);
 
-    if (type == kAooTypeServer){
+    if (type == kAooMsgTypeServer){
         return handle_udp_message(data, size, onset, addr, fn);
-    } else if (type == kAooTypeRelay){
+    } else if (type == kAooMsgTypeRelay){
         return handle_relay(data, size, addr, fn);
     } else {
         LOG_WARNING("AooServer: not a client message!");
@@ -789,7 +789,7 @@ void Server::handle_message(client_endpoint& client,
     }
 
     try {
-        if (type == kAooTypeServer){
+        if (type == kAooMsgTypeServer){
             auto pattern = msg.AddressPattern() + onset;
             LOG_DEBUG("AooServer: got server message " << pattern);
             if (!strcmp(pattern, kAooMsgPing)){

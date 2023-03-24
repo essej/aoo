@@ -269,29 +269,29 @@ AooError AOO_CALL aoo_parsePattern(
         count += kAooMsgDomainLen;
         if (size >= (count + kAooMsgSourceLen)
             && !memcmp(msg + count, kAooMsgSource, kAooMsgSourceLen)) {
-            *type = kAooTypeSource;
+            *type = kAooMsgTypeSource;
             count += kAooMsgSourceLen;
         } else if (size >= (count + kAooMsgSinkLen)
             && !memcmp(msg + count, kAooMsgSink, kAooMsgSinkLen)) {
-            *type = kAooTypeSink;
+            *type = kAooMsgTypeSink;
             count += kAooMsgSinkLen;
         } else {
         #if AOO_NET
             if (size >= (count + kAooMsgClientLen)
                 && !memcmp(msg + count, kAooMsgClient, kAooMsgClientLen)) {
-                *type = kAooTypeClient;
+                *type = kAooMsgTypeClient;
                 count += kAooMsgClientLen;
             } else if (size >= (count + kAooMsgServerLen)
                 && !memcmp(msg + count, kAooMsgServer, kAooMsgServerLen)) {
-                *type = kAooTypeServer;
+                *type = kAooMsgTypeServer;
                 count += kAooMsgServerLen;
             } else if (size >= (count + kAooMsgPeerLen)
                 && !memcmp(msg + count, kAooMsgPeer, kAooMsgPeerLen)) {
-                *type = kAooTypePeer;
+                *type = kAooMsgTypePeer;
                 count += kAooMsgPeerLen;
             } else if (size >= (count + kAooMsgRelayLen)
                 && !memcmp(msg + count, kAooMsgRelay, kAooMsgRelayLen)) {
-                *type = kAooTypeRelay;
+                *type = kAooMsgTypeRelay;
                 count += kAooMsgRelayLen;
             } else {
                 return kAooErrorBadArgument;

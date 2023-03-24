@@ -70,7 +70,7 @@ AOO_API AooError AOO_CALL AooSource_stopStream(AooSource *source);
 
 /** \copydoc AooSource::addSink() */
 AOO_API AooError AOO_CALL AooSource_addSink(
-        AooSource *source, const AooEndpoint *sink, AooFlag flags);
+        AooSource *source, const AooEndpoint *sink, AooSinkFlags flags);
 
 /** \copydoc AooSource::removeSink() */
 AOO_API AooError AOO_CALL AooSource_removeSink(

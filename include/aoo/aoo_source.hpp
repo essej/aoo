@@ -160,7 +160,7 @@ public:
      * and have to be activated manually with AooSource_activateSink().
      */
     virtual AooError AOO_CALL addSink(
-            const AooEndpoint& sink, AooFlag flags) = 0;
+            const AooEndpoint& sink, AooSinkFlags flags) = 0;
 
     /** \brief remove sink */
     virtual AooError AOO_CALL removeSink(const AooEndpoint& sink) = 0;

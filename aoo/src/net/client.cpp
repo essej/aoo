@@ -488,7 +488,7 @@ AooError AOO_CALL aoo::net::Client::handleMessage(
         return kAooErrorUnknown;
     }
 
-    if (type == kAooTypeSource){
+    if (type == kAooMsgTypeSource){
         // forward to matching source
         for (auto& s : sources_){
             if (s.id == id){
@@ -496,7 +496,7 @@ AooError AOO_CALL aoo::net::Client::handleMessage(
             }
         }
         LOG_WARNING("AooClient: handle_message(): source not found");
-    } else if (type == kAooTypeSink){
+    } else if (type == kAooMsgTypeSink){
         // forward to matching sink
         for (auto& s : sinks_){
             if (s.id == id){
@@ -1349,7 +1349,7 @@ void Client::handle_server_message(const osc::ReceivedMessage& msg, int32_t n){
     }
 
     try {
-        if (type == kAooTypeClient){
+        if (type == kAooMsgTypeClient){
             // now compare subpattern
             auto pattern = msg.AddressPattern() + onset;
             LOG_DEBUG("AooClient: got message " << pattern << " from server");
@@ -1705,7 +1705,7 @@ void Client::on_exception(const char *what, const osc::Exception &err,
 
 AooError udp_client::handle_bin_message(Client& client, const AooByte *data, int32_t size,
                                         const ip_address& addr, AooMsgType type, int32_t onset) {
-    if (type == kAooTypeRelay) {
+    if (type == kAooMsgTypeRelay) {
         ip_address src;
         onset = binmsg_read_relay(data, size, src);
         if (onset > 0) {
@@ -1719,7 +1719,7 @@ AooError udp_client::handle_bin_message(Client& client, const AooByte *data, int
             LOG_ERROR("AooClient: bad binary relay message");
             return kAooErrorUnknown;
         }
-    } else if (type == kAooTypePeer) {
+    } else if (type == kAooMsgTypePeer) {
         // peer message
         //
         // NOTE: during the handshake process it is expected that
@@ -1742,7 +1742,7 @@ AooError udp_client::handle_osc_message(Client& client, const AooByte *data, int
         osc::ReceivedPacket packet((const char *)data, size);
         osc::ReceivedMessage msg(packet);
 
-        if (type == kAooTypePeer){
+        if (type == kAooMsgTypePeer){
             // peer message
             //
             // NOTE: during the handshake process it is expected that
@@ -1753,14 +1753,14 @@ AooError udp_client::handle_osc_message(Client& client, const AooByte *data, int
                 LOG_VERBOSE("AooClient: ignore UDP message " << msg.AddressPattern() + onset
                             << " from endpoint " << addr);
             }
-        } else if (type == kAooTypeClient){
+        } else if (type == kAooMsgTypeClient){
             // server message
             if (is_server_address(addr)) {
                 handle_server_message(client, msg, onset);
             } else {
                 LOG_WARNING("AooClient: got OSC message from unknown server " << addr);
             }
-        } else if (type == kAooTypeRelay){
+        } else if (type == kAooMsgTypeRelay){
             ip_address src;
             auto packet = unwrap_message(msg, src, type_);
             auto msg = (const AooByte *)packet.Contents();

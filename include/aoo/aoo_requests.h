@@ -13,7 +13,7 @@ AOO_PACK_BEGIN
 /*--------------------------------------------*/
 
 /** \brief request types */
-enum
+AOO_ENUM(AooRequestType)
 {
     /** error response */
     kAooRequestError = 0,
@@ -37,6 +37,8 @@ enum
     kAooRequestCustom
 };
 
+/*----------------- request ------------------*/
+
 /** \brief common header for all request structures */
 #define AOO_REQUEST_HEADER \
     AooRequestType type; \
@@ -53,6 +55,8 @@ typedef struct AooRequestBase
     (ptr)->type = kAooRequest##name; \
     (ptr)->structSize = AOO_STRUCT_SIZE(AooRequest##name, field);
 
+/*----------------- response ------------------*/
+
 /** \brief common header for all response structures */
 #define AOO_RESPONSE_HEADER AOO_REQUEST_HEADER
 
@@ -66,6 +70,7 @@ typedef struct AooResponseBase
 #define AOO_RESPONSE_INIT(ptr, name, field) \
     (ptr)->type = kAooRequest##name; \
     (ptr)->structSize = AOO_STRUCT_SIZE(AooResponse##name, field);
+
 
 /*----------------- error ------------------*/
 

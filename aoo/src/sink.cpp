@@ -350,7 +350,7 @@ AooError AOO_CALL aoo::Sink::handleMessage(
         return kAooErrorUnknown;
     }
 
-    if (type != kAooTypeSink){
+    if (type != kAooMsgTypeSink){
         LOG_WARNING("AooSink: not a sink message!");
         return kAooErrorUnknown;
     }
@@ -2421,7 +2421,7 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
         const int32_t maxrequests = maxdatasize / 8; // 2 * int32
 
         // write header
-        auto onset = aoo::binmsg_write_header(buf, sizeof(buf), kAooTypeSource,
+        auto onset = aoo::binmsg_write_header(buf, sizeof(buf), kAooMsgTypeSource,
                                               kAooBinMsgCmdData, ep.id, s.id());
         // write arguments
         auto it = buf + onset;
