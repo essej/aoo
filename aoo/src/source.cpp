@@ -400,18 +400,19 @@ AooError AOO_CALL aoo::Source::codecControl(
 }
 
 AOO_API AooError AOO_CALL AooSource_setup(
-        AooSource *src, AooSampleRate samplerate,
-        AooInt32 blocksize, AooInt32 nchannels){
-    return src->setup(samplerate, blocksize, nchannels);
+        AooSource *src, AooInt32 nchannels, AooSampleRate samplerate,
+        AooInt32 blocksize, AooFlag flags) {
+    return src->setup(nchannels, samplerate, blocksize, flags);
 }
 
 AooError AOO_CALL aoo::Source::setup(
-        AooSampleRate samplerate, AooInt32 blocksize, AooInt32 nchannels){
+        AooInt32 nchannels, AooSampleRate samplerate,
+        AooInt32 blocksize, AooFlag flags) {
     scoped_lock lock(update_mutex_); // writer lock!
-    if (samplerate > 0 && blocksize > 0 && nchannels >= 0)
+    if (nchannels >= 0 && samplerate > 0 && blocksize > 0)
     {
-        if (samplerate != samplerate_ || blocksize != blocksize_ ||
-            nchannels != nchannels_)
+        if (nchannels != nchannels_ || samplerate != samplerate_ ||
+            blocksize != blocksize_)
         {
             nchannels_ = nchannels;
             samplerate_ = samplerate;

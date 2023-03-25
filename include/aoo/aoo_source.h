@@ -31,8 +31,8 @@ AOO_API void AOO_CALL AooSource_free(AooSource *source);
 
 /** \copydoc AooSource::setup() */
 AOO_API AooError AOO_CALL AooSource_setup(
-        AooSource *source, AooSampleRate sampleRate,
-        AooInt32 blockSize, AooInt32 numChannels);
+        AooSource *source, AooInt32 numChannels, AooSampleRate sampleRate,
+        AooInt32 blockSize, AooFlag flags);
 
 /** \copydoc AooSource::handleMessage() */
 AOO_API AooError AOO_CALL AooSource_handleMessage(

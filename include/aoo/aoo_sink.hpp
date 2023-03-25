@@ -65,12 +65,14 @@ public:
      *
      * \attention Not threadsafe - needs to be synchronized with other method calls!
      *
+     * \param numChannels the max. number of channels
      * \param sampleRate the sample rate
      * \param blockSize the max. blocksize
-     * \param numChannels the max. number of channels
+     * \param flags optional flags (currently always 0)
      */
     virtual AooError AOO_CALL setup(
-            AooSampleRate sampleRate, AooInt32 blockSize, AooInt32 numChannels) = 0;
+            AooInt32 numChannels, AooSampleRate sampleRate,
+            AooInt32 blockSize, AooFlag flags) = 0;
 
     /** \brief handle source messages
      *

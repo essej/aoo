@@ -206,8 +206,8 @@ class Source final : public AooSource, rt_memory_pool_client {
 
     //--------------------- interface methods --------------------------//
 
-    AooError AOO_CALL setup(AooSampleRate sampleRate,
-                            AooInt32 blockSize, AooInt32 numChannels) override;
+    AooError AOO_CALL setup(AooInt32 numChannels, AooSampleRate sampleRate,
+                            AooInt32 blockSize, AooFlag flags) override;
 
     AooError AOO_CALL handleMessage(const AooByte *data, AooInt32 n,
                                     const void *address, AooAddrSize addrlen) override;

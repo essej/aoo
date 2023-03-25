@@ -53,17 +53,18 @@ aoo::Sink::~Sink(){
 }
 
 AOO_API AooError AOO_CALL AooSink_setup(
-        AooSink *sink, AooSampleRate samplerate,
-        AooInt32 blocksize, AooInt32 nchannels) {
-    return sink->setup(samplerate, blocksize, nchannels);
+        AooSink *sink, AooInt32 nchannels, AooSampleRate samplerate,
+        AooInt32 blocksize, AooFlag flags) {
+    return sink->setup(nchannels, samplerate, blocksize, flags);
 }
 
 AooError AOO_CALL aoo::Sink::setup(
-        AooSampleRate samplerate, AooInt32 blocksize, AooInt32 nchannels){
-    if (samplerate > 0 && blocksize > 0 && nchannels >= 0)
+        AooInt32 nchannels, AooSampleRate samplerate,
+        AooInt32 blocksize, AooFlag flags) {
+    if (nchannels >= 0 && samplerate > 0 && blocksize > 0)
     {
-        if (samplerate != samplerate_ || blocksize != blocksize_ ||
-            nchannels != nchannels_)
+        if (nchannels != nchannels_ || samplerate != samplerate_ ||
+            blocksize != blocksize_)
         {
             nchannels_ = nchannels;
             samplerate_ = samplerate;

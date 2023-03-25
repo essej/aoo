@@ -31,8 +31,8 @@ AOO_API void AOO_CALL AooSink_free(AooSink *sink);
 
 /** \copydoc AooSink::setup() */
 AOO_API AooError AOO_CALL AooSink_setup(
-        AooSink *sink, AooSampleRate sampleRate,
-        AooInt32 blockSize, AooInt32 numChannels);
+        AooSink *sink, AooInt32 numChannels, AooSampleRate sampleRate,
+        AooInt32 blockSize, AooFlag flags);
 
 /** \copydoc AooSink::handleMessage() */
 AOO_API AooError AOO_CALL AooSink_handleMessage(

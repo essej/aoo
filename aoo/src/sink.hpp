@@ -283,8 +283,8 @@ public:
 
     ~Sink();
 
-    AooError AOO_CALL setup(AooSampleRate samplerate,
-                            AooInt32 blocksize, AooInt32 nchannels) override;
+    AooError AOO_CALL setup(AooInt32 nchannels, AooSampleRate samplerate,
+                            AooInt32 blocksize, AooFlag flags) override;
 
     AooError AOO_CALL handleMessage(const AooByte *data, AooInt32 n,
                                     const void *address, AooAddrSize addrlen) override;

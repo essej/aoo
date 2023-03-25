@@ -28,8 +28,7 @@ void AooSend::init(int32_t port, AooId id) {
                     if (source){
                         NodeLock lock(*node);
                         if (node->client()->addSource(source, cmd->id) == kAooOk){
-                            source->setup(cmd->sampleRate, cmd->blockSize,
-                                          cmd->numChannels);
+                            source->setup(cmd->numChannels, cmd->sampleRate, cmd->blockSize, 0);
 
                             source->setEventHandler(
                                 [](void *user, const AooEvent *event, int32_t){

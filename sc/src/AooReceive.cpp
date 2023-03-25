@@ -24,8 +24,7 @@ void AooReceive::init(int32_t port, AooId id, AooSeconds latency) {
                     if (sink){
                         NodeLock lock(*node);
                         if (node->client()->addSink(sink, cmd->id) == kAooOk){
-                            sink->setup(cmd->sampleRate, cmd->blockSize,
-                                        cmd->numChannels);
+                            sink->setup(cmd->numChannels, cmd->sampleRate, cmd->blockSize, 0);
 
                             sink->setEventHandler(
                                 [](void *user, const AooEvent *event, int32_t){

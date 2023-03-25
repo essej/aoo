@@ -876,7 +876,7 @@ static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
         if (x->x_node){
             x->x_node->lock();
         }
-        x->x_source->setup(samplerate, blocksize, x->x_nchannels);
+        x->x_source->setup(x->x_nchannels, samplerate, blocksize, 0);
         if (x->x_node){
             x->x_node->unlock();
         }

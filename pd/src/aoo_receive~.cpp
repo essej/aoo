@@ -637,7 +637,7 @@ static void aoo_receive_dsp(t_aoo_receive *x, t_signal **sp)
         if (x->x_node){
             x->x_node->lock();
         }
-        x->x_sink->setup(samplerate, blocksize, x->x_nchannels);
+        x->x_sink->setup(x->x_nchannels, samplerate, blocksize, 0);
         if (x->x_node){
             x->x_node->unlock();
         }
