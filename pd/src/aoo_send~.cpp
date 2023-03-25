@@ -433,33 +433,6 @@ codec_sendit:
     outlet_anything(x->x_msgout, gensym("codec_get"), 2, msg);
 }
 
-static void aoo_send_setformat(t_aoo_send *x, AooFormat& f)
-{
-    // Prevent user from accidentally creating huge number of channels.
-    // This also helps to catch an issue with old patches (before 2.0-pre3),
-    // which would pass the block size as the channel count, because the
-    // "channel" argument hasn't been added yet.
-    if (f.numChannels > x->x_nchannels){
-        pd_error(x, "%s: 'channel' argument (%d) in 'format' message out of range!",
-                 classname(x), f.numChannels);
-        f.numChannels = x->x_nchannels;
-    }
-
-    auto err = x->x_source->setFormat(f);
-    if (err == kAooOk) {
-        x->x_codec = gensym(f.codec);
-        // output actual format
-        t_atom msg[16];
-        int n = format_to_atoms(f, 16, msg);
-        if (n > 0){
-            outlet_anything(x->x_msgout, gensym("format"), n, msg);
-        }
-    } else {
-        pd_error(x, "%s: could not set format: %s",
-                 classname(x), aoo_strerror(err));
-    }
-}
-
 static void aoo_send_handle_event(t_aoo_send *x, const AooEvent *event, int32_t)
 {
     switch (event->type){
@@ -581,7 +554,34 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 {
     AooFormatStorage f;
     if (format_parse((t_pd *)x, f, argc, argv, x->x_nchannels)){
-        aoo_send_setformat(x, f.header);
+        // Prevent user from accidentally creating huge number of channels.
+        // This also helps to catch an issue with old patches (before 2.0-pre3),
+        // which would pass the block size as the channel count because the
+        // "channel" argument hasn't been added yet.
+        if (f.header.numChannels > x->x_nchannels){
+            if (x->x_nchannels > 0) {
+                pd_error(x, "%s: 'channel' argument (%d) in 'format' message out of range!",
+                         classname(x), f.header.numChannels);
+                f.header.numChannels = x->x_nchannels;
+            } else {
+                // if we have no inputs, silently bash format to single channel
+                f.header.numChannels = 1;
+            }
+        }
+
+        auto err = x->x_source->setFormat(f.header);
+        if (err == kAooOk) {
+            x->x_codec = gensym(f.header.codec);
+            // output actual format
+            t_atom msg[16];
+            int n = format_to_atoms(f.header, 16, msg);
+            if (n > 0){
+                outlet_anything(x->x_msgout, gensym("format"), n, msg);
+            }
+        } else {
+            pd_error(x, "%s: could not set format: %s",
+                     classname(x), aoo_strerror(err));
+        }
     }
 }
 
@@ -962,9 +962,9 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
     x_id = id;
 
     // arg #3: num channels
-    int nchannels = atom_getfloatarg(2, argc, argv);
-    if (nchannels < 1){
-        nchannels = 1;
+    int nchannels = argc >= 3 ? atom_getfloat(argv + 2) : 1;
+    if (nchannels < 0){
+        nchannels = 0;
     }
     x_nchannels = nchannels;
 
@@ -975,7 +975,7 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
             inlet_new(&x_obj, &x_obj.ob_pd, &s_signal, &s_signal);
         }
     }
-    x_vec = std::make_unique<t_sample *[]>(nchannels);
+    x_vec = nchannels > 0 ? std::make_unique<t_sample *[]>(nchannels) : nullptr;
 
     // make event outlet
     x_msgout = outlet_new(&x_obj, 0);

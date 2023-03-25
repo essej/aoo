@@ -724,9 +724,9 @@ t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
     x_id = id;
 
     // arg #3: num channels
-    int nchannels = atom_getfloatarg(2, argc, argv);
-    if (nchannels < 1){
-        nchannels = 1;
+    int nchannels = argc >= 3 ? atom_getfloat(argv + 2) : 1;
+    if (nchannels < 0){
+        nchannels = 0;
     }
     x_nchannels = nchannels;
 
@@ -737,7 +737,7 @@ t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
     for (int i = 0; i < nchannels; ++i){
         outlet_new(&x_obj, &s_signal);
     }
-    x_vec = std::make_unique<t_sample *[]>(nchannels);
+    x_vec = nchannels > 0 ? std::make_unique<t_sample *[]>(nchannels) : nullptr;
 
     // event outlet
     x_msgout = outlet_new(&x_obj, 0);

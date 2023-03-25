@@ -60,7 +60,7 @@ AOO_API AooError AOO_CALL AooSink_setup(
 
 AooError AOO_CALL aoo::Sink::setup(
         AooSampleRate samplerate, AooInt32 blocksize, AooInt32 nchannels){
-    if (samplerate > 0 && blocksize > 0 && nchannels > 0)
+    if (samplerate > 0 && blocksize > 0 && nchannels >= 0)
     {
         if (samplerate != samplerate_ || blocksize != blocksize_ ||
             nchannels != nchannels_)
@@ -78,7 +78,7 @@ AooError AOO_CALL aoo::Sink::setup(
 
         return kAooOk;
     } else {
-        return kAooErrorUnknown;
+        return kAooErrorBadArgument;
     }
 }
 
@@ -470,8 +470,10 @@ AooError AOO_CALL aoo::Sink::process(
     }
 
     // clear outputs
-    for (int i = 0; i < nchannels_; ++i){
-        std::fill(data[i], data[i] + nsamples, 0);
+    if (data) {
+        for (int i = 0; i < nchannels_; ++i){
+            std::fill(data[i], data[i] + nsamples, 0);
+        }
     }
 #if 1
     if (sources_.empty() && requestqueue_.empty()) {
@@ -1687,6 +1689,7 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
 
     auto nchannels = format_->numChannels;
     auto outsize = nsamples * nchannels;
+    assert(outsize > 0);
     auto buf = (AooSample *)alloca(outsize * sizeof(AooSample));
 #if AOO_DEBUG_STREAM_MESSAGE
     LOG_ALL("AooSink: process samples: " << process_samples_
@@ -1786,13 +1789,15 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
     // sum source into sink (interleaved -> non-interleaved),
     // starting at the desired sink channel offset.
     // out of bound source channels are silently ignored.
-    auto realnchannels = s.nchannels();
-    for (int i = 0; i < nchannels; ++i){
-        auto chn = i + channel_;
-        if (chn < realnchannels){
-            auto out = buffer[chn];
-            for (int j = 0; j < nsamples; ++j){
-                out[j] += buf[j * nchannels + i];
+    if (buffer) {
+        auto realnchannels = s.nchannels();
+        for (int i = 0; i < nchannels; ++i){
+            auto chn = i + channel_;
+            if (chn < realnchannels){
+                auto out = buffer[chn];
+                for (int j = 0; j < nsamples; ++j){
+                    out[j] += buf[j * nchannels + i];
+                }
             }
         }
     }

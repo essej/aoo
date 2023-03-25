@@ -55,7 +55,7 @@ static int32_t format_getparam(void *x, int argc, t_atom *argv, int which,
     #if 1
         t_symbol *s = atom_getsymbol(argv + which);
         if (s != gensym("_")){
-            pd_error(x, "%s: bad %s argument %s, using %d", classname(x), name, s->s_name, def);
+            pd_error(x, "%s: bad %s argument (%s), using %d", classname(x), name, s->s_name, def);
         }
     #endif
     }

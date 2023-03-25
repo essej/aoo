@@ -408,7 +408,7 @@ AOO_API AooError AOO_CALL AooSource_setup(
 AooError AOO_CALL aoo::Source::setup(
         AooSampleRate samplerate, AooInt32 blocksize, AooInt32 nchannels){
     scoped_lock lock(update_mutex_); // writer lock!
-    if (samplerate > 0 && blocksize > 0 && nchannels > 0)
+    if (samplerate > 0 && blocksize > 0 && nchannels >= 0)
     {
         if (samplerate != samplerate_ || blocksize != blocksize_ ||
             nchannels != nchannels_)
@@ -436,7 +436,7 @@ AooError AOO_CALL aoo::Source::setup(
 
         return kAooOk;
     } else {
-        return kAooErrorUnknown;
+        return kAooErrorBadArgument;
     }
 }
 
@@ -700,31 +700,36 @@ AooError AOO_CALL aoo::Source::process(
     // only as many channels as current format needs
     auto nfchannels = format_->numChannels;
     auto insize = nsamples * nfchannels;
+    assert(insize > 0);
     auto buf = (AooSample *)alloca(insize * sizeof(AooSample));
-    for (int i = 0; i < nfchannels; ++i){
-        if (i < nchannels_){
-            for (int j = 0; j < nsamples; ++j){
-                buf[j * nfchannels + i] = data[i][j];
-            }
-        } else {
-            // zero remaining channel
-            for (int j = 0; j < nsamples; ++j){
-                buf[j * nfchannels + i] = 0;
+    if (data) {
+        for (int i = 0; i < nfchannels; ++i){
+            if (i < nchannels_){
+                for (int j = 0; j < nsamples; ++j){
+                    buf[j * nfchannels + i] = data[i][j];
+                }
+            } else {
+                // zero remaining channel
+                for (int j = 0; j < nsamples; ++j){
+                    buf[j * nfchannels + i] = 0;
+                }
             }
         }
+    } else {
+        // no buffers -> fill with zeros
+        std::fill(buf, buf + insize, 0);
     }
 
     double sr;
     if (dynamic_resampling){
-        sr = realsr_.load() / (double)samplerate_
-                * (double)format_->sampleRate;
+        sr = realsr_.load() / (double)samplerate_ * (double)format_->sampleRate;
     } else {
         sr = format_->sampleRate;
     }
 
     auto outsize = nfchannels * format_->blockSize;
 #if AOO_DEBUG_AUDIO_BUFFER
-    auto resampler_size = resampler_.size() / (double)(nchannels_ * blocksize_);
+    auto resampler_size = resampler_.size() / (double)(nfchannels * blocksize_);
     LOG_DEBUG("AooSource: audioqueue: " << audioqueue_.read_available() / resampler_.ratio()
               << ", resampler: " << resampler_size / resampler_.ratio()
               << ", capacity: " << audioqueue_.capacity() / resampler_.ratio());
