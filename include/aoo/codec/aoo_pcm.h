@@ -14,22 +14,14 @@
 
 #include <string.h>
 
-struct AooSource;
-
-AOO_API AooError AOO_CALL AooSource_codecControl(
-        AooSource *source,  AooCtl ctl, AooIntPtr index,
-        void *data, AooSize size);
-
 AOO_PACK_BEGIN
 
 /*--------------------------------------------------*/
 
 #define kAooCodecPcm "pcm"
 
-typedef AooInt32 AooPcmBitDepth;
-
 /** \brief PCM bit depth values */
-enum AooPcmBitDepthValues
+AOO_ENUM(AooPcmBitDepth)
 {
     kAooPcmInt8 = 0,
     kAooPcmInt16,

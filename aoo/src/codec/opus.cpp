@@ -432,7 +432,7 @@ AooError deserialize(
         return kAooErrorBadArgument;
     }
     if (!f) {
-        *fmtsize = sizeof(AooFormatOpus);
+        *fmtsize = AOO_STRUCT_SIZE(AooFormatOpus, applicationType);
         return kAooOk;
     }
     if (size < sizeof(AooInt32)) {

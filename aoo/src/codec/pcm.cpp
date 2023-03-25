@@ -387,7 +387,7 @@ AooError AOO_CALL deserialize(
         return kAooErrorBadArgument;
     }
     if (!f) {
-        *fmtsize = sizeof(AooFormatPcm);
+        *fmtsize = AOO_STRUCT_SIZE(AooFormatPcm, bitDepth);
         return kAooOk;
     }
     if (size < sizeof(AooInt32)) {
