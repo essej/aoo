@@ -1865,7 +1865,8 @@ void Source::send_data(const sendfn& fn){
                 dosend(j, ptr, maxpacketsize);
             }
             // send remaining bytes as a single frame (might be the only one!)
-            if (dv.rem){
+            // also make sure to send frames encoded with null codec.
+            if (dv.rem || d.totalsize == 0){
                 dosend(dv.quot, ptr, dv.rem);
             }
         }

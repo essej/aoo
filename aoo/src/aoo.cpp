@@ -566,6 +566,8 @@ AooError AOO_CALL aoo_registerCodec(const char *name, const AooCodecInterface *c
 
 //--------------------------- (de)initialize -----------------------------------//
 
+void aoo_nullLoad(const AooCodecHostInterface *);
+void aoo_nullUnload();
 void aoo_pcmLoad(const AooCodecHostInterface *);
 void aoo_pcmUnload();
 #if AOO_USE_CODEC_OPUS
@@ -601,8 +603,8 @@ AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
         }
 
         // register codecs
+        aoo_nullLoad(&aoo::g_interface);
         aoo_pcmLoad(&aoo::g_interface);
-
     #if AOO_USE_CODEC_OPUS
         aoo_opusLoad(&aoo::g_interface);
     #endif
@@ -617,11 +619,12 @@ void AOO_CALL aoo_terminate() {
     aoo::g_rt_memory_pool.print();
 #endif
     // unload codecs
+    aoo_nullUnload();
     aoo_pcmUnload();
 #if AOO_USE_CODEC_OPUS
     aoo_opusUnload();
 #endif
-    // free codec pluginlist
+    // free codec plugin list
     aoo::codec_list tmp;
     std::swap(tmp, aoo::g_codec_list);
 }

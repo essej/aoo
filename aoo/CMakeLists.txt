@@ -72,7 +72,7 @@ set(DEPS "${CMAKE_CURRENT_SOURCE_DIR}/../deps")
 file(GLOB HEADERS "${INCLUDE}/*.h" "${INCLUDE}/*.hpp"
      "${INCLUDE}/codec/aoo_pcm.h" "src/*.hpp" "${COMMON}/*.hpp")
 
-file(GLOB SOURCES "src/*.cpp" "src/codec/pcm.cpp" "${COMMON}/*.cpp")
+file(GLOB SOURCES "src/*.cpp" "src/codec/null.cpp" "src/codec/pcm.cpp" "${COMMON}/*.cpp")
 
 if (NOT AOO_SYSTEM_OSCPACK)
     # only build required files in "osc" folder
