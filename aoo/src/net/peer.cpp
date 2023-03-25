@@ -271,11 +271,10 @@ void peer::do_send(Client& client, const sendfn& fn, time_tag now) {
 // /aoo/peer/msg <group> <user> <flags> <seq> <total> <nframes> <frame> <tt> <type> <data>
 //
 // binary:
-// header (group + user), flags (int16), size (int16), seq,
-// [total (int32), nframes (int16), frame (int16)], [tt (uint64)], [type (str)], data (bin)
+// header (group + user), flags (uint16), size (uint16), seq (int32),
+// [total (int32), nframes (int32), frame (int32)], [tt (uint64)], type (int32), data (bin)
 //
-// 'total', 'nframes' and 'frame' are omitted for single-frame messages.
-// 'tt' and 'type' are only sent with the first frame. 'tt' might be ommited if zero.
+// 'total', 'nframes' and 'frame' are omitted for single-frame messages. 'tt' may be omitted if zero.
 
 // if 'flags' contains kAooMessageReliable, the other end sends an ack messages:
 //
@@ -378,16 +377,14 @@ void peer::send_packet_bin(const message_packet& p, const sendfn& fn) const {
     aoo::write_bytes<uint16_t>(p.size, ptr);
     if (flags & kAooBinMsgMessageFrames) {
         aoo::write_bytes<int32_t>(p.totalsize, ptr);
-        aoo::write_bytes<int16_t>(p.nframes, ptr);
-        aoo::write_bytes<int16_t>(p.frame, ptr);
+        aoo::write_bytes<int32_t>(p.nframes, ptr);
+        aoo::write_bytes<int32_t>(p.frame, ptr);
     }
     // only send type and timetag with first frame
-    if (p.frame == 0) {
-        if (flags & kAooBinMsgMessageTimestamp) {
-            aoo::write_bytes<uint64_t>(p.tt, ptr);
-        }
-        aoo::write_bytes<int32_t>(p.type, ptr);
+    if (flags & kAooBinMsgMessageTimestamp) {
+        aoo::write_bytes<uint64_t>(p.tt, ptr);
     }
+    aoo::write_bytes<int32_t>(p.type, ptr);
     // write actual data
     assert((end - ptr) >= p.size);
     memcpy(ptr, p.data, p.size);
@@ -592,32 +589,29 @@ void peer::handle_client_message(Client &client, const AooByte *data, AooSize si
     remaining -= 8;
 
     if (flags & kAooBinMsgMessageFrames) {
-        if (remaining < 8) {
+        if (remaining < 12) {
             goto bad_message;
         }
         p.totalsize = aoo::read_bytes<int32_t>(ptr);
-        p.nframes = aoo::read_bytes<int16_t>(ptr);
-        p.frame = aoo::read_bytes<int16_t>(ptr);
-        remaining -= 8;
+        p.nframes = aoo::read_bytes<int32_t>(ptr);
+        p.frame = aoo::read_bytes<int32_t>(ptr);
+        remaining -= 12;
     } else {
         p.totalsize = p.size;
         p.nframes = 1;
         p.frame = 0;
     }
-    // type and timetag is only sent with first frame
-    p.type = kAooDataUnspecified;
-    p.tt = 0;
-    if (p.frame == 0) {
-        if (flags & kAooBinMsgMessageTimestamp) {
-            if (remaining < 8) {
-                goto bad_message;
-            }
-            p.tt = aoo::read_bytes<uint64_t>(ptr);
-            remaining -= 8;
+    if (flags & kAooBinMsgMessageTimestamp) {
+        if (remaining < 8) {
+            goto bad_message;
         }
-        p.type = aoo::read_bytes<int32_t>(ptr);
-        remaining -= 4;
+        p.tt = aoo::read_bytes<uint64_t>(ptr);
+        remaining -= 8;
+    } else {
+        p.tt = 0;
     }
+    p.type = aoo::read_bytes<int32_t>(ptr);
+    remaining -= 4;
 
     if (remaining < p.size) {
         goto bad_message;
