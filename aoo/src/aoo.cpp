@@ -40,12 +40,7 @@ namespace aoo {
 
 void * AOO_CALL def_allocator(void *ptr, AooSize oldsize, AooSize newsize);
 
-#ifndef _MSC_VER
-void __attribute__((format(printf, 2, 3 )))
-#else
-void
-#endif
-    def_logfunc(AooLogLevel, const char *, ...);
+void AOO_CALL def_logfunc(AooLogLevel level, const char *message);
 
 // populate interface table with default implementations
 static AooCodecHostInterface g_interface = {
@@ -127,13 +122,7 @@ ip_address osc_read_address(osc::ReceivedMessageArgumentIterator& it, ip_address
 static sync::mutex g_log_mutex;
 #endif
 
-#ifndef _MSC_VER
-void __attribute__((format(printf, 2, 3 )))
-#else
-void
-#endif
-    def_logfunc(AooLogLevel level, const char *fmt, ...)
-{
+void AOO_CALL def_logfunc(AooLogLevel level, const char *message) {
     const char *label = nullptr;
 
 #if CERR_LOG_LABEL
@@ -154,24 +143,15 @@ void
         break;
     }
 #endif
+
     const auto size = Log::buffer_size;
     char buffer[size];
-    int count = 0;
+    int count;
     if (label) {
-        count += snprintf(buffer, size, "[aoo][%s] ", label);
+        count = snprintf(buffer, size, "[aoo][%s] %s\n", label, message);
     } else {
-        count += snprintf(buffer, size, "[aoo] ");
+        count = snprintf(buffer, size, "[aoo] %s\n", message);
     }
-
-    va_list args;
-    va_start (args, fmt);
-    count += vsnprintf(buffer + count, size - count, fmt, args);
-    va_end (args);
-
-    // force newline
-    count = std::min(count, size - 2);
-    buffer[count++] = '\n';
-    buffer[count++] = '\0';
 
 #if CERR_LOG_MUTEX
     // shouldn't be necessary since fwrite() is supposed

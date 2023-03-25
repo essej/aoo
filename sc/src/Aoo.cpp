@@ -17,13 +17,13 @@ namespace rt {
 }
 
 // TODO: honor Server verbosity
-static void SCLog(AooLogLevel level, const char *s, ...) {
+static void AOO_CALL SCLog(AooLogLevel level, const char *msg) {
     if (level == kAooLogLevelError) {
-        Print("ERROR: %s", s);
+        Print("ERROR: %s", msg);
     } else if (level == kAooLogLevelWarning) {
-        Print("WARNING: %s", s);
+        Print("WARNING: %s", msg);
     } else {
-        Print("%s", s);
+        Print("%s", msg);
     }
 }
 

@@ -500,17 +500,10 @@ AOO_ENUM(AooLogLevel)
 
 /** \brief custom log function type
  * \param level the log level
- * \param fmt the format string
- * \param ... arguments
+ * \param message the message
  */
-typedef void
-/** \cond */
-#ifndef _MSC_VER
-    __attribute__((format(printf, 2, 3 )))
-#endif
-/** \endcond */
-    (AOO_CALL *AooLogFunc)
-        (AooLogLevel level, const AooChar *fmt, ...);
+typedef void (AOO_CALL *AooLogFunc)
+        (AooLogLevel level, const AooChar *message);
 
 /*------------------------------------------------------------------*/
 
