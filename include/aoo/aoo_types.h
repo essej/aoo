@@ -196,6 +196,15 @@ AOO_ENUM(AooError)
 
 /*------------------------------------------------------------------*/
 
+/** \brief flags for AooSource/AooSink setup */
+AOO_FLAG(AooSetupFlags)
+{
+    /** the block size will not vary between process() calls */
+    kAooFixedBlockSize = 0x01
+};
+
+/*------------------------------------------------------------------*/
+
 /** \brief flags for AooSource_addSink / AooSource::addSink */
 AOO_FLAG(AooSinkFlags)
 {
