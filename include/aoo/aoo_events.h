@@ -58,14 +58,12 @@ AOO_ENUM(AooEventType)
     kAooEventBufferOverrun,
     /** sink: buffer underrun */
     kAooEventBufferUnderrun,
-    /** sink: blocks have been lost */
-    kAooEventBlockLost,
-    /** sink: blocks arrived out of order */
-    kAooEventBlockReordered,
+    /** sink: blocks had to be skipped/dropped */
+    kAooEventBlockDropped,
     /** sink: blocks have been resent */
     kAooEventBlockResent,
-    /** sink: block has been dropped by source */
-    kAooEventBlockDropped,
+    /** sink: empty blocks caused by source xrun */
+    kAooEventBlockXRun,
     /*----------------------------------*/
     /*         AooClient events         */
     /*----------------------------------*/
@@ -253,20 +251,14 @@ typedef struct AooEventBlock
     AooInt32 count;
 } AooEventBlock;
 
-/** \brief blocks have been lost */
-typedef AooEventBlock AooEventBlockLost;
-
-/** \brief blocks arrived out of order */
-typedef AooEventBlock AooEventBlockReordered;
+/** \brief blocks had to be skipped/dropped */
+typedef AooEventBlock AooEventBlockDropped;
 
 /** \brief blocks have been resent */
 typedef AooEventBlock AooEventBlockResent;
 
-/** \brief large gap between blocks */
-typedef AooEventBlock AooEventBlockGap;
-
-/** \brief blocks have been dropped (e.g. because of xruns) */
-typedef AooEventBlock AooEventBlockDropped;
+/** \brief empty blocks caused by source xrun */
+typedef AooEventBlock AooEventBlockXRun;
 
 /** \brief the source stream format has changed */
 typedef struct AooEventFormatChange
@@ -494,10 +486,9 @@ union AooEvent
     AooEventUninviteTimeout uninviteTimeout;
     AooEventBufferOverrun bufferOverrrun;
     AooEventBufferUnderrun bufferUnderrun;
-    AooEventBlockLost blockLost;
-    AooEventBlockReordered blockReordered;
-    AooEventBlockResent blockResent;
     AooEventBlockDropped blockDropped;
+    AooEventBlockResent blockResent;
+    AooEventBlockXRun blockXRun;
     /* Aoo client/server events */
     AooEventClientDisconnect clientDisconnect;
     AooEventClientNotification clientNotification;

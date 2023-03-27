@@ -28,10 +28,9 @@
 namespace aoo {
 
 struct stream_stats {
-    int32_t lost = 0;
-    int32_t reordered = 0;
-    int32_t resent = 0;
     int32_t dropped = 0;
+    int32_t resent = 0;
+    int32_t xrun = 0;
 };
 
 enum class request_type {
@@ -234,7 +233,7 @@ private:
     std::atomic<float> last_packet_time_{0};
     std::atomic<float> last_ping_time_{0};
     // statistics
-    std::atomic<int32_t> lost_blocks_{0};
+    std::atomic<int32_t> dropped_blocks_{0};
     time_tag last_ping_reply_time_;
     // audio decoder
     std::unique_ptr<AooFormat, format_deleter> format_;

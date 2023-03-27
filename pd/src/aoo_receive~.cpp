@@ -343,10 +343,9 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
     case kAooEventStreamStart:
     case kAooEventStreamStop:
     case kAooEventStreamState:
-    case kAooEventBlockLost:
     case kAooEventBlockDropped:
-    case kAooEventBlockReordered:
     case kAooEventBlockResent:
+    case kAooEventBlockXRun:
     case kAooEventSourcePing:
     {
         // common endpoint header
@@ -483,13 +482,6 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
             }
             break;
         }
-        case kAooEventBlockLost:
-        {
-            SETSYMBOL(msg + 3, gensym("block_lost"));
-            SETFLOAT(msg + 4, event->blockLost.count);
-            outlet_anything(x->x_msgout, gensym("event"), 5, msg);
-            break;
-        }
         case kAooEventBlockDropped:
         {
             SETSYMBOL(msg + 3, gensym("block_dropped"));
@@ -497,17 +489,17 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
             outlet_anything(x->x_msgout, gensym("event"), 5, msg);
             break;
         }
-        case kAooEventBlockReordered:
-        {
-            SETSYMBOL(msg + 3, gensym("block_reordered"));
-            SETFLOAT(msg + 4, event->blockReordered.count);
-            outlet_anything(x->x_msgout, gensym("event"), 5, msg);
-            break;
-        }
         case kAooEventBlockResent:
         {
             SETSYMBOL(msg + 3, gensym("block_resent"));
             SETFLOAT(msg + 4, event->blockResent.count);
+            outlet_anything(x->x_msgout, gensym("event"), 5, msg);
+            break;
+        }
+        case kAooEventBlockXRun:
+        {
+            SETSYMBOL(msg + 3, gensym("block_xrun"));
+            SETFLOAT(msg + 4, event->blockXRun.count);
             outlet_anything(x->x_msgout, gensym("event"), 5, msg);
             break;
         }

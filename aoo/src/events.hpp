@@ -214,14 +214,9 @@ struct block_event : endpoint_event<AooEventBlock> {
     }
 };
 
-struct block_lost_event : block_event {
-    block_lost_event(const aoo::endpoint& ep, int32_t count)
-        : block_event(kAooEventBlockLost, ep, count) {}
-};
-
-struct block_reordered_event : block_event {
-    block_reordered_event(const aoo::endpoint& ep, int32_t count)
-        : block_event(kAooEventBlockReordered, ep, count) {}
+struct block_dropped_event : block_event {
+    block_dropped_event(const aoo::endpoint& ep, int32_t count)
+        : block_event(kAooEventBlockDropped, ep, count) {}
 };
 
 struct block_resent_event : block_event {
@@ -229,9 +224,9 @@ struct block_resent_event : block_event {
         : block_event(kAooEventBlockResent, ep, count) {}
 };
 
-struct block_dropped_event : block_event {
-    block_dropped_event(const aoo::endpoint& ep, int32_t count)
-        : block_event(kAooEventBlockDropped, ep, count) {}
+struct block_xrun_event : block_event {
+    block_xrun_event(const aoo::endpoint& ep, int32_t count)
+        : block_event(kAooEventBlockXRun, ep, count) {}
 };
 
 } // namespace aoo

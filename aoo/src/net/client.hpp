@@ -362,7 +362,7 @@ private:
     parameter<AooSeconds> query_timeout_{AOO_CLIENT_QUERY_TIMEOUT * 0.001};
     parameter<bool> binary_{AOO_CLIENT_BINARY_MSG};
 #if AOO_CLIENT_SIMULATE
-    parameter<float> sim_packet_drop_{0};
+    parameter<float> sim_packet_loss_{0};
     parameter<float> sim_packet_reorder_{0};
     parameter<bool> sim_packet_jitter_{false};
 

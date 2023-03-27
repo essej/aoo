@@ -529,7 +529,7 @@ AooError AOO_CALL aoo::net::Client::send(
     sendfn reply(fn, user);
 
 #if AOO_CLIENT_SIMULATE
-    auto drop = sim_packet_drop_.load();
+    auto drop = sim_packet_loss_.load();
     auto reorder = sim_packet_reorder_.load();
     auto jitter = sim_packet_jitter_.load();
 
@@ -742,9 +742,9 @@ AooError AOO_CALL aoo::net::Client::control(
         CHECKARG(AooSeconds);
         sim_packet_reorder_.store(as<AooSeconds>(ptr));
         break;
-    case kAooCtlSetSimulatePacketDrop:
+    case kAooCtlSetSimulatePacketLoss:
         CHECKARG(float);
-        sim_packet_drop_.store(as<float>(ptr));
+        sim_packet_loss_.store(as<float>(ptr));
         break;
     case kAooCtlSetSimulatePacketJitter:
         CHECKARG(AooBool);

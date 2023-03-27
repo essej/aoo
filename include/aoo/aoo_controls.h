@@ -197,7 +197,7 @@ enum
     kAooCtlSetClient = -1000,
     kAooCtlNeedRelay,
     kAooCtlGetRelayAddress,
+    kAooCtlSetSimulatePacketLoss,
     kAooCtlSetSimulatePacketReorder,
-    kAooCtlSetSimulatePacketDrop,
     kAooCtlSetSimulatePacketJitter
 };

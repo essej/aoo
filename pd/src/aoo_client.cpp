@@ -370,14 +370,14 @@ static void aoo_client_port(t_aoo_client *x, t_floatarg f)
     }
 }
 
-static void aoo_client_sim_packet_drop(t_aoo_client *x, t_floatarg f)
+static void aoo_client_sim_packet_loss(t_aoo_client *x, t_floatarg f)
 {
-    if (!x->check("sim_packet_drop")) return;
+    if (!x->check("sim_packet_loss")) return;
 
     float val = f;
-    auto e = x->x_node->client()->control(kAooCtlSetSimulatePacketDrop, 0, AOO_ARG(val));
+    auto e = x->x_node->client()->control(kAooCtlSetSimulatePacketLoss, 0, AOO_ARG(val));
     if (e != kAooOk) {
-        pd_error(x, "%s: 'sim_packet_drop' message failed (%s)",
+        pd_error(x, "%s: 'sim_packet_loss' message failed (%s)",
                  classname(x), aoo_strerror(e));
     }
 }
@@ -958,8 +958,8 @@ void aoo_client_setup(void)
     // debug/simulate
     class_addmethod(aoo_client_class, (t_method)aoo_client_sim_packet_reorder,
                     gensym("sim_packet_reorder"), A_FLOAT, A_NULL);
-    class_addmethod(aoo_client_class, (t_method)aoo_client_sim_packet_drop,
-                    gensym("sim_packet_drop"), A_FLOAT, A_NULL);
+    class_addmethod(aoo_client_class, (t_method)aoo_client_sim_packet_loss,
+                    gensym("sim_packet_loss"), A_FLOAT, A_NULL);
     class_addmethod(aoo_client_class, (t_method)aoo_client_sim_packet_jitter,
                     gensym("sim_packet_jitter"), A_FLOAT, A_NULL);
 }

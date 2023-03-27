@@ -1153,7 +1153,7 @@ void source_desc::update(const Sink& s){
         stopped_ = false;
         did_update_ = true;
 
-        lost_blocks_.store(0);
+        dropped_blocks_.store(0);
         last_ping_time_.store(-1e007); // force ping
 
         // reset decoder to avoid garbage from previous stream
@@ -1817,16 +1817,11 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
 
     flush_event_buffer(s);
 
-    if (stats.lost > 0){
-        // add to lost blocks for packet loss reporting
-        lost_blocks_.fetch_add(stats.lost, std::memory_order_relaxed);
-        // push block loss event
-        auto e = make_event<block_lost_event>(ep, stats.lost);
-        send_event(s, std::move(e), kAooThreadLevelAudio);
-    }
-    if (stats.reordered > 0){
-        // push block reorder event
-        auto e = make_event<block_reordered_event>(ep, stats.reordered);
+    if (stats.dropped > 0){
+        // add to dropped blocks for packet loss reporting
+        dropped_blocks_.fetch_add(stats.dropped, std::memory_order_relaxed);
+        // push block dropped event
+        auto e = make_event<block_dropped_event>(ep, stats.dropped);
         send_event(s, std::move(e), kAooThreadLevelAudio);
     }
     if (stats.resent > 0){
@@ -1834,9 +1829,9 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
         auto e = make_event<block_resent_event>(ep, stats.resent);
         send_event(s, std::move(e), kAooThreadLevelAudio);
     }
-    if (stats.dropped > 0){
-        // push block dropped event
-        auto e = make_event<block_dropped_event>(ep, stats.dropped);
+    if (stats.xrun > 0){
+        // push block xrun event
+        auto e = make_event<block_xrun_event>(ep, stats.xrun);
         send_event(s, std::move(e), kAooThreadLevelAudio);
     }
 
@@ -1987,10 +1982,12 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
             // out of order or resent
             if (block->resend_count() > 0){
                 LOG_VERBOSE("AooSink: resent frame " << d.frame << " of block " << d.sequence);
-                stats.resent++;
+                // only record first resent frame!
+                if (block->received_frames() == 0) {
+                    stats.resent++;
+                }
             } else {
                 LOG_VERBOSE("AooSink: frame " << d.frame << " of block " << d.sequence << " out of order!");
-                stats.reordered++;
             }
         }
     }
@@ -2115,7 +2112,7 @@ bool source_desc::try_decode_block(const Sink& s, stream_stats& stats){
     if (b.complete()){
         // block is ready
         if (b.flags & kAooBinMsgDataXRun) {
-            stats.dropped++;
+            stats.xrun++;
         }
         size = b.size();
         data = size > 0 ? b.data() : nullptr;
@@ -2132,7 +2129,7 @@ bool source_desc::try_decode_block(const Sink& s, stream_stats& stats){
         size = msgsize = 0;
         sr = format_->sampleRate; // nominal samplerate
         channel = -1; // current channel
-        stats.lost++;
+        stats.dropped++;
         LOG_VERBOSE("AooSink: dropped block " << b.sequence);
         LOG_DEBUG("AooSink: remaining blocks: " << jitterbuffer_.size() - 1);
     }
@@ -2339,12 +2336,12 @@ void source_desc::send_pong(const Sink &s, AooNtpTime tt1, const sendfn &fn) {
     lock.unlock();
 
     // get lost blocks since last pong and calculate packet loss percentage.
-    auto lost_blocks = lost_blocks_.exchange(0);
+    auto dropped_blocks = dropped_blocks_.exchange(0);
     auto last_ping_time = std::exchange(last_ping_reply_time_, tt2);
     // NOTE: the delta can be very large for the first ping in a stream,
     // but this is not an issue because there's no packet loss anyway.
     auto delta = time_tag::duration(last_ping_time, tt2);
-    float packetloss = (float)lost_blocks * (float)blocksize / ((float)sr * delta);
+    float packetloss = (float)dropped_blocks * (float)blocksize / ((float)sr * delta);
     if (packetloss > 1.0){
         LOG_DEBUG("AooSink: packet loss percentage larger than 1");
         packetloss = 1.0;
