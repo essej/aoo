@@ -887,7 +887,7 @@ AooError Sink::handle_data_message(const osc::ReceivedMessage& msg,
 
     auto id = (it++)->AsInt32();
 
-    aoo::net_packet d;
+    net_packet d;
     d.stream_id = (it++)->AsInt32();
     d.sequence = (it++)->AsInt32();
     d.samplerate = (it++)->AsDouble();
@@ -901,6 +901,7 @@ AooError Sink::handle_data_message(const osc::ReceivedMessage& msg,
     (it++)->AsBlob(blobdata, blobsize);
     d.data = (const AooByte *)blobdata;
     d.size = blobsize;
+    d.flags = 0;
 
     return handle_data_packet(d, false, addr, id);
 }
@@ -913,7 +914,7 @@ AooError Sink::handle_data_message(const AooByte *msg, int32_t n,
                                    AooId id, const ip_address& addr)
 {
     AooFlag flags;
-    aoo::net_packet d;
+    net_packet d;
     auto it = msg;
     auto end = it + n;
 
@@ -924,9 +925,9 @@ AooError Sink::handle_data_message(const AooByte *msg, int32_t n,
     d.stream_id = aoo::read_bytes<int32_t>(it);
     d.sequence = aoo::read_bytes<int32_t>(it);
     d.channel = aoo::read_bytes<uint8_t>(it);
-    flags = aoo::read_bytes<uint8_t>(it);
+    d.flags = aoo::read_bytes<uint8_t>(it);
     d.size = aoo::read_bytes<uint16_t>(it);
-    if (flags & kAooBinMsgDataFrames) {
+    if (d.flags & kAooBinMsgDataFrames) {
         if ((end - it) < 8) {
             goto wrong_size;
         }
@@ -935,10 +936,10 @@ AooError Sink::handle_data_message(const AooByte *msg, int32_t n,
         d.frame = aoo::read_bytes<uint16_t>(it);
     } else {
         d.totalsize = d.size;
-        d.nframes = 1;
+        d.nframes = d.size > 0;
         d.frame = 0;
     }
-    if (flags & kAooBinMsgDataStreamMessage) {
+    if (d.flags & kAooBinMsgDataStreamMessage) {
         if ((end - it) < 4) {
             goto wrong_size;
         }
@@ -946,7 +947,7 @@ AooError Sink::handle_data_message(const AooByte *msg, int32_t n,
     } else {
         d.msgsize = 0;
     }
-    if (flags & kAooBinMsgDataSampleRate) {
+    if (d.flags & kAooBinMsgDataSampleRate) {
         if ((end - it) < 8) {
             goto wrong_size;
         }
@@ -1050,7 +1051,9 @@ source_desc::~source_desc() {
     // flush packet queue
     net_packet d;
     while (packetqueue_.try_pop(d)){
-        memory_.deallocate((void *)d.data);
+        if (d.data) {
+            memory_.deallocate((void *)d.data);
+        }
     }
     // flush stream message queue
     reset_stream_messages();
@@ -1472,9 +1475,13 @@ AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
     }
 
     // copy blob data and push to queue
-    auto data = (AooByte *)memory_.allocate(d.size);
-    memcpy(data, d.data, d.size);
-    d.data = data;
+    if (d.size > 0) {
+        auto data = (AooByte *)memory_.allocate(d.size);
+        memcpy(data, d.data, d.size);
+        d.data = data;
+    } else {
+        d.data = nullptr;
+    }
 
     packetqueue_.push(d);
 
@@ -1675,7 +1682,9 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
             // check data packet
             add_packet(s, d, stats);
             // return memory
-            memory_.deallocate((void *)d.data);
+            if (d.data) {
+                memory_.deallocate((void *)d.data);
+            }
         }
     }
 
@@ -1951,41 +1960,23 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
                 auto e = make_event<source_event>(kAooEventBufferOverrun, ep);
                 eventbuffer_.push_back(std::move(e));
             }
-            // fill gaps with empty blocks
+            // fill gaps with placeholder blocks
             for (int32_t i = newest + 1; i < d.sequence; ++i){
-                jitterbuffer_.push(i)->init(i, false);
+                jitterbuffer_.push(i)->init(i);
             }
         }
 
         // add new block
         block = jitterbuffer_.push(d.sequence);
 
-        if (d.totalsize == 0){
-            // dropped block
-            block->init(d.sequence, true);
-            return true;
-        } else {
-            block->init(d.sequence, d.samplerate, d.channel,
-                        d.totalsize, d.msgsize, d.nframes);
-        }
+        block->init(d);
     } else {
-        // add frame to existing block
-        if (d.totalsize == 0){
-            if (!block->dropped()){
-                // dropped block arrived out of order
-                LOG_VERBOSE("AooSink: empty block " << d.sequence << " out of order");
-                block->init(d.sequence, true); // don't call before dropped()!
-                return true;
-            } else {
-                LOG_VERBOSE("AooSink: empty block " << d.sequence << " already received");
-                return false;
-            }
-        }
-
-        if (block->num_frames() == 0){
-            // placeholder block
-            block->init(d.sequence, d.samplerate, d.channel,
-                        d.totalsize, d.msgsize, d.nframes);
+        if (block->placeholder()){
+            block->init(d);
+        } else if (block->empty()) {
+            // empty block already received
+            LOG_VERBOSE("AooSink: empty block " << d.sequence << " already received");
+            return false;
         } else if (block->has_frame(d.frame)){
             // frame already received
             LOG_VERBOSE("AooSink: frame " << d.frame << " of block " << d.sequence << " already received");
@@ -2004,8 +1995,10 @@ bool source_desc::add_packet(const Sink& s, const net_packet& d,
         }
     }
 
-    // add frame to block
-    block->add_frame(d.frame, d.data, d.size);
+    // add frame to block (if not empty)
+    if (d.size > 0) {
+        block->add_frame(d.frame, d.data, d.size);
+    }
 
     return true;
 }
@@ -2120,29 +2113,19 @@ bool source_desc::try_decode_block(const Sink& s, stream_stats& stats){
 
     auto& b = jitterbuffer_.front();
     if (b.complete()){
-        if (b.dropped()){
-            data = nullptr;
-            size = msgsize = 0;
-            sr = format_->sampleRate; // nominal samplerate
-            channel = -1; // current channel
-        #if AOO_DEBUG_JITTER_BUFFER
-            LOG_ALL("jitter buffer: write empty block ("
-                    << b.sequence << ") for source xrun");
-        #endif
-            // record dropped block
+        // block is ready
+        if (b.flags & kAooBinMsgDataXRun) {
             stats.dropped++;
-        } else {
-            // block is ready
-            data = b.data();
-            size = b.size();
-            msgsize = b.message_size;
-            sr = b.samplerate; // real samplerate
-            channel = b.channel;
-        #if AOO_DEBUG_JITTER_BUFFER
-            LOG_ALL("jitter buffer: write samples for block ("
-                    << b.sequence << ")");
-        #endif
         }
+        size = b.size();
+        data = size > 0 ? b.data() : nullptr;
+        msgsize = b.message_size;
+        sr = b.samplerate;
+        channel = b.channel;
+    #if AOO_DEBUG_JITTER_BUFFER
+        LOG_ALL("jitter buffer: write samples for block ("
+                << b.sequence << ")");
+    #endif
     } else {
         // we need audio, so we have to drop a block
         data = nullptr;
@@ -2251,7 +2234,7 @@ void source_desc::check_missing_blocks(const Sink& s){
         if (!b->complete() && b->update(elapsed, interval)){
             auto nframes = b->num_frames();
 
-            if (b->count_frames() > 0){
+            if (b->received_frames() > 0){
                 // a) only some frames missing
                 // we use a frame offset + bitset to indicate which frames are missing
                 for (int16_t offset = 0; offset < nframes; offset += 16){
@@ -2285,6 +2268,7 @@ void source_desc::check_missing_blocks(const Sink& s){
                 }
             } else {
                 // b) all frames missing
+                // TODO: what is the frame count of placeholder blocks!?
                 if (resent + nframes <= maxnumframes){
                     push_data_request({ b->sequence, -1, 0 }); // whole block
                 #if AOO_DEBUG_RESEND

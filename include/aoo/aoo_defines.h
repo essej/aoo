@@ -214,7 +214,8 @@ enum
 {
     kAooBinMsgDataSampleRate = 0x01,
     kAooBinMsgDataFrames = 0x02,
-    kAooBinMsgDataStreamMessage = 0x04
+    kAooBinMsgDataStreamMessage = 0x04,
+    kAooBinMsgDataXRun = 0x08
 };
 
 /** \brief commands for 'message' binary message */

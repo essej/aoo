@@ -1476,7 +1476,7 @@ AooSize write_bin_data(AooByte *buffer, AooSize size,
 {
     assert(size >= 32);
 
-    int16_t flags = 0;
+    auto flags = d.flags;
     if (d.samplerate != 0){
         flags |= kAooBinMsgDataSampleRate;
     }
@@ -1505,7 +1505,9 @@ AooSize write_bin_data(AooByte *buffer, AooSize size,
          aoo::write_bytes<double>(d.samplerate, it);
     }
     // write audio data
-    memcpy(it, d.data, d.size);
+    if (d.size > 0) {
+        memcpy(it, d.data, d.size);
+    }
     it += d.size;
 
     return (it - buffer);
@@ -1515,7 +1517,7 @@ AooSize write_bin_data(AooByte *buffer, AooSize size,
 // <totalsize> <msgsize> <nframes> <frame> <data>
 
 void send_packet_osc(const endpoint& ep, AooId id, int32_t stream_id,
-                     const aoo::data_packet& d, const sendfn& fn) {
+                     const data_packet& d, const sendfn& fn) {
     char buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream msg(buf, sizeof(buf));
 
@@ -1541,7 +1543,7 @@ void send_packet_osc(const endpoint& ep, AooId id, int32_t stream_id,
 // [total (int32), nframes (int16), frame (int16)], [msgsize (int32)], [sr (float64)], data...
 
 void send_packet_bin(const endpoint& ep, AooId id, AooId stream_id,
-                     const aoo::data_packet& d, const sendfn& fn) {
+                     const data_packet& d, const sendfn& fn) {
     AooByte buf[AOO_MAX_PACKET_SIZE];
 
     auto onset = aoo::binmsg_write_header(buf, sizeof(buf), kAooMsgTypeSink,
@@ -1562,12 +1564,6 @@ void send_packet_bin(const endpoint& ep, AooId id, AooId stream_id,
 void send_packet(const aoo::vector<cached_sink>& sinks, const AooId id,
                  data_packet& d, const sendfn &fn, bool binary) {
     if (binary){
-    #if AOO_DEBUG_DATA
-        LOG_DEBUG("AooSource: send block: seq = " << d.sequence << ", sr = "
-                  << d.samplerate << ", chn = " << s.channel << ", msgsize = "
-                  << d.msgsize << ", totalsize = " << d.totalsize << ", nframes = "
-                  << d.nframes << ", frame = " << d.frame << ", size " << d.size);
-    #endif
         AooByte buf[AOO_MAX_PACKET_SIZE];
 
         // start at max. header size
@@ -1577,6 +1573,12 @@ void send_packet(const aoo::vector<cached_sink>& sinks, const AooId id,
         auto end = args + argsize;
 
         for (auto& s : sinks) {
+        #if AOO_DEBUG_DATA
+            LOG_DEBUG("AooSource: send block: seq = " << d.sequence << ", sr = "
+                      << d.samplerate << ", chn = " << s.channel << ", msgsize = "
+                      << d.msgsize << ", totalsize = " << d.totalsize << ", nframes = "
+                      << d.nframes << ", frame = " << d.frame << ", size " << d.size);
+        #endif
             // write header
             bool large =  s.ep.id > 255 || id > 255;
             auto start = large ? buf : (args - kAooBinMsgHeaderSize);
@@ -1672,10 +1674,16 @@ void Source::send_xruns(const sendfn &fn) {
             d.frame = 0;
             d.data = nullptr;
             d.size = 0;
+            d.flags = kAooBinMsgDataXRun;
 
             // wrap around to prevent signed integer overflow
             if (sequence_ == INT32_MAX) {
                 sequence_ = 0;
+            }
+
+            // save block (if we have a history buffer)
+            if (history_.capacity() > 0) {
+                history_.push()->set(d, 0);
             }
 
             // now we can unlock
@@ -1791,6 +1799,8 @@ void Source::send_data(const sendfn& fn){
 
         data_packet d;
         d.samplerate = ptr->sr;
+        d.channel = 0;
+        d.flags = 0;
         d.msgsize = sendbuffer_.size();
         // message size must be aligned to 4 byte boundary!
         assert((d.msgsize & 3) == 0);
@@ -1838,8 +1848,8 @@ void Source::send_data(const sendfn& fn){
 
         // save block (if we have a history buffer)
         if (history_.capacity() > 0){
-            history_.push()->set(d.sequence, d.samplerate, sendbuffer_.data(),
-                                 d.totalsize, d.msgsize, d.nframes, maxpacketsize);
+            d.data = sendbuffer_.data();
+            history_.push()->set(d, maxpacketsize);
         }
 
         // unlock before sending!
@@ -1899,13 +1909,14 @@ void Source::resend_data(const sendfn &fn){
 
                 auto stream_id = s.stream_id();
 
-                aoo::data_packet d;
+                data_packet d;
                 d.sequence = block->sequence;
                 d.msgsize = block->message_size;
                 d.samplerate = block->samplerate;
                 d.channel = s.channel();
                 d.totalsize = block->size();
                 d.nframes = block->num_frames();
+                d.flags = block->flags;
                 // We need to copy all (requested) frames before sending
                 // because we temporarily release the update lock!
                 // We use a buffer on the heap because blocks and even frames
@@ -1918,44 +1929,54 @@ void Source::resend_data(const sendfn &fn){
                     int32_t size;
                     AooByte *data;
                 };
-                auto framevec = (frame_data *)alloca(d.nframes * sizeof(frame_data));
+                auto framevec = (frame_data *)alloca(std::max(d.nframes, 1) * sizeof(frame_data));
                 int32_t numframes = 0;
                 int32_t buf_offset = 0;
 
-                auto copy_frame = [&](int32_t index) {
-                    auto nbytes = block->get_frame(index, buf + buf_offset,
-                                                   d.totalsize - buf_offset);
-                    if (nbytes > 0) {
-                        auto& frame = framevec[numframes];
-                        frame.index = index;
-                        frame.size = nbytes;
-                        frame.data = buf + buf_offset;
+                if (d.nframes > 0) {
+                    // copy and send frames
+                    auto copy_frame = [&](int32_t index) {
+                        auto nbytes = block->get_frame(index, buf + buf_offset,
+                                                       d.totalsize - buf_offset);
+                        if (nbytes > 0) {
+                            auto& frame = framevec[numframes];
+                            frame.index = index;
+                            frame.size = nbytes;
+                            frame.data = buf + buf_offset;
 
-                        buf_offset += nbytes;
-                        numframes++;
+                            buf_offset += nbytes;
+                            numframes++;
+                        } else {
+                            LOG_ERROR("AooSource: empty frame!");
+                        }
+                    };
+
+                    if (r.offset < 0) {
+                        // a) whole block: copy all frames
+                        for (int i = 0; i < d.nframes; ++i){
+                            copy_frame(i);
+                        }
                     } else {
-                        LOG_ERROR("AooSource: empty frame!");
-                    }
-                };
-
-                if (r.offset < 0) {
-                    // a) whole block: copy all frames
-                    for (int i = 0; i < d.nframes; ++i){
-                        copy_frame(i);
-                    }
-                } else {
-                    // b) only copy requested frames
-                    uint16_t bitset = r.bitset;
-                    for (int i = 0; bitset != 0; ++i, bitset >>= 1) {
-                        if (bitset & 1) {
-                            auto index = r.offset + i;
-                            if (index < d.nframes) {
-                                copy_frame(index);
-                            } else {
-                                LOG_ERROR("AooSource: frame number " << index << " out of range!");
+                        // b) only copy requested frames
+                        uint16_t bitset = r.bitset;
+                        for (int i = 0; bitset != 0; ++i, bitset >>= 1) {
+                            if (bitset & 1) {
+                                auto index = r.offset + i;
+                                if (index < d.nframes) {
+                                    copy_frame(index);
+                                } else {
+                                    LOG_ERROR("AooSource: frame number " << index << " out of range!");
+                                }
                             }
                         }
                     }
+                } else {
+                    // resend empty block
+                    auto& frame = framevec[0];
+                    frame.index = 0;
+                    frame.size = 0;
+                    frame.data = nullptr;
+                    numframes = 1;
                 }
                 // unlock before sending
                 updatelock.unlock();
