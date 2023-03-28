@@ -674,14 +674,9 @@ static void aoo_client_tick(t_aoo_client *x)
     clock_delay(x->x_clock, AOO_CLIENT_POLL_INTERVAL);
 }
 
-struct t_error_response {
-    int code;
-    std::string msg;
-};
-
 static void AOO_CALL connect_cb(t_aoo_client *x, const AooRequest *request,
-                                const AooResponse *response) {
-    if (response->type != kAooRequestError) {
+                                AooError result, const AooResponse *response) {
+    if (result == kAooErrorNone) {
         x->push_reply([x](){
             // remove all peers and groups (to be sure)
             x->x_peers.clear();
@@ -692,11 +687,11 @@ static void AOO_CALL connect_cb(t_aoo_client *x, const AooRequest *request,
         });
     } else {
         auto& e = response->error;
-        t_error_response error { e.errorCode, e.errorMessage };
+        std::string errmsg = *e.errorMessage ? e.errorMessage : aoo_strerror(result);
 
-        x->push_reply([x, error=std::move(error)](){
+        x->push_reply([x, errmsg=std::move(errmsg)](){
             pd_error(x, "%s: can't connect to server: %s",
-                     classname(x), error.msg.c_str());
+                     classname(x), errmsg.c_str());
 
             if (!x->x_connected){
                 outlet_float(x->x_stateout, 0);
@@ -744,8 +739,8 @@ static void aoo_client_disconnect(t_aoo_client *x)
 }
 
 static void AOO_CALL group_join_cb(t_aoo_client *x, const AooRequest *request,
-                                   const AooResponse *response){
-    if (response->type != kAooRequestError) {
+                                   AooError result, const AooResponse *response){
+    if (result == kAooErrorNone) {
         x->push_reply([x, group=std::string(request->groupJoin.groupName), id=response->groupJoin.groupId](){
             // add group
             auto name = gensym(group.c_str());
@@ -762,11 +757,12 @@ static void AOO_CALL group_join_cb(t_aoo_client *x, const AooRequest *request,
         });
     } else {
         auto& e = response->error;
-        t_error_response error { e.errorCode, e.errorMessage };
+        std::string group = std::string(request->groupJoin.groupName);
+        std::string errmsg = *e.errorMessage ? e.errorMessage : aoo_strerror(result);
 
-        x->push_reply([x, group=std::string(request->groupJoin.groupName), error=std::move(error)](){
+        x->push_reply([x, group=std::move(group), errmsg=std::move(errmsg)](){
             pd_error(x, "%s: can't join group '%s': %s",
-                     classname(x), group.c_str(), error.msg.c_str());
+                     classname(x), group.c_str(), errmsg.c_str());
 
             t_atom msg[2];
             SETSYMBOL(msg, gensym(group.c_str()));
@@ -798,8 +794,8 @@ static void aoo_client_group_join(t_aoo_client *x, t_symbol *s, int argc, t_atom
 }
 
 static void AOO_CALL group_leave_cb(t_aoo_client *x, const AooRequest *request,
-                                    const AooResponse *response) {
-    if (response->type != kAooRequestError){
+                                    AooError result, const AooResponse *response) {
+    if (result == kAooErrorNone){
         x->push_reply([x, id=request->groupLeave.group]() {
             // remove group
             t_symbol *name = nullptr;
@@ -831,16 +827,17 @@ static void AOO_CALL group_leave_cb(t_aoo_client *x, const AooRequest *request,
         });
     } else {
         auto& e = response->error;
-        t_error_response error { e.errorCode, e.errorMessage };
+        auto id = request->groupLeave.group;
+        std::string errmsg = *e.errorMessage ? e.errorMessage : aoo_strerror(result);
 
-        x->push_reply([x, id=request->groupLeave.group, error=std::move(error)]() {
+        x->push_reply([x, id=id, errmsg=std::move(errmsg)]() {
             auto group = x->find_group(id);
             if (!group) {
                 bug("group_leave_cb");
                 return;
             }
             pd_error(x, "%s: can't leave group '%s': %s",
-                     classname(x), group->name->s_name, error.msg.c_str());
+                     classname(x), group->name->s_name, errmsg.c_str());
 
             t_atom msg[2];
             SETSYMBOL(msg, group->name);

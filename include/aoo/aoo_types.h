@@ -174,6 +174,7 @@ AOO_ENUM(AooError)
     kAooErrorUnknown = -1,
     /** no error (= success) */
     kAooErrorNone = 0,
+    /*------------- generic errors -------------*/
     /** operation/control not implemented */
     kAooErrorNotImplemented,
     /** bad argument for function/method call */
@@ -188,7 +189,44 @@ AOO_ENUM(AooError)
     /** resource not found */
     kAooErrorNotFound,
     /** insufficient buffer size */
-    kAooErrorInsufficientBuffer
+    kAooErrorInsufficientBuffer,
+    /** internal error */
+    kAooErrorInternal,
+    /** system error */
+    kAooErrorSystem,
+    /** user-defined error */
+    kAooErrorUserDefined,
+    /*------------- server errors -------------*/
+    /** request is already in progress */
+    kAooErrorRequestInProgress = 1000,
+    /** request has not been handled */
+    kAooErrorUnhandledRequest,
+    /** version not supported */
+    kAooErrorVersionNotSupported,
+    /** UDP handshake time out */
+    kAooErrorUDPHandshakeTimeOut,
+    /** wrong passoword */
+    kAooErrorWrongPassword,
+    /** already connected to server */
+    kAooErrorAlreadyConnected,
+    /** not connected to server */
+    kAooErrorNotConnected,
+    /** group does not exist */
+    kAooErrorGroupDoesNotExist,
+    /** cannot create group on the server */
+    kAooErrorCannotCreateGroup,
+    /** already a group member */
+    kAooErrorAlreadyGroupMember,
+    /** not a group member */
+    kAooErrorNotGroupMember,
+    /** user already exists */
+    kAooErrorUserAlreadyExists,
+    /** user does not exist */
+    kAooErrorUserDoesNotExist,
+    /** cannot create user */
+    kAooErrorCannotCreateUser,
+    /** start of user defined error codes (for custom AOO versions) */
+    kAooErrorCustom = 10000
 };
 
 /** \brief alias for success result */
@@ -451,17 +489,18 @@ typedef union AooResponse AooResponse;
 
 /** \brief client response handler
  *
- * In the handler function the user must check the response type.
- * If the type is `kAooRequestError`, the request has failed and
- * the user may inspect the `error` member to gather more information.
- * Otherwise the user can safely use the actual response data,
- * e.g. `response->connect` for a connection request.
+ * If `result` is `kAooErrorNone`, you can safely access the corresponding
+ * response member, e.g. `response->connect` for a connection request.
+ * Otherwise the request has failed. If the error code is `kAooErrorSystem`
+ * or `kAooErrorUserDefined`, you may access `response->error` for more details.
  */
 typedef void (AOO_CALL *AooResponseHandler)(
         /** the user data */
         void *user,
         /** the original request */
         const AooRequest *request,
+        /** the result error code */
+        AooError result,
         /** the response */
         const AooResponse *response
 );

@@ -217,10 +217,46 @@ const char *aoo_strerror(AooError e){
         return "bad argument";
     case kAooErrorIdle:
         return "idle";
+    case kAooErrorOverflow:
+        return "overflow";
     case kAooErrorOutOfMemory:
         return "out of memory";
     case kAooErrorInsufficientBuffer:
         return "insufficient buffer";
+    case kAooErrorInternal:
+        return "internal error";
+    case kAooErrorSystem:
+        return "system error";
+    case kAooErrorUserDefined:
+        return "user-defined error";
+    case kAooErrorRequestInProgress:
+        return "request in progress";
+    case kAooErrorUnhandledRequest:
+        return "unhandled request";
+    case kAooErrorVersionNotSupported:
+        return "version not supported";
+    case kAooErrorUDPHandshakeTimeOut:
+        return "UDP handshake time out";
+    case kAooErrorWrongPassword:
+        return "wrong password";
+    case kAooErrorAlreadyConnected:
+        return "already connected";
+    case kAooErrorNotConnected:
+        return "not connected";
+    case kAooErrorGroupDoesNotExist:
+        return "group does not exist";
+    case kAooErrorCannotCreateGroup:
+        return "cannot create group";
+    case kAooErrorAlreadyGroupMember:
+        return "already a group member";
+    case kAooErrorNotGroupMember:
+        return "not a group member";
+    case kAooErrorUserAlreadyExists:
+        return "user already exists";
+    case kAooErrorUserDoesNotExist:
+        return "user does not exist";
+    case kAooErrorCannotCreateUser:
+        return "cannot create user";
     default:
         return "unknown error code";
     }

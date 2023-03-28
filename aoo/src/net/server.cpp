@@ -210,7 +210,8 @@ AooError AOO_CALL aoo::net::Server::declineRequest(
     auto c = find_client(client);
     if (c) {
         // LATER find a dedicated error code for declined requests
-        c->send_error(*this, token, request->type, errorCode, errorMessage);
+        c->send_error(*this, token, request->type, kAooErrorUserDefined,
+                      errorCode, errorMessage);
         return kAooOk;
     } else {
         return kAooErrorUnknown;
@@ -841,13 +842,13 @@ void Server::handle_login(client_endpoint& client, const osc::ReceivedMessage& m
     // check version
     if (!check_version(version)) {
         LOG_DEBUG("AooServer: client " << client.id() << ": version mismatch");
-        client.send_error(*this, token, request.type, 0, "AOO version not supported");
+        client.send_error(*this, token, request.type, kAooErrorVersionNotSupported);
         return;
     }
     // check password
     if (!password_.empty() && pwd != password_) {
         LOG_DEBUG("AooServer: client " << client.id() << ": wrong password");
-        client.send_error(*this, token, request.type, 0, "wrong password");
+        client.send_error(*this, token, request.type, kAooErrorWrongPassword);
         return;
     }
 
@@ -874,7 +875,7 @@ AooError Server::do_login(client_endpoint& client, AooId token,
     auto msg = start_message(extra);
 
     msg << osc::BeginMessage(kAooMsgClientLogin)
-        << token << (int32_t)1 << client.id()
+        << token << kAooErrorNone << client.id()
         << (int32_t)flags << response.metadata
         << osc::EndMessage;
 
@@ -922,7 +923,7 @@ void Server::handle_group_join(client_endpoint& client, const osc::ReceivedMessa
         request.groupId = grp->id();
         // check group password
         if (!grp->check_pwd(request.groupPwd)) {
-            client.send_error(*this, token, request.type, 0, "wrong group password");
+            client.send_error(*this, token, request.type, kAooErrorWrongPassword);
             return;
         }
         usr = grp->find_user(request.userName);
@@ -930,12 +931,12 @@ void Server::handle_group_join(client_endpoint& client, const osc::ReceivedMessa
             request.userId = usr->id();
             // check if someone is already logged in
             if (usr->active()) {
-                client.send_error(*this, token, request.type, 0, "user already logged in");
+                client.send_error(*this, token, request.type, kAooErrorUserAlreadyExists);
                 return;
             }
             // check user password
             if (!usr->check_pwd(request.userPwd)) {
-                client.send_error(*this, token, request.type, 0, "wrong user password");
+                client.send_error(*this, token, request.type, kAooErrorWrongPassword);
                 return;
             }
         } else {
@@ -943,7 +944,7 @@ void Server::handle_group_join(client_endpoint& client, const osc::ReceivedMessa
             request.userId = kAooIdInvalid;
             // check if the client is allowed to create users
             if (!grp->user_auto_create()) {
-                client.send_error(*this, token, request.type, 0, "not allowed to create user");
+                client.send_error(*this, token, request.type, kAooErrorCannotCreateUser);
                 return;
             }
         }
@@ -952,7 +953,7 @@ void Server::handle_group_join(client_endpoint& client, const osc::ReceivedMessa
         request.groupId = kAooIdInvalid;
         // check if the client is allowed to create groups
         if (!group_auto_create_.load()) {
-            client.send_error(*this, token, request.type, 0, "not allowed to create group");
+            client.send_error(*this, token, request.type, kAooErrorCannotCreateGroup);
             return;
         }
     }
@@ -991,8 +992,7 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
             send_event(std::move(e));
         } else {
             // group has been added in the meantime... LATER try to deal with this
-            client.send_error(*this, token, request.type,
-                              0, "could not create group: already exists");
+            client.send_error(*this, token, request.type, kAooErrorCannotCreateGroup);
             return kAooErrorUnknown;
         }
     }
@@ -1008,8 +1008,7 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
                                  client.id(), user_md, user_relay, false));
         if (!usr) {
             // user has been added in the meantime... LATER try to deal with this
-            client.send_error(*this, token, request.type,
-                              0, "could not create user: already exists");
+            client.send_error(*this, token, request.type, kAooErrorCannotCreateUser);
             return kAooErrorUnknown;
         }
     }
@@ -1025,7 +1024,7 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
     auto msg = start_message(extra);
 
     msg << osc::BeginMessage(kAooMsgClientGroupJoin)
-        << token << (int32_t)1
+        << token << kAooErrorNone
         << grp->id() << usr->id()
         << grp->metadata() << usr->metadata()
         << response.privateMetadata << group_relay // *not* group->relay()!
@@ -1061,7 +1060,7 @@ void Server::handle_group_leave(client_endpoint& client, const osc::ReceivedMess
 AooError Server::do_group_leave(client_endpoint& client, AooId token,
                                 const AooRequestGroupLeave& request,
                                 AooResponseGroupLeave& response) {
-    const char *errmsg;
+    AooError result = kAooErrorNone;
 
     if (auto grp = find_group(request.group)) {
         // find the user in the group that is associated with this client
@@ -1078,19 +1077,19 @@ AooError Server::do_group_leave(client_endpoint& client, AooId token,
             auto msg = start_message();
 
             msg << osc::BeginMessage(kAooMsgClientGroupLeave)
-                << token << (int32_t)1
+                << token << kAooErrorNone
                 << osc::EndMessage;
 
             client.send_message(msg);
 
             return kAooOk;
         } else {
-            errmsg = "client is not a group member";
+            result = kAooErrorNotGroupMember;
         }
     } else {
-        errmsg = "can't find group";
+        result = kAooErrorGroupDoesNotExist;
     }
-    client.send_error(*this, token, request.type, 0, errmsg);
+    client.send_error(*this, token, request.type, result);
 
     return kAooErrorUnknown;
 }
@@ -1111,7 +1110,7 @@ void Server::handle_group_update(client_endpoint& client, const osc::ReceivedMes
 
     auto grp = find_group(request.groupId);
     if (!grp) {
-        client.send_error(*this, token, request.type, 0, "group not found");
+        client.send_error(*this, token, request.type, kAooErrorGroupDoesNotExist);
         return;
     }
 
@@ -1152,7 +1151,7 @@ AooError Server::do_group_update(client_endpoint &client, AooId token,
     auto msg = start_message(grp->metadata().size());
 
     msg << osc::BeginMessage(kAooMsgClientGroupUpdate)
-        << token << (int32_t)1 << grp->metadata()
+        << token << kAooErrorNone << grp->metadata()
         << osc::EndMessage;
 
     client.send_message(msg);
@@ -1182,12 +1181,12 @@ void Server::handle_user_update(client_endpoint& client, const osc::ReceivedMess
 
     auto grp = find_group(request.groupId);
     if (!grp) {
-        client.send_error(*this, token, request.type, 0, "group not found");
+        client.send_error(*this, token, request.type, kAooErrorGroupDoesNotExist);
         return;
     }
     auto usr = grp->find_user(user_id);
     if (!usr) {
-        client.send_error(*this, token, request.type, 0, "user not found");
+        client.send_error(*this, token, request.type, kAooErrorUserDoesNotExist);
     }
 
     if (!handle_request(client, token, (AooRequest&)request)) {
@@ -1233,7 +1232,7 @@ AooError Server::do_user_update(client_endpoint &client, AooId token,
     auto msg = start_message(usr->metadata().size());
 
     msg << osc::BeginMessage(kAooMsgClientUserUpdate)
-        << token << (int32_t)1 << usr->metadata()
+        << token << kAooErrorNone << usr->metadata()
         << osc::EndMessage;
 
     client.send_message(msg);
@@ -1260,7 +1259,7 @@ void Server::handle_custom_request(client_endpoint& client, const osc::ReceivedM
 
     if (!handle_request(client, token, (AooRequest&)request)) {
         // requests must be handled by the user!
-        client.send_error(*this, token, request.type, 0, "request not handled");
+        client.send_error(*this, token, request.type, kAooErrorUnhandledRequest);
     }
 }
 
@@ -1271,7 +1270,7 @@ AooError Server::do_custom_request(client_endpoint& client, AooId token,
     auto msg = start_message(response.data.size);
 
     msg << osc::BeginMessage(kAooMsgClientRequest)
-        << token << (int32_t)1 << (int32_t)response.flags
+        << token << kAooErrorNone << (int32_t)response.flags
         << &response.data << osc::EndMessage;
 
     client.send_message(msg);

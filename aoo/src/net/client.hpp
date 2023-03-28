@@ -327,19 +327,23 @@ private:
 
         virtual void handle_response(Client& client, const osc::ReceivedMessage& msg) = 0;
 
-        virtual void reply(const AooResponse& response) const = 0;
+        void reply(const AooResponse& response) const {
+            do_reply(kAooErrorNone, response);
+        }
 
-        void reply_error(const char *msg, int32_t code) const {
+        void reply_error(AooError result, int32_t code = 0, const char *msg = "") const {
             AooResponseError response;
             response.type = kAooRequestError;
             response.errorCode = code;
             response.errorMessage = msg;
-            reply(reinterpret_cast<AooResponse&>(response));
+            do_reply(result, reinterpret_cast<AooResponse&>(response));
         }
     protected:
-        void callback(const AooRequest& request, const AooResponse& response) const {
+        virtual void do_reply(AooError result, const AooResponse& response) const = 0;
+
+        void callback(const AooRequest& request, AooError result, const AooResponse& response) const {
             if (cb_) {
-                cb_(user_, &request, &response);
+                cb_(user_, &request, result, &response);
             }
         }
     private:
@@ -442,7 +446,7 @@ public:
             // dummy
         }
 
-        void reply(const AooResponse& response) const override {
+        void do_reply(AooError result, const AooResponse& response) const override {
             AooRequestConnect request;
             AOO_REQUEST_INIT(&request, Connect, metadata);
             request.address.hostName = host_.name.c_str();
@@ -451,9 +455,8 @@ public:
             AooData md { metadata_.type(), metadata_.data(), metadata_.size() };
             request.metadata = (md.size > 0) ? &md : nullptr;
 
-            callback((AooRequest&)request, response);
+            callback((AooRequest&)request, result, response);
         }
-    public:
         ip_host host_;
         std::string pwd_;
         aoo::metadata metadata_;
@@ -472,11 +475,11 @@ public:
             // dummy
         }
 
-        void reply(const AooResponse& response) const override {
+        void do_reply(AooError result, const AooResponse& response) const override {
             AooRequestDisconnect request;
             AOO_RESPONSE_INIT(&request, Disconnect, structSize);
 
-            callback((AooRequest&)request, response);
+            callback((AooRequest&)request, result, response);
         }
     };
 
@@ -489,7 +492,6 @@ public:
         void perform(Client& obj) override {
             obj.perform(*this);
         }
-    public:
         ip_address_list server_ip_;
         ip_address_list public_ip_;
     };
@@ -518,7 +520,7 @@ public:
             client.handle_response(*this, msg);
         }
 
-        void reply(const AooResponse& response) const override {
+        void do_reply(AooError result, const AooResponse& response) const override {
             AooRequestGroupJoin request;
             AOO_REQUEST_INIT(&request, GroupJoin, relayAddress);
 
@@ -541,9 +543,8 @@ public:
                 request.relayAddress = nullptr;
             }
 
-            callback((AooRequest&)request, response);
+            callback((AooRequest&)request, result, response);
         }
-    public:
         std::string group_name_;
         std::string group_pwd_;
         aoo::metadata group_md_;
@@ -566,14 +567,13 @@ public:
             client.handle_response(*this, msg);
         }
 
-        void reply(const AooResponse& response) const override {
+        void do_reply(AooError result, const AooResponse& response) const override {
             AooRequestGroupLeave request;
             AOO_REQUEST_INIT(&request, GroupLeave, group);
             request.group = group_;
 
-            callback((AooRequest&)request, response);
+            callback((AooRequest&)request, result, response);
         }
-    public:
         AooId group_;
     };
 
@@ -591,7 +591,7 @@ public:
             client.handle_response(*this, msg);
         }
 
-        void reply(const AooResponse& response) const override {
+        void do_reply(AooError result, const AooResponse& response) const override {
             AooRequestGroupUpdate request;
             AOO_REQUEST_INIT(&request, GroupUpdate, groupMetadata);
             request.groupId = group_;
@@ -599,9 +599,8 @@ public:
             request.groupMetadata.data = md_.data();
             request.groupMetadata.size = md_.size();
 
-            callback((AooRequest&)request, response);
+            callback((AooRequest&)request, result, response);
         }
-    public:
         AooId group_;
         aoo::metadata md_;
     };
@@ -621,7 +620,7 @@ public:
             client.handle_response(*this, msg);
         }
 
-        void reply(const AooResponse& response) const override {
+        void do_reply(AooError result, const AooResponse& response) const override {
             AooRequestUserUpdate request;
             AOO_REQUEST_INIT(&request, UserUpdate, userMetadata);
             request.groupId = group_;
@@ -630,9 +629,8 @@ public:
             request.userMetadata.data = md_.data();
             request.userMetadata.size = md_.size();
 
-            callback((AooRequest&)request, response);
+            callback((AooRequest&)request, result, response);
         }
-    public:
         AooId group_;
         AooId user_;
         aoo::metadata md_;
@@ -650,8 +648,8 @@ public:
         void handle_response(Client &client, const osc::ReceivedMessage &msg) override {
             auto it = msg.ArgumentsBegin();
             auto token = (it++)->AsInt32(); // skip
-            auto success = (it++)->AsInt32();
-            if (success) {
+            auto result = (it++)->AsInt32();
+            if (result == kAooErrorNone) {
                 AooResponseCustom response;
                 AOO_RESPONSE_INIT(&response, Custom, flags);
                 response.flags = (AooFlag)(it++)->AsInt32();
@@ -661,11 +659,11 @@ public:
             } else {
                 auto code = (it++)->AsInt32();
                 auto msg = (it++)->AsString();
-                reply_error(msg, code);
+                reply_error(result, code, msg);
             }
         }
 
-        void reply(const AooResponse& response) const override {
+        void do_reply(AooError result, const AooResponse& response) const override {
             AooRequestCustom request;
             AOO_REQUEST_INIT(&request, Custom, flags);
             request.flags = flags_;
@@ -673,9 +671,8 @@ public:
             request.data.data = data_.data();
             request.data.size = data_.size();
 
-            callback((AooRequest&)request, response);
+            callback((AooRequest&)request, result, response);
         }
-    public:
         aoo::metadata data_;
         AooFlag flags_;
     };

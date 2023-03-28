@@ -33,6 +33,20 @@
 # include <errno.h>
 #endif
 
+namespace aoo {
+
+std::string response_error_message(AooError result, int code, const char *msg) {
+    if (code != 0 || *msg) {
+        char buf[256];
+        snprintf(buf, sizeof(buf), "%s: %s (%d)", aoo_strerror(result), msg, code);
+        return buf;
+    } else {
+        return aoo_strerror(result);
+    }
+}
+
+}
+
 //--------------------- AooClient -----------------------------//
 
 AOO_API AooClient * AOO_CALL AooClient_new(
@@ -813,10 +827,10 @@ void Client::perform(const connect_cmd& cmd)
 {
     auto state = state_.load();
     if (state != client_state::disconnected){
-        const char *msg = (state == client_state::connected) ?
-            "already connected" : "already connecting";
+        auto code = (state == client_state::connected) ?
+            kAooErrorAlreadyConnected : kAooErrorRequestInProgress;
 
-        cmd.reply_error(msg, 0);
+        cmd.reply_error(code);
 
         return;
     }
@@ -828,7 +842,7 @@ void Client::perform(const connect_cmd& cmd)
         // LATER think about best way for error handling. Maybe exception?
         LOG_ERROR("AooClient: couldn't resolve hostname: " << msg);
 
-        cmd.reply_error(msg.c_str(), err);
+        cmd.reply_error(kAooErrorSystem, err, msg.c_str());
 
         return;
     }
@@ -885,7 +899,7 @@ void Client::perform(const login_cmd& cmd) {
 
         close();
 
-        connection->reply_error(msg.c_str(), err);
+        connection->reply_error(kAooErrorSystem, err, msg.c_str());
 
         return;
     }
@@ -899,7 +913,7 @@ void Client::perform(const login_cmd& cmd) {
 
         close();
 
-        connection->reply_error(msg.c_str(), err);
+        connection->reply_error(kAooErrorSystem, err, msg.c_str());
 
         return;
     }
@@ -933,7 +947,7 @@ void Client::perform(const timeout_cmd& cmd) {
 
         close();
 
-        connection->reply_error("UDP handshake time out", 0);
+        connection->reply_error(kAooErrorUDPHandshakeTimeOut);
     }
 }
 
@@ -942,10 +956,10 @@ void Client::perform(const timeout_cmd& cmd) {
 void Client::perform(const disconnect_cmd& cmd) {
     auto state = state_.load();
     if (state != client_state::connected) {
-        const char *msg = (state == client_state::disconnected) ?
-                "not connected" : "still connecting";
+        auto code = (state == client_state::disconnected) ?
+                kAooErrorNotConnected : kAooErrorAlreadyConnected;
 
-        cmd.reply_error(msg, 0);
+        cmd.reply_error(code);
 
         return;
     }
@@ -963,13 +977,13 @@ void Client::perform(const disconnect_cmd& cmd) {
 void Client::perform(const group_join_cmd& cmd)
 {
     if (state_.load() != client_state::connected) {
-        cmd.reply_error("not connected", 0);
+        cmd.reply_error(kAooErrorNotConnected);
         return;
     }
     // check if we're already a group member
     for (auto& m : memberships_) {
         if (m.group_name == cmd.group_name_) {
-            cmd.reply_error("already a group member", 0);
+            cmd.reply_error(kAooErrorAlreadyGroupMember);
             return;
         }
     }
@@ -990,8 +1004,8 @@ void Client::handle_response(const group_join_cmd& cmd,
                              const osc::ReceivedMessage& msg) {
     auto it = msg.ArgumentsBegin();
     auto token = (it++)->AsInt32(); // skip
-    auto success = (it++)->AsInt32();
-    if (success) {
+    auto result = (it++)->AsInt32();
+    if (result == kAooErrorNone) {
         auto group = (it++)->AsInt32();
         auto user = (it++)->AsInt32();
         auto group_md = osc_read_metadata(it);
@@ -1040,9 +1054,9 @@ void Client::handle_response(const group_join_cmd& cmd,
     } else {
         auto code = (it++)->AsInt32();
         auto msg = (it++)->AsString();
-        cmd.reply_error(msg, code);
+        cmd.reply_error(result, code, msg);
         LOG_WARNING("AooClient: couldn't join group "
-                    << cmd.group_name_ << ": " << msg);
+                    << cmd.group_name_ << ": " << response_error_message(result, code, msg));
     }
 }
 
@@ -1067,8 +1081,8 @@ void Client::handle_response(const group_leave_cmd& cmd,
                              const osc::ReceivedMessage& msg) {
     auto it = msg.ArgumentsBegin();
     auto token = (it++)->AsInt32(); // skip
-    auto success = (it++)->AsInt32();
-    if (success) {
+    auto result = (it++)->AsInt32();
+    if (result == kAooErrorNone) {
         // remove all peers from this group
         peer_lock lock(peers_);
         for (auto it = peers_.begin(); it != peers_.end(); ){
@@ -1097,9 +1111,9 @@ void Client::handle_response(const group_leave_cmd& cmd,
     } else {
         auto code = (it++)->AsInt32();
         auto msg = (it++)->AsString();
-        cmd.reply_error(msg, code);
+        cmd.reply_error(result, code, msg);
         LOG_WARNING("AooClient: couldn't leave group "
-                    << cmd.group_ << ": " << msg);
+                    << cmd.group_ << ": " << response_error_message(result, code, msg));
     }
 }
 
@@ -1123,8 +1137,8 @@ void Client::handle_response(const group_update_cmd& cmd,
                              const osc::ReceivedMessage& msg) {
     auto it = msg.ArgumentsBegin();
     auto token = (it++)->AsInt32(); // skip
-    auto success = (it++)->AsInt32();
-    if (success) {
+    auto result = (it++)->AsInt32();
+    if (result == kAooErrorNone) {
         AooResponseGroupUpdate response;
         AOO_RESPONSE_INIT(&response, GroupUpdate, groupMetadata);
         response.groupMetadata.type = cmd.md_.type();
@@ -1136,9 +1150,9 @@ void Client::handle_response(const group_update_cmd& cmd,
     } else {
         auto code = (it++)->AsInt32();
         auto msg = (it++)->AsString();
-        cmd.reply_error(msg, code);
+        cmd.reply_error(result, code, msg);
         LOG_WARNING("AooClient: could not update group "
-                    << cmd.group_ << ": " << msg);
+                    << cmd.group_ << ": " << response_error_message(result, code, msg));
     }
 }
 
@@ -1162,8 +1176,8 @@ void Client::handle_response(const user_update_cmd& cmd,
                              const osc::ReceivedMessage& msg) {
     auto it = msg.ArgumentsBegin();
     auto token = (it++)->AsInt32(); // skip
-    auto success = (it++)->AsInt32();
-    if (success) {
+    auto result = (it++)->AsInt32();
+    if (result == kAooErrorNone) {
         AooResponseUserUpdate response;
         AOO_RESPONSE_INIT(&response, UserUpdate, userMetadata);
         response.userMetadata.type = cmd.md_.type();
@@ -1176,9 +1190,10 @@ void Client::handle_response(const user_update_cmd& cmd,
     } else {
         auto code = (it++)->AsInt32();
         auto msg = (it++)->AsString();
-        cmd.reply_error(msg, code);
+        cmd.reply_error(result, code, msg);
         LOG_WARNING("AooClient: could not update user " << cmd.user_
-                    << " in group " << cmd.group_ << ": " << msg);
+                    << " in group " << cmd.group_ << ": "
+                    << response_error_message(result, code, msg));
     }
 }
 
@@ -1186,7 +1201,7 @@ void Client::handle_response(const user_update_cmd& cmd,
 
 void Client::perform(const custom_request_cmd& cmd) {
     if (state_.load() != client_state::connected) {
-        cmd.reply_error("not connected", 0);
+        cmd.reply_error(kAooErrorNotConnected);
         return;
     }
 
@@ -1402,9 +1417,8 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
     if (connection_) {
         auto it = msg.ArgumentsBegin();
         auto token = (AooId)(it++)->AsInt32(); // skip
-        auto success = (it++)->AsInt32();
-
-        if (success){
+        auto result = (it++)->AsInt32();
+        if (result == kAooErrorNone){
             auto id = (AooId)(it++)->AsInt32();
             auto flags = (AooFlag)(it++)->AsInt32();
             auto metadata = osc_read_metadata(it);
@@ -1425,14 +1439,14 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
         } else {
             auto code = (it++)->AsInt32();
             auto msg = (it++)->AsString();
-            LOG_WARNING("AooClient: login failed: " << msg);
+            LOG_WARNING("AooClient: login failed: " << response_error_message(result, code, msg));
 
             // cache connection
             auto connection = std::move(connection_);
 
             close();
 
-            connection->reply_error(msg, code);
+            connection->reply_error(result, code, msg);
         }
     }
 }
