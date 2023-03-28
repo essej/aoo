@@ -804,6 +804,8 @@ void Server::handle_message(client_endpoint& client,
                 handle_group_update(client, msg);
             } else if (!strcmp(pattern, kAooMsgUserUpdate)){
                 handle_user_update(client, msg);
+            } else if (!strcmp(pattern, kAooMsgRequest)){
+                handle_custom_request(client, msg);
             } else {
                 throw std::runtime_error("unknown server message " + std::string(pattern));
             }
