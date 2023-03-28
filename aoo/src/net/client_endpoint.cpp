@@ -170,7 +170,7 @@ void client_endpoint::send_group_update(Server& server, const group& grp) {
 void client_endpoint::send_user_update(Server& server, const user& usr) {
     auto msg = server.start_message();
 
-    msg << osc::BeginMessage(kAooMsgUserChanged)
+    msg << osc::BeginMessage(kAooMsgClientUserChanged)
         << usr.group() << usr.id() << usr.metadata() << osc::EndMessage;
 
     send_message(msg);
