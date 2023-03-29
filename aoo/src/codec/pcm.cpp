@@ -249,7 +249,7 @@ AooError AOO_CALL PcmCodec_control(
         return kAooOk;
     default:
         LOG_WARNING("PCM: unsupported codec ctl " << ctl);
-        return kAooErrorUnknown;
+        return kAooErrorNotImplemented;
     }
 }
 
@@ -263,7 +263,7 @@ AooError AOO_CALL PcmCodec_encode(
     if (*size < nbytes){
         LOG_WARNING("PCM: size mismatch! input bytes: "
                     << nbytes << ", output bytes " << *size);
-        return kAooErrorUnknown;
+        return kAooErrorInsufficientBuffer;
     }
 
     auto samples_to_bytes = [&](auto fn){
@@ -292,7 +292,7 @@ AooError AOO_CALL PcmCodec_encode(
         break;
     default:
         // unknown bitdepth
-        return kAooErrorUnknown;
+        return kAooErrorBadArgument;
     }
 
     *size = nbytes;
@@ -318,7 +318,7 @@ AooError AOO_CALL PcmCodec_decode(
     if (*n < nsamples){
         LOG_WARNING("PCM: size mismatch! input samples: "
                     << nsamples << ", output samples " << *n);
-        return kAooErrorUnknown;
+        return kAooErrorInsufficientBuffer;
     }
 
     auto blob_to_samples = [&](auto convfn){
@@ -346,7 +346,7 @@ AooError AOO_CALL PcmCodec_decode(
         break;
     default:
         // unknown bitdepth
-        return kAooErrorUnknown;
+        return kAooErrorBadArgument;
     }
 
     *n = nsamples;

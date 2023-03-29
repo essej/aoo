@@ -16,7 +16,12 @@
 
 AOO_API AooServer * AOO_CALL AooServer_new(
         AooFlag flags, AooError *err) {
-    return aoo::construct<aoo::net::Server>();
+    try {
+        return aoo::construct<aoo::net::Server>();
+    } catch (const std::bad_alloc&) {
+        *err = kAooErrorOutOfMemory;
+        return nullptr;
+    }
 }
 
 aoo::net::Server::Server() {
@@ -53,7 +58,7 @@ AooError AOO_CALL aoo::net::Server::handleUdpMessage(
     auto err = parse_pattern(data, size, type, onset);
     if (err != kAooOk){
         LOG_WARNING("AooServer: not an AOO NET message!");
-        return kAooErrorUnknown;
+        return kAooErrorBadFormat;
     }
 
     ip_address addr((const struct sockaddr *)address, addrlen);
@@ -65,7 +70,7 @@ AooError AOO_CALL aoo::net::Server::handleUdpMessage(
         return handle_relay(data, size, addr, fn);
     } else {
         LOG_WARNING("AooServer: not a client message!");
-        return kAooErrorUnknown;
+        return kAooErrorBadFormat;
     }
 }
 
@@ -99,7 +104,7 @@ AooError AOO_CALL aoo::net::Server::removeClient(AooId clientId) {
         return kAooOk;
     } else {
         LOG_ERROR("AooServer: removeClient: client " << clientId << " not found");
-        return kAooErrorUnknown;
+        return kAooErrorNotFound;
     }
 }
 
@@ -113,13 +118,13 @@ AooError AOO_CALL aoo::net::Server::handleClientMessage(
     auto client = find_client(clientId);
     if (!client) {
         LOG_ERROR("AooServer: handleClientMessage: can't find client " << clientId);
-        return kAooErrorUnknown;
+        return kAooErrorNotFound;
     }
     try {
         client->handle_message(*this, data, size);
     } catch (const std::exception& e) {
         LOG_ERROR("AooServer: could not handle client message: " << e.what());
-        return kAooErrorUnknown;
+        return kAooErrorBadFormat;
     }
 
     return kAooOk;
@@ -183,10 +188,10 @@ AooError AOO_CALL aoo::net::Server::handleRequest(
             case kAooRequestCustom:
                 return do_custom_request(*c, token, request->custom, response->custom);
             default:
-                return kAooErrorUnknown;
+                return kAooErrorNotImplemented;
             }
         } else {
-            return kAooErrorUnknown;
+            return kAooErrorNotFound;
         }
     } else {
         // request denied
@@ -209,7 +214,7 @@ AooError AOO_CALL aoo::net::Server::handleRequest(
 
             return kAooOk;
         } else {
-            return kAooErrorUnknown;
+            return kAooErrorNotFound;
         }
     }
 }
@@ -226,7 +231,7 @@ AooError AOO_CALL aoo::net::Server::notifyClient(
         return kAooOk;
     } else {
         LOG_ERROR("AooServer: notifyClient: can't find client!");
-        return kAooErrorUnknown;
+        return kAooErrorNotFound;
     }
 }
 
@@ -266,7 +271,7 @@ AooError AOO_CALL aoo::net::Server::notifyGroup(
     } else {
         LOG_ERROR("AooServer: notifyGroup: can't find group " << group);
     }
-    return kAooErrorUnknown;
+    return kAooErrorNotFound;
 }
 
 AOO_API AooError AOO_CALL AooServer_findGroup(
@@ -282,7 +287,7 @@ AooError AOO_CALL aoo::net::Server::findGroup(
         }
         return kAooOk;
     } else {
-        return kAooErrorUnknown;
+        return kAooErrorNotFound;
     }
 }
 
@@ -307,8 +312,8 @@ AooError AOO_CALL aoo::net::Server::addGroup(
         return kAooOk;
     } else {
         LOG_ERROR("AooServer: addGroup: group " << name << " already exists");
+        return kAooErrorAlreadyExists;
     }
-    return kAooErrorUnknown;
 }
 
 AOO_API AooError AOO_CALL AooServer_removeGroup(
@@ -321,7 +326,7 @@ AooError AOO_CALL aoo::net::Server::removeGroup(AooId group) {
         return kAooOk;
     } else {
         LOG_ERROR("AooServer: removeGroup: group " << group << " not found");
-        return kAooErrorUnknown;
+        return kAooErrorNotFound;
     }
 }
 
@@ -340,7 +345,7 @@ AooError AOO_CALL aoo::net::Server::findUserInGroup(
             return kAooOk;
         }
     }
-    return kAooErrorUnknown;
+    return kAooErrorNotFound;
 }
 
 AOO_API AooError AOO_CALL AooServer_addUserToGroup(
@@ -365,11 +370,12 @@ AooError AOO_CALL aoo::net::Server::addUserToGroup(
         } else {
             LOG_ERROR("AooServer: addUserToGroup: user " << userName
                       << " already exists in group " << group);
+            return kAooErrorAlreadyExists;
         }
     } else {
         LOG_ERROR("AooServer: addUserToGroup: group " << group << " not found");
+        return kAooErrorNotFound;
     }
-    return kAooErrorUnknown;
 }
 
 AOO_API AooError AOO_CALL AooServer_removeUserFromGroup(
@@ -400,7 +406,7 @@ AooError AOO_CALL aoo::net::Server::removeUserFromGroup(
     } else {
         LOG_ERROR("AooServer: removeUserToGroup: group " << group << " not found");
     }
-    return kAooErrorUnknown;
+    return kAooErrorNotFound;
 }
 
 AOO_API AooError AOO_CALL AooServer_groupControl(
@@ -989,7 +995,7 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
         } else {
             // group has been added in the meantime... LATER try to deal with this
             client.send_error(*this, token, request.type, kAooErrorCannotCreateGroup);
-            return kAooErrorUnknown;
+            return kAooErrorCannotCreateGroup;
         }
     }
     // prefer response user metadata
@@ -1005,7 +1011,7 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
         if (!usr) {
             // user has been added in the meantime... LATER try to deal with this
             client.send_error(*this, token, request.type, kAooErrorCannotCreateUser);
-            return kAooErrorUnknown;
+            return kAooErrorCannotCreateUser;
         }
     }
     // update response
@@ -1087,7 +1093,7 @@ AooError Server::do_group_leave(client_endpoint& client, AooId token,
     }
     client.send_error(*this, token, request.type, result);
 
-    return kAooErrorUnknown;
+    return result;
 }
 
 //----------------------- group_update --------------------------//
@@ -1280,7 +1286,7 @@ AooError Server::handle_udp_message(const AooByte *data, AooSize size, int onset
                                 const ip_address& addr, const sendfn& fn) {
     if (binmsg_check(data, size)) {
         LOG_WARNING("AooServer: unsupported binary message");
-        return kAooErrorUnknown;
+        return kAooErrorNotImplemented;
     }
     // OSC format
     try {
@@ -1296,14 +1302,14 @@ AooError Server::handle_udp_message(const AooByte *data, AooSize size, int onset
             handle_query(msg, addr, fn);
         } else {
             LOG_ERROR("AooServer: unknown message " << pattern);
-            return kAooErrorUnknown;
+            return kAooErrorNotImplemented;
         }
         return kAooOk;
     } catch (const osc::Exception& e){
         auto pattern = (const char *)data + onset;
         LOG_ERROR("AooServer: exception on handling " << pattern
                   << " message: " << e.what());
-        return kAooErrorUnknown;
+        return kAooErrorBadFormat;
     }
 }
 
@@ -1338,12 +1344,13 @@ AooError Server::handle_relay(const AooByte *data, AooSize size,
                     return kAooOk;
                 } else {
                     LOG_ERROR("AooServer: can't relay: buffer too small");
+                    return kAooErrorInsufficientBuffer;
                 }
             }
         } else {
             LOG_ERROR("AooServer: bad relay message");
+            return kAooErrorBadFormat;
         }
-        return kAooErrorUnknown;
     } else {
         // --- OSC format ---
         try {
@@ -1376,7 +1383,7 @@ AooError Server::handle_relay(const AooByte *data, AooSize size,
             return kAooOk;
         } catch (const osc::Exception& e){
             LOG_ERROR("AooServer: exception in handle_relay: " << e.what());
-            return kAooErrorUnknown;
+            return kAooErrorBadFormat;
         }
     }
 }

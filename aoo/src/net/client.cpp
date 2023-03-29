@@ -54,11 +54,16 @@ AOO_API AooClient * AOO_CALL AooClient_new(
     aoo::ip_address address;
     if (aoo::socket_address(udpSocket, address) != 0) {
         if (err) {
-            *err = kAooErrorUnknown;
+            *err = kAooErrorSocket;
         }
         return nullptr;
     }
-    return aoo::construct<aoo::net::Client>(udpSocket, address, flags, err);
+    try {
+        return aoo::construct<aoo::net::Client>(udpSocket, address, flags, err);
+    } catch (const std::bad_alloc&) {
+        *err = kAooErrorOutOfMemory;
+        return nullptr;
+    }
 }
 
 aoo::net::Client::Client(int socket, const ip_address& address,
@@ -168,11 +173,11 @@ AooError AOO_CALL aoo::net::Client::addSource(
     for (auto& s : sources_){
         if (s.source == src){
             LOG_ERROR("AooClient: source already added");
-            return kAooErrorUnknown;
+            return kAooErrorAlreadyExists;
         } else if (s.id == id){
             LOG_WARNING("AooClient: source with id " << id
                         << " already added!");
-            return kAooErrorUnknown;
+            return kAooErrorAlreadyExists;
         }
     }
 #endif
@@ -199,7 +204,7 @@ AooError AOO_CALL aoo::net::Client::removeSource(
         }
     }
     LOG_ERROR("AooClient: source not found");
-    return kAooErrorUnknown;
+    return kAooErrorNotFound;
 }
 
 AOO_API AooError AOO_CALL AooClient_addSink(
@@ -215,11 +220,11 @@ AooError AOO_CALL aoo::net::Client::addSink(
     for (auto& s : sinks_){
         if (s.sink == sink){
             LOG_ERROR("AooClient: sink already added");
-            return kAooOk;
+            return kAooErrorAlreadyExists;
         } else if (s.id == id){
             LOG_WARNING("AooClient: sink with id " << id
                         << " already added!");
-            return kAooErrorUnknown;
+            return kAooErrorAlreadyExists;
         }
     }
 #endif
@@ -246,7 +251,7 @@ AooError AOO_CALL aoo::net::Client::removeSink(
         }
     }
     LOG_ERROR("AooClient: sink not found");
-    return kAooErrorUnknown;
+    return kAooErrorNotFound;
 }
 
 AOO_API AooError AOO_CALL AooClient_connect(
@@ -393,7 +398,7 @@ AooError AOO_CALL aoo::net::Client::findPeerByName(
             return kAooOk;
         }
     }
-    return kAooErrorUnknown;
+    return kAooErrorNotFound;
 }
 
 AOO_API AooError AOO_CALL AooClient_findPeerByAddress(
@@ -418,7 +423,7 @@ AooError AOO_CALL aoo::net::Client::findPeerByAddress(
             return kAooOk;
         }
     }
-    return kAooErrorUnknown;
+    return kAooErrorNotFound;
 }
 
 AOO_API AooError AOO_CALL AooClient_getPeerName(
@@ -458,7 +463,7 @@ AooError AOO_CALL aoo::net::Client::getPeerName(
             return kAooOk;
         }
     }
-    return kAooErrorUnknown;
+    return kAooErrorNotFound;
 }
 
 AOO_API AooError AOO_CALL AooClient_sendMessage(
@@ -499,7 +504,7 @@ AooError AOO_CALL aoo::net::Client::handleMessage(
     auto err = aoo_parsePattern(data, size, &type, &id, &onset);
     if (err != kAooOk){
         LOG_WARNING("AooClient: not an AOO NET message!");
-        return kAooErrorUnknown;
+        return kAooErrorBadFormat;
     }
 
     if (type == kAooMsgTypeSource){
@@ -510,6 +515,7 @@ AooError AOO_CALL aoo::net::Client::handleMessage(
             }
         }
         LOG_WARNING("AooClient: handle_message(): source not found");
+        return kAooErrorNotFound;
     } else if (type == kAooMsgTypeSink){
         // forward to matching sink
         for (auto& s : sinks_){
@@ -518,6 +524,7 @@ AooError AOO_CALL aoo::net::Client::handleMessage(
             }
         }
         LOG_WARNING("AooClient: handle_message(): sink not found");
+        return kAooErrorNotFound;
     } else {
         // forward to UDP client
         ip_address address((const sockaddr *)addr, len);
@@ -527,8 +534,6 @@ AooError AOO_CALL aoo::net::Client::handleMessage(
             return udp_client_.handle_osc_message(*this, data, size, address, type, onset);
         }
     }
-
-    return kAooErrorUnknown;
 }
 
 AOO_API AooError AOO_CALL AooClient_send(
@@ -695,7 +700,7 @@ AooError AOO_CALL aoo::net::Client::sendRequest(
         const AooRequest& request, AooResponseHandler callback, void *user, AooFlag flags)
 {
     LOG_ERROR("AooClient: unknown request " << request.type);
-    return kAooErrorUnknown;
+    return kAooErrorNotImplemented;
 }
 
 AOO_API AooError AOO_CALL AooClient_control(
@@ -735,7 +740,7 @@ AooError AOO_CALL aoo::net::Client::control(
                 return kAooOk;
             }
         }
-        return kAooErrorUnknown;
+        return kAooErrorNotFound;
     }
     case kAooCtlGetRelayAddress:
     {
@@ -749,7 +754,7 @@ AooError AOO_CALL aoo::net::Client::control(
                 return kAooOk;
             }
         }
-        return kAooErrorUnknown;
+        return kAooErrorNotFound;
     }
 #if AOO_CLIENT_SIMULATE
     case kAooCtlSetSimulatePacketReorder:
@@ -1731,7 +1736,7 @@ AooError udp_client::handle_bin_message(Client& client, const AooByte *data, int
             return client.handleMessage(msg, msgsize, src.address(), src.length());
         } else {
             LOG_ERROR("AooClient: bad binary relay message");
-            return kAooErrorUnknown;
+            return kAooErrorBadFormat;
         }
     } else if (type == kAooMsgTypePeer) {
         // peer message
@@ -1746,7 +1751,7 @@ AooError udp_client::handle_bin_message(Client& client, const AooByte *data, int
         return kAooOk;
     } else {
         LOG_WARNING("AooClient: unsupported binary message");
-        return kAooErrorUnknown;
+        return kAooErrorBadFormat;
     }
 }
 
@@ -1785,7 +1790,7 @@ AooError udp_client::handle_osc_message(Client& client, const AooByte *data, int
             return client.handleMessage(msg, msgsize, src.address(), src.length());
         } else {
             LOG_WARNING("AooClient: got unexpected message " << msg.AddressPattern());
-            return kAooErrorUnknown;
+            return kAooErrorNotImplemented;
         }
 
         return kAooOk;
@@ -1794,7 +1799,7 @@ AooError udp_client::handle_osc_message(Client& client, const AooByte *data, int
     #if 0
         on_exception("UDP message", e);
     #endif
-        return kAooErrorUnknown;
+        return kAooErrorBadFormat;
     }
 }
 

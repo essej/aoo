@@ -134,7 +134,12 @@ void sink_desc::activate(Source& s, bool b) {
 
 AOO_API AooSource * AOO_CALL AooSource_new(
         AooId id, AooFlag flags, AooError *err) {
-    return aoo::construct<aoo::Source>(id, flags, err);
+    try {
+        return aoo::construct<aoo::Source>(id, flags, err);
+    } catch (const std::bad_alloc&) {
+        *err = kAooErrorOutOfMemory;
+        return nullptr;
+    }
 }
 
 aoo::Source::Source(AooId id, AooFlag flags, AooError *err)
@@ -159,7 +164,7 @@ T& as(void *p){
     sink_lock lock(sinks_);             \
     auto sink = get_sink_arg(index);    \
     if (!sink) {                        \
-        return kAooErrorUnknown;   \
+        return kAooErrorNotFound;       \
     }                                   \
 
 AOO_API AooError AOO_CALL AooSource_control(
@@ -395,7 +400,7 @@ AooError AOO_CALL aoo::Source::codecControl(
     if (encoder_){
         return AooEncoder_control(encoder_.get(), ctl, data, size);
     } else {
-        return kAooErrorUnknown;
+        return kAooErrorNotInitialized;
     }
 }
 
@@ -503,12 +508,12 @@ AooError AOO_CALL aoo::Source::handleMessage(
                 handle_pong(msg, addr);
             } else {
                 LOG_WARNING("AooSource: unknown message " << pattern);
-                return kAooErrorUnknown;
+                return kAooErrorNotImplemented;
             }
             return kAooOk;
         } catch (const osc::Exception& e){
             LOG_ERROR("AooSource: exception in handle_message: " << e.what());
-            return kAooErrorUnknown;
+            return kAooErrorBadFormat;
         }
     }
 }
@@ -880,7 +885,7 @@ AooError AOO_CALL aoo::Source::addSink(const AooEndpoint& ep, AooFlag flags) {
     // check if sink exists!
     if (find_sink(addr, ep.id)){
         LOG_WARNING("AooSource: sink already added!");
-        return kAooErrorUnknown;
+        return kAooErrorAlreadyExists;
     }
     AooId stream = (flags & kAooSinkActive) ? get_random_id() : kAooIdInvalid;
     do_add_sink(addr, ep.id, stream);
@@ -894,7 +899,7 @@ AOO_API AooError AOO_CALL AooSource_removeSink(
     if (sink) {
         return source->removeSink(*sink);
     } else {
-        return kAooErrorBadArgument;
+        return kAooErrorNotFound;
     }
 }
 
@@ -908,7 +913,7 @@ AooError AOO_CALL aoo::Source::removeSink(const AooEndpoint& ep) {
     if (do_remove_sink(addr, ep.id)){
         return kAooOk;
     } else {
-        return kAooErrorUnknown;
+        return kAooErrorNotFound;
     }
 }
 
@@ -1091,7 +1096,7 @@ AooError Source::set_format(AooFormat &f){
     auto codec = aoo::find_codec(f.codec);
     if (!codec){
         LOG_ERROR("AooSource: codec '" << f.codec << "' not supported!");
-        return kAooErrorUnknown;
+        return kAooErrorNotInitialized;
     }
 
     std::unique_ptr<AooFormat, format_deleter> new_format;
@@ -1149,7 +1154,7 @@ AooError Source::get_format(AooFormat &fmt, size_t size){
             return kAooErrorBadArgument;
         }
     } else {
-        return kAooErrorUnknown;
+        return kAooErrorNotInitialized;
     }
 }
 

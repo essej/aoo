@@ -102,7 +102,7 @@ AooError AOO_CALL NullCodec_control(
         return kAooOk;
     default:
         LOG_WARNING("Null codec: unsupported codec ctl " << ctl);
-        return kAooErrorUnknown;
+        return kAooErrorNotImplemented;
     }
 }
 

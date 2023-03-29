@@ -171,14 +171,20 @@ AOO_ENUM(AooMsgType)
 AOO_ENUM(AooError)
 {
     /** unknown/unspecified error */
-    kAooErrorUnknown = -1,
+    kAooErrorUnspecified = -1,
     /** no error (= success) */
     kAooErrorNone = 0,
     /*------------- generic errors -------------*/
     /** operation/control not implemented */
     kAooErrorNotImplemented,
+    /** operation/control not permitted */
+    kAooErrorNotPermitted,
+    /** not initialized */
+    kAooErrorNotInitialized,
     /** bad argument for function/method call */
     kAooErrorBadArgument,
+    /** bad message/structure format */
+    kAooErrorBadFormat,
     /** AOO source/sink is idle;
      * no need to call `send()` resp. notify the send thread */
     kAooErrorIdle,
@@ -186,13 +192,23 @@ AOO_ENUM(AooError)
     kAooErrorOverflow,
     /** out of memory */
     kAooErrorOutOfMemory,
+    /** resource already exists */
+    kAooErrorAlreadyExists,
     /** resource not found */
     kAooErrorNotFound,
     /** insufficient buffer size */
     kAooErrorInsufficientBuffer,
+    /** bad state */
+    kAooErrorBadState,
+    /** socket error
+     * use errno resp. WSAGetLastError for more details */
+    kAooErrorSocket,
+    /** codec error */
+    kAooErrorCodec,
     /** internal error */
     kAooErrorInternal,
-    /** system error */
+    /** system error
+     * use errno resp. GetLastError for more details */
     kAooErrorSystem,
     /** user-defined error */
     kAooErrorUserDefined,

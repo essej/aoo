@@ -290,7 +290,8 @@ AooError Encoder_encode(
         return kAooOk;
     } else {
         LOG_VERBOSE("Opus: opus_encode_float() failed with error code " << result);
-        return kAooErrorUnknown;
+        // LATER try to translate Opus error codes to AOO error codes?
+        return kAooErrorCodec;
     }
 }
 
@@ -394,7 +395,8 @@ AooError Decoder_decode(
         return kAooOk;
     } else {
         LOG_VERBOSE("Opus: opus_decode_float() failed with error code " << result);
-        return kAooErrorUnknown;
+        // LATER try to translate Opus error codes to AOO error codes?
+        return kAooErrorCodec;
     }
 }
 

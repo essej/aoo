@@ -88,14 +88,14 @@ AooError parse_pattern(const AooByte *msg, int32_t n, AooMsgType& type, int32_t&
             type = kAooMsgTypeRelay;
             count += kAooMsgRelayLen;
         } else {
-            return kAooErrorUnknown;
+            return kAooErrorBadFormat;
         }
 
         offset = count;
 
         return kAooOk;
     } else {
-        return kAooErrorUnknown; // not an AOO message
+        return kAooErrorBadFormat; // not an AOO message
     }
 }
 

@@ -25,7 +25,12 @@ const int32_t kBinDataHeaderSize = kAooBinMsgLargeHeaderSize + 8;
 
 AOO_API AooSink * AOO_CALL AooSink_new(
         AooId id, AooFlag flags, AooError *err) {
-    return aoo::construct<aoo::Sink>(id, flags, err);
+    try {
+        return aoo::construct<aoo::Sink>(id, flags, err);
+    } catch (const std::bad_alloc&) {
+        *err = kAooErrorOutOfMemory;
+        return nullptr;
+    }
 }
 
 aoo::Sink::Sink(AooId id, AooFlag flags, AooError *err)
@@ -98,7 +103,7 @@ T& as(void *p){
     source_lock lock(sources_);         \
     auto src = get_source_arg(index);   \
     if (!src) {                         \
-        return kAooErrorUnknown;        \
+        return kAooErrorNotFound;       \
     }                                   \
 
 AOO_API AooError AOO_CALL AooSink_control(
@@ -339,7 +344,7 @@ AooError AOO_CALL aoo::Sink::handleMessage(
         const void *address, AooAddrSize addrlen)
 {
     if (samplerate_ == 0){
-        return kAooErrorUnknown; // not setup yet
+        return kAooErrorNotInitialized; // not setup yet
     }
 
     AooMsgType type;
@@ -348,16 +353,16 @@ AooError AOO_CALL aoo::Sink::handleMessage(
     auto err = aoo_parsePattern(data, size, &type, &sinkid, &onset);
     if (err != kAooOk){
         LOG_WARNING("AooSink: not an AOO message!");
-        return kAooErrorUnknown;
+        return kAooErrorBadFormat;
     }
 
     if (type != kAooMsgTypeSink){
         LOG_WARNING("AooSink: not a sink message!");
-        return kAooErrorUnknown;
+        return kAooErrorBadArgument;
     }
     if (sinkid != id()){
         LOG_WARNING("AooSink: wrong sink ID!");
-        return kAooErrorUnknown;
+        return kAooErrorBadArgument;
     }
 
     ip_address addr((const sockaddr *)address, addrlen);
@@ -371,7 +376,7 @@ AooError AOO_CALL aoo::Sink::handleMessage(
             return handle_data_message(data + onset, size - onset, id, addr);
         default:
             LOG_WARNING("AooSink: unsupported binary message");
-            return kAooErrorUnknown;
+            return kAooErrorNotImplemented;
         }
     } else {
         // OSC message
@@ -394,11 +399,12 @@ AooError AOO_CALL aoo::Sink::handleMessage(
                 return handle_pong_message(msg, addr);
             } else {
                 LOG_WARNING("AooSink: unknown message " << pattern);
+                return kAooErrorNotImplemented;
             }
         } catch (const osc::Exception& e){
             LOG_ERROR("AooSink: exception in handle_message: " << e.what());
+            return kAooErrorBadFormat;
         }
-        return kAooErrorUnknown;
     }
 }
 
@@ -781,7 +787,7 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
     // LATER handle this in the source_desc (e.g. ignoring further messages)
     if (!check_version(version)){
         LOG_ERROR("AooSink: source version not supported");
-        return kAooErrorUnknown;
+        return kAooErrorVersionNotSupported;
     }
 
     AooId stream = (it++)->AsInt32();
@@ -817,7 +823,7 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
 
     if (id < 0){
         LOG_WARNING("AooSink: bad ID for " << kAooMsgStart << " message");
-        return kAooErrorUnknown;
+        return kAooErrorBadArgument;
     }
     // try to find existing source
     // NB: sources can also be added in the network send thread,
@@ -843,7 +849,7 @@ AooError Sink::handle_stop_message(const osc::ReceivedMessage& msg,
 
     if (id < 0){
         LOG_WARNING("AooSink: bad ID for " << kAooMsgStop << " message");
-        return kAooErrorUnknown;
+        return kAooErrorBadArgument;
     }
     // try to find existing source
     source_lock lock(sources_);
@@ -851,7 +857,7 @@ AooError Sink::handle_stop_message(const osc::ReceivedMessage& msg,
     if (src){
         return src->handle_stop(*this, stream);
     } else {
-        return kAooErrorUnknown;
+        return kAooErrorNotFound;
     }
 }
 
@@ -865,7 +871,7 @@ AooError Sink::handle_decline_message(const osc::ReceivedMessage& msg,
 
     if (id < 0){
         LOG_WARNING("AooSink: bad ID for " << kAooMsgDecline << " message");
-        return kAooErrorUnknown;
+        return kAooErrorBadFormat;
     }
     // try to find existing source
     source_lock lock(sources_);
@@ -873,7 +879,7 @@ AooError Sink::handle_decline_message(const osc::ReceivedMessage& msg,
     if (src){
         return src->handle_decline(*this, token);
     } else {
-        return kAooErrorUnknown;
+        return kAooErrorNotFound;
     }
 }
 
@@ -965,7 +971,7 @@ AooError Sink::handle_data_message(const AooByte *msg, int32_t n,
 
 wrong_size:
     LOG_ERROR("AooSink: binary data message too small!");
-    return kAooErrorUnknown;
+    return kAooErrorBadFormat;
 }
 
 AooError Sink::handle_data_packet(net_packet& d, bool binary,
@@ -973,7 +979,7 @@ AooError Sink::handle_data_packet(net_packet& d, bool binary,
 {
     if (id < 0){
         LOG_WARNING("AooSink: bad ID for " << kAooMsgData << " message");
-        return kAooErrorUnknown;
+        return kAooErrorBadArgument;
     }
     // try to find existing source
     // NOTE: sources can also be added in the network send thread,
@@ -1005,7 +1011,7 @@ AooError Sink::handle_ping_message(const osc::ReceivedMessage& msg,
     } else {
         LOG_WARNING("AooSink: couldn't find source " << addr << "|" << id
                     << " for " << kAooMsgPing << " message");
-        return kAooErrorUnknown;
+        return kAooErrorNotFound;
     }
 }
 
@@ -1027,7 +1033,7 @@ AooError Sink::handle_pong_message(const osc::ReceivedMessage& msg,
     } else {
         LOG_WARNING("AooSink: couldn't find source " << addr << "|" << id
                     << " for " << kAooMsgPong << " message");
-        return kAooErrorUnknown;
+        return kAooErrorNotFound;
     }
 }
 
@@ -1081,7 +1087,7 @@ AooError source_desc::get_format(AooFormat &format, size_t size){
             return kAooErrorBadArgument;
         }
     } else {
-        return kAooErrorUnknown;
+        return kAooErrorNotInitialized;
     }
 }
 
@@ -1093,7 +1099,7 @@ AooError source_desc::codec_control(
     if (decoder_){
         return AooDecoder_control(decoder_.get(), ctl, data, size);
     } else {
-        return kAooErrorUnknown;
+        return kAooErrorNotInitialized;
     }
 }
 
@@ -1259,7 +1265,7 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags
         auto c = aoo::find_codec(f.codec);
         if (!c){
             LOG_ERROR("AooSink: codec '" << f.codec << "' not supported!");
-            return kAooErrorUnknown;
+            return kAooErrorNotImplemented;
         }
 
         // copy format header
@@ -1463,7 +1469,7 @@ AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
 #if 1
     if (!decoder_){
         LOG_DEBUG("AooSink: ignore data message");
-        return kAooErrorUnknown;
+        return kAooErrorNotInitialized;
     }
 #else
     assert(decoder_ != nullptr);

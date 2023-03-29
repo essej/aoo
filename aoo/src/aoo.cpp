@@ -207,22 +207,36 @@ Log::~Log() {
 
 const char *aoo_strerror(AooError e){
     switch (e){
-    case kAooErrorUnknown:
+    case kAooErrorUnspecified:
         return "unspecified error";
     case kAooErrorNone:
         return "no error";
     case kAooErrorNotImplemented:
         return "not implemented";
+    case kAooErrorNotPermitted:
+        return "not permitted";
+    case kAooErrorNotInitialized:
+        return "not initialized";
     case kAooErrorBadArgument:
         return "bad argument";
+    case kAooErrorBadFormat:
+        return "bad format";
     case kAooErrorIdle:
         return "idle";
     case kAooErrorOverflow:
         return "overflow";
     case kAooErrorOutOfMemory:
         return "out of memory";
+    case kAooErrorAlreadyExists:
+        return "already exists";
+    case kAooErrorNotFound:
+        return "not found";
     case kAooErrorInsufficientBuffer:
         return "insufficient buffer";
+    case kAooErrorBadState:
+        return "bad state";
+    case kAooErrorSocket:
+        return "socket error";
     case kAooErrorInternal:
         return "internal error";
     case kAooErrorSystem:
@@ -573,7 +587,7 @@ const AooCodecHostInterface * aoo_getCodecHostInterface(void)
 AooError AOO_CALL aoo_registerCodec(const char *name, const AooCodecInterface *codec){
     if (aoo::find_codec(name)) {
         LOG_WARNING("codec " << name << " already registered!");
-        return kAooErrorUnknown;
+        return kAooErrorAlreadyExists;
     }
     aoo::g_codec_list.emplace_back(name, codec);
     LOG_VERBOSE("registered codec '" << name << "'");
