@@ -91,22 +91,27 @@ public:
     virtual AooError AOO_CALL handleClientMessage(
             AooId client, const AooByte *data, AooInt32 size) = 0;
 
+    /* request handling */
+
     /** \brief set request handler (to intercept client requests) */
     virtual AooError AOO_CALL setRequestHandler(
             AooRequestHandler cb, void *user, AooFlag flags) = 0;
 
-    /** \brief accept request
+    /** \brief handle request
+     *
+     * If `result` is `kAooErrorNone`, the request has been handled successfully
+     * and `response` points to the corresponding response structure.
+     *
+     * Otherwise the request has failed or been denied; in this case `response`
+     * is either `NULL` or points to an `AooResponseError` structure for more detailed
+     * information about the error. For example, in the case of `kAooErrorSystem`,
+     * the response may contain an OS-specific error code and error message.
      *
      * \attention The response must be properly initialized with `AOO_RESPONSE_INIT`.
      */
-    virtual AooError AOO_CALL acceptRequest(
+    virtual AooError AOO_CALL handleRequest(
             AooId client, AooId token, const AooRequest *request,
-            AooResponse *response) = 0;
-
-    /** \brief decline request */
-    virtual AooError AOO_CALL declineRequest(
-            AooId client, AooId token, const AooRequest *request,
-            AooError errorCode, const AooChar *errorMessage) = 0;
+            AooError result, AooResponse *response) = 0;
 
     /* push notifications */
 

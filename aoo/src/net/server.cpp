@@ -137,84 +137,80 @@ AooError AOO_CALL aoo::net::Server::setRequestHandler(
     return kAooOk;
 }
 
-AOO_API AooError AooServer_acceptRequest(
-        AooServer *server, AooId client, AooId token,
-        const AooRequest *request, AooResponse *response)
+AOO_API AooError AooServer_handleRequest(
+        AooServer *server, AooId client, AooId token, const AooRequest *request,
+        AooError result, AooResponse *response)
 {
-    return server->acceptRequest(client, token, request, response);
+    return server->handleRequest(client, token, request, result, response);
 }
 
-AooError AOO_CALL aoo::net::Server::acceptRequest(
+AooError AOO_CALL aoo::net::Server::handleRequest(
         AooId client, AooId token, const AooRequest *request,
-        AooResponse *response)
-{
-    // currently all requests that can be intercepted require a response
-    if (!request || !response) {
-        return kAooErrorBadArgument;
-    }
-    // just make sure that request and response match up
-    if (response->type != request->type) {
-        return kAooErrorBadArgument;
-    }
-    // query request needs to handled specially
-    if (request->type == kAooRequestQuery) {
-        do_query(request->query, response->query);
-        return kAooOk; // always succeeds
-    }
-    // client requests
-    auto c = find_client(client);
-    if (c) {
-        switch (request->type) {
-        case kAooRequestLogin:
-            return do_login(*c, token, request->login, response->login);
-        case kAooRequestGroupJoin:
-            return do_group_join(*c, token, request->groupJoin, response->groupJoin);
-        case kAooRequestGroupLeave:
-            return do_group_leave(*c, token, request->groupLeave, response->groupLeave);
-        case kAooRequestGroupUpdate:
-            return do_group_update(*c, token, request->groupUpdate, response->groupUpdate);
-        case kAooRequestUserUpdate:
-            return do_user_update(*c, token, request->userUpdate, response->userUpdate);
-        case kAooRequestCustom:
-            return do_custom_request(*c, token, request->custom, response->custom);
-        default:
-            return kAooErrorUnknown;
-        }
-    } else {
-        return kAooErrorUnknown;
-    }
-}
-
-AOO_API AooError AooServer_declineRequest(
-        AooServer *server,
-        AooId client, AooId token, const AooRequest *request,
-        AooError errorCode, const AooChar *errorMessage)
-{
-    return server->declineRequest(client, token, request, errorCode, errorMessage);
-}
-
-AooError AOO_CALL aoo::net::Server::declineRequest(
-        AooId client, AooId token, const AooRequest *request,
-        AooError errorCode, const AooChar *errorMessage)
+        AooError result, AooResponse *response)
 {
     if (!request) {
         return kAooErrorBadArgument;
     }
-    // query request needs to handled specially
-    if (request->type == kAooRequestQuery) {
-        // for now, just ignore request
-        // TODO think about error response
-        return kAooOk;
-    }
-    // client requests
-    auto c = find_client(client);
-    if (c) {
-        // LATER find a dedicated error code for declined requests
-        c->send_error(*this, token, request->type, kAooErrorUserDefined,
-                      errorCode, errorMessage);
-        return kAooOk;
+    if (result == kAooErrorNone) {
+        // request accepted
+
+        // every request needs a response
+        if (!response) {
+            return kAooErrorBadArgument;
+        }
+        // just make sure that the response matches the request
+        if (response->type != request->type) {
+            return kAooErrorBadArgument;
+        }
+        // query request needs to handled specially
+        if (request->type == kAooRequestQuery) {
+            return do_query(request->query, response->query);
+        }
+        // client requests
+        auto c = find_client(client);
+        if (c) {
+            switch (request->type) {
+            case kAooRequestLogin:
+                return do_login(*c, token, request->login, response->login);
+            case kAooRequestGroupJoin:
+                return do_group_join(*c, token, request->groupJoin, response->groupJoin);
+            case kAooRequestGroupLeave:
+                return do_group_leave(*c, token, request->groupLeave, response->groupLeave);
+            case kAooRequestGroupUpdate:
+                return do_group_update(*c, token, request->groupUpdate, response->groupUpdate);
+            case kAooRequestUserUpdate:
+                return do_user_update(*c, token, request->userUpdate, response->userUpdate);
+            case kAooRequestCustom:
+                return do_custom_request(*c, token, request->custom, response->custom);
+            default:
+                return kAooErrorUnknown;
+            }
+        } else {
+            return kAooErrorUnknown;
+        }
     } else {
-        return kAooErrorUnknown;
+        // request denied
+
+        // query request needs to handled specially
+        if (request->type == kAooRequestQuery) {
+            // for now, just ignore request
+            // TODO think about error response
+            return kAooOk;
+        }
+        // client requests
+        auto c = find_client(client);
+        if (c) {
+            // response must be either AooRequestError or NULL
+            if (response && response->type != kAooRequestError) {
+                return kAooErrorBadArgument;
+            }
+            c->send_error(*this, token, request->type, result,
+                          (const AooResponseError *)response);
+
+            return kAooOk;
+        } else {
+            return kAooErrorUnknown;
+        }
     }
 }
 
@@ -1414,8 +1410,8 @@ void Server::handle_query(const osc::ReceivedMessage& msg,
     }
 }
 
-void Server::do_query(const AooRequestQuery& request,
-                      const AooResponseQuery& response) const {
+AooError Server::do_query(const AooRequestQuery& request,
+                          const AooResponseQuery& response) const {
     sendfn fn(request.replyFunc, request.replyContext);
     ip_address public_addr((const struct sockaddr *)request.replyAddr.data,
                            request.replyAddr.size);
@@ -1429,6 +1425,8 @@ void Server::do_query(const AooRequestQuery& request,
           << public_addr << server_addr << osc::EndMessage;
 
     fn((const AooByte *)reply.Data(), reply.Size(), public_addr);
+
+    return kAooOk; // always succeeds
 }
 
 AooId Server::get_next_client_id(){

@@ -50,13 +50,9 @@ public:
     AooError AOO_CALL setRequestHandler(
             AooRequestHandler cb, void *user, AooFlag flags) override;
 
-    AooError AOO_CALL acceptRequest(
+    AooError AOO_CALL handleRequest(
             AooId client, AooId token, const AooRequest *request,
-            AooResponse *response) override;
-
-    AooError AOO_CALL declineRequest(
-            AooId client, AooId token, const AooRequest *request,
-            AooError errorCode, const AooChar *errorMessage) override;
+            AooError result, AooResponse *response) override;
 
     AooError AOO_CALL notifyClient(
             AooId client, const AooData *data) override;
@@ -152,8 +148,8 @@ private:
     void handle_query(const osc::ReceivedMessage& msg,
                       const ip_address& addr, const sendfn& fn);
 
-    void do_query(const AooRequestQuery& request,
-                  const AooResponseQuery& response) const;
+    AooError do_query(const AooRequestQuery& request,
+                      const AooResponseQuery& response) const;
 
     // TCP
     void handle_ping(const client_endpoint& client, const osc::ReceivedMessage& msg);

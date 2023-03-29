@@ -66,17 +66,13 @@ AOO_API AooError AOO_CALL AooServer_setRequestHandler(
         AooServer *server, AooRequestHandler cb,
         void *user, AooFlag flags);
 
-/** \copydoc AooServer::acceptRequest */
-AOO_API AooError AOO_CALL acceptRequest(
-        AooServer *server,
-        AooId client, AooId token, const AooRequest *request,
-        const AooResponse *response);
+/* request handling */
 
-/** \copydoc AooServer::declineRequest */
-AOO_API AooError AOO_CALL declineRequest(
+/** \copydoc AooServer::handleRequest */
+AOO_API AooError AOO_CALL handleRequest(
         AooServer *server,
         AooId client, AooId token, const AooRequest *request,
-        AooError errorCode, const AooChar *errorMessage);
+        AooError result, const AooResponse *response);
 
 /* push notifications */
 
