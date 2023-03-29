@@ -6,29 +6,6 @@
 namespace aoo {
 namespace net {
 
-//------------------------------ OSC utilities ---------------------------------//
-
-// see comment in "detail.hpp"
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const AooData *md) {
-    if (md) {
-        msg << md->type << osc::Blob(md->data, md->size);
-    } else {
-        msg << kAooDataUnspecified << osc::Blob(msg.Data(), 0); // HACK: do not use nullptr because of memcpy()
-    }
-    return msg;
-}
-
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_host& addr) {
-    msg << addr.name.c_str() << addr.port;
-    return msg;
-}
-
-ip_host osc_read_host(osc::ReceivedMessageArgumentIterator& it) {
-    auto host = (it++)->AsString();
-    auto port = (it++)->AsInt32();
-    return net::ip_host { host, port };
-}
-
 //------------------------ misc ---------------------------//
 
 std::string encrypt(const std::string& input) {

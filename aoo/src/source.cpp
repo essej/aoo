@@ -2200,7 +2200,7 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
     const void *ptr = nullptr;
     osc::osc_bundle_element_size_t size = 0;
 
-    if (msg.ArgumentCount() > 2){
+    if (msg.ArgumentCount() >= 4){
         type = (it++)->AsInt32();
         (it++)->AsBlob(ptr, size);
     }

@@ -878,7 +878,7 @@ AooError Server::do_login(client_endpoint& client, AooId token,
 
     msg << osc::BeginMessage(kAooMsgClientLogin)
         << token << kAooErrorNone << client.id()
-        << (int32_t)flags << response.metadata
+        << (int32_t)flags << metadata_view(response.metadata)
         << osc::EndMessage;
 
     client.send_message(msg);
@@ -1029,7 +1029,8 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
         << token << kAooErrorNone
         << grp->id() << usr->id()
         << grp->metadata() << usr->metadata()
-        << response.privateMetadata << group_relay // *not* group->relay()!
+        << metadata_view(response.privateMetadata)
+        << group_relay // *not* group->relay()!
         << osc::EndMessage;
 
     client.send_message(msg);
@@ -1273,7 +1274,7 @@ AooError Server::do_custom_request(client_endpoint& client, AooId token,
 
     msg << osc::BeginMessage(kAooMsgClientRequest)
         << token << kAooErrorNone << (int32_t)response.flags
-        << &response.data << osc::EndMessage;
+        << metadata_view(&response.data) << osc::EndMessage;
 
     client.send_message(msg);
 

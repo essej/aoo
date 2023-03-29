@@ -157,9 +157,16 @@ using ip_address_list = std::vector<ip_address, aoo::allocator<ip_address>>;
 using ip_address_list = std::vector<ip_address>;
 #endif
 
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_host& addr);
+inline osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_host& addr) {
+    msg << addr.name.c_str() << addr.port;
+    return msg;
+}
 
-ip_host osc_read_host(osc::ReceivedMessageArgumentIterator& it);
+inline ip_host osc_read_host(osc::ReceivedMessageArgumentIterator& it) {
+    auto host = (it++)->AsString();
+    auto port = (it++)->AsInt32();
+    return net::ip_host { host, port };
+}
 
 } // namespace net
 } // namespace aoo

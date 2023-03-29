@@ -75,45 +75,6 @@ int32_t get_random_id(){
 #endif
 }
 
-//------------------------------ OSC utilities ---------------------------------//
-
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const aoo::metadata& md) {
-    if (md.size() > 0) {
-        msg << md.type() << osc::Blob(md.data(), md.size());
-    } else {
-        msg << kAooDataUnspecified << osc::Blob(msg.Data(), 0); // HACK: do not use nullptr because of memcpy()
-    }
-    return msg;
-}
-
-AooData osc_read_metadata(osc::ReceivedMessageArgumentIterator& it) {
-    auto type = (it++)->AsInt32();
-    const void *blobdata;
-    osc::osc_bundle_element_size_t blobsize;
-    (it++)->AsBlob(blobdata, blobsize);
-    if (blobsize) {
-        return AooData { type, (const AooByte *)blobdata, (AooSize)blobsize };
-    } else {
-        return AooData { type, nullptr, 0 };
-    }
-}
-
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_address& addr) {
-    // send *unmapped* addresses in case the client is IPv4 only
-    if (addr.valid()) {
-        msg << addr.name_unmapped() << (int32_t)addr.port();
-    } else {
-        msg << "" << (int32_t)0;
-    }
-    return msg;
-}
-
-ip_address osc_read_address(osc::ReceivedMessageArgumentIterator& it, ip_address::ip_type type) {
-    auto host = (it++)->AsString();
-    auto port = (it++)->AsInt32();
-    return ip_address(host, port, type);
-}
-
 //----------------------- logging --------------------------//
 
 #if CERR_LOG_FUNCTION

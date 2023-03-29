@@ -31,16 +31,6 @@ namespace aoo {
 template<typename T>
 using parameter = sync::relaxed_atomic<T>;
 
-//------------------ OSC ---------------------------//
-
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_address& addr);
-
-ip_address osc_read_address(osc::ReceivedMessageArgumentIterator& it, ip_address::ip_type type = ip_address::Unspec);
-
-//---------------- codec ---------------------------//
-
-const struct AooCodecInterface * find_codec(const char * name);
-
 //--------------- helper functions ----------------//
 
 AooId get_random_id();
@@ -48,6 +38,22 @@ AooId get_random_id();
 uint32_t make_version();
 
 bool check_version(uint32_t version);
+
+//------------- common data structures ------------//
+
+template<typename T>
+using vector = std::vector<T, aoo::allocator<T>>;
+
+using string = std::basic_string<char, std::char_traits<char>, aoo::allocator<char>>;
+
+template<typename T>
+using spsc_queue = lockfree::spsc_queue<T, aoo::allocator<T>>;
+
+template<typename T>
+using unbounded_mpsc_queue = lockfree::unbounded_mpsc_queue<T, aoo::allocator<T>>;
+
+template<typename T>
+using rcu_list = lockfree::rcu_list<T, aoo::allocator<T>>;
 
 //-------------------- sendfn-------------------------//
 
@@ -67,6 +73,25 @@ private:
     AooSendFunc fn_;
     void *user_;
 };
+
+//---------------- IP address ----------------------//
+
+inline osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_address& addr) {
+    // send *unmapped* addresses in case the client is IPv4 only
+    if (addr.valid()) {
+        msg << addr.name_unmapped() << (int32_t)addr.port();
+    } else {
+        msg << "" << (int32_t)0;
+    }
+    return msg;
+}
+
+inline ip_address osc_read_address(osc::ReceivedMessageArgumentIterator& it,
+                                   ip_address::ip_type type = ip_address::Unspec) {
+    auto host = (it++)->AsString();
+    auto port = (it++)->AsInt32();
+    return ip_address(host, port, type);
+}
 
 //---------------- endpoint ------------------------//
 
@@ -128,21 +153,23 @@ inline void endpoint::send(const AooByte *data, AooSize size, const sendfn& fn) 
 }
 #endif
 
-//------------- common data structures ------------//
+//---------------- codec ---------------------------//
 
-template<typename T>
-using vector = std::vector<T, aoo::allocator<T>>;
+const struct AooCodecInterface * find_codec(const char * name);
 
-using string = std::basic_string<char, std::char_traits<char>, aoo::allocator<char>>;
+struct encoder_deleter {
+    void operator() (void *x) const {
+        auto c = (AooCodec *)x;
+        c->cls->encoderFree(c);
+    }
+};
 
-template<typename T>
-using spsc_queue = lockfree::spsc_queue<T, aoo::allocator<T>>;
-
-template<typename T>
-using unbounded_mpsc_queue = lockfree::unbounded_mpsc_queue<T, aoo::allocator<T>>;
-
-template<typename T>
-using rcu_list = lockfree::rcu_list<T, aoo::allocator<T>>;
+struct decoder_deleter {
+    void operator() (void *x) const {
+        auto c = (AooCodec *)x;
+        c->cls->decoderFree(c);
+    }
+};
 
 //------------------- format -------------------------//
 
@@ -157,22 +184,6 @@ struct rt_format_deleter {
     void operator() (void *x) const {
         auto f = static_cast<AooFormat *>(x);
         aoo::rt_deallocate(x, f->structSize);
-    }
-};
-
-//------------------- codec -----------------------//
-
-struct encoder_deleter {
-    void operator() (void *x) const {
-        auto c = (AooCodec *)x;
-        c->cls->encoderFree(c);
-    }
-};
-
-struct decoder_deleter {
-    void operator() (void *x) const {
-        auto c = (AooCodec *)x;
-        c->cls->decoderFree(c);
     }
 };
 
@@ -194,16 +205,42 @@ private:
     std::vector<AooByte> data_;
 };
 
-// HACK: declare the AooData overload in "net" namespace and then import into "aoo"
-// namespace to prevent the compiler from picking OutboundPacketStream::operator<<bool
-namespace net {
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const AooData *md);
-} // net
-osc::OutboundPacketStream& net::operator<<(osc::OutboundPacketStream& msg, const AooData *md);
 
-osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const aoo::metadata& md);
+struct metadata_view {
+    metadata_view() :
+        type(kAooDataUnspecified), data(nullptr), size(0) {}
+    metadata_view(const aoo::metadata& md)
+        : type(md.type()), data(md.data()), size(md.size()) {}
+    metadata_view (const AooData *md)
+        : type(md ? md->type : kAooDataUnspecified),
+          data(md ? md->data : nullptr),
+          size(md ? md->size : 0) {}
 
-AooData osc_read_metadata(osc::ReceivedMessageArgumentIterator& it);
+    AooDataType type;
+    const AooByte *data;
+    AooSize size;
+};
+
+inline osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const metadata_view& md) {
+    if (md.size > 0) {
+        msg << md.type << osc::Blob(md.data, md.size);
+    } else {
+        msg << kAooDataUnspecified << osc::Blob(nullptr, 0);
+    }
+    return msg;
+}
+
+inline AooData osc_read_metadata(osc::ReceivedMessageArgumentIterator& it) {
+    auto type = (it++)->AsInt32();
+    const void *blobdata;
+    osc::osc_bundle_element_size_t blobsize;
+    (it++)->AsBlob(blobdata, blobsize);
+    if (blobsize) {
+        return AooData { type, (const AooByte *)blobdata, (AooSize)blobsize };
+    } else {
+        return AooData { type, nullptr, 0 };
+    }
+}
 
 inline AooSize flat_metadata_size(const AooData& data){
     return sizeof(data) + data.size;

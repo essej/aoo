@@ -107,7 +107,7 @@ void AooServer::handleEvent(const AooEvent *event){
         auto& e = event->serverClientLogin;
         aoo::ip_address addr;
         aoo::socket_peer(e.sockfd, addr);
-        msg << "/client/add" << e.id << addr.address() << addr.port();
+        msg << "/client/add" << e.id << addr.name() << addr.port();
         break;
     }
     case kAooEventServerClientRemove:
@@ -130,7 +130,8 @@ void AooServer::handleEvent(const AooEvent *event){
     case kAooEventServerGroupJoin:
     {
         auto& e = event->serverGroupJoin;
-        msg << "/group/join" << e.groupId << e.userId << e.userName << e.clientId;
+        msg << "/group/join" << e.groupId << e.userId
+            << e.userName << e.clientId;
         break;
     }
     case kAooEventServerGroupLeave:
