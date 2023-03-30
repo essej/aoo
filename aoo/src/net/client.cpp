@@ -935,14 +935,14 @@ void Client::perform(const login_cmd& cmd) {
     msg << osc::BeginMessage(kAooMsgServerLogin)
         << token << (int32_t)make_version()
         << encrypt(connection_->pwd_).c_str()
-        << connection_->metadata_
-    // addresses
+    // IP addresses
         << (int32_t)count
         << local_addr_;
     for (auto& addr : cmd.public_ip_){
         msg << addr;
     }
-    msg << osc::EndMessage;
+    msg << connection_->metadata_
+        << osc::EndMessage;
 
     send_server_message(msg);
 }
@@ -999,9 +999,10 @@ void Client::perform(const group_join_cmd& cmd)
     auto msg = start_server_message(cmd.group_md_.size() + cmd.user_md_.size());
 
     msg << osc::BeginMessage(kAooMsgServerGroupJoin) << token
-        << cmd.group_name_.c_str() << encrypt(cmd.group_pwd_).c_str() << cmd.group_md_
-        << cmd.user_name_.c_str() << encrypt(cmd.user_pwd_).c_str() << cmd.user_md_
-        << cmd.relay_ << osc::EndMessage;
+        << cmd.group_name_.c_str() << encrypt(cmd.group_pwd_).c_str()
+        << cmd.user_name_.c_str() << encrypt(cmd.user_pwd_).c_str()
+        << cmd.group_md_ << cmd.user_md_ << cmd.relay_
+        << osc::EndMessage;
 
     send_server_message(msg);
 }
@@ -1510,18 +1511,21 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
     auto group_id = (it++)->AsInt32();
     auto user_name = (it++)->AsString();
     auto user_id = (it++)->AsInt32();
-    auto metadata = osc_read_metadata(it);
     // collect IP addresses
     auto count = (it++)->AsInt32();
     ip_address_list addrlist;
     while (count--){
         // force IP protocol!
+        // TODO: handle IPv6 addresses on IPv4 clients!
+        // We can't convert them to IPv4, but we might need them
+        // as identifiers if we want to relay...
         auto addr = osc_read_address(it, udp_client_.type());
         // NB: filter local addresses so that we don't accidentally ping ourselves!
         if (addr.valid() && addr != local_addr_) {
             addrlist.push_back(addr);
         }
     }
+    auto metadata = osc_read_metadata(it);
     auto relay = osc_read_host(it);
 
     peer_lock lock(peers_);

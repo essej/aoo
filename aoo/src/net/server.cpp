@@ -830,12 +830,12 @@ void Server::handle_login(client_endpoint& client, const osc::ReceivedMessage& m
     auto token = (AooId)(it++)->AsInt32();
     auto version = (uint32_t)(it++)->AsInt32();
     auto pwd = (it++)->AsString();
-    auto metadata = osc_read_metadata(it);
     // IP addresses
     auto count = (it++)->AsInt32();
     for (int i = 0; i < count; ++i) {
         client.add_public_address(osc_read_address(it));
     }
+    auto metadata = osc_read_metadata(it);
 
     AooRequestLogin request;
     AOO_REQUEST_INIT(&request, Login, metadata);
@@ -897,9 +897,9 @@ void Server::handle_group_join(client_endpoint& client, const osc::ReceivedMessa
     auto token = (AooId)(it++)->AsInt32();
     auto group_name = (it++)->AsString();
     auto group_pwd = (it++)->AsString();
-    auto group_md = osc_read_metadata(it);
     auto user_name = (it++)->AsString();
     auto user_pwd = (it++)->AsString();
+    auto group_md = osc_read_metadata(it);
     auto user_md = osc_read_metadata(it);
     AooIpEndpoint relay;
     relay.hostName = (it++)->AsString();

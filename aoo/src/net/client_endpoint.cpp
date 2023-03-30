@@ -141,13 +141,14 @@ void client_endpoint::send_peer_add(Server& server, const group& grp, const user
 
     msg << osc::BeginMessage(kAooMsgClientPeerJoin)
         << grp.name().c_str() << grp.id()
-        << usr.name().c_str() << usr.id() << usr.metadata()
-    // addresses
+        << usr.name().c_str() << usr.id()
+    // IP addresses
         << (int32_t)client.public_addresses().size();
     for (auto& addr : client.public_addresses()){
         msg << addr;
     }
-    msg << usr.relay_addr() << osc::EndMessage;
+    msg << usr.metadata() << usr.relay_addr()
+        << osc::EndMessage;
 
     send_message(msg);
 }
