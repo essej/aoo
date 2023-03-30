@@ -1780,7 +1780,7 @@ AooError udp_client::handle_osc_message(Client& client, const AooByte *data, int
         } else if (type == kAooMsgTypeClient){
             // server message
             if (is_server_address(addr)) {
-                handle_server_message(client, msg, onset);
+                handle_server_message(client, msg, addr, onset);
             } else {
                 LOG_WARNING("AooClient: got OSC message from unknown server " << addr);
             }
@@ -1884,7 +1884,8 @@ void udp_client::send_server_message(const osc::OutboundPacketStream& msg, const
     fn((const AooByte *)msg.Data(), msg.Size(), addr);
 }
 
-void udp_client::handle_server_message(Client& client, const osc::ReceivedMessage& msg, int onset) {
+void udp_client::handle_server_message(Client& client, const osc::ReceivedMessage& msg,
+                                       const ip_address& udp_addr, int onset) {
     auto pattern = msg.AddressPattern() + onset;
     LOG_DEBUG("AooClient: got server OSC message " << pattern);
 
@@ -1911,13 +1912,7 @@ void udp_client::handle_server_message(Client& client, const osc::ReceivedMessag
                     // use UDP server address
                     // TODO: always require the server to send the address?
                     scoped_lock lock(mutex_);
-                    if (!server_addrlist_.empty()) {
-                        // TODO: use the actual sender address?
-                        tcp_addr = server_addrlist_.front();
-                    } else {
-                        LOG_ERROR("AooClient: no UDP server address");
-                        return;
-                    }
+                    tcp_addr = udp_addr;
                 }
 
                 scoped_lock lock(mutex_);
