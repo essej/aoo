@@ -791,7 +791,6 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
     }
 
     AooId stream = (it++)->AsInt32();
-    AooFlag flags = (it++)->AsInt32();
     AooId format_id = (it++)->AsInt32();
 
     // get stream format
@@ -834,7 +833,7 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
     if (!src){
         src = add_source(addr, id);
     }
-    return src->handle_start(*this, stream, flags, format_id, f,
+    return src->handle_start(*this, stream, format_id, f,
                              (const AooByte *)extension, size,
                              (md.data ? &md : nullptr));
 }
@@ -1225,12 +1224,11 @@ void source_desc::add_xrun(double nblocks){
     xrunblocks_ += nblocks;
 }
 
-// /aoo/sink/<id>/start <src> <version> <stream_id> <flags>
-// <lastformat> <nchannels> <samplerate> <blocksize> <codec> <options> <metadata>
+// /aoo/sink/<id>/start <src> <version> <stream_id> <lastformat>
+// <nchannels> <samplerate> <blocksize> <codec> <options> <metadata>
 
-AooError source_desc::handle_start(const Sink& s, int32_t stream, uint32_t flags,
-                                   int32_t format_id, const AooFormat& f,
-                                   const AooByte *extension, int32_t size,
+AooError source_desc::handle_start(const Sink& s, int32_t stream, int32_t format_id,
+                                   const AooFormat& f, const AooByte *extension, int32_t size,
                                    const AooData *md) {
     LOG_DEBUG("AooSink: handle start (" << stream << ")");
     auto state = state_.load(std::memory_order_acquire);

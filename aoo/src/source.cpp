@@ -1315,12 +1315,8 @@ void send_start_msg(const endpoint& ep, int32_t id, int32_t stream, int32_t last
     snprintf(address, sizeof(address), "%s/%d%s",
              kAooMsgDomain kAooMsgSink, ep.id, kAooMsgStart);
 
-    // stream specific flags (for future use)
-    AooFlag flags = 0;
-
     msg << osc::BeginMessage(address) << id << (int32_t)make_version()
-        << stream << (int32_t)flags << lastformat
-        << f.numChannels << f.sampleRate << f.blockSize
+        << stream << lastformat << f.numChannels << f.sampleRate << f.blockSize
         << f.codec << osc::Blob(extension, size);
     if (metadata) {
         msg << metadata->type << osc::Blob(metadata->data, metadata->size);

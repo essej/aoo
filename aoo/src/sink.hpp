@@ -153,9 +153,8 @@ public:
     // methods
     void reset(const Sink& s);
 
-    AooError handle_start(const Sink& s, int32_t stream, uint32_t flags,
-                          int32_t format_id, const AooFormat& f,
-                          const AooByte *extension, int32_t size,
+    AooError handle_start(const Sink& s, int32_t stream, int32_t format_id,
+                          const AooFormat& f, const AooByte *extension, int32_t size,
                           const AooData *md);
 
     AooError handle_stop(const Sink& s, int32_t stream);
