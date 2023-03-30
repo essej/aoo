@@ -790,11 +790,12 @@ bool Client::handle_peer_osc_message(const osc::ReceivedMessage& msg, int onset,
         auto it = msg.ArgumentsBegin();
         auto group = (it++)->AsInt32();
         auto user = (it++)->AsInt32();
+        auto remaining = msg.ArgumentCount() - 2;
         // forward to matching peer
         peer_lock lock(peers_);
         for (auto& p : peers_) {
             if (p.match(group, user)) {
-                p.handle_osc_message(*this, pattern, it, addr);
+                p.handle_osc_message(*this, pattern, it, remaining, addr);
                 return true;
             }
         }

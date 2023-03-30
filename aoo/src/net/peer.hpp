@@ -80,7 +80,7 @@ public:
 
     void handle_osc_message(Client& client, const char *pattern,
                             osc::ReceivedMessageArgumentIterator it,
-                            const ip_address& addr);
+                            int remaining, const ip_address& addr);
 
     void handle_bin_message(Client& client, const AooByte *data,
                             AooSize size, int onset, const ip_address& addr);
@@ -99,7 +99,7 @@ private:
 
     void do_handle_client_message(Client& client, const message_packet& p, AooFlag flags);
 
-    void handle_ack(Client& client, osc::ReceivedMessageArgumentIterator it);
+    void handle_ack(Client& client, osc::ReceivedMessageArgumentIterator it, int remaining);
 
     void handle_ack(Client& client, const AooByte *data, AooSize size);
 

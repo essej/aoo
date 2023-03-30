@@ -417,7 +417,7 @@ void peer::send_ack(const message_ack &ack, const sendfn& fn) {
         osc::OutboundPacketStream msg(buf, sizeof(buf));
         msg << osc::BeginMessage(kAooMsgPeerAck)
             << group_id_ << local_id_
-            << (int32_t)1 << ack.seq << ack.frame
+            << ack.seq << ack.frame
             << osc::EndMessage;
 
         send(msg, fn);
@@ -426,7 +426,7 @@ void peer::send_ack(const message_ack &ack, const sendfn& fn) {
 
 void peer::handle_osc_message(Client& client, const char *pattern,
                               osc::ReceivedMessageArgumentIterator it,
-                              const ip_address& addr) {
+                              int remaining, const ip_address& addr) {
     LOG_DEBUG("AooClient: got OSC message " << pattern << " from " << *this);
 
     if (!strcmp(pattern, kAooMsgPing)) {
@@ -436,7 +436,7 @@ void peer::handle_osc_message(Client& client, const char *pattern,
     } else if (!strcmp(pattern, kAooMsgMessage)) {
         handle_client_message(client, it);
     } else if (!strcmp(pattern, kAooMsgAck)) {
-        handle_ack(client, it);
+        handle_ack(client, it, remaining);
     } else {
         LOG_WARNING("AooClient: got unknown message "
                     << pattern << " from " << *this);
@@ -745,9 +745,8 @@ void peer::do_handle_client_message(Client& client, const message_packet& p, Aoo
     }
 }
 
-void peer::handle_ack(Client &client, osc::ReceivedMessageArgumentIterator it) {
-    auto count = (it++)->AsInt32();
-    while (count--) {
+void peer::handle_ack(Client &client, osc::ReceivedMessageArgumentIterator it, int remaining) {
+    for (; remaining >= 2; remaining -= 2) {
         auto seq = (it++)->AsInt32();
         auto frame = (it++)->AsInt32();
     #if AOO_DEBUG_CLIENT_MESSAGE
