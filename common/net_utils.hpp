@@ -32,7 +32,8 @@ public:
         IPv6
     };
 
-    static std::vector<ip_address> resolve(const std::string& host, uint16_t port, ip_type type);
+    static std::vector<ip_address> resolve(const std::string& host,
+                                           uint16_t port, ip_type type);
 
     ip_address();
     ip_address(socklen_t size);
@@ -68,6 +69,10 @@ public:
     ip_type type() const;
 
     bool is_ipv4_mapped() const;
+
+    ip_address ipv4_mapped() const;
+
+    ip_address unmapped() const;
 
     const struct sockaddr *address() const {
         return (const struct sockaddr *)&address_;

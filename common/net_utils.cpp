@@ -444,13 +444,36 @@ ip_address::ip_type ip_address::type() const {
 bool ip_address::is_ipv4_mapped() const {
 #if AOO_USE_IPv6
     if (address()->sa_family == AF_INET6){
-        auto addr = reinterpret_cast<const sockaddr_in6 *>(address());
-        auto a = (uint16_t *)addr->sin6_addr.s6_addr;
-        return (a[0] == 0) && (a[1] == 0) && (a[2] == 0) && (a[3] == 0) &&
-               (a[4] == 0) && (a[5] == 0xffff);
+        auto addr = reinterpret_cast<const sockaddr_in6 *>(&address_);
+        auto w = (uint16_t *)addr->sin6_addr.s6_addr;
+        return (w[0] == 0) && (w[1] == 0) && (w[2] == 0) && (w[3] == 0) &&
+               (w[4] == 0) && (w[5] == 0xffff);
     }
 #endif
     return false;
+}
+
+ip_address ip_address::ipv4_mapped() const {
+#if AOO_USE_IPv6
+    if (type() == IPv4) {
+        auto addr = reinterpret_cast<const sockaddr_in *>(&address_);
+        uint16_t w[8] = { 0, 0, 0, 0, 0, 0xffff };
+        memcpy(&w[6], &addr->sin_addr.s_addr, 4);
+        return ip_address((const AooByte *)&w, 16, port(), IPv4);
+    }
+#endif
+    return *this;
+}
+
+ip_address ip_address::unmapped() const {
+#if AOO_USE_IPv6
+    if (is_ipv4_mapped()){
+        auto addr = reinterpret_cast<const sockaddr_in6 *>(&address_);
+        auto w = (uint16_t *)addr->sin6_addr.s6_addr;
+        return ip_address((const AooByte *)&w[6], 4, port(), IPv4);
+    }
+#endif
+    return *this;
 }
 
 //------------------------ socket ----------------------------//
