@@ -1490,12 +1490,12 @@ void Client::handle_user_changed(const osc::ReceivedMessage& msg) {
     LOG_VERBOSE("AooClient: user " << user << " has been updated");
 }
 
-static osc::ReceivedPacket unwrap_message(const osc::ReceivedMessage& msg,
-    ip_address& addr, ip_address::ip_type type)
+static osc::ReceivedPacket unwrap_message(const osc::ReceivedMessage& msg, ip_address& addr)
 {
     auto it = msg.ArgumentsBegin();
 
-    addr = osc_read_address(it, type);
+    // NB: read as is! the address is only used as an identifier
+    addr = osc_read_address(it);
 
     const void *blobData;
     osc::osc_bundle_element_size_t blobSize;
@@ -1782,7 +1782,7 @@ AooError udp_client::handle_osc_message(Client& client, const AooByte *data, int
             }
         } else if (type == kAooMsgTypeRelay){
             ip_address src;
-            auto packet = unwrap_message(msg, src, type_);
+            auto packet = unwrap_message(msg, src);
             auto msg = (const AooByte *)packet.Contents();
             auto msgsize = packet.Size();
         #if AOO_DEBUG_RELAY
@@ -1901,12 +1901,14 @@ void udp_client::handle_server_message(Client& client, const osc::ReceivedMessag
                 port = (it++)->AsInt32();
                 ip_address tcp_addr;
                 if (!ip.empty()) {
+                    // TODO: support host names?
                     tcp_addr = ip_address(ip, port, type());
                 } else {
                     // use UDP server address
-                    // TODO later always require the server to send the address
+                    // TODO: always require the server to send the address?
                     scoped_lock lock(mutex_);
                     if (!server_addrlist_.empty()) {
+                        // TODO: use the actual sender address?
                         tcp_addr = server_addrlist_.front();
                     } else {
                         LOG_ERROR("AooClient: no UDP server address");
