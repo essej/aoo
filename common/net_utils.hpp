@@ -32,15 +32,15 @@ public:
         IPv6
     };
 
-    static std::vector<ip_address> resolve(const std::string& host,
-                                           uint16_t port, ip_type type);
+    static std::vector<ip_address> resolve(const std::string& host, uint16_t port,
+                                           ip_type type, bool ipv4mapped = false);
 
     ip_address();
     ip_address(socklen_t size);
     ip_address(const struct sockaddr *sa, socklen_t len);
     ip_address(const AooSockAddr& addr);
     ip_address(uint16_t port, ip_type type); // "any" address
-    ip_address(const std::string& ip, uint16_t port, ip_type type);
+    ip_address(const std::string& ip, uint16_t port, ip_type type = ip_type::Unspec);
     ip_address(const AooByte *bytes, AooSize size, uint16_t port, ip_type type);
 
     ip_address(const ip_address& other);
@@ -63,6 +63,8 @@ public:
     uint16_t port() const;
 
     const AooByte* address_bytes() const;
+
+    size_t address_size() const;
 
     bool valid() const;
 

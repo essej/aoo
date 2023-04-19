@@ -56,7 +56,9 @@ ip_address::ip_address(const struct sockaddr *sa, socklen_t len){
     } else {
         clear();
     }
+#if 0
     check();
+#endif
 }
 
 ip_address::ip_address(const AooSockAddr &addr)
@@ -99,7 +101,9 @@ ip_address::ip_address(const AooByte *bytes, AooSize size,
         clear();
         break;
     }
+#if 0
     check();
+#endif
 }
 
 void ip_address::clear(){
@@ -125,8 +129,8 @@ void ip_address::resize(socklen_t size) {
     length_ = size;
 }
 
-std::vector<ip_address> ip_address::resolve(const std::string &host,
-                                            uint16_t port, ip_type type){
+std::vector<ip_address> ip_address::resolve(const std::string &host, uint16_t port,
+                                            ip_type type, bool ipv4mapped){
     std::vector<ip_address> result;
 
     if (host.empty()) {
@@ -157,16 +161,19 @@ std::vector<ip_address> ip_address::resolve(const std::string &host,
     }
 
     hints.ai_flags =
-#if AOO_USE_IPv6
-    #ifdef AI_ALL
-        AI_ALL |        // both IPv4 and IPv6 addresses
-    #endif
-    #ifdef AI_V4MAPPED
-        AI_V4MAPPED |   // fallback to IPv4-mapped IPv6 addresses
-    #endif
-#endif
+        AI_ADDRCONFIG | // check if we have a matching adapter
         AI_NUMERICSERV | // we use a port number
         AI_PASSIVE;      // listen to any addr if hostname is NULL
+#if AOO_USE_IPv6
+    if (ipv4mapped) {
+    #ifdef AI_V4MAPPED
+        hints.ai_flags |= AI_V4MAPPED; // fallback to IPv4-mapped IPv6 addresses
+    #endif
+    #ifdef AI_ALL
+        hints.ai_flags |= AI_ALL; // both IPv6 and IPv4-mapped addresses
+    #endif
+    }
+#endif
 
     char portstr[10]; // largest port is 65535
     snprintf(portstr, sizeof(portstr), "%d", port);
@@ -235,7 +242,9 @@ ip_address::ip_address(uint16_t port, ip_type type) {
         // fail
         clear();
     }
+#if 0
     check();
+#endif
 }
 
 ip_address::ip_address(const std::string& ip, uint16_t port, ip_type type) {
@@ -264,8 +273,7 @@ ip_address::ip_address(const std::string& ip, uint16_t port, ip_type type) {
             // doesn't seem to work with AI_V4MAPPED (at least on Windows)
             freeaddrinfo(ailist);
             std::string mapped = "::ffff:" + ip;
-            err = getaddrinfo(mapped.c_str(),
-                              portstr, &hints, &ailist);
+            err = getaddrinfo(mapped.c_str(), portstr, &hints, &ailist);
             if (err != 0){
                 // fail
                 clear();
@@ -281,7 +289,9 @@ ip_address::ip_address(const std::string& ip, uint16_t port, ip_type type) {
         // fail
         clear();
     }
+#if 0
     check();
+#endif
 }
 
 ip_address::ip_address(const ip_address& other){
@@ -291,7 +301,9 @@ ip_address::ip_address(const ip_address& other){
     } else {
         clear();
     }
+#if 0
     check();
+#endif
 }
 
 ip_address& ip_address::operator=(const ip_address& other){
@@ -301,7 +313,9 @@ ip_address& ip_address::operator=(const ip_address& other){
     } else {
         clear();
     }
+#if 0
     check();
+#endif
     return *this;
 }
 
@@ -424,6 +438,17 @@ const AooByte* ip_address::address_bytes() const {
     }
 }
 
+size_t ip_address::address_size() const {
+    switch (type()) {
+    case IPv6:
+        return 16;
+    case IPv4:
+        return 4;
+    default:
+        return 0;
+    }
+}
+
 bool ip_address::valid() const {
     return address()->sa_family != AF_UNSPEC;
 }
@@ -459,7 +484,7 @@ ip_address ip_address::ipv4_mapped() const {
         auto addr = reinterpret_cast<const sockaddr_in *>(&address_);
         uint16_t w[8] = { 0, 0, 0, 0, 0, 0xffff };
         memcpy(&w[6], &addr->sin_addr.s_addr, 4);
-        return ip_address((const AooByte *)&w, 16, port(), IPv4);
+        return ip_address((const AooByte *)&w, 16, port(), IPv6);
     }
 #endif
     return *this;
@@ -580,6 +605,7 @@ int socket_udp(uint16_t port)
         if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&val, sizeof(val))){
             fprintf(stderr, "socket_udp: couldn't set IPV6_V6ONLY");
             fflush(stderr);
+            // TODO: fall back to IPv4?
         }
     } else {
         sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -616,6 +642,7 @@ int socket_tcp(uint16_t port)
         if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&val, sizeof(val))){
             fprintf(stderr, "socket_udp: couldn't set IPV6_V6ONLY");
             fflush(stderr);
+            // TODO: fall back to IPv4?
         }
     } else {
         sock = socket(AF_INET, SOCK_STREAM, 0);
