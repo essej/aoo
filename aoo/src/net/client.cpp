@@ -1063,7 +1063,7 @@ void Client::perform(const group_join_cmd& cmd)
 void Client::handle_response(const group_join_cmd& cmd,
                              const osc::ReceivedMessage& msg) {
     auto it = msg.ArgumentsBegin();
-    auto token = (it++)->AsInt32(); // skip
+    (it++)->AsInt32(); // skip token
     auto result = (it++)->AsInt32();
     if (result == kAooErrorNone) {
         auto group = (it++)->AsInt32();
@@ -1145,7 +1145,7 @@ void Client::perform(const group_leave_cmd& cmd)
 void Client::handle_response(const group_leave_cmd& cmd,
                              const osc::ReceivedMessage& msg) {
     auto it = msg.ArgumentsBegin();
-    auto token = (it++)->AsInt32(); // skip
+    (it++)->AsInt32(); // skip token
     auto result = (it++)->AsInt32();
     if (result == kAooErrorNone) {
         // remove all peers from this group
@@ -1201,7 +1201,7 @@ void Client::perform(const group_update_cmd& cmd) {
 void Client::handle_response(const group_update_cmd& cmd,
                              const osc::ReceivedMessage& msg) {
     auto it = msg.ArgumentsBegin();
-    auto token = (it++)->AsInt32(); // skip
+    (it++)->AsInt32(); // skip token
     auto result = (it++)->AsInt32();
     if (result == kAooErrorNone) {
         AooResponseGroupUpdate response;
@@ -1240,7 +1240,7 @@ void Client::perform(const user_update_cmd& cmd) {
 void Client::handle_response(const user_update_cmd& cmd,
                              const osc::ReceivedMessage& msg) {
     auto it = msg.ArgumentsBegin();
-    auto token = (it++)->AsInt32(); // skip
+    (it++)->AsInt32(); // skip token
     auto result = (it++)->AsInt32();
     if (result == kAooErrorNone) {
         AooResponseUserUpdate response;
@@ -1481,7 +1481,7 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
     // make sure that state hasn't changed
     if (connection_) {
         auto it = msg.ArgumentsBegin();
-        auto token = (AooId)(it++)->AsInt32(); // skip
+        (it++)->AsInt32(); // skip token
         auto result = (it++)->AsInt32();
         if (result == kAooErrorNone){
             auto id = (AooId)(it++)->AsInt32();
