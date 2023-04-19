@@ -413,25 +413,18 @@ const AooChar * AOO_CALL aoo_dataTypeToString(AooDataType type) {
 
 namespace aoo {
 
-bool check_version(uint32_t version){
-    auto major = (version >> 24) & 255;
-#if 0
-    auto minor = (version >> 16) & 255;
-    auto bugfix = (version >> 8) & 255;
-#endif
-
-    if (major != kAooVersionMajor){
-        return false;
+AooError check_version(const char *version) {
+    int major, minor;
+    if (sscanf(version, "%d.%d", &major, &minor) != 2) {
+        return kAooErrorBadFormat;
     }
+    // LOG_DEBUG("major version: " << major << ", minor version: " << minor);
 
-    return true;
-}
-
-uint32_t make_version(){
-    // make version: major, minor, bugfix, [protocol]
-    return ((uint32_t)kAooVersionMajor << 24)
-            | ((uint32_t)kAooVersionMinor << 16)
-            | ((uint32_t)kAooVersionPatch << 8);
+    if (major == kAooVersionMajor){
+        return kAooOk;
+    } else {
+        return kAooErrorVersionNotSupported;
+    }
 }
 
 //------------------- allocator ------------------//

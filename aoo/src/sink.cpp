@@ -782,12 +782,16 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
     auto it = msg.ArgumentsBegin();
 
     AooId id = (it++)->AsInt32();
-    int32_t version = (it++)->AsInt32();
+    auto version = (it++)->AsString();
 
     // LATER handle this in the source_desc (e.g. ignoring further messages)
-    if (!check_version(version)){
-        LOG_ERROR("AooSink: source version not supported");
-        return kAooErrorVersionNotSupported;
+    if (auto err = check_version(version); err != kAooOk){
+        if (err == kAooErrorVersionNotSupported) {
+            LOG_ERROR("AooSource: source version not supported");
+        } else {
+            LOG_ERROR("AooSource: bad source version format");
+        }
+        return err;
     }
 
     AooId stream = (it++)->AsInt32();
@@ -2384,8 +2388,9 @@ void source_desc::send_start_request(const Sink& s, const sendfn& fn) {
     snprintf(address, sizeof(address), "%s/%d%s",
              kAooMsgDomain kAooMsgSource, ep.id, kAooMsgStart);
 
-    msg << osc::BeginMessage(address) << s.id()
-        << (int32_t)make_version() << osc::EndMessage;
+    msg << osc::BeginMessage(address)
+        << s.id() << aoo_getVersionString()
+        << osc::EndMessage;
 
     ep.send(msg, fn);
 }

@@ -1315,7 +1315,7 @@ void send_start_msg(const endpoint& ep, int32_t id, int32_t stream, int32_t last
     snprintf(address, sizeof(address), "%s/%d%s",
              kAooMsgDomain kAooMsgSink, ep.id, kAooMsgStart);
 
-    msg << osc::BeginMessage(address) << id << (int32_t)make_version()
+    msg << osc::BeginMessage(address) << id << aoo_getVersionString()
         << stream << lastformat << f.numChannels << f.sampleRate << f.blockSize
         << f.codec << osc::Blob(extension, size);
     if (metadata) {
@@ -2053,11 +2053,15 @@ void Source::handle_start_request(const osc::ReceivedMessage& msg,
     auto it = msg.ArgumentsBegin();
 
     auto id = (it++)->AsInt32();
-    auto version = (it++)->AsInt32();
+    auto version = (it++)->AsString();
 
     // LATER handle this in the sink_desc (e.g. not sending data)
-    if (!check_version(version)){
-        LOG_ERROR("AooSource: sink version not supported");
+    if (auto err = check_version(version); err != kAooOk){
+        if (err == kAooErrorVersionNotSupported) {
+            LOG_ERROR("AooSource: sink version not supported");
+        } else {
+            LOG_ERROR("AooSource: bad sink version format");
+        }
         return;
     }
 

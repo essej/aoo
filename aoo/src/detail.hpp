@@ -34,7 +34,7 @@ AooId get_random_id();
 
 uint32_t make_version();
 
-bool check_version(uint32_t version);
+AooError check_version(const char *version);
 
 //------------- common data structures ------------//
 

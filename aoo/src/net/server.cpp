@@ -838,7 +838,7 @@ void Server::handle_login(client_endpoint& client, const osc::ReceivedMessage& m
 {
     auto it = msg.ArgumentsBegin();
     auto token = (AooId)(it++)->AsInt32();
-    auto version = (uint32_t)(it++)->AsInt32();
+    auto version = (it++)->AsString();
     auto pwd = (it++)->AsString();
     // IP addresses
     auto count = (it++)->AsInt32();
@@ -852,9 +852,9 @@ void Server::handle_login(client_endpoint& client, const osc::ReceivedMessage& m
     request.password = pwd;
     request.metadata = metadata.data ? &metadata : nullptr;
     // check version
-    if (!check_version(version)) {
+    if (auto err = check_version(version); err != kAooOk) {
         LOG_DEBUG("AooServer: client " << client.id() << ": version mismatch");
-        client.send_error(*this, token, request.type, kAooErrorVersionNotSupported);
+        client.send_error(*this, token, request.type, err);
         return;
     }
     // check password
@@ -887,7 +887,8 @@ AooError Server::do_login(client_endpoint& client, AooId token,
     auto msg = start_message(extra);
 
     msg << osc::BeginMessage(kAooMsgClientLogin)
-        << token << kAooErrorNone << client.id()
+        << token << kAooErrorNone
+        << aoo_getVersionString() << client.id()
         << (int32_t)flags << metadata_view(response.metadata)
         << osc::EndMessage;
 

@@ -988,7 +988,7 @@ void Client::perform(const login_cmd& cmd) {
     auto msg = start_server_message(connection_->metadata_.size());
 
     msg << osc::BeginMessage(kAooMsgServerLogin)
-        << token << (int32_t)make_version()
+        << token << aoo_getVersionString()
         << encrypt(connection_->pwd_).c_str()
         << (int32_t)addrlist.size();
     for (auto& addr : addrlist){
@@ -1484,9 +1484,22 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
         (it++)->AsInt32(); // skip token
         auto result = (it++)->AsInt32();
         if (result == kAooErrorNone){
+            auto version = (it++)->AsString();
             auto id = (AooId)(it++)->AsInt32();
             auto flags = (AooFlag)(it++)->AsInt32();
             auto metadata = osc_read_metadata(it);
+
+            // check version
+            if (auto err = check_version(version); err != kAooOk) {
+                LOG_WARNING("AooClient: login failed: " << aoo_strerror(err));
+
+                // cache connection
+                auto connection = std::move(connection_);
+
+                close();
+
+                connection->reply_error(err);
+            }
 
             server_relay_ = flags & kAooLoginServerRelay;
 
@@ -1504,7 +1517,8 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
         } else {
             auto code = (it++)->AsInt32();
             auto msg = (it++)->AsString();
-            LOG_WARNING("AooClient: login failed: " << response_error_message(result, code, msg));
+            LOG_WARNING("AooClient: login failed: "
+                        << response_error_message(result, code, msg));
 
             // cache connection
             auto connection = std::move(connection_);
