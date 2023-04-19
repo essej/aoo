@@ -28,16 +28,23 @@ const int32_t kBinMessageHeaderSize = kAooBinMsgLargeHeaderSize + 28;
 //------------------------- peer ------------------------------//
 
 peer::peer(const std::string& groupname, AooId groupid,
-           const std::string& username, AooId userid, AooId localid,
-           ip_address_list&& addrlist, const AooData *metadata,
-           ip_address_list&& user_relay, const ip_address_list& group_relay)
-    : group_name_(groupname), user_name_(username), group_id_(groupid), user_id_(userid),
-      local_id_(localid), metadata_(metadata), addrlist_(std::move(addrlist)),
+           const std::string& username, AooId userid,
+           AooId localid, const AooData *metadata,
+           ip_address::ip_type address_family, bool use_ipv4_mapped,
+           ip_address_list&& addrlist, ip_address_list&& user_relay,
+           const ip_address_list& group_relay)
+    : group_name_(groupname), user_name_(username),
+      group_id_(groupid), user_id_(userid), local_id_(localid),
+      address_family_(address_family), use_ipv4_mapped_(use_ipv4_mapped),
+      metadata_(metadata), addrlist_(std::move(addrlist)),
       user_relay_(std::move(user_relay)), group_relay_(group_relay)
 {
     start_time_ = time_tag::now();
 
     LOG_DEBUG("AooClient: create peer " << *this);
+    for (auto& addr : addrlist_) {
+        LOG_DEBUG("\t" << addr);
+    }
 }
 
 peer::~peer(){
@@ -46,6 +53,7 @@ peer::~peer(){
 
 bool peer::match(const ip_address& addr) const {
     if (connected()){
+        // NB: 'addr' has been obtained with address(), so we can match as is.
         return real_address_ == addr;
     } else {
         return false;
@@ -71,6 +79,15 @@ bool peer::match(AooId group, AooId user) const {
 bool peer::match_wildcard(AooId group, AooId user) const {
     return (group_id_ == group || group == kAooIdInvalid) &&
             (user_id_ == user || user == kAooIdInvalid);
+}
+
+ip_address peer::address() const {
+    if (connected()) {
+        // may be IPv4 mapped for peer-to-peer, but always unmapped for relay
+        return real_address_;
+    } else {
+        return ip_address{};
+    }
 }
 
 void peer::send(Client& client, const sendfn& fn, time_tag now) {
@@ -133,7 +150,26 @@ void peer::send(Client& client, const sendfn& fn, time_tag now) {
                 << osc::EndMessage;
 
             for (auto& addr : addrlist_) {
-                send(msg, addr, fn);
+                if (relay_) {
+                    send(msg, addr, fn); // always keep IP address as is!
+                } else {
+                    if (address_family_ == ip_address::IPv6 && addr.type() == ip_address::IPv4) {
+                        if (use_ipv4_mapped_) {
+                            // map address to IPv4
+                            send(msg, addr.ipv4_mapped(), fn);
+                        } else {
+                            // cannot send to IPv4 endpoint from IPv6-only socket, just ignore.
+                            // (We might still use the address later for relaying.)
+                            LOG_DEBUG("AooClient: cannot send to " << addr);
+                        }
+                    } else if (address_family_ == ip_address::IPv4 && addr.type() == ip_address::IPv6) {
+                        // cannot send to IPv6 endpoint from IPv4-only socket, just ignore.
+                        // (We might still use the address later for relaying.)
+                        LOG_DEBUG("AooClient: cannot send to " << addr);
+                    } else {
+                        send(msg, addr, fn);
+                    }
+                }
             }
 
             last_pingtime_ = elapsed_time;
@@ -468,12 +504,12 @@ void peer::handle_first_ping(Client &client, const aoo::ip_address& addr) {
     }
 #endif
     // Try to find matching address.
-    // If we receive a message from a peer behind a symmetric NAT,
-    // its IP address will be different from the one we obtained
-    // from the server, that's why we're sending and checking the
-    // group/user ID in the first place.
+    // If we receive a message from a peer behind a symmetric NAT, its IP address
+    // will be different from the one we obtained from the server, that's why we're
+    // sending and checking the group/user ID in the first place.
     // NB: this only works if *we* are behind a full cone or restricted cone NAT.
-    if (std::find(addrlist_.begin(), addrlist_.end(), addr) == addrlist_.end()) {
+    // NB: the address list contains *unmapped* IP addresses.
+    if (std::find(addrlist_.begin(), addrlist_.end(), addr.unmapped()) == addrlist_.end()) {
         LOG_WARNING("AooClient: peer " << *this << " is located behind a symmetric NAT!");
     }
 
@@ -775,12 +811,6 @@ void peer::handle_ack(Client &client, const AooByte *data, AooSize size) {
         }
     }
     LOG_ERROR("AooClient: got malformed binary ack message from " << *this);
-}
-
-// only called if peer is connected!
-void peer::send(const AooByte *data, AooSize size, const sendfn &fn) const {
-    assert(connected());
-    send(data, size, real_address_, fn);
 }
 
 void peer::send(const AooByte *data, AooSize size,

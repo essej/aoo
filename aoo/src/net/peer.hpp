@@ -30,9 +30,11 @@ struct message_ack {
 class peer {
 public:
     peer(const std::string& groupname, AooId groupid,
-         const std::string& username, AooId userid, AooId localid,
-         ip_address_list&& addrlist, const AooData *metadata,
-         ip_address_list&& user_relay, const ip_address_list& group_relay);
+         const std::string& username, AooId userid,
+         AooId localid, const AooData *metadata,
+         ip_address::ip_type address_family, bool use_ipv4_mapped,
+         ip_address_list&& addrlist, ip_address_list&& user_relay,
+         const ip_address_list& group_relay);
 
     ~peer();
 
@@ -52,6 +54,8 @@ public:
 
     bool match_wildcard(AooId group, AooId user) const;
 
+    ip_address address() const;
+
     bool relay() const { return relay_; }
 
     const ip_address& relay_address() const { return relay_address_; }
@@ -67,10 +71,6 @@ public:
     AooId user_id() const { return user_id_; }
 
     AooId local_id() const { return local_id_; }
-
-    const ip_address& address() const {
-        return real_address_;
-    }
 
     const aoo::metadata& metadata() const { return metadata_; }
 
@@ -115,11 +115,15 @@ private:
         send((const AooByte *)msg.Data(), msg.Size(), fn);
     }
 
-    void send(const AooByte *data, AooSize size, const sendfn& fn) const;
-
     void send(const osc::OutboundPacketStream& msg,
               const ip_address& addr, const sendfn& fn) const {
         send((const AooByte *)msg.Data(), msg.Size(), addr, fn);
+    }
+
+    // only called if peer is connected!
+    void send(const AooByte *data, AooSize size, const sendfn &fn) const {
+        assert(connected());
+        send(data, size, real_address_, fn);
     }
 
     void send(const AooByte *data, AooSize size,
@@ -130,13 +134,15 @@ private:
     const AooId group_id_;
     const AooId user_id_;
     const AooId local_id_;
-    aoo::metadata metadata_;
+    ip_address::ip_type address_family_;
+    bool use_ipv4_mapped_;
     bool relay_ = false;
     bool timeout_ = false;
+    aoo::metadata metadata_;
     ip_address_list addrlist_;
     ip_address_list user_relay_;
     ip_address_list group_relay_;
-    ip_address real_address_;
+    ip_address real_address_; // IPv4-mapped if peer-to-peer, unmapped if relayed
     ip_address relay_address_;
     time_tag start_time_;
     double last_pingtime_ = 0;

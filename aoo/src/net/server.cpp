@@ -1489,7 +1489,8 @@ AooError Server::do_query(const AooRequestQuery& request,
     char buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream reply(buf, sizeof(buf));
     reply << osc::BeginMessage(kAooMsgClientQuery)
-          << public_addr << server_addr << osc::EndMessage;
+          << public_addr.unmapped() << server_addr // unmapped!
+          << osc::EndMessage;
 
     fn((const AooByte *)reply.Data(), reply.Size(), public_addr);
 

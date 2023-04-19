@@ -49,32 +49,22 @@ std::string response_error_message(AooError result, int code, const char *msg) {
 
 //--------------------- AooClient -----------------------------//
 
-AOO_API AooClient * AOO_CALL AooClient_new(
-        AooSocket udpSocket, AooFlag flags, AooError *err) {
-    aoo::ip_address address;
-    if (aoo::socket_address(udpSocket, address) != 0) {
-        if (err) {
-            *err = kAooErrorSocket;
-        }
-        return nullptr;
-    }
+AOO_API AooClient * AOO_CALL AooClient_new(AooFlag flags, AooError *err) {
     try {
-        return aoo::construct<aoo::net::Client>(udpSocket, address, flags, err);
+        return aoo::construct<aoo::net::Client>(flags, err);
     } catch (const std::bad_alloc&) {
         *err = kAooErrorOutOfMemory;
         return nullptr;
     }
 }
 
-aoo::net::Client::Client(int socket, const ip_address& address,
-                         AooFlag flags, AooError *err)
-    : udp_client_(socket, address.port(), address.type())
-{
+aoo::net::Client::Client(AooFlag flags, AooError *err) {
     eventsocket_ = socket_udp(0);
     if (eventsocket_ < 0){
         // TODO handle error
         socket_error_print("socket_udp");
     }
+
     sendbuffer_.resize(AOO_MAX_PACKET_SIZE);
 }
 
@@ -88,6 +78,61 @@ aoo::net::Client::~Client() {
     if (socket_ >= 0){
         socket_close(socket_);
     }
+}
+
+AOO_API AooError AOO_CALL AooClient_setup(
+    AooClient *client, AooUInt16 port, AooSocketFlags flags)
+{
+    return client->setup(port, flags);
+}
+
+AooError AOO_CALL aoo::net::Client::setup(AooUInt16 port, AooSocketFlags flags) {
+    auto err = udp_client_.setup(port, flags);
+    if (err != kAooOk) {
+        return err;
+    }
+
+    // get local network interfaces
+    local_addr_.clear();
+    int sock = socket_udp(0);
+    // get global IPv6 address
+    if (socket_family(sock) == ip_address::IPv6) {
+        ip_address dummy_addr("2001:4860:4860::8888", 80);
+        if (socket_connect(sock, dummy_addr, 0) == 0) {
+            ip_address result;
+            if (socket_address(sock, result) == 0) {
+                local_addr_.emplace_back(result.name(), udp_client_.port());
+                LOG_DEBUG("AooClient: global IPv6 address: " << local_addr_.back());
+            } else {
+                LOG_WARNING("AooClient: could not get global IPv6 address; getsockname() failed: "
+                            << socket_strerror(socket_errno()));
+            }
+        } else {
+            LOG_WARNING("AooClient: could not get global IPv6 address; connect() failed: "
+                        << socket_strerror(socket_errno()));
+        }
+    }
+    // get private IPv4 address
+    // ip_address::resolve() will return a IPv4 (mapped) address
+    // - but only if IPv4 networking is enabled
+    auto dummy_addr = ip_address::resolve("8.8.8.8", 80, socket_family(sock), true);
+    if (!dummy_addr.empty()) {
+        if (socket_connect(sock, dummy_addr.front(), 0) == 0) {
+            ip_address result;
+            if (socket_address(sock, result) == 0) {
+                local_addr_.emplace_back(result.name_unmapped(), udp_client_.port()); // unmapped!
+                LOG_DEBUG("AooClient: private IPv4 address: " << local_addr_.back());
+            } else {
+                LOG_WARNING("AooClient: could not get private IPv4 address; getsockname() failed: "
+                            << socket_strerror(socket_errno()));
+            }
+        } else {
+            LOG_WARNING("AooClient: could not get private IPv4 address; connect() failed: "
+                        << socket_strerror(socket_errno()));
+        }
+    }
+
+    return kAooOk;
 }
 
 AOO_API AooError AOO_CALL AooClient_run(AooClient *client, AooBool nonBlocking){
@@ -383,15 +428,16 @@ AooError AOO_CALL aoo::net::Client::findPeerByName(
                 *userId = p.user_id();
             }
             if (address && addrlen) {
-                // we may only access the address if the peer is connected!
-                if (p.connected()) {
-                    if (*addrlen >= p.address().length()) {
-                        memcpy(address, p.address().address(), p.address().length());
-                        *addrlen = p.address().length();
+                auto addr = p.address();
+                if (addr.valid()) {
+                    if (*addrlen >= addr.length()) {
+                        memcpy(address, addr.address(), addr.length());
+                        *addrlen = addr.length();
                     } else {
                         return kAooErrorInsufficientBuffer;
                     }
                 } else {
+                    // TODO: maybe return kAooErrorNotInitialized?
                     *addrlen = 0;
                 }
             }
@@ -841,15 +887,15 @@ void Client::perform(const connect_cmd& cmd)
         return;
     }
 
-    auto result = ip_address::resolve(cmd.host_.name, cmd.host_.port, udp_client_.type());
+    auto result = ip_address::resolve(cmd.host_.name, cmd.host_.port,
+                                      udp_client_.address_family(),
+                                      udp_client_.use_ipv4_mapped());
     if (result.empty()){
         int err = socket_errno();
-        auto msg = socket_strerror(err);
+        auto errmsg = socket_strerror(err);
         // LATER think about best way for error handling. Maybe exception?
-        LOG_ERROR("AooClient: couldn't resolve hostname: " << msg);
-
-        cmd.reply_error(kAooErrorSystem, err, msg.c_str());
-
+        LOG_ERROR("AooClient: could not resolve hostname: " << errmsg);
+        cmd.reply_error(kAooErrorSystem, err, errmsg.c_str());
         return;
     }
 
@@ -862,12 +908,20 @@ void Client::perform(const connect_cmd& cmd)
         LOG_DEBUG("\t" << addr);
     }
 
-    state_.store(client_state::handshake);
+    for (auto& addr : result) {
+        // we only need to perform UDP handshake with IPv4 (mapped) address
+        if (addr.type() == ip_address::IPv4 || addr.is_ipv4_mapped()) {
+            state_.store(client_state::handshake);
+            udp_client_.start_handshake(addr);
+            return;
+        }
+    }
 
-    udp_client_.start_handshake(std::move(result));
+    // IPv6-only: continue with login
+    perform(login_cmd(ip_address{}));
 }
 
-int Client::try_connect(const ip_address& remote){
+int Client::try_connect(const ip_host& server){
     socket_ = socket_tcp(0);
     if (socket_ < 0){
         int err = socket_errno();
@@ -875,19 +929,34 @@ int Client::try_connect(const ip_address& remote){
         return err;
     }
 
-    LOG_VERBOSE("AooClient: try to connect to " << remote);
-
-    // try to connect (LATER make timeout configurable)
-    if (socket_connect(socket_, remote, 5.0) < 0) {
+    auto type = socket_family(socket_);
+    auto addrlist = ip_address::resolve(server.name, server.port, type, true);
+    if (addrlist.empty()) {
         int err = socket_errno();
-        LOG_ERROR("AooClient: couldn't connect to " << remote << ": "
-                  << socket_strerror(err));
+        LOG_ERROR("AooClient: couldn't resolve host name: " << socket_strerror(err));
         return err;
     }
+    // sort IPv4 first because it is more likely for an AOO server to be IP4-only than
+    // to be IPv6-only
+    std::sort(addrlist.begin(), addrlist.end(), [](auto& a, auto& b) {
+        return a.type() == ip_address::IPv4 && b.type() == ip_address::IPv6;
+    });
 
-    LOG_VERBOSE("AooClient: successfully connected to " << remote);
-
-    return 0;
+    LOG_VERBOSE("AooClient: try to connect to " << server.name << " on port " << server.port);
+    // try to connect to both addresses (just because the hostname resolves to IPv4
+    // and IPv6 addresses does not mean that the AOO server actually supports both).
+    for (auto& addr : addrlist) {
+        LOG_DEBUG("AooClient: try to connect to " << addr);
+        // try to connect (LATER make timeout configurable)
+        if (socket_connect(socket_, addr, 5.0) == 0) {
+            LOG_VERBOSE("AooClient: successfully connected to " << addr);
+            return 0;
+        }
+    }
+    int err = socket_errno();
+    LOG_ERROR("AooClient: couldn't connect to " << server.name << " on port "
+               << server.port << ": " << socket_strerror(err));
+    return err;
 }
 
 void Client::perform(const login_cmd& cmd) {
@@ -896,10 +965,9 @@ void Client::perform(const login_cmd& cmd) {
 
     state_.store(client_state::connecting);
 
-    // for actual TCP connection, just pick the first result
-    int err = try_connect(cmd.server_ip_.front());
+    int err = try_connect(connection_->host_);
     if (err != 0){
-        // cache
+        // cache data before closing
         auto msg = socket_strerror(err);
         auto connection = std::move(connection_);
 
@@ -909,36 +977,21 @@ void Client::perform(const login_cmd& cmd) {
 
         return;
     }
-    // get local network interface
-    ip_address temp;
-    if (socket_address(socket_, temp) < 0){
-        int err = socket_errno();
-        auto msg = socket_strerror(err);
-        auto connection = std::move(connection_);
-        LOG_ERROR("AooClient: couldn't get socket name: " << msg);
-
-        close();
-
-        connection->reply_error(kAooErrorSystem, err, msg.c_str());
-
-        return;
-    }
-    local_addr_ = ip_address(temp.name(), udp_client_.port(), udp_client_.type());
-    LOG_VERBOSE("AooClient: local address: " << local_addr_);
 
     // send login request
     auto token = next_token_++;
-    auto count = cmd.public_ip_.size() + 1;
+    auto addrlist = local_addr_;
+    if (cmd.public_ip_.valid()) {
+        addrlist.push_back(cmd.public_ip_);
+    }
 
     auto msg = start_server_message(connection_->metadata_.size());
 
     msg << osc::BeginMessage(kAooMsgServerLogin)
         << token << (int32_t)make_version()
         << encrypt(connection_->pwd_).c_str()
-    // IP addresses
-        << (int32_t)count
-        << local_addr_;
-    for (auto& addr : cmd.public_ip_){
+        << (int32_t)addrlist.size();
+    for (auto& addr : addrlist){
         msg << addr;
     }
     msg << connection_->metadata_
@@ -1025,21 +1078,26 @@ void Client::handle_response(const group_join_cmd& cmd,
         // add group membership
         if (!find_group_membership(cmd.group_name_)) {
             group_membership m { cmd.group_name_, cmd.user_name_, group, user, {} };
+
             // add relay servers (in descending priority)
+            auto family = udp_client_.address_family();
+            auto ipv4mapped = udp_client_.use_ipv4_mapped();
             // 1) our own relay
             if (cmd.relay_.valid()) {
-                auto addrlist = ip_address::resolve(cmd.relay_.name, cmd.relay_.port, udp_client_.type());
+                auto addrlist = ip_address::resolve(cmd.relay_.name, cmd.relay_.port,
+                                                    family, ipv4mapped);
                 m.relay_list.insert(m.relay_list.end(), addrlist.begin(), addrlist.end());
             }
             // 2) server group relay
             if (relay.port > 0) {
-                auto addrlist = ip_address::resolve(cmd.relay_.name, cmd.relay_.port, udp_client_.type());
+                auto addrlist = ip_address::resolve(cmd.relay_.name, cmd.relay_.port,
+                                                    family, ipv4mapped);
                 m.relay_list.insert(m.relay_list.end(), addrlist.begin(), addrlist.end());
             }
             // 3) use UDP server as relay
             if (server_relay_) {
                 auto& host = connection_->host_;
-                auto addrlist = ip_address::resolve(host.name, host.port, udp_client_.type());
+                auto addrlist = ip_address::resolve(host.name, host.port, family, ipv4mapped);
                 m.relay_list.insert(m.relay_list.end(), addrlist.begin(), addrlist.end());
             }
             memberships_.push_back(std::move(m));
@@ -1495,14 +1553,14 @@ static osc::ReceivedPacket unwrap_message(const osc::ReceivedMessage& msg, ip_ad
 {
     auto it = msg.ArgumentsBegin();
 
-    // NB: read as is! the address is only used as an identifier
+    // read address as is (always unmapped)
     addr = osc_read_address(it);
 
-    const void *blobData;
-    osc::osc_bundle_element_size_t blobSize;
-    (it++)->AsBlob(blobData, blobSize);
+    const void *msg_data;
+    osc::osc_bundle_element_size_t msg_size;
+    (it++)->AsBlob(msg_data, msg_size);
 
-    return osc::ReceivedPacket((const char *)blobData, blobSize);
+    return osc::ReceivedPacket((const char *)msg_data, msg_size);
 }
 
 void Client::handle_peer_add(const osc::ReceivedMessage& msg){
@@ -1515,14 +1573,19 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
     auto count = (it++)->AsInt32();
     ip_address_list addrlist;
     while (count--){
-        // force IP protocol!
-        // TODO: handle IPv6 addresses on IPv4 clients!
-        // We can't convert them to IPv4, but we might need them
-        // as identifiers if we want to relay...
-        auto addr = osc_read_address(it, udp_client_.type());
-        // NB: filter local addresses so that we don't accidentally ping ourselves!
-        if (addr.valid() && addr != local_addr_) {
+        // read as is! They might be used as identifiers in relay message.
+        auto addr = osc_read_address(it);
+        if (addr.is_ipv4_mapped()) {
+            // peer addresses must be unmapped!
+            LOG_WARNING("AooClient: ignore IPv4-mapped peer address " << addr);
+            continue;
+        }
+        // filter local addresses so that we don't accidentally ping ourselves!
+        if (addr.valid() && std::find(local_addr_.begin(), local_addr_.end(), addr)
+                                == local_addr_.end()) {
             addrlist.push_back(addr);
+        } else {
+            LOG_DEBUG("AooClient: ignore local address " << addr);
         }
     }
     auto metadata = osc_read_metadata(it);
@@ -1545,18 +1608,20 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
         return; // ignore
     }
     // get relay address(es)
-    ip_address_list relaylist;
+    ip_address_list user_relay;
     if (relay.valid()) {
-        relaylist = aoo::ip_address::resolve(relay.name, relay.port, udp_client_.type());
+        user_relay = aoo::ip_address::resolve(relay.name, relay.port,
+                                              udp_client_.address_family(),
+                                              udp_client_.use_ipv4_mapped());
         // add to group relay list
         auto& list = membership->relay_list;
-        list.insert(list.end(), relaylist.begin(), relaylist.end());
+        list.insert(list.end(), user_relay.begin(), user_relay.end());
     }
 
     auto peer = peers_.emplace_front(group_name, group_id, user_name, user_id,
-                                     membership->user_id, std::move(addrlist),
-                                     metadata.size > 0 ? &metadata : nullptr,
-                                     std::move(relaylist), membership->relay_list);
+                                     membership->user_id, metadata.size > 0 ? &metadata : nullptr,
+                                     udp_client_.address_family(), udp_client_.use_ipv4_mapped(),
+                                     std::move(addrlist), std::move(user_relay), membership->relay_list);
 
     auto e = std::make_unique<peer_event>(kAooEventPeerHandshake, *peer);
     send_event(std::move(e));
@@ -1596,7 +1661,7 @@ void Client::handle_peer_remove(const osc::ReceivedMessage& msg){
     for (auto& addr : peer->user_relay()) {
         // check if this relay is used by a peer
         for (auto& p : peers_) {
-            if (p.match(addr)) {
+            if (p.relay() && p.relay_address() == addr) {
                 std::stringstream ss;
                 ss << p << " uses a relay provided by " << *peer
                    << ", so the connection might stop working";
@@ -1727,6 +1792,33 @@ void Client::on_exception(const char *what, const osc::Exception &err,
 
 //---------------------- udp_client ------------------------//
 
+AooError udp_client::setup(int port, AooSocketFlags flags) {
+    if (port <= 0) {
+        return kAooErrorBadArgument;
+    }
+    if ((flags & kAooSocketIPv4Mapped) &&
+            (!(flags & kAooSocketIPv6) || (flags & kAooSocketIPv4))) {
+        LOG_ERROR("AooClient: combination of setup flags not allowed");
+        return kAooErrorBadArgument;
+    }
+
+    port_ = port;
+
+    if (flags & kAooSocketIPv6) {
+        if (flags & kAooSocketIPv4) {
+            address_family_ = ip_address::Unspec; // both IPv6 and IPv4
+        } else {
+            address_family_ = ip_address::IPv6;
+        }
+    } else {
+        address_family_ = ip_address::IPv4;
+    }
+
+    use_ipv4_mapped_ = flags | kAooSocketIPv4Mapped;
+
+    return kAooOk;
+}
+
 AooError udp_client::handle_bin_message(Client& client, const AooByte *data, int32_t size,
                                         const ip_address& addr, AooMsgType type, int32_t onset) {
     if (type == kAooMsgTypeRelay) {
@@ -1831,12 +1923,11 @@ void udp_client::update(Client& client, const sendfn& fn, time_tag now){
         if (delta >= client.query_interval()) {
             char buf[64];
             osc::OutboundPacketStream msg(buf, sizeof(buf));
-            msg << osc::BeginMessage(kAooMsgServerQuery) << osc::EndMessage;
+            msg << osc::BeginMessage(kAooMsgServerQuery)
+                << osc::EndMessage;
 
-            scoped_shared_lock lock(mutex_);
-            for (auto& addr : server_addrlist_){
-                fn((const AooByte *)msg.Data(), msg.Size(), addr);
-            }
+            send_server_message(msg, fn);
+
             last_ping_time_ = elapsed_time;
         }
     } else if (state == client_state::connected) {
@@ -1848,6 +1939,7 @@ void udp_client::update(Client& client, const sendfn& fn, time_tag now){
                 << osc::EndMessage;
 
             send_server_message(msg, fn);
+
             last_ping_time_ = elapsed_time;
         }
     }
@@ -1859,12 +1951,11 @@ void udp_client::update(Client& client, const sendfn& fn, time_tag now){
     }
 }
 
-void udp_client::start_handshake(ip_address_list&& remote) {
+void udp_client::start_handshake(const ip_address& remote) {
     scoped_lock lock(mutex_);
     first_ping_time_ = 0;
-    server_addrlist_ = std::move(remote);
-    tcp_addrlist_.clear();
-    public_addrlist_.clear();
+    remote_addr_ = remote;
+    public_addr_.clear();
 }
 
 void udp_client::queue_message(message&& m) {
@@ -1873,19 +1964,18 @@ void udp_client::queue_message(message&& m) {
 
 void udp_client::send_server_message(const osc::OutboundPacketStream& msg, const sendfn& fn) {
     sync::shared_lock<sync::shared_mutex> lock(mutex_);
-    if (server_addrlist_.empty()) {
+    if (!remote_addr_.valid()) {
         LOG_ERROR("AooClient: no server address");
         return;
     }
-    // just pick any address
-    ip_address addr(server_addrlist_.front());
+    auto addr = remote_addr_;
     lock.unlock();
     // send unlocked
     fn((const AooByte *)msg.Data(), msg.Size(), addr);
 }
 
 void udp_client::handle_server_message(Client& client, const osc::ReceivedMessage& msg,
-                                       const ip_address& udp_addr, int onset) {
+                                       const ip_address& addr, int onset) {
     auto pattern = msg.AddressPattern() + onset;
     LOG_DEBUG("AooClient: got server OSC message " << pattern);
 
@@ -1896,48 +1986,23 @@ void udp_client::handle_server_message(Client& client, const osc::ReceivedMessag
             if (client.current_state() == client_state::handshake){
                 auto it = msg.ArgumentsBegin();
 
-                // public IP + port
-                std::string ip = (it++)->AsString();
-                int port = (it++)->AsInt32();
-                ip_address public_addr(ip, port, type());
+                // read public address (make sure it is really unmapped)
+                ip_address public_addr = osc_read_address(it).unmapped();
 
-                // TCP server IP + port
-                ip = (it++)->AsString();
-                port = (it++)->AsInt32();
-                ip_address tcp_addr;
-                if (!ip.empty()) {
-                    // TODO: support host names?
-                    tcp_addr = ip_address(ip, port, type());
-                } else {
-                    // use UDP server address
-                    // TODO: always require the server to send the address?
+                {
                     scoped_lock lock(mutex_);
-                    tcp_addr = udp_addr;
-                }
-
-                scoped_lock lock(mutex_);
-                for (auto& addr : public_addrlist_) {
-                    if (addr == tcp_addr) {
-                        LOG_DEBUG("AooClient: public address " << addr
+                    if (public_addr_ == public_addr) {
+                        LOG_DEBUG("AooClient: public address " << public_addr
                                   << " already received");
                         return; // already received
                     }
+                    public_addr_ = public_addr;
                 }
-                public_addrlist_.push_back(public_addr);
-                tcp_addrlist_.push_back(tcp_addr);
-                LOG_VERBOSE("AooClient: public address: " << public_addr
-                            << ", TCP server address: " << tcp_addr);
+                LOG_VERBOSE("AooClient: public address: " << public_addr);
 
-                // check if we got all public addresses
-                // LATER improve this
-                if (tcp_addrlist_.size() == server_addrlist_.size()) {
-                    // now we can try to login
-                    auto cmd = std::make_unique<Client::login_cmd>(
-                                std::move(tcp_addrlist_),
-                                std::move(public_addrlist_));
-
-                    client.push_command(std::move(cmd));
-                }
+                // now we can try to login
+                auto cmd = std::make_unique<Client::login_cmd>(public_addr);
+                client.push_command(std::move(cmd));
             }
         } else {
             LOG_WARNING("AooClient: received unexpected UDP message "
@@ -1953,14 +2018,8 @@ void udp_client::handle_server_message(Client& client, const osc::ReceivedMessag
 }
 
 bool udp_client::is_server_address(const ip_address& addr){
-    // server message
     scoped_shared_lock lock(mutex_);
-    for (auto& remote : server_addrlist_){
-        if (remote == addr){
-            return true;
-        }
-    }
-    return false;
+    return addr == remote_addr_;
 }
 
 } // net

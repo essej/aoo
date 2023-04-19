@@ -11,8 +11,7 @@ int main(int argc, const char * arg[]) {
 #if AOO_NET
     AooClient *client;
     AooServer *server;
-    int sock = 0; /* TODO */
-    client = AooClient_new(sock, 0, NULL);
+    client = AooClient_new(0, NULL);
     server = AooServer_new(0, NULL);
 #endif
 

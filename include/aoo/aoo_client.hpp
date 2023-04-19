@@ -25,13 +25,12 @@ typedef struct AooClient AooClient;
 
 /** \brief create a new AOO source instance
  *
- * \param udpSocket bound UDP socket handle
- * \param flags optional flags
+ * \param flags optional flags.
  * \param[out] err error code on failure
  * \return new AooClient instance on success; `NULL` on failure
  */
 AOO_API AooClient * AOO_CALL AooClient_new(
-        AooSocket udpSocket, AooFlag flags, AooError *err);
+        AooFlag flags, AooError *err);
 
 /** \brief destroy AOO client */
 AOO_API void AOO_CALL AooClient_free(AooClient *client);
@@ -57,17 +56,26 @@ public:
      *
      * \copydetails AooClient_new()
      */
-    static Ptr create(AooSocket udpSocket, AooFlag flags, AooError *err) {
-        return Ptr(AooClient_new(udpSocket, flags, err));
+    static Ptr create(AooFlag flags, AooError *err) {
+        return Ptr(AooClient_new(flags, err));
     }
 #endif
 
     /*------------------ methods -------------------------------*/
 
-    /** \brief run the AOO client
+    /** \brief setup the client object (before calling run())
+     *
+     * \param port the listening port of the UDP server
+     * \param flags optional flags.
+     *
+     * \attention If `flags` is 0, we assume that the UDP server is IPv4-only.
+     */
+    virtual AooError AOO_CALL setup(AooUInt16 port, AooSocketFlags flags) = 0;
+
+    /** \brief run the internal TCP client
      *
      * \param nonBlocking #kAooTrue: the function does not block;
-     * #kAooFalse: blocks until until AooClient_quit() is called.
+     * #kAooFalse: blocks until until quit() is called.
      */
     virtual AooError AOO_CALL run(AooBool nonBlocking) = 0;
 

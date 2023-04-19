@@ -17,7 +17,12 @@ AooNode::AooNode(World *world, int port) {
                   false, recvbufsize, sendbufsize);
 
     LOG_DEBUG("create AooClient on port " << port);
-    client_ = AooClient::create(server_.socket(), 0, nullptr);
+
+    auto flags = aoo::socket_family(server_.socket()) == aoo::ip_address::IPv6 ?
+                     kAooSocketDualStack : kAooSocketIPv4;
+
+    client_ = AooClient::create(0, nullptr);
+    client_->setup(port, flags);
 
 #if NETWORK_THREAD_POLL
     // start network I/O thread

@@ -70,12 +70,15 @@ struct message {
 
 class udp_client {
 public:
-    udp_client(int socket, int port, ip_address::ip_type type)
-        : socket_(socket), port_(port), type_(type) {}
+    AooError setup(int port, AooSocketFlags flags);
 
     int port() const { return port_; }
 
-    ip_address::ip_type type() const { return type_; }
+    ip_address::ip_type address_family() const { return address_family_; }
+
+    bool use_ipv4_mapped() const { return use_ipv4_mapped_; }
+
+    // ip_address::ip_type type() const { return type_; }
 
     AooError handle_osc_message(Client& client, const AooByte *data, int32_t n,
                                 const ip_address& addr, int32_t type, AooMsgType onset);
@@ -85,7 +88,7 @@ public:
 
     void update(Client& client, const sendfn& fn, time_tag now);
 
-    void start_handshake(ip_address_list&& remote);
+    void start_handshake(const ip_address& remote);
 
     void queue_message(message&& msg);
 private:
@@ -99,15 +102,13 @@ private:
     using scoped_lock = sync::scoped_lock<sync::shared_mutex>;
     using scoped_shared_lock = sync::scoped_shared_lock<sync::shared_mutex>;
 
-    int socket_;
-    int port_;
-    ip_address::ip_type type_;
+    int port_ = 0;
+    ip_address::ip_type address_family_ = ip_address::Unspec;
+    bool use_ipv4_mapped_ = false;
 
-    ip_address_list server_addrlist_;
-    ip_address_list tcp_addrlist_;
-    ip_address_list public_addrlist_;
-    ip_address local_address_;
-    sync::shared_mutex mutex_;
+    ip_address remote_addr_;
+    ip_address public_addr_;
+    sync::shared_mutex mutex_; // LATER replace with sequence lock
 
     double last_ping_time_ = 0;
     std::atomic<double> first_ping_time_{0};
@@ -137,10 +138,11 @@ public:
 
     //----------------------------------------------------------//
 
-    Client(int socket, const ip_address& address,
-           AooFlag flags, AooError *err);
+    Client(AooFlag flags, AooError *err);
 
     ~Client();
+
+    AooError AOO_CALL setup(AooUInt16 port, AooSocketFlags flags) override;
 
     AooError AOO_CALL run(AooBool nonBlocking) override;
 
@@ -223,7 +225,7 @@ public:
     struct connect_cmd;
     void perform(const connect_cmd& cmd);
 
-    int try_connect(const ip_address& remote);
+    int try_connect(const ip_host& server);
 
     struct login_cmd;
     void perform(const login_cmd& cmd);
@@ -283,7 +285,7 @@ private:
     int socket_ = -1;
     udp_client udp_client_;
     osc_stream_receiver receiver_;
-    ip_address local_addr_;
+    ip_address_list local_addr_;
     std::atomic<bool> quit_{false};
     int eventsocket_ = -1;
     bool server_relay_ = false;
@@ -486,15 +488,13 @@ public:
 
     struct login_cmd : icommand
     {
-        login_cmd(ip_address_list&& server_ip, ip_address_list&& public_ip)
-            : server_ip_(std::move(server_ip)),
-              public_ip_(std::move(public_ip)) {}
+        login_cmd(const ip_address& public_ip)
+            : public_ip_(public_ip) {}
 
         void perform(Client& obj) override {
             obj.perform(*this);
         }
-        ip_address_list server_ip_;
-        ip_address_list public_ip_;
+        ip_address public_ip_;
     };
 
     struct timeout_cmd : icommand
