@@ -150,9 +150,6 @@ private:
     void handle_query(const osc::ReceivedMessage& msg,
                       const ip_address& addr, const sendfn& fn);
 
-    AooError do_query(const AooRequestQuery& request,
-                      const AooResponseQuery& response) const;
-
     // TCP
     void handle_ping(const client_endpoint& client, const osc::ReceivedMessage& msg);
 
@@ -237,7 +234,6 @@ private:
     void *eventcontext_ = nullptr;
     AooEventMode eventmode_ = kAooEventModeNone;
     // options
-    ip_host tcp_addr_;
     ip_host relay_addr_;
     std::string password_;
     parameter<bool> allow_relay_{AOO_SERVER_RELAY};

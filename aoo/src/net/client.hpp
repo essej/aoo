@@ -94,8 +94,9 @@ public:
 private:
     void send_server_message(const osc::OutboundPacketStream& msg, const sendfn& fn);
 
-    void handle_server_message(Client& client, const osc::ReceivedMessage& msg,
-                               const ip_address& addr, int onset);
+    void handle_server_message(Client& client, const osc::ReceivedMessage& msg, int onset);
+
+    void handle_query(Client& client, const osc::ReceivedMessage& msg);
 
     bool is_server_address(const ip_address& addr);
 

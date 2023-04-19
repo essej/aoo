@@ -216,11 +216,6 @@ public:
         return control(kAooCtlSetPassword, 0, AOO_ARG(pwd));
     }
 
-    AooError setTcpHost(const AooIpEndpoint *ep)
-    {
-        return control(kAooCtlSetTcpHost, 0, AOO_ARG(ep));
-    }
-
     AooError setRelayHost(const AooIpEndpoint *ep)
     {
         return control(kAooCtlSetRelayHost, 0, AOO_ARG(ep));

@@ -1872,7 +1872,7 @@ AooError udp_client::handle_osc_message(Client& client, const AooByte *data, int
         } else if (type == kAooMsgTypeClient){
             // server message
             if (is_server_address(addr)) {
-                handle_server_message(client, msg, addr, onset);
+                handle_server_message(client, msg, onset);
             } else {
                 LOG_WARNING("AooClient: got OSC message from unknown server " << addr);
             }
@@ -1974,8 +1974,7 @@ void udp_client::send_server_message(const osc::OutboundPacketStream& msg, const
     fn((const AooByte *)msg.Data(), msg.Size(), addr);
 }
 
-void udp_client::handle_server_message(Client& client, const osc::ReceivedMessage& msg,
-                                       const ip_address& addr, int onset) {
+void udp_client::handle_server_message(Client& client, const osc::ReceivedMessage& msg, int onset) {
     auto pattern = msg.AddressPattern() + onset;
     LOG_DEBUG("AooClient: got server OSC message " << pattern);
 
@@ -1983,27 +1982,7 @@ void udp_client::handle_server_message(Client& client, const osc::ReceivedMessag
         if (!strcmp(pattern, kAooMsgPong)){
             LOG_DEBUG("AooClient: got UDP pong from server");
         } else if (!strcmp(pattern, kAooMsgQuery)){
-            if (client.current_state() == client_state::handshake){
-                auto it = msg.ArgumentsBegin();
-
-                // read public address (make sure it is really unmapped)
-                ip_address public_addr = osc_read_address(it).unmapped();
-
-                {
-                    scoped_lock lock(mutex_);
-                    if (public_addr_ == public_addr) {
-                        LOG_DEBUG("AooClient: public address " << public_addr
-                                  << " already received");
-                        return; // already received
-                    }
-                    public_addr_ = public_addr;
-                }
-                LOG_VERBOSE("AooClient: public address: " << public_addr);
-
-                // now we can try to login
-                auto cmd = std::make_unique<Client::login_cmd>(public_addr);
-                client.push_command(std::move(cmd));
-            }
+            handle_query(client, msg);
         } else {
             LOG_WARNING("AooClient: received unexpected UDP message "
                         << pattern << " from server");
@@ -2014,6 +1993,30 @@ void udp_client::handle_server_message(Client& client, const osc::ReceivedMessag
     #if 0
         on_exception("server UDP message", e, pattern);
     #endif
+    }
+}
+
+void udp_client::handle_query(Client &client, const osc::ReceivedMessage &msg) {
+    if (client.current_state() == client_state::handshake){
+        auto it = msg.ArgumentsBegin();
+
+        // read public address (make sure it is really unmapped)
+        ip_address public_addr = osc_read_address(it).unmapped();
+
+        {
+            scoped_lock lock(mutex_);
+            if (public_addr_ == public_addr) {
+                LOG_DEBUG("AooClient: public address " << public_addr
+                          << " already received");
+                return; // already received
+            }
+            public_addr_ = public_addr;
+        }
+        LOG_DEBUG("AooClient: public address: " << public_addr);
+
+        // now we can try to login
+        auto cmd = std::make_unique<Client::login_cmd>(public_addr);
+        client.push_command(std::move(cmd));
     }
 }
 

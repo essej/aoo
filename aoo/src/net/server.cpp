@@ -200,11 +200,7 @@ AooError AOO_CALL aoo::net::Server::handleRequest(
         if (response->type != request->type) {
             return kAooErrorBadArgument;
         }
-        // query request needs to handled specially
-        if (request->type == kAooRequestQuery) {
-            return do_query(request->query, response->query);
-        }
-        // client requests
+
         auto c = find_client(client);
         if (c) {
             switch (request->type) {
@@ -228,14 +224,6 @@ AooError AOO_CALL aoo::net::Server::handleRequest(
         }
     } else {
         // request denied
-
-        // query request needs to handled specially
-        if (request->type == kAooRequestQuery) {
-            // for now, just ignore request
-            // TODO think about error response
-            return kAooOk;
-        }
-        // client requests
         auto c = find_client(client);
         if (c) {
             // response must be either AooRequestError or NULL
@@ -564,17 +552,6 @@ AooError AOO_CALL aoo::net::Server::control(
             password_ = encrypt(pwd);
         } else {
             password_ = "";
-        }
-        break;
-    }
-    case kAooCtlSetTcpHost:
-    {
-        CHECKARG(AooIpEndpoint*);
-        auto ep = as<AooIpEndpoint*>(ptr);
-        if (ep) {
-            tcp_addr_ = ip_host(*ep);
-        } else {
-            tcp_addr_ = ip_host{};
         }
         break;
     }
@@ -1462,39 +1439,14 @@ void Server::handle_ping(const osc::ReceivedMessage& msg,
 
 void Server::handle_query(const osc::ReceivedMessage& msg,
                           const ip_address& addr, const sendfn& fn) {
-    AooRequestQuery request;
-    AOO_REQUEST_INIT(&request, Query, replyContext);
-    request.replyAddr.data = addr.address();
-    request.replyAddr.size = addr.length();
-    request.replyFunc = fn.fn();
-    request.replyContext = fn.user();
-    if (!handle_request((AooRequest&)request)) {
-        AooResponseQuery response;
-        AOO_RESPONSE_INIT(&response, Query, serverAddress);
-        response.serverAddress.hostName = nullptr;
-        response.serverAddress.port = 0;
-        do_query(request, response);
-    }
-}
-
-AooError Server::do_query(const AooRequestQuery& request,
-                          const AooResponseQuery& response) const {
-    sendfn fn(request.replyFunc, request.replyContext);
-    ip_address public_addr((const struct sockaddr *)request.replyAddr.data,
-                           request.replyAddr.size);
-    auto server_addr = response.serverAddress.hostName ?
-                ip_host(response.serverAddress) : tcp_addr_;
-
-    // do not prepend size for UDP message!
+    // NB: do not prepend size for UDP message!
     char buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream reply(buf, sizeof(buf));
     reply << osc::BeginMessage(kAooMsgClientQuery)
-          << public_addr.unmapped() << server_addr // unmapped!
+          << addr.unmapped() // return unmapped(!) public IP
           << osc::EndMessage;
 
-    fn((const AooByte *)reply.Data(), reply.Size(), public_addr);
-
-    return kAooOk; // always succeeds
+    fn((const AooByte *)reply.Data(), reply.Size(), addr);
 }
 
 AooId Server::get_next_client_id(){

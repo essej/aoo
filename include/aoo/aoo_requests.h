@@ -19,8 +19,6 @@ AOO_ENUM(AooRequestType)
     kAooRequestError = 0,
     /** connect to server */
     kAooRequestConnect,
-    /** query public IP + server IP */
-    kAooRequestQuery,
     /** login to server */
     kAooRequestLogin,
     /** disconnect from server */
@@ -108,24 +106,6 @@ typedef struct AooResponseConnect
 typedef AooRequestBase AooRequestDisconnect;
 
 typedef AooResponseBase AooResponseDisconnect;
-
-/*----------- query (server-side) -------------*/
-
-/** \brief query request */
-typedef struct AooRequestQuery
-{
-    AOO_REQUEST_HEADER
-    AooSockAddr replyAddr;
-    AooSendFunc replyFunc;
-    void *replyContext;
-} AooRequestQuery;
-
-/** \brief query response */
-typedef struct AooResponseQuery
-{
-    AOO_RESPONSE_HEADER
-    AooIpEndpoint serverAddress;
-} AooResponseQuery;
 
 /*----------- login (server-side) ------------*/
 
@@ -278,7 +258,6 @@ union AooRequest
     AooRequestType type; /** request type */
     AooRequestConnect connect;
     AooRequestDisconnect disconnect;
-    AooRequestQuery query;
     AooRequestLogin login;
     AooRequestGroupJoin groupJoin;
     AooRequestGroupLeave groupLeave;
@@ -296,7 +275,6 @@ union AooResponse
     AooResponseError error;
     AooResponseConnect connect;
     AooResponseDisconnect disconnect;
-    AooResponseQuery query;
     AooResponseLogin login;
     AooResponseGroupJoin groupJoin;
     AooResponseGroupLeave groupLeave;

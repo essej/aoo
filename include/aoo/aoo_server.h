@@ -152,11 +152,6 @@ AOO_INLINE AooError AooServer_setPassword(AooServer *server, const AooChar *pwd)
     return AooServer_control(server, kAooCtlSetPassword, 0, AOO_ARG(pwd));
 }
 
-AOO_INLINE AooError AooServer_setTcpHost(AooServer *server, const AooIpEndpoint *ep)
-{
-    return AooServer_control(server, kAooCtlSetTcpHost, 0, AOO_ARG(ep));
-}
-
 AOO_INLINE AooError AooServer_setRelayHost(
         AooServer *server, const AooIpEndpoint *ep)
 {

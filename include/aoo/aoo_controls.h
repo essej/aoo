@@ -66,7 +66,6 @@ enum
     kAooCtlGetBinaryDataMsg,
 #if AOO_NET
     kAooCtlSetPassword = 1000,
-    kAooCtlSetTcpHost,
     kAooCtlSetRelayHost,
     kAooCtlSetServerRelay,
     kAooCtlGetServerRelay,
