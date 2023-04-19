@@ -92,44 +92,47 @@ AooError AOO_CALL aoo::net::Client::setup(AooUInt16 port, AooSocketFlags flags) 
         return err;
     }
 
-    // get local network interfaces
+    // get private/global network interfaces
+    auto get_address = [](int sock, const char *host, int port,
+                          ip_address::ip_type family, bool ipv4mapped) {
+        auto addrlist = ip_address::resolve(host, port, family, ipv4mapped);
+        if (!addrlist.empty()) {
+            if (socket_connect(sock, addrlist.front(), 0) == 0) {
+                ip_address result;
+                if (socket_address(sock, result) == 0) {
+                    return result;
+                } else {
+                    throw std::runtime_error("getsockname() failed: " + socket_strerror(socket_errno()));
+                }
+            } else {
+                throw std::runtime_error("connect() failed: " + socket_strerror(socket_errno()));
+            }
+        } else {
+            throw std::runtime_error(std::string(ipv4mapped ? "IPv4" : "IPv6") + " networking not available");
+        }
+    };
+
     local_addr_.clear();
     int sock = socket_udp(0);
-    // get global IPv6 address
-    if (socket_family(sock) == ip_address::IPv6) {
-        ip_address dummy_addr("2001:4860:4860::8888", 80);
-        if (socket_connect(sock, dummy_addr, 0) == 0) {
-            ip_address result;
-            if (socket_address(sock, result) == 0) {
-                local_addr_.emplace_back(result.name(), udp_client_.port());
-                LOG_DEBUG("AooClient: global IPv6 address: " << local_addr_.back());
-            } else {
-                LOG_WARNING("AooClient: could not get global IPv6 address; getsockname() failed: "
-                            << socket_strerror(socket_errno()));
-            }
-        } else {
-            LOG_WARNING("AooClient: could not get global IPv6 address; connect() failed: "
-                        << socket_strerror(socket_errno()));
-        }
+
+    // try to get global IPv6 address
+    try {
+        auto ipv6_addr = get_address(sock, "2001:4860:4860::8888", 80, ip_address::IPv6, false);
+        local_addr_.emplace_back(ipv6_addr.name(), udp_client_.port());
+        LOG_DEBUG("AooClient: global IPv6 address: " << local_addr_.back());
+    } catch (const std::exception& e) {
+        LOG_VERBOSE("AooClient: could not get global IPv6 address");
+        LOG_DEBUG(e.what());
     }
-    // get private IPv4 address
-    // ip_address::resolve() will return a IPv4 (mapped) address
-    // - but only if IPv4 networking is enabled
-    auto dummy_addr = ip_address::resolve("8.8.8.8", 80, socket_family(sock), true);
-    if (!dummy_addr.empty()) {
-        if (socket_connect(sock, dummy_addr.front(), 0) == 0) {
-            ip_address result;
-            if (socket_address(sock, result) == 0) {
-                local_addr_.emplace_back(result.name_unmapped(), udp_client_.port()); // unmapped!
-                LOG_DEBUG("AooClient: private IPv4 address: " << local_addr_.back());
-            } else {
-                LOG_WARNING("AooClient: could not get private IPv4 address; getsockname() failed: "
-                            << socket_strerror(socket_errno()));
-            }
-        } else {
-            LOG_WARNING("AooClient: could not get private IPv4 address; connect() failed: "
-                        << socket_strerror(socket_errno()));
-        }
+
+    // try to get private IPv4 address
+    try {
+        auto ipv4_addr = get_address(sock, "8.8.8.8", 80, socket_family(sock), true);
+        local_addr_.emplace_back(ipv4_addr.name_unmapped(), udp_client_.port()); // unmapped!
+        LOG_DEBUG("AooClient: private IPv4 address: " << local_addr_.back());
+    } catch (const std::exception& e) {
+        LOG_VERBOSE("AooClient: could not get private IPv4 address");
+        LOG_DEBUG(e.what());
     }
 
     return kAooOk;
@@ -908,8 +911,10 @@ void Client::perform(const connect_cmd& cmd)
         LOG_DEBUG("\t" << addr);
     }
 
+    // typically we only need to contact the UDP server to obtain our
+    // public IPv4(-mapped) address. (Are there cases where we actually
+    // need to obtain an IPv6 address?)
     for (auto& addr : result) {
-        // we only need to perform UDP handshake with IPv4 (mapped) address
         if (addr.type() == ip_address::IPv4 || addr.is_ipv4_mapped()) {
             state_.store(client_state::handshake);
             udp_client_.start_handshake(addr);
