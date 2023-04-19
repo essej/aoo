@@ -500,7 +500,7 @@ AooError AOO_CALL aoo::net::Client::getPeerName(
             if (userNameBuffer && userNameSize) {
                 auto len = p.user_name().size() + 1;
                 if (*userNameSize >= len) {
-                    memcpy(groupNameBuffer, p.user_name().c_str(), len);
+                    memcpy(userNameBuffer, p.user_name().c_str(), len);
                     *userNameSize = len;
                 } else {
                     return kAooErrorInsufficientBuffer;
