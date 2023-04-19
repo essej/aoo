@@ -76,6 +76,8 @@ AooError parse_pattern(const AooByte *msg, int32_t n, AooMsgType& type, int32_t&
     }
 }
 
+// For now we deduce the message type (OSC vs. binary) from
+// the relayed message.
 AooSize write_relay_message(AooByte *buffer, AooSize bufsize,
                             const AooByte *msg, AooSize msgsize,
                             const ip_address& addr) {

@@ -3,9 +3,6 @@
 #include "aoo/aoo_codec.h"
 #include "aoo/aoo_config.h"
 #include "aoo/aoo_defines.h"
-#if AOO_NET
-# include "aoo/aoo_requests.h"
-#endif
 #include "aoo/aoo_types.h"
 
 #include "memory.hpp"
@@ -74,25 +71,6 @@ private:
     void *user_;
 };
 
-//---------------- IP address ----------------------//
-
-inline osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const ip_address& addr) {
-    // send *unmapped* addresses in case the client is IPv4 only
-    if (addr.valid()) {
-        msg << addr.name_unmapped() << (int32_t)addr.port();
-    } else {
-        msg << "" << (int32_t)0;
-    }
-    return msg;
-}
-
-inline ip_address osc_read_address(osc::ReceivedMessageArgumentIterator& it,
-                                   ip_address::ip_type type = ip_address::Unspec) {
-    auto host = (it++)->AsString();
-    auto port = (it++)->AsInt32();
-    return ip_address(host, port, type);
-}
-
 //---------------- endpoint ------------------------//
 
 struct endpoint {
@@ -129,9 +107,8 @@ inline std::ostream& operator<<(std::ostream& os, const endpoint& ep){
 
 #if AOO_NET
 namespace net {
-AooSize write_relay_message(AooByte *buffer, AooSize bufsize,
-                            const AooByte *msg, AooSize msgsize,
-                            const ip_address& addr);
+AooSize write_relay_message(AooByte *buffer, AooSize bufsize, const AooByte *msg,
+                            AooSize msgsize, const ip_address& addr);
 } // net
 
 inline void endpoint::send(const AooByte *data, AooSize size, const sendfn& fn) const {
