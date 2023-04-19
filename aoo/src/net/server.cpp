@@ -40,6 +40,39 @@ aoo::net::Server::~Server() {
     // between connected peers can continue if the server goes down for maintainence
 }
 
+AOO_API AooError AOO_CALL AooServer_setup(
+    AooServer *server, AooUInt16 port, AooSocketFlags flags)
+{
+    return server->setup(port, flags);
+}
+
+AooError AOO_CALL aoo::net::Server::setup(AooUInt16 port, AooSocketFlags flags) {
+    if (port <= 0) {
+        return kAooErrorBadArgument;
+    }
+    if ((flags & kAooSocketIPv4Mapped) &&
+            (!(flags & kAooSocketIPv6) || (flags & kAooSocketIPv4))) {
+        LOG_ERROR("AooServer: combination of setup flags not allowed");
+        return kAooErrorBadArgument;
+    }
+
+    port_ = port;
+
+    if (flags & kAooSocketIPv6) {
+        if (flags & kAooSocketIPv4) {
+            address_family_ = ip_address::Unspec; // both IPv6 and IPv4
+        } else {
+            address_family_ = ip_address::IPv6;
+        }
+    } else {
+        address_family_ = ip_address::IPv4;
+    }
+
+    use_ipv4_mapped_ = flags | kAooSocketIPv4Mapped;
+
+    return kAooOk;
+}
+
 AOO_API AooError AOO_CALL AooServer_handleUdpMessage(
         AooServer *server,
         const AooByte *data, AooInt32 size,
@@ -1323,25 +1356,52 @@ AooError Server::handle_relay(const AooByte *data, AooSize size,
         return kAooOk; // ?
     }
 
+    auto src_addr = addr.unmapped();
+
+    auto check_addr = [&](ip_address& addr) {
+        if (addr.is_ipv4_mapped()) {
+            LOG_DEBUG("AooServer: relay destination must not be IPv4-mapped");
+            return false;
+        }
+        if (address_family_ == ip_address::IPv6 && addr.type() == ip_address::IPv4) {
+            if (use_ipv4_mapped_) {
+                // map address to IPv4
+                addr = addr.ipv4_mapped();
+            } else {
+                // cannot relay to IPv4 address with IPv6-only socket
+                LOG_DEBUG("AooClient: cannot relay to destination address" << addr);
+                return false;
+            }
+        } else if (address_family_ == ip_address::IPv4 && addr.type() == ip_address::IPv6) {
+            // cannot relay to IPv6 address with IPv4-only socket
+            LOG_DEBUG("AooClient: cannot relay to destination address" << addr);
+            return false;
+        }
+        return true;
+    };
+
     if (binmsg_check(data, size)) {
         // --- binary format ---
-        ip_address dst;
-        auto onset = binmsg_read_relay(data, size, dst);
+        ip_address dst_addr;
+        auto onset = binmsg_read_relay(data, size, dst_addr);
+        if (!check_addr(dst_addr)) {
+            return kAooOk;
+        }
         if (onset > 0) {
         #if AOO_DEBUG_RELAY
             LOG_DEBUG("AooServer: forward binary relay message from " << addr << " to " << dst);
         #endif
-            if (addr.type() == dst.type()) {
+            if (src_addr.type() == dst_addr.type()) {
                 // simply replace the header (= rewrite address)
-                binmsg_write_relay(const_cast<AooByte *>(data), size, addr);
-                fn(data, size, dst);
+                binmsg_write_relay(const_cast<AooByte *>(data), size, src_addr);
+                fn(data, size, dst_addr);
                 return kAooOk;
             } else {
                 // rewrite whole message
                 AooByte buf[AOO_MAX_PACKET_SIZE];
-                auto result = write_relay_message(buf, sizeof(buf), data, size, addr);
+                auto result = write_relay_message(buf, sizeof(buf), data + onset, size - onset, src_addr);
                 if (result > 0) {
-                    fn(buf, result + size, dst);
+                    fn(buf, result + size, dst_addr);
                     return kAooOk;
                 } else {
                     LOG_ERROR("AooServer: can't relay: buffer too small");
@@ -1359,11 +1419,10 @@ AooError Server::handle_relay(const AooByte *data, AooSize size,
             osc::ReceivedMessage msg(packet);
 
             auto it = msg.ArgumentsBegin();
-            // infer the address type from the sender.
-            // E.g. the destination address might be IPv4,
-            // but our UDP socket is IPv6, so it would need
-            // to convert the address to IPv4-mapped.
-            auto dst = osc_read_address(it, addr.type());
+            auto dst_addr = osc_read_address(it);
+            if (!check_addr(dst_addr)) {
+                return kAooOk;
+            }
 
             const void *msgData;
             osc::osc_bundle_element_size_t msgSize;
@@ -1373,13 +1432,13 @@ AooError Server::handle_relay(const AooByte *data, AooSize size,
             char buf[AOO_MAX_PACKET_SIZE];
             osc::OutboundPacketStream out(buf, sizeof(buf));
             out << osc::BeginMessage(kAooMsgDomain kAooMsgRelay)
-                << addr << osc::Blob(msgData, msgSize)
+                << src_addr << osc::Blob(msgData, msgSize)
                 << osc::EndMessage;
 
         #if AOO_DEBUG_RELAY
             LOG_DEBUG("AooServer: forward OSC relay message from " << addr << " to " << dst);
         #endif
-            fn((const AooByte *)out.Data(), out.Size(), dst);
+            fn((const AooByte *)out.Data(), out.Size(), dst_addr);
 
             return kAooOk;
         } catch (const osc::Exception& e){

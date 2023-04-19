@@ -33,6 +33,8 @@ public:
 
     ~Server();
 
+    AooError AOO_CALL setup(AooUInt16 port, AooSocketFlags flags) override;
+
     AooError AOO_CALL handleUdpMessage(
             const AooByte *data, AooInt32 size,
             const void *address, AooAddrSize addrlen,
@@ -211,6 +213,10 @@ private:
 
     //----------------------------------------------------------------//
 
+    // UDP server
+    int port_ = 0; // unused
+    ip_address::ip_type address_family_ = ip_address::Unspec;
+    bool use_ipv4_mapped_ = false;
     // clients
     using client_map = std::unordered_map<AooId, client_endpoint>;
     client_map clients_;

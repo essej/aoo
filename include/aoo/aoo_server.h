@@ -31,6 +31,10 @@ AOO_API AooServer * AOO_CALL AooServer_new(
 /** \brief destroy AOO server instance */
 AOO_API void AOO_CALL AooServer_free(AooServer *server);
 
+/** \copydoc AooServer::setup() */
+AOO_API AooError AOO_CALL AooServer_setup(
+        AooServer *server, AooUInt16 port, AooSocketFlags flags);
+
 /** \copydoc AooServer::update() */
 AOO_API AooError AOO_CALL AooServer_update(AooServer *server);
 

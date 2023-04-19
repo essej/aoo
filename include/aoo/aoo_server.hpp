@@ -65,6 +65,12 @@ public:
 
     /*---------------------- methods ---------------------------*/
 
+    /** \brief setup the server object
+     *
+     * \attention If `flags` is 0, we assume that the server is IPv4-only.
+     */
+    virtual AooError AOO_CALL setup(AooUInt16 port, AooSocketFlags flags) = 0;
+
     /* UDP echo server */
 
     /** \brief handle UDP message

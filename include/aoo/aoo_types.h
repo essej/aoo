@@ -268,6 +268,29 @@ AOO_FLAG(AooSinkFlags)
 
 /*------------------------------------------------------------------*/
 
+/** \brief flags for AooClient_setup / AooClient::setup and
+ *         AooServer_setup / AooServer::setup
+ *
+ * Possible combinations:
+ *   - `kAooSocketIPv4` IPv4 only
+ *   - `kAooSocketIPv6` IPv6 only
+ *   - `kAooSocketIPv4 | kAooSocketIPv6` dedicated IPv4 and IPv6 sockets
+ *   - `kAooSocketIP6 | kAooSocketIPv4Mapped` IPv6 dual-stack socket
+ */
+AOO_FLAG(AooSocketFlags)
+{
+    /** client uses IPv4 addresses */
+    kAooSocketIPv4 = 0x01,
+    /** client uses IPv6 addresses */
+    kAooSocketIPv6 = 0x02,
+    /** client uses IPv4-mapped addresses */
+    kAooSocketIPv4Mapped = 0x04
+};
+
+#define kAooSocketDualStack (kAooSocketIPv6 | kAooSocketIPv4Mapped)
+
+/*------------------------------------------------------------------*/
+
 /** \brief flags for AooClient_sendMessage / AooClient::sendMessage */
 AOO_FLAG(AooMessageFlags)
 {

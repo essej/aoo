@@ -245,6 +245,11 @@ static void aoo_server_port(t_aoo_server *x, t_floatarg f)
             x->x_udpserver.start(port,
                 [x](auto&&... args) { x->handle_udp_receive(args...); });
 
+            auto flags = aoo::socket_family(x->x_udpserver.socket()) == aoo::ip_address::IPv6 ?
+                             kAooSocketDualStack : kAooSocketIPv4;
+
+            x->x_server->setup(port, flags);
+
             // setup TCP server
             x->x_tcpserver.start(port,
                 [x](auto&&... args) { return x->handle_accept(args...); },
@@ -291,6 +296,7 @@ t_aoo_server::t_aoo_server(int argc, t_atom *argv)
     x_clock = clock_new(this, (t_method)aoo_server_tick);
     x_stateout = outlet_new(&x_obj, 0);
     x_msgout = outlet_new(&x_obj, 0);
+
     x_server = AooServer::create(0, nullptr);
 
     int port = atom_getfloatarg(0, argc, argv);

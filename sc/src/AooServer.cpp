@@ -63,12 +63,18 @@ AooServer::AooServer(World *world, int port, const char *password)
                      [this](auto&&... args) { return handleAccept(args...); },
                      [this](auto&&... args) { return handleReceive(args...); });
 
+    auto flags = aoo::socket_family(udpserver_.socket()) == aoo::ip_address::IPv6 ?
+                     kAooSocketDualStack : kAooSocketIPv4;
+
     // success
     server_ = ::AooServer::create(0, nullptr);
+    server_->setup(port, flags);
     if (password) {
         server_->setPassword(password);
     }
+
     LOG_VERBOSE("AooServer: listening on port " << port);
+
     // first set event handler!
     server_->setEventHandler([](void *x, const AooEvent *e, AooThreadLevel) {
         static_cast<sc::AooServer *>(x)->handleEvent(e);
