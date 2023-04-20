@@ -890,10 +890,10 @@ void Client::perform(const connect_cmd& cmd)
         return;
     }
 
-    auto result = ip_address::resolve(cmd.host_.name, cmd.host_.port,
-                                      udp_client_.address_family(),
-                                      udp_client_.use_ipv4_mapped());
-    if (result.empty()){
+    auto addrlist = ip_address::resolve(cmd.host_.name, cmd.host_.port,
+                                        udp_client_.address_family(),
+                                        udp_client_.use_ipv4_mapped());
+    if (addrlist.empty()){
         int err = socket_errno();
         auto errmsg = socket_strerror(err);
         // LATER think about best way for error handling. Maybe exception?
@@ -907,23 +907,21 @@ void Client::perform(const connect_cmd& cmd)
     connection_ = std::make_unique<connect_cmd>(cmd);
 
     LOG_DEBUG("AooClient: server address list:");
-    for (auto& addr : result){
+    for (auto& addr : addrlist){
         LOG_DEBUG("\t" << addr);
     }
 
-    // typically we only need to contact the UDP server to obtain our
-    // public IPv4(-mapped) address. (Are there cases where we actually
-    // need to obtain an IPv6 address?)
-    for (auto& addr : result) {
-        if (addr.type() == ip_address::IPv4 || addr.is_ipv4_mapped()) {
-            state_.store(client_state::handshake);
-            udp_client_.start_handshake(addr);
-            return;
-        }
-    }
-
-    // IPv6-only: continue with login
-    perform(login_cmd(ip_address{}));
+    // prefer IPv4(-mapped) server address.
+    // Typically, we need to contact the UDP server to obtain our public
+    // IPv4(-mapped) address. In case the server address is IPv6-only,
+    // we ping it nevertheless, e.g. in case we could not obtain our
+    // global IPv6 address (for whatever reason).
+    std::sort(addrlist.begin(), addrlist.end(), [](auto& a, auto& b) {
+        return ((a.type() == ip_address::IPv4) || (a.is_ipv4_mapped()))
+               && b.type() == ip_address::IPv6;
+    });
+    state_.store(client_state::handshake);
+    udp_client_.start_handshake(addrlist.front());
 }
 
 int Client::try_connect(const ip_host& server){
@@ -941,10 +939,11 @@ int Client::try_connect(const ip_host& server){
         LOG_ERROR("AooClient: couldn't resolve host name: " << socket_strerror(err));
         return err;
     }
-    // sort IPv4 first because it is more likely for an AOO server to be IP4-only than
+    // sort IPv4(-mapped) first because it is more likely for an AOO server to be IP4-only than
     // to be IPv6-only
     std::sort(addrlist.begin(), addrlist.end(), [](auto& a, auto& b) {
-        return a.type() == ip_address::IPv4 && b.type() == ip_address::IPv6;
+        return ((a.type() == ip_address::IPv4) || (a.is_ipv4_mapped()))
+               && b.type() == ip_address::IPv6;
     });
 
     LOG_VERBOSE("AooClient: try to connect to " << server.name << " on port " << server.port);
@@ -1971,6 +1970,7 @@ void udp_client::update(Client& client, const sendfn& fn, time_tag now){
 }
 
 void udp_client::start_handshake(const ip_address& remote) {
+    LOG_DEBUG("AooClient: start UDP handshake with " << remote);
     scoped_lock lock(mutex_);
     first_ping_time_ = 0;
     remote_addr_ = remote;
