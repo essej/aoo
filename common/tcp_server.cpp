@@ -213,14 +213,14 @@ void tcp_server::receive_from_clients() {
                 }
             }
         } else if (revents & POLLERR) {
-            LOG_ERROR("tcp_server: receive: POLLERR");
+            LOG_DEBUG("tcp_server: receive: POLLERR");
             on_error(c.id, socket_error(c.socket));
         } else if (revents & POLLHUP) {
             // connection has been closed by the client
             LOG_DEBUG("tcp_server: receive: POLLHUP");
             on_error(c.id, socket_error(c.socket));
         } else if (revents & POLLNVAL) {
-            LOG_ERROR("tcp_server: receive: POLLNVAL");
+            LOG_DEBUG("tcp_server: receive: POLLNVAL");
             on_error(c.id, EINVAL);
         } else {
             // should never happen, just ignore for now
@@ -290,22 +290,22 @@ bool tcp_server::accept_client() {
                 poll_array_.push_back(p);
             }
 
-            LOG_VERBOSE("tcp_server: accepted client " << addr << " " << id);
+            LOG_DEBUG("tcp_server: accepted client " << addr << " " << id);
             return true;
         } else {
             int e = socket_errno();
-            LOG_ERROR("tcp_server: accept() failed for client "
+            LOG_DEBUG("tcp_server: accept() failed for client "
                       << addr << ": " << socket_strerror(e));
             on_error(e);
         }
     } else if (revents & POLLERR) {
-        LOG_ERROR("tcp_server: accept: POLLERR");
+        LOG_DEBUG("tcp_server: accept: POLLERR");
         on_error(socket_error(listen_socket_));
     } else if (revents & POLLHUP) {
-        LOG_ERROR("tcp_server: accept: POLLHUP");
+        LOG_DEBUG("tcp_server: accept: POLLHUP");
         on_error(socket_error(listen_socket_));
     } else if (revents & POLLNVAL) {
-        LOG_ERROR("tcp_server: accept: POLLNVAL");
+        LOG_DEBUG("tcp_server: accept: POLLNVAL");
         on_error(EINVAL);
     } else {
         // should never happen

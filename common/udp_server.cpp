@@ -17,7 +17,7 @@ void udp_server::start(int port, receive_handler receive,
                                  + socket_strerror(e));
     }
 
-    if (socket_address(socket_, addr_) < 0) {
+    if (socket_address(socket_, bind_addr_) < 0) {
         auto e = socket_errno();
         throw std::runtime_error("couldn't get socket address: "
                                  + socket_strerror(e));

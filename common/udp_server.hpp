@@ -39,9 +39,9 @@ public:
     udp_server() : buffer_(max_udp_packet_size) {}
     ~udp_server();
 
-    int port() const { return addr_.port(); }
+    int port() const { return bind_addr_.port(); }
     int socket() const { return socket_; }
-    aoo::ip_address::ip_type type() const { return addr_.type(); }
+    aoo::ip_address::ip_type type() const { return bind_addr_.type(); }
 
     udp_server(const udp_server&) = delete;
     udp_server& operator=(const udp_server&) = delete;
@@ -57,7 +57,7 @@ private:
     void do_close();
 
     int socket_ = invalid_socket;
-    aoo::ip_address addr_;
+    aoo::ip_address bind_addr_;
     std::atomic<bool> running_{false};
     bool threaded_ = false;
 

@@ -577,7 +577,7 @@ public:
             }
             // check the refcount again
         #if 1
-            // use read-modify-write operation to prevent reordering
+            // use read-modify-write operation to prevent reordering in both directions
             int32_t expected = 0;
             if (refcount_.compare_exchange_strong(expected, 0, std::memory_order_acq_rel)) {
         #else
