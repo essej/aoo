@@ -6,6 +6,7 @@
 #include "common/sync.hpp"
 
 #include <stdlib.h>
+#include <string.h>
 #include <iostream>
 
 #ifdef _WIN32
