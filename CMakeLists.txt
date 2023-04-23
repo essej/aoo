@@ -283,6 +283,15 @@ if (AOO_BUILD_SC_EXTENSION)
     add_subdirectory("sc")
 endif()
 
+# aooserver binary
+option(AOO_BUILD_SERVER "build AOO server application" ON)
+if (AOO_BUILD_SERVER)
+    if (NOT AOO_NET)
+        message(FATAL_ERROR "AOO server requires AOO_NET")
+    endif()
+    message(STATUS "\n*** AOO server ***\n")
+    add_subdirectory("server")
+endif()
 
 # test suite
 option(AOO_BUILD_TEST_SUITE "build test suite" ON)
