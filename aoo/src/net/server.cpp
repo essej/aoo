@@ -68,7 +68,7 @@ AooError AOO_CALL aoo::net::Server::setup(AooUInt16 port, AooSocketFlags flags) 
         address_family_ = ip_address::IPv4;
     }
 
-    use_ipv4_mapped_ = flags | kAooSocketIPv4Mapped;
+    use_ipv4_mapped_ = flags & kAooSocketIPv4Mapped;
 
     return kAooOk;
 }
