@@ -242,7 +242,7 @@ int main(int argc, const char **argv) {
     }
 
     AooError err;
-    g_aoo_server = AooServer::create(kAooSocketDualStack, &err);
+    g_aoo_server = AooServer::create(&err);
     if (!g_aoo_server) {
         std::cout << "Could not create AooServer: "
                   << aoo_strerror(err) << std::endl;

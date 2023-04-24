@@ -67,7 +67,7 @@ AooServer::AooServer(World *world, int port, const char *password)
                      kAooSocketDualStack : kAooSocketIPv4;
 
     // success
-    server_ = ::AooServer::create(0, nullptr);
+    server_ = ::AooServer::create(nullptr);
     server_->setup(port, flags);
     if (password) {
         server_->setPassword(password);

@@ -19,12 +19,10 @@ typedef struct AooSink AooSink;
 /** \brief create a new AOO sink instance
  *
  * \param id the ID
- * \param flags optional flags
- * \param[out] err error code on failure
+ * \param[out] err (optional) error code on failure
  * \return new AooSink instance on success; `NULL` on failure
  */
-AOO_API AooSink * AOO_CALL AooSink_new(
-        AooId id, AooFlag flags, AooError *err);
+AOO_API AooSink * AOO_CALL AooSink_new(AooId id, AooError *err);
 
 /** \brief destroy the AOO sink instance */
 AOO_API void AOO_CALL AooSink_free(AooSink *sink);

@@ -22,12 +22,10 @@ typedef struct AooClient AooClient;
 
 /** \brief create a new AOO source instance
  *
- * \param flags optional flags.
- * \param[out] err error code on failure
+ * \param[out] err (optional) error code on failure
  * \return new AooClient instance on success; `NULL` on failure
  */
-AOO_API AooClient * AOO_CALL AooClient_new(
-        AooSocketFlags flags, AooError *err);
+AOO_API AooClient * AOO_CALL AooClient_new(AooError *err);
 
 /** \brief destroy AOO client */
 AOO_API void AOO_CALL AooClient_free(AooClient *client);

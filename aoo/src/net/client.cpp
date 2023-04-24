@@ -49,16 +49,21 @@ std::string response_error_message(AooError result, int code, const char *msg) {
 
 //--------------------- AooClient -----------------------------//
 
-AOO_API AooClient * AOO_CALL AooClient_new(AooFlag flags, AooError *err) {
+AOO_API AooClient * AOO_CALL AooClient_new(AooError *err) {
     try {
-        return aoo::construct<aoo::net::Client>(flags, err);
+        if (err) {
+            *err = kAooErrorNone;
+        }
+        return aoo::construct<aoo::net::Client>();
     } catch (const std::bad_alloc&) {
-        *err = kAooErrorOutOfMemory;
+        if (err) {
+            *err = kAooErrorOutOfMemory;
+        }
         return nullptr;
     }
 }
 
-aoo::net::Client::Client(AooFlag flags, AooError *err) {
+aoo::net::Client::Client() {
     eventsocket_ = socket_udp(0);
     if (eventsocket_ < 0){
         // TODO handle error

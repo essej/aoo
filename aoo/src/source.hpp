@@ -200,7 +200,7 @@ public:
 
 class Source final : public AooSource, rt_memory_pool_client {
  public:
-    Source(AooId id, AooFlag flags, AooError *err);
+    Source(AooId id);
 
     ~Source();
 

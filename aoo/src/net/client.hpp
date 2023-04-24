@@ -139,7 +139,7 @@ public:
 
     //----------------------------------------------------------//
 
-    Client(AooFlag flags, AooError *err);
+    Client();
 
     ~Client();
 

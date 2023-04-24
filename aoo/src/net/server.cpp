@@ -14,12 +14,16 @@
 
 //----------------------- Server --------------------------//
 
-AOO_API AooServer * AOO_CALL AooServer_new(
-        AooFlag flags, AooError *err) {
+AOO_API AooServer * AOO_CALL AooServer_new(AooError *err) {
     try {
+        if (err) {
+            *err = kAooErrorNone;
+        }
         return aoo::construct<aoo::net::Server>();
     } catch (const std::bad_alloc&) {
-        *err = kAooErrorOutOfMemory;
+        if (err) {
+            *err = kAooErrorOutOfMemory;
+        }
         return nullptr;
     }
 }

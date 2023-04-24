@@ -23,17 +23,21 @@ const int32_t kBinDataHeaderSize = kAooBinMsgLargeHeaderSize + 8;
 
 //------------------------- Sink ------------------------------//
 
-AOO_API AooSink * AOO_CALL AooSink_new(
-        AooId id, AooFlag flags, AooError *err) {
+AOO_API AooSink * AOO_CALL AooSink_new(AooId id, AooError *err) {
     try {
-        return aoo::construct<aoo::Sink>(id, flags, err);
+        if (err) {
+            *err = kAooErrorNone;
+        }
+        return aoo::construct<aoo::Sink>(id);
     } catch (const std::bad_alloc&) {
-        *err = kAooErrorOutOfMemory;
+        if (err) {
+            *err = kAooErrorOutOfMemory;
+        }
         return nullptr;
     }
 }
 
-aoo::Sink::Sink(AooId id, AooFlag flags, AooError *err)
+aoo::Sink::Sink(AooId id)
     : id_(id) {}
 
 AOO_API void AOO_CALL AooSink_free(AooSink *sink) {

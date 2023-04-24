@@ -132,17 +132,21 @@ void sink_desc::activate(Source& s, bool b) {
 
 //---------------------- Source -------------------------//
 
-AOO_API AooSource * AOO_CALL AooSource_new(
-        AooId id, AooFlag flags, AooError *err) {
+AOO_API AooSource * AOO_CALL AooSource_new(AooId id, AooError *err) {
     try {
-        return aoo::construct<aoo::Source>(id, flags, err);
+        if (err) {
+            *err = kAooErrorNone;
+        }
+        return aoo::construct<aoo::Source>(id);
     } catch (const std::bad_alloc&) {
-        *err = kAooErrorOutOfMemory;
+        if (err) {
+            *err = kAooErrorOutOfMemory;
+        }
         return nullptr;
     }
 }
 
-aoo::Source::Source(AooId id, AooFlag flags, AooError *err)
+aoo::Source::Source(AooId id)
     : id_(id) {}
 
 AOO_API void AOO_CALL AooSource_free(AooSource *src){

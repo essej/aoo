@@ -981,7 +981,7 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
     x_msgout = outlet_new(&x_obj, 0);
 
     // create and initialize AooSource object
-    x_source = AooSource::create(x_id, 0, nullptr);
+    x_source = AooSource::create(x_id, nullptr);
 
     // set event handler
     x_source->setEventHandler((AooEventHandler)aoo_send_handle_event,

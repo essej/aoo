@@ -297,7 +297,7 @@ t_aoo_server::t_aoo_server(int argc, t_atom *argv)
     x_stateout = outlet_new(&x_obj, 0);
     x_msgout = outlet_new(&x_obj, 0);
 
-    x_server = AooServer::create(0, nullptr);
+    x_server = AooServer::create(nullptr);
 
     int port = atom_getfloatarg(0, argc, argv);
     aoo_server_port(this, port);

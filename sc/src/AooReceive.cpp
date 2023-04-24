@@ -20,7 +20,7 @@ void AooReceive::init(int32_t port, AooId id, AooSeconds latency) {
                 auto cmd = (OpenCmd *)data;
                 auto node = INode::get(world, cmd->port);
                 if (node){
-                    AooSink * sink = AooSink_new(cmd->id, 0, nullptr);
+                    AooSink * sink = AooSink_new(cmd->id, nullptr);
                     if (sink){
                         NodeLock lock(*node);
                         if (node->client()->addSink(sink, cmd->id) == kAooOk){

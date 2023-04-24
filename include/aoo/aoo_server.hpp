@@ -27,12 +27,10 @@ typedef struct AooServer AooServer;
 
 /** \brief create a new AOO source instance
  *
- * \param flags optional flags
- * \param[out] err error code on failure
+ * \param[out] err (optional) error code on failure
  * \return new AooServer instance on success; `NULL` on failure
  */
-AOO_API AooServer * AOO_CALL AooServer_new(
-        AooFlag flags, AooError *err);
+AOO_API AooServer * AOO_CALL AooServer_new(AooError *err);
 
 /** \brief destroy AOO server instance */
 AOO_API void AOO_CALL AooServer_free(AooServer *server);
@@ -58,8 +56,8 @@ public:
      *
      * \copydetails AooServer_new()
      */
-    static Ptr create(AooFlag flags, AooError *err) {
-        return Ptr(AooServer_new(flags, err));
+    static Ptr create(AooError *err) {
+        return Ptr(AooServer_new(err));
     }
 #endif
 

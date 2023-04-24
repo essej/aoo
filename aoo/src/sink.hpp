@@ -277,7 +277,7 @@ private:
 
 class Sink final : public AooSink, rt_memory_pool_client {
 public:
-    Sink(AooId id, AooFlag flags, AooError *err);
+    Sink(AooId id);
 
     ~Sink();
 

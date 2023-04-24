@@ -21,7 +21,7 @@ AooNode::AooNode(World *world, int port) {
     auto flags = aoo::socket_family(server_.socket()) == aoo::ip_address::IPv6 ?
                      kAooSocketDualStack : kAooSocketIPv4;
 
-    client_ = AooClient::create(0, nullptr);
+    client_ = AooClient::create(nullptr);
     client_->setup(port, flags);
 
 #if NETWORK_THREAD_POLL

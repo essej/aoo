@@ -339,7 +339,7 @@ t_node_imp::t_node_imp(t_symbol *s, int port)
     auto flags = aoo::socket_family(x_server.socket()) == aoo::ip_address::IPv6 ?
         kAooSocketDualStack : kAooSocketIPv4;
 
-    x_client = AooClient::create(0, nullptr);
+    x_client = AooClient::create(nullptr);
     x_client->setup(port, flags);
 
     pd_bind(&x_proxy.x_pd, x_bindsym);
