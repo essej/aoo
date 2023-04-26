@@ -193,6 +193,12 @@ AooError AOO_CALL aoo::net::Server::handleRequest(
     if (!request) {
         return kAooErrorBadArgument;
     }
+
+    auto c = find_client(client);
+    if (!c) {
+        return kAooErrorNotFound;
+    }
+
     if (result == kAooErrorNone) {
         // request accepted
 
@@ -205,42 +211,32 @@ AooError AOO_CALL aoo::net::Server::handleRequest(
             return kAooErrorBadArgument;
         }
 
-        auto c = find_client(client);
-        if (c) {
-            switch (request->type) {
-            case kAooRequestLogin:
-                return do_login(*c, token, request->login, response->login);
-            case kAooRequestGroupJoin:
-                return do_group_join(*c, token, request->groupJoin, response->groupJoin);
-            case kAooRequestGroupLeave:
-                return do_group_leave(*c, token, request->groupLeave, response->groupLeave);
-            case kAooRequestGroupUpdate:
-                return do_group_update(*c, token, request->groupUpdate, response->groupUpdate);
-            case kAooRequestUserUpdate:
-                return do_user_update(*c, token, request->userUpdate, response->userUpdate);
-            case kAooRequestCustom:
-                return do_custom_request(*c, token, request->custom, response->custom);
-            default:
-                return kAooErrorNotImplemented;
-            }
-        } else {
-            return kAooErrorNotFound;
+        switch (request->type) {
+        case kAooRequestLogin:
+            return do_login(*c, token, request->login, response->login);
+        case kAooRequestGroupJoin:
+            return do_group_join(*c, token, request->groupJoin, response->groupJoin);
+        case kAooRequestGroupLeave:
+            return do_group_leave(*c, token, request->groupLeave, response->groupLeave);
+        case kAooRequestGroupUpdate:
+            return do_group_update(*c, token, request->groupUpdate, response->groupUpdate);
+        case kAooRequestUserUpdate:
+            return do_user_update(*c, token, request->userUpdate, response->userUpdate);
+        case kAooRequestCustom:
+            return do_custom_request(*c, token, request->custom, response->custom);
+        default:
+            return kAooErrorNotImplemented;
         }
     } else {
         // request denied
-        auto c = find_client(client);
-        if (c) {
-            // response must be either AooRequestError or NULL
-            if (response && response->type != kAooRequestError) {
-                return kAooErrorBadArgument;
-            }
-            c->send_error(*this, token, request->type, result,
-                          (const AooResponseError *)response);
-
-            return kAooOk;
-        } else {
-            return kAooErrorNotFound;
+        // response must be either AooRequestError or NULL
+        if (response && response->type != kAooRequestError) {
+            return kAooErrorBadArgument;
         }
+        c->send_error(*this, token, request->type, result,
+                      (const AooResponseError *)response);
+
+        return kAooOk;
     }
 }
 
