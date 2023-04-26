@@ -616,7 +616,7 @@ bool Server::remove_client(AooId id) {
         return false;
     }
     // only send event if client has actually logged in!
-    auto valid = it->second.valid();
+    auto valid = it->second.active();
     it->second.on_close(*this);
     clients_.erase(it);
 
@@ -798,32 +798,38 @@ void Server::handle_message(client_endpoint& client,
     int32_t onset;
     auto err = parse_pattern((const AooByte *)msg.AddressPattern(), size, type, onset);
     if (err != kAooOk){
-        throw std::runtime_error("AOO NET message!");
+        throw std::runtime_error("not an AOO message!");
     }
 
     try {
         if (type == kAooMsgTypeServer){
             auto pattern = msg.AddressPattern() + onset;
             LOG_DEBUG("AooServer: got server message " << pattern);
-            if (!strcmp(pattern, kAooMsgPing)){
-                handle_ping(client, msg);
-            } else if (!strcmp(pattern, kAooMsgLogin)){
+            if (!strcmp(pattern, kAooMsgLogin)){
                 handle_login(client, msg);
-            } else if (!strcmp(pattern, kAooMsgGroupJoin)){
-                handle_group_join(client, msg);
-            } else if (!strcmp(pattern, kAooMsgGroupLeave)){
-                handle_group_leave(client, msg);
-            } else if (!strcmp(pattern, kAooMsgGroupUpdate)){
-                handle_group_update(client, msg);
-            } else if (!strcmp(pattern, kAooMsgUserUpdate)){
-                handle_user_update(client, msg);
-            } else if (!strcmp(pattern, kAooMsgRequest)){
-                handle_custom_request(client, msg);
             } else {
-                throw std::runtime_error("unknown server message " + std::string(pattern));
+                // all other message must be received after login!
+                if (!client.active()) {
+                    throw std::runtime_error("not logged in");
+                }
+                if (!strcmp(pattern, kAooMsgPing)){
+                    handle_ping(client, msg);
+                } else if (!strcmp(pattern, kAooMsgGroupJoin)){
+                    handle_group_join(client, msg);
+                } else if (!strcmp(pattern, kAooMsgGroupLeave)){
+                    handle_group_leave(client, msg);
+                } else if (!strcmp(pattern, kAooMsgGroupUpdate)){
+                    handle_group_update(client, msg);
+                } else if (!strcmp(pattern, kAooMsgUserUpdate)){
+                    handle_user_update(client, msg);
+                } else if (!strcmp(pattern, kAooMsgRequest)){
+                    handle_custom_request(client, msg);
+                } else {
+                    throw std::runtime_error("unknown server message " + std::string(pattern));
+                }
             }
         } else {
-            throw std::runtime_error("AooServer: got unexpected message " + std::string(msg.AddressPattern()));
+            throw std::runtime_error("unexpected message " + std::string(msg.AddressPattern()));
         }
     } catch (const osc::Exception& e) {
         std::stringstream ss;
@@ -881,6 +887,8 @@ AooError Server::do_login(client_endpoint& client, AooId token,
     if (allow_relay_.load()) {
         flags |= kAooLoginServerRelay;
     }
+
+    client.activate();
 
     // send reply
     auto extra = response.metadata ? response.metadata->size : 0;

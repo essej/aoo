@@ -154,8 +154,12 @@ public:
 
     AooSocket sockfd() const { return sockfd_; }
 
-    bool valid() const {
-        return !public_addresses_.empty();
+    void activate() {
+        active_ = true;
+    }
+
+    bool active() const {
+        return active_;
     }
 
     void add_public_address(const ip_address& addr) {
@@ -196,6 +200,7 @@ public:
 private:
     AooId id_;
     int sockfd_; // LATER use this to get information about the client (e.g. IP protocol)
+    bool active_ = false;
     AooServerReplyFunc replyfn_;
     void *context_;
     osc_stream_receiver receiver_;
