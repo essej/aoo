@@ -1069,8 +1069,7 @@ void Client::perform(const group_join_cmd& cmd)
     send_server_message(msg);
 }
 
-void Client::handle_response(const group_join_cmd& cmd,
-                             const osc::ReceivedMessage& msg) {
+void Client::handle_response(const group_join_cmd& cmd, const osc::ReceivedMessage& msg) {
     auto it = msg.ArgumentsBegin();
     (it++)->AsInt32(); // skip token
     auto result = (it++)->AsInt32();
@@ -1129,8 +1128,8 @@ void Client::handle_response(const group_join_cmd& cmd,
         auto code = (it++)->AsInt32();
         auto msg = (it++)->AsString();
         cmd.reply_error(result, code, msg);
-        LOG_WARNING("AooClient: couldn't join group "
-                    << cmd.group_name_ << ": " << response_error_message(result, code, msg));
+        LOG_WARNING("AooClient: couldn't join group " << cmd.group_name_ << ": "
+                    << response_error_message(result, code, msg));
     }
 }
 
@@ -1138,7 +1137,12 @@ void Client::handle_response(const group_join_cmd& cmd,
 
 void Client::perform(const group_leave_cmd& cmd)
 {
-    // TODO check for group membership?
+    // first check for group membership
+    if (find_group_membership(cmd.group_) == nullptr) {
+        LOG_WARNING("AooClient: couldn't leave group " << cmd.group_ << ": not a group member");
+        cmd.reply_error(kAooErrorNotGroupMember);
+        return;
+    }
 
     auto token = next_token_++;
     pending_requests_.emplace(token, std::make_unique<group_leave_cmd>(cmd));
@@ -1151,8 +1155,7 @@ void Client::perform(const group_leave_cmd& cmd)
     send_server_message(msg);
 }
 
-void Client::handle_response(const group_leave_cmd& cmd,
-                             const osc::ReceivedMessage& msg) {
+void Client::handle_response(const group_leave_cmd& cmd, const osc::ReceivedMessage& msg) {
     auto it = msg.ArgumentsBegin();
     (it++)->AsInt32(); // skip token
     auto result = (it++)->AsInt32();
@@ -1186,15 +1189,20 @@ void Client::handle_response(const group_leave_cmd& cmd,
         auto code = (it++)->AsInt32();
         auto msg = (it++)->AsString();
         cmd.reply_error(result, code, msg);
-        LOG_WARNING("AooClient: couldn't leave group "
-                    << cmd.group_ << ": " << response_error_message(result, code, msg));
+        LOG_WARNING("AooClient: couldn't leave group " << cmd.group_ << ": "
+                    << response_error_message(result, code, msg));
     }
 }
 
 //------------------ group_update -----------------------//
 
 void Client::perform(const group_update_cmd& cmd) {
-    // TODO check for group membership?
+    // first check for group membership
+    if (find_group_membership(cmd.group_) == nullptr) {
+        LOG_WARNING("AooClient: couldn't update group " << cmd.group_ << ": not a group member");
+        cmd.reply_error(kAooErrorNotGroupMember);
+        return;
+    }
 
     auto token = next_token_++;
     pending_requests_.emplace(token, std::make_unique<group_update_cmd>(cmd));
@@ -1207,8 +1215,7 @@ void Client::perform(const group_update_cmd& cmd) {
     send_server_message(msg);
 }
 
-void Client::handle_response(const group_update_cmd& cmd,
-                             const osc::ReceivedMessage& msg) {
+void Client::handle_response(const group_update_cmd& cmd, const osc::ReceivedMessage& msg) {
     auto it = msg.ArgumentsBegin();
     (it++)->AsInt32(); // skip token
     auto result = (it++)->AsInt32();
@@ -1225,15 +1232,29 @@ void Client::handle_response(const group_update_cmd& cmd,
         auto code = (it++)->AsInt32();
         auto msg = (it++)->AsString();
         cmd.reply_error(result, code, msg);
-        LOG_WARNING("AooClient: could not update group "
-                    << cmd.group_ << ": " << response_error_message(result, code, msg));
+        LOG_WARNING("AooClient: could not update group " << cmd.group_ << ": "
+                    << response_error_message(result, code, msg));
     }
 }
 
 //------------------ user_update -----------------------//
 
 void Client::perform(const user_update_cmd& cmd) {
-    // TODO check for group membership?
+    // first check for group membership
+    auto group = find_group_membership(cmd.group_);
+    if (group == nullptr) {
+        LOG_WARNING("AooClient: couldn't update user " << cmd.user_
+                    << " in group " << cmd.group_ << ": not a group member");
+        cmd.reply_error(kAooErrorNotGroupMember);
+        return;
+    }
+    // we are only allowed to update ourselves
+    if (group->user_id != cmd.user_) {
+        LOG_WARNING("AooClient: couldn't update user " << cmd.user_
+                    << " in group " << cmd.group_ << ": not permitted");
+        cmd.reply_error(kAooErrorNotPermitted);
+        return;
+    }
 
     auto token = next_token_++;
     pending_requests_.emplace(token, std::make_unique<user_update_cmd>(cmd));
@@ -1246,8 +1267,7 @@ void Client::perform(const user_update_cmd& cmd) {
     send_server_message(msg);
 }
 
-void Client::handle_response(const user_update_cmd& cmd,
-                             const osc::ReceivedMessage& msg) {
+void Client::handle_response(const user_update_cmd& cmd, const osc::ReceivedMessage& msg) {
     auto it = msg.ArgumentsBegin();
     (it++)->AsInt32(); // skip token
     auto result = (it++)->AsInt32();

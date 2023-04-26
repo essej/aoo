@@ -1135,6 +1135,11 @@ void Server::handle_group_update(client_endpoint& client, const osc::ReceivedMes
         client.send_error(*this, token, request.type, kAooErrorGroupDoesNotExist);
         return;
     }
+    // verify group membership (in addition to client-side check)
+    if (!grp->find_user(client)) {
+        client.send_error(*this, token, request.type, kAooErrorNotPermitted);
+        return;
+    }
 
     if (!handle_request(client, token, (AooRequest&)request)) {
         AooResponseGroupUpdate response;
@@ -1206,9 +1211,13 @@ void Server::handle_user_update(client_endpoint& client, const osc::ReceivedMess
         client.send_error(*this, token, request.type, kAooErrorGroupDoesNotExist);
         return;
     }
-    auto usr = grp->find_user(user_id);
-    if (!usr) {
+    if (!grp->find_user(user_id)) {
         client.send_error(*this, token, request.type, kAooErrorUserDoesNotExist);
+    }
+    // verify group membership (in addition to client-side check)
+    if (!grp->find_user(client)) {
+        client.send_error(*this, token, request.type, kAooErrorNotPermitted);
+        return;
     }
 
     if (!handle_request(client, token, (AooRequest&)request)) {
