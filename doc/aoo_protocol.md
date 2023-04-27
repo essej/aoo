@@ -601,6 +601,18 @@ Group metadata has changed.
 
 ---
 
+## `/aoo/client/group/eject`
+
+Ejected from group.
+
+### Arguments:
+
+| type | description                      |
+| ---: | -------------------------------- |
+|  `i` | group ID                         |
+
+---
+
 ## `/aoo/client/message`
 
 Generic server notification.

@@ -411,7 +411,7 @@ AooError AOO_CALL aoo::net::Server::removeUserFromGroup(
             if (usr->active()) {
                 // tell client that it has been kicked out of the group
                 if (auto client = find_client(*usr)) {
-                    client->on_group_leave(*grp, *usr, true);
+                    client->on_group_leave(*this, *grp, *usr, true);
                 } else {
                     LOG_ERROR("AooServer: removeUserFromGroup: can't find client for user " << *usr);
                 }
@@ -666,7 +666,7 @@ bool Server::remove_group(AooId id) {
     auto& grp = it->second;
     for (auto& usr : grp.users()) {
         if (auto client = find_client(usr)) {
-            client->on_group_leave(grp, usr, true);
+            client->on_group_leave(*this, grp, usr, true);
         } else {
             LOG_ERROR("AooServer: remove_group: can't find client for user " << usr);
         }
@@ -1037,7 +1037,7 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
     response.groupId = grp->id();
     response.userId = usr->id();
 
-    client.on_group_join(*grp, *usr);
+    client.on_group_join(*this, *grp, *usr);
 
     // send reply
     auto extra = grp->metadata().size() + usr->metadata().size() +
@@ -1091,7 +1091,7 @@ AooError Server::do_group_leave(client_endpoint& client, AooId token,
         if (auto usr = grp->find_user(client)) {
             on_user_left_group(*grp, *usr);
 
-            client.on_group_leave(*grp, *usr, false);
+            client.on_group_leave(*this, *grp, *usr, false);
 
             do_remove_user_from_group(*grp, *usr);
 

@@ -176,6 +176,9 @@
 #define kAooMsgLeave "/leave"
 #define kAooMsgLeaveLen 6
 
+#define kAooMsgEject "/eject"
+#define kAooMsgEjectLen 6
+
 #define kAooMsgUpdate "/update"
 #define kAooMsgUpdateLen 7
 

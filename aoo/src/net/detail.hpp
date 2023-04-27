@@ -11,6 +11,9 @@
 #define kAooMsgGroupLeave \
     kAooMsgGroup kAooMsgLeave
 
+#define kAooMsgGroupEject \
+    kAooMsgGroup kAooMsgEject
+
 #define kAooMsgGroupUpdate \
     kAooMsgGroup kAooMsgUpdate
 
@@ -62,6 +65,9 @@
 
 #define kAooMsgClientGroupLeave \
     kAooMsgDomain kAooMsgClient kAooMsgGroupLeave
+
+#define kAooMsgClientGroupEject\
+    kAooMsgDomain kAooMsgClient kAooMsgGroupEject
 
 #define kAooMsgClientGroupUpdate \
     kAooMsgDomain kAooMsgClient kAooMsgGroupUpdate

@@ -1469,6 +1469,8 @@ void Client::handle_server_message(const osc::ReceivedMessage& msg, int32_t n){
                 handle_group_changed(msg);
             } else if (!strcmp(pattern, kAooMsgUserChanged)) {
                 handle_user_changed(msg);
+            } else if (!strcmp(pattern, kAooMsgGroupEject)) {
+                handle_group_eject(msg);
             } else if (!strcmp(pattern, kAooMsgGroupJoin) ||
                        !strcmp(pattern, kAooMsgGroupLeave) ||
                        !strcmp(pattern, kAooMsgGroupUpdate) ||
@@ -1557,6 +1559,36 @@ void Client::handle_server_notification(const osc::ReceivedMessage& msg) {
     send_event(std::move(e));
 
     LOG_DEBUG("AooClient: received server notification (" << message.type << ")");
+}
+
+void Client::handle_group_eject(const osc::ReceivedMessage& msg) {
+    auto it = msg.ArgumentsBegin();
+    auto group = (it++)->AsInt32();
+
+    // remove all peers from this group
+    peer_lock lock(peers_);
+    for (auto it = peers_.begin(); it != peers_.end(); ){
+        if (it->match(group)){
+            it = peers_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    lock.unlock();
+
+    // remove group membership
+    auto mit = std::find_if(memberships_.begin(), memberships_.end(),
+                            [&](auto& m) { return m.group_id == group; });
+    if (mit != memberships_.end()) {
+        memberships_.erase(mit);
+    } else {
+        LOG_ERROR("AooClient: group eject: not a member of group " << group);
+    }
+
+    auto e = std::make_unique<group_eject_event>(group);
+    send_event(std::move(e));
+
+    LOG_VERBOSE("AooClient: ejected from group " << group);
 }
 
 void Client::handle_group_changed(const osc::ReceivedMessage& msg) {

@@ -73,6 +73,8 @@ AOO_ENUM(AooEventType)
     kAooEventClientNotification,
     /** need to call AooClient_send() */
     kAooEventClientNeedSend,
+    /** the client has been ejected from a group */
+    kAooEventClientGroupEject,
     /** a group has been updated (by a peer or by the server) */
     kAooEventClientGroupUpdate,
     /** our user has been updated (by the server) */
@@ -283,6 +285,13 @@ typedef struct AooEventClientNotification
     AOO_EVENT_HEADER
     AooData message;
 } AooEventClientNotification;
+
+/** \brief we have been ejected from a group */
+typedef struct AooEventClientGroupEject
+{
+    AOO_EVENT_HEADER
+    AooId groupId;
+} AooEventClientGroupEject;
 
 /** \brief group metadata has been updated */
 typedef struct AooEventClientGroupUpdate
@@ -495,6 +504,7 @@ union AooEvent
 #if 0
     AooEventClientNeedSend clientNeedSend;
 #endif
+    AooEventClientGroupEject clientGroupEject;
     AooEventClientGroupUpdate clientGroupUpdate;
     AooEventClientUserUpdate clientUserUpdate;
     AooEventPeer peer;

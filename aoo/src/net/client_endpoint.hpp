@@ -190,9 +190,9 @@ public:
 
     void send_peer_update(Server& server, const user& peer);
 
-    void on_group_join(const group& grp, const user& usr);
+    void on_group_join(Server& server, const group& grp, const user& usr);
 
-    void on_group_leave(const group& grp, const user& usr, bool force);
+    void on_group_leave(Server& server, const group& grp, const user& usr, bool eject);
 
     void on_close(Server& server);
 

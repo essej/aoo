@@ -216,7 +216,7 @@ void client_endpoint::handle_message(Server &server, const AooByte *data, int32_
     });
 }
 
-void client_endpoint::on_group_join(const group& grp, const user& usr) {
+void client_endpoint::on_group_join(Server&, const group& grp, const user& usr) {
 #if 1
     for (auto& gu : group_users_) {
         if (gu.group == grp.id() && gu.user == usr.id()) {
@@ -229,9 +229,16 @@ void client_endpoint::on_group_join(const group& grp, const user& usr) {
     group_users_.emplace_back(group_user { grp.id(), usr.id() });
 }
 
-void client_endpoint::on_group_leave(const group& grp, const user& usr, bool force) {
-    if (force) {
-        // TODO send message to user, so that it knows it has been removed!
+void client_endpoint::on_group_leave(Server& server, const group& grp,
+                                     const user& usr, bool eject) {
+    if (eject) {
+        // tell client that it has been ejected from the group
+        auto msg = server.start_message();
+
+        msg << osc::BeginMessage(kAooMsgClientGroupEject)
+            << grp.id() << osc::EndMessage;
+
+        send_message(msg);
     }
     for (auto it = group_users_.begin(); it != group_users_.end(); ++it) {
         if (it->group == grp.id() && it->user == usr.id()) {
@@ -239,8 +246,8 @@ void client_endpoint::on_group_leave(const group& grp, const user& usr, bool for
             return;
         }
     }
-    LOG_ERROR("AooServer: client_endpoint::remove_group_user(): "
-              << "couldn't remove group user " << grp.id() << "|" << usr.id());
+    LOG_ERROR("AooServer: on_group_leave: couldn't remove group user "
+              << grp.id() << "|" << usr.id());
 }
 
 } // net

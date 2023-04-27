@@ -151,6 +151,21 @@ struct group_update_event : ievent
     metadata md_;
 };
 
+struct group_eject_event : ievent
+{
+    group_eject_event(AooId group)
+        : group_(group) {}
+
+    void dispatch(const event_handler &fn) const override {
+        AooEventClientGroupEject e;
+        AOO_EVENT_INIT(&e, AooEventClientGroupEject, groupId);
+        e.groupId = group_;
+        fn(e);
+    }
+
+    AooId group_;
+};
+
 struct notification_event : ievent
 {
     notification_event(const AooData& msg)

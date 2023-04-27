@@ -411,6 +411,8 @@ private:
 
     void handle_server_notification(const osc::ReceivedMessage& msg);
 
+    void handle_group_eject(const osc::ReceivedMessage& msg);
+
     void handle_group_changed(const osc::ReceivedMessage& msg);
 
     void handle_user_changed(const osc::ReceivedMessage& msg);
