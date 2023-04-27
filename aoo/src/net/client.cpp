@@ -366,35 +366,35 @@ AooError AOO_CALL aoo::net::Client::leaveGroup(
 }
 
 AOO_API AooError AOO_CALL AooClient_updateGroup(
-        AooClient *client, AooId group, const AooData *metadata,
+        AooClient *client, AooId groupId, const AooData *groupMetadata,
         AooResponseHandler cb, void *context) {
-    if (!metadata) {
+    if (!groupMetadata) {
         return kAooErrorBadArgument;
     }
-    return client->updateGroup(group, *metadata, cb, context);
+    return client->updateGroup(groupId, *groupMetadata, cb, context);
 }
 
 AooError AOO_CALL aoo::net::Client::updateGroup(
-        AooId group, const AooData& metadata,
+        AooId groupId, const AooData& groupMetadata,
         AooResponseHandler cb, void *context) {
-    auto cmd = std::make_unique<group_update_cmd>(group, metadata, cb, context);
+    auto cmd = std::make_unique<group_update_cmd>(groupId, groupMetadata, cb, context);
     push_command(std::move(cmd));
     return kAooOk;
 }
 
 AOO_API AooError AOO_CALL AooClient_updateUser(
-        AooClient *client, AooId group, AooId user, const AooData *metadata,
+        AooClient *client, AooId groupId, const AooData *userMetadata,
         AooResponseHandler cb, void *context) {
-    if (!metadata) {
+    if (!userMetadata) {
         return kAooErrorBadArgument;
     }
-    return client->updateUser(group, user, *metadata, cb, context);
+    return client->updateUser(groupId, *userMetadata, cb, context);
 }
 
 AooError AOO_CALL aoo::net::Client::updateUser(
-        AooId group, AooId user, const AooData& metadata,
+        AooId groupId, const AooData& userMetadata,
         AooResponseHandler cb, void *context) {
-    auto cmd = std::make_unique<user_update_cmd>(group, user, metadata, cb, context);
+    auto cmd = std::make_unique<user_update_cmd>(groupId, userMetadata, cb, context);
     push_command(std::move(cmd));
     return kAooOk;
 }
@@ -1243,26 +1243,18 @@ void Client::perform(const user_update_cmd& cmd) {
     // first check for group membership
     auto group = find_group_membership(cmd.group_);
     if (group == nullptr) {
-        LOG_WARNING("AooClient: couldn't update user " << cmd.user_
-                    << " in group " << cmd.group_ << ": not a group member");
+        LOG_WARNING("AooClient: couldn't update user in group "
+                    << cmd.group_ << ": not a group member");
         cmd.reply_error(kAooErrorNotGroupMember);
         return;
     }
-    // we are only allowed to update ourselves
-    if (group->user_id != cmd.user_) {
-        LOG_WARNING("AooClient: couldn't update user " << cmd.user_
-                    << " in group " << cmd.group_ << ": not permitted");
-        cmd.reply_error(kAooErrorNotPermitted);
-        return;
-    }
-
     auto token = next_token_++;
     pending_requests_.emplace(token, std::make_unique<user_update_cmd>(cmd));
 
     auto msg = start_server_message(cmd.md_.size());
 
     msg << osc::BeginMessage(kAooMsgServerUserUpdate)
-        << token << cmd.group_ << cmd.user_ << cmd.md_ << osc::EndMessage;
+        << token << cmd.group_ << cmd.md_ << osc::EndMessage;
 
     send_server_message(msg);
 }
@@ -1279,14 +1271,12 @@ void Client::handle_response(const user_update_cmd& cmd, const osc::ReceivedMess
         response.userMetadata.size = cmd.md_.size();
 
         cmd.reply((AooResponse&)response);
-        LOG_VERBOSE("AooClient: successfully updated user "
-                    << cmd.user_ << " in group " << cmd.group_);
+        LOG_VERBOSE("AooClient: successfully updated user in group " << cmd.group_);
     } else {
         auto code = (it++)->AsInt32();
         auto msg = (it++)->AsString();
         cmd.reply_error(result, code, msg);
-        LOG_WARNING("AooClient: could not update user " << cmd.user_
-                    << " in group " << cmd.group_ << ": "
+        LOG_WARNING("AooClient: could not update user in group " << cmd.group_ << ": "
                     << response_error_message(result, code, msg));
     }
 }

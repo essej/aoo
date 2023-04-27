@@ -85,13 +85,13 @@ AOO_API AooError AooClient_leaveGroup(
 /** \copydoc AooClient::updateGroup() */
 AOO_API AooError AOO_CALL AooClient_updateGroup(
         AooClient *client,
-        AooId group, const AooData *metadata,
+        AooId groupId, const AooData *groupMetadata,
         AooResponseHandler cb, void *context);
 
 /** \copydoc AooClient::updateUser() */
 AOO_API AooError AOO_CALL AooClient_updateUser(
-        AooClient *client, AooId group,
-        AooId user, const AooData *metadata,
+        AooClient *client, AooId groupId,
+        const AooData *userMetadata,
         AooResponseHandler cb, void *context);
 
 /** \copydoc AooClient::customRequest() */

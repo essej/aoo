@@ -170,10 +170,10 @@ public:
 
     AooError AOO_CALL leaveGroup(AooId group, AooResponseHandler cb, void *context) override;
 
-    AooError AOO_CALL updateGroup(AooId group, const AooData& metadata,
+    AooError AOO_CALL updateGroup(AooId groupId, const AooData& groupMetadata,
                                   AooResponseHandler cb, void *context) override;
 
-    AooError AOO_CALL updateUser(AooId group, AooId user, const AooData& metadata,
+    AooError AOO_CALL updateUser(AooId groupId, const AooData& userMetadata,
                                  AooResponseHandler cb, void *context) override;
 
     AooError AOO_CALL customRequest(const AooData& data, AooFlag flags,
@@ -609,10 +609,9 @@ public:
 
     struct user_update_cmd : callback_cmd
     {
-        user_update_cmd(AooId group, AooId user,
-                        const AooData &md, AooResponseHandler cb, void *context)
+        user_update_cmd(AooId group, const AooData &md, AooResponseHandler cb, void *context)
             : callback_cmd(cb, context),
-              group_(group), user_(user), md_(&md) {}
+              group_(group), md_(&md) {}
 
         void perform(Client& obj) override {
             obj.perform(*this);
@@ -626,7 +625,6 @@ public:
             AooRequestUserUpdate request;
             AOO_REQUEST_INIT(&request, UserUpdate, userMetadata);
             request.groupId = group_;
-            request.userId = user_;
             request.userMetadata.type = md_.type();
             request.userMetadata.data = md_.data();
             request.userMetadata.size = md_.size();
@@ -634,7 +632,6 @@ public:
             callback((AooRequest&)request, result, response);
         }
         AooId group_;
-        AooId user_;
         aoo::metadata md_;
     };
 

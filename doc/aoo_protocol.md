@@ -443,7 +443,6 @@ Update user metadata.
 | ---: | -------------------------------- |
 |  `i` | request token                    |
 |  `i` | group ID                         |
-|  `i` | user ID                          |
 |  `i` | [metadata type](#5.2-data-types) |
 |  `b` | metadata content                 |
 

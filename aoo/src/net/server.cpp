@@ -1197,22 +1197,17 @@ void Server::handle_user_update(client_endpoint& client, const osc::ReceivedMess
     auto it = msg.ArgumentsBegin();
     auto token = (AooId)(it++)->AsInt32();
     auto group_id = (it++)->AsInt32();
-    auto user_id = (it++)->AsInt32();
     auto md = osc_read_metadata(it);
 
     AooRequestUserUpdate request;
     AOO_REQUEST_INIT(&request, UserUpdate, userMetadata);
     request.groupId = group_id;
-    request.userId = user_id;
     request.userMetadata = md;
 
     auto grp = find_group(request.groupId);
     if (!grp) {
         client.send_error(*this, token, request.type, kAooErrorGroupDoesNotExist);
         return;
-    }
-    if (!grp->find_user(user_id)) {
-        client.send_error(*this, token, request.type, kAooErrorUserDoesNotExist);
     }
     // verify group membership (in addition to client-side check)
     if (!grp->find_user(client)) {
@@ -1238,7 +1233,7 @@ AooError Server::do_user_update(client_endpoint &client, AooId token,
         return kAooErrorNotFound;
     }
 
-    auto usr = grp->find_user(request.userId);
+    auto usr = grp->find_user(client);
     if (!usr) {
         LOG_ERROR("AooServer: could not find user");
         return kAooErrorNotFound;

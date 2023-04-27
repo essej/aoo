@@ -221,7 +221,6 @@ typedef struct AooRequestUserUpdate
 {
     AOO_REQUEST_HEADER
     AooId groupId;
-    AooId userId;
     AooData userMetadata;
 } AooRequestUserUpdate;
 

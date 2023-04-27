@@ -164,27 +164,26 @@ public:
      *
      * \note Threadsafe and RT-safe
      *
-     * \param group the group
-     * \param metadata the new metadata
+     * \param groupId the group ID
+     * \param groupMetadata the new group metadata
      * \param cb function to be called with server reply
      * \param context user data passed to callback function
      */
     virtual AooError AOO_CALL updateGroup(
-            AooId group, const AooData &metadata,
+            AooId groupId, const AooData &groupMetadata,
             AooResponseHandler cb, void *context) = 0;
 
     /** \brief update user metadata
      *
      * \note Threadsafe and RT-safe
      *
-     * \param group the group
-     * \param user the user
-     * \param metadata the new metadata
+     * \param groupId the group ID
+     * \param userMetadata the new user metadata
      * \param cb function to be called with server reply
      * \param context user data passed to callback function
      */
     virtual AooError AOO_CALL updateUser(
-            AooId group, AooId user, const AooData &metadata,
+            AooId groupId, const AooData &userMetadata,
             AooResponseHandler cb, void *context) = 0;
 
     /** \brief send custom request
