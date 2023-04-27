@@ -129,6 +129,10 @@ void udp_server::receive(double timeout) {
                 continue;
             }
         #endif
+            if (e == EINTR){
+                continue;
+            }
+
             LOG_DEBUG("udp_server: recv() failed: " << socket_strerror(e));
             receive_handler_(e, address, nullptr, 0);
 

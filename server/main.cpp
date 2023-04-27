@@ -87,7 +87,8 @@ AooId handle_tcp_accept(int e, const aoo::ip_address& addr, int sockfd) {
         // error
         if (g_loglevel >= kAooLogLevelError)
             std::cout << "TCP server: accept() failed: " << aoo::socket_strerror(e) << std::endl;
-    #if 1
+        // TODO handle error?
+    #if 0
         stop_server();
     #endif
         return kAooIdInvalid;

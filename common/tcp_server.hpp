@@ -50,7 +50,7 @@ public:
     bool close(AooId client);
 private:
     void receive();
-    bool accept_client();
+    void accept_client();
     void receive_from_clients();
     void on_error(int code) {
         accept_handler_(0, ip_address(), -1);
