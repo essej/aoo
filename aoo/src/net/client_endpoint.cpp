@@ -164,11 +164,11 @@ void client_endpoint::send_peer_remove(Server& server, const group& grp, const u
     send_message(msg);
 }
 
-void client_endpoint::send_group_update(Server& server, const group& grp) {
+void client_endpoint::send_group_update(Server& server, const group& grp, AooId usr) {
     auto msg = server.start_message();
 
     msg << osc::BeginMessage(kAooMsgClientGroupChanged)
-        << grp.id() << grp.metadata() << osc::EndMessage;
+        << grp.id() << usr << grp.metadata() << osc::EndMessage;
 
     send_message(msg);
 }

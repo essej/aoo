@@ -1597,9 +1597,10 @@ void Client::handle_group_eject(const osc::ReceivedMessage& msg) {
 void Client::handle_group_changed(const osc::ReceivedMessage& msg) {
     auto it = msg.ArgumentsBegin();
     auto group = (it++)->AsInt32();
+    auto user = (it++)->AsInt32();
     auto md = osc_read_metadata(it);
 
-    auto e = std::make_unique<group_update_event>(group, md);
+    auto e = std::make_unique<group_update_event>(group, user, md);
     send_event(std::move(e));
 
     LOG_VERBOSE("AooClient: group " << group << " has been updated");

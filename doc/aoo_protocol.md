@@ -598,8 +598,12 @@ Group metadata has changed.
 | type | description                      |
 | ---: | -------------------------------- |
 |  `i` | group ID                         |
+|  `i` | user ID                          |
 |  `i` | [metadata type](#5.2-data-types) |
 |  `b` | metadata content                 |
+
+The user ID refers to the user that updated the group.
+-1 means that the group has been updated by the server.
 
 ---
 

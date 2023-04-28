@@ -148,14 +148,14 @@ struct group_leave_event : ievent
 
 struct group_update_event : ievent
 {
-    group_update_event(const group& grp)
-        : group_(grp.id()), md_(grp.metadata()) {}
+    group_update_event(const group& grp, const user& usr)
+        : group_(grp.id()), user_(usr.id()), md_(grp.metadata()) {}
 
     void dispatch(const event_handler& fn) const override {
         AooEventGroupUpdate e;
         AOO_EVENT_INIT(&e, AooEventGroupUpdate, groupMetadata);
         e.groupId = group_;
-        e.userId = kAooIdInvalid; // TODO
+        e.userId = user_;
         e.groupMetadata.type = md_.type();
         e.groupMetadata.data = md_.data();
         e.groupMetadata.size = md_.size();
@@ -164,6 +164,7 @@ struct group_update_event : ievent
     }
 
     AooId group_;
+    AooId user_;
     aoo::metadata md_;
 };
 

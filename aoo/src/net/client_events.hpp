@@ -133,14 +133,14 @@ struct user_update_event : ievent
 
 struct group_update_event : ievent
 {
-    group_update_event(AooId group, const AooData& md)
-        : group_(group), md_(&md) {}
+    group_update_event(AooId group, AooId user, const AooData& md)
+        : group_(group), user_(user), md_(&md) {}
 
     void dispatch(const event_handler &fn) const override {
         AooEventGroupUpdate e;
         AOO_EVENT_INIT(&e, AooEventGroupUpdate, groupMetadata);
         e.groupId = group_;
-        e.userId = kAooIdInvalid; // TODO
+        e.userId = user_;
         e.groupMetadata.type = md_.type();
         e.groupMetadata.data = md_.data();
         e.groupMetadata.size = md_.size();
@@ -149,6 +149,7 @@ struct group_update_event : ievent
     }
 
     AooId group_;
+    AooId user_;
     metadata md_;
 };
 

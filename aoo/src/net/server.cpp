@@ -685,7 +685,8 @@ void Server::update_group(group& grp, const AooData& md) {
     for (auto& usr : grp.users()) {
         auto client = find_client(usr.client());
         if (client) {
-            client->send_group_update(*this, grp);
+            // kAooIdInvalid -> updated on the server
+            client->send_group_update(*this, grp, kAooIdInvalid);
         } else {
             LOG_ERROR("AooServer: could not find client for user " << usr);
         }
@@ -1164,17 +1165,23 @@ AooError Server::do_group_update(client_endpoint &client, AooId token,
         return kAooErrorNotFound;
     }
 
-    LOG_DEBUG("AooServer: update group " << *grp);
+    auto usr = grp->find_user(client);
+    if (!usr) {
+        LOG_ERROR("AooServer: could not find user");
+        return kAooErrorNotFound;
+    }
+
+    LOG_DEBUG("AooServer: group " << *grp << " updated by user " << *usr);
 
     grp->set_metadata(response.groupMetadata);
 
     // notify peers
-    for (auto& usr : grp->users()) {
-        if (usr.client() != client.id()) {
-            if (auto c = find_client(usr.client())) {
-                c->send_group_update(*this, *grp);
+    for (auto& p : grp->users()) {
+        if (p.client() != client.id()) {
+            if (auto c = find_client(p.client())) {
+                c->send_group_update(*this, *grp, usr->id());
             } else {
-                LOG_ERROR("AooServer: could not find client for user " << usr);
+                LOG_ERROR("AooServer: could not find client for user " << p);
             }
         }
     }
@@ -1189,7 +1196,7 @@ AooError Server::do_group_update(client_endpoint &client, AooId token,
     client.send_message(msg);
 
     // send event
-    auto e = std::make_unique<group_update_event>(*grp);
+    auto e = std::make_unique<group_update_event>(*grp, *usr);
     send_event(std::move(e));
 
     return kAooOk; // success

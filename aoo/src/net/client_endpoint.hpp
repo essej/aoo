@@ -184,7 +184,7 @@ public:
 
     void send_peer_remove(Server& server, const group& grp, const user& usr) const;
 
-    void send_group_update(Server& server, const group& grp);
+    void send_group_update(Server& server, const group& grp, AooId usr);
 
     void send_user_update(Server& server, const user& usr);
 
