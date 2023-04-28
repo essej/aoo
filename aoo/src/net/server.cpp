@@ -160,6 +160,7 @@ AooError AOO_CALL aoo::net::Server::handleClientMessage(
     try {
         client->handle_message(*this, data, size);
     } catch (const std::exception& e) {
+        // TODO more granular exception handling with custom exception type
         LOG_ERROR("AooServer: could not handle client message: " << e.what());
         return kAooErrorBadFormat;
     }
@@ -609,18 +610,20 @@ client_endpoint * Server::find_client(const ip_address& addr) {
     return nullptr;
 }
 
-bool Server::remove_client(AooId id) {
+bool Server::remove_client(AooId id, AooError error) {
     auto it = clients_.find(id);
     if (it == clients_.end()) {
         return false;
     }
-    // only send event if client has actually logged in!
-    auto valid = it->second.active();
+
+    // only send logout event if client has been logged in!
+    auto active = it->second.active();
+    // remove from group(s) and send notifications
     it->second.on_close(*this);
     clients_.erase(it);
 
-    if (valid) {
-        auto e = std::make_unique<client_remove_event>(id);
+    if (active) {
+        auto e = std::make_unique<client_logout_event>(id, error);
         send_event(std::move(e));
     }
 
@@ -807,7 +810,7 @@ void Server::handle_message(client_endpoint& client,
             if (!strcmp(pattern, kAooMsgLogin)){
                 handle_login(client, msg);
             } else {
-                // all other message must be received after login!
+                // all other messages must be received after login!
                 if (!client.active()) {
                     throw std::runtime_error("not logged in");
                 }

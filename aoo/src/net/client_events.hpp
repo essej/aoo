@@ -115,8 +115,8 @@ struct user_update_event : ievent
         : group_(group), user_(user), md_(&md) {}
 
     void dispatch(const event_handler &fn) const override {
-        AooEventClientUserUpdate e;
-        AOO_EVENT_INIT(&e, AooEventClientUserUpdate, userMetadata);
+        AooEventUserUpdate e;
+        AOO_EVENT_INIT(&e, AooEventUserUpdate, userMetadata);
         e.groupId = group_;
         e.userId = user_;
         e.userMetadata.type = md_.type();
@@ -137,9 +137,10 @@ struct group_update_event : ievent
         : group_(group), md_(&md) {}
 
     void dispatch(const event_handler &fn) const override {
-        AooEventClientGroupUpdate e;
-        AOO_EVENT_INIT(&e, AooEventClientGroupUpdate, groupMetadata);
+        AooEventGroupUpdate e;
+        AOO_EVENT_INIT(&e, AooEventGroupUpdate, groupMetadata);
         e.groupId = group_;
+        e.userId = kAooIdInvalid; // TODO
         e.groupMetadata.type = md_.type();
         e.groupMetadata.data = md_.data();
         e.groupMetadata.size = md_.size();
@@ -157,8 +158,8 @@ struct group_eject_event : ievent
         : group_(group) {}
 
     void dispatch(const event_handler &fn) const override {
-        AooEventClientGroupEject e;
-        AOO_EVENT_INIT(&e, AooEventClientGroupEject, groupId);
+        AooEventGroupEject e;
+        AOO_EVENT_INIT(&e, AooEventGroupEject, groupId);
         e.groupId = group_;
         fn(e);
     }
@@ -172,8 +173,8 @@ struct notification_event : ievent
         : msg_(&msg) {}
 
     void dispatch(const event_handler &fn) const override {
-        AooEventClientNotification e;
-        AOO_EVENT_INIT(&e, AooEventClientNotification, message);
+        AooEventNotification e;
+        AOO_EVENT_INIT(&e, AooEventNotification, message);
         e.message.type = msg_.type();
         e.message.data = msg_.data();
         e.message.size = msg_.size();
@@ -193,8 +194,8 @@ struct disconnect_event : ievent
         : error_(error), msg_(std::move(msg)) {}
 
     void dispatch(const event_handler &fn) const override {
-        AooEventClientDisconnect e;
-        AOO_EVENT_INIT(&e, AooEventClientDisconnect, errorMessage);
+        AooEventDisconnect e;
+        AOO_EVENT_INIT(&e, AooEventDisconnect, errorMessage);
         e.errorCode = error_;
         e.errorMessage = msg_.c_str();
         fn(e);

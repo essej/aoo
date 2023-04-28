@@ -343,8 +343,8 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
     case kAooEventStreamStart:
     case kAooEventStreamStop:
     case kAooEventStreamState:
-    case kAooEventBlockDropped:
-    case kAooEventBlockResent:
+    case kAooEventBlockDrop:
+    case kAooEventBlockResend:
     case kAooEventBlockXRun:
     case kAooEventSourcePing:
     {
@@ -482,17 +482,17 @@ static void aoo_receive_handle_event(t_aoo_receive *x, const AooEvent *event, in
             }
             break;
         }
-        case kAooEventBlockDropped:
+        case kAooEventBlockDrop:
         {
             SETSYMBOL(msg + 3, gensym("block_dropped"));
-            SETFLOAT(msg + 4, event->blockDropped.count);
+            SETFLOAT(msg + 4, event->blockDrop.count);
             outlet_anything(x->x_msgout, gensym("event"), 5, msg);
             break;
         }
-        case kAooEventBlockResent:
+        case kAooEventBlockResend:
         {
             SETSYMBOL(msg + 3, gensym("block_resent"));
-            SETFLOAT(msg + 4, event->blockResent.count);
+            SETFLOAT(msg + 4, event->blockResend.count);
             outlet_anything(x->x_msgout, gensym("event"), 5, msg);
             break;
         }

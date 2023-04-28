@@ -214,14 +214,14 @@ struct block_event : endpoint_event<AooEventBlock> {
     }
 };
 
-struct block_dropped_event : block_event {
-    block_dropped_event(const aoo::endpoint& ep, int32_t count)
-        : block_event(kAooEventBlockDropped, ep, count) {}
+struct block_drop_event : block_event {
+    block_drop_event(const aoo::endpoint& ep, int32_t count)
+        : block_event(kAooEventBlockDrop, ep, count) {}
 };
 
-struct block_resent_event : block_event {
-    block_resent_event(const aoo::endpoint& ep, int32_t count)
-        : block_event(kAooEventBlockResent, ep, count) {}
+struct block_resend_event : block_event {
+    block_resend_event(const aoo::endpoint& ep, int32_t count)
+        : block_event(kAooEventBlockResend, ep, count) {}
 };
 
 struct block_xrun_event : block_event {

@@ -1833,12 +1833,12 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
         // add to dropped blocks for packet loss reporting
         dropped_blocks_.fetch_add(stats.dropped, std::memory_order_relaxed);
         // push block dropped event
-        auto e = make_event<block_dropped_event>(ep, stats.dropped);
+        auto e = make_event<block_drop_event>(ep, stats.dropped);
         send_event(s, std::move(e), kAooThreadLevelAudio);
     }
     if (stats.resent > 0){
         // push block resent event
-        auto e = make_event<block_resent_event>(ep, stats.resent);
+        auto e = make_event<block_resend_event>(ep, stats.resent);
         send_event(s, std::move(e), kAooThreadLevelAudio);
     }
     if (stats.xrun > 0){

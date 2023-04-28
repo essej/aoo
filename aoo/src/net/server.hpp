@@ -112,7 +112,7 @@ public:
 
     client_endpoint * find_client(const ip_address& addr);
 
-    bool remove_client(AooId id);
+    bool remove_client(AooId id, AooError error = kAooErrorNone);
 
     group* find_group(AooId id);
 

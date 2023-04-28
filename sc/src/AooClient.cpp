@@ -210,10 +210,10 @@ void AooClient::handleEvent(const AooEvent* event) {
         handlePeerMessage(e.groupId, e.userId, e.timeStamp, e.data);
         return; // don't send event
     }
-    case kAooEventClientDisconnect:
+    case kAooEventDisconnect:
     {
-        msg << "/disconnect" << event->clientDisconnect.errorCode
-            << event->clientDisconnect.errorMessage;
+        msg << "/disconnect" << event->disconnect.errorCode
+            << event->disconnect.errorMessage;
         break;
     }
     case kAooEventPeerHandshake:

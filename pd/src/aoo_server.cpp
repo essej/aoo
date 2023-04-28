@@ -126,9 +126,9 @@ void t_aoo_server::handle_udp_receive(int e, const aoo::ip_address& addr,
 static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int32_t)
 {
     switch (event->type) {
-    case kAooEventServerClientLogin:
+    case kAooEventClientLogin:
     {
-        auto& e = event->serverClientLogin;
+        auto& e = event->clientLogin;
 
         t_atom msg[3];
 
@@ -148,11 +148,11 @@ static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int3
 
         break;
     }
-    case kAooEventServerClientRemove:
+    case kAooEventClientLogout:
     {
         t_atom msg;
         char id[64];
-        snprintf(id, sizeof(id), "0x%X", event->serverClientRemove.id);
+        snprintf(id, sizeof(id), "0x%X", event->clientLogout.id);
         SETSYMBOL(&msg, gensym(id));
 
         outlet_anything(x->x_msgout, gensym("client_remove"), 1, &msg);
@@ -163,28 +163,28 @@ static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int3
 
         break;
     }
-    case kAooEventServerGroupAdd:
+    case kAooEventGroupAdd:
     {
         // TODO add group
         t_atom msg;
-        SETSYMBOL(&msg, gensym(event->serverGroupAdd.name));
+        SETSYMBOL(&msg, gensym(event->groupAdd.name));
         // TODO metadata
         outlet_anything(x->x_msgout, gensym("group_add"), 1, &msg);
 
         break;
     }
-    case kAooEventServerGroupRemove:
+    case kAooEventGroupRemove:
     {
         // TODO remove group
         t_atom msg;
-        SETSYMBOL(&msg, gensym(event->serverGroupRemove.name));
+        SETSYMBOL(&msg, gensym(event->groupRemove.name));
         outlet_anything(x->x_msgout, gensym("group_remove"), 1, &msg);
 
         break;
     }
-    case kAooEventServerGroupJoin:
+    case kAooEventGroupJoin:
     {
-        auto& e = event->serverGroupJoin;
+        auto& e = event->groupJoin;
 
         t_atom msg[3];
         SETSYMBOL(msg, gensym(e.groupName));
@@ -194,9 +194,9 @@ static void aoo_server_handle_event(t_aoo_server *x, const AooEvent *event, int3
 
         break;
     }
-    case kAooEventServerGroupLeave:
+    case kAooEventGroupLeave:
     {
-        auto& e = event->serverGroupLeave;
+        auto& e = event->groupLeave;
 
         t_atom msg[3];
         SETSYMBOL(msg, gensym(e.groupName));

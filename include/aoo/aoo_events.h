@@ -24,94 +24,87 @@ AOO_ENUM(AooEventType)
     /*----------------------------------*/
     /*     AooSource/AooSink events     */
     /*----------------------------------*/
-    /** received ping from source */
-    kAooEventSourcePing,
-    /** received ping from sink */
+    /** AooSource: received ping from sink */
     kAooEventSinkPing,
-    /** source: invited by sink */
+    /** AooSink: received ping from source */
+    kAooEventSourcePing,
+    /** AooSource: invited by sink */
     kAooEventInvite,
-    /** source: uninvited by sink */
+    /** AooSource: uninvited by sink */
     kAooEventUninvite,
-    /** source: sink added */
+    /** AooSource: sink added */
     kAooEventSinkAdd,
-    /** source: sink removed */
+    /** AooSource: sink removed */
     kAooEventSinkRemove,
-    /** sink: source added */
+    /** AooSink: source added */
     kAooEventSourceAdd,
-    /** sink: source removed */
+    /** AooSink: source removed */
     kAooEventSourceRemove,
-    /** sink: stream started */
+    /** AooSink: stream started */
     kAooEventStreamStart,
-    /** sink: stream stopped */
+    /** AooSink: stream stopped */
     kAooEventStreamStop,
-    /** sink: stream changed state */
+    /** AooSink: stream changed state */
     kAooEventStreamState,
-    /** sink: source format changed */
+    /** AooSink: source format changed */
     kAooEventFormatChange,
-    /** sink: invitation has been declined */
+    /** AooSink: invitation has been declined */
     kAooEventInviteDecline,
-    /** sink: invitation timed out */
+    /** AooSink: invitation timed out */
     kAooEventInviteTimeout,
-    /** sink: uninvitation timed out */
+    /** AooSink: uninvitation timed out */
     kAooEventUninviteTimeout,
-    /** sink: buffer overrun */
+    /** AooSink: buffer overrun */
     kAooEventBufferOverrun,
-    /** sink: buffer underrun */
+    /** AooSink: buffer underrun */
     kAooEventBufferUnderrun,
-    /** sink: blocks had to be skipped/dropped */
-    kAooEventBlockDropped,
-    /** sink: blocks have been resent */
-    kAooEventBlockResent,
-    /** sink: empty blocks caused by source xrun */
+    /** AooSink: blocks had to be skipped/dropped */
+    kAooEventBlockDrop,
+    /** AooSink: blocks have been resent */
+    kAooEventBlockResend,
+    /** AooSink: empty blocks caused by source xrun */
     kAooEventBlockXRun,
-    /*----------------------------------*/
-    /*         AooClient events         */
-    /*----------------------------------*/
-    /** client has disconnected from server */
-    kAooEventClientDisconnect = 1000,
-    /** received a server notification */
-    kAooEventClientNotification,
-    /** need to call AooClient_send() */
-    kAooEventClientNeedSend,
-    /** the client has been ejected from a group */
-    kAooEventClientGroupEject,
-    /** a group has been updated (by a peer or by the server) */
-    kAooEventClientGroupUpdate,
-    /** our user has been updated (by the server) */
-    kAooEventClientUserUpdate,
-    /** received ping (reply) from peer */
+    /*--------------------------------------------*/
+    /*         AooClient/AooServer events         */
+    /*--------------------------------------------*/
+    /** AooClient: disconnected from server */
+    kAooEventDisconnect = 1000,
+    /** AooClient: received a server notification */
+    kAooEventNotification,
+    /** AooClient: ejected from a group */
+    kAooEventGroupEject,
+    /** AooClient: received ping (reply) from peer */
     kAooEventPeerPing,
-    /** peer handshake has started */
+    /** AooClient: peer handshake has started */
     kAooEventPeerHandshake,
-    /** peer handshake has timed out */
+    /** AooClient: peer handshake has timed out */
     kAooEventPeerTimeout,
-    /** peer has joined the group */
+    /** AooClient: peer has joined the group */
     kAooEventPeerJoin,
-    /** peer has left the group */
+    /** AooClient: peer has left the group */
     kAooEventPeerLeave,
-    /** received message from peer */
+    /** AooClient: received message from peer */
     kAooEventPeerMessage,
-    /** peer has been updated */
+    /** AooClient: peer has been updated */
     kAooEventPeerUpdate,
-    /*----------------------------------*/
-    /*         AooServer events         */
-    /*----------------------------------*/
-    /** client logged in successfully */
-    kAooEventServerClientLogin = 2000,
-    /** client has been removed */
-    kAooEventServerClientRemove,
-    /** a new group has been added (automatically) */
-    kAooEventServerGroupAdd,
-    /** a group has been removed (automatically) */
-    kAooEventServerGroupRemove,
-    /** a user has joined a group */
-    kAooEventServerGroupJoin,
-    /** a user has left a group */
-    kAooEventServerGroupLeave,
-    /** a group has been updated (by a client) */
-    kAooEventServerGroupUpdate,
-    /** a user has been updated (by the client) */
-    kAooEventServerUserUpdate,
+    /** AooClient: a group has been updated by a peer or by the server
+     *  AooServer: a group has been updated by a user */
+    kAooEventGroupUpdate,
+    /** AooClient: our user has been updated by the server
+     *  AooServer: a user has updated itself */
+    kAooEventUserUpdate,
+    /** AooServer: client logged in successfully */
+    kAooEventClientLogin,
+    /** AooServer: client has logged out */
+    kAooEventClientLogout,
+    /** AooServer: a new group has been added (automatically) */
+    kAooEventGroupAdd,
+    /** AooServer: a group has been removed (automatically) */
+    kAooEventGroupRemove,
+    /** AooServer: a user has joined a group */
+    kAooEventGroupJoin,
+    /** AooServer: a user has left a group */
+    kAooEventGroupLeave,
     /** start of user defined events (for custom AOO versions) */
     kAooEventCustom = 10000
 };
@@ -254,10 +247,10 @@ typedef struct AooEventBlock
 } AooEventBlock;
 
 /** \brief blocks had to be skipped/dropped */
-typedef AooEventBlock AooEventBlockDropped;
+typedef AooEventBlock AooEventBlockDrop;
 
 /** \brief blocks have been resent */
-typedef AooEventBlock AooEventBlockResent;
+typedef AooEventBlock AooEventBlockResend;
 
 /** \brief empty blocks caused by source xrun */
 typedef AooEventBlock AooEventBlockXRun;
@@ -277,38 +270,41 @@ typedef struct AooEventFormatChange
 /* client events */
 
 /** \brief client has been disconnected from server */
-typedef AooEventError AooEventClientDisconnect;
+typedef AooEventError AooEventDisconnect;
 
 /** \brief client received server notification */
-typedef struct AooEventClientNotification
+typedef struct AooEventNotification
 {
     AOO_EVENT_HEADER
     AooData message;
-} AooEventClientNotification;
+} AooEventNotification;
 
 /** \brief we have been ejected from a group */
-typedef struct AooEventClientGroupEject
+typedef struct AooEventGroupEject
 {
     AOO_EVENT_HEADER
     AooId groupId;
-} AooEventClientGroupEject;
+} AooEventGroupEject;
 
 /** \brief group metadata has been updated */
-typedef struct AooEventClientGroupUpdate
+typedef struct AooEventGroupUpdate
 {
     AOO_EVENT_HEADER
     AooId groupId;
+    /** user who updated the group;
+     * `kAooIdInvalid` if updated by the server */
+    AooId userId;
     AooData groupMetadata;
-} AooEventClientGroupUpdate;
+} AooEventGroupUpdate;
 
-/** \brief user metadata has been updated */
-typedef struct AooEventClientUserUpdate
+/** \brief user metadata has been updated by the server */
+typedef struct AooEventUserUpdate
 {
     AOO_EVENT_HEADER
     AooId groupId;
     AooId userId;
     AooData userMetadata;
-} AooEventClientUserUpdate;
+} AooEventUserUpdate;
 
 /* peer events */
 
@@ -384,22 +380,25 @@ typedef struct AooEventPeerUpdate
 /* server events */
 
 /** \brief client logged in */
-typedef struct AooEventServerClientLogin
+typedef struct AooEventClientLogin
 {
     AOO_EVENT_HEADER
     AooId id;
     AooSocket sockfd;
-} AooEventServerClientLogin;
+} AooEventClientLogin;
 
-/** \brief client has been removed */
-typedef struct AooEventServerClientRemove
+/** \brief client has logged out */
+typedef struct AooEventClientLogout
 {
     AOO_EVENT_HEADER
     AooId id;
-} AooEventServerClientRemove;
+    /** the error that caused the logout;
+     * `kAooErrorNone` if the client logged out voluntarily */
+    AooInt32 error;
+} AooEventClientLogout;
 
 /** \brief group added */
-typedef struct AooEventServerGroupAdd
+typedef struct AooEventGroupAdd
 {
     AOO_EVENT_HEADER
     AooId id;
@@ -409,20 +408,20 @@ typedef struct AooEventServerGroupAdd
 #if 0
     const AooIpEndpoint *relayAddress;
 #endif
-} AooEventServerGroupAdd;
+} AooEventGroupAdd;
 
 /** \brief group removed */
-typedef struct AooEventServerGroupRemove
+typedef struct AooEventGroupRemove
 {
     AOO_EVENT_HEADER
     AooId id;
 #if 1
     const AooChar *name;
 #endif
-} AooEventServerGroupRemove;
+} AooEventGroupRemove;
 
 /** \brief user joined group */
-typedef struct AooEventServerGroupJoin
+typedef struct AooEventGroupJoin
 {
     AOO_EVENT_HEADER
     AooId groupId;
@@ -437,10 +436,10 @@ typedef struct AooEventServerGroupJoin
 #if 0
     const AooIpEndpoint *relayAddress;
 #endif
-} AooEventServerGroupJoin;
+} AooEventGroupJoin;
 
 /** \brief user left group */
-typedef struct AooEventServerGroupLeave
+typedef struct AooEventGroupLeave
 {
     AOO_EVENT_HEADER
     AooId groupId;
@@ -449,24 +448,8 @@ typedef struct AooEventServerGroupLeave
     const AooChar *groupName;
     const AooChar *userName;
 #endif
-} AooEventServerGroupLeave;
-
-/** \brief a group has been updated */
-typedef struct AooEventServerGroupUpdate
-{
-    AOO_EVENT_HEADER
-    AooId groupId;
-    AooData groupMetadata;
-} AooEventServerGroupUpdate;
-
-/** \brief a user has been updated */
-typedef struct AooEventServerUserUpdate
-{
-    AOO_EVENT_HEADER
-    AooId groupId;
-    AooId userId;
-    AooData userMetadata;
-} AooEventServerUserUpdate;
+    AooFlag userFlags;
+} AooEventGroupLeave;
 
 /*----------------------------------------------------*/
 
@@ -495,18 +478,13 @@ union AooEvent
     AooEventUninviteTimeout uninviteTimeout;
     AooEventBufferOverrun bufferOverrrun;
     AooEventBufferUnderrun bufferUnderrun;
-    AooEventBlockDropped blockDropped;
-    AooEventBlockResent blockResent;
+    AooEventBlockDrop blockDrop;
+    AooEventBlockResend blockResend;
     AooEventBlockXRun blockXRun;
-    /* Aoo client/server events */
-    AooEventClientDisconnect clientDisconnect;
-    AooEventClientNotification clientNotification;
-#if 0
-    AooEventClientNeedSend clientNeedSend;
-#endif
-    AooEventClientGroupEject clientGroupEject;
-    AooEventClientGroupUpdate clientGroupUpdate;
-    AooEventClientUserUpdate clientUserUpdate;
+    /* AooClient/AooServer events */
+    AooEventDisconnect disconnect;
+    AooEventNotification notification;
+    AooEventGroupEject groupEject;
     AooEventPeer peer;
     AooEventPeerPing peerPing;
     AooEventPeerHandshake peerHandshake;
@@ -515,14 +493,14 @@ union AooEvent
     AooEventPeerLeave peerLeave;
     AooEventPeerMessage peerMessage;
     AooEventPeerUpdate peerUpdate;
-    AooEventServerClientLogin serverClientLogin;
-    AooEventServerClientRemove serverClientRemove;
-    AooEventServerGroupAdd serverGroupAdd;
-    AooEventServerGroupRemove serverGroupRemove;
-    AooEventServerGroupJoin serverGroupJoin;
-    AooEventServerGroupLeave serverGroupLeave;
-    AooEventServerGroupUpdate serverGroupUpdate;
-    AooEventServerUserUpdate serverUserUpdate;
+    AooEventGroupUpdate groupUpdate;
+    AooEventUserUpdate userUpdate;
+    AooEventClientLogin clientLogin;
+    AooEventClientLogout clientLogout;
+    AooEventGroupAdd groupAdd;
+    AooEventGroupRemove groupRemove;
+    AooEventGroupJoin groupJoin;
+    AooEventGroupLeave groupLeave;
 };
 
 /*-------------------------------------------------*/
