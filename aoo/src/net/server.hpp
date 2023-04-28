@@ -44,7 +44,7 @@ public:
             AooServerReplyFunc replyFn, void *user,
             AooSocket sockfd, AooId *id) override;
 
-    AooError AOO_CALL removeClient(AooId clientId) override;
+    AooError AOO_CALL removeClient(AooId clientId, AooError error) override;
 
     AooError AOO_CALL handleClientMessage(
             AooId client, const AooByte *data, AooInt32 size) override;
@@ -112,7 +112,7 @@ public:
 
     client_endpoint * find_client(const ip_address& addr);
 
-    bool remove_client(AooId id, AooError error = kAooErrorNone);
+    bool remove_client(AooId id, AooError error);
 
     group* find_group(AooId id);
 

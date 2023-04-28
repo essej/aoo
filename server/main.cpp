@@ -100,7 +100,7 @@ void handle_tcp_receive(AooId client, int e, const AooByte *data, AooSize size) 
         // handle client message
         if (auto err = g_aoo_server->handleClientMessage(client, data, size); err != kAooOk) {
             // remove misbehaving client
-            g_aoo_server->removeClient(client);
+            g_aoo_server->removeClient(client, err);
             g_tcp_server.close(client);
             if (g_loglevel >= kAooLogLevelWarning)
                 std::cout << "Close client " << client << " after error: " << aoo_strerror(err) << std::endl;
@@ -114,7 +114,7 @@ void handle_tcp_receive(AooId client, int e, const AooByte *data, AooSize size) 
             if (g_loglevel >= kAooLogLevelVerbose)
                 std::cout << "Client " << client << " has disconnected" << std::endl;
         }
-        g_aoo_server->removeClient(client);
+        g_aoo_server->removeClient(client, e != 0 ? kAooErrorSocket : kAooErrorNone);
     }
 }
 

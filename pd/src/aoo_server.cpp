@@ -80,14 +80,14 @@ AooId t_aoo_server::handle_accept(int e, const aoo::ip_address& addr, AooSocket 
 
 void t_aoo_server::handle_receive(AooId client, int e, const AooByte *data, AooSize size) {
     if (e == 0 && size > 0) {
-        if (x_server->handleClientMessage(client, data, size) != kAooOk) {
+        if (auto err = x_server->handleClientMessage(client, data, size); err != kAooOk) {
             // remove client!
-            x_server->removeClient(client);
+            x_server->removeClient(client, err);
             x_tcpserver.close(client);
         }
     } else {
         // remove client!
-        x_server->removeClient(client);
+        x_server->removeClient(client, e != 0 ? kAooErrorSocket : kAooErrorNone);
         // called on network thread - must lock Pd!
         sys_lock();
         if (e == 0) {

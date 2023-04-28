@@ -131,12 +131,13 @@ AooError AOO_CALL aoo::net::Server::addClient(
     return kAooOk;
 }
 
-AOO_API AooError AOO_CALL AooServer_removeClient(AooServer *server, AooId clientId) {
-    return server->removeClient(clientId);
+AOO_API AooError AOO_CALL AooServer_removeClient(
+        AooServer *server, AooId clientId, AooError error) {
+    return server->removeClient(clientId, error);
 }
 
-AooError AOO_CALL aoo::net::Server::removeClient(AooId clientId) {
-    if (remove_client(clientId)) {
+AooError AOO_CALL aoo::net::Server::removeClient(AooId clientId, AooError error) {
+    if (remove_client(clientId, error)) {
         LOG_DEBUG("AooServer: remove client " << clientId);
         return kAooOk;
     } else {

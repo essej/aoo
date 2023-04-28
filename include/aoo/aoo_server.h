@@ -56,7 +56,7 @@ AOO_API AooError AOO_CALL AooServer_addClient(
 
 /** \copydoc AooServer::removeClient() */
 AOO_API AooError AOO_CALL AooServer_removeClient(
-        AooServer *server, AooId clientId);
+        AooServer *server, AooId clientId, AooError error);
 
 /** \copydoc AooServer::handleClientMessage() */
 AOO_API AooError AOO_CALL AooServer_handleClientMessage(

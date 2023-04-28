@@ -180,13 +180,13 @@ AooId AooServer::handleAccept(int e, const aoo::ip_address& addr, AooSocket sock
 
 void AooServer::handleReceive(AooId client, int e, const AooByte *data, AooSize size) {
     if (e == 0 && size > 0) {
-        if (server_->handleClientMessage(client, data, size) != kAooOk) {
-            server_->removeClient(client);
+        if (auto err = server_->handleClientMessage(client, data, size); err != kAooOk) {
+            server_->removeClient(client, err);
             tcpserver_.close(client);
         }
     } else {
         // remove client!
-        server_->removeClient(client);
+        server_->removeClient(client, e != 0 ? kAooErrorSocket : kAooErrorNone);
         if (e == 0) {
             LOG_VERBOSE("AooServer: client " << client << " disconnected");
         } else {
