@@ -166,6 +166,15 @@ void print_usage() {
         << std::endl;
 }
 
+bool check_arguments(const char **argv, int argc, int numargs) {
+    if (argc > numargs) {
+        return true;
+    } else {
+        std::cout << "Missing argument(s) for option '" << argv[0] << "'";
+        return false;
+    }
+}
+
 bool match_option(const char *str, const char *short_option, const char *long_option) {
     return (short_option && !strcmp(str, short_option))
            || (long_option && !strcmp(str, long_option));
@@ -191,39 +200,40 @@ int main(int argc, const char **argv) {
     argc--; argv++;
 
     try {
-        while ((argc > 0) && (**argv == '-')) {
-            if (match_option(*argv, "-h", "--help")) {
+        while ((argc > 0) && (argv[0][0] == '-')) {
+            if (match_option(argv[0], "-h", "--help")) {
                 print_usage();
                 return EXIT_SUCCESS;
-            } else if (match_option(*argv, "-v", "--version")) {
+            } else if (match_option(argv[0], "-v", "--version")) {
                 std::cout << "aooserver " << aoo_getVersionString() << std::endl;
                 return EXIT_SUCCESS;
-            } else if (match_option(*argv, "-p", "--port")) {
-                port = std::stoi(*argv);
+            } else if (match_option(argv[0], "-p", "--port")) {
+                if (!check_arguments(argv, argc, 1)) {
+                    return EXIT_FAILURE;
+                }
+                port = std::stoi(argv[1]);
                 if (port <= 0 || port > 65535) {
                     std::cout << "Port number " << port << " out of range" << std::endl;
                     return EXIT_FAILURE;
                 }
-            } else if (match_option(*argv, "-r", "--relay")) {
+                argc--; argv++;
+            } else if (match_option(argv[0], "-r", "--relay")) {
                 relay = true;
-            } else if (match_option(*argv, "-l", "--log-level")) {
-                if (argc > 1) {
-                    g_loglevel = std::stoi(argv[1]);
-                    argc--; argv++;
-                } else {
-                    print_usage();
+            } else if (match_option(argv[0], "-l", "--log-level")) {
+                if (!check_arguments(argv, argc, 1)) {
                     return EXIT_FAILURE;
                 }
+                g_loglevel = std::stoi(argv[1]);
+                argc--; argv++;
             } else {
-                std::cout << "Unknown command line option '" << *argv << "'" << std::endl;
+                std::cout << "Unknown command line option '" << argv[0] << "'" << std::endl;
                 print_usage();
                 return EXIT_FAILURE;
             }
             argc--; argv++;
         }
     } catch (const std::exception& e) {
-        std::cout << "Bad argument for option '" << *argv << "': "
-                  << e.what() << std::endl;
+        std::cout << "Bad argument for option '" << argv[0] << "'" << std::endl;
         return EXIT_FAILURE;
     }
 
@@ -279,6 +289,10 @@ int main(int argc, const char **argv) {
     auto tcp_thread = std::thread([]() {
         g_tcp_server.run();
     });
+
+    if (g_loglevel >= kAooLogLevelVerbose) {
+        std::cout << "Listening on port " << port << std::endl;
+    }
 
     // keep running until interrupted
     g_semaphore.wait();
