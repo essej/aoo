@@ -155,12 +155,12 @@ bool set_signal_handlers() {
 
 void print_usage() {
     std::cout
-        << "Usage: aooserver [OPTIONS]... [PORTNUMBER]\n"
-        << "Run AOO server instance, listening on the port specified "
-        << "by PORTNUMBER (default = " << AOO_DEFAULT_SERVER_PORT << ")\n"
+        << "Usage: aooserver [OPTIONS]...\n"
+        << "Run an AOO server instance\n"
         << "Options:\n"
         << "  -h, --help             display help and exit\n"
         << "  -v, --version          print version and exit\n"
+        << "  -p, --port             port number (default = " << AOO_DEFAULT_SERVER_PORT << ")\n"
         << "  -r, --relay            enable server relay\n"
         << "  -l, --log-level=LEVEL  set log level\n"
         << std::endl;
@@ -185,11 +185,26 @@ int main(int argc, const char **argv) {
 #endif
 
     // parse command line options
+    int port = AOO_DEFAULT_SERVER_PORT;
     bool relay = false;
+
     argc--; argv++;
+
     try {
         while ((argc > 0) && (**argv == '-')) {
-            if (match_option(*argv, "-r", "--relay")) {
+            if (match_option(*argv, "-h", "--help")) {
+                print_usage();
+                return EXIT_SUCCESS;
+            } else if (match_option(*argv, "-v", "--version")) {
+                std::cout << "aooserver " << aoo_getVersionString() << std::endl;
+                return EXIT_SUCCESS;
+            } else if (match_option(*argv, "-p", "--port")) {
+                port = std::stoi(*argv);
+                if (port <= 0 || port > 65535) {
+                    std::cout << "Port number " << port << " out of range" << std::endl;
+                    return EXIT_FAILURE;
+                }
+            } else if (match_option(*argv, "-r", "--relay")) {
                 relay = true;
             } else if (match_option(*argv, "-l", "--log-level")) {
                 if (argc > 1) {
@@ -199,12 +214,6 @@ int main(int argc, const char **argv) {
                     print_usage();
                     return EXIT_FAILURE;
                 }
-            } else if (match_option(*argv, "-h", "--help")) {
-                print_usage();
-                return EXIT_SUCCESS;
-            } else if (match_option(*argv, "-v", "--version")) {
-                std::cout << "aooserver " << aoo_getVersionString() << std::endl;
-                return EXIT_SUCCESS;
             } else {
                 std::cout << "Unknown command line option '" << *argv << "'" << std::endl;
                 print_usage();
@@ -216,21 +225,6 @@ int main(int argc, const char **argv) {
         std::cout << "Bad argument for option '" << *argv << "': "
                   << e.what() << std::endl;
         return EXIT_FAILURE;
-    }
-
-    // get port number
-    int port = AOO_DEFAULT_SERVER_PORT;
-    if (argc > 0) {
-        try {
-            port = std::stoi(*argv);
-            if (port <= 0 || port > 65535) {
-                std::cout << "Port number " << port << " out of range" << std::endl;
-                return EXIT_FAILURE;
-            }
-        } catch (const std::exception& e) {
-            std::cout << "Bad port number argument '" << *argv << "'" << std::endl;
-            return EXIT_FAILURE;
-        }
     }
 
     AooSettings settings;
