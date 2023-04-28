@@ -1110,7 +1110,10 @@ void Client::handle_response(const group_join_cmd& cmd, const osc::ReceivedMessa
             }
             memberships_.push_back(std::move(m));
         } else {
+            // shouldn't happen...
             LOG_ERROR("AooClient: group join response: already a member of group " << cmd.group_name_);
+            cmd.reply_error(kAooErrorAlreadyGroupMember);
+            return;
         }
 
         AooResponseGroupJoin response;

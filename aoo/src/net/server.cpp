@@ -324,8 +324,7 @@ AooError AOO_CALL aoo::net::Server::addGroup(
     // this might "waste" a group ID, but we don't care.
     auto id = get_next_group_id();
     std::string hashed_pwd = password ? aoo::net::encrypt(password) : "";
-    auto relay_addr = relayAddress ? ip_host { relayAddress->hostName, relayAddress->port }
-                                   : ip_host {};
+    auto relay_addr = relayAddress ? ip_host(*relayAddress) : ip_host{};
     if (add_group(group(name, hashed_pwd, id, metadata, relay_addr, true))) {
         if (groupId) {
             *groupId = id;
@@ -928,12 +927,12 @@ void Server::handle_group_join(client_endpoint& client, const osc::ReceivedMessa
     AOO_REQUEST_INIT(&request, GroupJoin, relayAddress);
     request.groupName = group_name;
     request.groupPwd = group_pwd;
-    request.groupId = kAooIdInvalid; // set later
+    request.groupId = kAooIdInvalid; // to be created (override later)
     request.groupFlags = 0;
     request.groupMetadata = group_md.size ? &group_md : nullptr;
     request.userName = user_name;
     request.userPwd = user_pwd;
-    request.userId = kAooIdInvalid; // set later
+    request.userId = kAooIdInvalid; // to be created (override later)
     request.userFlags = 0;
     request.userMetadata = user_md.size ? &user_md : nullptr;
     request.relayAddress = relay.port > 0 ? &relay : nullptr;
@@ -962,7 +961,6 @@ void Server::handle_group_join(client_endpoint& client, const osc::ReceivedMessa
             }
         } else {
             // user needs to be created
-            request.userId = kAooIdInvalid;
             // check if the client is allowed to create users
             if (!grp->user_auto_create()) {
                 client.send_error(*this, token, request.type, kAooErrorCannotCreateUser);
@@ -971,7 +969,6 @@ void Server::handle_group_join(client_endpoint& client, const osc::ReceivedMessa
         }
     } else {
         // group needs to be created
-        request.groupId = kAooIdInvalid;
         // check if the client is allowed to create groups
         if (!group_auto_create_.load()) {
             client.send_error(*this, token, request.type, kAooErrorCannotCreateGroup);
@@ -998,13 +995,14 @@ void Server::handle_group_join(client_endpoint& client, const osc::ReceivedMessa
 AooError Server::do_group_join(client_endpoint &client, AooId token,
                                const AooRequestGroupJoin& request,
                                AooResponseGroupJoin& response) {
-    // prefer response group metadata
-    auto group_md = response.groupMetadata ? response.groupMetadata : request.groupMetadata;
-    // prefer response group relay address over server relay
-    auto group_relay = response.relayAddress ? ip_host(*response.relayAddress) : relay_addr_;
-    // find group or create it if necessary
+    // find/create group
     auto grp = find_group(request.groupId);
     if (!grp) {
+        // prefer response group metadata
+        auto group_md = response.groupMetadata ? response.groupMetadata : request.groupMetadata;
+        // (optional) group relay address
+        auto group_relay = response.relayAddress ? ip_host(*response.relayAddress) : ip_host{};
+
         grp = add_group(group(request.groupName, request.groupPwd, get_next_group_id(),
                               group_md, group_relay, false));
         if (grp) {
@@ -1017,13 +1015,14 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
             return kAooErrorCannotCreateGroup;
         }
     }
-    // prefer response user metadata
-    auto user_md = response.userMetadata ? response.userMetadata : request.userMetadata;
-    // (optional) user provided relay address
-    auto user_relay = request.relayAddress ? ip_host(*request.relayAddress) : ip_host{};
     // find user or create it if necessary
     auto usr = grp->find_user(request.userId);
     if (!usr) {
+        // prefer response user metadata
+        auto user_md = response.userMetadata ? response.userMetadata : request.userMetadata;
+        // (optional) user provided relay address
+        auto user_relay = request.relayAddress ? ip_host(*request.relayAddress) : ip_host{};
+
         auto id = grp->get_next_user_id();
         usr = grp->add_user(user(request.userName, request.userPwd, id, grp->id(),
                                  client.id(), user_md, user_relay, false));
@@ -1033,11 +1032,14 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
             return kAooErrorCannotCreateUser;
         }
     }
-    // update response
+    // update response, so the use may inspect it after calling handlingRequest()!
     response.groupId = grp->id();
     response.userId = usr->id();
 
     client.on_group_join(*this, *grp, *usr);
+
+    // prefer group relay over global relay address; both may be empty!
+    auto relay_addr = grp->relay_addr().valid() ? grp->relay_addr() : relay_addr_;
 
     // send reply
     auto extra = grp->metadata().size() + usr->metadata().size() +
@@ -1049,7 +1051,7 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
         << grp->id() << usr->id()
         << grp->metadata() << usr->metadata()
         << metadata_view(response.privateMetadata)
-        << group_relay // *not* group->relay()!
+        << relay_addr
         << osc::EndMessage;
 
     client.send_message(msg);

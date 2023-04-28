@@ -364,6 +364,8 @@ Group join response.
     | [`b`] | user metadata content                    |
     | [`i`] | private [metadata type](#5.2-data-types) |
     | [`b`] | private metadata content                 |
+    | [`s`] | group relay hostname                     |
+    | [`i`] | group relay port                         |
 
 2. failure: see [3.1.1 Error response](#3.1.1-error-response)
 
