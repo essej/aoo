@@ -687,11 +687,9 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
             return;
         }
 
-        bool active = argc > 3 ? atom_getfloat(argv + 3) : true;
-        AooFlag flags = active ? kAooSinkActive : 0;
-
         AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
-        x->x_source->addSink(ep, flags);
+        bool active = argc > 3 ? atom_getfloat(argv + 3) : true;
+        x->x_source->addSink(ep, active);
 
         if (argc > 4){
             int channel = atom_getfloat(argv + 4);

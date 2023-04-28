@@ -138,8 +138,7 @@ void AooSend::handleEvent(const AooEvent *event){
 bool AooSend::addSink(const aoo::ip_address& addr, AooId id,
                       bool active, int32_t channelOnset){
     AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
-    AooFlag flags = active ? kAooSinkActive : 0;
-    if (source()->addSink(ep, flags) == kAooOk){
+    if (source()->addSink(ep, active) == kAooOk){
         if (channelOnset > 0){
             source()->setSinkChannelOnset(ep, channelOnset);
         }

@@ -228,7 +228,7 @@ class Source final : public AooSource, rt_memory_pool_client {
 
     AooError AOO_CALL stopStream() override;
 
-    AooError AOO_CALL addSink(const AooEndpoint& sink, AooFlag flags) override;
+    AooError AOO_CALL addSink(const AooEndpoint& sink, AooBool active) override;
 
     AooError AOO_CALL removeSink(const AooEndpoint& sink) override;
 

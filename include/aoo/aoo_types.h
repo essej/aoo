@@ -259,15 +259,6 @@ AOO_FLAG(AooSetupFlags)
 
 /*------------------------------------------------------------------*/
 
-/** \brief flags for AooSource_addSink / AooSource::addSink */
-AOO_FLAG(AooSinkFlags)
-{
-    /** sink should start active */
-    kAooSinkActive = 0x01
-};
-
-/*------------------------------------------------------------------*/
-
 /** \brief flags for AooClient_setup / AooClient::setup and
  *         AooServer_setup / AooServer::setup
  *

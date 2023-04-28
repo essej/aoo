@@ -68,7 +68,7 @@ AOO_API AooError AOO_CALL AooSource_stopStream(AooSource *source);
 
 /** \copydoc AooSource::addSink() */
 AOO_API AooError AOO_CALL AooSource_addSink(
-        AooSource *source, const AooEndpoint *sink, AooSinkFlags flags);
+        AooSource *source, const AooEndpoint *sink, AooBool active);
 
 /** \copydoc AooSource::removeSink() */
 AOO_API AooError AOO_CALL AooSource_removeSink(

@@ -155,11 +155,11 @@ public:
 
     /** \brief add sink
      *
-     * Unless you pass the #kAooSinkActive flag, sinks are initially deactivated
-     * and have to be activated manually with AooSource_activateSink().
+     * If `active` is true, the sink will start active, otherwise
+     * it has to be activated manually with AooSource_activateSink().
      */
     virtual AooError AOO_CALL addSink(
-            const AooEndpoint& sink, AooSinkFlags flags) = 0;
+            const AooEndpoint& sink, AooBool active) = 0;
 
     /** \brief remove sink */
     virtual AooError AOO_CALL removeSink(const AooEndpoint& sink) = 0;

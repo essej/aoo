@@ -871,16 +871,16 @@ AooError AOO_CALL aoo::Source::stopStream() {
 }
 
 AOO_API AooError AOO_CALL AooSource_addSink(
-        AooSource *source, const AooEndpoint *sink, AooFlag flags)
+        AooSource *source, const AooEndpoint *sink, AooBool active)
 {
     if (sink) {
-        return source->addSink(*sink, flags);
+        return source->addSink(*sink, active);
     } else {
         return kAooErrorBadArgument;
     }
 }
 
-AooError AOO_CALL aoo::Source::addSink(const AooEndpoint& ep, AooFlag flags) {
+AooError AOO_CALL aoo::Source::addSink(const AooEndpoint& ep, AooBool active) {
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
     // NB: sinks can be added/removed from different threads,
     // so we have to lock a mutex to avoid the ABA problem!
@@ -891,7 +891,7 @@ AooError AOO_CALL aoo::Source::addSink(const AooEndpoint& ep, AooFlag flags) {
         LOG_WARNING("AooSource: sink already added!");
         return kAooErrorAlreadyExists;
     }
-    AooId stream = (flags & kAooSinkActive) ? get_random_id() : kAooIdInvalid;
+    AooId stream = active ? get_random_id() : kAooIdInvalid;
     do_add_sink(addr, ep.id, stream);
     // always succeeds
     return kAooOk;
