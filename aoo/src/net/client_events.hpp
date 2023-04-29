@@ -11,7 +11,7 @@ struct peer_event : ievent
     peer_event(int32_t type, const peer& p)
         : type_(type), group_id_(p.group_id()), user_id_(p.user_id()),
           group_name_(p.group_name()), user_name_(p.user_name()),
-          addr_(p.address()), metadata_(p.metadata()) {}
+          addr_(p.address()), flags_(p.flags()), metadata_(p.metadata()) {}
 
     void dispatch(const event_handler &fn) const override {
         AooEventPeer e;
@@ -23,6 +23,7 @@ struct peer_event : ievent
         e.userName = user_name_.c_str();
         e.address.data = addr_.valid() ? addr_.address() : nullptr;
         e.address.size = addr_.length();
+        e.flags = flags_;
         AooData md { metadata_.type(), metadata_.data(), metadata_.size() };
         e.metadata = md.size > 0 ? &md : nullptr;
 
@@ -35,6 +36,7 @@ struct peer_event : ievent
     std::string group_name_;
     std::string user_name_;
     ip_address addr_;
+    AooFlag flags_;
     metadata metadata_;
 };
 

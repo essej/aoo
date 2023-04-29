@@ -27,17 +27,17 @@ const int32_t kBinMessageHeaderSize = kAooBinMsgLargeHeaderSize + 28;
 
 //------------------------- peer ------------------------------//
 
-peer::peer(const std::string& groupname, AooId groupid,
-           const std::string& username, AooId userid,
-           AooId localid, const AooData *metadata,
+peer::peer(const std::string& group_name, AooId group_id,
+           const std::string& user_name, AooId user_id,
+           const AooData *metadata, AooFlag flags,
            ip_address::ip_type address_family, bool use_ipv4_mapped,
-           ip_address_list&& addrlist, ip_address_list&& user_relay,
-           const ip_address_list& group_relay)
-    : group_name_(groupname), user_name_(username),
-      group_id_(groupid), user_id_(userid), local_id_(localid),
+           ip_address_list&& addrlist, AooId local_id,
+           ip_address_list&& user_relay, const ip_address_list& relay_list)
+    : group_name_(group_name), user_name_(user_name),
+      group_id_(group_id), user_id_(user_id), local_id_(local_id), flags_(flags),
       address_family_(address_family), use_ipv4_mapped_(use_ipv4_mapped),
       metadata_(metadata), addrlist_(std::move(addrlist)),
-      user_relay_(std::move(user_relay)), group_relay_(group_relay)
+      user_relay_(std::move(user_relay)), relay_list_(relay_list)
 {
     start_time_ = time_tag::now();
 
@@ -99,20 +99,20 @@ void peer::send(Client& client, const sendfn& fn, time_tag now) {
         auto delta = elapsed_time - last_pingtime_;
         if (elapsed_time > client.query_timeout()){
             // time out -> try to relay
-            if (!group_relay_.empty() && !relay()) {
+            if (!relay_list_.empty() && !need_relay()) {
                 start_time_ = now;
                 last_pingtime_ = 0;
                 // for now we just try with the first relay address.
                 // LATER try all of them.
-                relay_address_ = group_relay_.front();
-                relay_ = true;
+                relay_address_ = relay_list_.front();
+                flags_ |= kAooPeerNeedRelay;
                 LOG_WARNING("AooClient: UDP handshake with " << *this
                             << " timed out, try to relay over " << relay_address_);
                 return;
             }
 
             // couldn't establish connection!
-            const char *what = relay() ? "relay" : "peer-to-peer";
+            const char *what = need_relay() ? "relay" : "peer-to-peer";
             LOG_ERROR("AooClient: couldn't establish UDP " << what
                       << " connection to " << *this << "; timed out after "
                       << client.query_timeout() << " seconds");
@@ -150,7 +150,7 @@ void peer::send(Client& client, const sendfn& fn, time_tag now) {
                 << osc::EndMessage;
 
             for (auto& addr : addrlist_) {
-                if (relay_) {
+                if (need_relay()) {
                     send(msg, addr, fn); // always keep IP address as is!
                 } else {
                     if (address_family_ == ip_address::IPv6 && addr.type() == ip_address::IPv4) {
@@ -499,7 +499,7 @@ void peer::handle_first_ping(Client &client, const aoo::ip_address& addr) {
     // first ping
 #if FORCE_RELAY
     // force relay
-    if (!relay()){
+    if (!need_relay()){
         return;
     }
 #endif
@@ -522,7 +522,7 @@ void peer::handle_first_ping(Client &client, const aoo::ip_address& addr) {
     client.send_event(std::move(e));
 
     LOG_VERBOSE("AooClient: successfully established connection with "
-                << *this << " " << addr << (relay() ? " (relayed)" : ""));
+                << *this << " " << addr << (need_relay() ? " (relayed)" : ""));
 }
 
 void peer::handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
@@ -815,7 +815,7 @@ void peer::handle_ack(Client &client, const AooByte *data, AooSize size) {
 
 void peer::send(const AooByte *data, AooSize size,
                 const ip_address &addr, const sendfn &fn) const {
-    if (relay()) {
+    if (need_relay()) {
     #if AOO_DEBUG_RELAY
         if (binmsg_check(data, size)) {
             LOG_DEBUG("AooClient: relay binary message to peer " << *this);

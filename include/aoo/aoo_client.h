@@ -60,8 +60,9 @@ AOO_API AooError AOO_CALL AooClient_removeSink(
 /** \copydoc AooClient::connect() */
 AOO_API AooError AooClient_connect(
         AooClient *client,
-        const AooChar *hostName, AooInt32 port, const AooChar *password,
-        const AooData *metadata, AooResponseHandler cb, void *context);
+        const AooChar *hostName, AooInt32 port,
+        const AooChar *password, const AooData *metadata,
+        AooResponseHandler cb, void *context);
 
 /** \copydoc AooClient::disconnect() */
 AOO_API AooError AooClient_disconnect(

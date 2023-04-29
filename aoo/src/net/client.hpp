@@ -514,7 +514,8 @@ public:
                        const ip_host& relay, AooResponseHandler cb, void *user)
             : callback_cmd(cb, user),
               group_name_(group_name), group_pwd_(group_pwd ? group_pwd : ""), group_md_(group_md),
-              user_name_(user_name), user_pwd_(user_pwd ? user_pwd : ""), user_md_(user_md), relay_(relay) {}
+              user_name_(user_name), user_pwd_(user_pwd ? user_pwd : ""), user_md_(user_md),
+              relay_(relay) {}
 
         void perform(Client& obj) override {
             obj.perform(*this);

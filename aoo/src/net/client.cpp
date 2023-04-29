@@ -790,7 +790,7 @@ AooError AOO_CALL aoo::net::Client::control(
         peer_lock lock(peers_);
         for (auto& peer : peers_){
             if (peer.match(addr)){
-                as<AooBool>(ptr) = peer.relay() ? kAooTrue : kAooFalse;
+                as<AooBool>(ptr) = peer.need_relay();
                 return kAooOk;
             }
         }
@@ -1074,8 +1074,10 @@ void Client::handle_response(const group_join_cmd& cmd, const osc::ReceivedMessa
     (it++)->AsInt32(); // skip token
     auto result = (it++)->AsInt32();
     if (result == kAooErrorNone) {
-        auto group = (it++)->AsInt32();
-        auto user = (it++)->AsInt32();
+        auto group_id = (it++)->AsInt32();
+        auto group_flags = (AooFlag)(it++)->AsInt32();
+        auto user_id = (it++)->AsInt32();
+        auto user_flags = (AooFlag)(it++)->AsInt32();
         auto group_md = osc_read_metadata(it);
         auto user_md = osc_read_metadata(it);
         auto private_md = osc_read_metadata(it);
@@ -1085,7 +1087,7 @@ void Client::handle_response(const group_join_cmd& cmd, const osc::ReceivedMessa
 
         // add group membership
         if (!find_group_membership(cmd.group_name_)) {
-            group_membership m { cmd.group_name_, cmd.user_name_, group, user, {} };
+            group_membership m { cmd.group_name_, cmd.user_name_, group_id, user_id, {} };
 
             // add relay servers (in descending priority)
             auto family = udp_client_.address_family();
@@ -1118,8 +1120,10 @@ void Client::handle_response(const group_join_cmd& cmd, const osc::ReceivedMessa
 
         AooResponseGroupJoin response;
         AOO_RESPONSE_INIT(&response, GroupJoin, relayAddress);
-        response.groupId = group;
-        response.userId = user;
+        response.groupId = group_id;
+        response.groupFlags = group_flags;
+        response.userId = user_id;
+        response.userFlags = user_flags;
         response.groupMetadata = group_md.size ? &group_md : nullptr;
         response.userMetadata = user_md.size ? &user_md : nullptr;
         response.privateMetadata = private_md.size ? &private_md : nullptr;
@@ -1525,7 +1529,7 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
                 connection->reply_error(err);
             }
 
-            server_relay_ = flags & kAooLoginServerRelay;
+            server_relay_ = flags & kAooServerRelay;
 
             // connected!
             state_.store(client_state::connected);
@@ -1535,6 +1539,7 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
             AooResponseConnect response;
             AOO_RESPONSE_INIT(&response, Connect, metadata);
             response.clientId = id;
+            response.flags = flags;
             response.metadata = metadata.data ? &metadata : nullptr;
 
             connection_->reply((AooResponse&)response);
@@ -1638,6 +1643,7 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
     auto group_id = (it++)->AsInt32();
     auto user_name = (it++)->AsString();
     auto user_id = (it++)->AsInt32();
+    auto flags = (AooFlag)(it++)->AsInt32();
     // collect IP addresses
     auto count = (it++)->AsInt32();
     ip_address_list addrlist;
@@ -1676,7 +1682,8 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
                   << ", but we are not a group member");
         return; // ignore
     }
-    // get relay address(es)
+
+    // get user relay address(es)
     ip_address_list user_relay;
     if (relay.valid()) {
         user_relay = aoo::ip_address::resolve(relay.name, relay.port,
@@ -1686,11 +1693,11 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
         auto& list = membership->relay_list;
         list.insert(list.end(), user_relay.begin(), user_relay.end());
     }
-
     auto peer = peers_.emplace_front(group_name, group_id, user_name, user_id,
-                                     membership->user_id, metadata.size > 0 ? &metadata : nullptr,
+                                     metadata.size > 0 ? &metadata : nullptr, flags,
                                      udp_client_.address_family(), udp_client_.use_ipv4_mapped(),
-                                     std::move(addrlist), std::move(user_relay), membership->relay_list);
+                                     std::move(addrlist), membership->user_id,
+                                     std::move(user_relay), membership->relay_list);
 
     auto e = std::make_unique<peer_event>(kAooEventPeerHandshake, *peer);
     send_event(std::move(e));
@@ -1730,7 +1737,7 @@ void Client::handle_peer_remove(const osc::ReceivedMessage& msg){
     for (auto& addr : peer->user_relay()) {
         // check if this relay is used by a peer
         for (auto& p : peers_) {
-            if (p.relay() && p.relay_address() == addr) {
+            if (p.need_relay() && p.relay_address() == addr) {
                 std::stringstream ss;
                 ss << p << " uses a relay provided by " << *peer
                    << ", so the connection might stop working";

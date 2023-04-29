@@ -188,12 +188,6 @@
 #define kAooMsgRequest "/request"
 #define kAooMsgRequestLen 8
 
-/** \brief flags for /login message */
-enum
-{
-    kAooLoginServerRelay = 0x01
-};
-
 /*------------------- binary messages ---------------------*/
 
 /* domain bit + type (uint8), size bit + cmd (uint8)

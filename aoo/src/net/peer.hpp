@@ -29,12 +29,13 @@ struct message_ack {
 
 class peer {
 public:
-    peer(const std::string& groupname, AooId groupid,
-         const std::string& username, AooId userid,
-         AooId localid, const AooData *metadata,
+    // NB: be must set everything in the constructor to avoid race conditions!
+    peer(const std::string& group_name, AooId group_id,
+         const std::string& user_name, AooId user_id,
+         const AooData *metadata, AooFlag flags,
          ip_address::ip_type address_family, bool use_ipv4_mapped,
-         ip_address_list&& addrlist, ip_address_list&& user_relay,
-         const ip_address_list& group_relay);
+         ip_address_list&& addrlist, AooId local_id,
+         ip_address_list&& user_relay, const ip_address_list& relay_list);
 
     ~peer();
 
@@ -56,7 +57,7 @@ public:
 
     ip_address address() const;
 
-    bool relay() const { return relay_; }
+    bool need_relay() const { return flags_ & kAooPeerNeedRelay; }
 
     const ip_address& relay_address() const { return relay_address_; }
 
@@ -71,6 +72,8 @@ public:
     AooId user_id() const { return user_id_; }
 
     AooId local_id() const { return local_id_; }
+
+    AooFlag flags() const { return flags_; }
 
     const aoo::metadata& metadata() const { return metadata_; }
 
@@ -134,14 +137,14 @@ private:
     const AooId group_id_;
     const AooId user_id_;
     const AooId local_id_;
+    AooFlag flags_;
     ip_address::ip_type address_family_;
     bool use_ipv4_mapped_;
-    bool relay_ = false;
     bool timeout_ = false;
     aoo::metadata metadata_;
     ip_address_list addrlist_;
     ip_address_list user_relay_;
-    ip_address_list group_relay_;
+    ip_address_list relay_list_;
     ip_address real_address_; // IPv4-mapped if peer-to-peer, unmapped if relayed
     ip_address relay_address_;
     time_tag start_time_;

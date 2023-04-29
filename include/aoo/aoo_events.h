@@ -317,6 +317,7 @@ typedef struct AooEventPeer
     const AooChar *groupName;
     const AooChar *userName;
     AooSockAddr address;
+    AooPeerFlags flags;
     /** See AooResponseGroupJoin::userMetadata */
     const AooData *metadata;
 #if 0
@@ -402,7 +403,7 @@ typedef struct AooEventGroupAdd
 {
     AOO_EVENT_HEADER
     AooId id;
-    AooFlag flags;
+    AooGroupFlags flags;
     const AooChar *name;
     const AooData *metadata;
 #if 0
@@ -431,7 +432,7 @@ typedef struct AooEventGroupJoin
 #endif
     const AooChar *userName;
     AooId clientId;
-    AooFlag userFlags;
+    AooUserFlags userFlags;
     const AooData *userMetadata;
 #if 0
     const AooIpEndpoint *relayAddress;
@@ -448,7 +449,6 @@ typedef struct AooEventGroupLeave
     const AooChar *groupName;
     const AooChar *userName;
 #endif
-    AooFlag userFlags;
 } AooEventGroupLeave;
 
 /*----------------------------------------------------*/

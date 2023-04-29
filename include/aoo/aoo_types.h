@@ -282,6 +282,48 @@ AOO_FLAG(AooSocketFlags)
 
 /*------------------------------------------------------------------*/
 
+/** \brief see AooResponseConnect */
+AOO_FLAG(AooServerFlags)
+{
+    /** clients may use the server as relay */
+    kAooServerRelay = 0x01
+};
+
+/*------------------------------------------------------------------*/
+
+/** \brief see AooEventPeer */
+AOO_FLAG(AooPeerFlags)
+{
+    /** peer-to-peer not possible, need relay */
+    kAooPeerNeedRelay = 0x01,
+    /** peer persists between sessions */
+    kAooPeerPersistent = 0x02,
+    /** peer has created the group */
+    kAooPeerGroupCreator = 0x04
+};
+
+/*------------------------------------------------------------------*/
+
+/** \brief see AooEventGroupAdd and AooResponseGroupJoin */
+AOO_FLAG(AooGroupFlags)
+{
+    /** group persists between sessions */
+    kAooGroupPersistent = 0x01
+};
+
+/*------------------------------------------------------------------*/
+
+/** \brief see AooEventGroupJoin and AooResponseGroupJoin */
+AOO_FLAG(AooUserFlags)
+{
+    /** user persists between sessions */
+    kAooUserPersistent = 0x01,
+    /** user has created the group */
+    kAooUserGroupCreator = 0x02
+};
+
+/*------------------------------------------------------------------*/
+
 /** \brief flags for AooClient_sendMessage / AooClient::sendMessage */
 AOO_FLAG(AooMessageFlags)
 {

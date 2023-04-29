@@ -139,9 +139,18 @@ void client_endpoint::send_peer_add(Server& server, const group& grp, const user
 
     auto msg = server.start_message(usr.metadata().size());
 
+    AooFlag flags = 0;
+    if (usr.group_creator()) {
+        flags |= kAooPeerGroupCreator;
+    }
+    if (usr.persistent()) {
+        flags |= kAooPeerPersistent;
+    }
+
     msg << osc::BeginMessage(kAooMsgClientPeerJoin)
         << grp.name().c_str() << grp.id()
         << usr.name().c_str() << usr.id()
+        << (int32_t)flags
     // IP addresses
         << (int32_t)client.public_addresses().size();
     for (auto& addr : client.public_addresses()){

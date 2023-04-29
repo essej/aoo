@@ -112,8 +112,9 @@ public:
      * \param user user data passed to callback function
      */
     virtual AooError AOO_CALL connect(
-            const AooChar *hostName, AooInt32 port, const AooChar *password,
-            const AooData *metadata, AooResponseHandler cb, void *context) = 0;
+            const AooChar *hostName, AooInt32 port,
+            const AooChar *password, const AooData *metadata,
+            AooResponseHandler cb, void *context) = 0;
 
     /** \brief disconnect from AOO server
      *

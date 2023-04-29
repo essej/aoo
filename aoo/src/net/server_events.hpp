@@ -45,13 +45,14 @@ struct client_logout_event : ievent
 struct group_add_event : ievent
 {
     group_add_event(const group& grp)
-        : id_(grp.id()), name_(grp.name()), metadata_(grp.metadata()) {}
+        : id_(grp.id()), flags_(grp.flags()), name_(grp.name()),
+          metadata_(grp.metadata()) {}
 
     void dispatch(const event_handler& fn) const override {
         AooEventGroupAdd e;
         AOO_EVENT_INIT(&e, AooEventGroupAdd, metadata);
         e.id = id_;
-        e.flags = 0;
+        e.flags = flags_;
         e.name = name_.c_str();
         AooData md { metadata_.type(), metadata_.data(), metadata_.size() };
         e.metadata = md.size > 0 ? &md : nullptr;
@@ -60,6 +61,7 @@ struct group_add_event : ievent
     }
 
     AooId id_;
+    AooFlag flags_;
     std::string name_;
     aoo::metadata metadata_;
 };
@@ -89,7 +91,8 @@ struct group_join_event : ievent
     group_join_event(const group& grp, const user& usr)
         : group_id_(grp.id()), user_id_(usr.id()),
           group_name_(grp.name()), user_name_(usr.name()),
-          metadata_(usr.metadata()), client_id_(usr.client()) {}
+          metadata_(usr.metadata()), client_id_(usr.client()),
+          user_flags_(usr.flags()) {}
 
     void dispatch(const event_handler& fn) const override {
         AooEventGroupJoin e;
@@ -99,7 +102,7 @@ struct group_join_event : ievent
         e.groupName = group_name_.c_str();
         e.userName = user_name_.c_str();
         e.clientId = client_id_;
-        e.userFlags = 0;
+        e.userFlags = user_flags_;
         AooData md { metadata_.type(), metadata_.data(), metadata_.size() };
         e.userMetadata = md.size > 0 ? &md : nullptr;
 
@@ -112,6 +115,7 @@ struct group_join_event : ievent
     std::string user_name_;
     aoo::metadata metadata_;
     AooId client_id_;
+    AooFlag user_flags_;
 };
 
 struct group_leave_event : ievent
@@ -126,14 +130,13 @@ struct group_leave_event : ievent
 
     void dispatch(const event_handler& fn) const override {
         AooEventGroupLeave e;
-        AOO_EVENT_INIT(&e, AooEventGroupLeave, userFlags);
+        AOO_EVENT_INIT(&e, AooEventGroupLeave, userName);
         e.groupId = group_id_;
         e.userId = user_id_;
     #if 1
         e.groupName = group_name_.c_str();
         e.userName = user_name_.c_str();
     #endif
-        e.userFlags = 0;
 
         fn(e);
     }

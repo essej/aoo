@@ -176,7 +176,7 @@ Send a ping to a peer.
 | type | description      |
 | ---: | ---------------- |
 |  `i` | group ID         |
-|  `i` | peer ID (sender) |
+|  `i` | user ID (sender) |
 |  `t` | timestamp        |
 
 Note: *timestamp* is empty (0) in handshake pings.
@@ -192,7 +192,7 @@ Reply to ping message.
 | type | description          |
 | ---: | -------------------- |
 |  `i` | group ID             |
-|  `i` | peer ID (sender)     |
+|  `i` | user ID (sender)     |
 |  `t` | timestamp 1 (remote) |
 |  `t` | timestamp 2 (local)  |
 
@@ -357,7 +357,9 @@ Group join response.
     |  `i`  | request token                            |
     |  `i`  | 0 (= no error)                           |
     |  `i`  | group ID                                 |
+    |  `i`  | group flags                              |
     |  `i`  | user ID                                  |
+    |  `i`  | user flags                               |
     | [`i`] | group [metadata type](#5.2-data-types)   |
     | [`b`] | group metadata content                   |
     | [`i`] | user [metadata type](#5.2-data-types)    |
@@ -531,8 +533,9 @@ A peer has joined the group.
 | ----: | -------------------------------- |
 |  `s`  | group name                       |
 |  `i`  | group ID                         |
-|  `s`  | peer name                        |
-|  `i`  | peer ID                          |
+|  `s`  | user name                        |
+|  `i`  | user ID                          |
+|  `i`  | flags                            |
 |  `i`  | address count                    |
 |  `s`  | IP address 1                     |
 |  `i`  | port 1                           |
