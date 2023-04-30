@@ -53,7 +53,7 @@ private:
     void accept_client();
     void receive_from_clients();
     void on_error(int code) {
-        accept_handler_(0, ip_address(), -1);
+        accept_handler_(code, ip_address(), -1);
     }
     void on_error(AooId id, int code) {
         receive_handler_(id, code, nullptr, 0);

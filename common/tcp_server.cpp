@@ -48,6 +48,8 @@ void tcp_server::start(int port, accept_handler accept, receive_handler receive)
     poll_array_[event_index].events = POLLIN;
     poll_array_[event_index].revents = 0;
     poll_array_[event_index].fd = event_socket_;
+
+    LOG_DEBUG("tcp_server: start listening on port " << port);
 }
 
 void tcp_server::run() {
@@ -73,9 +75,7 @@ void tcp_server::stop() {
 void tcp_server::do_close() {
     // close listening socket
     if (listen_socket_ != invalid_socket) {
-    #if 0
-        error_handler_(0, 0); // no error
-    #endif
+        LOG_DEBUG("tcp_server: stop listening");
         socket_close(listen_socket_);
         listen_socket_ = invalid_socket;
     }
@@ -88,9 +88,6 @@ void tcp_server::do_close() {
     // close client sockets
     for (auto& c : clients_){
         if (c.socket != invalid_socket) {
-        #if 0
-            error_handler_(c.id, 0); // no error
-        #endif
             socket_close(c.socket);
         }
     }
@@ -203,30 +200,28 @@ void tcp_server::receive_from_clients() {
                     int e = socket_errno();
                     if (e == EINTR) {
                         continue;
-                    } else {
-                        LOG_DEBUG("tcp_server: recv() failed: " << socket_strerror(e));
-                        on_error(c.id, e);
                     }
+                    LOG_DEBUG("tcp_server: recv() failed: " << socket_strerror(e));
+                    on_error(c.id, e);
                 }
             }
         } else if (revents & POLLERR) {
-            LOG_DEBUG("tcp_server: receive: POLLERR");
             auto e = socket_error(c.socket);
             if (e == EINTR) {
                 continue;
-            } else {
-                on_error(c.id, e);
             }
+            LOG_DEBUG("tcp_server: POLLERR: " << socket_strerror(e));
+            on_error(c.id, e);
         } else if (revents & POLLHUP) {
             // connection has been closed by the client
-            LOG_DEBUG("tcp_server: receive: POLLHUP");
+            LOG_DEBUG("tcp_server: POLLHUP");
             on_error(c.id, socket_error(c.socket));
         } else if (revents & POLLNVAL) {
-            LOG_DEBUG("tcp_server: receive: POLLNVAL");
+            LOG_DEBUG("tcp_server: POLLNVAL");
             on_error(c.id, EINVAL);
         } else {
             // should never happen, just ignore for now
-            LOG_ERROR("tcp_server: receive: unexpected revent value " << revents);
+            LOG_ERROR("tcp_server: unexpected revent value " << revents);
             continue;
         }
 
@@ -256,6 +251,51 @@ void tcp_server::accept_client() {
     if (revents == 0) {
         return; // no event
     }
+
+    auto handle_error = [this](int e) {
+        // ignore certain non-fatal errors
+        // TODO: should we rather explicitly select fatal errors instead?
+        switch (e) {
+#ifdef _WIN32
+        // remote peer has terminated the connection
+        case WSAECONNRESET:
+        // no available file descriptors
+        case WSAEMFILE:
+#else
+        // remote peer has terminated the connection
+        case ECONNABORTED:
+        // reached process/system limit for open file descriptors
+        case EMFILE:
+        case ENFILE:
+        // interrupted by signal handler
+        case EINTR:
+        // not allowed by firewall rules
+        case EPERM:
+#endif
+#ifdef __linux__
+        // On Linux, also ignore TCP/IP errors! See man page for accept().
+        case ENETDOWN:
+        case EPROTO:
+        case ENOPROTOOPT:
+        case EHOSTDOWN:
+        case ENONET:
+        case EHOSTUNREACH:
+        case EOPNOTSUPP:
+        case ENETUNREACH:
+#endif
+            LOG_DEBUG("tcp_server: ignore accept() error: " << socket_strerror(e));
+            break;
+        default:
+            // fatal error
+            LOG_DEBUG("tcp_server: accept() failed: " << socket_strerror(e));
+            on_error(e);
+        #if 1
+            running_.store(false); // quit server
+        #endif
+            break;
+        }
+    };
+
     if (revents & POLLIN) {
         ip_address addr(ip_address::max_length);
         auto sock = (AooSocket)accept(listen_socket_, addr.address_ptr(), addr.length_ptr());
@@ -294,28 +334,20 @@ void tcp_server::accept_client() {
 
             LOG_DEBUG("tcp_server: accepted client " << addr << " " << id);
         } else {
-            int e = socket_errno();
-            if (e != EINTR) {
-                LOG_DEBUG("tcp_server: accept() failed for client "
-                          << addr << ": " << socket_strerror(e));
-                on_error(e);
-            }
+            handle_error(socket_errno());
         }
     } else if (revents & POLLERR) {
-        LOG_DEBUG("tcp_server: accept: POLLERR");
-        auto e = socket_error(listen_socket_);
-        if (e != EINTR) {
-            on_error(e);
-        }
+        LOG_DEBUG("tcp_server: POLLERR");
+        handle_error(socket_error(listen_socket_));
     } else if (revents & POLLHUP) {
-        LOG_DEBUG("tcp_server: accept: POLLHUP");
-        on_error(socket_error(listen_socket_));
+        LOG_DEBUG("tcp_server: POLLHUP");
+        handle_error(socket_error(listen_socket_));
     } else if (revents & POLLNVAL) {
-        LOG_DEBUG("tcp_server: accept: POLLNVAL");
-        on_error(EINVAL);
+        LOG_DEBUG("tcp_server: POLLNVAL");
+        handle_error(EINVAL);
     } else {
         // should never happen, just ignore for now
-        LOG_ERROR("tcp_server: accept: unexpected revent value " << revents);
+        LOG_ERROR("tcp_server: unexpected revent value " << revents);
     }
 }
 
