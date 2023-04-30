@@ -348,14 +348,13 @@ public:
     void print() {
         std::cout << "total RT memory usage: " << memory_usage()
                   << " / " << size() << " bytes" << std::endl;
-    #if 0
+
         for (size_t i = 0; i < buckets_.size(); ++i) {
             auto count = buckets_[i].count(linear_allocator_.data());
             auto bytes = count * bucket_sizes_[i];
             std::cout << "bucket " << i << ": " << count << " elements, "
                       << bytes << " bytes" << std::endl;
         }
-    #endif
     }
 
     size_t memory_usage() const {

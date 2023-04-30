@@ -495,18 +495,17 @@ size_t g_rt_memory_pool_refcount = 0;
 void rt_memory_pool_ref() {
     sync::scoped_lock<sync::mutex> l(g_rt_memory_pool_lock);
     g_rt_memory_pool_refcount++;
-    LOG_DEBUG("rt_memory_pool_ref: " << g_rt_memory_pool_refcount);
+    // LOG_DEBUG("rt_memory_pool_ref: " << g_rt_memory_pool_refcount);
 }
 
 void rt_memory_pool_unref() {
     sync::scoped_lock<sync::mutex> l(g_rt_memory_pool_lock);
     if (--g_rt_memory_pool_refcount == 0) {
-    #if AOO_LOG_LEVEL >= kAooLogLevelDebug
-        g_rt_memory_pool.print();
-    #endif
+        LOG_DEBUG("total RT memory usage: " << g_rt_memory_pool.memory_usage()
+                  << " / " << g_rt_memory_pool.size() << " bytes");
         g_rt_memory_pool.reset();
     }
-    LOG_DEBUG("rt_memory_pool_unref: " << g_rt_memory_pool_refcount);
+    // LOG_DEBUG("rt_memory_pool_unref: " << g_rt_memory_pool_refcount);
 }
 
 } // aoo
@@ -599,7 +598,7 @@ AooError AOO_CALL aoo_initialize(const AooSettings *settings) {
 }
 
 void AOO_CALL aoo_terminate() {
-#if AOO_LOG_LEVEL >= kAooLogLevelDebug
+#if AOO_DEBUG_MEMORY
     aoo::g_rt_memory_pool.print();
 #endif
     // unload codecs
