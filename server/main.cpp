@@ -46,9 +46,11 @@ void log_function(AooLogLevel level, const AooChar *msg) {
 
 AooServer::Ptr g_aoo_server;
 
+int g_error = 0;
 aoo::sync::semaphore g_semaphore;
 
-void stop_server() {
+void stop_server(int error) {
+    g_error = error;
     g_semaphore.post();
 }
 
@@ -66,7 +68,7 @@ void handle_udp_receive(int e, const aoo::ip_address& addr,
     } else {
         if (g_loglevel >= kAooLogLevelError)
             std::cout << "UDP server: recv() failed: " << aoo::socket_strerror(e) << std::endl;
-        stop_server();
+        stop_server(e);
     }
 }
 
@@ -87,9 +89,8 @@ AooId handle_tcp_accept(int e, const aoo::ip_address& addr, int sockfd) {
         // error
         if (g_loglevel >= kAooLogLevelError)
             std::cout << "TCP server: accept() failed: " << aoo::socket_strerror(e) << std::endl;
-        // TODO handle error?
-    #if 0
-        stop_server();
+    #if 1
+        stop_server(e);
     #endif
         return kAooIdInvalid;
     }
@@ -122,7 +123,7 @@ void handle_tcp_receive(AooId client, int e, const AooByte *data, AooSize size) 
 BOOL WINAPI console_handler(DWORD signal) {
     switch (signal) {
     case CTRL_C_EVENT:
-        stop_server();
+        stop_server(0);
         return TRUE;
     case CTRL_CLOSE_EVENT:
         return TRUE;
@@ -147,7 +148,7 @@ bool set_signal_handler(int sig, sig_t handler) {
 
 bool set_signal_handlers() {
     // NB: stop_server() is async-signal-safe!
-    auto handler = [](int) { stop_server(); };
+    auto handler = [](int) { stop_server(0); };
     return set_signal_handler(SIGINT, handler)
            && set_signal_handler(SIGTERM, handler);
 }
@@ -294,9 +295,15 @@ int main(int argc, const char **argv) {
         std::cout << "Listening on port " << port << std::endl;
     }
 
-    // keep running until interrupted
+    // wait for stop signal
     g_semaphore.wait();
-    std::cout << "Program stopped by the user" << std::endl;
+
+    if (g_error == 0) {
+        std::cout << "Program stopped by the user" << std::endl;
+    } else {
+        std::cout << "Program stopped because of an error: "
+                  << aoo::socket_strerror(g_error) << std::endl;
+    }
 
     // stop UDP and TCP server and exit
     g_udp_server.stop();
