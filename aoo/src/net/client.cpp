@@ -92,8 +92,7 @@ AOO_API AooError AOO_CALL AooClient_setup(
 }
 
 AooError AOO_CALL aoo::net::Client::setup(AooUInt16 port, AooSocketFlags flags) {
-    auto err = udp_client_.setup(port, flags);
-    if (err != kAooOk) {
+    if (auto err = udp_client_.setup(port, flags); err != kAooOk) {
         return err;
     }
 
@@ -784,14 +783,19 @@ AooError AOO_CALL aoo::net::Client::control(
         break;
     case kAooCtlAddInterfaceAddress:
     {
-        assert(ptr != NULL);
-        ip_address addr((const struct sockaddr *)ptr, size);
+        auto ifaddr = (const AooChar *)index;
+        if (ifaddr == nullptr) {
+            return kAooErrorBadArgument;
+        }
+        // test address
+        ip_address addr(ifaddr, 0);
         if (!addr.valid() || addr.is_ipv4_mapped()) {
             return kAooErrorBadFormat;
         }
-        if (std::find(interface_addr_.begin(), interface_addr_.end(), addr)
-                == interface_addr_.end()) {
-            interface_addr_.push_back(addr);
+        sync::scoped_lock<sync::shared_mutex> lock(mutex_);
+        if (std::find(interfaces_.begin(), interfaces_.end(), ifaddr)
+                == interfaces_.end()) {
+            interfaces_.push_back(ifaddr);
         } else {
             return kAooErrorAlreadyExists;
         }
@@ -799,19 +803,17 @@ AooError AOO_CALL aoo::net::Client::control(
     }
     case kAooCtlRemoveInterfaceAddress:
     {
-        if (ptr != NULL) {
-            ip_address addr((const struct sockaddr *)ptr, size);
-            if (!addr.valid()) {
-                return kAooErrorBadFormat;
-            }
-            if (auto it = std::find(interface_addr_.begin(), interface_addr_.end(), addr);
-                    it != interface_addr_.end()) {
-                interface_addr_.erase(it);
+        sync::scoped_lock<sync::shared_mutex> lock(mutex_);
+        auto ifaddr = (const AooChar *)index;
+        if (ifaddr != NULL) {
+            if (auto it = std::find(interfaces_.begin(), interfaces_.end(), ifaddr);
+                    it != interfaces_.end()) {
+                interfaces_.erase(it);
             } else {
                 return kAooErrorNotFound;
             }
         } else {
-            interface_addr_.clear();
+            interfaces_.clear();
         }
         break;
     }
@@ -1024,12 +1026,23 @@ void Client::perform(const login_cmd& cmd) {
     auto token = next_token_++;
     // create address list; start with local/global addresses
     ip_address_list addrlist = local_addr_;
-    // add user provided interface addresses
-    addrlist.insert(addrlist.end(), interface_addr_.begin(), interface_addr_.end());
     // add public IP address
     if (cmd.public_ip_.valid()) {
         addrlist.push_back(cmd.public_ip_);
     }
+    // add user provided interface addresses
+    {
+        sync::scoped_shared_lock<sync::shared_mutex> lock(mutex_);
+        for (auto& ifaddr : interfaces_) {
+            ip_address addr(ifaddr, udp_client_.port());
+            if (addr.valid()) {
+                addrlist.push_back(addr);
+            } else {
+                LOG_ERROR("AooClient: ignore invalid interface address " << ifaddr);
+            }
+        }
+    }
+
     LOG_DEBUG("AooClient: address list:");
     for (auto& addr : addrlist) {
         LOG_DEBUG("\t" << addr);

@@ -287,11 +287,12 @@ private:
     udp_client udp_client_;
     osc_stream_receiver receiver_;
     ip_address_list local_addr_;
-    ip_address_list interface_addr_;
-    std::atomic<bool> quit_{false};
+    std::vector<std::string> interfaces_;
     int eventsocket_ = -1;
+    std::atomic<bool> quit_{false};
     bool server_relay_ = false;
     std::vector<char> sendbuffer_;
+    sync::shared_mutex mutex_;
     // dependants
     struct source_desc {
         AooSource *source;

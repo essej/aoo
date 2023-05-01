@@ -167,16 +167,16 @@ AOO_INLINE AooError AooClient_getBinaryMsg(AooClient *client, AooBool *b)
 
 /** \copydoc AooClient::addInterfaceAddress() */
 AOO_INLINE AooError AooClient_addInterfaceAddress(
-    AooClient *client, const void *address, AooAddrSize size)
+    AooClient *client, const AooChar *address)
 {
-    return AooClient_control(client, kAooCtlAddInterfaceAddress, 0, (void *)address, size);
+    return AooClient_control(client, kAooCtlAddInterfaceAddress, (AooIntPtr)address, NULL, 0);
 }
 
 /** \copydoc AooClient::removeInterfaceAddress() */
 AOO_INLINE AooError removeInterfaceAddress(
-    AooClient *client, const void *address, AooAddrSize size)
+    AooClient *client, const AooChar *address)
 {
-    return AooClient_control(client, kAooCtlRemoveInterfaceAddress, 0, (void *)address, size);
+    return AooClient_control(client, kAooCtlRemoveInterfaceAddress, (AooIntPtr)address, NULL, 0);
 }
 
 /** \copydoc AooClient::clearInterfaceAddresses() */

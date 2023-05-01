@@ -348,13 +348,13 @@ public:
     }
 
     /** \brief add interface address */
-    AooError addInterfaceAddress(const void *address, AooAddrSize size) {
-        return control(kAooCtlAddInterfaceAddress, 0, (void *)address, size);
+    AooError addInterfaceAddress(const AooChar *address) {
+        return control(kAooCtlAddInterfaceAddress, (AooIntPtr)address, NULL, 0);
     }
 
     /** \brief remove interface address */
-    AooError removeInterfaceAddress(const void *address, AooAddrSize size) {
-        return control(kAooCtlRemoveInterfaceAddress, 0, (void *)address, size);
+    AooError removeInterfaceAddress(const AooChar *address) {
+        return control(kAooCtlRemoveInterfaceAddress, (AooIntPtr)address, NULL, 0);
     }
 
     /** \brief clear interface addresses */
