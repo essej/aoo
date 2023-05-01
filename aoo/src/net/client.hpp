@@ -287,6 +287,7 @@ private:
     udp_client udp_client_;
     osc_stream_receiver receiver_;
     ip_address_list local_addr_;
+    ip_address_list interface_addr_;
     std::atomic<bool> quit_{false};
     int eventsocket_ = -1;
     bool server_relay_ = false;

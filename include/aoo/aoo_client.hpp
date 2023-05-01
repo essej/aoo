@@ -347,6 +347,21 @@ public:
         return control(kAooCtlGetBinaryClientMsg, 0, AOO_ARG(b));
     }
 
+    /** \brief add interface address */
+    AooError addInterfaceAddress(const void *address, AooAddrSize size) {
+        return control(kAooCtlAddInterfaceAddress, 0, (void *)address, size);
+    }
+
+    /** \brief remove interface address */
+    AooError removeInterfaceAddress(const void *address, AooAddrSize size) {
+        return control(kAooCtlRemoveInterfaceAddress, 0, (void *)address, size);
+    }
+
+    /** \brief clear interface addresses */
+    AooError clearInterfaceAddresses() {
+        return control(kAooCtlRemoveInterfaceAddress, 0, NULL, 0);
+    }
+
     /*--------------------------------------------*/
     /*         type-safe request functions        */
     /*--------------------------------------------*/

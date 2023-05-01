@@ -165,6 +165,26 @@ AOO_INLINE AooError AooClient_getBinaryMsg(AooClient *client, AooBool *b)
     return AooClient_control(client, kAooCtlGetBinaryClientMsg, 0, AOO_ARG(*b));
 }
 
+/** \copydoc AooClient::addInterfaceAddress() */
+AOO_INLINE AooError AooClient_addInterfaceAddress(
+    AooClient *client, const void *address, AooAddrSize size)
+{
+    return AooClient_control(client, kAooCtlAddInterfaceAddress, 0, (void *)address, size);
+}
+
+/** \copydoc AooClient::removeInterfaceAddress() */
+AOO_INLINE AooError removeInterfaceAddress(
+    AooClient *client, const void *address, AooAddrSize size)
+{
+    return AooClient_control(client, kAooCtlRemoveInterfaceAddress, 0, (void *)address, size);
+}
+
+/** \copydoc AooClient::clearInterfaceAddresses() */
+AOO_INLINE AooError clearInterfaceAddresses(AooClient *client)
+{
+    return AooClient_control(client, kAooCtlRemoveInterfaceAddress, 0, NULL, 0);
+}
+
 /*--------------------------------------------*/
 /*         type-safe request functions        */
 /*--------------------------------------------*/

@@ -782,6 +782,39 @@ AooError AOO_CALL aoo::net::Client::control(
         CHECKARG(AooBool);
         as<AooBool>(ptr) = binary_.load();
         break;
+    case kAooCtlAddInterfaceAddress:
+    {
+        assert(ptr != NULL);
+        ip_address addr((const struct sockaddr *)ptr, size);
+        if (!addr.valid() || addr.is_ipv4_mapped()) {
+            return kAooErrorBadFormat;
+        }
+        if (std::find(interface_addr_.begin(), interface_addr_.end(), addr)
+                == interface_addr_.end()) {
+            interface_addr_.push_back(addr);
+        } else {
+            return kAooErrorAlreadyExists;
+        }
+        break;
+    }
+    case kAooCtlRemoveInterfaceAddress:
+    {
+        if (ptr != NULL) {
+            ip_address addr((const struct sockaddr *)ptr, size);
+            if (!addr.valid()) {
+                return kAooErrorBadFormat;
+            }
+            if (auto it = std::find(interface_addr_.begin(), interface_addr_.end(), addr);
+                    it != interface_addr_.end()) {
+                interface_addr_.erase(it);
+            } else {
+                return kAooErrorNotFound;
+            }
+        } else {
+            interface_addr_.clear();
+        }
+        break;
+    }
     case kAooCtlNeedRelay:
     {
         CHECKARG(AooBool);
@@ -989,9 +1022,17 @@ void Client::perform(const login_cmd& cmd) {
 
     // send login request
     auto token = next_token_++;
-    auto addrlist = local_addr_;
+    // create address list; start with local/global addresses
+    ip_address_list addrlist = local_addr_;
+    // add user provided interface addresses
+    addrlist.insert(addrlist.end(), interface_addr_.begin(), interface_addr_.end());
+    // add public IP address
     if (cmd.public_ip_.valid()) {
         addrlist.push_back(cmd.public_ip_);
+    }
+    LOG_DEBUG("AooClient: address list:");
+    for (auto& addr : addrlist) {
+        LOG_DEBUG("\t" << addr);
     }
 
     auto msg = start_server_message(connection_->metadata_.size());

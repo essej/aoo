@@ -73,6 +73,8 @@ enum
     kAooCtlGetGroupAutoCreate,
     kAooCtlSetBinaryClientMsg,
     kAooCtlGetBinaryClientMsg,
+    kAooCtlAddInterfaceAddress,
+    kAooCtlRemoveInterfaceAddress,
     /* server group controls */
     kAooCtlUpdateGroup,
     kAooCtlUpdateUser,
