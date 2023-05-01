@@ -318,6 +318,7 @@ typedef struct AooEventPeer
     const AooChar *userName;
     AooSockAddr address;
     AooPeerFlags flags;
+    const AooChar *version;
     /** See AooResponseGroupJoin::userMetadata */
     const AooData *metadata;
 #if 0

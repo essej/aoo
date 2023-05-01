@@ -29,13 +29,13 @@ const int32_t kBinMessageHeaderSize = kAooBinMsgLargeHeaderSize + 28;
 
 peer::peer(const std::string& group_name, AooId group_id,
            const std::string& user_name, AooId user_id,
-           const AooData *metadata, AooFlag flags,
+           const std::string& version, AooFlag flags, const AooData *metadata,
            ip_address::ip_type address_family, bool use_ipv4_mapped,
            ip_address_list&& addrlist, AooId local_id,
            ip_address_list&& user_relay, const ip_address_list& relay_list)
     : group_name_(group_name), user_name_(user_name),
       group_id_(group_id), user_id_(user_id), local_id_(local_id), flags_(flags),
-      address_family_(address_family), use_ipv4_mapped_(use_ipv4_mapped),
+      version_(version), address_family_(address_family), use_ipv4_mapped_(use_ipv4_mapped),
       metadata_(metadata), addrlist_(std::move(addrlist)),
       user_relay_(std::move(user_relay)), relay_list_(relay_list)
 {

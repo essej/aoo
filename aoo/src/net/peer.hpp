@@ -32,7 +32,7 @@ public:
     // NB: be must set everything in the constructor to avoid race conditions!
     peer(const std::string& group_name, AooId group_id,
          const std::string& user_name, AooId user_id,
-         const AooData *metadata, AooFlag flags,
+         const std::string& version, AooFlag flags, const AooData *metadata,
          ip_address::ip_type address_family, bool use_ipv4_mapped,
          ip_address_list&& addrlist, AooId local_id,
          ip_address_list&& user_relay, const ip_address_list& relay_list);
@@ -72,6 +72,8 @@ public:
     AooId user_id() const { return user_id_; }
 
     AooId local_id() const { return local_id_; }
+
+    const std::string& version() const { return version_; }
 
     AooFlag flags() const { return flags_; }
 
@@ -138,6 +140,7 @@ private:
     const AooId user_id_;
     const AooId local_id_;
     AooFlag flags_;
+    std::string version_;
     ip_address::ip_type address_family_;
     bool use_ipv4_mapped_;
     bool timeout_ = false;

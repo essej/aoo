@@ -535,6 +535,7 @@ A peer has joined the group.
 |  `i`  | group ID                         |
 |  `s`  | user name                        |
 |  `i`  | user ID                          |
+|  `s`  | version string                   |
 |  `i`  | flags                            |
 |  `i`  | address count                    |
 |  `s`  | IP address 1                     |

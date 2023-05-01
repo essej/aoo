@@ -1692,6 +1692,7 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
     auto group_id = (it++)->AsInt32();
     auto user_name = (it++)->AsString();
     auto user_id = (it++)->AsInt32();
+    auto version = (it++)->AsString();
     auto flags = (AooFlag)(it++)->AsInt32();
     // collect IP addresses
     auto count = (it++)->AsInt32();
@@ -1733,18 +1734,19 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
     }
 
     // get user relay address(es)
+    auto family = udp_client_.address_family();
+    auto use_ipv4_mapped = udp_client_.use_ipv4_mapped();
     ip_address_list user_relay;
     if (relay.valid()) {
-        user_relay = aoo::ip_address::resolve(relay.name, relay.port,
-                                              udp_client_.address_family(),
-                                              udp_client_.use_ipv4_mapped());
+        user_relay = aoo::ip_address::resolve(relay.name, relay.port, family, use_ipv4_mapped);
         // add to group relay list
         auto& list = membership->relay_list;
         list.insert(list.end(), user_relay.begin(), user_relay.end());
     }
+    auto md = metadata.size > 0 ? &metadata : nullptr;
+
     auto peer = peers_.emplace_front(group_name, group_id, user_name, user_id,
-                                     metadata.size > 0 ? &metadata : nullptr, flags,
-                                     udp_client_.address_family(), udp_client_.use_ipv4_mapped(),
+                                     version, flags, md, family, use_ipv4_mapped,
                                      std::move(addrlist), membership->user_id,
                                      std::move(user_relay), membership->relay_list);
 
