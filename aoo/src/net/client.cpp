@@ -1574,13 +1574,10 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
             // check version
             if (auto err = check_version(version); err != kAooOk) {
                 LOG_WARNING("AooClient: login failed: " << aoo_strerror(err));
-
-                // cache connection
-                auto connection = std::move(connection_);
-
+                auto connection = std::move(connection_); // cache!
                 close();
-
                 connection->reply_error(err);
+                return;
             }
 
             server_relay_ = flags & kAooServerRelay;
@@ -1594,6 +1591,7 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
             AOO_RESPONSE_INIT(&response, Connect, metadata);
             response.clientId = id;
             response.flags = flags;
+            response.version = version;
             response.metadata = metadata.data ? &metadata : nullptr;
 
             connection_->reply((AooResponse&)response);
@@ -1603,11 +1601,8 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
             LOG_WARNING("AooClient: login failed: "
                         << response_error_message(result, code, msg));
 
-            // cache connection
-            auto connection = std::move(connection_);
-
+            auto connection = std::move(connection_); // cache!
             close();
-
             connection->reply_error(result, code, msg);
         }
     }
