@@ -1097,9 +1097,9 @@ bool Source::do_remove_sink(const ip_address& addr, AooId id){
 }
 
 AooError Source::set_format(AooFormat &f){
-    auto codec = aoo::find_codec(f.codec);
+    auto codec = aoo::find_codec(f.codecName);
     if (!codec){
-        LOG_ERROR("AooSource: codec '" << f.codec << "' not supported!");
+        LOG_ERROR("AooSource: codec '" << f.codecName << "' not supported!");
         return kAooErrorNotInitialized;
     }
 
@@ -1321,7 +1321,7 @@ void send_start_msg(const endpoint& ep, int32_t id, int32_t stream, int32_t last
 
     msg << osc::BeginMessage(address) << id << aoo_getVersionString()
         << stream << lastformat << f.numChannels << f.sampleRate << f.blockSize
-        << f.codec << osc::Blob(extension, size);
+        << f.codecName << osc::Blob(extension, size);
     if (metadata) {
         msg << metadata->type << osc::Blob(metadata->data, metadata->size);
     }

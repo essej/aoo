@@ -806,7 +806,7 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
     f.numChannels = (it++)->AsInt32();
     f.sampleRate = (it++)->AsInt32();
     f.blockSize = (it++)->AsInt32();
-    snprintf(f.codec, sizeof(f.codec), "%s", (it++)->AsString());
+    snprintf(f.codecName, sizeof(f.codecName), "%s", (it++)->AsString());
     f.structSize = sizeof(AooFormat);
 
     const void *extension;
@@ -1268,9 +1268,9 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream, int32_t format
 
     if (format_changed){
         // look up codec
-        auto c = aoo::find_codec(f.codec);
+        auto c = aoo::find_codec(f.codecName);
         if (!c){
-            LOG_ERROR("AooSink: codec '" << f.codec << "' not supported!");
+            LOG_ERROR("AooSink: codec '" << f.codecName << "' not supported!");
             return kAooErrorNotImplemented;
         }
 

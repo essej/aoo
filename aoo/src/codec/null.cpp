@@ -25,11 +25,11 @@ void print_format(const AooFormatNull& f)
 
 bool validate_format(AooFormatNull& f, bool loud = true)
 {
-    if (strcmp(f.header.codec, kAooCodecNull)){
+    if (f.header.structSize < AOO_STRUCT_SIZE(AooFormatNull, header)) {
         return false;
     }
 
-    if (f.header.structSize < AOO_STRUCT_SIZE(AooFormatNull, header)) {
+    if (strcmp(f.header.codecName, kAooCodecNull)){
         return false;
     }
 

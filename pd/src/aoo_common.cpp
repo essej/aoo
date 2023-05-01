@@ -148,7 +148,7 @@ int format_to_atoms(const AooFormat &f, int argc, t_atom *argv)
         bug("format_to_atoms: too few atoms!");
         return 0;
     }
-    t_symbol *codec = gensym(f.codec);
+    t_symbol *codec = gensym(f.codecName);
     SETSYMBOL(argv, codec);
     SETFLOAT(argv + 1, f.numChannels);
     SETFLOAT(argv + 2, f.blockSize);

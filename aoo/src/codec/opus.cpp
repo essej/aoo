@@ -43,11 +43,11 @@ void print_format(const AooFormatOpus& f){
 
 bool validate_format(AooFormatOpus& f, bool loud = true)
 {
-    if (strcmp(f.header.codec, kAooCodecOpus)){
+    if (f.header.structSize < AOO_STRUCT_SIZE(AooFormatOpus, applicationType)) {
         return false;
     }
 
-    if (f.header.structSize < AOO_STRUCT_SIZE(AooFormatOpus, applicationType)) {
+    if (strcmp(f.header.codecName, kAooCodecOpus)){
         return false;
     }
 

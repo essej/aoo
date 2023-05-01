@@ -53,12 +53,12 @@ AOO_INLINE void AooFormatOpus_init(
         AooInt32 numChannels, AooInt32 sampleRate,
         AooInt32 blockSize, opus_int32 applicationType)
 {
-    strcpy(fmt->header.codec, kAooCodecOpus);
     AOO_STRUCT_INIT(&fmt->header, AooFormatOpus, applicationType);
     fmt->header.numChannels = numChannels;
     fmt->header.sampleRate = sampleRate;
     fmt->header.blockSize = blockSize;
     fmt->applicationType = applicationType;
+    strcpy(fmt->header.codecName, kAooCodecOpus);
 }
 
 /*----------- helper functions for common controls ------------------*/

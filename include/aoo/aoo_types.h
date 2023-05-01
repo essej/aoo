@@ -511,8 +511,6 @@ typedef void (AOO_CALL *AooStreamMessageHandler)(
 /** \brief common header for all AOO format structs */
 typedef struct AooFormat
 {
-    /** the codec name */
-    AooChar codec[kAooCodecNameMaxSize];
     /** the format structure size (including the header) */
     AooInt32 structSize;
     /** the number of channels */
@@ -521,6 +519,8 @@ typedef struct AooFormat
     AooInt32 sampleRate;
     /** the max. block size */
     AooInt32 blockSize;
+    /** the codec name */
+    AooChar codecName[kAooCodecNameMaxSize];
 } AooFormat;
 
 /*------------------------------------------------------------------*/

@@ -168,11 +168,11 @@ void print_format(const AooFormatPcm& f)
 
 bool validate_format(AooFormatPcm& f, bool loud = true)
 {
-    if (strcmp(f.header.codec, kAooCodecPcm)){
+    if (f.header.structSize < AOO_STRUCT_SIZE(AooFormatPcm, bitDepth)) {
         return false;
     }
 
-    if (f.header.structSize < AOO_STRUCT_SIZE(AooFormatPcm, bitDepth)) {
+    if (strcmp(f.header.codecName, kAooCodecPcm)){
         return false;
     }
 

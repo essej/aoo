@@ -33,11 +33,11 @@ AOO_INLINE void AooFormatNull_init(
         AooFormatNull *fmt, AooInt32 numChannels,
         AooInt32 sampleRate, AooInt32 blockSize)
 {
-    strcpy(fmt->header.codec, kAooCodecNull);
     AOO_STRUCT_INIT(&fmt->header, AooFormatNull, header);
     fmt->header.numChannels = numChannels;
     fmt->header.sampleRate = sampleRate;
     fmt->header.blockSize = blockSize;
+    strcpy(fmt->header.codecName, kAooCodecNull);
 }
 
 /*-----------------------------------------------*/

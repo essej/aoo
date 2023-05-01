@@ -571,7 +571,7 @@ static void aoo_send_format(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
 
         auto err = x->x_source->setFormat(f.header);
         if (err == kAooOk) {
-            x->x_codec = gensym(f.header.codec);
+            x->x_codec = gensym(f.header.codecName);
             // output actual format
             t_atom msg[16];
             int n = format_to_atoms(f.header, 16, msg);
@@ -988,7 +988,7 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
     AooFormatStorage fmt;
     format_makedefault(fmt, nchannels);
     x_source->setFormat(fmt.header);
-    x_codec = gensym(fmt.header.codec);
+    x_codec = gensym(fmt.header.codecName);
 
     x_source->setBufferSize(DEFBUFSIZE * 0.001);
 

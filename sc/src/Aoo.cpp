@@ -379,10 +379,10 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
 
 bool serializeFormat(osc::OutboundPacketStream& msg, const AooFormat& f)
 {
-    msg << f.codec << (int32_t)f.numChannels
+    msg << f.codecName << (int32_t)f.numChannels
         << (int32_t)f.blockSize << (int32_t)f.sampleRate;
 
-    if (!strcmp(f.codec, kAooCodecPcm)){
+    if (!strcmp(f.codecName, kAooCodecPcm)){
         // pcm <channels> <blocksize> <samplerate> <bitdepth>
         auto& fmt = (AooFormatPcm &)f;
         int nbytes;
@@ -410,7 +410,7 @@ bool serializeFormat(osc::OutboundPacketStream& msg, const AooFormat& f)
         return true;
     }
 #if AOO_USE_CODEC_OPUS
-    else if (!strcmp(f.codec, kAooCodecOpus)){
+    else if (!strcmp(f.codecName, kAooCodecOpus)){
         // opus <channels> <blocksize> <samplerate> <application>
         auto& fmt = (AooFormatOpus &)f;
 
@@ -434,7 +434,7 @@ bool serializeFormat(osc::OutboundPacketStream& msg, const AooFormat& f)
     }
 #endif
     else {
-        LOG_ERROR("unknown codec " << f.codec);
+        LOG_ERROR("unknown codec " << f.codecName);
         return false;
     }
 }
