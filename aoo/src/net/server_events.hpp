@@ -9,19 +9,21 @@ namespace net {
 struct client_login_event : ievent
 {
     client_login_event(const client_endpoint& c)
-        : id_(c.id()), sockfd_(c.sockfd()) {}
+        : id_(c.id()), sockfd_(c.sockfd()), version_(c.version()) {}
 
     void dispatch(const event_handler& fn) const override {
         AooEventClientLogin e;
-        AOO_EVENT_INIT(&e, AooEventClientLogin, sockfd);
+        AOO_EVENT_INIT(&e, AooEventClientLogin, version);
         e.id = id_;
         e.sockfd = sockfd_;
+        e.version = version_.c_str();
 
         fn(e);
     }
 
     AooId id_;
     AooSocket sockfd_;
+    std::string version_;
 };
 
 struct client_logout_event : ievent

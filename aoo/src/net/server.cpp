@@ -831,6 +831,8 @@ void Server::handle_message(client_endpoint& client,
                 } else if (!strcmp(pattern, kAooMsgRequest)){
                     handle_custom_request(client, msg);
                 } else {
+                    // NB: the client is supposed to check the server version
+                    // and only send supported messages.
                     throw std::runtime_error("unknown server message " + std::string(pattern));
                 }
             }
@@ -861,6 +863,7 @@ void Server::handle_login(client_endpoint& client, const osc::ReceivedMessage& m
 
     AooRequestLogin request;
     AOO_REQUEST_INIT(&request, Login, metadata);
+    request.version = version;
     request.password = pwd;
     request.metadata = metadata.data ? &metadata : nullptr;
     // check version
@@ -894,7 +897,7 @@ AooError Server::do_login(client_endpoint& client, AooId token,
         flags |= kAooServerRelay;
     }
 
-    client.activate();
+    client.activate(request.version);
 
     // send reply
     auto extra = response.metadata ? response.metadata->size : 0;

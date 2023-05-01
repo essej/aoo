@@ -114,6 +114,7 @@ typedef AooResponseBase AooResponseDisconnect;
 typedef struct AooRequestLogin
 {
     AOO_REQUEST_HEADER
+    const AooChar *version;
     const AooChar *password;
     const AooData *metadata;
 } AooRequestLogin;

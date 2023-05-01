@@ -386,6 +386,7 @@ typedef struct AooEventClientLogin
     AOO_EVENT_HEADER
     AooId id;
     AooSocket sockfd;
+    const AooChar *version;
 } AooEventClientLogin;
 
 /** \brief client has logged out */

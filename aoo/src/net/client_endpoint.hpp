@@ -161,12 +161,14 @@ public:
 
     AooSocket sockfd() const { return sockfd_; }
 
-    void activate() {
-        active_ = true;
+    const std::string& version() const { return version_; }
+
+    void activate(const std::string& version) {
+        version_ = version;
     }
 
     bool active() const {
-        return active_;
+        return !version_.empty();
     }
 
     void add_public_address(const ip_address& addr) {
@@ -208,6 +210,7 @@ private:
     AooId id_;
     int sockfd_; // LATER use this to get information about the client (e.g. IP protocol)
     bool active_ = false;
+    std::string version_;
     AooServerReplyFunc replyfn_;
     void *context_;
     osc_stream_receiver receiver_;
