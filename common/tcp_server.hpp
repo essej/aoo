@@ -26,9 +26,9 @@ class tcp_server
 {
 public:
 #ifdef _WIN32
-    static const int invalid_socket = (int)INVALID_SOCKET;
+    static const AooSocket invalid_socket = (AooSocket)INVALID_SOCKET;
 #else
-    static const int invalid_socket = -1;
+    static const AooSocket invalid_socket = -1;
 #endif
 
     tcp_server() {}
@@ -49,8 +49,9 @@ public:
     int send(AooId client, const AooByte *data, AooSize size);
     bool close(AooId client);
 private:
-    void receive();
+    void loop();
     void accept_client();
+    void handle_accept_error(int code, const ip_address& addr);
     void receive_from_clients();
     void on_error(int code) {
         accept_handler_(code, ip_address(), -1);
@@ -62,6 +63,7 @@ private:
 
     int listen_socket_ = invalid_socket;
     int event_socket_ = invalid_socket;
+    int last_error_ = 0;
     std::atomic<bool> running_{false};
 
     std::vector<pollfd> poll_array_;

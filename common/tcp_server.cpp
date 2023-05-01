@@ -3,6 +3,7 @@
 #include "common/utils.hpp"
 
 #include <algorithm>
+#include <thread>
 #include <utility>
 
 namespace aoo {
@@ -53,9 +54,10 @@ void tcp_server::start(int port, accept_handler accept, receive_handler receive)
 }
 
 void tcp_server::run() {
+    last_error_ = 0;
     running_.store(true);
 
-    receive();
+    loop();
 
     do_close();
 }
@@ -119,7 +121,7 @@ int tcp_server::send(AooId client, const AooByte *data, AooSize size) {
             return size;
         }
     }
-    LOG_ERROR("tcp_server::send: unknown client (" << client << ")");
+    LOG_ERROR("tcp_server: send(): unknown client (" << client << ")");
     return -1;
 }
 
@@ -138,13 +140,13 @@ bool tcp_server::close(AooId client) {
     return false;
 }
 
-void tcp_server::receive() {
+void tcp_server::loop() {
     while (running_.load()) {
         // NOTE: macOS/BSD requires the negative timeout to be exactly -1!
     #ifdef _WIN32
         int result = WSAPoll(poll_array_.data(), poll_array_.size(), -1);
     #else
-        int result = poll(poll_array_.data(), poll_array_.size(), -1);
+        int result = ::poll(poll_array_.data(), poll_array_.size(), -1);
     #endif
         if (result < 0) {
         #ifdef _WIN32
@@ -153,7 +155,7 @@ void tcp_server::receive() {
             int err = errno;
         #endif
             if (err != EINTR) {
-                LOG_ERROR("aoo_server: poll failed (" << err << ")");
+                LOG_ERROR("tcp_server: poll() failed (" << err << ")");
                 break;
             }
         }
@@ -181,7 +183,12 @@ void tcp_server::receive_from_clients() {
         }
     #endif
         auto& c = clients_[i];
-        if (revents & POLLIN) {
+        if ((revents & POLLIN) || (revents & POLLERR) || (revents & POLLHUP)) {
+            if (revents & POLLERR) {
+                LOG_DEBUG("tcp_server: POLLERR");
+            } else if (revents & POLLHUP) {
+                LOG_DEBUG("tcp_server: POLLHUP");
+            }
             // receive data from client
             AooByte buffer[AOO_MAX_PACKET_SIZE];
             auto result = ::recv(c.socket, (char *)buffer, sizeof(buffer), 0);
@@ -205,22 +212,12 @@ void tcp_server::receive_from_clients() {
                     on_error(c.id, e);
                 }
             }
-        } else if (revents & POLLERR) {
-            auto e = socket_error(c.socket);
-            if (e == EINTR) {
-                continue;
-            }
-            LOG_DEBUG("tcp_server: POLLERR: " << socket_strerror(e));
-            on_error(c.id, e);
-        } else if (revents & POLLHUP) {
-            // connection has been closed by the client
-            LOG_DEBUG("tcp_server: POLLHUP");
-            on_error(c.id, socket_error(c.socket));
         } else if (revents & POLLNVAL) {
+            // invalid socket, shouldn't happen...
             LOG_DEBUG("tcp_server: POLLNVAL");
             on_error(c.id, EINVAL);
         } else {
-            // should never happen, just ignore for now
+            // shouldn't happen, ignore for now...
             LOG_ERROR("tcp_server: unexpected revent value " << revents);
             continue;
         }
@@ -252,53 +249,10 @@ void tcp_server::accept_client() {
         return; // no event
     }
 
-    auto handle_error = [this](int e) {
-        // ignore certain non-fatal errors
-        // TODO: should we rather explicitly select fatal errors instead?
-        switch (e) {
-#ifdef _WIN32
-        // remote peer has terminated the connection
-        case WSAECONNRESET:
-        // no available file descriptors
-        case WSAEMFILE:
-#else
-        // remote peer has terminated the connection
-        case ECONNABORTED:
-        // reached process/system limit for open file descriptors
-        case EMFILE:
-        case ENFILE:
-        // interrupted by signal handler
-        case EINTR:
-        // not allowed by firewall rules
-        case EPERM:
-#endif
-#ifdef __linux__
-        // On Linux, also ignore TCP/IP errors! See man page for accept().
-        case ENETDOWN:
-        case EPROTO:
-        case ENOPROTOOPT:
-        case EHOSTDOWN:
-        case ENONET:
-        case EHOSTUNREACH:
-        case EOPNOTSUPP:
-        case ENETUNREACH:
-#endif
-            LOG_DEBUG("tcp_server: ignore accept() error: " << socket_strerror(e));
-            break;
-        default:
-            // fatal error
-            LOG_DEBUG("tcp_server: accept() failed: " << socket_strerror(e));
-            on_error(e);
-        #if 1
-            running_.store(false); // quit server
-        #endif
-            break;
-        }
-    };
-
-    if (revents & POLLIN) {
+    // NB: also call accept() on POLLERR, so we may get the peer address
+    if ((revents & POLLIN) || (revents & POLLERR)) {
         ip_address addr(ip_address::max_length);
-        auto sock = (AooSocket)accept(listen_socket_, addr.address_ptr(), addr.length_ptr());
+        auto sock = (AooSocket)::accept(listen_socket_, addr.address_ptr(), addr.length_ptr());
         if (sock != invalid_socket) {
         #if 1
             // disable Nagle's algorithm
@@ -331,23 +285,90 @@ void tcp_server::accept_client() {
                 p.revents = 0;
                 poll_array_.push_back(p);
             }
-
             LOG_DEBUG("tcp_server: accepted client " << addr << " " << id);
         } else {
-            handle_error(socket_errno());
+            handle_accept_error(socket_errno(), addr);
         }
-    } else if (revents & POLLERR) {
-        LOG_DEBUG("tcp_server: POLLERR");
-        handle_error(socket_error(listen_socket_));
     } else if (revents & POLLHUP) {
         LOG_DEBUG("tcp_server: POLLHUP");
-        handle_error(socket_error(listen_socket_));
+        // shouldn't happen on listening socket...
+        on_error(socket_error(listen_socket_));
+    #if 1
+        running_.store(false); // quit server
+    #endif
     } else if (revents & POLLNVAL) {
         LOG_DEBUG("tcp_server: POLLNVAL");
-        handle_error(EINVAL);
+        on_error(EINVAL);
+    #if 1
+        running_.store(false); // quit server
+    #endif
     } else {
-        // should never happen, just ignore for now
+        // just ignore for now
         LOG_ERROR("tcp_server: unexpected revent value " << revents);
+    }
+}
+
+void tcp_server::handle_accept_error(int code, const ip_address &addr) {
+    // avoid spamming the console with repeated errors
+    thread_local ip_address last_addr;
+    if (code != last_error_ || addr != last_addr) {
+        if (addr.valid()) {
+            LOG_DEBUG("tcp_server: could not accept " << addr
+                      << ": " << socket_strerror(code));
+        } else {
+            LOG_DEBUG("tcp_server: accept() failed: " << socket_strerror(code));
+        }
+    }
+    last_error_ = code;
+    last_addr = addr;
+    // handle error
+    switch (code) {
+    // We ran out of open file descriptors.
+#ifdef _WIN32
+    case WSAEMFILE:
+#else
+    case EMFILE:
+    case ENFILE:
+#endif
+        // Sleep to avoid hogging the CPU, but do not stop the server
+        // because we might be able to recover.
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        break;
+
+    // non-fatal errors
+    // TODO: should we rather explicitly check for fatal errors instead?
+#ifdef _WIN32
+    // remote peer has terminated the connection
+    case WSAECONNRESET:
+#else
+    // remote peer has terminated the connection
+    case ECONNABORTED:
+    // reached process/system limit for open file descriptors
+    // interrupted by signal handler
+    case EINTR:
+    // not allowed by firewall rules
+    case EPERM:
+#endif
+#ifdef __linux__
+    // On Linux, also ignore TCP/IP errors! See man page for accept().
+    case ENETDOWN:
+    case EPROTO:
+    case ENOPROTOOPT:
+    case EHOSTDOWN:
+    case ENONET:
+    case EHOSTUNREACH:
+    case EOPNOTSUPP:
+    case ENETUNREACH:
+#endif
+        break;
+
+    default:
+        // fatal error
+        on_error(code);
+#if 1
+        running_.store(false); // quit server
+#endif
+        break;
     }
 }
 
