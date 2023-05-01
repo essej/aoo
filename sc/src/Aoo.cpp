@@ -1,5 +1,6 @@
 #include "Aoo.hpp"
 
+#include "aoo/codec/aoo_null.h"
 #include "aoo/codec/aoo_pcm.h"
 #if AOO_USE_CODEC_OPUS
 #include "aoo/codec/aoo_opus.h"
@@ -312,7 +313,13 @@ bool parseFormat(const AooUnit& unit, int defNumChannels,
 {
     const char *codec = args->gets("");
 
-    if (!strcmp(codec, kAooCodecPcm)){
+    if (!strcmp(codec, kAooCodecNull)) {
+        auto numChannels = getFormatParam(args, "channels", defNumChannels);
+        auto blockSize = getFormatParam(args, "blocksize", unit.bufferSize());
+        auto sampleRate = getFormatParam(args, "samplerate", unit.sampleRate());
+
+        AooFormatNull_init((AooFormatNull *)&f, numChannels, sampleRate, blockSize);
+    } else if (!strcmp(codec, kAooCodecPcm)){
         auto numChannels = getFormatParam(args, "channels", defNumChannels);
         auto blockSize = getFormatParam(args, "blocksize", unit.bufferSize());
         auto sampleRate = getFormatParam(args, "samplerate", unit.sampleRate());
@@ -382,7 +389,9 @@ bool serializeFormat(osc::OutboundPacketStream& msg, const AooFormat& f)
     msg << f.codecName << (int32_t)f.numChannels
         << (int32_t)f.blockSize << (int32_t)f.sampleRate;
 
-    if (!strcmp(f.codecName, kAooCodecPcm)){
+    if (!strcmp(f.codecName, kAooCodecNull)) {
+        return true;
+    } else if (!strcmp(f.codecName, kAooCodecPcm)){
         // pcm <channels> <blocksize> <samplerate> <bitdepth>
         auto& fmt = (AooFormatPcm &)f;
         int nbytes;
