@@ -128,12 +128,17 @@ int tcp_server::send(AooId client, const AooByte *data, AooSize size) {
 bool tcp_server::close(AooId client) {
     for (size_t i = 0; i < clients_.size(); ++i) {
         if (clients_[i].id == client) {
-            socket_close(clients_[i].socket);
-            // mark as stale (will be ignored in poll())
-            clients_[i].socket = invalid_socket;
-            poll_array_[client_index + i].fd = invalid_socket;
-            stale_clients_.push_back(i);
-            LOG_DEBUG("tcp_server: closed client " << client);
+        #if 1
+            // "lingering close": shutdown() will send FIN, causing the
+            // client to terminate the connection. However, it is important
+            // that we read all pending data before calling close(), otherwise
+            // we might accidentally send RST and the client might lose data.
+            socket_shutdown(clients_[i].socket, shutdown_send);
+            clients_[i].id = kAooIdInvalid;
+        #else
+            close_and_remove_client(i);
+        #endif
+            LOG_DEBUG("tcp_server: close client " << client);
             return true;
         }
     }
@@ -183,50 +188,49 @@ void tcp_server::receive_from_clients() {
         }
     #endif
         auto& c = clients_[i];
-        if ((revents & POLLIN) || (revents & POLLERR) || (revents & POLLHUP)) {
-            if (revents & POLLERR) {
-                LOG_DEBUG("tcp_server: POLLERR");
-            } else if (revents & POLLHUP) {
-                LOG_DEBUG("tcp_server: POLLHUP");
-            }
-            // receive data from client
-            AooByte buffer[AOO_MAX_PACKET_SIZE];
-            auto result = ::recv(c.socket, (char *)buffer, sizeof(buffer), 0);
-            if (result > 0) {
-                // success
-                receive_handler_(c.id, 0, buffer, result);
-                continue;
-            } else {
-                // failure
-                if (result == 0) {
-                    // client disconnected
-                    LOG_DEBUG("tcp_server: connection closed by client");
-                    on_error(c.id, 0);
-                } else {
-                    // error
-                    int e = socket_errno();
-                    if (e == EINTR) {
-                        continue;
-                    }
-                    LOG_DEBUG("tcp_server: recv() failed: " << socket_strerror(e));
-                    on_error(c.id, e);
-                }
-            }
-        } else if (revents & POLLNVAL) {
+
+        if (revents & POLLERR) {
+            LOG_DEBUG("tcp_server: POLLERR");
+        }
+        if (revents & POLLHUP) {
+            LOG_DEBUG("tcp_server: POLLHUP");
+        }
+        if (revents & POLLNVAL) {
             // invalid socket, shouldn't happen...
             LOG_DEBUG("tcp_server: POLLNVAL");
             on_error(c.id, EINVAL);
-        } else {
-            // shouldn't happen, ignore for now...
-            LOG_ERROR("tcp_server: unexpected revent value " << revents);
-            continue;
+            close_and_remove_client(i);
+            return;
         }
 
-        socket_close(c.socket);
-        // mark as stale (will be ignored in poll())
-        c.socket = invalid_socket;
-        poll_array_[client_index + i].fd = invalid_socket;
-        stale_clients_.push_back(i);
+        // receive data from client
+        AooByte buffer[AOO_MAX_PACKET_SIZE];
+        auto result = ::recv(c.socket, (char *)buffer, sizeof(buffer), 0);
+        if (c.id != kAooIdInvalid) {
+            if (result > 0) {
+                // received data
+                receive_handler_(c.id, 0, buffer, result);
+            } else if (result == 0) {
+                // client disconnected
+                LOG_DEBUG("tcp_server: connection closed by client");
+                on_error(c.id, 0);
+                close_and_remove_client(i);
+            } else {
+                // error
+                int e = socket_errno();
+                if (e == EINTR) {
+                    continue;
+                }
+                LOG_DEBUG("tcp_server: recv() failed: " << socket_strerror(e));
+                on_error(c.id, e);
+                close_and_remove_client(i);
+            }
+        } else {
+            // "lingering close": read from socket until EOF, see close() method.
+            if (result <= 0) {
+                close_and_remove_client(i);
+            }
+        }
     }
 
 #if 1
@@ -243,68 +247,76 @@ void tcp_server::receive_from_clients() {
 #endif
 }
 
+void tcp_server::close_and_remove_client(int index) {
+    auto& c = clients_[index];
+    socket_close(c.socket);
+    // mark as stale (will be ignored in poll())
+    c.socket = invalid_socket;
+    poll_array_[client_index + index].fd = invalid_socket;
+    stale_clients_.push_back(index);
+    LOG_DEBUG("tcp_server: close socket and remove client " << c.id);
+}
+
 void tcp_server::accept_client() {
     auto revents = std::exchange(poll_array_[listen_index].revents, 0);
     if (revents == 0) {
         return; // no event
     }
 
-    // NB: also call accept() on POLLERR, so we may get the peer address
-    if ((revents & POLLIN) || (revents & POLLERR)) {
-        ip_address addr(ip_address::max_length);
-        auto sock = (AooSocket)::accept(listen_socket_, addr.address_ptr(), addr.length_ptr());
-        if (sock != invalid_socket) {
-        #if 1
-            // disable Nagle's algorithm
-            int val = 1;
-            if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
-                           (char *)&val, sizeof(val)) != 0) {
-                LOG_ERROR("tcp_server: couldn't set TCP_NODELAY");
-            }
-        #endif
-            auto id = accept_handler_(0, addr, sock);
-            if (id == kAooIdInvalid) {
-                // user refused to accept client
-                socket_close(sock);
-                return;
-            }
-
-            if (!stale_clients_.empty()) {
-                // reuse stale client
-                auto index = stale_clients_.back();
-                stale_clients_.pop_back();
-
-                clients_[index] = client { addr, sock, id };
-                poll_array_[client_index + index].fd = sock;
-            } else {
-                // add new client
-                clients_.push_back(client { addr, sock, id });
-                pollfd p;
-                p.fd = sock;
-                p.events = POLLIN;
-                p.revents = 0;
-                poll_array_.push_back(p);
-            }
-            LOG_DEBUG("tcp_server: accepted client " << addr << " " << id);
-        } else {
-            handle_accept_error(socket_errno(), addr);
-        }
-    } else if (revents & POLLHUP) {
-        LOG_DEBUG("tcp_server: POLLHUP");
-        // shouldn't happen on listening socket...
-        on_error(socket_error(listen_socket_));
-    #if 1
-        running_.store(false); // quit server
-    #endif
-    } else if (revents & POLLNVAL) {
+    if (revents & POLLNVAL) {
         LOG_DEBUG("tcp_server: POLLNVAL");
         on_error(EINVAL);
     #if 1
         running_.store(false); // quit server
     #endif
+        return;
+    }
+    if (revents & POLLERR) {
+        LOG_DEBUG("tcp_server: POLLERR");
+        // get actual error from accept() below
+    }
+    if (revents & POLLHUP) {
+        LOG_DEBUG("tcp_server: POLLHUP");
+        // shouldn't happen on listening socket...
+    }
+
+    ip_address addr(ip_address::max_length);
+    auto sock = (AooSocket)::accept(listen_socket_, addr.address_ptr(), addr.length_ptr());
+    if (sock != invalid_socket) {
+    #if 1
+        // disable Nagle's algorithm
+        int val = 1;
+        if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
+                       (char *)&val, sizeof(val)) != 0) {
+            LOG_ERROR("tcp_server: couldn't set TCP_NODELAY");
+        }
+    #endif
+        auto id = accept_handler_(0, addr, sock);
+        if (id == kAooIdInvalid) {
+            // user refused to accept client
+            socket_close(sock);
+            return;
+        }
+
+        if (!stale_clients_.empty()) {
+            // reuse stale client
+            auto index = stale_clients_.back();
+            stale_clients_.pop_back();
+
+            clients_[index] = client { addr, sock, id };
+            poll_array_[client_index + index].fd = sock;
+        } else {
+            // add new client
+            clients_.push_back(client { addr, sock, id });
+            pollfd p;
+            p.fd = sock;
+            p.events = POLLIN;
+            p.revents = 0;
+            poll_array_.push_back(p);
+        }
+        LOG_DEBUG("tcp_server: accepted client " << addr << " " << id);
     } else {
-        // just ignore for now
-        LOG_ERROR("tcp_server: unexpected revent value " << revents);
+        handle_accept_error(socket_errno(), addr);
     }
 }
 

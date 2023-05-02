@@ -1412,7 +1412,7 @@ bool Client::wait_for_event(float timeout){
     if (result < 0){
         int err = socket_errno();
         if (err == EINTR){
-            return true; // ?
+            return true;
         } else {
             LOG_ERROR("AooClient: poll failed (" << err << ")");
             socket_error_print("poll");
@@ -1430,6 +1430,12 @@ bool Client::wait_for_event(float timeout){
 
     // tcp socket
     if (socket_ >= 0 && fds[1].revents){
+        if (fds[1].revents & POLLERR) {
+            LOG_DEBUG("AooClient: POLLERR");
+        }
+        if (fds[1].revents & POLLHUP) {
+            LOG_DEBUG("AooClient: POLLHUP");
+        }
         receive_data();
     }
 
@@ -1838,7 +1844,7 @@ void Client::close(bool manual){
     if (socket_ >= 0){
         socket_close(socket_);
         socket_ = -1;
-        LOG_VERBOSE("AooClient: connection closed");
+        LOG_VERBOSE("AooClient: closed connection");
     }
 
     connection_ = nullptr;

@@ -118,6 +118,14 @@ int socket_udp(uint16_t port);
 
 int socket_tcp(uint16_t port);
 
+enum shutdown_method {
+    shutdown_receive = 0,
+    shutdown_send = 1,
+    shutdown_both = 2
+};
+
+int socket_shutdown(int socket, shutdown_method how);
+
 int socket_close(int socket);
 
 int socket_connect(int socket, const ip_address& addr, double timeout);

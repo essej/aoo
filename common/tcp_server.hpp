@@ -53,6 +53,7 @@ private:
     void accept_client();
     void handle_accept_error(int code, const ip_address& addr);
     void receive_from_clients();
+    void close_and_remove_client(int index);
     void on_error(int code) {
         accept_handler_(code, ip_address(), -1);
     }

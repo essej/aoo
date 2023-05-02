@@ -728,6 +728,10 @@ ip_address::ip_type socket_family(int socket){
     }
 }
 
+int socket_shutdown(int socket, shutdown_method how) {
+    return shutdown(socket, how);
+}
+
 int socket_close(int socket)
 {
 #ifdef _WIN32
