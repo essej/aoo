@@ -197,10 +197,11 @@ inline osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, con
     return msg;
 }
 
-inline ip_host osc_read_host(osc::ReceivedMessageArgumentIterator& it) {
-    auto host = (it++)->AsString();
-    auto port = (it++)->AsInt32();
-    return net::ip_host { host, port };
+inline AooIpEndpoint osc_read_host(osc::ReceivedMessageArgumentIterator& it) {
+    AooIpEndpoint ep;
+    ep.hostName = (it++)->AsString();
+    ep.port = (it++)->AsInt32();
+    return ep;
 }
 
 } // namespace net

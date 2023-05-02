@@ -943,9 +943,7 @@ void Server::handle_group_join(client_endpoint& client, const osc::ReceivedMessa
     auto user_pwd = (it++)->AsString();
     auto group_md = osc_read_metadata(it);
     auto user_md = osc_read_metadata(it);
-    AooIpEndpoint relay;
-    relay.hostName = (it++)->AsString();
-    relay.port = (it++)->AsInt32();
+    auto relay = osc_read_host(it);
 
     AooRequestGroupJoin request;
     AOO_REQUEST_INIT(&request, GroupJoin, relayAddress);

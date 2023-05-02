@@ -1066,9 +1066,7 @@ void Client::perform(const login_cmd& cmd) {
 void Client::perform(const timeout_cmd& cmd) {
     if (connection_ && state_.load() == client_state::handshake) {
         auto connection = std::move(connection_); // cache!
-
         close();
-
         connection->reply_error(kAooErrorUDPHandshakeTimeOut);
     }
 }
@@ -1135,9 +1133,7 @@ void Client::handle_response(const group_join_cmd& cmd, const osc::ReceivedMessa
         auto group_md = osc_read_metadata(it);
         auto user_md = osc_read_metadata(it);
         auto private_md = osc_read_metadata(it);
-        AooIpEndpoint relay;
-        relay.hostName = (it++)->AsString();
-        relay.port = (it++)->AsInt32();
+        auto relay = osc_read_host(it);
 
         // add group membership
         if (!find_group_membership(cmd.group_name_)) {
@@ -1737,8 +1733,8 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
     auto family = udp_client_.address_family();
     auto use_ipv4_mapped = udp_client_.use_ipv4_mapped();
     ip_address_list user_relay;
-    if (relay.valid()) {
-        user_relay = aoo::ip_address::resolve(relay.name, relay.port, family, use_ipv4_mapped);
+    if (relay.port > 0) {
+        user_relay = aoo::ip_address::resolve(relay.hostName, relay.port, family, use_ipv4_mapped);
         // add to group relay list
         auto& list = membership->relay_list;
         list.insert(list.end(), user_relay.begin(), user_relay.end());
