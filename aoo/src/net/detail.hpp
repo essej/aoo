@@ -3,6 +3,8 @@
 #include "../detail.hpp"
 #include "aoo/aoo_requests.h"
 
+#include <exception>
+
 // OSC address patterns
 
 #define kAooMsgGroupJoin \
@@ -125,6 +127,21 @@
 
 namespace aoo {
 namespace net {
+
+class error : public std::exception {
+public:
+    error(AooError code, std::string msg)
+        : code_(code), msg_(std::move(msg)) {}
+
+    const char *what() const noexcept override {
+        return msg_.c_str();
+    }
+
+    AooError code() const { return code_; }
+private:
+    AooError code_;
+    std::string msg_;
+};
 
 AooError parse_pattern(const AooByte *msg, int32_t n,
                        AooMsgType& type, int32_t& offset);

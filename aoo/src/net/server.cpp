@@ -160,8 +160,10 @@ AooError AOO_CALL aoo::net::Server::handleClientMessage(
     }
     try {
         client->handle_message(*this, data, size);
+    } catch (const error& e) {
+        LOG_ERROR("AooServer: could not handle client message: " << e.what());
+        return e.code();
     } catch (const std::exception& e) {
-        // TODO more granular exception handling with custom exception type
         LOG_ERROR("AooServer: could not handle client message: " << e.what());
         return kAooErrorBadFormat;
     }
@@ -804,7 +806,7 @@ void Server::handle_message(client_endpoint& client,
     int32_t onset;
     auto err = parse_pattern((const AooByte *)msg.AddressPattern(), size, type, onset);
     if (err != kAooOk){
-        throw std::runtime_error("not an AOO message!");
+        throw error(kAooErrorBadFormat, "not an AOO message!");
     }
 
     try {
@@ -816,7 +818,7 @@ void Server::handle_message(client_endpoint& client,
             } else {
                 // all other messages must be received after login!
                 if (!client.active()) {
-                    throw std::runtime_error("not logged in");
+                    throw error(kAooErrorNotPermitted, "not logged in");
                 }
                 if (!strcmp(pattern, kAooMsgPing)){
                     handle_ping(client, msg);
@@ -833,16 +835,28 @@ void Server::handle_message(client_endpoint& client,
                 } else {
                     // NB: the client is supposed to check the server version
                     // and only send supported messages.
-                    throw std::runtime_error("unknown server message " + std::string(pattern));
+                    std::stringstream ss;
+                    ss << "unknown server message " << pattern;
+                    throw error(kAooErrorNotImplemented, ss.str());
                 }
             }
         } else {
-            throw std::runtime_error("unexpected message " + std::string(msg.AddressPattern()));
+            std::stringstream ss;
+            ss << "unexpected message " << msg.AddressPattern();
+            throw error(kAooErrorBadFormat, ss.str());
         }
+    } catch (const osc::WrongArgumentTypeException& e) {
+        std::stringstream ss;
+        ss << "wrong argument(s) for " << msg.AddressPattern() << " message";
+        throw error(kAooErrorBadArgument, ss.str());
+    } catch (const osc::MissingArgumentException& e) {
+        std::stringstream ss;
+        ss << "missing argument(s) for " << msg.AddressPattern() << " message";
+        throw error(kAooErrorBadArgument, ss.str());
     } catch (const osc::Exception& e) {
         std::stringstream ss;
-        ss << "exception while handling " << msg.AddressPattern() << " message: " << e.what();
-        throw std::runtime_error(ss.str());
+        ss << "malformed " << msg.AddressPattern() << " message: " << e.what();
+        throw error(kAooErrorBadFormat, ss.str());
     }
 }
 

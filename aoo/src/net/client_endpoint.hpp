@@ -209,7 +209,6 @@ public:
 private:
     AooId id_;
     int sockfd_; // LATER use this to get information about the client (e.g. IP protocol)
-    bool active_ = false;
     std::string version_;
     AooServerReplyFunc replyfn_;
     void *context_;
