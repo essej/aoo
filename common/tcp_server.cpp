@@ -198,7 +198,7 @@ void tcp_server::receive_from_clients() {
         if (revents & POLLNVAL) {
             // invalid socket, shouldn't happen...
             LOG_DEBUG("tcp_server: POLLNVAL");
-            on_error(c.id, EINVAL);
+            on_client_error(c, EINVAL);
             close_and_remove_client(i);
             return;
         }
@@ -209,11 +209,11 @@ void tcp_server::receive_from_clients() {
         if (c.id != kAooIdInvalid) {
             if (result > 0) {
                 // received data
-                receive_handler_(c.id, 0, buffer, result);
+                receive_handler_(0, c.id, c.address, buffer, result);
             } else if (result == 0) {
                 // client disconnected
                 LOG_DEBUG("tcp_server: connection closed by client");
-                on_error(c.id, 0);
+                on_client_error(c, 0);
                 close_and_remove_client(i);
             } else {
                 // error
@@ -222,7 +222,7 @@ void tcp_server::receive_from_clients() {
                     continue;
                 }
                 LOG_DEBUG("tcp_server: recv() failed: " << socket_strerror(e));
-                on_error(c.id, e);
+                on_client_error(c, e);
                 close_and_remove_client(i);
             }
         } else {
@@ -265,7 +265,7 @@ void tcp_server::accept_client() {
 
     if (revents & POLLNVAL) {
         LOG_DEBUG("tcp_server: POLLNVAL");
-        on_error(EINVAL);
+        accept_handler_(EINVAL, ip_address{});
     #if 1
         running_.store(false); // quit server
     #endif
@@ -291,7 +291,7 @@ void tcp_server::accept_client() {
             LOG_ERROR("tcp_server: couldn't set TCP_NODELAY");
         }
     #endif
-        auto id = accept_handler_(0, addr, sock);
+        auto id = accept_handler_(0, addr);
         if (id == kAooIdInvalid) {
             // user refused to accept client
             socket_close(sock);
@@ -316,11 +316,11 @@ void tcp_server::accept_client() {
         }
         LOG_DEBUG("tcp_server: accepted client " << addr << " " << id);
     } else {
-        handle_accept_error(socket_errno(), addr);
+        on_accept_error(socket_errno(), addr);
     }
 }
 
-void tcp_server::handle_accept_error(int code, const ip_address &addr) {
+void tcp_server::on_accept_error(int code, const ip_address &addr) {
     // avoid spamming the console with repeated errors
     thread_local ip_address last_addr;
     if (code != last_error_ || addr != last_addr) {
@@ -376,7 +376,7 @@ void tcp_server::handle_accept_error(int code, const ip_address &addr) {
 
     default:
         // fatal error
-        on_error(code);
+        on_accept_error(code, addr);
 #if 1
         running_.store(false); // quit server
 #endif
