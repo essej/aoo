@@ -331,8 +331,9 @@ t_node_imp::t_node_imp(t_symbol *s, int port)
 #endif
     // udp_server::start() throws on error!
     // TODO: should we use threaded=true instead?
-    x_server.start(port, [this](auto&&... args) { handle_packet(args...); },
-                   false, recvbufsize, sendbufsize);
+    x_server.set_send_buffer_size(sendbufsize);
+    x_server.set_receive_buffer_size(recvbufsize);
+    x_server.start(port, [this](auto&&... args) { handle_packet(args...); }, false);
 
     LOG_DEBUG("create AooClient on port " << port);
 

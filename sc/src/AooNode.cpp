@@ -13,8 +13,9 @@ AooNode::AooNode(World *world, int port) {
     const int recvbufsize = 1 << 18; // 256 KB
 #endif
     // udp_server::start() throws on error!
-    server_.start(port, [this](auto&&... args) { handlePacket(args...); },
-                  false, recvbufsize, sendbufsize);
+    server_.set_send_buffer_size(sendbufsize);
+    server_.set_receive_buffer_size(recvbufsize);
+    server_.start(port, [this](auto&&... args) { handlePacket(args...); }, false);
 
     LOG_DEBUG("create AooClient on port " << port);
 
