@@ -149,51 +149,56 @@ AOO_API AooError AOO_CALL AooClient_run(AooClient *client, AooBool nonBlocking){
 AooError AOO_CALL aoo::net::Client::run(AooBool nonBlocking){
     start_time_ = time_tag::now();
 
-    while (!quit_.load()){
-        double timeout = 0;
+    try {
+        while (!quit_.load()){
+            double timeout = -1;
 
-        time_tag now = time_tag::now();
-        auto elapsed_time = time_tag::duration(start_time_, now);
+            time_tag now = time_tag::now();
+            auto elapsed_time = time_tag::duration(start_time_, now);
 
-        if (state_.load() == client_state::connected){
-            auto delta = elapsed_time - last_ping_time_;
-            auto interval = ping_interval();
-            if (delta >= interval) {
-                // send ping
-                if (socket_ >= 0){
-                    auto msg = start_server_message();
+            if (state_.load() == client_state::connected){
+                auto delta = elapsed_time - last_ping_time_;
+                auto interval = ping_interval();
+                if (delta >= interval) {
+                    // send ping
+                    if (socket_ >= 0){
+                        auto msg = start_server_message();
 
-                    msg << osc::BeginMessage(kAooMsgServerPing)
-                        << osc::EndMessage;
+                        msg << osc::BeginMessage(kAooMsgServerPing)
+                            << osc::EndMessage;
 
-                    send_server_message(msg);
+                        send_server_message(msg);
+                    } else {
+                        LOG_ERROR("AooClient: bug send_ping()");
+                    }
+
+                    last_ping_time_ = elapsed_time;
+                    timeout = interval;
                 } else {
-                    LOG_ERROR("AooClient: bug send_ping()");
+                    timeout = interval - delta;
                 }
-
-                last_ping_time_ = elapsed_time;
-                timeout = interval;
-            } else {
-                timeout = interval - delta;
             }
-        } else {
-            timeout = -1;
-        }
 
-        if (!wait_for_event(nonBlocking ? 0 : timeout)){
-            break;
-        }
+            auto didsomething = wait_for_event(nonBlocking ? 0 : timeout);
 
-        // handle commands
-        std::unique_ptr<icommand> cmd;
-        while (commands_.try_pop(cmd)){
-            cmd->perform(*this);
-        }
+            // handle commands
+            std::unique_ptr<icommand> cmd;
+            while (commands_.try_pop(cmd)){
+                cmd->perform(*this);
+            }
 
-        if (!peers_.update()){
-            // LOG_DEBUG("AooClient: update() would block");
+            if (!peers_.update()){
+                // LOG_DEBUG("AooClient: update() would block");
+            }
+
+            if (nonBlocking) {
+                return didsomething ? kAooOk : kAooErrorWouldBlock;
+            }
         }
+    } catch (const net::error& e) {
+        return e.code();
     }
+
     return kAooOk;
 }
 
@@ -1409,14 +1414,15 @@ bool Client::wait_for_event(float timeout){
 #else
     int result = poll(fds, 2, timeout < 0 ? -1 : timeout * 1000.0 + 0.5);
 #endif
-    if (result < 0){
+    if (result == 0) {
+        return false; // nothing to do or timeout
+    } else if (result < 0) {
         int err = socket_errno();
-        if (err == EINTR){
+        if (err == EINTR) {
             return true;
         } else {
-            LOG_ERROR("AooClient: poll failed (" << err << ")");
-            socket_error_print("poll");
-            return false;
+            LOG_ERROR("AooClient: poll() failed: " << socket_strerror(err));
+            throw error(kAooErrorSocket, "poll() failed");
         }
     }
 

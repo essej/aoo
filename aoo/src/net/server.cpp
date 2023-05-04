@@ -163,6 +163,7 @@ AooError AOO_CALL aoo::net::Server::handleClientMessage(
     }
     try {
         client->handle_message(*this, data, size);
+        return kAooOk;
     } catch (const error& e) {
         LOG_ERROR("AooServer: could not handle client message: " << e.what());
         return e.code();
@@ -170,8 +171,6 @@ AooError AOO_CALL aoo::net::Server::handleClientMessage(
         LOG_ERROR("AooServer: could not handle client message: " << e.what());
         return kAooErrorBadFormat;
     }
-
-    return kAooOk;
 }
 
 AOO_API AooError AOO_CALL AooServer_setRequestHandler(

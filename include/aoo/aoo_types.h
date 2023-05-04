@@ -188,6 +188,8 @@ AOO_ENUM(AooError)
     /** AOO source/sink is idle;
      * no need to call `send()` resp. notify the send thread */
     kAooErrorIdle,
+    /** operation would block */
+    kAooErrorWouldBlock,
     /** operation would overflow */
     kAooErrorOverflow,
     /** out of memory */

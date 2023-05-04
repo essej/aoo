@@ -184,6 +184,8 @@ const char *aoo_strerror(AooError e){
         return "bad format";
     case kAooErrorIdle:
         return "idle";
+    case kAooErrorWouldBlock:
+        return "would block";
     case kAooErrorOverflow:
         return "overflow";
     case kAooErrorOutOfMemory:

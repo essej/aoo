@@ -72,8 +72,10 @@ public:
 
     /** \brief run the internal TCP client
      *
-     * \param nonBlocking #kAooTrue: the function does not block;
-     * #kAooFalse: blocks until until quit() is called.
+     * \param nonBlocking
+     *   - #kAooTrue: returns immediately, either with #kAooOk (= did something)
+     *     or with #kAooErrorWouldBlock (= nothing to do).
+     *   - #kAooFalse: blocks until until quit() is called.
      */
     virtual AooError AOO_CALL run(AooBool nonBlocking) = 0;
 

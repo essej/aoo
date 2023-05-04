@@ -254,7 +254,11 @@ void tcp_server::close_and_remove_client(int index) {
     c.socket = invalid_socket;
     poll_array_[client_index + index].fd = invalid_socket;
     stale_clients_.push_back(index);
-    LOG_DEBUG("tcp_server: close socket and remove client " << c.id);
+    if (c.id != kAooIdInvalid) {
+        LOG_DEBUG("tcp_server: close socket and remove client " << c.id);
+    } else {
+        LOG_DEBUG("tcp_server: close client socket");
+    }
 }
 
 void tcp_server::accept_client() {
