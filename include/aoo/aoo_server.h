@@ -51,12 +51,12 @@ AOO_API AooError AOO_CALL AooServer_handleUdpMessage(
 
 /** \copydoc AooServer::addClient() */
 AOO_API AooError AOO_CALL AooServer_addClient(
-        AooServer *server, AooServerReplyFunc replyFn,
-        void *user, AooSocket sockfd, AooId *id);
+        AooServer *server,
+        AooServerReplyFunc replyFn, void *user, AooId *id);
 
 /** \copydoc AooServer::removeClient() */
 AOO_API AooError AOO_CALL AooServer_removeClient(
-        AooServer *server, AooId clientId, AooError error);
+        AooServer *server, AooId clientId);
 
 /** \copydoc AooServer::handleClientMessage() */
 AOO_API AooError AOO_CALL AooServer_handleClientMessage(

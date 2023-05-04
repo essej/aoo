@@ -8,40 +8,32 @@ namespace net {
 
 struct client_login_event : ievent
 {
-    client_login_event(const client_endpoint& c)
-        : id_(c.id()), sockfd_(c.sockfd()), version_(c.version()) {}
+    client_login_event(const client_endpoint& c, AooError error, aoo::metadata md = aoo::metadata{})
+        : id_(c.id()), error_(error), version_(c.version()), metadata_(std::move(md)) {}
 
     void dispatch(const event_handler& fn) const override {
         AooEventClientLogin e;
-        AOO_EVENT_INIT(&e, AooEventClientLogin, version);
-        e.id = id_;
-        e.sockfd = sockfd_;
-        e.version = version_.c_str();
-
-        fn(e);
-    }
-
-    AooId id_;
-    AooSocket sockfd_;
-    std::string version_;
-};
-
-struct client_logout_event : ievent
-{
-    client_logout_event(AooId id, AooError error)
-        : id_(id), error_(error) {}
-
-    void dispatch(const event_handler& fn) const override {
-        AooEventClientLogout e;
-        AOO_EVENT_INIT(&e, AooEventClientLogout, error);
+        AOO_EVENT_INIT(&e, AooEventClientLogin, metadata);
         e.id = id_;
         e.error = error_;
+        e.version = version_.c_str();
+        AooData md;
+        if (metadata_.type() != kAooDataUnspecified && metadata_.size() > 0) {
+            md.type = metadata_.type();
+            md.data = metadata_.data();
+            md.size = metadata_.size();
+            e.metadata = &md;
+        } else {
+            e.metadata = nullptr;
+        }
 
         fn(e);
     }
 
     AooId id_;
     AooError error_;
+    std::string version_;
+    aoo::metadata metadata_;
 };
 
 struct group_add_event : ievent

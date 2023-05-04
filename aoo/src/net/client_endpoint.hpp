@@ -149,8 +149,8 @@ inline std::ostream& operator<<(std::ostream& os, const group& g) {
 
 class client_endpoint {
 public:
-    client_endpoint(int sockfd, AooId id, AooServerReplyFunc replyfn, void *context)
-        : id_(id), sockfd_(sockfd), replyfn_(replyfn), context_(context) {}
+    client_endpoint(AooId id, AooServerReplyFunc replyfn, void *context)
+        : id_(id), replyfn_(replyfn), context_(context) {}
 
     ~client_endpoint() {}
 
@@ -159,12 +159,10 @@ public:
 
     AooId id() const { return id_; }
 
-    AooSocket sockfd() const { return sockfd_; }
-
     const std::string& version() const { return version_; }
 
-    void activate(const std::string& version) {
-        version_ = version;
+    void activate(std::string version) {
+        version_ = std::move(version);
     }
 
     bool active() const {
@@ -208,7 +206,6 @@ public:
     void handle_message(Server& server, const AooByte *data, int32_t n);
 private:
     AooId id_;
-    int sockfd_; // LATER use this to get information about the client (e.g. IP protocol)
     std::string version_;
     AooServerReplyFunc replyfn_;
     void *context_;

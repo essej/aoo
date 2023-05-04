@@ -85,11 +85,10 @@ public:
 
     /** \brief add a new client */
     virtual AooError AOO_CALL addClient(
-            AooServerReplyFunc replyFn, void *user,
-            AooSocket sockfd, AooId *id) = 0;
+            AooServerReplyFunc replyFn, void *user, AooId *id) = 0;
 
     /** \brief remove a client */
-    virtual AooError AOO_CALL removeClient(AooId clientId, AooError error) = 0;
+    virtual AooError AOO_CALL removeClient(AooId clientId) = 0;
 
     /** \brief handle client message */
     virtual AooError AOO_CALL handleClientMessage(

@@ -74,13 +74,13 @@ void handle_udp_receive(int e, const aoo::ip_address& addr,
 
 aoo::tcp_server g_tcp_server;
 
-AooId handle_tcp_accept(int e, const aoo::ip_address& addr, int sockfd) {
+AooId handle_tcp_accept(int e, const aoo::ip_address& addr) {
     if (e == 0) {
         // add new client
         AooId id;
         g_aoo_server->addClient([](void *, AooId client, const AooByte *data, AooSize size) {
             return g_tcp_server.send(client, data, size);
-        }, nullptr, sockfd, &id);
+        }, nullptr, &id);
         if (g_loglevel >= kAooLogLevelVerbose) {
             std::cout << "Add new client " << id << std::endl;
         }
@@ -96,12 +96,13 @@ AooId handle_tcp_accept(int e, const aoo::ip_address& addr, int sockfd) {
     }
 }
 
-void handle_tcp_receive(AooId client, int e, const AooByte *data, AooSize size) {
+void handle_tcp_receive(int e, AooId client, const aoo::ip_address& addr,
+                        const AooByte *data, AooSize size) {
     if (e == 0 && size > 0) {
         // handle client message
         if (auto err = g_aoo_server->handleClientMessage(client, data, size); err != kAooOk) {
             // remove misbehaving client
-            g_aoo_server->removeClient(client, err);
+            g_aoo_server->removeClient(client);
             g_tcp_server.close(client);
             if (g_loglevel >= kAooLogLevelWarning)
                 std::cout << "Close client " << client << " after error: " << aoo_strerror(err) << std::endl;
@@ -115,7 +116,7 @@ void handle_tcp_receive(AooId client, int e, const AooByte *data, AooSize size) 
             if (g_loglevel >= kAooLogLevelVerbose)
                 std::cout << "Client " << client << " has disconnected" << std::endl;
         }
-        g_aoo_server->removeClient(client, e != 0 ? kAooErrorSocket : kAooErrorNone);
+        g_aoo_server->removeClient(client);
     }
 }
 

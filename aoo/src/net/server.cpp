@@ -112,18 +112,17 @@ AooError AOO_CALL aoo::net::Server::handleUdpMessage(
 }
 
 AOO_API AooError AOO_CALL AooServer_addClient(
-        AooServer *server, AooServerReplyFunc replyFn,
-        void *user, AooSocket sockfd, AooId *id) {
-    return server->addClient(replyFn, user, sockfd, id);
+        AooServer *server, AooServerReplyFunc replyFn, void *user, AooId *id) {
+    return server->addClient(replyFn, user, id);
 }
 
 AooError AOO_CALL aoo::net::Server::addClient(
-        AooServerReplyFunc replyFn, void *user, AooSocket sockfd, AooId *clientId) {
+        AooServerReplyFunc replyFn, void *user, AooId *clientId) {
     // NB: we don't protect against duplicate clients;
     // the user is supposed to only call this when a new client
     // socket is accepted.
     auto id = get_next_client_id();
-    clients_.emplace(id, client_endpoint(sockfd, id, replyFn, user));
+    clients_.emplace(id, client_endpoint(id, replyFn, user));
     if (clientId) {
         *clientId = id;
     }
@@ -132,18 +131,22 @@ AooError AOO_CALL aoo::net::Server::addClient(
 }
 
 AOO_API AooError AOO_CALL AooServer_removeClient(
-        AooServer *server, AooId clientId, AooError error) {
-    return server->removeClient(clientId, error);
+        AooServer *server, AooId clientId) {
+    return server->removeClient(clientId);
 }
 
-AooError AOO_CALL aoo::net::Server::removeClient(AooId clientId, AooError error) {
-    if (remove_client(clientId, error)) {
-        LOG_DEBUG("AooServer: remove client " << clientId);
-        return kAooOk;
-    } else {
+AooError AOO_CALL aoo::net::Server::removeClient(AooId clientId) {
+    auto it = clients_.find(clientId);
+    if (it == clients_.end()) {
         LOG_ERROR("AooServer: removeClient: client " << clientId << " not found");
         return kAooErrorNotFound;
     }
+
+    // remove from group(s) and send notifications
+    it->second.on_close(*this);
+    clients_.erase(it);
+    LOG_DEBUG("AooServer: remove client " << clientId);
+    return kAooOk;
 }
 
 AOO_API AooError AOO_CALL AooServer_handleClientMessage(
@@ -239,6 +242,13 @@ AooError AOO_CALL aoo::net::Server::handleRequest(
         }
         c->send_error(*this, token, request->type, result,
                       (const AooResponseError *)response);
+    #if 1
+        if (request->type == kAooRequestLogin) {
+            // send event
+            auto e = std::make_unique<client_login_event>(*c, result);
+            send_event(std::move(e));
+        }
+    #endif
 
         return kAooOk;
     }
@@ -615,26 +625,6 @@ client_endpoint * Server::find_client(const ip_address& addr) {
     return nullptr;
 }
 
-bool Server::remove_client(AooId id, AooError error) {
-    auto it = clients_.find(id);
-    if (it == clients_.end()) {
-        return false;
-    }
-
-    // only send logout event if client has been logged in!
-    auto active = it->second.active();
-    // remove from group(s) and send notifications
-    it->second.on_close(*this);
-    clients_.erase(it);
-
-    if (active) {
-        auto e = std::make_unique<client_logout_event>(id, error);
-        send_event(std::move(e));
-    }
-
-    return true;
-}
-
 group* Server::add_group(group&& grp) {
     if (!find_group(grp.name())) {
         auto result = groups_.emplace(grp.id(), std::move(grp));
@@ -884,12 +874,18 @@ void Server::handle_login(client_endpoint& client, const osc::ReceivedMessage& m
     if (auto err = check_version(version); err != kAooOk) {
         LOG_DEBUG("AooServer: client " << client.id() << ": version mismatch");
         client.send_error(*this, token, request.type, err);
+        // send event
+        auto e = std::make_unique<client_login_event>(client, err);
+        send_event(std::move(e));
         return;
     }
     // check password
     if (!password_.empty() && pwd != password_) {
         LOG_DEBUG("AooServer: client " << client.id() << ": wrong password");
         client.send_error(*this, token, request.type, kAooErrorWrongPassword);
+        // send event
+        auto e = std::make_unique<client_login_event>(client, kAooErrorWrongPassword);
+        send_event(std::move(e));
         return;
     }
 
@@ -925,7 +921,7 @@ AooError Server::do_login(client_endpoint& client, AooId token,
 
     client.send_message(msg);
 
-    auto e = std::make_unique<client_login_event>(client);
+    auto e = std::make_unique<client_login_event>(client, kAooOk, aoo::metadata(request.metadata));
     send_event(std::move(e));
 
     return kAooOk;

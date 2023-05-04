@@ -93,10 +93,8 @@ AOO_ENUM(AooEventType)
     /** AooClient: our user has been updated by the server
      *  AooServer: a user has updated itself */
     kAooEventUserUpdate,
-    /** AooServer: client logged in successfully */
+    /** AooServer: client logged in successfully or failed */
     kAooEventClientLogin,
-    /** AooServer: client has logged out */
-    kAooEventClientLogout,
     /** AooServer: a new group has been added (automatically) */
     kAooEventGroupAdd,
     /** AooServer: a group has been removed (automatically) */
@@ -386,19 +384,10 @@ typedef struct AooEventClientLogin
 {
     AOO_EVENT_HEADER
     AooId id;
-    AooSocket sockfd;
+    AooError error;
     const AooChar *version;
+    const AooData *metadata;
 } AooEventClientLogin;
-
-/** \brief client has logged out */
-typedef struct AooEventClientLogout
-{
-    AOO_EVENT_HEADER
-    AooId id;
-    /** the error that caused the logout;
-     * `kAooErrorNone` if the client logged out voluntarily */
-    AooInt32 error;
-} AooEventClientLogout;
 
 /** \brief group added */
 typedef struct AooEventGroupAdd
@@ -498,7 +487,6 @@ union AooEvent
     AooEventGroupUpdate groupUpdate;
     AooEventUserUpdate userUpdate;
     AooEventClientLogin clientLogin;
-    AooEventClientLogout clientLogout;
     AooEventGroupAdd groupAdd;
     AooEventGroupRemove groupRemove;
     AooEventGroupJoin groupJoin;
