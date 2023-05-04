@@ -208,14 +208,19 @@ inline osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, con
 }
 
 inline AooData osc_read_metadata(osc::ReceivedMessageArgumentIterator& it) {
-    auto type = (it++)->AsInt32();
-    const void *blobdata;
-    osc::osc_bundle_element_size_t blobsize;
-    (it++)->AsBlob(blobdata, blobsize);
-    if (blobsize) {
-        return AooData { type, (const AooByte *)blobdata, (AooSize)blobsize };
-    } else {
-        return AooData { type, nullptr, 0 };
+    try {
+        auto type = (it++)->AsInt32();
+        const void *blobdata;
+        osc::osc_bundle_element_size_t blobsize;
+        (it++)->AsBlob(blobdata, blobsize);
+        if (blobsize > 0) {
+            return AooData { type, (const AooByte *)blobdata, (AooSize)blobsize };
+        } else {
+            return AooData { type, nullptr, 0 };
+        }
+    } catch (const osc::MissingArgumentException&) {
+        LOG_DEBUG("metadata argument not provided");
+        return AooData { kAooDataUnspecified, nullptr, 0 };
     }
 }
 

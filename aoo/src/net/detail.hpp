@@ -198,10 +198,15 @@ inline osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, con
 }
 
 inline AooIpEndpoint osc_read_host(osc::ReceivedMessageArgumentIterator& it) {
-    AooIpEndpoint ep;
-    ep.hostName = (it++)->AsString();
-    ep.port = (it++)->AsInt32();
-    return ep;
+    try {
+        AooIpEndpoint ep;
+        ep.hostName = (it++)->AsString();
+        ep.port = (it++)->AsInt32();
+        return ep;
+    } catch (const osc::MissingArgumentException&) {
+        LOG_DEBUG("host argument not provided");
+        return AooIpEndpoint { "", 0 };
+    }
 }
 
 } // namespace net

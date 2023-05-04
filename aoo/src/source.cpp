@@ -2197,17 +2197,8 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
     auto it = msg.ArgumentsBegin();
 
     auto id = (it++)->AsInt32();
-
     auto token = (it++)->AsInt32();
-
-    AooInt32 type = kAooDataUnspecified;
-    const void *ptr = nullptr;
-    osc::osc_bundle_element_size_t size = 0;
-
-    if (msg.ArgumentCount() >= 4){
-        type = (it++)->AsInt32();
-        (it++)->AsBlob(ptr, size);
-    }
+    auto metadata = osc_read_metadata(it); // optional
 
     LOG_DEBUG("AooSource: handle invitation by " << addr << "|" << id);
 
@@ -2227,13 +2218,8 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
     // make sure that the event is only sent once per invitation.
     if (sink->need_invite(token)) {
         // push "invite" event
-        AooData md;
-        md.type = type;
-        md.data = (AooByte *)ptr;
-        md.size = size;
-
         e2 = make_event<invite_event>(
-            addr, id, token, (type != kAooDataUnspecified) ? &md : nullptr);
+            addr, id, token, (metadata.data ? &metadata : nullptr));
     }
 
     lock1.unlock(); // unlock before sending events
@@ -2334,7 +2320,7 @@ void Source::handle_pong(const osc::ReceivedMessage& msg,
     AooId id = (it++)->AsInt32();
     time_tag tt1 = (it++)->AsTimeTag();
     time_tag tt2 = (it++)->AsTimeTag();
-    float packetloss = (it++)->AsFloat();
+    float packetloss = (msg.ArgumentCount() >= 4) ? (it++)->AsFloat() : 0;
 
     LOG_DEBUG("AooSource: handle pong");
 

@@ -813,20 +813,7 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
     osc::osc_bundle_element_size_t size;
     (it++)->AsBlob(extension, size);
 
-    // get stream metadata
-    AooData md;
-    if (msg.ArgumentCount() >= 12) {
-        md.type = (it++)->AsInt32();
-        const void *md_data;
-        osc::osc_bundle_element_size_t md_size;
-        (it++)->AsBlob(md_data, md_size);
-        md.data = (const AooByte *)md_data;
-        md.size = md_size;
-    } else {
-        md.type = kAooDataUnspecified;
-        md.data = nullptr;
-        md.size = 0;
-    }
+    AooData metadata = osc_read_metadata(it); // optional
 
     if (id < 0){
         LOG_WARNING("AooSink: bad ID for " << kAooMsgStart << " message");
@@ -843,7 +830,7 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
     }
     return src->handle_start(*this, stream, format_id, f,
                              (const AooByte *)extension, size,
-                             (md.data ? &md : nullptr));
+                             (metadata.data ? &metadata : nullptr));
 }
 
 // /aoo/sink/<id>/stop <src> <stream>

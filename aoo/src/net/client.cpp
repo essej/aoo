@@ -1135,10 +1135,10 @@ void Client::handle_response(const group_join_cmd& cmd, const osc::ReceivedMessa
         auto group_flags = (AooFlag)(it++)->AsInt32();
         auto user_id = (it++)->AsInt32();
         auto user_flags = (AooFlag)(it++)->AsInt32();
-        auto group_md = osc_read_metadata(it);
-        auto user_md = osc_read_metadata(it);
-        auto private_md = osc_read_metadata(it);
-        auto relay = osc_read_host(it);
+        auto group_md = osc_read_metadata(it); // optional
+        auto user_md = osc_read_metadata(it); // optional
+        auto private_md = osc_read_metadata(it); // optional
+        auto relay = osc_read_host(it); // optional
 
         // add group membership
         if (!find_group_membership(cmd.group_name_)) {
@@ -1577,7 +1577,7 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
             auto version = (it++)->AsString();
             auto id = (AooId)(it++)->AsInt32();
             auto flags = (AooFlag)(it++)->AsInt32();
-            auto metadata = osc_read_metadata(it);
+            auto metadata = osc_read_metadata(it); // optional
 
             // check version
             if (auto err = check_version(version); err != kAooOk) {
@@ -1703,9 +1703,9 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
     auto version = (it++)->AsString();
     auto flags = (AooFlag)(it++)->AsInt32();
     // collect IP addresses
-    auto count = (it++)->AsInt32();
+    auto addrcount = (it++)->AsInt32();
     ip_address_list addrlist;
-    while (count--){
+    for (int32_t i = 0; i < addrcount; ++i){
         // read as is! They might be used as identifiers in relay message.
         auto addr = osc_read_address(it);
         if (addr.is_ipv4_mapped()) {
@@ -1721,8 +1721,8 @@ void Client::handle_peer_add(const osc::ReceivedMessage& msg){
             LOG_DEBUG("AooClient: ignore local address " << addr);
         }
     }
-    auto metadata = osc_read_metadata(it);
-    auto relay = osc_read_host(it);
+    auto metadata = osc_read_metadata(it); // optional
+    auto relay = osc_read_host(it); // optional
 
     peer_lock lock(peers_);
     // check if peer already exists (shouldn't happen)
