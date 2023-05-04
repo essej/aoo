@@ -148,11 +148,17 @@ int socket_set_sendbufsize(int socket, int bufsize);
 
 int socket_set_recvbufsize(int socket, int bufsize);
 
+int socket_set_int_option(int socket, int level, int opt, int value);
+
+int socket_get_int_option(int socket, int level, int opt, int* value);
+
 int socket_set_nonblocking(int socket, bool nonblocking);
 
 bool socket_signal(int socket);
 
 int socket_errno();
+
+void socket_set_errno(int err);
 
 int socket_error(int socket);
 

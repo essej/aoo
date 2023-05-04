@@ -529,6 +529,15 @@ int socket_errno()
 #endif
 }
 
+void socket_set_errno(int err)
+{
+#ifdef _WIN32
+    WSASetLastError(err);
+#else
+    errno = err;
+#endif
+}
+
 int socket_error(int socket) {
     int error = 0;
     socklen_t errlen = sizeof(error);
@@ -576,13 +585,12 @@ std::string socket_strerror(int err){
 
 void socket_error_print(const char *label)
 {
-    char str[1024];
-
     int err = socket_errno();
     if (!err){
         return;
     }
 
+    char str[1024];
     socket_strerror(err, str, sizeof(str));
     if (label){
         fprintf(stderr, "%s: %s (%d)\n", label, str, err);
@@ -590,6 +598,8 @@ void socket_error_print(const char *label)
         fprintf(stderr, "%s (%d)\n", str, err);
     }
     fflush(stderr);
+
+    socket_set_errno(err); // restore errno!
 }
 
 int socket_udp(uint16_t port)
@@ -601,8 +611,7 @@ int socket_udp(uint16_t port)
     if (sock >= 0){
         bindaddr = ip_address(port, ip_address::IPv6);
         // make dual stack socket by listening to both IPv4 and IPv6 packets
-        int val = 0;
-        if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&val, sizeof(val))){
+        if (socket_set_int_option(sock, IPPROTO_IPV6, IPV6_V6ONLY, false) != 0){
             fprintf(stderr, "socket_udp: couldn't set IPV6_V6ONLY");
             fflush(stderr);
             // TODO: fall back to IPv4?
@@ -615,18 +624,19 @@ int socket_udp(uint16_t port)
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     ip_address bindaddr(port, ip_address::IPv4);
 #endif
-    if (sock >= 0){
-        // finally bind the socket
-        if (bind(sock, bindaddr.address(), bindaddr.length()) == 0){
-            return sock; // success
-        } else {
-            socket_error_print("bind");
-        }
-        socket_close(sock);
-    } else {
+    if (sock < 0) {
         socket_error_print("socket_udp");
+        return -1;
     }
-    return -1;
+    // finally bind the socket
+    if (bind(sock, bindaddr.address(), bindaddr.length()) != 0){
+        auto err = socket_errno(); // cache errno
+        socket_error_print("bind");
+        socket_close(sock);
+        socket_set_errno(err); // restore errno
+        return -1;
+    }
+    return sock; // success
 }
 
 int socket_tcp(uint16_t port)
@@ -638,8 +648,7 @@ int socket_tcp(uint16_t port)
     if (sock >= 0) {
         bindaddr = ip_address(port, ip_address::IPv6);
         // make dual stack socket by listening to both IPv4 and IPv6 packets
-        int val = 0;
-        if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (const char *)&val, sizeof(val))){
+        if (socket_set_int_option(sock, IPPROTO_IPV6, IPV6_V6ONLY, false)) {
             fprintf(stderr, "socket_udp: couldn't set IPV6_V6ONLY");
             fflush(stderr);
             // TODO: fall back to IPv4?
@@ -652,35 +661,29 @@ int socket_tcp(uint16_t port)
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     ip_address bindaddr = ip_address(port, ip_address::IPv4);
 #endif
-    if (sock >= 0){
-        // set SO_REUSEADDR
-        int val = 1;
-        if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
-                       (char *)&val, sizeof(val)) < 0)
-        {
-            fprintf(stderr, "aoo_client: couldn't set SO_REUSEADDR");
-            fflush(stderr);
-        }
-        // disable Nagle's algorithm
-        val = 1;
-        if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
-                       (char *)&val, sizeof(val)) < 0)
-        {
-            fprintf(stderr, "aoo_client: couldn't set TCP_NODELAY");
-            fflush(stderr);
-        }
-        // finally bind the socket
-        auto result = bind(sock, bindaddr.address(), bindaddr.length());
-        if (result == 0){
-            return sock; // success
-        } else {
-            socket_error_print("bind");
-        }
-        socket_close(sock);
-    } else {
+    if (sock < 0){
         socket_error_print("socket_tcp");
+        return -1;
     }
-    return -1;
+    // set SO_REUSEADDR
+    if (socket_set_int_option(sock, SOL_SOCKET, SO_REUSEADDR, true) != 0) {
+        fprintf(stderr, "aoo_client: couldn't set SO_REUSEADDR");
+        fflush(stderr);
+    }
+    // disable Nagle's algorithm
+    if (socket_set_int_option(sock, IPPROTO_TCP, TCP_NODELAY, true)) {
+        fprintf(stderr, "aoo_client: couldn't set TCP_NODELAY");
+        fflush(stderr);
+    }
+    // finally bind the socket
+    if (bind(sock, bindaddr.address(), bindaddr.length()) != 0) {
+        int err = socket_errno(); // cache errno
+        socket_error_print("bind");
+        socket_close(sock);
+        socket_set_errno(err); // restore errno
+        return -1;
+    }
+    return sock; // success
 }
 
 
@@ -781,25 +784,22 @@ int socket_receive(int socket, void *buf, int size,
 
 int socket_set_sendbufsize(int socket, int bufsize)
 {
-    int val = 0;
-    socklen_t len;
-    len = sizeof(val);
-    getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char *)&val, &len);
+    int oldsize = 0;
+    socket_get_int_option(socket, SOL_SOCKET, SO_SNDBUF, &oldsize);
 #if DEBUG_SOCKET_BUFFER
-    fprintf(stderr, "old recvbufsize: %d\n", val);
+    fprintf(stderr, "old recvbufsize: %d\n", oldsize);
     fflush(stderr);
 #endif
     // don't set a smaller buffer size than the default
-    if (val > bufsize){
+    if (bufsize < oldsize){
         return 0;
     }
-    val = bufsize;
-    int result = setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char *)&val, sizeof(val));
+    int result = socket_set_int_option(socket, SOL_SOCKET, SO_SNDBUF, bufsize);
 #if DEBUG_SOCKET_BUFFER
     if (result == 0){
-        len = sizeof(val);
-        getsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char *)&val, &len);
-        fprintf(stderr, "new recvbufsize: %d\n", val);
+        int newsize = -1;
+        socket_get_int_option(socket, SOL_SOCKET, SO_SNDBUF, &newsize);
+        fprintf(stderr, "new recvbufsize: %d\n", newsize);
         fflush(stderr);
     }
 #endif
@@ -808,25 +808,22 @@ int socket_set_sendbufsize(int socket, int bufsize)
 
 int socket_set_recvbufsize(int socket, int bufsize)
 {
-    int val = 0;
-    socklen_t len;
-    len = sizeof(val);
-    getsockopt(socket, SOL_SOCKET, SO_RCVBUF, (char *)&val, &len);
+    int oldsize = 0;
+    socket_get_int_option(socket, SOL_SOCKET, SO_RCVBUF, &oldsize);
 #if DEBUG_SOCKET_BUFFER
-    fprintf(stderr, "old recvbufsize: %d\n", val);
+    fprintf(stderr, "old recvbufsize: %d\n", oldsize);
     fflush(stderr);
 #endif
     // don't set a smaller buffer size than the default
-    if (val > bufsize){
+    if (bufsize < oldsize){
         return 0;
     }
-    val = bufsize;
-    int result = setsockopt(socket, SOL_SOCKET, SO_RCVBUF, (char *)&val, sizeof(val));
+    int result = socket_set_int_option(socket, SOL_SOCKET, SO_RCVBUF, bufsize);
 #if DEBUG_SOCKET_BUFFER
     if (result == 0){
-        len = sizeof(val);
-        getsockopt(socket, SOL_SOCKET, SO_RCVBUF, (char *)&val, &len);
-        fprintf(stderr, "new recvbufsize: %d\n", val);
+        int newsize = -1;
+        socket_get_int_option(socket, SOL_SOCKET, SO_RCVBUF, &newsize);
+        fprintf(stderr, "new recvbufsize: %d\n", newsize);
         fflush(stderr);
     }
 #endif
@@ -853,6 +850,30 @@ bool socket_signal(int socket)
     } else {
         return true;
     }
+}
+
+int socket_set_int_option(int socket, int level, int option, bool value) {
+    int arg = value;
+    return setsockopt(socket, level, option, (const char *)&arg, sizeof(arg));
+}
+
+int socket_get_int_option(int socket, int level, int option, bool* value) {
+    int arg;
+    socklen_t len = sizeof(arg);
+    int err = getsockopt(socket, level, option, (char *)&arg, &len);
+    if (err == 0) {
+        *value = arg;
+    }
+    return err;
+}
+
+int socket_set_int_option(int socket, int level, int option, int value) {
+    return setsockopt(socket, level, option, (const char *)&value, sizeof(value));
+}
+
+int socket_get_int_option(int socket, int level, int option, int* value) {
+    socklen_t len = sizeof(*value);
+    return getsockopt(socket, level, option, (char *)value, &len);
 }
 
 int socket_set_nonblocking(int socket, bool nonblocking)
@@ -900,10 +921,10 @@ int socket_connect(int socket, const ip_address& addr, double timeout)
         FD_ZERO(&errfds);
         FD_SET(socket, &errfds); // catch exceptions
 
-        status = select(socket+1, NULL, &writefds, &errfds, &timeoutval);
+        status = select(socket + 1, NULL, &writefds, &errfds, &timeoutval);
         if (status < 0) // select failed
         {
-            fprintf(stderr, "socket_connect: select failed");
+            socket_error_print("select");
             return -1;
         }
         else if (status == 0) // connection timed out
@@ -918,13 +939,8 @@ int socket_connect(int socket, const ip_address& addr, double timeout)
 
         if (FD_ISSET(socket, &errfds)) // connection failed
         {
-            int err; socklen_t len = sizeof(err);
-            getsockopt(socket, SOL_SOCKET, SO_ERROR, (char *)&err, &len);
-        #ifdef _WIN32
-            WSASetLastError(err);
-        #else
-            errno = err;
-        #endif
+            int err = socket_error(socket);
+            socket_set_errno(err);
             return -1;
         }
     }
