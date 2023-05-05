@@ -124,8 +124,7 @@ void peer::send(Client& client, const sendfn& fn, time_tag now) {
             auto e1 = std::make_unique<error_event>(0, ss.str());
             client.send_event(std::move(e1));
 
-            auto e2 = std::make_unique<peer_event>(
-                        kAooEventPeerTimeout, *this);
+            auto e2 = std::make_unique<peer_event>(kAooEventPeerTimeout, *this);
             client.send_event(std::move(e2));
 
             timeout_ = true;

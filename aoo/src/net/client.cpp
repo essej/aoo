@@ -1016,14 +1016,9 @@ void Client::perform(const login_cmd& cmd) {
 
     int err = try_connect(connection_->host_);
     if (err != 0){
-        // cache data before closing
         auto msg = socket_strerror(err);
-        auto connection = std::move(connection_);
-
+        connection_->reply_error(kAooErrorSocket, err, msg.c_str());
         close();
-
-        connection->reply_error(kAooErrorSystem, err, msg.c_str());
-
         return;
     }
 
@@ -1070,9 +1065,8 @@ void Client::perform(const login_cmd& cmd) {
 
 void Client::perform(const timeout_cmd& cmd) {
     if (connection_ && state_.load() == client_state::handshake) {
-        auto connection = std::move(connection_); // cache!
+        connection_->reply_error(kAooErrorUDPHandshakeTimeOut);
         close();
-        connection->reply_error(kAooErrorUDPHandshakeTimeOut);
     }
 }
 
@@ -1089,7 +1083,7 @@ void Client::perform(const disconnect_cmd& cmd) {
         return;
     }
 
-    close(true);
+    close(true); // do not send disconnect event!
 
     AooResponseDisconnect response;
     AOO_RESPONSE_INIT(&response, Disconnect, structSize);
@@ -1421,6 +1415,7 @@ bool Client::wait_for_event(float timeout){
         if (err == EINTR) {
             return true;
         } else {
+            // fatal error
             LOG_ERROR("AooClient: poll() failed: " << socket_strerror(err));
             throw error(kAooErrorSocket, "poll() failed");
         }
@@ -1582,9 +1577,8 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
             // check version
             if (auto err = check_version(version); err != kAooOk) {
                 LOG_WARNING("AooClient: login failed: " << aoo_strerror(err));
-                auto connection = std::move(connection_); // cache!
+                connection_->reply_error(err);
                 close();
-                connection->reply_error(err);
                 return;
             }
 
@@ -1608,10 +1602,8 @@ void Client::handle_login(const osc::ReceivedMessage& msg){
             auto msg = (it++)->AsString();
             LOG_WARNING("AooClient: login failed: "
                         << response_error_message(result, code, msg));
-
-            auto connection = std::move(connection_); // cache!
+            connection_->reply_error(result, code, msg);
             close();
-            connection->reply_error(result, code, msg);
         }
     }
 }
@@ -1846,7 +1838,7 @@ bool Client::signal() {
     return socket_signal(eventsocket_);
 }
 
-void Client::close(bool manual){
+void Client::close(bool silent){
     if (socket_ >= 0){
         socket_close(socket_);
         socket_ = -1;
@@ -1861,13 +1853,9 @@ void Client::close(bool manual){
     peers_.clear();
 
     // clear pending request
-    // LATER call them all with some dummy input
-    // to avoid memleak if clients pass heap
-    // allocated request data, which is supposed
-    // to be freed in the callback.
     pending_requests_.clear();
 
-    if (!manual && state_.load() == client_state::connected){
+    if (!silent && state_.load() == client_state::connected){
         auto e = std::make_unique<disconnect_event>(0, "no error");
         send_event(std::move(e));
     }

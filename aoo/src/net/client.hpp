@@ -430,7 +430,7 @@ private:
     void on_exception(const char *what, const osc::Exception& err,
                       const char *pattern = nullptr);
 
-    void close(bool manual = false);
+    void close(bool silent = false);
 
     group_membership * find_group_membership(const std::string& name);
 
