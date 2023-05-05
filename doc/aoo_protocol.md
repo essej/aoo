@@ -2,7 +2,19 @@
 
 <br>
 
-# 1 AOO source-sink communication
+# 1 AOO peer-to-peer communication (UDP)
+
+<br>
+
+The following messages are exchanged between AOO sources and AOO sinks resp. between AOO clients via UDP sockets.
+
+<br>
+
+## 1.1 AOO source-sink communication
+
+<br>
+
+Messages exchanged between AOO sources and AOO sinks.
 
 <br>
 
@@ -23,7 +35,7 @@ Start a new stream.
 |  `i`  | block size                       |
 |  `s`  | codec name                       |
 |  `b`  | codec extension                  |
-| [`i`] | [metadata type](#5.2-data-types) |
+| [`i`] | [metadata type](#4.2-data-types) |
 | [`b`] | metadata content                 |
 
 ---
@@ -103,7 +115,7 @@ Invite a source.
 | ----: | -------------------------------- |
 |  `i`  | sink ID                          |
 |  `i`  | stream ID                        |
-| [`i`] | [metadata type](#5.2-data-types) |
+| [`i`] | [metadata type](#4.2-data-types) |
 | [`b`] | metadata content                 |
 
 ---
@@ -163,7 +175,11 @@ Reply to ping message.
 
 <br>
 
-# 2 AOO peer communication
+## 1.2 AOO peer communication
+
+<br>
+
+Messages exchanged between AOO peers.
 
 <br>
 
@@ -216,7 +232,7 @@ Send a message to a peer.
 |  `i` | number of frames                 |
 |  `i` | frame index                      |
 |  `t` | timetag                          |
-|  `i` | [message type](#5.2-data-types)  |
+|  `i` | [message type](#4.2-data-types)  |
 |  `b` | message content                  |
 
 Possible values for *flags*:
@@ -243,17 +259,25 @@ Send message acknowledgements.
 
 <br>
 
-## 3 AOO client-server communication
+# 2 AOO client-server communication (UDP/TCP)
 
 <br>
 
-## 3.1 Client requests and server responses
+The following messages are exchanged between an AOO client and an AOO server
+
+<br>
+
+## 2.1 NAT traversal (UDP)
+
+<br>
+
+The following messages are used for NAT traversal resp. UDP hole punching.
 
 <br>
 
 ## `/aoo/server/query`
 
-Sent query to server.
+Query the public IPv4 address and port.
 
 ### Arguments:
 
@@ -263,7 +287,7 @@ None
 
 ## `/aoo/client/query`
 
-Reply to query.
+Reply to a `/query` message.
 
 ### Arguments:
 
@@ -273,6 +297,34 @@ Reply to query.
 |  `i` | public port           |
 
 ---
+
+## `/aoo/server/ping`
+
+Send a ping message to keep the port open.
+
+### Arguments:
+
+None
+
+---
+
+## `/aoo/client/pong`
+
+Reply to a `/ping` message.
+
+### Arguments:
+
+None
+
+<br>
+
+## 2.2 Client requests and server responses (TCP)
+
+<br>
+
+Client requests and server responses over a TCP socket connection.
+
+<br>
 
 ## `/aoo/server/login`
 
@@ -291,7 +343,7 @@ Login to server.
 | [`s`] | IP address 2                     |
 | [`i`] | port 2                           |
 |  ...  | ...                              |
-| [`i`] | [metadata type](#5.2-data-types) |
+| [`i`] | [metadata type](#4.2-data-types) |
 | [`b`] | metadata content                 |
 
 ---
@@ -311,10 +363,10 @@ Login response.
     |  `s`  | version string                   |
     |  `i`  | client ID                        |
     |  `i`  | flags                            |
-    | [`i`] | [metadata type](#5.2-data-types) |
+    | [`i`] | [metadata type](#4.2-data-types) |
     | [`b`] | metadata content                 |
 
-2. failure: see [3.1.1 Error response](#3.1.1-error-response)
+2. failure: see [3.1.1 Error response](#2.1.1-error-response)
 
 Possible values for *flags*:
 
@@ -335,9 +387,9 @@ Join a group on the server.
 |  `s`  | group password (encrypted)             |
 |  `s`  | user name                              |
 |  `s`  | user password (encrypted)              |
-| [`i`] | group [metadata type](#5.2-data-types) |
+| [`i`] | group [metadata type](#4.2-data-types) |
 | [`b`] | group metadata content                 |
-| [`i`] | user [metadata type](#5.2-data-types)  |
+| [`i`] | user [metadata type](#4.2-data-types)  |
 | [`b`] | user metadata content                  |
 | [`s`] | relay hostname                         |
 | [`i`] | relay port                             |
@@ -360,16 +412,16 @@ Group join response.
     |  `i`  | group flags                              |
     |  `i`  | user ID                                  |
     |  `i`  | user flags                               |
-    | [`i`] | group [metadata type](#5.2-data-types)   |
+    | [`i`] | group [metadata type](#4.2-data-types)   |
     | [`b`] | group metadata content                   |
-    | [`i`] | user [metadata type](#5.2-data-types)    |
+    | [`i`] | user [metadata type](#4.2-data-types)    |
     | [`b`] | user metadata content                    |
-    | [`i`] | private [metadata type](#5.2-data-types) |
+    | [`i`] | private [metadata type](#4.2-data-types) |
     | [`b`] | private metadata content                 |
     | [`s`] | group relay hostname                     |
     | [`i`] | group relay port                         |
 
-2. failure: see [3.1.1 Error response](#3.1.1-error-response)
+2. failure: see [3.1.1 Error response](#2.1.1-error-response)
 
 ---
 
@@ -399,7 +451,7 @@ Group leave response.
     |  `i` | request token  |
     |  `i` | 0 (= no error) |
 
-2. failure: see [3.1.1 Error response](#3.1.1-error-response)
+2. failure: see [3.1.1 Error response](#2.1.1-error-response)
 
 ---
 
@@ -413,7 +465,7 @@ Update group metadata.
 | ---: | -------------------------------- |
 |  `i` | request token                    |
 |  `i` | group ID                         |
-|  `i` | [metadata type](#5.2-data-types) |
+|  `i` | [metadata type](#4.2-data-types) |
 |  `b` | metadata content                 |
 
 ---
@@ -430,10 +482,10 @@ Group update response.
     | ---: | -------------------------------- |
     |  `i` | request token                    |
     |  `i` | 0 (= no error)                   |
-    |  `i` | [metadata type](#5.2-data-types) |
+    |  `i` | [metadata type](#4.2-data-types) |
     |  `b` | metadata content                 |
 
-2. failure: see [3.1.1 Error response](#3.1.1-error-response)
+2. failure: see [3.1.1 Error response](#2.1.1-error-response)
 
 ---
 
@@ -447,7 +499,7 @@ Update user metadata.
 | ---: | -------------------------------- |
 |  `i` | request token                    |
 |  `i` | group ID                         |
-|  `i` | [metadata type](#5.2-data-types) |
+|  `i` | [metadata type](#4.2-data-types) |
 |  `b` | metadata content                 |
 
 ---
@@ -464,10 +516,10 @@ User update response.
     | ---: | -------------------------------- |
     |  `i` | request token                    |
     |  `i` | 0 (= no error)                   |
-    |  `i` | [metadata type](#5.2-data-types) |
+    |  `i` | [metadata type](#4.2-data-types) |
     |  `b` | metadata content                 |
 
-2. failure: see [3.1.1 Error response](#3.1.1-error-response)
+2. failure: see [3.1.1 Error response](#2.1.1-error-response)
 
 ---
 
@@ -481,7 +533,7 @@ Send custom request.
 | ---: | ---------------------------- |
 |  `i` | request token                |
 |  `i` | flags                        |
-|  `i` | [data type](#5.2-data-types) |
+|  `i` | [data type](#4.2-data-types) |
 |  `b` | data content                 |
 
 ---
@@ -499,14 +551,14 @@ Response to custom request.
     |  `i` | request token                |
     |  `i` | 0 (= no error)               |
     |  `i` | flags                        |
-    |  `i` | [data type](#5.2-data-types) |
+    |  `i` | [data type](#4.2-data-types) |
     |  `b` | data content                 |
 
-2. failure: see [3.1.1 Error response](#3.1.1-error-response)
+2. failure: see [3.1.1 Error response](#2.1.1-error-response)
 
 <br>
 
-## 3.1.1 Error response
+## 2.1.1 Error response
 
 All error responses have the same argument structure:
 
@@ -519,7 +571,11 @@ All error responses have the same argument structure:
 
 <br>
 
-## 3.2 Server notifications
+## 2.3 Server notifications (TCP)
+
+<br>
+
+The following messages are sent by the server over a TCP connection to notify one or more clients.
 
 <br>
 
@@ -543,7 +599,7 @@ A peer has joined the group.
 | [`s`] | IP address 2                     |
 | [`i`] | port 2                           |
 |  ...  | ...                              |
-| [`i`] | [metadata type](#5.2-data-types) |
+| [`i`] | [metadata type](#4.2-data-types) |
 | [`b`] | metadata content                 |
 | [`s`] | relay hostname                   |
 | [`i`] | relay port                       |
@@ -573,7 +629,7 @@ Peer metadata has changed.
 | ---: | -------------------------------- |
 |  `i` | group ID                         |
 |  `i` | peer ID                          |
-|  `i` | [metadata type](#5.2-data-types) |
+|  `i` | [metadata type](#4.2-data-types) |
 |  `b` | metadata content                 |
 
 ---
@@ -588,7 +644,7 @@ User metadata has changed.
 | ---: | -------------------------------- |
 |  `i` | group ID                         |
 |  `i` | user ID                          |
-|  `i` | [metadata type](#5.2-data-types) |
+|  `i` | [metadata type](#4.2-data-types) |
 |  `b` | metadata content                 |
 
 ---
@@ -603,7 +659,7 @@ Group metadata has changed.
 | ---: | -------------------------------- |
 |  `i` | group ID                         |
 |  `i` | user ID                          |
-|  `i` | [metadata type](#5.2-data-types) |
+|  `i` | [metadata type](#4.2-data-types) |
 |  `b` | metadata content                 |
 
 The user ID refers to the user that updated the group.
@@ -623,7 +679,7 @@ Ejected from group.
 
 ---
 
-## `/aoo/client/message`
+## `/aoo/client/msg`
 
 Generic server notification.
 
@@ -631,42 +687,20 @@ Generic server notification.
 
 | type | description                      |
 | ---: | -------------------------------- |
-|  `i` | [metadata type](#5.2-data-types) |
+|  `i` | [metadata type](#4.2-data-types) |
 |  `b` | message content                  |
 
 <br>
 
-## 3.3 Other
-
-<br>
-
-## `/aoo/server/ping`
-
-Send a ping message to the server.
-
-### Arguments:
-
-None
-
----
-
-## `/aoo/client/pong`
-
-Reply with pong message to the client.
-
-### Arguments:
-
-None
-
-<br>
-
-# 4 Relay
+# 3 Relay (UDP)
 
 <br>
 
 ## `/aoo/relay`
 
-Relayed message.
+A relayed message.
+
+If sent from an AOO peer to an AOO relay server, the message contains the destination endpoint address (IP address + port) together with the original message data. The server extracts the destination endpoint address, replaces it with the source endpoint address and forwards the message to the destination. The destination extracts the source endpoint address and message data and forwards the original message to the appropriate receiver.
 
 ### Arguments:
 
@@ -678,11 +712,11 @@ Relayed message.
 
 <br>
 
-# 5 Constants
+# 4 Constants
 
 <br>
 
-### 5.1 Error codes
+### 4.1 Error codes
 
 | value | description                |
 | ----: | -------------------------- |
@@ -693,7 +727,7 @@ For a full list of error codes see `AooError` in `aoo/aoo_types.h`.
 
 <br>
 
-### 5.2 Data types
+### 4.2 Data types
 
 | value | description              |
 | ----: | ------------------------ |
@@ -709,7 +743,7 @@ For a full list of error codes see `AooError` in `aoo/aoo_types.h`.
 
 <br>
 
-### 5.3 Codec names
+### 4.3 Codec names
 
 | value  | description |
 | ------ | ----------- |
@@ -718,7 +752,7 @@ For a full list of error codes see `AooError` in `aoo/aoo_types.h`.
 
 <br>
 
-# 6 Binary messages
+# 5 Binary messages
 
 <br>
 
