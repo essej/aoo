@@ -48,6 +48,8 @@ inline void osc_stream_receiver::handle_message(const char *data, int32_t n, Fn&
                     throw osc::MalformedPacketException("bad OSC packet size");
                 }
                 message_size_ = msgsize;
+                // NB: do not reserve the buffer because the message size
+                // may come from a bad actor and may be huge!
             }
         } else {
             // message data in progress

@@ -57,6 +57,7 @@ public:
     void start(int port, receive_handler receive, bool threaded = false);
     void run(double timeout = -1);
     void stop();
+    void notify();
 
     int send(const aoo::ip_address& addr, const AooByte *data, AooSize size);
 private:

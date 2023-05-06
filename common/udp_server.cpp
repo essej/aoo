@@ -83,6 +83,14 @@ void udp_server::stop() {
     }
 }
 
+void udp_server::notify() {
+    if (threaded_) {
+        event_.set(); // wake up main thread
+    } else {
+        socket_signal(socket_);
+    }
+}
+
 void udp_server::do_close() {
     if (socket_ != invalid_socket) {
         socket_close(socket_);

@@ -74,6 +74,10 @@ void tcp_server::stop() {
     }
 }
 
+void tcp_server::notify() {
+    socket_signal(event_socket_);
+}
+
 void tcp_server::do_close() {
     // close listening socket
     if (listen_socket_ != invalid_socket) {
@@ -97,6 +101,7 @@ void tcp_server::do_close() {
     clients_.clear();
     poll_array_.clear();
     stale_clients_.clear();
+    client_count_ = 0;
 }
 
 tcp_server::~tcp_server() {
@@ -259,6 +264,7 @@ void tcp_server::close_and_remove_client(int index) {
     } else {
         LOG_DEBUG("tcp_server: close client socket");
     }
+    client_count_--;
 }
 
 void tcp_server::accept_client() {
@@ -319,6 +325,7 @@ void tcp_server::accept_client() {
             poll_array_.push_back(p);
         }
         LOG_DEBUG("tcp_server: accepted client " << addr << " " << id);
+        client_count_++;
     } else {
         on_accept_error(socket_errno(), addr);
     }

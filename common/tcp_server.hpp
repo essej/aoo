@@ -46,9 +46,11 @@ public:
     void start(int port, accept_handler accept, receive_handler receive);
     void run();
     void stop();
+    void notify();
 
     int send(AooId client, const AooByte *data, AooSize size);
     bool close(AooId client);
+    int client_count() const { return client_count_; }
 private:
     struct client {
         ip_address address;
@@ -81,6 +83,7 @@ private:
 
     std::vector<client> clients_;
     std::vector<size_t> stale_clients_;
+    int32_t client_count_ = 0;
     static const int max_stale_clients = 100;
 };
 
