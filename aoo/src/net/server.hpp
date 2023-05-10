@@ -56,10 +56,10 @@ public:
             AooError result, AooResponse *response) override;
 
     AooError AOO_CALL notifyClient(
-            AooId client, const AooData *data) override;
+            AooId client, const AooData &data) override;
 
     AooError AOO_CALL notifyGroup(
-            AooId group, AooId user, const AooData *data) override;
+            AooId group, AooId user, const AooData &data) override;
 
     AooError AOO_CALL findGroup(const AooChar *name, AooId *id) override;
 

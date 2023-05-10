@@ -255,13 +255,13 @@ AooError AOO_CALL aoo::net::Server::handleRequest(
 
 AOO_API AooError AOO_CALL AooServer_notifyClient(
         AooServer *server, AooId client, const AooData *data) {
-    return  server->notifyClient(client, data);
+    return server->notifyClient(client, *data);
 }
 
 AooError AOO_CALL aoo::net::Server::notifyClient(
-        AooId client, const AooData *data) {
+        AooId client, const AooData &data) {
     if (auto c = find_client(client)) {
-        c->send_notification(*this, *data);
+        c->send_notification(*this, data);
         return kAooOk;
     } else {
         LOG_ERROR("AooServer: notifyClient: can't find client!");
@@ -270,19 +270,18 @@ AooError AOO_CALL aoo::net::Server::notifyClient(
 }
 
 AOO_API AooError AOO_CALL AooServer_notifyGroup(
-        AooServer *server, AooId group, AooId user,
-        const AooData *data) {
-    return server->notifyGroup(group, user, data);
+        AooServer *server, AooId group, AooId user, const AooData *data) {
+    return server->notifyGroup(group, user, *data);
 }
 
 AooError AOO_CALL aoo::net::Server::notifyGroup(
-        AooId group, AooId user, const AooData *data) {
+        AooId group, AooId user, const AooData &data) {
     if (auto g = find_group(group)) {
         if (user == kAooIdInvalid) {
             // all users
             for (auto& u : g->users()) {
                 if (auto c = find_client(u)) {
-                    c->send_notification(*this, *data);
+                    c->send_notification(*this, data);
                     return kAooOk;
                 } else {
                     LOG_ERROR("AooServer: notifyGroup: can't find client for user " << u);
@@ -293,7 +292,7 @@ AooError AOO_CALL aoo::net::Server::notifyGroup(
             // single user
             if (auto u = g->find_user(user)) {
                 if (auto c = find_client(*u)) {
-                    c->send_notification(*this, *data);
+                    c->send_notification(*this, data);
                     return kAooOk;
                 } else {
                     LOG_ERROR("AooServer: notifyGroup: can't find client for user " << *u);

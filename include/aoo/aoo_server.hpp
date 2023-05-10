@@ -120,12 +120,12 @@ public:
 
     /** \brief send custom push notification to client */
     virtual AooError AOO_CALL notifyClient(
-            AooId client, const AooData *data) = 0;
+            AooId client, const AooData &data) = 0;
 
     /** \brief send custom push notification to group member(s);
         if `user` is `kAooIdInvalid`, all group members are notified. */
     virtual AooError AOO_CALL notifyGroup(
-            AooId group, AooId user, const AooData *data) = 0;
+            AooId group, AooId user, const AooData &data) = 0;
 
     /* group management */
 
