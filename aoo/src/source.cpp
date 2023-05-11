@@ -614,7 +614,11 @@ AooError AOO_CALL aoo::Source::process(
         AooSample **data, AooInt32 nsamples, AooNtpTime t) {
     auto state = state_.load();
     if (state == stream_state::idle){
-        return kAooErrorIdle; // pausing
+        if (!requests_.empty()) {
+            return kAooOk; // user needs to call send()!
+        } else {
+            return kAooErrorIdle; // pausing
+        }
     } else if (state == stream_state::stop){
         sink_lock lock(sinks_);
         for (auto& s : sinks_){
@@ -687,7 +691,7 @@ AooError AOO_CALL aoo::Source::process(
     }
 
 #if IDLE_IF_NO_SINKS
-    if (sinks_.empty()){
+    if (sinks_.empty() && requests_.empty()){
         // nothing to do. users still have to check for pending events,
         // but there is no reason to call send()
         return kAooErrorIdle;
@@ -2305,13 +2309,9 @@ void Source::handle_uninvite(const osc::ReceivedMessage& msg,
         LOG_VERBOSE("ignoring '" << kAooMsgUninvite << "' message: sink not found");
         // Don't return because we still want to send a /stop message, see below.
     }
-    // Tell the remote side that we have stopped. Don't use the sink because it can be NULL!
-#if AOO_NET
-    auto relay = sink ? sink->ep.relay : false; // ?
-    sink_request r(request_type::stop, endpoint(addr, id, relay));
-#else
-    sink_request r(request_type::stop, endpoint(addr, id));
-#endif
+    // Tell the remote side that we have stopped. If the sink is NULL, just use
+    // the remote address (this does not work if the sink is relayed!)
+    sink_request r(request_type::stop, sink ? sink->ep : endpoint(addr, id));
     r.stop.stream = token; // use remote stream id!
     push_request(r);
     LOG_DEBUG("AooSource: resend " << kAooMsgStop << " message");
