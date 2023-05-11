@@ -500,6 +500,8 @@ AooError AOO_CALL aoo::Source::handleMessage(
             auto pattern = msg.AddressPattern() + onset;
             if (!strcmp(pattern, kAooMsgStart)){
                 handle_start_request(msg, addr);
+            } else if (!strcmp(pattern, kAooMsgStop)){
+                handle_stop_request(msg, addr);
             } else if (!strcmp(pattern, kAooMsgData)){
                 handle_data_request(msg, addr);
             } else if (!strcmp(pattern, kAooMsgInvite)){
@@ -2083,6 +2085,38 @@ void Source::handle_start_request(const osc::ReceivedMessage& msg,
         }
     } else {
         LOG_VERBOSE("AooSource: ignoring '" << kAooMsgStart << "' message: sink not found");
+    }
+}
+
+// /stop <id> <stream>
+void Source::handle_stop_request(const osc::ReceivedMessage& msg,
+                                 const ip_address& addr)
+{
+    LOG_DEBUG("AooSource: handle stop request");
+
+    auto it = msg.ArgumentsBegin();
+
+    auto id = (it++)->AsInt32();
+    auto stream = (it++)->AsInt32();
+
+    // check if sink exists (not strictly necessary, but might help catch errors)
+    sink_lock lock(sinks_);
+    auto sink = find_sink(addr, id);
+    if (sink){
+        // A stream can be considered stopped if the source is stopped (idle)
+        // and/or the sink is deactivated.
+        auto state = state_.load(std::memory_order_relaxed);
+        if (state == stream_state::idle || !sink->is_active()){
+            // resend /stop message
+            sink_request r(request_type::stop, sink->ep);
+            r.stop.stream = stream; // use original stream ID!
+            push_request(r);
+        } else {
+            LOG_VERBOSE("AooSource: ignoring '" << kAooMsgStop << "' message: sink is active");
+        }
+    } else {
+        // TODO: should we still send /stop message?
+        LOG_VERBOSE("AooSource: ignoring '" << kAooMsgStop<< "' message: sink not found");
     }
 }
 

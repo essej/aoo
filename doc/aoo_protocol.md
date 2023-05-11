@@ -66,6 +66,19 @@ Stop a stream.
 
 ---
 
+## `/aoo/source/<id>/stop`
+
+Request a stop message.
+
+### Arguments:
+
+| type | description |
+| ---: | ----------- |
+|  `i` | source ID   |
+|  `i` | stream ID   |
+
+---
+
 ## `/aoo/sink/<id>/data`
 
 Send stream data.

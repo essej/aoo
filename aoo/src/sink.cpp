@@ -1155,6 +1155,7 @@ void source_desc::update(const Sink& s){
 
         dropped_blocks_.store(0);
         last_ping_time_.store(-1e007); // force ping
+        last_stop_time_ = 0;
 
         // reset decoder to avoid garbage from previous stream
         AooDecoder_reset(decoder_.get());
@@ -1542,8 +1543,7 @@ AooError source_desc::handle_pong(const Sink& s, time_tag tt1, time_tag tt2){
     return kAooOk;
 }
 
-void send_uninvitation(const Sink& s, const endpoint& ep,
-                       AooId token, const sendfn &fn);
+void send_uninvitation(const Sink& s, const endpoint& ep, AooId token, const sendfn &fn);
 
 void source_desc::send(const Sink& s, const sendfn& fn){
     // handle requests
@@ -1555,6 +1555,9 @@ void source_desc::send(const Sink& s, const sendfn& fn){
             break;
         case request_type::start:
             send_start_request(s, fn);
+            break;
+        case request_type::stop:
+            send_stop_request(s, r.stop.stream, fn);
             break;
         case request_type::uninvite:
             send_uninvitation(s, ep, r.uninvite.token, fn);
@@ -1572,6 +1575,7 @@ void source_desc::send(const Sink& s, const sendfn& fn){
 }
 
 #define XRUN_THRESHOLD 0.1
+#define STOP_INTERVAL 1.0
 
 bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
                           AooStreamMessageHandler handler, void *user)
@@ -1650,7 +1654,6 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
                 auto e = make_event<stream_state_event>(ep, kAooStreamStateInactive, 0);
                 send_event(s, std::move(e), kAooThreadLevelAudio);
             }
-
             return false;
         }
     }
@@ -1737,9 +1740,27 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
                 // try to change source state to idle (if still running!)
                 auto expected = source_state::run;
                 state_.compare_exchange_strong(expected, source_state::idle);
+                LOG_DEBUG("AooSink: run -> idle");
             }
 
             underrun_ = true;
+            // check if we should send a stop request
+            if (last_stop_time_ > 0) {
+                auto now = s.elapsed_time();
+                auto delta = now - last_stop_time_;
+                if (delta >= STOP_INTERVAL) {
+                    request r(request_type::stop);
+                    r.stop.stream = stream_id_;
+                    push_request(r);
+                    last_stop_time_ = now;
+                }
+            } else {
+                // initialize stop request timer.
+                // underruns are often temporary and may happen in short succession,
+                // so we don't want to immediately send a stop request; instead we
+                // we wait one interval as a simple debouncing mechanism.
+                last_stop_time_ = s.elapsed_time();
+            }
 
             lock.unlock(); // unlock before sending event!
 
@@ -1861,6 +1882,7 @@ void source_desc::handle_underrun(const Sink& s){
     resampler_.reset(); // !
 
     last_ping_time_.store(-1e007); // force ping
+    last_stop_time_ = 0; // reset stop request timer
 
     reset_stream_messages();
 
@@ -2364,7 +2386,7 @@ void source_desc::send_pong(const Sink &s, AooNtpTime tt1, const sendfn &fn) {
     ep.send(msg, fn);
 }
 
-// /aoo/src/<id>/start <sink>
+// /aoo/src/<id>/start <sink> <version>
 // called without lock!
 void source_desc::send_start_request(const Sink& s, const sendfn& fn) {
     LOG_VERBOSE("AooSink: request " kAooMsgStart " for source " << ep);
@@ -2373,14 +2395,36 @@ void source_desc::send_start_request(const Sink& s, const sendfn& fn) {
     osc::OutboundPacketStream msg((char *)buf, sizeof(buf));
 
     // make OSC address pattern
-    const int32_t max_addr_size = kAooMsgDomainLen +
-            kAooMsgSourceLen + 16 + kAooMsgStartLen;
+    const int32_t max_addr_size = kAooMsgDomainLen + kAooMsgSourceLen
+                                  + 16 + kAooMsgStartLen;
     char address[max_addr_size];
     snprintf(address, sizeof(address), "%s/%d%s",
              kAooMsgDomain kAooMsgSource, ep.id, kAooMsgStart);
 
     msg << osc::BeginMessage(address)
         << s.id() << aoo_getVersionString()
+        << osc::EndMessage;
+
+    ep.send(msg, fn);
+}
+
+// /aoo/src/<id>/stop <sink> <stream>
+// called without lock!
+void source_desc::send_stop_request(const Sink& s, int32_t stream, const sendfn& fn) {
+    LOG_VERBOSE("AooSink: request " kAooMsgStop " for source " << ep);
+
+    AooByte buf[AOO_MAX_PACKET_SIZE];
+    osc::OutboundPacketStream msg((char *)buf, sizeof(buf));
+
+    // make OSC address pattern
+    const int32_t max_addr_size = kAooMsgDomainLen + kAooMsgSourceLen
+                                  + 16 + kAooMsgStopLen;
+    char address[max_addr_size];
+    snprintf(address, sizeof(address), "%s/%d%s",
+             kAooMsgDomain kAooMsgSource, ep.id, kAooMsgStop);
+
+    msg << osc::BeginMessage(address)
+        << s.id() << stream
         << osc::EndMessage;
 
     ep.send(msg, fn);

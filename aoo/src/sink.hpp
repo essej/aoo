@@ -36,6 +36,7 @@ struct stream_stats {
 enum class request_type {
     none,
     start,
+    stop,
     pong,
     invite,
     uninvite,
@@ -55,6 +56,9 @@ struct request {
         struct {
             AooId token;
         } uninvite;
+        struct {
+            AooId stream;
+        } stop;
     };
 };
 
@@ -203,6 +207,8 @@ private:
 
     void send_start_request(const Sink& s, const sendfn& fn);
 
+    void send_stop_request(const Sink& s, int32_t stream, const sendfn& fn);
+
     void send_data_requests(const Sink& s, const sendfn& fn);
 
     void send_invitations(const Sink& s, const sendfn& fn);
@@ -231,6 +237,7 @@ private:
     std::atomic<float> last_invite_time_{0};
     std::atomic<float> last_packet_time_{0};
     std::atomic<float> last_ping_time_{0};
+    float last_stop_time_{0};
     // statistics
     std::atomic<int32_t> dropped_blocks_{0};
     time_tag last_ping_reply_time_;
