@@ -6,6 +6,10 @@
 #include <thread>
 #include <utility>
 
+#ifndef AOO_DEBUG_TCP_SERVER
+# define AOO_DEBUG_TCP_SERVER 0
+#endif
+
 namespace aoo {
 
 void tcp_server::start(int port, accept_handler accept, receive_handler receive) {
@@ -168,6 +172,12 @@ void tcp_server::loop() {
                 LOG_ERROR("tcp_server: poll() failed (" << err << ")");
                 break;
             }
+        }
+
+        // drain event socket
+        if (poll_array_[event_index].revents != 0) {
+            char dummy[64];
+            ::recv(event_socket_, dummy, sizeof(dummy), 0);
         }
 
         // first receive from clients

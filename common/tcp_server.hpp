@@ -20,8 +20,6 @@
 
 namespace aoo {
 
-// TODO: make multi-threaded
-
 class tcp_server
 {
 public:
