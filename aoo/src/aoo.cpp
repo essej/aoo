@@ -38,16 +38,16 @@ namespace aoo {
 
 //--------------------- interface table -------------------//
 
-void * AOO_CALL def_allocator(void *ptr, AooSize oldsize, AooSize newsize);
+void * AOO_CALL default_allocator(void *ptr, AooSize oldsize, AooSize newsize);
 
-void AOO_CALL def_logfunc(AooLogLevel level, const char *message);
+void AOO_CALL default_logfunc(AooLogLevel level, const char *message);
 
 // populate interface table with default implementations
 static AooCodecHostInterface g_interface = {
     sizeof(AooCodecHostInterface),
     aoo_registerCodec,
-    def_allocator,
-    def_logfunc
+    default_allocator,
+    default_logfunc
 };
 
 //--------------------- helper functions -----------------//
@@ -83,7 +83,7 @@ int32_t get_random_id(){
 static sync::mutex g_log_mutex;
 #endif
 
-void AOO_CALL def_logfunc(AooLogLevel level, const char *message) {
+void AOO_CALL default_logfunc(AooLogLevel level, const char *message) {
     const char *label = nullptr;
 
 #if CERR_LOG_LABEL
@@ -130,7 +130,7 @@ void __attribute__((format(printf, 2, 3 )))
 #else
 void
 #endif
-    def_logfunc(AooLogLevel, const char *, ...) {}
+    default_logfunc(AooLogLevel, const char *, ...) {}
 
 #endif // CERR_LOG_FUNCTION
 
@@ -435,7 +435,7 @@ AooError check_version(const char *version) {
 std::atomic<ptrdiff_t> total_memory{0};
 #endif
 
-void * AOO_CALL def_allocator(void *ptr, AooSize oldsize, AooSize newsize) {
+void * AOO_CALL default_allocator(void *ptr, AooSize oldsize, AooSize newsize) {
     if (newsize > 0) {
         // allocate new memory
         // NOTE: we never reallocate
