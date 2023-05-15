@@ -208,31 +208,37 @@ public:
     /*         type-safe control functions        */
     /*--------------------------------------------*/
 
+    /** \brief set the server password */
     AooError setPassword(const AooChar *pwd)
     {
         return control(kAooCtlSetPassword, 0, AOO_ARG(pwd));
     }
 
+    /** \brief get the server password */
     AooError setRelayHost(const AooIpEndpoint *ep)
     {
         return control(kAooCtlSetRelayHost, 0, AOO_ARG(ep));
     }
 
+    /** \brief enabled/disable server relay */
     AooError setServerRelay(AooBool b)
     {
         return control(kAooCtlSetServerRelay, 0, AOO_ARG(b));
     }
 
+    /** \brief check if server relay is enabled */
     AooError getServerRelay(AooBool& b)
     {
         return control(kAooCtlGetServerRelay, 0, AOO_ARG(b));
     }
 
+    /** \brief enable/disable automatic group creation */
     AooError setGroupAutoCreate(AooBool b)
     {
         return control(kAooCtlSetGroupAutoCreate, 0, AOO_ARG(b));
     }
 
+    /** \brief check if automatic group creation is enabled */
     AooError getGroupAutoCreate(AooBool& b)
     {
         return control(kAooCtlGetGroupAutoCreate, 0, AOO_ARG(b));
@@ -242,11 +248,13 @@ public:
     /*         type-safe group control functions        */
     /*--------------------------------------------------*/
 
+    /** \brief update group metadata */
     AooError updateGroup(AooId group, const AooData *metadata)
     {
         return groupControl(group, kAooCtlUpdateGroup, 0, AOO_ARG(metadata));
     }
 
+    /** \brief update user metadata */
     AooError updateUser(AooId group, AooId user, const AooData *metadata)
     {
         return groupControl(group, kAooCtlUpdateUser, user, AOO_ARG(metadata));

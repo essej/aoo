@@ -145,32 +145,38 @@ AOO_API AooError AOO_CALL AooServer_control(
 /*         type-safe control functions        */
 /*--------------------------------------------*/
 
+/** \copydoc AooServer::setPassword() */
 AOO_INLINE AooError AooServer_setPassword(AooServer *server, const AooChar *pwd)
 {
     return AooServer_control(server, kAooCtlSetPassword, 0, AOO_ARG(pwd));
 }
 
+/** \copydoc AooServer::setPassword() */
 AOO_INLINE AooError AooServer_setRelayHost(
-        AooServer *server, const AooIpEndpoint *ep)
+    AooServer *server, const AooIpEndpoint *ep)
 {
     return AooServer_control(server, kAooCtlSetRelayHost, 0, AOO_ARG(ep));
 }
 
+/** \copydoc AooServer::setPassword() */
 AOO_INLINE AooError AooServer_setServerRelay(AooServer *server, AooBool b)
 {
     return AooServer_control(server, kAooCtlSetServerRelay, 0, AOO_ARG(b));
 }
 
+/** \copydoc AooServer::setServerRelay() */
 AOO_INLINE AooError AooServer_getServerRelay(AooServer *server, AooBool* b)
 {
     return AooServer_control(server, kAooCtlGetServerRelay, 0, AOO_ARG(*b));
 }
 
+/** \copydoc AooServer::setGroupAutoCreate() */
 AOO_INLINE AooError AooServer_setGroupAutoCreate(AooServer *server, AooBool b)
 {
     return AooServer_control(server, kAooCtlSetGroupAutoCreate, 0, AOO_ARG(b));
 }
 
+/** \copydoc AooServer::getGroupAutoCreate() */
 AOO_INLINE AooError AooServer_getGroupAutoCreate(AooServer *server, AooBool* b)
 {
     return AooServer_control(server, kAooCtlGetGroupAutoCreate, 0, AOO_ARG(*b));
@@ -180,14 +186,16 @@ AOO_INLINE AooError AooServer_getGroupAutoCreate(AooServer *server, AooBool* b)
 /*         type-safe group control functions        */
 /*--------------------------------------------------*/
 
+/** \copydoc AooServer::updateGroup() */
 AOO_INLINE AooError AooServer_updateGroup(
-        AooServer *server, AooId group, const AooData *metadata)
+    AooServer *server, AooId group, const AooData *metadata)
 {
     return AooServer_groupControl(server, group, kAooCtlUpdateGroup, 0, AOO_ARG(metadata));
 }
 
+/** \copydoc AooServer::updateUser() */
 AOO_INLINE AooError AooServer_updateUser(
-        AooServer *server, AooId group, AooId user, const AooData *metadata)
+    AooServer *server, AooId group, AooId user, const AooData *metadata)
 {
     return AooServer_groupControl(server, group, kAooCtlUpdateUser, user, AOO_ARG(metadata));
 }
