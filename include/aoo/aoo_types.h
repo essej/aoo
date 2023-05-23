@@ -606,19 +606,21 @@ typedef void * (AOO_CALL *AooAllocFunc)
 /*------------------------------------------------------------------*/
 
 /** \brief log levels */
-AOO_ENUM(AooLogLevel)
-{
-    /** no logging */
-    kAooLogLevelNone = 0,
-    /** only errors */
-    kAooLogLevelError = 1,
-    /** only errors and warnings */
-    kAooLogLevelWarning = 2,
-    /** errors, warnings and notifications */
-    kAooLogLevelVerbose = 3,
-    /** errors, warnings, notifications and debug messages */
-    kAooLogLevelDebug = 4
-};
+typedef AooInt32 AooLogLevel;
+
+/* NB: log level constants must be macros, otherwise they cannot
+ * be used in #if clause, as they would expand to zero! */
+
+/** no logging */
+#define kAooLogLevelNone 0
+/** only errors */
+#define kAooLogLevelError 1
+/** only errors and warnings */
+#define kAooLogLevelWarning 2
+/** errors, warnings and notifications */
+#define kAooLogLevelVerbose 3
+/** errors, warnings, notifications and debug messages */
+#define kAooLogLevelDebug 4
 
 /** \brief custom log function type
  * \param level the log level
