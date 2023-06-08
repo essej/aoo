@@ -82,7 +82,7 @@ struct tagged_bitset {
     T bits;
     uint16_t tag; // always uint16_t, so we get the same behavior across platforms
 
-    tagged_bitset(T bits_ = 0, uint16_t tag_ = 0)
+    tagged_bitset(T bits_ = 0, uint16_t tag_ = 0) noexcept
         : bits(bits_), tag(tag_) {}
 
     void set(T index, bool state) {
