@@ -107,6 +107,8 @@ variables:
 .build:linux: &build_linux
   extends: .build:script
   image: registry.git.iem.at/devtools/docker/debiancross:amd64
+  tags:
+    - docker@lucier
   variables:
     SUPERNOVA: 1
     DOXYGEN: 1
@@ -159,7 +161,9 @@ variables:
 .build:w32: &build_w32
   extends: .build:script
   tags:
-    - windows
+  # - windows
+    - sardinecake
+  image: registry.git.iem.at/devtools/sardinecake/windows:latest
   variables:
     IEMCI_CONFIGURATIONS: mingw32
     SUPERNOVA: 1
