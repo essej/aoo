@@ -63,7 +63,7 @@ public:
 
     void stop();
 private:
-    void process(float **output, int numFrames);
+    void process(AooSample **output, int numFrames);
 
     void handle_event(const AooEvent& event);
 
@@ -238,11 +238,11 @@ void SimpleReceiver::stop() {
 }
 
 // audio callback passed to Pa_OpenStream()
-void SimpleReceiver::process(float **output, int numFrames) {
+void SimpleReceiver::process(AooSample **output, int numFrames) {
     // sample the current NTP time
     AooNtpTime t = aoo_getCurrentNtpTime();
     // write stream directy to audio output
-    sink_->process((AooSample **)output, numFrames, t, nullptr, nullptr);
+    sink_->process(output, numFrames, t, nullptr, nullptr);
     // tell the client that there may be data to send out
     client_->notify();
 }

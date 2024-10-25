@@ -88,7 +88,7 @@ public:
 
     void stop();
 private:
-    void process(float **input, int numFrames);
+    void process(AooSample **input, int numFrames);
 
     void handle_event(const AooEvent& event);
 
@@ -103,8 +103,8 @@ private:
 
     std::vector<double> freq_;
     std::vector<double> last_phase_;
-    std::vector<float*> process_buffer_;
-    std::vector<float> buffer_data_;
+    std::vector<AooSample*> process_buffer_;
+    std::vector<AooSample> buffer_data_;
 
     std::thread send_thread_;
     std::thread receive_thread_;
@@ -301,7 +301,7 @@ void SimpleSender::stop() {
     Pa_StopStream(stream_);
 }
 
-void SimpleSender::process(float **input, int numFrames) {
+void SimpleSender::process(AooSample **input, int numFrames) {
     // sample the current NTP time
     AooNtpTime t = aoo_getCurrentNtpTime();
 

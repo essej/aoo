@@ -105,7 +105,7 @@ typedef struct SimpleSender {
 
     double *freq;
     double *last_phase;
-    float **process_buffer;
+    AooSample **process_buffer;
 
 #ifdef _MSC_VER
     HANDLE send_thread;
@@ -129,13 +129,13 @@ PaError callback(const void *input, void *output, unsigned long frameCount,
 
     if (x->mode == MODE_INPUT) {
         // forward audio input
-        AooSource_process(x->source, (AooSample **)input, frameCount, t);
+        AooSource_process(x->source, (float **)input, frameCount, t);
     } else if (x->mode == MODE_SINE) {
         // make sine waves
         for (int i = 0; i < x->channels; i++) {
             double advance = x->freq[i] / x->sr;
             double phase = x->last_phase[i];
-            float *buf = x->process_buffer[i];
+            AooSample *buf = x->process_buffer[i];
             for (int j = 0; j < frameCount; j++) {
                 buf[j] = sin(phase * 2.0 * M_PI) * SINE_GAIN;
                 phase += advance;
@@ -278,9 +278,9 @@ int SimpleSender_init(SimpleSender *x,
             x->last_phase[i] = 0;
         }
         // create buffers
-        x->process_buffer = (float**)malloc(x->channels * sizeof(float *));
+        x->process_buffer = (AooSample**)malloc(x->channels * sizeof(AooSample *));
         for (int i = 0; i < x->channels; i++) {
-            x->process_buffer[i] = (float*)malloc(buffersize * sizeof(float));
+            x->process_buffer[i] = (AooSample*)malloc(buffersize * sizeof(AooSample));
         }
     }
 

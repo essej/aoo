@@ -129,7 +129,7 @@ typedef struct SimplePeer {
 
     double freq; // sine osc frequency
     double last_phase;
-    float **process_buffer;
+    AooSample **process_buffer;
 
 #ifdef _MSC_VER
     HANDLE send_thread;
@@ -156,7 +156,7 @@ PaError callback(const void *input, void *output, unsigned long frameCount,
     // send to peers
     if (x->mode == MODE_INPUT) {
         // forward audio input
-        AooSource_process(x->source, (AooSample **)input, frameCount, t);
+        AooSource_process(x->source, (float **)input, frameCount, t);
     } else if (x->mode == MODE_SINE) {
         // make sine wave
         double advance = x->freq / (double)x->sr;
@@ -312,9 +312,9 @@ int SimplePeer_init(SimplePeer *x, const SimplePeerOptions *opt) {
         x->freq = 220.0 * pow(2.0, randf() * 2.0);
         fprintf(stdout, "sine tone frequency: %g Hz\n", x->freq);
         // create buffers
-        x->process_buffer = (float**)malloc(x->channels * sizeof(float *));
+        x->process_buffer = (AooSample**)malloc(x->channels * sizeof(AooSample *));
         for (int i = 0; i < x->channels; i++) {
-            x->process_buffer[i] = (float*)malloc(buffersize * sizeof(float));
+            x->process_buffer[i] = (AooSample*)malloc(buffersize * sizeof(AooSample));
         }
     }
 

@@ -99,7 +99,7 @@ PaError callback(const void *input, void *output, unsigned long frameCount,
     // sample the current NTP time
     AooNtpTime t = aoo_getCurrentNtpTime();
     // write stream directy to audio output
-    AooSink_process(x->sink, (AooSample **)output, frameCount, t, 0, 0);
+    AooSink_process(x->sink, (float **)output, frameCount, t, 0, 0);
     // tell the client that there may be data to send out
     AooClient_notify(x->client);
 

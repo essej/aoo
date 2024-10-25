@@ -106,7 +106,7 @@ public:
 
     void stop();
 private:
-    void process(float **input, float **output, int numFrames);
+    void process(AooSample **input, AooSample **output, int numFrames);
 
     void handle_event(const AooEvent& event);
 
@@ -141,8 +141,8 @@ private:
 
     double freq_ = 0; // sine osc frequency
     double last_phase_ = 0;
-    std::vector<float*> process_buffer_;
-    std::vector<float> buffer_data_;
+    std::vector<AooSample*> process_buffer_;
+    std::vector<AooSample> buffer_data_;
 
     std::thread send_thread_;
     std::thread receive_thread_;
@@ -453,7 +453,7 @@ void SimplePeer::handle_leave_group(const AooRequest& request,
     }
 }
 
-void SimplePeer::process(float **input, float **output, int numFrames) {
+void SimplePeer::process(AooSample **input, AooSample **output, int numFrames) {
     // sample the current NTP time
     AooNtpTime t = aoo_getCurrentNtpTime();
 
