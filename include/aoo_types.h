@@ -97,7 +97,7 @@ typedef AooUInt32 AooFlag;
 typedef float AooSample;
 #elif AOO_SAMPLE_SIZE == 64
 /** \brief audio sample type */
-typedef double AooSample
+typedef double AooSample;
 #else
 # error "unsupported value for AOO_SAMPLE_SIZE"
 #endif
@@ -635,7 +635,7 @@ typedef struct AooClientSettings
 typedef struct AooClientConnect {
 #ifdef __cplusplus
     AooClientConnect()
-        : structSize(AOO_STRUCT_SIZE(AooClientConnect, metadata)),
+        : structSize(AOO_STRUCT_SIZE(AooClientConnect, timeout)),
           hostName(NULL), port(0), password(NULL), metadata(NULL),
           timeout(0) {}
 #endif
@@ -658,7 +658,7 @@ typedef struct AooClientConnect {
 
 /** \brief (C only) default initializer for AooClientConnect struct */
 #define AOO_CLIENT_CONNECT_INIT() \
-    { AOO_STRUCT_SIZE(AooClientConnect, metadata), \
+    { AOO_STRUCT_SIZE(AooClientConnect, timeout), \
         NULL, 0, NULL, NULL, 0 }
 
 /*------------------------------------------------------------------*/
@@ -717,7 +717,7 @@ typedef struct AooServerSettings
 #ifdef __cplusplus
     /** default constructor */
     AooServerSettings()
-        : structSize(AOO_STRUCT_SIZE(AooServerSettings, userData)),
+        : structSize(AOO_STRUCT_SIZE(AooServerSettings, sendFunc)),
           options(0), portNumber(0), socketType(kAooSocketDefault),
           userData(NULL), sendFunc(NULL) {}
 #endif
@@ -739,7 +739,7 @@ typedef struct AooServerSettings
 
 /** \brief (C only) default initializer for AooServerSettings struct */
 #define AOO_SERVER_SETTINGS_INIT() \
-    { AOO_STRUCT_SIZE(AooServerSettings, userData), 0, 0, \
+    { AOO_STRUCT_SIZE(AooServerSettings, sendFunc), 0, 0, \
         kAooSocketDefault, NULL, NULL }
 
 /*------------------------------------------------------------------*/
