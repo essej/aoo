@@ -170,8 +170,9 @@ void AooNode::handleMessage(const AooByte *data, int32_t size) {
             if (bundle.ElementCount() < 1) {
                 throw osc::Exception("empty bundle");
             }
-            auto& elem = *bundle.ElementsBegin();
-            osc::ReceivedMessage msg(elem);
+            // NB: save the iterator on the stack!
+            auto it = bundle.ElementsBegin();
+            osc::ReceivedMessage msg(*it);
             handleMessage(time, msg);
         } else {
             osc::ReceivedMessage msg(packet);
