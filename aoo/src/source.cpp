@@ -1432,7 +1432,7 @@ void send_start_msg(const endpoint& ep, int32_t id, int32_t stream_id,
     ep.send(msg, fn);
 }
 
-// /aoo/sink/<id>/stop <src> <stream_id> <offset>
+// /aoo/sink/<id>/stop <src> <stream_id> <last_seq> <offset>
 void send_stop_msg(const endpoint& ep, int32_t id, int32_t stream,
                    int32_t last_seq, int32_t offset, const sendfn& fn) {
     LOG_DEBUG("AooSource: send " kAooMsgStop " to " << ep

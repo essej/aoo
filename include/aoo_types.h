@@ -833,11 +833,17 @@ typedef AooInt32 AooLogLevel;
 /* NB: log level constants must be macros, otherwise they cannot
  * be used in #if clauses as they would expand to zero! */
 
+/** \brief no logging */
 #define kAooLogLevelSilent 0
+/** \brief only log errors */
 #define kAooLogLevelError 1
+/** \brief log errors and warnings */
 #define kAooLogLevelWarning 2
+/** \brief log errors, warnings and info messages */
 #define kAooLogLevelInfo 3
+/** \brief log errors, warnings, info and debug messages */
 #define kAooLogLevelDebug 4
+/** \brief extra verbose logging */
 #define kAooLogLevelVerbose 5
 
 /** \brief custom log function type

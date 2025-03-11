@@ -223,6 +223,7 @@ AooError AOO_CALL aoo::net::Client::run(AooSeconds timeout){
         }
 
         // NB: in non-blocking mode, close() will be called in setup()!
+        // QUESTION: why not close here when quit_ is true?
         if (timeout < 0) {
             close();
         }
