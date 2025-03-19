@@ -461,8 +461,8 @@ AooPeer : AooAddr {
 		^super.newCopyArgs(addr, port, group, user);
 	}
 
-	*prFromEvent { arg groupID, userID, groupName, userName, addr, port;
-		^AooPeer(AooGroup(groupName, groupID), AooUser(userName, userID), addr, port);
+	*prFromEvent { arg groupID, userID, groupName, userName, addr, port, metadata;
+		^AooPeer(AooGroup(groupName, groupID), AooUser(userName, userID, metadata), addr, port);
 	}
 
 	== { arg that;
