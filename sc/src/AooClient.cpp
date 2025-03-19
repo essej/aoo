@@ -484,6 +484,7 @@ void aoo_client_disconnect(World* world, void* user,
 
     auto cmdData = CmdData::create<sc::AooClientCmd>(world);
     if (cmdData) {
+        cmdData->world = world;
         cmdData->port = port;
         cmdData->token = token;
 
@@ -521,6 +522,7 @@ void aoo_client_group_join(World* world, void* user,
 
     auto cmdData = CmdData::create<sc::GroupJoinCmd>(world);
     if (cmdData) {
+        cmdData->world = world;
         cmdData->port = port;
         cmdData->token = token;
         snprintf(cmdData->groupName, sizeof(cmdData->groupName),
@@ -576,6 +578,7 @@ void aoo_client_group_leave(World* world, void* user,
 
     auto cmdData = CmdData::create<sc::GroupLeaveCmd>(world);
     if (cmdData) {
+        cmdData->world = world;
         cmdData->port = port;
         cmdData->token = token;
         cmdData->group = group;
@@ -603,6 +606,7 @@ void aoo_client_ping(World* world, void* user,
 
     auto cmdData = CmdData::create<sc::ControlCmd>(world);
     if (cmdData) {
+        cmdData->world = world;
         cmdData->port = port;
         cmdData->token = -1;
         cmdData->f = seconds;
@@ -629,6 +633,7 @@ void aoo_client_packet_size(World* world, void* user,
 
     auto cmdData = CmdData::create<sc::ControlCmd>(world);
     if (cmdData) {
+        cmdData->world = world;
         cmdData->port = port;
         cmdData->token = -1;
         cmdData->i = size;
