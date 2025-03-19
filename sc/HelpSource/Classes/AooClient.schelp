@@ -30,7 +30,7 @@ fork {
 	~client.connect("aoo.iem.at", action: { |err|
 		if (err.isNil) {
 			// now join a group
-			~client.joinGroup("the_group_name", "my_user_name", action: {
+			~client.joinGroup("theGroupName", "myUserName", action: {
 				|err, group, user|
 				if (err.isNil) {
 					"successfully joined group % as user %".format(group.name, user.name).postln;
@@ -284,7 +284,7 @@ ARGUMENT:: password
 optional password, in case the AOO server is password protected.
 
 ARGUMENT:: metadata
-optional metadata (link::Classes/AooData::)
+optional metadata (link::Classes/AooData::), to be handled by the AOO server
 
 ARGUMENT:: timeout
 connection timeout in seconds
@@ -294,10 +294,10 @@ a function to be called when the request has finished.
 
 On success the function will be called with the following arguments:
 table::
-## code::nil:: ||
+## code::nil:: || (no error)
 ## Integer || client ID
 ## String || version string
-## link::Classes/AooData:: || (optional) metadata
+## link::Classes/AooData:: || (optional) metadata from the AOO server
 ::
 
 ---
@@ -338,7 +338,7 @@ Example:
 
 code::
 // assuming that we are already connected to the server
-~client.joinGroup("the_group_name", "my_user_name", "password1234", action: {
+~client.joinGroup("theGroupName", "myUserName", "password1234", action: {
 	if (err.isNil) {
 		// success
 	} {
@@ -375,32 +375,14 @@ The user password only ensures that nobody can impersonate you in a given group,
 ARGUMENT:: groupMetadata
 optional group metadata (link::Classes/AooData::)
 
-This is arbitrary metadata that is associated with the group; it is visible to all group members via the code::action:: function (see link::Classes/AooGroup#-metadata::).
-
-For example, an online-jamming app can use the metadata to specify the geographical location and preferred musical style.
-
-code::
-~client.joinGroup("test", "foo", "password", action: { |err, group, user|
-	var info = group.metadata.data.parseJSON;
-	"location: %, style: %".format(info.location, info.style).postln;
-});
-::
+This is arbitrary metadata that is associated with the group; it is visible to all group members via the code::action:: function (see link::Classes/AooGroup#-metadata::). See the discussion below for examples.
 
 note::The group metadata can only be set by the first user who joins the group (see link::#More Group Features::).::
 
 ARGUMENT:: userMetadata
 optional user metadata (link::Classes/AooData::)
 
-This is some arbitrary data that is associated with your user; it is visible to all peers via the code::\peerJoin:: event (see link::#Event handling:: and link::Classes/AooUser#-metadata::).
-
-For example, an online-jamming app can use the metadata to specify the geographical location and preferred musical style.
-
-code::
-~client.addListener(\peerJoin, { |peer|
-	var info = peer.user.metadata;
-	"location: %, instrument: %, channels: %".format(info.location, info.instrument, info.channels).postln;
-});
-::
+This is some arbitrary data that is associated with your user; it is visible to all peers via the code::\peerJoin:: event (see link::#Event handling:: and link::Classes/AooUser#-metadata::). See the discussion below for examples.
 
 ARGUMENT:: relayAddr
 optional relay address (link::Classes/AooAddr::)
@@ -412,7 +394,7 @@ a function to be called when the request has finished.
 
 On success the function will be called with the following arguments:
 table::
-## code::nil:: ||
+## code::nil:: || (no error)
 
 ## link::Classes/AooGroup:: || the group;
 e.g. lets you view the group metadata (link::Classes/AooGroup#-metadata::)
@@ -430,6 +412,34 @@ unlike the user metadata, which is visible to all peers, the private metadata is
 On failure the function will be called with an link::Classes/AooError::.
 
 DISCUSSION::
+
+Example:
+
+An online-jamming app can use the group and user metadata to provide information about the group (e.g. geographical location and musical style) and individual users (e.g. instrument and number of channels) to each peer.
+
+note::We need to use the JSONlib Quark because sclang's parseJSON method is fundamentally broken!::
+
+code::
+// Let's provide the group and user info in JSON format. NOTE: the group info can only be set by the user who creates the group!
+(
+var groupInfo = AooData(\json, ( location: "Austria", style: "classical" ).asJSON);
+var userInfo = AooData(\json, ( location: "Vienna", instrument: "piano", channels: 2).asJSON);
+
+// receive info about peers
+~client.addListener(\peerJoin, { |peer|
+	var info = JSONlib.convertToSC(peer.user.metadata.data);
+	"peer info: name: %, location: %, instrument: %, channels: %"
+	.format(peer.user.name, info.location, info.instrument, info.channels).postln;
+});
+
+// Send group and user info:
+~client.joinGroup("test", "foo", "password", nil, groupInfo, userInfo, action: { |err, group, user|
+	// This is how other users would read the info:
+	var info = JSONlib.convertToSC(group.metadata.data);
+	"group info: location: %, style: %".format(info.location, info.style).postln;
+});
+)
+::
 
 emphasis::More Group Features::
 anchor::More Group Features::
@@ -498,15 +508,15 @@ code::
 // same as above, but with a 0.5 second timestamp
 ~client.sendMsg(nil, 0.5, ["/foo", 1, 2, 3]);
 
-// send the same message to a single peer
+// send the same OSC message to a single peer
 ~client.sendMsg(AooPeer("test", "foo"), nil, ["/foo", 1, 2, 3]);
 
-// send the message to all peers in group "test".
+// send the OSC message to all peers in group "test".
 // (This only makes sense if you are a member of multiple groups.)
 ~client.sendMsg(AooGroup("test"), nil, [ "/foo", 1, 2, 3]);
 
 // send a JSON message to all peers
-~client.sendMsg(nil, nil, AooData(\json, "{x=%,y=%,z=%}".format(5, 3, 1.5)));
+~client.sendMsg(nil, nil, AooData(\json, ( x: 5, y: 3, z: 1.5).asJSON));
 
 // send a MIDI message to all peers
 ~client.sendMsg(nil, nil, AooData(\midi, [144, 60, 100]));
