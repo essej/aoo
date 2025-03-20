@@ -117,7 +117,7 @@ AooClient {
 
 	prHandleEvent { arg type, args;
 		// \disconnect, \peerJoin, \peerLeave, \peerHandshake, \peerTimeout, \peerPing
-		var md, peer;
+		var md, peer, group;
 		var event = type.switch(
 			\disconnect, {
 				"disconnected from server".error;
@@ -144,6 +144,18 @@ AooClient {
 				peer = AooPeer.prFromEvent(*args[0..1]);
 				peer = this.prFindPeer(peer, true);
 				if (peer.notNil) { [peer] ++ args[2..] } { nil }
+			},
+			\peerUpdate, {
+				md = AooData.fromBytes(*args[2..3]);
+				peer = AooPeer.prFromEvent(*args[0..1]);
+				peer = this.prFindPeer(peer, true);
+				if (peer.notNil) { peer.user.metadata = md; [peer] } { nil }
+			},
+			\groupUpdate, {
+				md = AooData.fromBytes(*args[1..2]);
+				group = AooGroup(nil, args[0]);
+				group = this.prFindGroup(group, true);
+				if (group.notNil) { group.metadata = md; [group] } { nil }
 			},
 			{ "%: ignore unknown event '%'".format(this.class.name, type).warn; nil }
 		);
@@ -324,7 +336,7 @@ AooClient {
 				privateMetadata = AooData.fromBytes(*msg[10..11]);
 				"AooClient: joined group '%' as user '%' (group ID: %, user ID: %)".format(groupName, userName, groupID, userID).postln;
 				user = AooUser(userName, userID, userMetadata);
-				group = AooGroup(groupName, groupID, groupMetadata);
+				group = AooGroup(groupName, groupID, groupMetadata).user_(user);
 				this.prAddGroup(group);
 				action.value(nil, group, user, privateMetadata);
 			} {
@@ -384,6 +396,90 @@ AooClient {
 		}, '/aoo/client/group/leave', replyAddr, argTemplate: [this.port, token]).oneShot;
 
 		server.sendMsg('/cmd', '/aoo_client_group_leave', this.port, token, group.id);
+	}
+
+	updateGroup { arg group, groupMetadata, action;
+		var token;
+		this.port ?? { ^MethodError("AooClient not initialized", this).throw };
+		if (state != \connected) {
+			^MethodError("not connected to an AOO server", this).throw
+		};
+		token = this.class.prNextToken;
+		if (group.isNil) {
+			// take the first (and only) group
+			if (this.groups.size == 0) {
+				^MethodError("not a group member", this).throw
+			};
+			if (this.groups.size > 1) {
+				^MethodError("member of multiple groups", this).throw
+			};
+			group = this.groups[0];
+		} {
+			if (group.isKindOf(AooGroup).not) {
+				group = AooGroup(group);
+			};
+			group = this.prFindGroup(group);
+			if (group.isNil) { ^MethodError("not a group member", this).throw };
+		};
+
+		OSCFunc({ arg msg;
+			var err;
+			if (msg[3] == 0) {
+				group.metadata = AooData.fromBytes(*msg[4..5]);
+				"AooClient: updated group '%'".format(group.name).postln;
+				action.value(nil, group);
+			} {
+				err = AooError(*msg[3..4]);
+				"AooClient: could not update group '%': %".format(group.name, err.message).error;
+				action.value(err);
+			};
+		}, '/aoo/client/group/update', replyAddr, argTemplate: [this.port, token]).oneShot;
+
+		server.sendMsg('/cmd', '/aoo_client_group_update', this.port, token,
+			group.id, *groupMetadata.asOSCArgArray);
+	}
+
+	updateUser { arg group, userMetadata, action;
+		var token;
+		this.port ?? { ^MethodError("AooClient not initialized", this).throw };
+		if (state != \connected) {
+			^MethodError("not connected to an AOO server", this).throw
+		};
+		token = this.class.prNextToken;
+		if (group.isNil) {
+			// take the first (and only) group
+			if (this.groups.size == 0) {
+				^MethodError("not a group member", this).throw
+			};
+			if (this.groups.size > 1) {
+				^MethodError("member of multiple groups", this).throw
+			};
+			group = this.groups[0];
+		} {
+			if (group.isKindOf(AooGroup).not) {
+				group = AooGroup(group);
+			};
+			group = this.prFindGroup(group);
+			if (group.isNil) { ^MethodError("not a group member", this).throw };
+		};
+
+		OSCFunc({ arg msg;
+			var err;
+			if (msg[3] == 0) {
+				group.user.metadata = AooData.fromBytes(*msg[4..5]);
+				"AooClient: updated user '%' in group '%'"
+				.format(group.user.name, group.name).postln;
+				action.value(nil, group, group.user);
+			} {
+				err = AooError(*msg[3..4]);
+				"AooClient: could not update user '%' in group '%': %"
+				.format(group.user.name, group.name, err.message).error;
+				action.value(err);
+			};
+		}, '/aoo/client/user/update', replyAddr, argTemplate: [this.port, token]).oneShot;
+
+		server.sendMsg('/cmd', '/aoo_client_user_update', this.port, token,
+			group.id, *userMetadata.asOSCArgArray);
 	}
 
 	sendMsg { arg target, time, msg, reliable = false;

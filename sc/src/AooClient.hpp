@@ -26,6 +26,10 @@ public:
 
     void leaveGroup(int token, AooId group);
 
+    void updateGroup(int token, AooId group, const AooData& groupMetadata);
+
+    void updateUser(int token, AooId group, const AooData& userMetadata);
+
     void handleEvent(const AooEvent* e);
 
     void setPingInterval(AooSeconds s) {
@@ -86,6 +90,13 @@ struct GroupJoinCmd : AooClientCmd {
 
 struct GroupLeaveCmd : AooClientCmd {
     AooId group;
+};
+
+struct UpdateCmd : AooClientCmd {
+    ~UpdateCmd();
+
+    AooId groupID;
+    AooData metadata;
 };
 
 struct ControlCmd : AooClientCmd {

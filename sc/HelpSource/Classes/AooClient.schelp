@@ -228,6 +228,22 @@ code::network-RTT * 0.5::
 code::(delta1 - delta2) * 0.5::
 ::
 
+## code::\peerUpdate::
+|| A peer has updated its metadata, see link::Classes/AooClient#-updateUser::.
+
+Arguments:
+table::
+## link::Classes/AooPeer:: || the peer
+::
+
+## code::\groupUpdate::
+|| A group has updated its metadata, see link::Classes/AooClient#-updateGroup::.
+
+Arguments:
+table::
+## link::Classes/AooGroup:: || the group
+::
+
 ## code::\event::
 || Catch-all event type (except for code::\msg::)
 
@@ -338,7 +354,7 @@ Example:
 
 code::
 // assuming that we are already connected to the server
-~client.joinGroup("theGroupName", "myUserName", "password1234", action: {
+~client.joinGroup("theGroupName", "myUserName", "password1234", action: { |err|
 	if (err.isNil) {
 		// success
 	} {
@@ -459,6 +475,94 @@ the group; if connected to a single group, this can be code::nil::.
 
 ARGUMENT:: action
 a function that will be called with code::nil:: on success or link::Classes/AooError:: on failure.
+
+
+METHOD:: updateGroup
+update the group metadata
+
+With this method you can replace the initial group metadata that has been set when the group was created. The new metadata will be sent to all peers in a code::\groupUpdate:: event (see link::#Event handling::).
+
+Example:
+
+code::
+// assuming that we have already joined a group
+var newData = AooData(\json, ( location: "Italy", style: "classical" ).asJSON);
+
+~client.updateGroup(nil, newData, action: { |err, group|
+	if (err.isNil) {
+		// success
+		"new (actual) group metadata: %".format(group.metadata).postln;
+	} {
+		// failure
+		"could not update group: %".format(err.message).postln;
+	}
+});
+::
+
+ARGUMENT:: group
+the group; if connected to a single group, this can be code::nil::.
+
+ARGUMENT:: groupMetadata
+the new group metadata (link::Classes/AooData::)
+
+ARGUMENT:: action
+a function to be called when the request has finished.
+
+On success the function will be called with the following arguments:
+table::
+## code::nil:: || (no error)
+
+## link::Classes/AooGroup:: || the group with the new metadata (link::Classes/AooGroup#-metadata::), possibly validated by the Server.
+::
+
+---
+
+On failure the function will be called with an link::Classes/AooError::.
+
+
+METHOD:: updateUser
+update your own user metadata
+
+With this method you can replace the initial user metadata that you have set when you joined the group. The new metadata will be sent to all peers in a code::\peerUpdate:: event (see link::#Event handling::).
+
+Example:
+
+code::
+// assuming that we have already joined a group
+var newData = AooData(\json, ( location: "Rome", instrument: "violin" ).asJSON);
+
+~client.updateUser(nil, newData, action: { |err, group, user|
+	if (err.isNil) {
+		// success
+		"new (actual) user metadata: %".format(user.metadata).postln;
+	} {
+		// failure
+		"could not update user: %".format(err.message).postln;
+	}
+});
+::
+
+ARGUMENT:: group
+the group; if connected to a single group, this can be code::nil::.
+
+ARGUMENT:: userMetadata
+the new user metadata (link::Classes/AooData::)
+
+ARGUMENT:: action
+a function to be called when the request has finished.
+
+On success the function will be called with the following arguments:
+table::
+## code::nil:: || (no error)
+
+## link::Classes/AooGroup:: || the group;
+
+## link::Classes/AooGroup:: || the user with the new metadata (link::Classes/AooUser#-metadata::), possibly validated by the Server.
+::
+
+---
+
+On failure the function will be called with an link::Classes/AooError::.
 
 
 SUBSECTION:: Messaging

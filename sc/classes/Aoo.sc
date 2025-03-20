@@ -394,6 +394,7 @@ AooGroup {
 	var <>name;
 	var <>id;
 	var <>metadata;
+	var <>user; // (for internal use)
 	// var <>flags;
 
 	*new { arg name, id, metadata;

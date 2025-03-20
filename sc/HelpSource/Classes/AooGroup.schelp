@@ -4,7 +4,7 @@ categories:: External Control>AOO
 related:: Classes/AooPeer, Classes/AooUser, Classes/AooEndpoint, Classes/AooClient
 
 DESCRIPTION::
-AooGroup represents a group in an AOO network (see link::Classes/AooClient::). It is defined by its group and user.
+AooGroup represents a group in an AOO network (see link::Classes/AooClient::).
 
 See link::Classes/AooClient:: for more information about AOO groups.
 

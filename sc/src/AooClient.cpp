@@ -200,6 +200,64 @@ void AooClient::leaveGroup(int token, AooId group) {
     node_->client()->leaveGroup(group, cb, new RequestData { this, token });
 }
 
+void AooClient::updateGroup(int token, AooId group,
+                            const AooData& groupMetadata) {
+    auto cb = [](void* x, const AooRequest *request,
+                 AooError result, const AooResponse* response) {
+        auto data = (RequestData *)x;
+        auto client = data->client;
+        auto token = data->token;
+        auto& r = response->groupUpdate;
+
+        if (result == kAooErrorNone) {
+            char buf[1024];
+            osc::OutboundPacketStream msg(buf, sizeof(buf));
+            msg << osc::BeginMessage("/aoo/client/group/update")
+                << client->node_->port() << token << (int32_t)0;
+            serializeData(msg, &r.groupMetadata);
+            msg << osc::EndMessage;
+
+            client->sendReply(msg);
+        } else {
+            client->sendError("/aoo/client/group/update", token, result, *response);
+        }
+
+        delete data;
+    };
+
+    node_->client()->updateGroup(group, groupMetadata,
+                                 cb, new RequestData { this, token });
+}
+
+void AooClient::updateUser(int token, AooId group,
+                           const AooData& userMetadata) {
+    auto cb = [](void* x, const AooRequest *request,
+                 AooError result, const AooResponse* response) {
+        auto data = (RequestData *)x;
+        auto client = data->client;
+        auto token = data->token;
+        auto& r = response->userUpdate;
+
+        if (result == kAooErrorNone) {
+            char buf[1024];
+            osc::OutboundPacketStream msg(buf, sizeof(buf));
+            msg << osc::BeginMessage("/aoo/client/user/update")
+                << client->node_->port() << token << (int32_t)0;
+            serializeData(msg, &r.userMetadata);
+            msg << osc::EndMessage;
+
+            client->sendReply(msg);
+        } else {
+            client->sendError("/aoo/client/user/update", token, result, *response);
+        }
+
+        delete data;
+    };
+
+    node_->client()->updateUser(group, userMetadata,
+                                cb, new RequestData { this, token });
+}
+
 // called from network thread
 void AooClient::handleEvent(const AooEvent* event) {
     if (event->type == kAooEventPeerMessage) {
@@ -262,8 +320,22 @@ void AooClient::handleEvent(const AooEvent* event) {
             << delta1 << delta2 << network_rtt << total_rtt;
         break;
     }
+    case kAooEventPeerUpdate:
+    {
+        auto& e = event->peerUpdate;
+        msg << "peerUpdate" << e.groupId << e.userId;
+        serializeData(msg, &e.userMetadata);
+        break;
+    }
+    case kAooEventGroupUpdate:
+    {
+        auto& e = event->groupUpdate;
+        msg << "groupUpdate" << e.groupId;
+        serializeData(msg, &e.groupMetadata);
+        break;
+    }
     default:
-        LOG_DEBUG("AooClient: got unknown event " << event->type);
+        LOG_DEBUG("AooClient: ignore event " << event->type);
         return; // don't send event!
     }
 
@@ -317,6 +389,12 @@ GroupJoinCmd::~GroupJoinCmd() {
     }
     if (relayAddress.hostName) {
         RTFree(world, (void*)relayAddress.hostName);
+    }
+}
+
+UpdateCmd::~UpdateCmd() {
+    if (metadata.data) {
+        RTFree(world, (void*)metadata.data);
     }
 }
 
@@ -598,6 +676,68 @@ void aoo_client_group_leave(World* world, void* user,
     }
 }
 
+void aoo_client_group_update(World* world, void* user,
+                             sc_msg_iter* args, void* replyAddr)
+{
+    auto port = args->geti();
+    auto token = args->geti();
+    auto groupID = args->geti();
+    auto groupMetadata = parseData(args);
+
+    auto cmdData = CmdData::create<sc::UpdateCmd>(world);
+    if (cmdData) {
+        cmdData->world = world;
+        cmdData->port = port;
+        cmdData->token = token;
+        cmdData->groupID = groupID;
+        cmdData->metadata = copyMetadata(world, groupMetadata);
+
+        auto fn = [](World * world, void* cmdData) {
+            auto data = (sc::UpdateCmd *)cmdData;
+            auto client = getClient(world, data->port,
+                                    data->token, "/aoo/client/group/update");
+            if (client) {
+                client->updateGroup(data->token, data->groupID, data->metadata);
+            }
+
+            return false; // done
+        };
+
+        doCommand(world, replyAddr, cmdData, fn);
+    }
+}
+
+void aoo_client_user_update(World* world, void* user,
+                            sc_msg_iter* args, void* replyAddr)
+{
+    auto port = args->geti();
+    auto token = args->geti();
+    auto groupID = args->geti();
+    auto userMetadata = parseData(args);
+
+    auto cmdData = CmdData::create<sc::UpdateCmd>(world);
+    if (cmdData) {
+        cmdData->world = world;
+        cmdData->port = port;
+        cmdData->token = token;
+        cmdData->groupID = groupID;
+        cmdData->metadata = copyMetadata(world, userMetadata);
+
+        auto fn = [](World * world, void* cmdData) {
+            auto data = (sc::UpdateCmd *)cmdData;
+            auto client = getClient(world, data->port,
+                                    data->token, "/aoo/client/user/update");
+            if (client) {
+                client->updateUser(data->token, data->groupID, data->metadata);
+            }
+
+            return false; // done
+        };
+
+        doCommand(world, replyAddr, cmdData, fn);
+    }
+}
+
 void aoo_client_ping(World* world, void* user,
                      sc_msg_iter* args, void* replyAddr)
 {
@@ -665,6 +805,8 @@ void AooClientLoad(InterfaceTable *inTable){
     AooPluginCmd(aoo_client_disconnect);
     AooPluginCmd(aoo_client_group_join);
     AooPluginCmd(aoo_client_group_leave);
+    AooPluginCmd(aoo_client_group_update);
+    AooPluginCmd(aoo_client_user_update);
     AooPluginCmd(aoo_client_packet_size);
     AooPluginCmd(aoo_client_ping);
 }
