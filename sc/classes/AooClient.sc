@@ -168,8 +168,15 @@ AooClient {
 	}
 
 	prAddPeer { arg peer;
+		var group;
 		if (this.prFindPeer(peer).isNil) {
-			this.peers = this.peers.add(peer)
+			group = this.prFindGroup(peer.group);
+			if (group.notNil) {
+				peer.group = group;
+				this.peers = this.peers.add(peer);
+			} {
+				"cannot add peer %: group not found".format(peer).error;
+			}
 		} {
 			"peer % already added".format(peer).error;
 		}
