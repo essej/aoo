@@ -23,8 +23,7 @@ void lower_thread_priority()
     // lower thread priority only for high priority or real time processes
     DWORD cls = GetPriorityClass(GetCurrentProcess());
     if (cls == HIGH_PRIORITY_CLASS || cls == REALTIME_PRIORITY_CLASS){
-        int priority = GetThreadPriority(GetCurrentThread());
-        SetThreadPriority(GetCurrentThread(), priority - 2);
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
     }
 #else
 
