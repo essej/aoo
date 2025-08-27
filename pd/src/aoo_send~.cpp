@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others. 
+/* Copyright (c) 2010-Now Christof Ressi, Winfried Ritsch and others.
  * For information on usage and redistribution, and for a DISCLAIMER OF ALL
  * WARRANTIES, see the file, "LICENSE.txt," in this distribution.  */
 
@@ -1072,9 +1072,8 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
     if (x_multi) {
         // one multi-channel inlet
         ninlets = 1;
-        // x_nchannels is used to keep track of the channel count, see "dsp" method.
-        // The creation argument sets the initial number of channels, so we can set
-        // the default format. NB: the channel count cannot be zero!
+        // The creation argument only sets the initial number of input channels, which
+        // might be overriden in the "dsp" method. NB: the channel count cannot be zero!
         x_nchannels = std::max<int>(atom_getfloatarg(0, argc, argv), 1);
     } else {
         // NB: users may explicitly specify 0 channels for pure message streams!
