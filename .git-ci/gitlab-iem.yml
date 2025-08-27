@@ -230,12 +230,9 @@ variables:
     - rm -rf ./aoo
     - rm -rf ./pd
     - rm -rf ./sc
-    - mkdir aoo
-    - mkdir pd
-    - mkdir sc
     - mv build/${JOBNAME}/aoo .
     - mv build/${JOBNAME}/pd .
-    - mv build/${JOBNAME}/sc ./sc
+    - mv build/${JOBNAME}/sc .
 
 .package_deken: &package_deken
   stage: deploy
