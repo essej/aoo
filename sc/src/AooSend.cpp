@@ -239,7 +239,14 @@ void AooSendUnit::next(int numSamples){
         uint64_t t = getOSCTime(mWorld);
         auto vec = mInBuf + bufferIndex;
 
-        if (source->process(vec, numSamples, t) == kAooOk){
+        auto err = source->process(vec, numSamples, t);
+
+        if (err == kAooErrorOverflow) {
+            Print("AooSend: send buffer overflow. Try to lower your "
+                  "hardware buffer size.\n");
+        }
+
+        if (err != kAooErrorIdle) {
             delegate().node()->notify();
         }
 
