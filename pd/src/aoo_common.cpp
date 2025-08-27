@@ -42,12 +42,6 @@ int endpoint_to_atoms(const aoo::ip_address& addr, AooId id, int argc, t_atom *a
     return 3;
 }
 
-void format_makedefault(AooFormatStorage &f, int nchannels)
-{
-    AooFormatPcm_init((AooFormatPcm *)&f, nchannels,
-                      sys_getsr(), 64, kAooPcmFloat32);
-}
-
 static int32_t format_getparam(void *x, int argc, t_atom *argv, int which,
                                const char *name, int32_t def)
 {
@@ -65,22 +59,34 @@ static int32_t format_getparam(void *x, int argc, t_atom *argv, int which,
     return def;
 }
 
-bool format_parse(t_pd *x, AooFormatStorage &f, int argc, t_atom *argv, int maxnumchannels)
+bool format_parse(t_pd *x, AooFormatStorage &f, int argc, t_atom *argv,
+                  int defchannels, int defsr, int defblocksize)
 {
     t_symbol *codec = atom_getsymbolarg(0, argc, argv);
+
+    // in case the "dsp" method has not been called yet
+    if (defchannels <= 0) {
+        defchannels = 1;
+    }
+    if (defsr <= 0) {
+        defsr = sys_getsr();
+    }
+    if (defblocksize <= 0) {
+        defblocksize = sys_getblksize();
+    }
 
     if (codec == gensym(kAooCodecNull)){
         // null <channels> <blocksize> <samplerate>
         auto numchannels = format_getparam(x, argc, argv, 1, "channels", 1);
-        auto blocksize = format_getparam(x, argc, argv, 2, "blocksize", 64);
-        auto samplerate = format_getparam(x, argc, argv, 3, "samplerate", sys_getsr());
+        auto blocksize = format_getparam(x, argc, argv, 2, "blocksize", defblocksize);
+        auto samplerate = format_getparam(x, argc, argv, 3, "samplerate", defsr);
 
         AooFormatNull_init((AooFormatNull *)&f.header, numchannels, samplerate, blocksize);
     } else if (codec == gensym(kAooCodecPcm)){
         // pcm <channels> <blocksize> <samplerate> <bitdepth>
-        auto numchannels = format_getparam(x, argc, argv, 1, "channels", maxnumchannels);
-        auto blocksize = format_getparam(x, argc, argv, 2, "blocksize", 64);
-        auto samplerate = format_getparam(x, argc, argv, 3, "samplerate", sys_getsr());
+        auto numchannels = format_getparam(x, argc, argv, 1, "channels", defchannels);
+        auto blocksize = format_getparam(x, argc, argv, 2, "blocksize", defblocksize);
+        auto samplerate = format_getparam(x, argc, argv, 3, "samplerate", defsr);
 
         auto nbits = format_getparam(x, argc, argv, 4, "bitdepth", 4);
         AooPcmBitDepth bitdepth;
@@ -110,7 +116,7 @@ bool format_parse(t_pd *x, AooFormatStorage &f, int argc, t_atom *argv, int maxn
 #if AOO_USE_OPUS
     else if (codec == gensym(kAooCodecOpus)){
         // opus <channels> <blocksize> <samplerate> <application>
-        opus_int32 numchannels = format_getparam(x, argc, argv, 1, "channels", maxnumchannels);
+        opus_int32 numchannels = format_getparam(x, argc, argv, 1, "channels", defchannels);
         opus_int32 blocksize = format_getparam(x, argc, argv, 2, "blocksize", 480); // 10ms
         opus_int32 samplerate = format_getparam(x, argc, argv, 3, "samplerate", 48000);
 

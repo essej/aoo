@@ -97,10 +97,8 @@ int address_to_atoms(const aoo::ip_address& addr, int argc, t_atom *argv);
 
 int endpoint_to_atoms(const aoo::ip_address& addr, AooId id, int argc, t_atom *argv);
 
-void format_makedefault(AooFormatStorage &f, int nchannels);
-
 bool format_parse(t_pd *x, AooFormatStorage &f, int argc, t_atom *argv,
-                  int maxnumchannels);
+                  int defchannels, int defsr, int defblocksize);
 
 int format_to_atoms(const AooFormat &f, int argc, t_atom *argv);
 
