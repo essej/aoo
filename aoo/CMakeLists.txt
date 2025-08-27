@@ -159,7 +159,7 @@ if (LINUX)
 endif()
 
 if (MINGW)
-    if (NOT AOO_STATIC_LIBS)
+    if (NOT AOO_STATIC_RUNTIME)
         target_link_libraries(aoo PRIVATE pthread)
     endif()
     if (AOO_USE_OPUS)
