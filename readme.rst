@@ -1,4 +1,9 @@
-IMPORTANT NOTE: This repository is a fork of an older version of AOO used ONLY for building SonoBus. DO NOT USE IT FOR ANY OTHER PURPOSE!
+**IMPORTANT NOTE**
+
+This repository is a fork of an older version of AOO used ONLY for building SonoBus and its related software.
+
+**DO NOT USE IT FOR ANY OTHER PURPOSE**
+
 If you want to use the AOO library, please go to the latest upstream version at:
    https://git.iem.at/aoo/aoo
 
