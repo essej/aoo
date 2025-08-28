@@ -431,6 +431,7 @@ void t_node_imp::release(t_pd *obj, void *x)
 
 t_node_imp::~t_node_imp()
 {
+    LOG_DEBUG("destroy AooClient on port " << x_port);
     pd_unbind(&x_proxy.x_pd, x_bindsym);
 
     // stop the client and join threads

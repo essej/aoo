@@ -15,9 +15,9 @@
 
 #define classname(x) class_getname(*(t_pd *)x)
 
-// NB: in theory we can support any number of channels;
-// this is rather meant to handle patches that accidentally use
-// the old argument order where the port would come first!
+// NB: in theory we can support any number of channels.
+// This is mainly meant to handle patches that accidentally use
+// the old argument order where the port number would come first!
 #define AOO_MAX_NUM_CHANNELS 256
 
 #define DEJITTER_TOLERANCE 0.1 // jitter tolerance in percent

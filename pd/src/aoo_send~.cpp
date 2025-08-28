@@ -1071,34 +1071,37 @@ t_aoo_send::t_aoo_send(int argc, t_atom *argv)
     int ninlets;
     if (x_multi) {
         // one multi-channel inlet
+        // NB: x_nchannels will be set in the "dsp" method and the format
+        // will be updated accordingly.
         ninlets = 1;
-        // The creation argument only sets the initial number of input channels, which
-        // might be overriden in the "dsp" method. NB: the channel count cannot be zero!
-        x_nchannels = std::max<int>(atom_getfloatarg(0, argc, argv), 1);
     } else {
         // NB: users may explicitly specify 0 channels for pure message streams!
-        // (In this case, the user must provide the number of "message channels"
-        // - if needed - with the "format" message.)
-        ninlets = argc > 0 ? atom_getfloat(argv) : 1;
-        if (ninlets < 0){
-            ninlets = 0;
-        } else if (ninlets > AOO_MAX_NUM_CHANNELS) {
-            // NB: in theory we can support any number of channels;
-            // this is rather meant to handle patches that accidentally
-            // use the old argument order where the port would come first!
-            pd_error(this, "%s: channel count (%d) out of range",
-                     classname(this), ninlets);
-            ninlets = 0;
+        // (In this case, the user must provide the number of "message channels",
+        // if needed, with the "format" message.)
+        if (argc > 0) {
+            ninlets = atom_getfloat(argv);
+            argv++;
+            argc--;
+            if (ninlets < 0) {
+                ninlets = 0;
+            } else if (ninlets > AOO_MAX_NUM_CHANNELS) {
+                // see comment above AOO_MAX_NUM_CHANNELS
+                pd_error(this, "%s: channel count (%d) out of range",
+                         classname(this), ninlets);
+                ninlets = 0;
+            }
+        } else {
+            ninlets = 1; // default
         }
         x_nchannels = ninlets;
     }
 
-    // arg #2 (optional): port number
+    // arg #2/#1 (optional): port number
     // NB: 0 means "don't listen"
-    int port = atom_getfloatarg(1, argc, argv);
+    int port = atom_getfloatarg(0, argc, argv);
 
-    // arg #3 (optional): ID
-    AooId id = atom_getfloatarg(2, argc, argv);
+    // arg #3/#2 (optional): ID
+    AooId id = atom_getfloatarg(1, argc, argv);
     if (id < 0) {
         pd_error(this, "%s: bad id % d, setting to 0", classname(this), id);
         id = 0;

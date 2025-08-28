@@ -864,9 +864,7 @@ t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
         if (noutlets < 0) {
             noutlets = 0;
         } else if (noutlets > AOO_MAX_NUM_CHANNELS) {
-            // NB: in theory we can support any number of channels;
-            // this rather meant to handle patches that accidentally
-            // use the old argument order where the port would come first!
+            // see comment above AOO_MAX_NUM_CHANNELS
             pd_error(this, "%s: channel count (%d) out of range",
                      classname(this), noutlets);
             noutlets = 0;
