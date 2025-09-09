@@ -8,5 +8,8 @@
 *.creator*
 *.files
 *.includes
+*.cflags
+*.cxxflags
+.qtc_**
 build**
 install/**

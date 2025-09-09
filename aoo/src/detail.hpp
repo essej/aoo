@@ -221,7 +221,7 @@ struct metadata_view {
     metadata_view(const aoo::metadata& md)
         : type(md.type()), data(md.data()), size(md.size()) {}
     metadata_view (const AooData *md)
-        : type(md ? md->type : kAooDataUnspecified),
+        : type(md ? md->type : (AooDataType)kAooDataUnspecified),
           data(md ? md->data : nullptr),
           size(md ? md->size : 0) {}
 

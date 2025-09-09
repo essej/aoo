@@ -125,7 +125,12 @@ public:
         return value_.exchange(value, std::memory_order_relaxed);
     }
 private:
-#if __cplusplus >= 201703L
+#if __cplusplus >= 201703L && !defined(ESP_PLATFORM)
+    // The Xtensa does not guarantee lockfree atomics for any data type.
+    // E.g. __GCC_ATOMIC_INT_LOCK_FREE evaluates to 1 (= sometimes lockfree).
+    // In practice all types up to 4 bytes should be lockfree on an ESP32 chip.
+    // Ideally we should do a runtime check with std::atomic::is_lock_free(),
+    // but that wouldn't work for cross-compiling...
     static_assert(std::atomic<T>::is_always_lock_free,
                   "std::atomic<T> is not lockfree!");
 #endif
