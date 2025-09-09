@@ -142,8 +142,9 @@ variables:
 
 .build:macos: &build_macos
   extends: .build:script
+  image: registry.git.iem.at/devtools/docker/tart/macos-monterey-xcode:latest
   tags:
-     - bigsur
+    - tart
   variables:
     OSX_ARCHITECTURES: "arm64;x86_64"
     SUPERNOVA: 1
