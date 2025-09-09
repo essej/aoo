@@ -209,7 +209,7 @@ variables:
 ### set DEKEN_USERNAME/DEKEN_PASSWORD in the CI-project settings.
 ### (https://git.iem.at/help/ci/variables/README#variables)
 .package:deps: &package_deps
-  - apt-get update && apt-get --no-install-recommends -y install deken git zip
+  - apt-get update && apt-get --no-install-recommends -y install git zip
 
 .package:script:
   stage: deploy
@@ -240,7 +240,7 @@ variables:
 
 .package_deken: &package_deken
   stage: deploy
-  image: debian:buster
+  image: registry.git.iem.at/pd/deken:latest
   variables:
     DEKEN_ROOT: "yes"
   artifacts:
