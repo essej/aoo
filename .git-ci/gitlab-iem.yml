@@ -48,7 +48,6 @@ variables:
   # static AOO library, Pd external, SC extension, AOO server, tests, examples and documentation
   - cmake -H. -Bbuild -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$prefix/aoo"
     -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_OSX_ARCHITECTURES="${OSX_ARCHITECTURES}"
-    -DCMAKE_DEPENDS_USE_COMPILER=OFF
     -DAOO_LOG_LEVEL=${LOG_LEVEL} -DAOO_STATIC_RUNTIME=${STATIC_RUNTIME} -DAOO_LOCAL_OPUS=ON
     -DAOO_BUILD_SERVER=ON -DAOO_BUILD_TESTS=ON -DAOO_BUILD_EXAMPLES=ON
     -DAOO_BUILD_DOCUMENTATION=${DOXYGEN}
@@ -61,11 +60,6 @@ variables:
     -DCMAKE_DEPENDS_USE_COMPILER=OFF
     -DAOO_LOG_LEVEL=${LOG_LEVEL} -DAOO_STATIC_RUNTIME=${STATIC_RUNTIME} -DAOO_LOCAL_OPUS=ON
     -DAOO_BUILD_SHARED_LIBRARY=ON
-
-   # NOTE: by default, CMake 3.21+ uses the compiler to obtain dependencies for makefiles ('compiler_depends.make').
-   # For some reason, on the 'Hopper' runner that file would contain bogus file paths which will cause the following
-   # invocation of 'cmake --build ./build --target install/strip' to fail with 'multiple target patterns'.
-   # As a workaround, we force the legacy behavior with -DCMAKE_DEPENDS_USE_COMPILER=OFF.
 
 ### build snippets
 .script:make: &script_make
