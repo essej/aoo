@@ -7,7 +7,9 @@ AOO is a lightweight and flexible peer-to-peer audio streaming and messaging sol
 
 It is fundamentally connectionless and allows to send audio and messages in real time and on demand between arbitrary network endpoints.
 
-The C/C++ library can be easily embedded in host applications or plugins. It even runs on embedded devices, such as the ESP32. In addition, the project contains a Pure Data external, and soon also a SuperCollider extension.
+The C/C++ library can be easily embedded in host applications or plugins. It even runs on embedded devices, such as the ESP32.
+In addition, the project contains a Pure Data external and a SuperCollider extension.
+There is also a third-party Max/MSP external ("AOO for Max"): https://github.com/ddgg-el/aoo-for-max
 
 For more information please visit https://aoo.iem.at.
 
