@@ -782,6 +782,7 @@ AooError AOO_CALL aoo::Source::process(
     if (!encoder_){
         return kAooErrorIdle;
     }
+    assert(format_ != nullptr);
 
     // non-interleaved -> interleaved
     // only as many channels as current format needs
@@ -1222,6 +1223,7 @@ AooError Source::set_format(AooFormat &f){
     // setup encoder - will validate format!
     if (auto err = AooEncoder_setup(encoder_.get(), &f); err != kAooOk) {
         encoder_ = nullptr;
+        format_ = nullptr;
         LOG_ERROR("AooSource: couldn't setup encoder!");
         return err;
     }
@@ -1348,8 +1350,9 @@ void Source::handle_xrun(int32_t nsamples) {
     reset_timer();
 }
 
-void Source::update_audio_queue(){
-    if (encoder_ && samplerate_ > 0){
+void Source::update_audio_queue() {
+    if (encoder_ && samplerate_ > 0) {
+        assert(format_ != nullptr);
         // convert buffersize from seconds to samples
         auto buffersize = buffersize_.load();
         int32_t buffersamples = buffersize * (double)samplerate_;
@@ -1559,6 +1562,7 @@ void Source::send_start(const sendfn& fn){
         return;
     }
 #endif
+    assert(format_ != nullptr);
 
     // calculate stream start time.
     auto tt = stream_tt_ + aoo::time_tag::from_seconds(stream_samples_ / (double)format_->sampleRate);
@@ -1575,6 +1579,7 @@ void Source::send_start(const sendfn& fn){
 
     // cache stream format
     auto format_id = format_id_;
+    assert(format_id >= 0);
 
     AooFormatStorage f;
     memcpy(&f, format_.get(), format_->structSize);
@@ -1904,6 +1909,7 @@ void Source::send_data(const sendfn& fn){
         if (!encoder_ || sequence_ == invalid_stream) {
             return;
         }
+        assert(format_ != nullptr);
 
         // reset and reserve space for message count
         sendbuffer_.resize(4);

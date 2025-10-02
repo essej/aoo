@@ -852,6 +852,10 @@ AooError Sink::handle_start_message(const osc::ReceivedMessage& msg,
     AooId stream_id = (it++)->AsInt32();
     AooId seq_start = (it++)->AsInt32();
     AooId format_id = (it++)->AsInt32();
+    if (stream_id < 0 || format_id < 0 || seq_start < 0) {
+        LOG_ERROR("AooSink: bad arguments for /start message");
+        return kAooErrorBadArgument;
+    }
 
     // get stream format
     AooFormat f;
@@ -1355,7 +1359,7 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream_id, int32_t seq
     auto state = state_.load(std::memory_order_acquire);
     if (state == source_state::invite) {
         // ignore /start messages that don't match the desired stream id
-        if (stream_id != invite_token_.load()){
+        if (stream_id != invite_token_.load()) {
             LOG_DEBUG("AooSink: handle_start: doesn't match invite token");
             return kAooOk;
         }
@@ -1363,7 +1367,7 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream_id, int32_t seq
     // ignore redundant /start messages!
     // NOTE: stream_id_ can only change in this thread,
     // so we don't need a lock to safely *read* it!
-    if (stream_id == stream_id_){
+    if (stream_id == stream_id_) {
         LOG_DEBUG("AooSink: handle_start: ignore redundant /start message");
         return kAooErrorNone;
     }
@@ -1373,8 +1377,7 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream_id, int32_t seq
     const AooCodecInterface *codec = nullptr;
     AooFormatStorage fmt;
     bool format_changed = format_id != format_id_;
-    format_id_ = format_id;
-    if (format_changed){
+    if (format_changed) {
         // look up codec
         codec = aoo::find_codec(f.codecName);
         if (!codec){
@@ -1395,14 +1398,14 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream_id, int32_t seq
     }
 
     // copy metadata
-    AooData *metadata = nullptr;
+    rt_metadata_ptr metadata;
     if (md) {
         assert(md->data && md->size > 0);
         LOG_DEBUG("AooSink: stream metadata: "
                   << md->type << ", " << md->size << " bytes");
         // allocate flat metadata
         auto md_size = flat_metadata_size(*md);
-        metadata = (AooData *)rt_allocate(md_size);
+        metadata.reset((AooData *)rt_allocate(md_size));
         flat_metadata_copy(*md, *metadata);
     }
 
@@ -1410,10 +1413,12 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream_id, int32_t seq
 
     // NOTE: the stream ID must always be in sync with the format,
     // so we have to set it while holding the lock!
+    // Also do this if the format turns out to be invalid, so we don't
+    // process the same invalid /start message over and over again.
     bool first_stream = stream_id_ == kAooIdInvalid;
     stream_id_ = stream_id;
 
-    if (format_changed){
+    if (format_changed) {
         // create new decoder if necessary
         if (!decoder_ || strcmp(decoder_->cls->name, codec->name)) {
             decoder_.reset(codec->decoderNew());
@@ -1422,7 +1427,8 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream_id, int32_t seq
         // setup decoder - will validate format!
         if (auto err = AooDecoder_setup(decoder_.get(), &fmt.header); err != kAooOk) {
             decoder_ = nullptr;
-            LOG_ERROR("AooSource: couldn't setup decoder!");
+            format_ = nullptr;
+            LOG_ERROR("AooSink: couldn't setup decoder!");
             return err;
         }
 
@@ -1430,10 +1436,14 @@ AooError source_desc::handle_start(const Sink& s, int32_t stream_id, int32_t seq
         auto fp = aoo::allocate(fmt.header.structSize);
         memcpy(fp, &fmt, fmt.header.structSize);
         format_.reset((AooFormat *)fp);
+
+        // finally save new format ID
+        format_id_ = format_id;
     }
+    assert(format_ != nullptr);
 
     // replace metadata
-    metadata_.reset(metadata);
+    metadata_ = std::move(metadata);
 
     // always update!
     update(s);
@@ -1590,7 +1600,7 @@ AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
         if (d.stream_id == stream_id_) {
             // this can happen when /data messages are reordered after
             // a /stop message.
-            LOG_DEBUG("AooSink: received data message for idle stream!");
+            LOG_DEBUG("AooSink: received /data message for idle stream!");
         #if 1
             // NOTE: during the 'idle' state no packets are being processed,
             // so incoming data messages would pile up indefinitely.
@@ -1602,8 +1612,8 @@ AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
     // the source format might have changed and we haven't noticed,
     // e.g. because of dropped UDP packets.
     // NOTE: stream_id_ can only change in this thread!
-    if (d.stream_id != stream_id_){
-        LOG_DEBUG("AooSink: received data message before /start message");
+    if (d.stream_id != stream_id_) {
+        LOG_DEBUG("AooSink: received /data message before /start message");
         push_request(request(request_type::start));
         return kAooOk;
     }
@@ -1611,14 +1621,13 @@ AooError source_desc::handle_data(const Sink& s, net_packet& d, bool binary)
     // synchronize with update()!
     scoped_shared_lock lock(mutex_);
 
-#if 1
-    if (!decoder_){
-        LOG_DEBUG("AooSink: ignore data message");
+    if (!decoder_) {
+        // when we receive a /start message with a bad format, we just ignore
+        // all subsequent /data messages for that stream ID. See handle_start().
+        LOG_DEBUG("AooSink: ignore /data message");
         return kAooErrorNotInitialized;
     }
-#else
-    assert(decoder_ != nullptr);
-#endif
+    assert(format_ != nullptr);
     // check and fix up samplerate
     if (d.samplerate == 0){
         assert(!(d.flags & kAooBinMsgDataSampleRate));
@@ -1745,6 +1754,7 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
     if (!decoder_){
         return false;
     }
+    assert(format_ != nullptr);
 
     // store events in buffer and only dispatch at the very end,
     // after we release the lock!
