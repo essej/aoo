@@ -192,18 +192,18 @@ void shared_mutex::unlock_shared() {
 
 void shared_recursive_mutex::lock(void) {
     auto id = std::this_thread::get_id();
-    if (owner_.load(std::memory_order_relaxed) != id) {
+    if (owner_.load(std::memory_order_acquire) != id) {
         shared_mutex::lock();
-        owner_.store(id, std::memory_order_relaxed);
+        owner_.store(id, std::memory_order_release);
     }
     count_++;
 }
 
 bool shared_recursive_mutex::try_lock() {
     auto id = std::this_thread::get_id();
-    if (owner_.load(std::memory_order_relaxed) != id) {
+    if (owner_.load(std::memory_order_acquire) != id) {
         if (shared_mutex::try_lock()) {
-            owner_.store(id, std::memory_order_relaxed);
+            owner_.store(id, std::memory_order_release);
         } else {
             return false;
         }
@@ -216,19 +216,19 @@ void shared_recursive_mutex::unlock(void) {
     assert(count_ > 0);
     assert(owner_.load() == std::this_thread::get_id());
     if (--count_ == 0) {
-        owner_.store(std::thread::id{}, std::memory_order_relaxed);
+        owner_.store(std::thread::id{}, std::memory_order_release);
         shared_mutex::unlock();
     }
 }
 
 void shared_recursive_mutex::lock_shared() {
-    if (owner_ != std::this_thread::get_id()) {
+    if (owner_.load(std::memory_order_acquire) != std::this_thread::get_id()) {
         shared_mutex::lock_shared();
     }
 }
 
 bool shared_recursive_mutex::try_lock_shared() {
-    if (owner_ != std::this_thread::get_id()) {
+    if (owner_.load(std::memory_order_acquire) != std::this_thread::get_id()) {
         return shared_mutex::try_lock_shared();
     } else {
         return true;
@@ -236,7 +236,7 @@ bool shared_recursive_mutex::try_lock_shared() {
 }
 
 void shared_recursive_mutex::unlock_shared() {
-    if (owner_ != std::this_thread::get_id()) {
+    if (owner_.load(std::memory_order_acquire) != std::this_thread::get_id()) {
         shared_mutex::unlock_shared();
     }
 }
