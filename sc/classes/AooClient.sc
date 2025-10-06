@@ -524,11 +524,11 @@ AooClient {
 	}
 
 	packetSize { arg size;
-		server.sendMsg('/cmd', '/aoo_packetsize', this.port, size);
+		server.sendMsg('/cmd', '/aoo_client_packet_size', this.port, size);
 	}
 
 	pingInterval { arg seconds;
-		server.sendMsg('/cmd', '/aoo_ping', this.port, seconds);
+		server.sendMsg('/cmd', '/aoo_client_ping', this.port, seconds);
 	}
 
 	// Try to find peer, but only if no IP/port is given.
