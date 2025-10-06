@@ -127,6 +127,8 @@ INSTANCEMETHODS::
 PRIVATE:: prFindSource, prAddSource, prRemoveSource, prParseEvent
 PRIVATE:: dllBandwidth, dynamicResampling, packetSize, pingInterval
 
+METHOD:: free
+release the controller. This is called automatically when the Synth is freed.
 
 METHOD:: isOpen
 returns:: whether the object has been created successfully

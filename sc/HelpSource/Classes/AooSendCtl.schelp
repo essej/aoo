@@ -132,6 +132,8 @@ INSTANCEMETHODS::
 
 PRIVATE:: prFindSink, prAddSink, prRemoveSink, prParseEvent
 
+METHOD:: free
+release the controller. This is called automatically when the Synth is freed.
 
 METHOD:: isOpen
 returns:: whether the object has been created successfully

@@ -123,6 +123,10 @@ PRIVATE:: prPostInit, prHandleEvent, prHandleMsg, prAddPeer, prRemovePeer
 PRIVATE:: prFindPeer, prAddGroup, prRemoveGroup, prFindGroup, prResolveAddr
 PRIVATE:: packetSize, prSimPacketLoss, prSimPacketReorder, prSimPacketJitter
 
+METHOD:: free
+release the client.
+
+Note that the UDP socket is kept open until any link::Classes/AooSend:: and link::Classes/AooReceive:: instances on that port have been released as well.
 
 METHOD:: isOpen
 returns:: whether the object has been created successfully
