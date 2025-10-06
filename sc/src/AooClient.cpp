@@ -792,6 +792,87 @@ void aoo_client_packet_size(World* world, void* user,
     }
 }
 
+void aoo_client_sim_packet_loss(World* world, void* user,
+                                sc_msg_iter* args, void* replyAddr)
+{
+    auto port = args->geti();
+    auto f = args->getf();
+
+    auto cmdData = CmdData::create<sc::ControlCmd>(world);
+    if (cmdData) {
+        cmdData->world = world;
+        cmdData->port = port;
+        cmdData->token = -1;
+        cmdData->f = f;
+
+        auto fn = [](World * world, void* cmdData) {
+            auto data = (sc::ControlCmd *)cmdData;
+            auto client = getClient(world, data->port, 0, nullptr);
+            if (client) {
+                client->setSimulatePacketLoss(data->f);
+            }
+
+            return false; // done
+        };
+
+        doCommand(world, replyAddr, cmdData, fn);
+    }
+}
+
+void aoo_client_sim_packet_reorder(World* world, void* user,
+                                   sc_msg_iter* args, void* replyAddr)
+{
+    auto port = args->geti();
+    auto f = args->getf();
+
+    auto cmdData = CmdData::create<sc::ControlCmd>(world);
+    if (cmdData) {
+        cmdData->world = world;
+        cmdData->port = port;
+        cmdData->token = -1;
+        cmdData->f = f;
+
+        auto fn = [](World * world, void* cmdData) {
+            auto data = (sc::ControlCmd *)cmdData;
+            auto client = getClient(world, data->port, 0, nullptr);
+            if (client) {
+                client->setSimulatePacketReorder(data->f);
+            }
+
+            return false; // done
+        };
+
+        doCommand(world, replyAddr, cmdData, fn);
+    }
+}
+
+void aoo_client_sim_packet_jitter(World* world, void* user,
+                                  sc_msg_iter* args, void* replyAddr)
+{
+    auto port = args->geti();
+    auto i = args->geti();
+
+    auto cmdData = CmdData::create<sc::ControlCmd>(world);
+    if (cmdData) {
+        cmdData->world = world;
+        cmdData->port = port;
+        cmdData->token = -1;
+        cmdData->i = i;
+
+        auto fn = [](World * world, void* cmdData) {
+            auto data = (sc::ControlCmd *)cmdData;
+            auto client = getClient(world, data->port, 0, nullptr);
+            if (client) {
+                client->setSimulatePacketJitter(data->i);
+            }
+
+            return false; // done
+        };
+
+        doCommand(world, replyAddr, cmdData, fn);
+    }
+}
+
 } // namespace
 
 /*////////////// Setup /////////////////*/
@@ -809,4 +890,8 @@ void AooClientLoad(InterfaceTable *inTable){
     AooPluginCmd(aoo_client_user_update);
     AooPluginCmd(aoo_client_packet_size);
     AooPluginCmd(aoo_client_ping);
+    // internal commands for network simulation
+    AooPluginCmd(aoo_client_sim_packet_loss);
+    AooPluginCmd(aoo_client_sim_packet_reorder);
+    AooPluginCmd(aoo_client_sim_packet_jitter);
 }

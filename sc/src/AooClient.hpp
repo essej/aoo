@@ -42,6 +42,20 @@ public:
     void setPacketSize(AooInt32 size) {
         node_->client()->setPacketSize(size);
     }
+
+    // simulate bad network
+    void setSimulatePacketLoss(float pct) {
+        node_->client()->control(kAooCtlSetSimulatePacketLoss, 0, AOO_ARG(pct));
+    }
+
+    void setSimulatePacketReorder(AooSeconds s) {
+        node_->client()->control(kAooCtlSetSimulatePacketReorder, 0, AOO_ARG(s));
+    }
+
+    void setSimulatePacketJitter(AooBool b) {
+        node_->client()->control(kAooCtlSetSimulatePacketJitter, 0, AOO_ARG(b));
+    }
+
 private:
     std::shared_ptr<INode> node_;
 

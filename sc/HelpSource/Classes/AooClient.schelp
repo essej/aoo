@@ -119,8 +119,9 @@ fork {
 
 INSTANCEMETHODS::
 
-PRIVATE:: prPostInit, prHandleEvent, prHandleMsg, prAddPeer, prRemovePeer, prFindPeer
-PRIVATE:: prAddGroup, prRemoveGroup, prFindGroup, prResolveAddr
+PRIVATE:: prPostInit, prHandleEvent, prHandleMsg, prAddPeer, prRemovePeer
+PRIVATE:: prFindPeer, prAddGroup, prRemoveGroup, prFindGroup, prResolveAddr
+PRIVATE:: packetSize, prSimPacketLoss, prSimPacketReorder, prSimPacketJitter
 
 
 METHOD:: isOpen
