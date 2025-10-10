@@ -60,6 +60,9 @@ struct t_aoo_receive
     AooId x_id = 0;
     bool x_multi = false;
     std::unique_ptr<t_sample *[]> x_vec;
+#if PD_FLOATSIZE != AOO_SAMPLE_SIZE
+    std::vector<AooSample> x_buffer;
+#endif
     // sources
     std::vector<t_source> x_sources;
     // node
@@ -694,20 +697,43 @@ static t_int * aoo_receive_perform(t_int *w)
     t_aoo_receive *x = (t_aoo_receive *)(w[1]);
     int n = (int)(w[2]);
 
-    if (x->x_node){
-        auto err = x->x_sink->process(x->x_vec.get(), n, get_osctime(),
+    if (x->x_node) {
+#if PD_FLOATSIZE != AOO_SAMPLE_SIZE
+        // write sink output to buffer
+        AooSample** buf = nullptr;
+        auto nchannels = x->x_nchannels;
+        if (nchannels > 0) {
+            buf = (AooSample**)alloca(nchannels * sizeof(AooSample*));
+            for (int i = 0; i < nchannels; ++i) {
+                buf[i] = &x->x_buffer[i * n];
+            }
+        }
+#else
+        auto buf = x->x_vec.get();
+#endif
+        auto err = x->x_sink->process(buf, n, get_osctime(),
                                       (AooStreamMessageHandler)aoo_receive_handle_stream_message, x);
-        if (err != kAooErrorIdle){
+#if PD_FLOATSIZE != AOO_SAMPLE_SIZE
+        // copy buffer to signal outlets
+        for (int i = 0; i < nchannels; ++i) {
+            auto src = buf[i];
+            auto dst = x->x_vec[i];
+            for (int k = 0; k < n; ++k) {
+                dst[k] = src[k];
+            }
+        }
+#endif
+        if (err != kAooErrorIdle) {
             x->x_node->notify();
         }
 
         // handle events
-        if (x->x_sink->eventsAvailable()){
+        if (x->x_sink->eventsAvailable()) {
             clock_delay(x->x_clock, 0);
         }
     } else {
         // zero outputs
-        for (int i = 0; i < x->x_nchannels; ++i){
+        for (int i = 0; i < x->x_nchannels; ++i) {
             std::fill(x->x_vec[i], x->x_vec[i] + n, 0);
         }
     }
@@ -753,14 +779,17 @@ static void aoo_receive_dsp(t_aoo_receive *x, t_signal **sp)
             x->x_vec = std::make_unique<t_sample *[]>(nchannels);
             channels_changed = true;
         }
-        for (int i = 0; i < nchannels; ++i){
+        for (int i = 0; i < nchannels; ++i) {
             x->x_vec[i] = &sp[0]->s_vec[i * blocksize];
         }
     } else {
-        for (int i = 0; i < nchannels; ++i){
+        for (int i = 0; i < nchannels; ++i) {
             x->x_vec[i] = sp[i]->s_vec;
         }
     }
+#if PD_FLOATSIZE != AOO_SAMPLE_SIZE
+    x->x_buffer.resize(nchannels * blocksize);
+#endif
 
     if (blocksize != x->x_blocksize || samplerate != x->x_samplerate
             || channels_changed) {

@@ -81,6 +81,12 @@ if (PD_MULTI_INSTANCE)
     target_compile_definitions(pd PRIVATE PDINSTANCE)
 endif()
 
+# specify float size
+set(PD_FLOAT_SIZE 32 CACHE STRING "Pd float size")
+set_property(CACHE PD_FLOAT_SIZE PROPERTY STRINGS "32;64")
+message(STATUS "Pd float size: ${PD_FLOAT_SIZE}")
+target_compile_definitions(pd PRIVATE PD_FLOATSIZE=${PD_FLOAT_SIZE})
+
 # plugin extension
 set(PD_EXTENSION "" CACHE STRING "Pd plugin extension")
 if (NOT PD_EXTENSION)

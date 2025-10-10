@@ -56,7 +56,10 @@ struct t_aoo_send
     int32_t x_port = 0;
     AooId x_id = 0;
     double x_logicaltime = 0;
-    std::unique_ptr<t_float *[]> x_vec;
+    std::unique_ptr<t_sample *[]> x_vec;
+#if PD_FLOATSIZE != AOO_SAMPLE_SIZE
+    std::vector<AooSample> x_buffer;
+#endif
     // sinks
     std::vector<t_sink> x_sinks;
     // node
@@ -925,11 +928,24 @@ static t_int * aoo_send_perform(t_int *w)
     t_aoo_send *x = (t_aoo_send *)(w[1]);
     int n = (int)(w[2]);
 
-    static_assert(sizeof(t_sample) == sizeof(AooSample),
-                  "AooSample size must match t_sample");
-
-    if (x->x_node){
-        auto err = x->x_source->process(x->x_vec.get(), n, get_osctime());
+    if (x->x_node) {
+#if PD_FLOATSIZE != AOO_SAMPLE_SIZE
+        // buffer input signals and convert to AooSample
+        AooSample** buf = nullptr;
+        if (auto nchannels = x->x_nchannels; nchannels > 0) {
+            buf = (AooSample**)alloca(nchannels * sizeof(AooSample*));
+            for (int i = 0; i < nchannels; ++i) {
+                auto src = x->x_vec[i];
+                auto dst = buf[i] = &x->x_buffer[i * n];
+                for (int k = 0; k < n; ++k) {
+                    dst[k] = src[k];
+                }
+            }
+        }
+#else
+        auto buf = x->x_vec.get();
+#endif
+        auto err = x->x_source->process(buf, n, get_osctime());
 
         if (err == kAooErrorOverflow) {
             pd_error(x, "%s: send buffer overflow. Try to manually increase "
@@ -937,11 +953,11 @@ static t_int * aoo_send_perform(t_int *w)
                      "lower your hardware buffer size.", classname(x));
         }
 
-        if (err != kAooErrorIdle){
+        if (err != kAooErrorIdle) {
             x->x_node->notify();
         }
 
-        if (x->x_source->eventsAvailable()){
+        if (x->x_source->eventsAvailable()) {
             clock_delay(x->x_clock, 0);
         }
     }
@@ -974,6 +990,9 @@ static void aoo_send_dsp(t_aoo_send *x, t_signal **sp)
             x->x_vec[i] = sp[i]->s_vec;
         }
     }
+#if PD_FLOATSIZE != AOO_SAMPLE_SIZE
+    x->x_buffer.resize(nchannels * blocksize);
+#endif
 
     if (blocksize != x->x_blocksize || samplerate != x->x_samplerate
             || nchannels != x->x_nchannels) {
