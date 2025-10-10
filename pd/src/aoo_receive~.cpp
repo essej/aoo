@@ -889,16 +889,17 @@ t_aoo_receive::t_aoo_receive(int argc, t_atom *argv)
         x_nchannels = std::max<int>(atom_getfloatarg(0, argc, argv), 1);
     } else {
         // NB: users may explicitly specify 0 channels for pure message streams!
-        noutlets = argc > 0 ? atom_getfloat(argv) : 1;
-        if (noutlets < 0) {
-            noutlets = 0;
-        } else if (noutlets > AOO_MAX_NUM_CHANNELS) {
+        x_nchannels = argc > 0 ? atom_getfloat(argv) : 1;
+        if (x_nchannels < 0) {
+            x_nchannels = 0;
+        } else if (x_nchannels > AOO_MAX_NUM_CHANNELS) {
             // see comment above AOO_MAX_NUM_CHANNELS
             pd_error(this, "%s: channel count (%d) out of range",
-                     classname(this), noutlets);
-            noutlets = 0;
+                     classname(this), x_nchannels);
+            x_nchannels = 0;
         }
-        x_nchannels = noutlets;
+        // however, we need at least one signal outlet for the "dsp" method...
+        noutlets = std::max<int>(x_nchannels, 1);
     }
 
     // arg #2 (optional): port number
