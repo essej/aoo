@@ -15,7 +15,10 @@ message(STATUS "SC install directory: ${SC_INSTALL_DIR}")
 option(SC_SUPERNOVA "Build Supernova plugins" OFF)
 message(STATUS "Supernova: ${SC_SUPERNOVA}")
 
-set(sc_sources
+# common properties
+add_library(sc_common INTERFACE)
+
+target_sources(sc_common INTERFACE
     "src/Aoo.cpp" "src/Aoo.hpp"
     "src/AooClient.cpp" "src/AooClient.hpp"
     "src/AooNode.cpp" "src/AooNode.hpp"
@@ -26,7 +29,9 @@ set(sc_sources
 )
 
 if (BUILD_SHARED_LIBS)
-    list(APPEND sc_sources
+    # we can't take these from the static aoo library,
+    # so we must add them to our target.
+    target_sources(sc_common INTERFACE
         "../common/net_utils.cpp"
         "../common/net_utils.hpp"
         "../common/log.hpp"
@@ -34,10 +39,15 @@ if (BUILD_SHARED_LIBS)
         "../common/sync.hpp"
         "../common/time.cpp"
         "../common/time.hpp"
+        # oscpack
+        $<TARGET_OBJECTS:aoo_oscpack>
     )
+    if (WIN32)
+        target_link_libraries(sc_common INTERFACE ws2_32)
+    endif()
 endif()
 
-set(sc_include
+target_include_directories(sc_common INTERFACE
     "${SC_INCLUDE_DIR}/include/plugin_interface"
     "${SC_INCLUDE_DIR}/include/common"
     "${SC_INCLUDE_DIR}/plugin_interface"
@@ -52,11 +62,10 @@ else()
 endif()
 
 # the SC extension
-add_library(sc MODULE ${sc_sources})
+add_library(sc MODULE)
 
-target_include_directories(sc PRIVATE ${sc_include})
-
-target_link_libraries(sc PRIVATE aoo aoo_common aoo_binary)
+target_link_libraries(sc PRIVATE
+    sc_common aoo aoo_common aoo_binary)
 
 # output name
 set_target_properties(sc PROPERTIES
@@ -67,11 +76,10 @@ set_target_properties(sc PROPERTIES
 
 # the Supernova extension
 if (SC_SUPERNOVA)
-    add_library(supernova MODULE ${sc_sources})
+    add_library(supernova MODULE)
 
-    target_include_directories(supernova PRIVATE ${sc_include})
-
-    target_link_libraries(supernova PRIVATE aoo aoo_common aoo_binary)
+    target_link_libraries(supernova PRIVATE
+        sc_common aoo aoo_common aoo_binary)
 
     # output name
     set_target_properties(supernova PROPERTIES
@@ -79,14 +87,6 @@ if (SC_SUPERNOVA)
         OUTPUT_NAME "aoo_supernova"
         SUFFIX ${SUFFIX}
     )
-endif()
-
-# platform specific definitions and options
-if (WIN32 AND BUILD_SHARED_LIBS)
-    target_link_libraries(sc PRIVATE ws2_32)
-    if (SC_SUPERNOVA)
-        target_link_libraries(supernova PRIVATE ws2_32)
-    endif()
 endif()
 
 # installation

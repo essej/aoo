@@ -53,6 +53,8 @@ add_library(pd MODULE
     "src/aoo_setup.cpp")
 
 if (BUILD_SHARED_LIBS)
+    # we can't take these from the static aoo library,
+    # so we must add them to our target.
     target_sources(pd PRIVATE
         "../common/net_utils.cpp"
         "../common/net_utils.hpp"
@@ -61,7 +63,11 @@ if (BUILD_SHARED_LIBS)
         "../common/sync.cpp"
         "../common/sync.hpp"
         "../common/time.cpp"
-        "../common/time.hpp")
+        "../common/time.hpp"
+    )
+    if (WIN32)
+        target_link_libraries(pd PRIVATE ws2_32)
+    endif()
 endif()
 
 target_include_directories(pd PRIVATE ${PD_INCLUDE_DIR})
@@ -106,9 +112,6 @@ if (WIN32)
         target_link_libraries(pd PRIVATE "${PD_BIN_DIR}/pd.dll")
     else()
         target_link_libraries(pd PRIVATE "${PD_BIN_DIR}/pd.lib")
-    endif()
-    if (BUILD_SHARED_LIBS)
-        target_link_libraries(pd PRIVATE ws2_32)
     endif()
 elseif(APPLE)
     target_link_options(pd PRIVATE -undefined suppress -flat_namespace -bundle)
