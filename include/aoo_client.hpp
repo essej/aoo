@@ -185,6 +185,14 @@ public:
      */
     virtual AooError AOO_CALL removeSource(AooSource *source) = 0;
 
+    /** \brief remove all AOO sources
+     *
+     * \note Threadsafe and reentrant.
+     *
+     * \attention Must not be called from an AooSource/AooSink event handler!
+     */
+    virtual AooError AOO_CALL removeAllSources() = 0;
+
     /** \brief add AOO sink
      *
      * \note Threadsafe and reentrant.
@@ -200,6 +208,14 @@ public:
      * \attention Must not be called from an AooSource/AooSink event handler!
      */
     virtual AooError AOO_CALL removeSink(AooSink *sink) = 0;
+
+    /** \brief remove all AOO sinks
+     *
+     * \note Threadsafe and reentrant.
+     *
+     * \attention Must not be called from an AooSource/AooSink event handler!
+     */
+    virtual AooError AOO_CALL removeAllSinks() = 0;
 
     /** \brief connect to AOO server
      *

@@ -80,6 +80,9 @@ AOO_API AooError AOO_CALL AooClient_addSource(
 AOO_API AooError AOO_CALL AooClient_removeSource(
         AooClient *client, struct AooSource *source);
 
+/** \copydoc AooClient::removeAllSources() */
+AOO_API AooError AOO_CALL AooClient_removeAllSources(AooClient *client);
+
 /** \copydoc AooClient::addSink() */
 AOO_API AooError AOO_CALL AooClient_addSink(
         AooClient *client, struct AooSink *sink);
@@ -87,6 +90,9 @@ AOO_API AooError AOO_CALL AooClient_addSink(
 /** \copydoc AooClient::removeSink() */
 AOO_API AooError AOO_CALL AooClient_removeSink(
         AooClient *client, struct AooSink *sink);
+
+/** \copydoc AooClient::removeAllSinks() */
+AOO_API AooError AOO_CALL AooClient_removeAllSinks(AooClient *client);
 
 /** \copydoc AooClient::connect() */
 AOO_API AooError AooClient_connect(

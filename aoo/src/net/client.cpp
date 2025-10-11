@@ -496,6 +496,21 @@ AooError AOO_CALL aoo::net::Client::removeSource(AooSource *src)
     return kAooErrorNotFound;
 }
 
+AOO_API AooError AOO_CALL AooClient_removeAllSources(AooClient *client)
+{
+    return client->removeAllSources();
+}
+
+AooError AOO_CALL aoo::net::Client::removeAllSources()
+{
+    sync::scoped_lock lock(source_sink_mutex_); // writer lock!
+    for (auto& src : sources_) {
+        src.source->control(kAooCtlSetClient, 0, nullptr, 0);
+    }
+    sources_.clear();
+    return kAooOk;
+}
+
 AOO_API AooError AOO_CALL AooClient_addSink(
         AooClient *client, AooSink *sink)
 {
@@ -544,6 +559,21 @@ AooError AOO_CALL aoo::net::Client::removeSink(AooSink *sink)
     }
     LOG_ERROR("AooClient: sink not found");
     return kAooErrorNotFound;
+}
+
+AOO_API AooError AOO_CALL AooClient_removeAllSinks(AooClient *client)
+{
+    return client->removeAllSinks();
+}
+
+AooError AOO_CALL aoo::net::Client::removeAllSinks()
+{
+    sync::scoped_lock lock(source_sink_mutex_); // writer lock!
+    for (auto& sink : sinks_) {
+        sink.sink->control(kAooCtlSetClient, 0, nullptr, 0);
+    }
+    sinks_.clear();
+    return kAooOk;
 }
 
 AOO_API AooError AOO_CALL AooClient_connect(

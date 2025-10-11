@@ -273,9 +273,13 @@ public:
 
     AooError AOO_CALL removeSource(AooSource *src) override;
 
+    AooError AOO_CALL removeAllSources() override;
+
     AooError AOO_CALL addSink(AooSink *sink) override;
 
     AooError AOO_CALL removeSink(AooSink *sink) override;
+
+    AooError AOO_CALL removeAllSinks() override;
 
     AooError AOO_CALL connect(const AooClientConnect& args,
             AooResponseHandler cb, void *context) override;
