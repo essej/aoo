@@ -199,7 +199,7 @@ void t_aoo_send::add_sink(const aoo::ip_address& addr, AooId id)
 
 void t_aoo_send::remove_all()
 {
-    x_source->removeAll();
+    x_source->removeAllSinks();
 
     int numsinks = x_sinks.size();
     if (!numsinks){

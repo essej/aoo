@@ -27,7 +27,7 @@ public:
 
     bool removeSink(const aoo::ip_address& addr, AooId id);
 
-    void removeAll();
+    void removeAllSinks();
 
     void startStream(int32_t offset, const AooData* metadata) {
         source_->startStream(offset, metadata);

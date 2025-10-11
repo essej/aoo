@@ -76,8 +76,8 @@ AOO_API AooError AOO_CALL AooSource_addSink(
 AOO_API AooError AOO_CALL AooSource_removeSink(
         AooSource *source, const AooEndpoint *sink);
 
-/** \copydoc AooSource::removeAll() */
-AOO_API AooError AOO_CALL AooSource_removeAll(AooSource *source);
+/** \copydoc AooSource::removeAllSinks() */
+AOO_API AooError AOO_CALL AooSource_removeAllSinks(AooSource *source);
 
 /** \copydoc AooSource::handleInvite() */
 AOO_API AooError AOO_CALL AooSource_handleInvite(

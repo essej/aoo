@@ -174,7 +174,7 @@ public:
     virtual AooError AOO_CALL removeSink(const AooEndpoint& sink) = 0;
 
     /** \brief remove all sinks */
-    virtual AooError AOO_CALL removeAll() = 0;
+    virtual AooError AOO_CALL removeAllSinks() = 0;
 
     /** \brief accept/decline an invitation
      *

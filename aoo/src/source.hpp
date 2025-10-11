@@ -242,7 +242,7 @@ class Source final : public AooSource, rt_memory_pool_client {
 
     AooError AOO_CALL removeSink(const AooEndpoint& sink) override;
 
-    AooError AOO_CALL removeAll() override;
+    AooError AOO_CALL removeAllSinks() override;
 
     AooError AOO_CALL handleInvite(const AooEndpoint& sink, AooId token, AooBool accept) override;
 

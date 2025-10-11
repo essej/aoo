@@ -171,8 +171,8 @@ bool AooSend::removeSink(const aoo::ip_address& addr, AooId id){
     return source()->removeSink(ep) == kAooOk;
 }
 
-void AooSend::removeAll(){
-    source()->removeAll();
+void AooSend::removeAllSinks(){
+    source()->removeAllSinks();
 }
 
 /*////////////////// AooSendUnit ////////////////*/
@@ -325,7 +325,7 @@ void aoo_send_remove(AooSendUnit *unit, sc_msg_iter* args){
                 }
             } else {
                 msg << (int32_t)1;
-                owner.removeAll();
+                owner.removeAllSinks();
             }
 
             owner.sendMsgNRT(msg);

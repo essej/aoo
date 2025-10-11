@@ -1001,7 +1001,6 @@ AOO_API AooError AOO_CALL AooSource_removeSink(
 
 AooError AOO_CALL aoo::Source::removeSink(const AooEndpoint& ep) {
     ip_address addr((const sockaddr *)ep.address, ep.addrlen);
-
     // NB: sinks can be added/removed from different threads,
     // so we have to lock a mutex to avoid the ABA problem!
     sync::scoped_lock<sync::mutex> lock1(sink_mutex_);
@@ -1013,21 +1012,19 @@ AooError AOO_CALL aoo::Source::removeSink(const AooEndpoint& ep) {
     }
 }
 
-AOO_API AooError AOO_CALL AooSource_removeAll(AooSource *source)
+AOO_API AooError AOO_CALL AooSource_removeAllSinks(AooSource *source)
 {
-    return source->removeAll();
+    return source->removeAllSinks();
 }
 
-AooError AOO_CALL aoo::Source::removeAll() {
-    // just lock once for all stream ids
-    scoped_shared_lock lock1(update_mutex_);
-
+AooError AOO_CALL aoo::Source::removeAllSinks() {
     bool running = is_running();
-
     // NB: sinks can be added/removed from different threads,
     // so we have to lock a mutex to avoid the ABA problem!
-    sync::scoped_lock<sync::mutex> lock2(sink_mutex_);
-    sink_lock lock3(sinks_);
+    sync::scoped_lock<sync::mutex> lock1(sink_mutex_);
+    sink_lock lock2(sinks_);
+    // just lock once for all stream ids, see do_remove_sink().
+    scoped_shared_lock lock3(update_mutex_);
     // send /stop messages
     for (auto& s : sinks_){
         if (running && s.is_active()){
