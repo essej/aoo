@@ -1,5 +1,33 @@
 # SuperCollider API:
-set(SC_INCLUDE_DIR "" CACHE PATH "SC include directory")
+
+# This is how SC_INCLUDE_DIR is set (in descending order of priority):
+# 1. set from the command line or in the GUI (ignores SC_PATH)
+# 2. deduced from SC_PATH, if set
+# 3. Linux: try to find SuperCollider installation and set SC_INCLUDE_DIR
+set(SC_INCLUDE_DIR "" CACHE PATH "Path to SuperCollider headers")
+set(SC_PATH "" CACHE PATH "(Optional) Path to SuperCollider repository")
+if (NOT SC_INCLUDE_DIR)
+    if (SC_PATH)
+        # set SC_INCLUDE_DIR
+        set(SC_INCLUDE_DIR "${SC_PATH}/include" CACHE PATH "Path to SuperCollider headers" FORCE)
+    else()
+        if (WIN32 OR APPLE)
+            message(WARNING "Please set SC_PATH or SC_INCLUDE_DIR")
+        else()
+            # Linux: try to find SC installation
+            unset(SC_INCLUDE_DIR CACHE)
+            find_path(SC_INCLUDE_DIR NAMES "plugin_interface/SC_PlugIn.h"
+                PATHS "/usr/include/SuperCollider" "/usr/local/include/SuperCollider"
+                DOC "Path to SuperCollider headers"
+            )
+            if (NOT SC_INCLUDE_DIR)
+                message(WARNING "Could not find SuperCollider headers. Please set SC_PATH or SC_INCLUDE_DIR.")
+            endif()
+        endif()
+    endif()
+endif()
+
+message(STATUS "SC repository: ${SC_PATH}")
 message(STATUS "SC include directory: ${SC_INCLUDE_DIR}")
 
 # install directory
@@ -8,12 +36,13 @@ if (WIN32)
 elseif(APPLE)
     set(SC_INSTALL_DIR "~/Library/Application Support/SuperCollider/Extensions/" CACHE PATH "SC install directoy")
 else()
+    # Linux
     set(SC_INSTALL_DIR "~/.local/share/SuperCollider/Extensions/" CACHE PATH "SC install directoy")
 endif()
 message(STATUS "SC install directory: ${SC_INSTALL_DIR}")
 
-option(SC_SUPERNOVA "Build Supernova plugins" OFF)
-message(STATUS "Supernova: ${SC_SUPERNOVA}")
+option(SC_SUPERNOVA "Build Supernova plugins" ON)
+message(STATUS "Build Supernova plugins: ${SC_SUPERNOVA}")
 
 # common properties
 add_library(sc_common INTERFACE)
@@ -48,8 +77,6 @@ if (BUILD_SHARED_LIBS)
 endif()
 
 target_include_directories(sc_common INTERFACE
-    "${SC_INCLUDE_DIR}/include/plugin_interface"
-    "${SC_INCLUDE_DIR}/include/common"
     "${SC_INCLUDE_DIR}/plugin_interface"
     "${SC_INCLUDE_DIR}/common"
 )

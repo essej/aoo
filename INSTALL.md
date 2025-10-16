@@ -182,18 +182,21 @@ Follow these instructions if you want to build the Pd external.
 
    Windows/macOS: http://msp.ucsd.edu/software.html
 
-   Linux: `sudo apt-get install pure-data-dev`
+   Linux: install the `puredata-dev` package, e.g. `sudo apt install puredata-dev`
 
 2. The `AOO_BUILD_PD_EXTERNAL` CMake variable must be `ON`.
 
-3. Make sure that `PD_INCLUDE_DIR` points to the Pd `src` or `include` directory.
+3. If Pd cannot be found by the build system, or is installed in a non-standard location,
+   you have to manually set `PD_INCLUDE_DIR` to the directory containing `m_pd.h`.
+   On Windows you also have to set `PD_BIN_DIR` to the `bin` folder (containing `pd.dll`).
 
-4. Windows: make sure that `PD_BIN_DIR` points to the Pd `bin` directory.
+   On Windows and macOS you can alternatively set `PD_PATH` to your Pd application folder,
+   which will in turn set `PD_INCLUDE_DIR` and `PD_BIN_DIR`.
 
-5. Set `PD_INSTALL_DIR` to the desired installation path (if you're not happy with the default).
+4. Set `PD_INSTALL_DIR` to the desired installation path (if you're not happy with the default).
 
-**NOTE**: If you *only* want to build and install the Pd external,
-set `AOO_INSTALL_LIBRARY` to `OFF` to prevent the `aoo` library from being installed as well.
+**NOTE**: If you *only* want to build and install the Pd external, set `AOO_INSTALL_LIBRARY`
+to `OFF` to prevent the `aoo` library from being installed as well.
 
 Additional options:
 
@@ -209,15 +212,23 @@ Additional options:
 
 ### 2.1.4 SuperCollider
 
-1. Clone the SuperCollider source code from https://github.com/supercollider/supercollider.
+1. macOS/Windows: clone the SuperCollider source code from https://github.com/supercollider/supercollider
+
+   Linux: same as above. Alternatively, install the SuperCollider development package (e.g. Debian: `apt install supercollider-dev`).
 
 2. The `AOO_BUILD_SC_EXTENSION` CMake variable must be `ON`.
 
-3. Set `SC_INCLUDE_DIR` to the `supercollider` folder (which should contain the subfolders `common` and `include`)
+3. Set `SC_PATH` to the SuperCollider source code directory, which will in turn set `SC_INCLUDE_DIR`.
+
+   Linux: this is not necessary if you have installed `supercollider-dev`. In this case,  `SC_INCLUDE_DIR`
+   is automatically set to the correct SuperCollider include directory, e.g. `/usr/include/SuperCollider`.
 
 4. Set `SC_INSTALL_DIR` to the desired installation path (if you're not happy with the default).
 
 5. Set `SC_SUPERNOVA` to `ON` if you want to also build the Supernova version.
+
+**NOTE**: If you *only* want to build and install the SuperCollider external, set
+`AOO_INSTALL_LIBRARY` to `OFF` to prevent the `aoo` library from being installed as well.
 
 ---
 
