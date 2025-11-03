@@ -68,7 +68,7 @@ inline void pause_cpu() {
 
 //-------------- thread priority ------------------//
 
-void lower_thread_priority();
+void set_low_realtime_priority();
 
 //----------------- relaxed atomics ---------------//
 

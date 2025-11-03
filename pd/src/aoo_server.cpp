@@ -223,14 +223,14 @@ static void aoo_server_port(t_aoo_server *x, t_floatarg f)
         }
         // start server threads
         x->x_thread = std::thread([x, pd=pd_this]() {
-            aoo::sync::lower_thread_priority();
+            aoo::sync::set_low_realtime_priority();
         #ifdef PDINSTANCE
             pd_setinstance(pd);
         #endif
             x->run();
         });
         x->x_udp_thread = std::thread([x, pd=pd_this]() {
-            aoo::sync::lower_thread_priority();
+            aoo::sync::set_low_realtime_priority();
 #ifdef PDINSTANCE
             pd_setinstance(pd);
 #endif

@@ -183,7 +183,7 @@ bool t_node_imp::add_object(t_pd *obj, void *x, AooId id)
             // start thread lazily
             if (!x_clientthread.joinable()){
                 x_clientthread = std::thread([this](){
-                    aoo::sync::lower_thread_priority();
+                    aoo::sync::set_low_realtime_priority();
                     run_client();
                 });
             }
@@ -379,7 +379,7 @@ t_node_imp::t_node_imp(t_symbol *s, int port)
     #ifdef PDINSTANCE
         pd_setinstance(pd);
     #endif
-        aoo::sync::lower_thread_priority();
+        aoo::sync::set_low_realtime_priority();
         perform_io();
     });
 #else
@@ -389,7 +389,7 @@ t_node_imp::t_node_imp(t_symbol *s, int port)
     #ifdef PDINSTANCE
         pd_setinstance(pd);
     #endif
-        aoo::sync::lower_thread_priority();
+        aoo::sync::set_low_realtime_priority();
         send();
     });
 
@@ -399,7 +399,7 @@ t_node_imp::t_node_imp(t_symbol *s, int port)
     #ifdef PDINSTANCE
         pd_setinstance(pd);
     #endif
-        aoo::sync::lower_thread_priority();
+        aoo::sync::set_low_realtime_priority();
         receive();
     });
 #endif

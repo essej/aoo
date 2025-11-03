@@ -92,12 +92,12 @@ AooServer::AooServer(int port, const char *password, bool relay)
 
     // finally start server threads
     thread_ = std::thread([this]() {
-        aoo::sync::lower_thread_priority();
+        aoo::sync::set_low_realtime_priority();
         run();
     });
 
     udp_thread_ = std::thread([this]() {
-        aoo::sync::lower_thread_priority();
+        aoo::sync::set_low_realtime_priority();
         receive();
     });
 

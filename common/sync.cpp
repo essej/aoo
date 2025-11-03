@@ -7,7 +7,8 @@
 #ifdef _WIN32
 # include <windows.h>
 #else
-# include "sys/time.h"
+# include <sys/time.h>
+# include <pthread.h>
 #endif
 
 #include <cassert>
@@ -17,16 +18,20 @@ namespace sync {
 
 //-------------------------- thread priority -----------------------------//
 
-void lower_thread_priority()
+void set_low_realtime_priority()
 {
-#ifdef _WIN32
+#if defined(_WIN32)
     // lower thread priority only for high priority or real time processes
     DWORD cls = GetPriorityClass(GetCurrentProcess());
     if (cls == HIGH_PRIORITY_CLASS || cls == REALTIME_PRIORITY_CLASS){
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
     }
+#elif defined(__APPLE__)
+    // make sure that the network thread is not scheduled on an efficiency core.
+    // Otherwise it might not be able to keep up with the audio thread.
+    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
 #else
-
+    // QUESTION: what should we do on Linux?
 #endif
 }
 

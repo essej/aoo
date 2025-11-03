@@ -48,20 +48,20 @@ AooNode::AooNode(int port) {
     // start network I/O thread
     LOG_DEBUG("start network thread");
     iothread_ = std::thread([this](){
-        aoo::sync::lower_thread_priority();
+        aoo::sync::set_low_realtime_priority();
         performNetworkIO();
     });
 #else
     // start send thread
     LOG_DEBUG("start network send thread");
     sendThread_ = std::thread([this](){
-        aoo::sync::lower_thread_priority();
+        aoo::sync::set_low_realtime_priority();
         send();
     });
     // start receive thread
     LOG_DEBUG("start network receive thread");
     receiveThread_ = std::thread([this](){
-        aoo::sync::lower_thread_priority();
+        aoo::sync::set_low_realtime_priority();
         receive();
     });
 #endif
@@ -137,7 +137,8 @@ bool AooNode::registerClient(sc::AooClient *c){
 
     if (!clientThread_.joinable()){
         // lazily create client thread
-        clientThread_ = std::thread([this](){
+        clientThread_ = std::thread([this]() {
+            aoo::sync::set_low_realtime_priority();
             client_->run(kAooInfinite);
         });
     }
