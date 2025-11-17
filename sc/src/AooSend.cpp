@@ -196,9 +196,8 @@ AooSendUnit::AooSendUnit() {
         delegate_ = std::move(delegate);
         set_calc_function<AooSendUnit, &AooSendUnit::next>();
     } else {
-        LOG_ERROR("RTAlloc() failed");
-        mCalcFunc = ClearUnitOutputs;                                                                                        \
-        mDone = true;
+        auto unit = this;
+        ClearUnitOnMemFailed;
     }
 }
 
