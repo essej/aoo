@@ -840,25 +840,41 @@ AooError AOO_CALL aoo::Source::process(
             return kAooErrorOverflow;
         }
     } else {
-        // try to write to resampler
-        if (!resampler_.write(buf, nsamples)) {
-            LOG_WARNING("AooSource: send buffer overflow");
-            add_xrun(nsamples);
-            // NB: clients are still supposed to call send() to drain the buffer
-            return kAooErrorOverflow;
-        }
-        // try to move samples from resampler to audiobuffer
-        while (audio_queue_.write_available()){
-            // copy audio samples
-            auto ptr = (block_data *)audio_queue_.write_data();
-            if (!resampler_.read(ptr->data, format_->blockSize)) {
-                break;
-            }
-            // push samplerate
-            ptr->sr = sr;
+        auto drain_resampler = [this, sr]() {
+            bool success = false;
 
-            audio_queue_.write_commit();
+            while (audio_queue_.write_available()){
+                // copy audio samples
+                auto ptr = (block_data *)audio_queue_.write_data();
+                if (!resampler_.read(ptr->data, format_->blockSize))
+                    break;
+
+                // push samplerate
+                ptr->sr = sr;
+
+                audio_queue_.write_commit();
+
+                success = true;
+            }
+
+            return success;
+        };
+
+        // try to fill the resampler
+        while (!resampler_.write(buf, nsamples)) {
+            // try to make room in the resampler, in case we couldn't drain it
+            // the last time (because the send thread was busy)
+            if (!drain_resampler()) {
+                // otherwise return overflow error
+                // NB: clients are still supposed to call send() to drain the ring buffer
+                LOG_WARNING("AooSource: send buffer overflow");
+                add_xrun(nsamples);
+                return kAooErrorOverflow;
+            }
         }
+
+        // try to move samples from resampler to ring buffer
+        drain_resampler();
     }
     return kAooOk;
 }
