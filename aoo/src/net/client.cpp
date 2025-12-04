@@ -1130,10 +1130,10 @@ void Client::perform(const connect_cmd& cmd)
     // IPv4(-mapped) address. In case the server address is IPv6-only,
     // we ping it nevertheless, e.g. in case we could not obtain our
     // global IPv6 address (for whatever reason).
-    std::sort(addrlist.begin(), addrlist.end(), [](auto& a, auto& b) {
-        return ((a.type() == ip_address::IPv4) || (a.is_ipv4_mapped()))
-               && b.type() == ip_address::IPv6;
+    std::stable_partition(addrlist.begin(), addrlist.end(), [](auto& a) {
+        return a.type() == ip_address::IPv4 || a.is_ipv4_mapped();
     });
+
     udp_client_.start_handshake(addrlist.front(), cmd.timeout_);
     // after start_handshake()! see udp_client::update()
     state_.store(client_state::handshake);
@@ -1157,9 +1157,8 @@ void Client::do_connect(const ip_host& server, AooSeconds timeout) {
     }
     // sort IPv4(-mapped) first because it is more likely for an AOO server to be IP4-only than
     // to be IPv6-only
-    std::sort(addrlist.begin(), addrlist.end(), [](auto& a, auto& b) {
-        return ((a.type() == ip_address::IPv4) || (a.is_ipv4_mapped()))
-               && b.type() == ip_address::IPv6;
+    std::stable_partition(addrlist.begin(), addrlist.end(), [](auto& a) {
+        return a.type() == ip_address::IPv4 || a.is_ipv4_mapped();
     });
 
     LOG_INFO("AooClient: try to connect to " << server.name << " on port " << server.port);
