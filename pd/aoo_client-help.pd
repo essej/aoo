@@ -26,7 +26,7 @@
 #X text 90 520 Send messages to peers:;
 #X msg 451 496 peer <group> <user> <id> <IP> <port>;
 #X text 157 475 Get a list all a peers. This will output a series of [peer( messages:, f 70;
-#N canvas 746 98 614 685 events 1;
+#N canvas 746 98 614 685 events 0;
 #X msg 33 269 peer_leave <group> <user> <id> <IP> <port>;
 #X text 55 293 a peer has left the group;
 #X text 34 33 events:;
