@@ -336,7 +336,7 @@ AooError AOO_CALL aoo::Sink::control(
         break;
     }
     case kAooCtlGetResendLimit:
-        CHECKARG(AooSeconds);
+        CHECKARG(int32_t);
         as<int32_t>(ptr) = resend_limit_.load();
         break;
     // source timeout
