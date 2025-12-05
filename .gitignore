@@ -11,5 +11,7 @@
 *.cflags
 *.cxxflags
 .qtc_**
+.vs**
+
 build**
 install/**
