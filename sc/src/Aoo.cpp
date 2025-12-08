@@ -514,7 +514,7 @@ PluginLoad(Aoo) {
     if (auto [ok, msg] = aoo::check_ntp_server(); ok){
         Print("%s\n", msg.c_str());
     } else {
-        Print("ERROR: %s\n", msg.c_str());
+        Print("WARNING: %s\n", msg.c_str());
     }
     Print("\n");
 

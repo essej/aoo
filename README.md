@@ -168,6 +168,28 @@ Run `aooserver -h` to see all available options.
 
 ---
 
+# Notes
+
+### Windows Time Service
+
+By default, the Windows Time Service (`W32Time`) is often configured so that time synchronization is done with
+a fixed "special poll interval" — instead of a min. and max. poll interval — that can be as large
+as 7 days (!). The Pd/SC externals try to detect this and print a warning to the console.
+
+You can disable the special poll interval by running the following command in `cmd.exe`:
+```
+w32tm /config /manualpeerlist:pool.ntp.org,0x8 /syncfromflags:manual /update
+```
+
+**NOTE**: the command above also replaces the default Windows time server (`time.windows.com`) with `pool.ntp.org` for better reliability and accuracy.
+
+You can check the current status with
+```
+w32tm /query /status
+```
+
+---
+
 # Footnotes
 
 [^Jaeger]: https://phaidra.kug.ac.at/view/o:11413
