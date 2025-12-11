@@ -77,7 +77,7 @@ AooSendCtl : AooCtl {
 		)
 	}
 
-	addSink { arg addr, id, active=true, action;
+	addSink { arg addr, id, active=true, channel=0, action;
 		var replyID = AooCtl.prNextReplyID;
 		addr = this.prResolveAddr(addr);
 
@@ -91,7 +91,7 @@ AooSendCtl : AooCtl {
 			} { action.value(nil) }
 		}, '/aoo/add', replyID).oneShot;
 
-		this.prSendMsg('/add', replyID, addr.ip, addr.port, id, active.asInteger);
+		this.prSendMsg('/add', replyID, addr.ip, addr.port, id, active.asInteger, channel.asInteger);
 	}
 
 	removeSink { arg addr, id, action;

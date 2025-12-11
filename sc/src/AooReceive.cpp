@@ -223,6 +223,7 @@ AooReceiveUnit::AooReceiveUnit() {
     if (delegate) {
         delegate->init(port, id, latency);
         delegate_ = std::move(delegate);
+        // NB: won't do anything because sink hasn't been created yet.
         set_calc_function<AooReceiveUnit, &AooReceiveUnit::next>();
     } else {
         auto unit = this;

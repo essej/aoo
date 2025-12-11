@@ -161,9 +161,14 @@ void AooSend::handleEvent(const AooEvent *event){
     }
 }
 
-bool AooSend::addSink(const aoo::ip_address& addr, AooId id, bool active) {
+bool AooSend::addSink(const aoo::ip_address& addr, AooId id,
+                      int32_t chan, bool active) {
     AooEndpoint ep { addr.address(), (AooAddrSize)addr.length(), id };
-    return source()->addSink(ep, active) == kAooOk;
+    auto ok = source()->addSink(ep, active) == kAooOk;
+    if (ok && chan > 0) {
+        source()->setSinkChannelOffset(ep, chan);
+    }
+    return ok;
 }
 
 bool AooSend::removeSink(const aoo::ip_address& addr, AooId id){
@@ -194,6 +199,7 @@ AooSendUnit::AooSendUnit() {
     if (delegate) {
         delegate->init(port, id);
         delegate_ = std::move(delegate);
+        // NB: won't do anything because source hasn't been created yet.
         set_calc_function<AooSendUnit, &AooSendUnit::next>();
     } else {
         auto unit = this;
@@ -275,10 +281,11 @@ void aoo_send_add(AooSendUnit *unit, sc_msg_iter* args) {
 
             aoo::ip_address addr;
             AooId id;
-            if (owner.node()->getSinkArg(&args, addr, id)){
-                auto active = args.geti();
+            if (owner.node()->getSinkArg(&args, addr, id)) {
+                auto active = args.geti(1);
+                auto chan = args.geti(0);
                 // only send IP address on success
-                if (owner.addSink(addr, id, active)) {
+                if (owner.addSink(addr, id, chan, active)) {
                     msg << (int32_t)1 << addr.name() << addr.port() << id;
 
                     owner.sendMsgNRT(msg);

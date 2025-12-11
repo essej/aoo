@@ -297,6 +297,9 @@ the sink ID
 ARGUMENT:: active
 whether the sink should be initially active
 
+ARGUMENT:: channelOffset
+the initial sink channel offset, see link::#-channelOffset::.
+
 ARGUMENT:: action
 a function to be called when the command as finished.
 
