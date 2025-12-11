@@ -770,17 +770,11 @@ static void aoo_send_add(t_aoo_send *x, t_symbol *s, int argc, t_atom *argv)
         bool active = argc > 3 ? atom_getfloat(argv + 3) : true;
         x->x_source->addSink(ep, active);
 
-#if 0
         // not yet implemented
         if (argc > 4) {
             int channel = atom_getfloat(argv + 4);
             x->x_source->setSinkChannelOffset(ep, channel);
         }
-        if (argc > 5) {
-            int channel = atom_getfloat(argv + 5);
-            x->x_source->setSinkChannelOffset(ep, channel);
-        }
-#endif
 
         x->add_sink(addr, id);
 
