@@ -137,7 +137,7 @@ struct sink_desc {
     }
 
     bool get_data_request(data_request& r){
-        return data_requests_.try_pop(r);
+        return data_requests_.pop(r);
     }
 private:
     std::atomic<int32_t> channel_{0};

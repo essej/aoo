@@ -200,7 +200,7 @@ AooError AOO_CALL aoo::net::Client::run(AooSeconds timeout){
 
             // handle commands
             std::unique_ptr<icommand> cmd;
-            while (commands_.try_pop(cmd)){
+            while (commands_.pop(cmd)){
                 cmd->perform(*this);
             }
 
@@ -440,7 +440,7 @@ AooError AOO_CALL aoo::net::Client::pollEvents(){
     // always thread-safe
     event_handler fn(event_handler_, event_context_, kAooThreadLevelUnknown);
     event_ptr e;
-    while (event_queue_.try_pop(e)){
+    while (event_queue_.pop(e)){
         e->dispatch(fn);
     }
     return kAooOk;

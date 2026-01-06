@@ -240,11 +240,11 @@ void peer::do_send(Client& client, const sendfn& fn, time_tag now,
     // 3) send outgoing acks
     // LATER send them in batches!
     message_ack ack;
-    while (send_acks_.try_pop(ack)) {
+    while (send_acks_.pop(ack)) {
         send_ack(ack, fn);
     }
     // 4) handle incoming acks
-    while (received_acks_.try_pop(ack)) {
+    while (received_acks_.pop(ack)) {
         if (auto msg = send_buffer_.find(ack.sequence)) {
             if (ack.frame_index >= 0) {
                 msg->ack_frame(ack.frame_index);

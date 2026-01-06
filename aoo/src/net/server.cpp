@@ -289,7 +289,7 @@ AooError AOO_CALL aoo::net::Server::pollEvents(){
     // always thread-safe
     event_handler fn(event_handler_, event_context_, kAooThreadLevelUnknown);
     event_ptr e;
-    while (event_queue_.try_pop(e)){
+    while (event_queue_.pop(e)){
         e->dispatch(fn);
     }
     return kAooOk;

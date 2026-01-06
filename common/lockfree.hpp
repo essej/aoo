@@ -292,50 +292,44 @@ public:
     }
 
     // must be called from a single thread!
-    void pop(T& result){
+    bool pop(T& result) {
+        auto div = divider_.load(std::memory_order_relaxed);
+        if (div == last_.load(std::memory_order_acquire)) {
+            return false;
+        }
         // use node *after* divider, because the divider itself is always a dummy!
-        auto n = divider_.load(std::memory_order_relaxed)->next_;
+        auto n = div->next_;
         result = std::move(n->data_); // get the data
         divider_.store(n, std::memory_order_release); // publish new divider
+        return true;
     }
 
-    bool try_pop(T& result){
-        if (!empty()){
-            pop(result);
+    template<typename Fn>
+    bool consume_one(Fn&& func) {
+        // We *could* pass the original data to the function before storing
+        // the divider to save an extra copy/move. However, this would delay
+        // the reclamation of the consumed node. It's a trade-off. For trivially
+        // copyable/movable types, the compiler will very likely optimize away
+        // the temporary copy/move.
+        T result;
+        if (pop(result)) {
+            func(std::move(result));
             return true;
-        } else {
-            return false;
         }
+        return false;
     }
 
     template<typename Fn>
-    void consume(Fn&& func){
-        // use node *after* divider, because the divider itself is always a dummy!
-        auto n = divider_.load(std::memory_order_relaxed)->next_;
-        auto data = std::move(n->data_); // get the data
-        divider_.store(n, std::memory_order_release); // publish new divider
-        func(data); // finally use data
-    }
-
-    template<typename Fn>
-    bool try_consume(Fn&& func){
-        if (!empty()){
-            consume(std::forward<Fn>(func));
-            return true;
-        } else {
-            return false;
+    size_t consume_all(Fn&& func) {
+        size_t count = 0;
+        while (consume_one(func)) {
+            count++;
         }
-    }
-
-    template<typename Fn>
-    void consume_all(Fn&& func){
-        while (!empty()){
-            consume(std::forward<Fn>(func));
-        }
+        return count;
     }
 
     bool empty() const {
-        return divider_.load(std::memory_order_relaxed)
+        return divider_.load(std::memory_order_acquire)
                 == last_.load(std::memory_order_acquire);
     }
 

@@ -72,7 +72,7 @@ AOO_API void AOO_CALL AooSink_free(AooSink *sink) {
 aoo::Sink::~Sink(){
     // free remaining source requests
     source_request r;
-    while (requestqueue_.try_pop(r)) {
+    while (requestqueue_.pop(r)) {
         if (r.type == request_type::invite){
             // free metadata
             auto md = r.invite.metadata;
@@ -635,7 +635,7 @@ AOO_API AooError AOO_CALL AooSink_pollEvents(AooSink *sink){
 
 AooError AOO_CALL aoo::Sink::pollEvents(){
     event_ptr e;
-    while (event_queue_.try_pop(e)){
+    while (event_queue_.pop(e)){
         event_handler_(event_context_, &e->cast(), kAooThreadLevelUnknown);
     }
     return kAooOk;
@@ -713,7 +713,7 @@ void Sink::send_event(event_ptr e, AooThreadLevel level) const {
 
 void Sink::dispatch_requests(){
     source_request r;
-    while (requestqueue_.try_pop(r)){
+    while (requestqueue_.pop(r)) {
         switch (r.type) {
         case request_type::invite:
         {
@@ -1707,7 +1707,7 @@ void send_uninvitation(const Sink& s, const endpoint& ep, AooId token, const sen
 void source_desc::send(const Sink& s, const sendfn& fn){
     // handle requests
     request r;
-    while (request_queue_.try_pop(r)){
+    while (request_queue_.pop(r)){
         switch (r.type){
         case request_type::pong:
             send_pong(s, r.pong.tt1, r.pong.tt2, fn);
@@ -1839,7 +1839,7 @@ bool source_desc::process(const Sink& s, AooSample **buffer, int32_t nsamples,
             handle_underrun(s);
         }
 
-        packet_queue_.consume_all([&](auto& packet) {
+        packet_queue_.consume_all([&](const auto& packet) {
             add_packet(s, packet, stats);
         });
     }
@@ -2669,7 +2669,7 @@ void source_desc::dispatch_stream_messages(const Sink &s, int nsamples,
 
 void source_desc::flush_packet_queue() {
     LOG_DEBUG("AooSink: flush packet queue");
-    packet_queue_.consume_all([&](auto& packet) {
+    packet_queue_.consume_all([&](const auto& packet) {
         if (packet.frame) {
             frame_allocator_.deallocate(packet.frame);
         }
@@ -2832,7 +2832,7 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
 
         int32_t numrequests = 0;
         data_request r;
-        while (data_requests_.try_pop(r)){
+        while (data_requests_.pop(r)) {
             aoo::write_bytes<int32_t>(r.sequence, it);
             aoo::write_bytes<int16_t>(r.offset, it);
             aoo::write_bytes<uint16_t>(r.bitset, it);
@@ -2874,7 +2874,7 @@ void source_desc::send_data_requests(const Sink& s, const sendfn& fn){
         msg << osc::BeginMessage(pattern) << s.id() << stream_id;
 
         data_request r;
-        while (data_requests_.try_pop(r)){
+        while (data_requests_.pop(r)) {
             if (r.offset < 0) {
                 // request whole block
             #if AOO_DEBUG_RESEND

@@ -64,7 +64,7 @@ bool udp_server::run(double timeout) {
             // a) threaded
             if (timeout == 0) {
                 if (!packet_queue_.empty()) {
-                    packet_queue_.consume_all([this](auto& packet){
+                    packet_queue_.consume_all([this](const auto& packet){
                         receive_handler_(packet.data.data(), packet.data.size(), packet.address);
                     });
                     return true;
@@ -73,7 +73,7 @@ bool udp_server::run(double timeout) {
                 }
             } else {
                 if (event_.wait_for(timeout)) {
-                    packet_queue_.consume_all([this](auto& packet){
+                    packet_queue_.consume_all([this](const auto& packet){
                         receive_handler_(packet.data.data(), packet.data.size(), packet.address);
                     });
                     return true;
@@ -101,7 +101,7 @@ bool udp_server::run(double timeout) {
         if (threaded_) {
             // a) threaded
             while (running_.load()) {
-                packet_queue_.consume_all([&](auto& packet){
+                packet_queue_.consume_all([&](const auto& packet){
                     receive_handler_(packet.data.data(), packet.data.size(), packet.address);
                 });
                 // wait for packets
