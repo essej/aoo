@@ -75,6 +75,7 @@ class spsc_queue {
         rdhead_ = wrhead_ = 0;
         balance_ = 0;
     }
+
     // returns: the number of available *blocks* for reading
     int32_t read_available() const {
         return balance_.load(std::memory_order_acquire);
@@ -164,47 +165,42 @@ class spsc_queue {
 namespace detail {
 
 template<typename T>
-class node_base {
-public:
-    struct node {
-        template<typename... U>
-        node(U&&... args)
-            : next_(nullptr), data_(std::forward<U>(args)...) {}
-        node * next_;
-        T data_;
-    };
+struct node {
+    template<typename... U>
+    node(U&&... args)
+        : next_(nullptr), data_(std::forward<U>(args)...) {}
+    node * next_;
+    T data_;
 };
 
 template<typename T>
-struct atomic_node_base {
-    struct node {
-        std::atomic<node*> next_;
-        T data_;
+struct atomic_node {
+    std::atomic<atomic_node*> next_;
+    T data_;
 
-        template<typename... U>
-        node(U&&... args)
-            : next_(nullptr), data_(std::forward<U>(args)...) {}
-    };
+    template<typename... U>
+    atomic_node(U&&... args)
+        : next_(nullptr), data_(std::forward<U>(args)...) {}
 };
 
-template<typename C, typename Alloc>
+template<typename Node, typename Alloc>
 class node_allocator_base :
-        protected C,
-        std::allocator_traits<Alloc>::template rebind_alloc<typename C::node>
+        std::allocator_traits<Alloc>::template rebind_alloc<Node>
 {
-    typedef typename std::allocator_traits<Alloc>::template rebind_alloc<typename C::node> base;
+    typedef typename std::allocator_traits<Alloc>::template rebind_alloc<Node> alloc_base;
+
 protected:
-    typedef typename C::node node;
+    typedef Node node_type;
 
     node_allocator_base(const Alloc& alloc)
-        : base(alloc) {}
+        : alloc_base(alloc) {}
 
-    node * allocate(){
-        return base::allocate(1);
+    node_type* allocate() {
+        return alloc_base::allocate(1);
     }
 
-    void deallocate(node *n){
-        base::deallocate(n, 1);
+    void deallocate(node_type* node) {
+        alloc_base::deallocate(node, 1);
     }
 };
 
@@ -216,15 +212,16 @@ protected:
 // the CAS would succeed even though the object has changed.)
 template<typename T, typename Alloc = std::allocator<T>>
 class unbounded_mpsc_queue :
-    detail::node_allocator_base<detail::node_base<T>, Alloc>
+    detail::node_allocator_base<detail::node<T>, Alloc>
 {
-    typedef detail::node_allocator_base<detail::node_base<T>, Alloc> base;
-    typedef typename base::node node;
- public:
+    typedef detail::node_allocator_base<detail::node<T>, Alloc> alloc_base;
+    typedef typename alloc_base::node_type node;
+
+public:
     unbounded_mpsc_queue(const Alloc& alloc = Alloc{})
-        : base(alloc) {
+        : alloc_base(alloc) {
         // add dummy node
-        auto n = base::allocate();
+        auto n = alloc_base::allocate();
         new (n) node();
         first_ = divider_ = last_ = n;
     }
@@ -232,7 +229,7 @@ class unbounded_mpsc_queue :
     unbounded_mpsc_queue(const unbounded_mpsc_queue&) = delete;
 
     unbounded_mpsc_queue(unbounded_mpsc_queue&& other)
-        : base(std::move(other))
+        : alloc_base(std::move(other))
     {
         first_ = other.first_;
         divider_ = other.divider_;
@@ -243,7 +240,7 @@ class unbounded_mpsc_queue :
     }
 
     unbounded_mpsc_queue& operator=(unbounded_mpsc_queue&& other){
-        base::operator=(std::move(other));
+        alloc_base::operator=(std::move(other));
         first_ = other.first_;
         divider_ = other.divider_;
         last_ = other.last_;
@@ -258,7 +255,7 @@ class unbounded_mpsc_queue :
         while (it){
             auto next = it->next_;
             it->~node();
-            base::deallocate(it);
+            alloc_base::deallocate(it);
             it = next;
         }
     }
@@ -272,7 +269,7 @@ class unbounded_mpsc_queue :
         }
         // add empty nodes
         for (size_t i = 0; i < n; ++i) {
-            auto tmp = base::allocate();
+            auto tmp = alloc_base::allocate();
             new (tmp) node();
             tmp->next_ = first_;
             first_ = tmp;
@@ -347,12 +344,12 @@ class unbounded_mpsc_queue :
         divider_.store(last_);
     }
  private:
-    node * first_;
-    std::atomic<node *> divider_;
-    std::atomic<node *> last_;
+    node* first_;
+    std::atomic<node*> divider_;
+    std::atomic<node*> last_;
     sync::spinlock lock_;
 
-    node * get_node() {
+    node* get_node() {
         // try to reuse existing node
         sync::unique_lock<sync::spinlock> l(lock_);
         if (first_ != divider_.load(std::memory_order_acquire)) {
@@ -363,7 +360,7 @@ class unbounded_mpsc_queue :
         } else {
             // allocate new node
             l.unlock();
-            auto n = base::allocate();
+            auto n = alloc_base::allocate();
             new (n) node{};
             return n;
         }
@@ -388,10 +385,11 @@ class unbounded_mpsc_queue :
 
 template<typename T, typename Alloc = std::allocator<T>>
 class concurrent_list :
-    detail::node_allocator_base<detail::atomic_node_base<T>, Alloc>
+    detail::node_allocator_base<detail::atomic_node<T>, Alloc>
 {
-    typedef detail::node_allocator_base<detail::atomic_node_base<T>, Alloc> base;
-    typedef typename base::node node;
+    typedef detail::node_allocator_base<detail::atomic_node<T>, Alloc> alloc_base;
+    typedef typename alloc_base::node_type node;
+
 public:
     template<typename U>
     class base_iterator {
@@ -406,38 +404,47 @@ public:
 
         base_iterator()
             : node_(nullptr){}
+
         base_iterator(U *n)
             : node_(n){}
+
         base_iterator(const base_iterator&) = default;
         base_iterator& operator=(const base_iterator&) = default;
+
         T& operator*() { return node_->data_; }
+
         T* operator->() { return &node_->data_; }
+
         base_iterator& operator++() {
             node_ = node_->next_.load(std::memory_order_acquire);
             return *this;
         }
+
         base_iterator operator++(int) {
             base_iterator old(node_);
             node_ = node_->next_.load(std::memory_order_acquire);
             return old;
         }
+
         bool operator==(const base_iterator& other){
             return node_ == other.node_;
         }
+
         bool operator!=(const base_iterator& other){
             return node_ != other.node_;
         }
     };
+
     using iterator = base_iterator<node>;
     using const_iterator = base_iterator<const node>;
 
     concurrent_list(const Alloc& alloc = Alloc{})
-        : base(alloc) {}
+        : alloc_base(alloc) {}
 
     concurrent_list(const concurrent_list&) = delete;
 
     concurrent_list(concurrent_list&& other)
-        : base(std::move(other))
+        : alloc_base(std::move(other))
     {
         head_ = other.head_.exchange(nullptr);
         free_ = other.free_.exchange(nullptr);
@@ -450,7 +457,7 @@ public:
     }
 
     concurrent_list& operator=(concurrent_list&& other){
-        base::operator=(std::move(other));
+        alloc_base::operator=(std::move(other));
         head_ = other.head_.exchange(nullptr);
         free_ = other.free_.exchange(nullptr);
         refcount_ = other.refcount_.exchange(0);
@@ -460,7 +467,7 @@ public:
     // NB: can be called concurrently (while the list is locked)
     template<typename... U>
     iterator emplace_front(U&&... args){
-        auto n = base::allocate();
+        auto n = alloc_base::allocate();
         new (n) node(std::forward<U>(args)...);
         auto next = head_.load(std::memory_order_relaxed);
         do {
@@ -647,7 +654,7 @@ private:
             auto tmp = n;
             n = n->next_.load(std::memory_order_relaxed);
             tmp->~node();
-            base::deallocate(tmp);
+            alloc_base::deallocate(tmp);
         }
     }
 };
