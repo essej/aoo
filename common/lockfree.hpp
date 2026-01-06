@@ -373,10 +373,9 @@ public:
 // A lock-free singly-linked list with RCU algorithm.
 // It supports concurrent iteration and adding/removal of items,
 // with a few restrictions:
-// * you may only call methods while the list is locked; the only exception is reclaim()
-// * you may only access list items while the list is (still) locked
-// * nodes must not be removed concurrently resp. without external synchronization
-
+// - you may only call methods while the list is locked; the only exception is reclaim()
+// - you may only access list items while the list is (still) locked
+// - nodes must not be removed concurrently resp. without external synchronization
 template<typename T, typename Alloc = std::allocator<T>>
 class concurrent_list :
     detail::node_allocator_base<detail::atomic_node<T>, Alloc>
@@ -388,7 +387,7 @@ public:
     template<typename U>
     class base_iterator {
         friend class concurrent_list;
-        U *node_;
+        U* node_;
     public:
         typedef std::ptrdiff_t difference_type;
         typedef U value_type;
@@ -397,10 +396,10 @@ public:
         typedef std::forward_iterator_tag iterator_category;
 
         base_iterator()
-            : node_(nullptr){}
+            : node_(nullptr) {}
 
-        base_iterator(U *n)
-            : node_(n){}
+        base_iterator(U* n)
+            : node_(n) {}
 
         base_iterator(const base_iterator&) = default;
         base_iterator& operator=(const base_iterator&) = default;
@@ -420,11 +419,11 @@ public:
             return old;
         }
 
-        bool operator==(const base_iterator& other){
+        bool operator==(const base_iterator& other) {
             return node_ == other.node_;
         }
 
-        bool operator!=(const base_iterator& other){
+        bool operator!=(const base_iterator& other) {
             return node_ != other.node_;
         }
     };
@@ -441,26 +440,26 @@ public:
         : alloc_base(std::move(other))
     {
         head_ = other.head_.exchange(nullptr);
-        free_ = other.free_.exchange(nullptr);
+        freed_ = other.free_.exchange(nullptr);
         refcount_ = other.refcount_.exchange(0);
     }
 
-    ~concurrent_list(){
+    ~concurrent_list() {
         destroy_list(head_.load());
-        destroy_list(free_.load());
+        destroy_list(freed_.load());
     }
 
-    concurrent_list& operator=(concurrent_list&& other){
+    concurrent_list& operator=(concurrent_list&& other) {
         alloc_base::operator=(std::move(other));
         head_ = other.head_.exchange(nullptr);
-        free_ = other.free_.exchange(nullptr);
+        freed_ = other.free_.exchange(nullptr);
         refcount_ = other.refcount_.exchange(0);
         return *this;
     }
 
     // NB: can be called concurrently (while the list is locked)
     template<typename... U>
-    iterator emplace_front(U&&... args){
+    iterator emplace_front(U&&... args) {
         auto n = alloc_base::allocate();
         new (n) node(std::forward<U>(args)...);
         auto next = head_.load(std::memory_order_relaxed);
@@ -472,41 +471,48 @@ public:
         return iterator(n);
     }
 
-    iterator push_front(T&& v){
+    iterator push_front(T&& v) {
         return emplace_front(std::forward<T>(v));
     }
 
-    // NB: don't call concurrently!
-    void pop_front(){
-        T *head = head_.load(std::memory_order_relaxed);
-        T *next;
+    // pop the first element. This is UB if the list is empty!
+    // NB: don't call concurrently with other pop/erase/clear methods!
+    void pop_front() {
+        T* head = head_.load(std::memory_order_relaxed);
+        T* next;
         do {
             next = head->next_.load(std::memory_order_relaxed);
             // check if the head has changed and update it atomically.
             // (if the CAS fails, 'head' is updated to the current head)
+            // NB: there is no ABA problem because pop_front() must not
+            // be called concurrently.
         } while (!head_.compare_exchange_weak(head, next, std::memory_order_acq_rel));
 
         dispose_node(head);
     }
 
-    // NB: don't call concurrently!
-    iterator erase(iterator it){
-        for (;;){
+    // tries to erase the given element. On success, it returns an iterator
+    // pointing to the next element in the list. On failure, it returns
+    // an empty iterator.
+    // NB: don't call concurrently with other pop/erase/clear methods!
+    iterator erase(iterator it) {
+        for (;;) {
             auto n = head_.load(std::memory_order_acquire);
-            if (n == it.node_){
+            if (n == it.node_) {
                 // try to remove head
-                // there is no ABA problem, see reclaim().
+                // NB: there is no ABA problem because erase() must not
+                // be called concurrently.
                 auto next = n->next_.load(std::memory_order_acquire);
-                if (head_.compare_exchange_strong(n, next, std::memory_order_acq_rel)){
+                if (head_.compare_exchange_strong(n, next, std::memory_order_acq_rel)) {
                     dispose_node(n);
                     return iterator(next); // success
                 }
                 // someone pushed a new node in between, try again!
             } else {
                 // find the node before it
-                while (n){
+                while (n) {
                     auto next = n->next_.load(std::memory_order_acquire);
-                    if (next == it.node_){
+                    if (next == it.node_) {
                         // unlink the node
                         auto next2 = next->next_.load(std::memory_order_acquire);
                         n->next_.store(next2, std::memory_order_release);
@@ -521,11 +527,12 @@ public:
         }
     }
 
+    // get a reference to the first element. This is UB if the list is empty.
     T& front() { return *begin(); }
 
     T& front() const { return *begin(); }
 
-    iterator begin(){
+    iterator begin() {
         return iterator(head_.load(std::memory_order_acquire));
     }
 
@@ -533,7 +540,7 @@ public:
         return const_iterator(head_.load(std::memory_order_acquire));
     }
 
-    iterator end(){
+    iterator end() {
         return iterator();
     }
 
@@ -542,52 +549,46 @@ public:
     }
 
     bool empty() const {
-        return head_.load(std::memory_order_relaxed) == nullptr;
+        // I *think* this could be a relaxed load, but I'm not entirely sure...
+        return head_.load(std::memory_order_acquire) == nullptr;
     }
 
-    void clear(){
+    // NB: cannot be called concurrently with other pop/erase/clear methods!
+    void clear() {
         // atomically unlink the whole list
         auto head = head_.exchange(nullptr);
-        if (head){
+        if (head) {
             // and move it to the free list
             dispose_list(head);
         }
     }
 
-    void lock(){
+    void lock() {
         refcount_.fetch_add(1, std::memory_order_acquire);
     }
 
-    void unlock(){
+    void unlock() {
         refcount_.fetch_sub(1, std::memory_order_release);
     }
 
     bool need_reclaim() const {
-        return free_.load(std::memory_order_relaxed) != nullptr;
+        return freed_.load(std::memory_order_relaxed) != nullptr;
     }
 
     // This method is called periodically from a non-RT thread to collect garbage.
     // Always call in unlocked state!
-    // NB: items on the free list are never reused, so there is no ABA problem
-    // in the CAS loop in erase(). We might put the items back again (see below),
-    // but in this case the list head would still point to the original (unmodified) object.
-    bool reclaim(){
-        // check if the list appears be non-empty; if yes, also check the refcount
-        if (free_.load(std::memory_order_relaxed)
-                && !refcount_.load(std::memory_order_relaxed)){
+    bool reclaim() {
+        // check if the list appears be non-empty. if yes, also check the refcount
+        if (need_reclaim() && !refcount_.load(std::memory_order_acquire)) {
             // atomically unlink the whole freelist
-            auto f = free_.exchange(nullptr);
-            if (!f){
+            auto f = freed_.exchange(nullptr);
+            if (!f) {
                 return false; // shouldn't really happen...
             }
-            // check the refcount again
-        #if 1
-            // use read-modify-write operation to prevent reordering in both directions
+            // check the refcount again.
+            // use RMW operation to prevent reordering in both directions.
             int32_t expected = 0;
             if (refcount_.compare_exchange_strong(expected, 0, std::memory_order_acq_rel)) {
-        #else
-            if (!refcount_.load(std::memory_order_acquire)) {
-        #endif
                 // from this point the refcount may go up again, but it wouldn't
                 // refer to our list items, so we can safely free the memory.
                 destroy_list(f);
@@ -596,8 +597,8 @@ public:
                 // A reader aquired access in the meantime, so we put the items back
                 // to the free list and try again later. If the free list is still empty,
                 // we can simply atomically exchange the head pointer.
-                node *expected = nullptr;
-                if (!free_.compare_exchange_strong(expected, f)){
+                node* expected = nullptr;
+                if (!freed_.compare_exchange_strong(expected, f)) {
                     // otherwise prepend the old free list to the new one
                     dispose_list(f);
                 }
@@ -606,24 +607,24 @@ public:
         return false;
     }
 private:
-    std::atomic<node *> head_{nullptr};
-    std::atomic<node *> free_{nullptr};
+    std::atomic<node*> head_{nullptr};
+    std::atomic<node*> freed_{nullptr};
     std::atomic<int32_t> refcount_{0};
 
-    void dispose_node(node * n){
+    void dispose_node(node* n) {
         // atomically add node to free list
-        auto next = free_.load(std::memory_order_relaxed);
+        auto next = freed_.load(std::memory_order_relaxed);
         do {
             n->next_.store(next, std::memory_order_relaxed);
             // check if the head has changed and update it atomically.
             // (if the CAS fails, 'next' is updated to the current head)
-        } while (!free_.compare_exchange_weak(next, n, std::memory_order_acq_rel));
+        } while (!freed_.compare_exchange_weak(next, n, std::memory_order_acq_rel));
     }
 
-    void dispose_list(node *list){
+    void dispose_list(node *list) {
         // get last node in list
         auto tail = list;
-        for (;;){
+        for (;;) {
             auto next = tail->next_.load(std::memory_order_relaxed);
             if (next) {
                 tail = next;
@@ -634,17 +635,18 @@ private:
         // prepend to the free list; 'list' becomes new head
         // NB: there is no ABA problem because this method is only called
         // from reclaim(), so nobody can concurrently *remove* items.
-        // (It is possible that new items are pushed by erase(), though.)
-        auto head = free_.load(std::memory_order_relaxed);
+        // (The ABA problem can only occur with concurrent pop operations.)
+        // New items might be pushed concurrently by erase().
+        auto head = freed_.load(std::memory_order_relaxed);
         do {
             tail->next_.store(head, std::memory_order_relaxed);
             // check if the head has changed and update it atomically.
             // (if the CAS fails, 'head' is updated to the actual list head)
-        } while (!free_.compare_exchange_weak(head, list, std::memory_order_acq_rel)) ;
+        } while (!freed_.compare_exchange_weak(head, list, std::memory_order_acq_rel)) ;
     }
 
-    void destroy_list(node *n){
-        while (n){
+    void destroy_list(node* n) {
+        while (n) {
             auto tmp = n;
             n = n->next_.load(std::memory_order_relaxed);
             tmp->~node();
