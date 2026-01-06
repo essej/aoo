@@ -782,7 +782,7 @@ void rt_memory_pool_unref() {
     sync::scoped_lock<sync::mutex> l(g_rt_memory_pool_lock);
     if (--g_rt_memory_pool_refcount == 0) {
         LOG_DEBUG("total RT memory usage: " << g_rt_memory_pool.memory_usage()
-                  << " / " << g_rt_memory_pool.size() << " bytes");
+                  << " / " << g_rt_memory_pool.capacity() << " bytes");
         g_rt_memory_pool.reset();
     }
     // LOG_DEBUG("rt_memory_pool_unref: " << g_rt_memory_pool_refcount);
