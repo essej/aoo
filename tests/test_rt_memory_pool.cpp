@@ -14,7 +14,7 @@
 constexpr bool use_pool = true;
 constexpr bool grow_pool = true;
 constexpr size_t num_threads = 16;
-constexpr double duration = 1;
+constexpr double duration = 1.0;
 constexpr size_t pool_size = (size_t)1 << 26; // 64 MB
 constexpr size_t max_alloc_size = (size_t)1 << 16; // 64 KB
 constexpr size_t max_blocks_per_loop = 10;
@@ -45,19 +45,28 @@ void thread_function(int num) {
     blocks.reserve(max_blocks_per_loop);
 
     auto start = std::chrono::high_resolution_clock::now();
-    for (;;) {
+    bool running = true;
+    while (running) {
         // allocate blocks
+        blocks.clear();
         auto num_blocks = block_dist(gen);
         for (size_t i = 0; i < num_blocks; ++i) {
             auto randf = size_dist(gen);
             auto size = (size_t)(randf * randf * randf * max_alloc_size);
-            auto mem = use_pool ? memory_pool.allocate(size) : ::operator new(size);
+            size = std::max<size_t>(size, 1);
+            void* mem;
+            if (use_pool) {
+                mem =  memory_pool.allocate(size);
+            } else {
+                mem = ::operator new(size);
+            }
             if (mem) {
                 alloc_count++;
                 global_alloc_count++;
                 auto total_bytes = total_alloc_bytes.fetch_add(size);
                 if (use_memory_limit && total_bytes > memory_limit) {
-                    goto done;
+                    running = false;
+                    break;
                 }
                 blocks.emplace_back(mem, size);
                 // do something with the memory
@@ -77,7 +86,6 @@ void thread_function(int num) {
                 ::operator delete(data, size);
             }
         }
-        blocks.clear();
         // check current time
         auto now = std::chrono::high_resolution_clock::now();
         auto elapsed = seconds(now - start).count();
@@ -85,7 +93,6 @@ void thread_function(int num) {
             break;
         }
     }
-done:
     std::cout << "quit thread " << num << " after "
               << alloc_count << " allocations" << std::endl;
 }
