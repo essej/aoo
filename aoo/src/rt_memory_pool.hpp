@@ -2,6 +2,7 @@
 
 #include "common/bit_utils.hpp"
 #include "common/log.hpp"
+#include "common/tagged_integer.hpp"
 #include "common/utils.hpp"
 
 #include <limits.h>
@@ -24,52 +25,6 @@ void * allocate(size_t size);
 void deallocate(void *ptr, size_t);
 
 namespace detail {
-
-template<typename T, size_t TagBits=16>
-class tagged_integer {
-public:
-    using type = T;
-
-    static_assert(TagBits < sizeof(type) * CHAR_BIT, "too many tag bits");
-
-    static constexpr T tag_bits = TagBits;
-    static constexpr T value_bits = sizeof(type) * CHAR_BIT - tag_bits;
-    static constexpr T tag_mask = ((type)1 << tag_bits) - 1;
-    static constexpr T value_mask = ((type)1 << value_bits) - 1;
-    static constexpr T max_value = value_mask;
-
-    tagged_integer() = default;
-
-    // IMPORTANT: do not assert that 'value' is in the range of [0, max_value(
-    // because it may contain garbage!! See comment in free_list::pop().
-    tagged_integer(type tag, type value)
-        : value_(((tag & tag_mask) << value_bits) | (value & value_mask)) {}
-
-    void set_value(type value) {
-        // NB: do not check value! See comment above.
-        auto tag_part = value_ & ~value_mask;
-        value_ = tag_part | (value & value_mask);
-    }
-
-    type get_value() const {
-        return value_ & value_mask;
-    }
-
-    void set_tag(type tag) {
-        auto value = value_ & value_mask;
-        value_ = ((tag & tag_mask) << value_bits) | value;
-    }
-
-    type get_tag() const {
-        return value_ >> value_bits;
-    }
-
-    T raw_value() const {
-        return value_;
-    }
-private:
-    T value_ = 0;
-};
 
 // TODO: explain why the bitset needs to be tagged
 template<typename T>
@@ -178,7 +133,8 @@ private:
 
 // NB: we use indices into the memory arena instead of pointers
 // because some platforms do not support the necessary DWCAS operations.
-// For example, the ESP32 (currently) only supports 32-bit atomic operations.
+// For example, XTensa (ESP32), 32-bit RISC-V and some 32-bit ARM CPUs
+// only support 32-bit atomic operations.
 using tagged_index = std::conditional_t<std::atomic<tagged_integer<uint64_t>>::is_always_lock_free,
     tagged_integer<uint64_t>, tagged_integer<uint32_t, 12>>;
 
@@ -200,8 +156,7 @@ public:
         auto head = head_.load(std::memory_order_relaxed);
         for (;;) {
             block->next = head.get_value();
-            // NB: we only have to increment the tag in the pop() method.
-            tagged_index new_head(head.get_tag(), (size_t)index);
+            tagged_index new_head((size_t)index, head.get_tag() + 1);
             if (head_.compare_exchange_weak(head, new_head,
                     std::memory_order_acq_rel, std::memory_order_relaxed)) {
                 break;
@@ -222,7 +177,7 @@ public:
             // However, this means that must not assert that the value is
             // actually in the range [0, max_index_size(!
             auto block = reinterpret_cast<const memory_block*>((const char *)pool + index);
-            tagged_index new_head(head.get_tag() + 1, block->next);
+            tagged_index new_head(block->next, head.get_tag() + 1);
             if (head_.compare_exchange_weak(head, new_head,
                     std::memory_order_acq_rel, std::memory_order_relaxed)) {
                 return (void *)block;
@@ -236,7 +191,7 @@ public:
     }
 
     void reset() {
-        head_ = tagged_index(0, sentinel);
+        head_ = tagged_index(sentinel, 0);
     }
 
     size_t count(const void *pool) const {
@@ -253,7 +208,7 @@ private:
     // NB: 0 (nullptr) is a valid index, so we cannot use it as our sentinel index.
     // Instead we use the largest possible representable value.
     static constexpr size_t sentinel = max_index_value;
-    std::atomic<tagged_index> head_{tagged_index{0, sentinel}};
+    std::atomic<tagged_index> head_{tagged_index{sentinel, 0}};
 };
 
 } // namespace detail

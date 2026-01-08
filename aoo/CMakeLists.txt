@@ -50,6 +50,7 @@ add_library(aoo
     "../common/priority_queue.hpp"
     "../common/sync.cpp"
     "../common/sync.hpp"
+    "../common/tagged_integer.hpp"
     "../common/time.cpp"
     "../common/time.hpp"
     "../common/utils.hpp"
