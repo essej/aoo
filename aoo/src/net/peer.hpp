@@ -192,8 +192,8 @@ private:
     message_send_buffer send_buffer_;
     message_receive_buffer receive_buffer_;
     received_message current_msg_;
-    aoo::unbounded_mpsc_queue<message_ack> send_acks_;
-    aoo::unbounded_mpsc_queue<message_ack> received_acks_;
+    lockfree::concurrent_queue<message_ack> send_acks_;
+    lockfree::concurrent_queue<message_ack> received_acks_;
 };
 
 inline std::ostream& operator<<(std::ostream& os, const peer& p) {

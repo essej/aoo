@@ -253,7 +253,7 @@ private:
         AooDataType type;
         std::vector<AooByte> data;
     };
-    using message_queue = lockfree::unbounded_mpsc_queue<message>;
+    using message_queue = lockfree::concurrent_queue<message>;
     message_queue message_queue_;
 
     void push_message(AooId group, AooId user, const AooData& data);
@@ -275,7 +275,7 @@ private:
     AooRequestHandler request_handler_{nullptr};
     void *request_context_{nullptr};
     // event handler
-    using event_queue = aoo::unbounded_mpsc_queue<event_ptr>;
+    using event_queue = lockfree::concurrent_queue<event_ptr>;
     event_queue event_queue_;
     AooEventHandler event_handler_ = nullptr;
     void *event_context_ = nullptr;

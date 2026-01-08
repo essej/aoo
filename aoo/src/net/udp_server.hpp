@@ -29,6 +29,7 @@ public:
         : socket_error(e) {}
 };
 
+// TODO: make 'threaded' a compile-time option
 class udp_server
 {
 public:
@@ -81,7 +82,7 @@ private:
         std::vector<AooByte> data;
         ip_address address;
     };
-    using packet_queue = aoo::lockfree::unbounded_mpsc_queue<udp_packet>;
+    using packet_queue = lockfree::concurrent_queue<udp_packet, false>;
     packet_queue packet_queue_;
 
     std::thread thread_;

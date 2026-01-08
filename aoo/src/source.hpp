@@ -145,7 +145,7 @@ private:
     int32_t invite_token_{kAooIdInvalid};
     int32_t uninvite_token_{kAooIdInvalid};
     std::atomic<bool> needstart_{false};
-    aoo::unbounded_mpsc_queue<data_request> data_requests_;
+    aoo::concurrent_queue<data_request, false> data_requests_;
 };
 
 struct cached_sink {
@@ -333,18 +333,18 @@ class Source final : public AooSource, rt_memory_pool_client {
     };
     aoo::spsc_queue<char> audio_queue_;
     history_buffer history_;
-    using message_queue = lockfree::unbounded_mpsc_queue<rt_stream_message, aoo::rt_allocator<rt_stream_message>>;
+    using message_queue = lockfree::concurrent_queue<rt_stream_message, false, aoo::rt_allocator<rt_stream_message>>;
     message_queue message_queue_;
     using message_prio_queue = priority_queue<nrt_stream_message, stream_message_comp, aoo::allocator<nrt_stream_message>>;
     message_prio_queue message_prio_queue_;
     // events
-    using event_queue = lockfree::unbounded_mpsc_queue<event_ptr, aoo::rt_allocator<event_ptr>>;
+    using event_queue = lockfree::concurrent_queue<event_ptr, true, aoo::rt_allocator<event_ptr>>;
     event_queue event_queue_;
     AooEventHandler event_handler_ = nullptr;
     void *event_context_ = nullptr;
     AooEventMode event_mode_ = kAooEventModeNone;
     // requests
-    aoo::unbounded_mpsc_queue<sink_request> requests_;
+    aoo::concurrent_queue<sink_request, true> requests_;
     // sinks
     using sink_list = aoo::concurrent_list<sink_desc>;
     using sink_lock = std::unique_lock<sink_list>;

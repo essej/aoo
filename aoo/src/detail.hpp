@@ -50,8 +50,8 @@ using string = std::basic_string<char, std::char_traits<char>, aoo::allocator<ch
 template<typename T>
 using spsc_queue = lockfree::spsc_queue<T, aoo::allocator<T>>;
 
-template<typename T>
-using unbounded_mpsc_queue = lockfree::unbounded_mpsc_queue<T, aoo::allocator<T>>;
+template<typename T, bool multi_producer=true>
+using concurrent_queue = lockfree::concurrent_queue<T, multi_producer, aoo::allocator<T>>;
 
 template<typename T>
 using concurrent_list = lockfree::concurrent_list<T, aoo::allocator<T>>;

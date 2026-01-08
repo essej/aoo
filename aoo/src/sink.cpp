@@ -72,7 +72,7 @@ AOO_API void AOO_CALL AooSink_free(AooSink *sink) {
 aoo::Sink::~Sink(){
     // free remaining source requests
     source_request r;
-    while (requestqueue_.pop(r)) {
+    while (request_queue_.pop(r)) {
         if (r.type == request_type::invite){
             // free metadata
             auto md = r.invite.metadata;
@@ -564,7 +564,7 @@ AooError AOO_CALL aoo::Sink::process(
         }
     }
 #if 1
-    if (sources_.empty() && !sources_.need_reclaim() && requestqueue_.empty()) {
+    if (sources_.empty() && !sources_.need_reclaim() && request_queue_.empty()) {
         // nothing to process and no need to call send()
         return kAooErrorIdle;
     }
@@ -713,7 +713,7 @@ void Sink::send_event(event_ptr e, AooThreadLevel level) const {
 
 void Sink::dispatch_requests(){
     source_request r;
-    while (requestqueue_.pop(r)) {
+    while (request_queue_.pop(r)) {
         switch (r.type) {
         case request_type::invite:
         {

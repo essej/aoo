@@ -181,7 +181,7 @@ private:
     aoo::time_tag query_deadline_;
     std::atomic<float> query_timeout_{max_query_timeout};
 
-    using message_queue = aoo::unbounded_mpsc_queue<message>;
+    using message_queue = lockfree::concurrent_queue<message>;
     message_queue messages_;
 };
 
@@ -419,7 +419,7 @@ private:
     aoo::vector<sink_desc> sinks_;
     sync::shared_mutex source_sink_mutex_;
     // peers
-    using peer_list = aoo::concurrent_list<peer>;
+    using peer_list = lockfree::concurrent_list<peer>;
     using peer_lock = std::unique_lock<peer_list>;
     peer_list peers_;
     // connect/login
@@ -436,7 +436,7 @@ private:
     sync::mutex group_mutex_;
     ping_timer server_ping_timer_;
     // commands
-    using command_queue = aoo::unbounded_mpsc_queue<command_ptr>;
+    using command_queue = lockfree::concurrent_queue<command_ptr>;
     command_queue commands_;
     // pending requests
     using callback_cmd_ptr = std::unique_ptr<callback_cmd>;
@@ -444,7 +444,7 @@ private:
     request_map pending_requests_;
     AooId next_token_ = 0;
     // events
-    using event_queue = aoo::unbounded_mpsc_queue<event_ptr>;
+    using event_queue = lockfree::concurrent_queue<event_ptr>;
     event_queue event_queue_;
     AooEventHandler event_handler_ = nullptr;
     void *event_context_ = nullptr;

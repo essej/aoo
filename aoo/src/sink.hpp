@@ -277,7 +277,7 @@ private:
     // packet queue and jitter buffer
     // NB: frame_allocator_ must come *before* jitter_buffer_!
     data_frame_allocator frame_allocator_;
-    aoo::unbounded_mpsc_queue<net_packet> packet_queue_;
+    aoo::concurrent_queue<net_packet, false> packet_queue_;
     jitter_buffer jitter_buffer_{frame_allocator_};
     int32_t latency_blocks_ = 0;
     int32_t latency_samples_ = 0;
@@ -287,12 +287,12 @@ private:
     int64_t process_samples_ = 0;
     void reset_stream();
     // requests
-    aoo::unbounded_mpsc_queue<request> request_queue_;
+    aoo::concurrent_queue<request, true> request_queue_;
     void push_request(const request& r){
         request_queue_.push(r);
     }
-    aoo::unbounded_mpsc_queue<data_request> data_requests_;
-    void push_data_request(const data_request& r){
+    aoo::concurrent_queue<data_request, false> data_requests_;
+    void push_data_request(const data_request& r) {
     #if AOO_DEBUG_RESEND && 0
         LOG_DEBUG("AooSink: push data request (" << r.sequence
                   << " " << r.offset << " " << r.bitset << ")");
@@ -425,15 +425,15 @@ private:
     parameter<char> resample_method_{ AOO_RESAMPLE_MODE };
 
     // events
-    using event_queue = lockfree::unbounded_mpsc_queue<event_ptr, aoo::rt_allocator<event_ptr>>;
+    using event_queue = lockfree::concurrent_queue<event_ptr, true, aoo::rt_allocator<event_ptr>>;
     mutable event_queue event_queue_;
     AooEventHandler event_handler_ = nullptr;
     void *event_context_ = nullptr;
     AooEventMode event_mode_ = kAooEventModeNone;
     // requests
-    aoo::unbounded_mpsc_queue<source_request> requestqueue_;
-    void push_request(const source_request& r){
-        requestqueue_.push(r);
+    aoo::concurrent_queue<source_request, true> request_queue_;
+    void push_request(const source_request& r) {
+        request_queue_.push(r);
     }
     void dispatch_requests();
 

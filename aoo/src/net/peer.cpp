@@ -723,7 +723,7 @@ void peer::do_handle_client_message(Client& client, const message_packet& p, Aoo
                       << p.sequence << ", frame: " << p.frame_index  << ") from " << *this);
         #endif
             // don't forget to acknowledge!
-            send_acks_.push(p.sequence, p.frame_index);
+            send_acks_.emplace(p.sequence, p.frame_index);
             return;
         }
         if (p.sequence > last_pushed) {
@@ -786,7 +786,7 @@ void peer::do_handle_client_message(Client& client, const message_packet& p, Aoo
             }
         }
         // schedule acknowledgement
-        send_acks_.push(p.sequence, p.frame_index);
+        send_acks_.emplace(p.sequence, p.frame_index);
     } else {
         // *** unreliable message ***
         if (p.num_frames > 1) {
@@ -824,7 +824,7 @@ void peer::handle_ack(Client &client, osc::ReceivedMessageArgumentIterator it, i
         LOG_DEBUG("AooClient: got ack (seq: " << seq
                   << ", frame: " << frame << ") from " << *this);
     #endif
-        received_acks_.push(seq, frame);
+        received_acks_.emplace(seq, frame);
     }
 }
 
@@ -840,7 +840,7 @@ void peer::handle_ack(Client &client, const AooByte *data, AooSize size) {
                 LOG_DEBUG("AooClient: got ack (seq: " << seq
                           << ", frame: " << frame << ") from " << *this);
             #endif
-                received_acks_.push(seq, frame);
+                received_acks_.emplace(seq, frame);
             }
             return; // done
         }

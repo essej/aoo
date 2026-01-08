@@ -655,7 +655,7 @@ AooError AOO_CALL aoo::Source::addStreamMessage(const AooStreamMessage& message)
     } else {
         time = process_samples_ + message.sampleOffset;
     }
-    message_queue_.push(time, message.channel, message.type,
+    message_queue_.emplace(time, message.channel, message.type,
                         (char *)message.data, message.size);
 #if AOO_DEBUG_STREAM_MESSAGE
     LOG_DEBUG("AooSource: add stream message "
