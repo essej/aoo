@@ -1,7 +1,7 @@
 #pragma once
 
 #include <climits>
-#include <cstdint>
+#include <cstddef>
 
 namespace aoo {
 
