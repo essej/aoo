@@ -42,6 +42,8 @@ namespace aoo {
 struct ievent {
     virtual ~ievent() {}
 
+    // we cannot directly cast an ievent pointer to a AooEvent pointer because
+    // of the hidden vtable pointer. That's why there is an explicit cast method.
     AooEvent& cast();
 };
 
@@ -53,7 +55,21 @@ event_ptr make_event(Args&&... args) {
 }
 
 template<typename T>
-struct base_event : ievent, T {
+struct alignas(AooEvent) aligned_event : T {};
+
+// IMPORTANT: make sure that T has the same alignment as AooEvent!
+// On some 32-bit system, e.g. 32-bit Windows, 64-bit integers and doubles
+// have an alignment of 8 bytes. Since ievent only has an alignment of 4 bytes,
+// this could create misaligned AooEvent pointers when casting an ievent pointer
+// to an AooEvent pointer via ievent::cast().
+//
+// (Normally, this wouldn't matter because the actual underlying AOO event always
+// has the appropriate alignment and the AooEvent pointer is only used for accessing
+// the 'type' field. However, some platforms apparently check the pointer alignment
+// at runtime, e.g. in debug builds, and would therefore complain about misaligned
+// AooEvent pointers.)
+template<typename T>
+struct base_event : ievent, aligned_event<T> {
     virtual ~base_event() {}
 
     base_event(AooEventType type_, size_t size) {
@@ -68,14 +84,16 @@ struct base_event : ievent, T {
 #define BASE_EVENT(name, field) \
     k##name, AOO_STRUCT_SIZE(name, field)
 
-// only for casting
-struct cast_event : base_event<AooEventBase> {
-    cast_event() = delete;
+// AooEvent cannot be used as the template argument for base_event because
+// unions cannot be base classes. That's why we make this helper struct.
+struct cast_event {
+    AooEvent event;
 };
 
 inline AooEvent& ievent::cast() {
-    auto ptr = static_cast<AooEventBase *>(static_cast<cast_event *>(this));
-    return *reinterpret_cast<AooEvent *>(ptr);
+    // we cannot directly cast from ievent to AooEvent, so we have to go
+    // through base_event<cast_event>.
+    return static_cast<base_event<cast_event>*>(this)->event;
 }
 
 template<typename T>
