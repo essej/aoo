@@ -197,18 +197,20 @@ if (AOO_BUILD_EXAMPLES)
         message(STATUS "*** portaudio library ***")
         message(STATUS "")
 
+        # for portaudio v19.8 <=
+        set(PA_BUILD_SHARED_LIBS OFF)
         # for portaudio v19.7 >=
         set(PA_BUILD_SHARED OFF)
         add_subdirectory("deps/portaudio" EXCLUDE_FROM_ALL)
-        if (NOT TARGET PortAudio::PortAudio)
+        if (NOT TARGET PortAudio::portaudio)
             # at the time of writing, portaudio does not export
-            # PortAudio::PortAudio when included as a subproject.
-            if (TARGET PortAudio)
+            # PortAudio::portaudio when included as a subproject.
+            if (TARGET portaudio)
                 # portaudio v19.8 <=
-                add_library(PortAudio::PortAudio ALIAS PortAudio)
+                add_library(PortAudio::portaudio ALIAS portaudio)
             elseif (TARGET portaudio_static)
                 # portaudio v19.7 >=
-                add_library(PortAudio::PortAudio ALIAS portaudio_static)
+                add_library(PortAudio::portaudio ALIAS portaudio_static)
             else()
                 message(FATAL_ERROR "missing portaudio target")
             endif()
