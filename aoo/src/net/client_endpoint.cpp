@@ -130,7 +130,7 @@ void client_endpoint::send_notification(Server& server, const AooData &data) con
     auto msg = server.start_message(data.size);
 
     msg << osc::BeginMessage(kAooMsgClientMessage)
-        << osc::Blob(data.data, data.size) << osc::EndMessage;
+        << data.type << osc::Blob(data.data, (int32_t)data.size) << osc::EndMessage;
 
     send_message(msg);
 }

@@ -232,7 +232,7 @@ struct metadata_view {
 
 inline osc::OutboundPacketStream& operator<<(osc::OutboundPacketStream& msg, const metadata_view& md) {
     if (md.type != kAooDataUnspecified) {
-        msg << md.type << osc::Blob(md.data, md.size);
+        msg << md.type << osc::Blob(md.data, (int32_t)md.size);
     } else {
         msg << osc::Nil << osc::Nil;
     }
