@@ -189,6 +189,10 @@ AooError AOO_CALL aoo::net::Server::setup(AooServerSettings& settings) {
     force_legacy_protocol_ = settings.options & kAooServerForceLegacyProtocol;
     int legacy_port = AOO_CHECK_FIELD(&settings, AooServerSettings, legacyPortNumber)
             ? settings.legacyPortNumber : 0;
+    if (external && legacy_port != 0) {
+        LOG_ERROR("AooServer: legacyPortNumber requires internal UDP sockets");
+        return kAooErrorBadArgument;
+    }
     std::vector<int> ports { settings.portNumber };
     if (legacy_port != 0 && legacy_port != settings.portNumber) {
         ports.push_back(legacy_port);

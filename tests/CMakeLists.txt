@@ -28,8 +28,10 @@ target_link_libraries(test_concurrent_queue PRIVATE ${test_libs})
 add_executable(test_wire_protocol "test_wire_protocol.cpp")
 target_link_libraries(test_wire_protocol PRIVATE ${test_libs})
 
-add_executable(test_dual_protocol_server "test_dual_protocol_server.cpp")
-target_link_libraries(test_dual_protocol_server PRIVATE ${test_libs})
+if (AOO_NET)
+    add_executable(test_dual_protocol_server "test_dual_protocol_server.cpp")
+    target_link_libraries(test_dual_protocol_server PRIVATE ${test_libs})
+endif()
 
 # relay test
 if (BUILD_SHARED_LIBS)

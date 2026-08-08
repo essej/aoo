@@ -1,7 +1,6 @@
 #include "aoo/src/net/wire_protocol.hpp"
 #include "aoo/src/net/osc_stream_receiver.hpp"
 
-#include <cassert>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -10,22 +9,31 @@
 using namespace aoo;
 using namespace aoo::net;
 
+namespace {
+void check(bool condition) {
+    if (!condition) {
+        std::cerr << "wire protocol test failed" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+}
+}
+
 int main() {
     const AooByte legacy[] = { slip_end, '/', 'a', slip_end };
-    assert(detect_wire_protocol(legacy, 1) == wire_protocol::legacy);
+    check(detect_wire_protocol(legacy, 1) == wire_protocol::legacy);
 
     AooByte current[4];
     to_bytes<int32_t>(12, (char *)current);
-    assert(detect_wire_protocol(current, 1) == wire_protocol::unknown);
-    assert(detect_wire_protocol(current, 3) == wire_protocol::unknown);
-    assert(detect_wire_protocol(current, 4) == wire_protocol::current);
+    check(detect_wire_protocol(current, 1) == wire_protocol::unknown);
+    check(detect_wire_protocol(current, 3) == wire_protocol::unknown);
+    check(detect_wire_protocol(current, 4) == wire_protocol::current);
 
     to_bytes<int32_t>(0, (char *)current);
-    assert(detect_wire_protocol(current, 4) == wire_protocol::invalid);
+    check(detect_wire_protocol(current, 4) == wire_protocol::invalid);
     to_bytes<int32_t>(10, (char *)current);
-    assert(detect_wire_protocol(current, 4) == wire_protocol::invalid);
+    check(detect_wire_protocol(current, 4) == wire_protocol::invalid);
     to_bytes<int32_t>(max_stream_packet_size + 4, (char *)current);
-    assert(detect_wire_protocol(current, 4) == wire_protocol::invalid);
+    check(detect_wire_protocol(current, 4) == wire_protocol::invalid);
 
     const std::vector<AooByte> payload = { '/', 'a', 0, slip_end, slip_escape, 1, 2, 3 };
     const auto encoded = slip_encode(payload.data(), (AooSize)payload.size());
@@ -42,8 +50,8 @@ int main() {
             receiver.handle_message(encoded.data() + split,
                                     (AooSize)(encoded.size() - split), collect);
         }
-        assert(packets.size() == 1);
-        assert(packets.front() == payload);
+        check(packets.size() == 1);
+        check(packets.front() == payload);
     }
 
     slip_stream_receiver receiver;
@@ -54,8 +62,8 @@ int main() {
     auto twice = encoded;
     twice.insert(twice.end(), encoded.begin(), encoded.end());
     receiver.handle_message(twice.data(), (AooSize)twice.size(), collect);
-    assert(packets.size() == 2);
-    assert(packets[0] == payload && packets[1] == payload);
+    check(packets.size() == 2);
+    check(packets[0] == payload && packets[1] == payload);
 
     bool malformed = false;
     const AooByte bad_escape[] = { slip_end, '/', slip_escape, 0, slip_end };
@@ -65,7 +73,7 @@ int main() {
     } catch (const osc::MalformedPacketException&) {
         malformed = true;
     }
-    assert(malformed);
+    check(malformed);
 
     // Every frame, not just the protocol probe, must enforce the size cap.
     osc_stream_receiver current_receiver;
@@ -77,7 +85,7 @@ int main() {
     } catch (const osc::MalformedPacketException&) {
         malformed = true;
     }
-    assert(malformed);
+    check(malformed);
 
     std::cout << "wire protocol test succeeded!" << std::endl;
     return EXIT_SUCCESS;
