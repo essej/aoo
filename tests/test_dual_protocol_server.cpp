@@ -1,4 +1,5 @@
 #include "aoo.h"
+#include "aoo_client.hpp"
 #include "aoo_server.hpp"
 
 #include "aoo/src/detail.hpp"
@@ -12,11 +13,13 @@
 #include "osc/OscReceivedElements.h"
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <iostream>
+#include <limits>
 #include <string_view>
 #include <thread>
 #include <utility>
@@ -193,6 +196,82 @@ void check_pattern(const std::vector<AooByte>& packet, const char *pattern) {
     osc::ReceivedPacket received((const char *)packet.data(), packet.size());
     osc::ReceivedMessage message(received);
     check(!strcmp(message.AddressPattern(), pattern), "unexpected OSC address");
+}
+
+constexpr int pending_result = std::numeric_limits<int>::min();
+
+struct callback_result {
+    std::atomic<int> value { pending_result };
+};
+
+void store_result(void *user, const AooRequest *, AooError result,
+                  const AooResponse *) {
+    static_cast<callback_result *>(user)->value.store(result);
+}
+
+void wait_for_result(const callback_result& result, const char *message) {
+    for (int attempt = 0; attempt < 300; ++attempt) {
+        if (result.value.load() != pending_result) {
+            return;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    fail(message);
+}
+
+void test_cancel_pending_connection() {
+    auto [primary_port, legacy_port] = unused_tcp_ports();
+    server_runner server(primary_port, legacy_port);
+    auto fake_port = unused_tcp_ports().first;
+
+    auto client = AooClient::create();
+    check((bool)client, "could not create client");
+    AooClientSettings settings;
+    settings.portNumber = 0;
+    settings.socketType = kAooSocketIPv4;
+    check(client->setup(settings) == kAooOk, "could not setup client");
+
+    std::thread send_thread([&]() { client->send(kAooInfinite); });
+    std::thread receive_thread([&]() { client->receive(kAooInfinite); });
+    std::thread run_thread([&]() { client->run(kAooInfinite); });
+
+    AooClientConnect connect;
+    connect.hostName = "127.0.0.1";
+    connect.port = fake_port;
+    connect.timeout = 1.0;
+
+    callback_result cancelled;
+    callback_result disconnected;
+    check(client->connect(connect, store_result, &cancelled) == kAooOk,
+          "could not queue first connection");
+    check(client->disconnect(store_result, &disconnected) == kAooOk,
+          "could not queue pending disconnect");
+    wait_for_result(disconnected, "pending disconnect timed out");
+    wait_for_result(cancelled, "cancelled connection callback timed out");
+    check(disconnected.value.load() == kAooOk,
+          "pending connection was not disconnected");
+    check(cancelled.value.load() == kAooErrorNotConnected,
+          "cancelled connection returned the wrong result");
+
+    connect.port = primary_port;
+    callback_result connected;
+    check(client->connect(connect, store_result, &connected) == kAooOk,
+          "could not queue replacement connection");
+    wait_for_result(connected, "replacement connection timed out");
+    check(connected.value.load() == kAooOk,
+          "replacement connection did not succeed");
+
+    callback_result final_disconnect;
+    check(client->disconnect(store_result, &final_disconnect) == kAooOk,
+          "could not queue final disconnect");
+    wait_for_result(final_disconnect, "final disconnect timed out");
+    check(final_disconnect.value.load() == kAooOk,
+          "final disconnect failed");
+
+    client->stop();
+    send_thread.join();
+    receive_thread.join();
+    run_thread.join();
 }
 
 void test_legacy_peer_matching() {
@@ -519,6 +598,7 @@ void test_legacy_cannot_bypass_server_password() {
 int main() {
     check(aoo_initialize(nullptr) == kAooOk, "could not initialize AOO");
     test_legacy_peer_matching();
+    test_cancel_pending_connection();
     test_dual_protocol_server();
     test_force_legacy_fallback();
     test_legacy_cannot_bypass_server_password();

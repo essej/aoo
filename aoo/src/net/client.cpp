@@ -1276,13 +1276,13 @@ void Client::perform(const timeout_cmd& cmd) {
 
 void Client::perform(const disconnect_cmd& cmd) {
     auto state = state_.load();
-    if (state != client_state::connected) {
-        auto code = (state == client_state::disconnected) ?
-                kAooErrorNotConnected : kAooErrorAlreadyConnected;
-
-        cmd.reply_error(code);
-
+    if (state == client_state::disconnected) {
+        cmd.reply_error(kAooErrorNotConnected);
         return;
+    }
+
+    if (connection_) {
+        connection_->reply_error(kAooErrorNotConnected);
     }
 
     close();
