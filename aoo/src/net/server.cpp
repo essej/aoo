@@ -1926,6 +1926,7 @@ void Server::handle_custom_request(client_endpoint& client, const osc::ReceivedM
     if (read_sonobus_public_subscription(request.data, watch_public_groups)) {
         client.set_watches_public_groups(watch_public_groups);
         AooResponseCustom response;
+        response.data = request.data;
         do_custom_request(client, token, request, response);
         if (watch_public_groups) {
             for (auto& [id, grp] : groups_) {

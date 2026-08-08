@@ -202,11 +202,14 @@ constexpr int pending_result = std::numeric_limits<int>::min();
 
 struct callback_result {
     std::atomic<int> value { pending_result };
+    std::atomic<int> count { 0 };
 };
 
 void store_result(void *user, const AooRequest *, AooError result,
                   const AooResponse *) {
-    static_cast<callback_result *>(user)->value.store(result);
+    auto& callback = *static_cast<callback_result *>(user);
+    callback.value.store(result);
+    callback.count.fetch_add(1);
 }
 
 void wait_for_result(const callback_result& result, const char *message) {
@@ -267,6 +270,74 @@ void test_cancel_pending_connection() {
     wait_for_result(final_disconnect, "final disconnect timed out");
     check(final_disconnect.value.load() == kAooOk,
           "final disconnect failed");
+    check(connected.count.load() == 1,
+          "successful connect callback was invoked more than once");
+
+    client->stop();
+    send_thread.join();
+    receive_thread.join();
+    run_thread.join();
+}
+
+void test_current_client_subscribe_and_join() {
+    auto [primary_port, legacy_port] = unused_tcp_ports();
+    server_runner server(primary_port, legacy_port);
+
+    auto client = AooClient::create();
+    check((bool)client, "could not create current client");
+    AooClientSettings settings;
+    settings.portNumber = 0;
+    settings.socketType = kAooSocketIPv4;
+    check(client->setup(settings) == kAooOk, "could not setup current client");
+
+    std::thread send_thread([&]() { client->send(kAooInfinite); });
+    std::thread receive_thread([&]() { client->receive(kAooInfinite); });
+    std::thread run_thread([&]() { client->run(kAooInfinite); });
+
+    AooClientConnect connect;
+    connect.hostName = "127.0.0.1";
+    connect.port = primary_port;
+    connect.timeout = 2.0;
+
+    callback_result connected;
+    check(client->connect(connect, store_result, &connected) == kAooOk,
+          "could not queue current connection");
+    wait_for_result(connected, "current connection timed out");
+    check(connected.value.load() == kAooOk, "current connection failed");
+
+    const std::string subscribe_json =
+            "{\"type\":\"public_group_subscribe\",\"subscribe\":false}";
+    AooData subscribe {
+        kAooDataJSON, (const AooByte *)subscribe_json.data(),
+        (AooSize)subscribe_json.size()
+    };
+    callback_result subscribed;
+    check(client->customRequest(subscribe, 0, store_result, &subscribed) == kAooOk,
+          "could not queue current public subscription");
+    wait_for_result(subscribed, "current public subscription timed out");
+    check(subscribed.value.load() == kAooOk,
+          "current public subscription failed");
+
+    AooClientJoinGroup join;
+    join.groupName = "current-client-group";
+    join.userName = "current-client-user";
+    callback_result joined;
+    check(client->joinGroup(join, store_result, &joined) == kAooOk,
+          "could not queue current group join");
+    wait_for_result(joined, "current group join timed out");
+    check(joined.value.load() == kAooOk, "current group join failed");
+
+    callback_result disconnected;
+    check(client->disconnect(store_result, &disconnected) == kAooOk,
+          "could not queue current disconnect");
+    wait_for_result(disconnected, "current disconnect timed out");
+    check(disconnected.value.load() == kAooOk, "current disconnect failed");
+    check(connected.count.load() == 1,
+          "current connect callback was invoked more than once");
+    check(subscribed.count.load() == 1,
+          "current subscription callback was invoked more than once");
+    check(joined.count.load() == 1,
+          "current join callback was invoked more than once");
 
     client->stop();
     send_thread.join();
@@ -463,7 +534,25 @@ void test_dual_protocol_server() {
             << osc::Blob(subscribe_json.data(), subscribe_json.size())
             << osc::EndMessage;
     }));
-    check_pattern(current_client.take(kAooMsgClientRequest), kAooMsgClientRequest);
+    auto subscribe_reply = current_client.take(kAooMsgClientRequest);
+    {
+        osc::ReceivedPacket packet((const char *)subscribe_reply.data(),
+                                   subscribe_reply.size());
+        osc::ReceivedMessage message(packet);
+        auto it = message.ArgumentsBegin();
+        check((it++)->AsInt32() == 204, "wrong public subscription token");
+        check((it++)->AsInt32() == kAooErrorNone,
+              "current public subscription failed");
+        check((it++)->AsInt32() == 0, "wrong public subscription flags");
+        auto response = osc_read_metadata(it);
+        check(response.has_value(), "public subscription response has no data");
+        check(response->type == kAooDataJSON,
+              "public subscription response has wrong data type");
+        std::string_view response_json((const char *)response->data,
+                                       response->size);
+        check(response_json == subscribe_json,
+              "public subscription response lost request data");
+    }
 
     const std::string group_json =
             "{\"type\":\"group\",\"name\":\"public\",\"isPublic\":true}";
@@ -599,6 +688,7 @@ int main() {
     check(aoo_initialize(nullptr) == kAooOk, "could not initialize AOO");
     test_legacy_peer_matching();
     test_cancel_pending_connection();
+    test_current_client_subscribe_and_join();
     test_dual_protocol_server();
     test_force_legacy_fallback();
     test_legacy_cannot_bypass_server_password();

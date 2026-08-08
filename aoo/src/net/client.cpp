@@ -1281,7 +1281,7 @@ void Client::perform(const disconnect_cmd& cmd) {
         return;
     }
 
-    if (connection_) {
+    if (connection_ && state != client_state::connected) {
         connection_->reply_error(kAooErrorNotConnected);
     }
 
