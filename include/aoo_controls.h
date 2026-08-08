@@ -72,6 +72,7 @@ enum
     kAooCtlGetBinaryFormat,
     kAooCtlSetStreamTimeSendInterval,
     kAooCtlGetStreamTimeSendInterval,
+    kAooCtlSetLegacyProtocol,
 #if AOO_NET
     kAooCtlSetPassword = 1000,
     kAooCtlSetRelayHost,

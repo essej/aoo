@@ -1047,6 +1047,22 @@ bool Client::handle_peer_osc_message(const osc::ReceivedMessage& msg, int onset,
     // forward them to the corresponding peer.
     auto pattern = msg.AddressPattern() + onset;
     try {
+        if (!strcmp(pattern, kAooMsgPing) && msg.ArgumentCount() <= 1) {
+            auto token = msg.ArgumentCount() == 1
+                       ? msg.ArgumentsBegin()->AsInt64() : 0;
+            peer_lock lock(peers_);
+            for (auto& p : peers_) {
+                if (p.legacy() && ((token != 0 && p.legacy_token() == token)
+                               || (p.connected() && p.match(addr)))) {
+                    p.handle_legacy_ping(*this, addr);
+                    notify();
+                    return true;
+                }
+            }
+            LOG_WARNING("AooClient: got legacy peer ping from unknown peer " << addr);
+            return false;
+        }
+
         auto it = msg.ArgumentsBegin();
         auto group = (it++)->AsInt32();
         auto user = (it++)->AsInt32();
@@ -1946,6 +1962,7 @@ void Client::handle_peer_join(const osc::ReceivedMessage& msg){
             LOG_DEBUG("AooClient: ignore local address " << addr);
         }
     }
+    auto legacy_token = it != msg.ArgumentsEnd() ? (it++)->AsInt64() : 0;
 
     peer_lock lock(peers_);
     // check if peer already exists (shouldn't happen)
@@ -1992,7 +2009,7 @@ void Client::handle_peer_join(const osc::ReceivedMessage& msg){
 
     peer_args args {
         group_name, user_name, group_id, user_id, local_id,
-        flags, version, md, family, use_ipv4_mapped, binary(),
+        flags, legacy_token, version, md, family, use_ipv4_mapped, binary(),
         std::move(addrlist), std::move(user_relay), membership->relay_list
     };
 
@@ -2194,7 +2211,8 @@ AooError udp_client::setup(Client& client, AooClientSettings& settings) {
         try {
             // TODO: honor socket flags! For now, just use default.
             udp_server_.start(settings.portNumber,
-                    [&client](const AooByte *data, AooSize size, const aoo::ip_address& addr){
+                    [&client](const AooByte *data, AooSize size,
+                              const aoo::ip_address& addr, size_t){
                 // TODO: error handling?
                 client.handlePacket(data, size, addr.address(), addr.length());
 

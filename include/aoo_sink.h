@@ -281,6 +281,14 @@ AOO_INLINE AooError AooSink_getBufferFillRatio(
     return AooSink_control(sink, kAooCtlGetBufferFillRatio, (AooIntPtr)source, AOO_ARG(*ratio));
 }
 
+/** \copydoc AooSink::setSourceLegacyProtocol() */
+AOO_INLINE AooError AooSink_setSourceLegacyProtocol(
+        AooSink *sink, const AooEndpoint *source, AooBool enabled)
+{
+    return AooSink_control(sink, kAooCtlSetLegacyProtocol,
+                           (AooIntPtr)source, AOO_ARG(enabled));
+}
+
 /** \copydoc AooSink::setBinaryFormat() */
 AOO_INLINE AooError AooSink_setBinaryFormat(AooSink *sink, AooBool b)
 {

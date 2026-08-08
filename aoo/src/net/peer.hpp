@@ -46,6 +46,7 @@ struct peer_args {
     AooId user_id;
     AooId local_id;
     AooFlag flags;
+    int64_t legacy_token;
     std::string_view version_string;
     const AooData *metadata;
     ip_address::ip_type address_family;
@@ -83,6 +84,10 @@ public:
 
     bool need_relay() const { return flags_ & kAooPeerNeedRelay; }
 
+    bool legacy() const { return flags_ & kAooPeerLegacyProtocol; }
+
+    int64_t legacy_token() const { return legacy_token_; }
+
     const ip_address& relay_address() const { return relay_address_; }
 
     const ip_address_list& user_relay() const { return user_relay_;}
@@ -114,6 +119,8 @@ public:
 
     void handle_bin_message(Client& client, const AooByte *data,
                             AooSize size, int onset, const ip_address& addr);
+
+    void handle_legacy_ping(Client& client, const ip_address& addr);
 private:
     void handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,
                      const ip_address& addr);
@@ -135,6 +142,9 @@ private:
 
     void do_send(Client& client, const sendfn& fn, time_tag now,
                  const AooPingSettings& settings);
+
+    void do_send_legacy(Client& client, const sendfn& fn, time_tag now,
+                        const AooPingSettings& settings);
 
     void send_packet_osc(const message_packet& frame, const sendfn& fn) const;
 
@@ -166,6 +176,7 @@ private:
     const AooId user_id_;
     const AooId local_id_;
     AooFlag flags_;
+    int64_t legacy_token_;
     std::string version_;
     ip_address::ip_type address_family_;
     bool binary_;

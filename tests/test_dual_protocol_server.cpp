@@ -59,7 +59,7 @@ std::pair<port_type, port_type> unused_tcp_ports() {
 class server_runner {
 public:
     server_runner(port_type primary_port, port_type legacy_port,
-                  AooServerOptions options = 0) {
+                  AooServerOptions options = 0, const char *password = nullptr) {
         server_ = AooServer::create();
         check((bool)server_, "could not create server");
 
@@ -69,6 +69,10 @@ public:
         settings.socketType = kAooSocketIPv4;
         settings.options = options;
         check(server_->setup(settings) == kAooOk, "could not setup server");
+        if (password) {
+            check(server_->setPassword(password) == kAooOk,
+                  "could not set server password");
+        }
 
         tcp_thread_ = std::thread([this]() {
             while (running_.load()) {
@@ -284,6 +288,7 @@ void test_dual_protocol_server() {
     }));
     join_reply = current_client.take(kAooMsgClientGroupJoin);
     AooId group_id;
+    AooId current_user_id;
     {
         osc::ReceivedPacket packet((const char *)join_reply.data(), join_reply.size());
         osc::ReceivedMessage message(packet);
@@ -291,6 +296,9 @@ void test_dual_protocol_server() {
         check((it++)->AsInt32() == 202, "wrong current join token");
         check((it++)->AsInt32() == kAooErrorNone, "current group join failed");
         group_id = (it++)->AsInt32();
+        (it++)->AsInt32();
+        osc_read_metadata(it);
+        current_user_id = (it++)->AsInt32();
     }
 
     auto peer_join = legacy_client.take(kAooMsgClientPeerJoin);
@@ -304,7 +312,7 @@ void test_dual_protocol_server() {
         check((it++)->AsInt32() == current_udp.port(), "wrong legacy peer public port");
         check(!strcmp((it++)->AsString(), "127.0.0.1"), "wrong legacy peer local IP");
         check((it++)->AsInt32() == current_udp.port(), "wrong legacy peer local port");
-        check((it++)->AsInt64() > 0, "legacy peer token must be nonzero");
+        check((it++)->AsInt64() == current_user_id, "legacy peer token lost current user ID");
     }
 
     peer_join = current_client.take(kAooMsgClientPeerJoin);
@@ -319,6 +327,13 @@ void test_dual_protocol_server() {
         check(!strcmp((it++)->AsString(), "legacy"), "legacy generation was lost");
         auto flags = (AooFlag)(it++)->AsInt32();
         check(flags & kAooPeerLegacyProtocol, "legacy peer flag was not set");
+        osc_read_metadata(it);
+        osc_read_host(it);
+        auto address_count = (it++)->AsInt32();
+        for (int32_t i = 0; i < address_count; ++i) {
+            osc_read_address(it);
+        }
+        check((it++)->AsInt64() == 101, "current peer lost legacy NAT token");
     }
 
     current_client.send_osc(make_osc([&](auto& msg) {
@@ -461,12 +476,31 @@ void test_force_legacy_fallback() {
           "compatibility mode did not request legacy fallback");
 }
 
+void test_legacy_cannot_bypass_server_password() {
+    auto [primary_port, legacy_port] = unused_tcp_ports();
+    server_runner server(primary_port, legacy_port, 0, "secret");
+    stream_client client(legacy_port, wire_protocol::legacy);
+    client.send_osc(make_osc([](auto& msg) {
+        msg << osc::BeginMessage(kAooMsgServerLogin)
+            << "legacy-user" << legacy_empty_password
+            << "127.0.0.1" << (int32_t)12345
+            << "127.0.0.1" << (int32_t)12345
+            << (int64_t)101 << osc::EndMessage;
+    }));
+    auto reply = client.take(kAooMsgClientLogin);
+    osc::ReceivedPacket packet((const char *)reply.data(), reply.size());
+    osc::ReceivedMessage message(packet);
+    check(message.ArgumentsBegin()->AsInt32() == 0,
+          "legacy login bypassed the server password");
+}
+
 } // namespace
 
 int main() {
     check(aoo_initialize(nullptr) == kAooOk, "could not initialize AOO");
     test_dual_protocol_server();
     test_force_legacy_fallback();
+    test_legacy_cannot_bypass_server_password();
     aoo_terminate();
     std::cout << "dual protocol server test succeeded!" << std::endl;
     return EXIT_SUCCESS;

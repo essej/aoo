@@ -1265,7 +1265,9 @@ void Server::handle_legacy_login(client_endpoint& client,
     int64_t token = msg.ArgumentCount() > 6 ? (it++)->AsInt64() : 0;
 
     std::string error_message;
-    if (client.active()) {
+    if (!password_.empty()) {
+        error_message = "access denied";
+    } else if (client.active()) {
         error_message = "already logged in";
     } else if (username.empty()) {
         error_message = "access denied";

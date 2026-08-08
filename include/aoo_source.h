@@ -282,6 +282,14 @@ AOO_INLINE AooError AooSource_getStreamTimeSendInterval(AooSource *source, AooSe
     return AooSource_control(source, kAooCtlGetStreamTimeSendInterval, 0, AOO_ARG(*s));
 }
 
+/** \copydoc AooSource::setSinkLegacyProtocol() */
+AOO_INLINE AooError AooSource_setSinkLegacyProtocol(
+        AooSource *source, const AooEndpoint *sink, AooBool enabled)
+{
+    return AooSource_control(source, kAooCtlSetLegacyProtocol,
+                             (AooIntPtr)sink, AOO_ARG(enabled));
+}
+
 /** \copydoc AooSource::setSinkChannelOffset() */
 AOO_INLINE AooError AooSource_setSinkChannelOffset(
         AooSource *source, const AooEndpoint *sink, AooInt32 onset)

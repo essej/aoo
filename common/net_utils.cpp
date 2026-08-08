@@ -1045,7 +1045,13 @@ bool udp_socket::signal() noexcept {
     try {
         ip_address addr = address();
         if (addr.type() == ip_address::ip_type::IPv6){
-            addr = ip_address("::1", addr.port(), addr.type());
+            try {
+                send(nullptr, 0, ip_address("::1", addr.port(), addr.type()));
+                return true;
+            } catch (const socket_error&) {
+                // Some containers expose a dual-stack socket without ::1.
+                addr = ip_address("127.0.0.1", addr.port(), addr.type());
+            }
         } else {
             addr = ip_address("127.0.0.1", addr.port(), addr.type());
         }

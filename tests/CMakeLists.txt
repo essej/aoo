@@ -33,6 +33,9 @@ if (AOO_NET)
     target_link_libraries(test_dual_protocol_server PRIVATE ${test_libs})
 endif()
 
+add_executable(test_legacy_media "test_legacy_media.cpp")
+target_link_libraries(test_legacy_media PRIVATE ${test_libs})
+
 # relay test
 if (BUILD_SHARED_LIBS)
     message(STATUS "skip 'test_relay' because it requires a static AOO library")

@@ -412,6 +412,17 @@ AooError AOO_CALL aoo::Source::control(
         CHECKARG(AooSeconds);
         as<AooSeconds>(ptr) = tt_interval_.load();
         break;
+    case kAooCtlSetLegacyProtocol:
+    {
+        CHECKARG(AooBool);
+        GETSINKARG
+        sink->set_legacy(as<AooBool>(ptr));
+        if (sink->is_active()) {
+            sink->notify_start();
+            notify_start();
+        }
+        break;
+    }
 #if AOO_NET
     case kAooCtlSetClient:
         client_ = reinterpret_cast<AooClient *>(index);
@@ -545,7 +556,9 @@ AooError AOO_CALL aoo::Source::handleMessage(
             osc::ReceivedMessage msg(packet);
 
             std::string_view pattern = msg.AddressPattern() + onset;
-            if (pattern == kAooMsgStart) {
+            if (pattern == "/format") {
+                handle_legacy_format_request(msg, addr);
+            } else if (pattern == kAooMsgStart) {
                 handle_start_request(msg, addr);
             } else if (pattern == kAooMsgStop) {
                 handle_stop_request(msg, addr);
@@ -1448,6 +1461,43 @@ void send_start_msg(const endpoint& ep, int32_t id, int32_t stream_id,
     ep.send(msg, fn);
 }
 
+void send_legacy_format_msg(const endpoint& ep, int32_t id, int32_t salt,
+                            const AooFormat& f, const AooByte *extension,
+                            AooInt32 size, const sendfn& fn)
+{
+    AooByte legacy_extension[16];
+    if (!strcmp(f.codecName, "pcm")) {
+        auto bitdepth = size >= 4 ? aoo::from_bytes<int32_t>(extension) : 0;
+        if (bitdepth < 1 || bitdepth > 4) {
+            LOG_ERROR("AooSource: legacy peers do not support 8-bit PCM");
+            return;
+        }
+        aoo::to_bytes<int32_t>(bitdepth - 1, legacy_extension);
+        extension = legacy_extension;
+        size = sizeof(int32_t);
+    } else if (!strcmp(f.codecName, "opus")) {
+        auto application = size >= 4 ? aoo::from_bytes<int32_t>(extension) : 2049;
+        aoo::to_bytes<int32_t>(-1000, legacy_extension);      // OPUS_AUTO bitrate
+        aoo::to_bytes<int32_t>(10, legacy_extension + 4);     // complexity
+        aoo::to_bytes<int32_t>(-1000, legacy_extension + 8); // OPUS_AUTO signal
+        aoo::to_bytes<int32_t>(application, legacy_extension + 12);
+        extension = legacy_extension;
+        size = sizeof(legacy_extension);
+    }
+
+    char buf[AOO_MAX_PACKET_SIZE];
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
+    char address[kDataMaxAddrSize];
+    snprintf(address, sizeof(address), "%s/%d/format",
+             kAooMsgDomain kAooMsgSink, (int)ep.id);
+
+    constexpr int32_t legacy_version = 2 << 24;
+    msg << osc::BeginMessage(address) << id << legacy_version << salt
+        << f.numChannels << f.sampleRate << f.blockSize << f.codecName
+        << osc::Blob(extension, size) << osc::EndMessage;
+    ep.send(msg, fn);
+}
+
 // /aoo/sink/<id>/stop <src> <stream_id> <last_seq> <offset>
 void send_stop_msg(const endpoint& ep, int32_t id, int32_t stream,
                    int32_t last_seq, int32_t offset, const sendfn& fn) {
@@ -1642,8 +1692,13 @@ void Source::send_start(const sendfn& fn){
     updatelock.unlock();
 
     for (auto& s : cached_sinks_){
-        send_start_msg(s.ep, id(), s.stream_id, seq_start, format_id, f.header,
-                       extension, size, tt, latency, codec_delay, md, offset, fn);
+        if (s.legacy) {
+            send_legacy_format_msg(s.ep, id(), s.stream_id, f.header,
+                                   extension, size, fn);
+        } else {
+            send_start_msg(s.ep, id(), s.stream_id, seq_start, format_id, f.header,
+                           extension, size, tt, latency, codec_delay, md, offset, fn);
+        }
     }
 }
 
@@ -1737,6 +1792,24 @@ void send_packet_osc(const endpoint& ep, AooId id, int32_t stream_id,
     ep.send(msg, fn);
 }
 
+void send_packet_legacy(const endpoint& ep, AooId id, int32_t salt,
+                        const data_packet& d, const sendfn& fn)
+{
+    char buf[AOO_MAX_PACKET_SIZE];
+    osc::OutboundPacketStream msg(buf, sizeof(buf));
+    char address[kDataMaxAddrSize];
+    snprintf(address, sizeof(address), "%s/%d%s",
+             kAooMsgDomain kAooMsgSink, (int)ep.id, kAooMsgData);
+
+    const AooByte empty = 0;
+    msg << osc::BeginMessage(address) << id << salt << d.sequence
+        << d.samplerate << d.channel << d.total_size
+        << d.num_frames << d.frame_index
+        << osc::Blob(d.data ? d.data : &empty, d.size)
+        << osc::EndMessage;
+    ep.send(msg, fn);
+}
+
 // binary data message:
 // stream_id (int32), seq (int32), channel (uint8), flags (uint8), size (uint16)
 // [total (int32), nframes (int16), frame (int16)], [msgsize (int32)], [sr (float64)],
@@ -1763,37 +1836,13 @@ void send_packet_bin(const endpoint& ep, AooId id, AooId stream_id,
 
 void send_packet(const aoo::vector<cached_sink>& sinks, const AooId id,
                  data_packet& d, const sendfn &fn, bool binary) {
-    if (binary){
-        AooByte buf[AOO_MAX_PACKET_SIZE];
-
-        // start at max. header size
-        auto args = buf + kAooBinMsgLargeHeaderSize;
-        auto argsize = write_bin_data(args, sizeof(buf) - kAooBinMsgLargeHeaderSize,
-                                      kAooIdInvalid, d);
-        auto end = args + argsize;
-
-        for (auto& s : sinks) {
-        #if AOO_DEBUG_DATA
-            LOG_DEBUG("AooSource: send block: seq = " << d.sequence << << ", tt = " << d.tt
-                      << ", sr = " << d.samplerate << ", chn = " << s.channel << ", msgsize = "
-                      << d.msgsize << ", totalsize = " << d.totalsize << ", nframes = "
-                      << d.nframes << ", frame = " << d.frame << ", size " << d.size);
-        #endif
-            // write header
-            bool large =  s.ep.id > 255 || id > 255;
-            auto start = large ? buf : (args - kAooBinMsgHeaderSize);
-            aoo::binmsg_write_header(start, args - start, kAooMsgTypeSink,
-                                     kAooBinMsgCmdData, s.ep.id, id);
-            // replace stream ID and channel
-            aoo::to_bytes(s.stream_id, args);
-            args[8] = s.channel;
-
-            s.ep.send(start, end - start, fn);
-        }
-    } else {
-        for (auto& s : sinks){
-            // set channel!
-            d.channel = s.channel;
+    for (auto& s : sinks){
+        d.channel = s.channel;
+        if (s.legacy) {
+            send_packet_legacy(s.ep, id, s.stream_id, d, fn);
+        } else if (binary) {
+            send_packet_bin(s.ep, id, s.stream_id, d, fn);
+        } else {
             send_packet_osc(s.ep, id, s.stream_id, d, fn);
         }
     }
@@ -2073,6 +2122,12 @@ void Source::send_data(const sendfn& fn){
 
         // calculate number of frames
         bool binary = binary_.load();
+        for (auto& sink : cached_sinks_) {
+            if (sink.legacy) {
+                binary = false;
+                break;
+            }
+        }
         auto packetsize = packet_size_.load();
         auto maxpacketsize = packetsize -
                 (binary ? kBinDataHeaderSize : kDataHeaderSize);
@@ -2251,7 +2306,9 @@ void Source::resend_data(const sendfn &fn) {
                     LOG_DEBUG("AooSource: resend " << d.sequence
                               << " (" << d.frame << " / " << d.nframes << ")");
                 #endif
-                    if (binary){
+                    if (s.legacy()) {
+                        send_packet_legacy(s.ep, id(), stream_id, d, fn);
+                    } else if (binary){
                         send_packet_bin(s.ep, id(), stream_id, d, fn);
                     } else {
                         send_packet_osc(s.ep, id(), stream_id, d, fn);
@@ -2347,6 +2404,27 @@ void Source::handle_start_request(const osc::ReceivedMessage& msg,
         }
     } else {
         LOG_INFO("AooSource: ignoring '" << kAooMsgStart << "' message: sink not found");
+    }
+}
+
+// Legacy AoO requests the stream description with /format and an integer version.
+void Source::handle_legacy_format_request(const osc::ReceivedMessage& msg,
+                                          const ip_address& addr)
+{
+    auto it = msg.ArgumentsBegin();
+    auto id = (it++)->AsInt32();
+    (it++)->AsInt32(); // legacy packed version
+
+    sink_lock lock(sinks_);
+    auto sink = find_sink(addr, id);
+    if (!sink) {
+        LOG_INFO("AooSource: ignoring legacy /format message: sink not found");
+        return;
+    }
+    sink->set_legacy(true);
+    if (sink->is_active()) {
+        sink->notify_start();
+        notify_start();
     }
 }
 
@@ -2495,7 +2573,9 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
 
     auto id = (it++)->AsInt32();
     auto token = (it++)->AsInt32();
-    auto metadata = osc_read_metadata(it); // optional
+    const auto legacy = msg.ArgumentCount() == 2 && token >= 0 && token <= 0xff;
+    auto metadata = legacy ? std::optional<AooData>{}
+                           : osc_read_metadata(it); // optional
 
     LOG_DEBUG("AooSource: handle invitation by " << addr << "|" << id);
 
@@ -2511,6 +2591,9 @@ void Source::handle_invite(const osc::ReceivedMessage& msg,
         sink = do_add_sink(addr, id, kAooIdInvalid);
         // push "add" event
         e1 = make_event<sink_add_event>(addr, id);
+    }
+    if (legacy) {
+        sink->set_legacy(true);
     }
     // make sure that the event is only sent once per invitation.
     if (sink->need_invite(token)) {
@@ -2545,13 +2628,13 @@ void Source::handle_uninvite(const osc::ReceivedMessage& msg,
 
     auto id = (it++)->AsInt32();
 
-    auto token = (it++)->AsInt32();
-
     LOG_DEBUG("AooSource: handle uninvitation by " << addr << "|" << id);
 
     // check if sink exists (not strictly necessary, but might help catch errors)
     sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
+    auto token = (it != msg.ArgumentsEnd()) ? (it++)->AsInt32()
+                                            : (sink ? sink->stream_id() : kAooIdInvalid);
     if (sink) {
         if (sink->is_active()) {
             if (sink->stream_id() == token) {
@@ -2601,6 +2684,15 @@ void Source::handle_ping(const osc::ReceivedMessage& msg,
     sink_lock lock(sinks_);
     auto sink = find_sink(addr, id);
     if (sink) {
+        if (sink->legacy() && msg.ArgumentCount() >= 4) {
+            auto tt2 = (it++)->AsTimeTag();
+            auto lost_blocks = (it++)->AsInt32();
+            auto now = aoo::time_tag::now();
+            auto e = make_event<sink_ping_event>(sink->ep, tt1, tt2, now, now,
+                                                 (float)lost_blocks);
+            send_event(std::move(e), kAooThreadLevelNetwork);
+            return;
+        }
         if (sink->is_active()){
             // push pong request
             sink_request r(request_type::pong, sink->ep);
