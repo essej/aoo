@@ -329,7 +329,9 @@ AOO_FLAG(AooPeerFlags)
     /** peer persists between sessions */
     kAooPeerPersistent = 0x02,
     /** peer has created the group */
-    kAooPeerGroupCreator = 0x04
+    kAooPeerGroupCreator = 0x04,
+    /** peer uses the legacy AOO control and media wire format */
+    kAooPeerLegacyProtocol = 0x08
 };
 
 /*------------------------------------------------------------------*/
@@ -708,7 +710,9 @@ typedef struct AooClientJoinGroup {
 AOO_FLAG(AooServerOptions)
 {
     /** use external UDP socket */
-    kAooServerExternalUDPSocket = 0x01
+    kAooServerExternalUDPSocket = 0x01,
+    /** reject current control connections so clients can retry with the legacy protocol */
+    kAooServerForceLegacyProtocol = 0x02
 };
 
 /** \brief settings for AooClient::setup() */
@@ -717,9 +721,9 @@ typedef struct AooServerSettings
 #ifdef __cplusplus
     /** default constructor */
     AooServerSettings()
-        : structSize(AOO_STRUCT_SIZE(AooServerSettings, sendFunc)),
+        : structSize(AOO_STRUCT_SIZE(AooServerSettings, legacyPortNumber)),
           options(0), portNumber(0), socketType(kAooSocketDefault),
-          userData(NULL), sendFunc(NULL) {}
+          userData(NULL), sendFunc(NULL), legacyPortNumber(0) {}
 #endif
 
     /** struct size */
@@ -735,12 +739,14 @@ typedef struct AooServerSettings
     void *userData;
     /** (optional) send function for external UDP socket */
     AooSendFunc sendFunc;
+    /** optional second UDP and TCP listening port for legacy clients */
+    AooUInt16 legacyPortNumber;
 } AooServerSettings;
 
 /** \brief (C only) default initializer for AooServerSettings struct */
 #define AOO_SERVER_SETTINGS_INIT() \
-    { AOO_STRUCT_SIZE(AooServerSettings, sendFunc), 0, 0, \
-        kAooSocketDefault, NULL, NULL }
+    { AOO_STRUCT_SIZE(AooServerSettings, legacyPortNumber), 0, 0, \
+        kAooSocketDefault, NULL, NULL, 0 }
 
 /*------------------------------------------------------------------*/
 

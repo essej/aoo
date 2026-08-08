@@ -3,6 +3,7 @@
 #include "osc/OscReceivedElements.h"
 
 #include "common/utils.hpp"
+#include "wire_protocol.hpp"
 
 #include <vector>
 #include <cassert>
@@ -43,7 +44,8 @@ inline void osc_stream_receiver::handle_message(const char *data, int32_t n, Fn&
                 // got message size
                 auto msgsize = aoo::from_bytes<int32_t>(buffer_.data());
                 // OSC packet size must be a multiple of 4!
-                if (msgsize <= 0 || ((msgsize & 3) != 0)) {
+                if (msgsize <= 0 || msgsize > max_stream_packet_size
+                        || ((msgsize & 3) != 0)) {
                     reset();
                     throw osc::MalformedPacketException("bad OSC packet size");
                 }

@@ -1,4 +1,5 @@
 #include "aoo/src/net/wire_protocol.hpp"
+#include "aoo/src/net/osc_stream_receiver.hpp"
 
 #include <cassert>
 #include <cstdint>
@@ -61,6 +62,18 @@ int main() {
     try {
         receiver.reset();
         receiver.handle_message(bad_escape, sizeof(bad_escape), collect);
+    } catch (const osc::MalformedPacketException&) {
+        malformed = true;
+    }
+    assert(malformed);
+
+    // Every frame, not just the protocol probe, must enforce the size cap.
+    osc_stream_receiver current_receiver;
+    to_bytes<int32_t>(max_stream_packet_size + 4, (char *)current);
+    malformed = false;
+    try {
+        current_receiver.handle_message((const char *)current, sizeof(current),
+                                         [](const osc::ReceivedPacket&) {});
     } catch (const osc::MalformedPacketException&) {
         malformed = true;
     }

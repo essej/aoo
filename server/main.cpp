@@ -23,6 +23,10 @@
 # define AOO_DEFAULT_SERVER_PORT 7078
 #endif
 
+#ifndef AOO_DEFAULT_LEGACY_SERVER_PORT
+# define AOO_DEFAULT_LEGACY_SERVER_PORT 10996
+#endif
+
 AooLogLevel g_loglevel = kAooLogLevelWarning;
 
 void log_function(AooLogLevel level, const AooChar *msg) {
@@ -145,6 +149,9 @@ void print_usage() {
         << "  -h, --help             display help and exit\n"
         << "  -v, --version          print version and exit\n"
         << "  -p, --port=PORT        port number (default = " << AOO_DEFAULT_SERVER_PORT << ")\n"
+        << "      --legacy-port=PORT additional legacy UDP/TCP port (default = "
+        << AOO_DEFAULT_LEGACY_SERVER_PORT << ", 0 disables)\n"
+        << "      --legacy-only      reject current login so clients retry legacy control\n"
         << "  -P, --password=PWD     password\n"
         << "  -r, --relay            enable server relay\n"
         << "  -l, --log-level=LEVEL  set log level\n"
@@ -228,6 +235,8 @@ int main(int argc, const char **argv) {
 
     // parse command line options
     int port = AOO_DEFAULT_SERVER_PORT;
+    int legacy_port = AOO_DEFAULT_LEGACY_SERVER_PORT;
+    bool legacy_only = false;
     bool relay = false;
     std::string password;
 
@@ -247,6 +256,14 @@ int main(int argc, const char **argv) {
                     std::cout << "Port number " << port << " out of range" << std::endl;
                     return EXIT_FAILURE;
                 }
+            } else if (auto arg = match_option<int>(argv, argc, nullptr, "--legacy-port")) {
+                legacy_port = *arg;
+                if (legacy_port < 0 || legacy_port > 65535) {
+                    std::cout << "Legacy port number " << legacy_port << " out of range" << std::endl;
+                    return EXIT_FAILURE;
+                }
+            } else if (match_option(argv, argc, nullptr, "--legacy-only")) {
+                legacy_only = true;
             } else if (auto arg = match_option<std::string>(argv, argc, "-P", "--password")) {
                 password = *arg;
             } else if (match_option(argv, argc, "-r", "--relay")) {
@@ -301,6 +318,10 @@ int main(int argc, const char **argv) {
 
     AooServerSettings server_settings;
     server_settings.portNumber = port;
+    server_settings.legacyPortNumber = legacy_port;
+    if (legacy_only) {
+        server_settings.options |= kAooServerForceLegacyProtocol;
+    }
 
     auto err = g_server->setup(server_settings);
     if (err != kAooOk) {
@@ -318,6 +339,12 @@ int main(int argc, const char **argv) {
 
     if (g_loglevel >= kAooLogLevelInfo) {
         std::cout << "Listening on port " << port << std::endl;
+        if (legacy_port && legacy_port != port) {
+            std::cout << "Listening for legacy clients on port " << legacy_port << std::endl;
+        }
+        if (legacy_only) {
+            std::cout << "Legacy-only compatibility mode enabled" << std::endl;
+        }
     }
 
     // run server threads

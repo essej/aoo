@@ -137,26 +137,38 @@ public:
 
     void do_remove_user_from_group(group& grp, user& usr);
 
+    void send_public_group(client_endpoint& client, const group& grp, bool removed);
+
+    void notify_public_group(const group& grp, bool removed = false);
+
     osc::OutboundPacketStream start_message(size_t extra_size = 0);
 
     void handle_message(client_endpoint& client, const osc::ReceivedMessage& msg, int32_t size);
+
+    void handle_legacy_message(client_endpoint& client,
+                               const osc::ReceivedMessage& msg, int32_t size);
 private:
     // UDP
     void handle_udp_packet(const AooByte *data, AooInt32 size,
-                           const aoo::ip_address& addr);
+                           const aoo::ip_address& addr, size_t socket_index);
 
     void handle_udp_message(const AooByte *data, AooSize size, int onset,
-                            const ip_address& addr);
+                            const ip_address& addr, size_t socket_index);
 
-    void handle_relay(const AooByte *data, AooSize size, const aoo::ip_address& addr);
+    void handle_relay(const AooByte *data, AooSize size,
+                      const aoo::ip_address& addr, size_t socket_index);
 
-    void handle_ping(const osc::ReceivedMessage& msg, const ip_address& addr);
+    void handle_ping(const osc::ReceivedMessage& msg, const ip_address& addr,
+                     size_t socket_index);
 
-    void handle_query(const osc::ReceivedMessage& msg, const ip_address& addr);
+    void handle_query(const osc::ReceivedMessage& msg, const ip_address& addr,
+                      size_t socket_index);
 
-    void send_udp(const ip_address& addr, const AooByte *data, AooSize size) {
-        udp_sendfn_(data, size, addr);
-    }
+    void handle_legacy_request(const osc::ReceivedMessage& msg,
+                               const ip_address& addr, size_t socket_index);
+
+    void send_udp(size_t socket_index, const ip_address& addr,
+                  const AooByte *data, AooSize size);
 
     // TCP
     AooId accept_client(const aoo::ip_address& addr, aoo::tcp_server::reply_func fn);
@@ -170,6 +182,14 @@ private:
 
     void handle_pong(client_endpoint& client, const osc::ReceivedMessage& msg);
 
+    void handle_legacy_login(client_endpoint& client, const osc::ReceivedMessage& msg);
+
+    void handle_legacy_group_join(client_endpoint& client, const osc::ReceivedMessage& msg);
+
+    void handle_legacy_group_leave(client_endpoint& client, const osc::ReceivedMessage& msg);
+
+    void handle_legacy_group_public(client_endpoint& client, const osc::ReceivedMessage& msg);
+
     void handle_login(client_endpoint& client, const osc::ReceivedMessage& msg);
 
     AooError do_login(client_endpoint& client, AooId token,
@@ -180,7 +200,8 @@ private:
 
     AooError do_group_join(client_endpoint& client, AooId token,
                            const AooRequestGroupJoin& request,
-                           AooResponseGroupJoin& response);
+                           AooResponseGroupJoin& response,
+                           bool is_public = false);
 
     void handle_group_leave(client_endpoint& client, const osc::ReceivedMessage& msg);
 
@@ -285,6 +306,18 @@ private:
     std::string password_;
     parameter<bool> internal_relay_{AOO_SERVER_INTERNAL_RELAY};
     parameter<bool> group_auto_create_{AOO_GROUP_AUTO_CREATE};
+    bool force_legacy_protocol_ = false;
+    bool external_udp_socket_ = false;
+
+    struct udp_endpoint_protocol {
+        ip_address address;
+        wire_protocol protocol;
+    };
+    std::vector<udp_endpoint_protocol> udp_protocols_;
+    sync::spinlock udp_protocol_lock_;
+
+    void remember_udp_protocol(const ip_address& addr, wire_protocol protocol);
+    wire_protocol find_udp_protocol(const ip_address& addr);
     AooPingSettings ping_settings_ {
         AOO_SERVER_PING_INTERVAL,
         AOO_SERVER_PROBE_TIME,
