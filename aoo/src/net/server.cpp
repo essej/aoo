@@ -7,10 +7,139 @@
 
 #include <functional>
 #include <algorithm>
+#include <cctype>
+#include <cstring>
 #include <iostream>
+#include <limits>
 #include <sstream>
 
 #include "../binmsg.hpp"
+
+namespace {
+
+constexpr const char *legacy_empty_password = "D41D8CD98F00B204E9800998ECF8427E";
+constexpr const char *legacy_group_public = "/group/public";
+constexpr const char *legacy_group_public_add = "/aoo/client/group/public/add";
+constexpr const char *legacy_group_public_del = "/aoo/client/group/public/del";
+constexpr const char *legacy_client_group_public = "/aoo/client/group/public";
+constexpr const char *legacy_request = "/request";
+constexpr const char *legacy_client_reply = "/aoo/client/reply";
+constexpr size_t external_udp_socket_index = std::numeric_limits<size_t>::max();
+
+std::string normalize_legacy_password(const char *password) {
+    if (!password || !strcmp(password, legacy_empty_password)) {
+        return {};
+    }
+    return password;
+}
+
+bool json_bool(const AooData& data, std::string_view key, bool& value) {
+    if (data.type != kAooDataJSON || !data.data || data.size <= 0) {
+        return false;
+    }
+
+    std::string needle;
+    needle.reserve(key.size() + 2);
+    needle.push_back('"');
+    needle.append(key);
+    needle.push_back('"');
+
+    std::string_view json((const char *)data.data, data.size);
+    auto pos = json.find(needle);
+    if (pos == std::string_view::npos) {
+        return false;
+    }
+    pos += needle.size();
+    while (pos < json.size() && std::isspace((unsigned char)json[pos])) {
+        ++pos;
+    }
+    if (pos >= json.size() || json[pos++] != ':') {
+        return false;
+    }
+    while (pos < json.size() && std::isspace((unsigned char)json[pos])) {
+        ++pos;
+    }
+    if (json.substr(pos, 4) == "true") {
+        value = true;
+        return true;
+    }
+    if (json.substr(pos, 5) == "false") {
+        value = false;
+        return true;
+    }
+    return false;
+}
+
+bool is_sonobus_public_group(const AooData *metadata) {
+    bool value = false;
+    return metadata && (json_bool(*metadata, "isPublic", value)
+                        || json_bool(*metadata, "public", value)) && value;
+}
+
+bool read_sonobus_public_subscription(const AooData& data, bool& value) {
+    if (data.type != kAooDataJSON || !data.data || data.size <= 0) {
+        return false;
+    }
+    std::string_view json((const char *)data.data, data.size);
+    if (json.find("public_group_subscribe") == std::string_view::npos) {
+        return false;
+    }
+    return json_bool(data, "subscribe", value)
+            || json_bool(data, "watch", value)
+            || json_bool(data, "enabled", value);
+}
+
+void append_json_string(std::string& output, std::string_view value) {
+    constexpr char hex[] = "0123456789abcdef";
+    output.push_back('"');
+    for (unsigned char c : value) {
+        switch (c) {
+        case '"': output += "\\\""; break;
+        case '\\': output += "\\\\"; break;
+        case '\b': output += "\\b"; break;
+        case '\f': output += "\\f"; break;
+        case '\n': output += "\\n"; break;
+        case '\r': output += "\\r"; break;
+        case '\t': output += "\\t"; break;
+        default:
+            if (c < 0x20) {
+                output += "\\u00";
+                output.push_back(hex[c >> 4]);
+                output.push_back(hex[c & 0x0f]);
+            } else {
+                output.push_back((char)c);
+            }
+        }
+    }
+    output.push_back('"');
+}
+
+std::string make_public_group_json(const aoo::net::group& grp, bool removed) {
+    std::string result = "{\"groupId\":";
+    result += std::to_string(grp.id());
+    result += ",\"groupName\":";
+    append_json_string(result, grp.name());
+    result += ",\"removed\":";
+    result += removed ? "true" : "false";
+    result += ",\"type\":\"public_group_update\",\"users\":[";
+    bool first = true;
+    if (!removed) {
+        for (auto& usr : grp.users()) {
+            if (!usr.active()) {
+                continue;
+            }
+            if (!first) {
+                result.push_back(',');
+            }
+            append_json_string(result, usr.name());
+            first = false;
+        }
+    }
+    result += "]}";
+    return result;
+}
+
+} // namespace
 
 //----------------------- Server --------------------------//
 
@@ -56,6 +185,18 @@ AooError AOO_CALL aoo::net::Server::setup(AooServerSettings& settings) {
     }
 
     bool external = settings.options & kAooServerExternalUDPSocket;
+    external_udp_socket_ = external;
+    force_legacy_protocol_ = settings.options & kAooServerForceLegacyProtocol;
+    int legacy_port = AOO_CHECK_FIELD(&settings, AooServerSettings, legacyPortNumber)
+            ? settings.legacyPortNumber : 0;
+    if (external && legacy_port != 0) {
+        LOG_ERROR("AooServer: legacyPortNumber requires internal UDP sockets");
+        return kAooErrorBadArgument;
+    }
+    std::vector<int> ports { settings.portNumber };
+    if (legacy_port != 0 && legacy_port != settings.portNumber) {
+        ports.push_back(legacy_port);
+    }
     if (external && (type == 0)) {
         // external UDP socket needs IP flags
         return kAooErrorBadArgument;
@@ -80,7 +221,7 @@ AooError AOO_CALL aoo::net::Server::setup(AooServerSettings& settings) {
     if (!external) {
         try {
             // TODO: settings
-            udp_server_.start(settings.portNumber,
+            udp_server_.start(ports,
                 [this](auto... args) { handle_udp_packet(args...);
             });
         } catch (const aoo::udp_error& e) {
@@ -93,7 +234,7 @@ AooError AOO_CALL aoo::net::Server::setup(AooServerSettings& settings) {
     }
 
     try {
-        tcp_server_.start(settings.portNumber,
+        tcp_server_.start(ports,
             [this](auto... args) { return accept_client(args...); },
             [this](auto... args) { handle_client_data(args...); });
     } catch (const aoo::tcp_error& e) {
@@ -245,7 +386,7 @@ AooError AOO_CALL aoo::net::Server::handlePacket(
     const void *address, AooAddrSize addrlen)
 {
     aoo::ip_address addr((struct sockaddr *)address, addrlen);
-    handle_udp_packet(data, size, addr);
+    handle_udp_packet(data, size, addr, external_udp_socket_index);
     return kAooOk;
 }
 
@@ -762,6 +903,9 @@ bool Server::remove_group(AooId id) {
             LOG_ERROR("AooServer: remove_group: can't find client for user " << usr);
         }
     }
+    if (grp.is_public()) {
+        notify_public_group(grp, true);
+    }
     groups_.erase(it);
     return true;
 }
@@ -843,7 +987,8 @@ void Server::on_user_left_group(const group& grp, const user& usr) {
 }
 
 void Server::do_remove_user_from_group(group& grp, user& usr) {
-    if (usr.persistent()) {
+    const bool persistent = usr.persistent();
+    if (persistent) {
         // just unset
         usr.unset();
     } else {
@@ -851,6 +996,13 @@ void Server::do_remove_user_from_group(group& grp, user& usr) {
         if (!grp.remove_user(usr.id())) {
             LOG_ERROR("AooServer: can't remove user " << usr << " from group " << grp);
         }
+    }
+
+    if (grp.is_public()) {
+        notify_public_group(grp);
+    }
+
+    if (!persistent) {
         // remove group if empty and not persistent
         if (!grp.persistent() && !grp.user_count()) {
             // send event
@@ -859,6 +1011,43 @@ void Server::do_remove_user_from_group(group& grp, user& usr) {
 
             // finally remove it
             remove_group(grp.id());
+        }
+    }
+}
+
+void Server::send_public_group(client_endpoint& client, const group& grp,
+                               bool removed) {
+    if (!client.watches_public_groups()) {
+        return;
+    }
+
+    if (client.protocol() == wire_protocol::legacy) {
+        auto msg = start_message();
+        if (removed) {
+            msg << osc::BeginMessage(legacy_group_public_del)
+                << grp.name().c_str() << osc::EndMessage;
+        } else {
+            int32_t active_users = 0;
+            for (auto& usr : grp.users()) {
+                active_users += usr.active() ? 1 : 0;
+            }
+            msg << osc::BeginMessage(legacy_group_public_add)
+                << grp.name().c_str() << active_users << osc::EndMessage;
+        }
+        client.send_message(msg);
+    } else {
+        auto json = make_public_group_json(grp, removed);
+        AooData data {
+            kAooDataJSON, (const AooByte *)json.data(), (AooSize)json.size()
+        };
+        client.send_notification(*this, data);
+    }
+}
+
+void Server::notify_public_group(const group& grp, bool removed) {
+    for (auto& [id, client] : clients_) {
+        if (client.active()) {
+            send_public_group(client, grp, removed);
         }
     }
 }
@@ -1021,19 +1210,229 @@ void Server::handle_message(client_endpoint& client,
     }
 }
 
+void Server::handle_legacy_message(client_endpoint& client,
+                                   const osc::ReceivedMessage& msg, int32_t size) {
+    client.handle_pong();
+
+    AooMsgType type;
+    int32_t onset;
+    auto err = parse_pattern((const AooByte *)msg.AddressPattern(), size, type, onset);
+    if (err != kAooOk || type != kAooMsgTypeServer) {
+        throw error(kAooErrorBadFormat, "not an AOO server message");
+    }
+
+    try {
+        std::string_view pattern = msg.AddressPattern() + onset;
+        if (pattern == kAooMsgLogin) {
+            handle_legacy_login(client, msg);
+            return;
+        }
+        if (!client.active()) {
+            LOG_WARNING("AooServer: ignore legacy message before login " << pattern);
+            return;
+        }
+        if (pattern == kAooMsgPing) {
+            auto reply = start_message();
+            reply << osc::BeginMessage(kAooMsgClientPing) << osc::EndMessage;
+            client.send_message(reply);
+        } else if (pattern == kAooMsgGroupJoin) {
+            handle_legacy_group_join(client, msg);
+        } else if (pattern == kAooMsgGroupLeave) {
+            handle_legacy_group_leave(client, msg);
+        } else if (pattern == legacy_group_public) {
+            handle_legacy_group_public(client, msg);
+        } else {
+            LOG_WARNING("AooServer: unknown legacy message " << pattern);
+        }
+    } catch (const osc::Exception& e) {
+        LOG_WARNING("AooServer: malformed legacy message "
+                    << msg.AddressPattern() << ": " << e.what());
+    } catch (const std::exception& e) {
+        LOG_WARNING("AooServer: failed to handle legacy message "
+                    << msg.AddressPattern() << ": " << e.what());
+    }
+}
+
+void Server::handle_legacy_login(client_endpoint& client,
+                                 const osc::ReceivedMessage& msg) {
+    auto it = msg.ArgumentsBegin();
+    std::string username = (it++)->AsString();
+    auto password = normalize_legacy_password((it++)->AsString());
+    std::string public_ip = (it++)->AsString();
+    auto public_port = (it++)->AsInt32();
+    std::string local_ip = (it++)->AsString();
+    auto local_port = (it++)->AsInt32();
+    int64_t token = msg.ArgumentCount() > 6 ? (it++)->AsInt64() : 0;
+
+    std::string error_message;
+    if (!password_.empty()) {
+        error_message = "access denied";
+    } else if (client.active()) {
+        error_message = "already logged in";
+    } else if (username.empty()) {
+        error_message = "access denied";
+    } else {
+        for (auto& [id, other] : clients_) {
+            if (id != client.id() && other.active()
+                    && other.protocol() == wire_protocol::legacy
+                    && other.legacy_name() == username) {
+                error_message = "access denied";
+                break;
+            }
+        }
+    }
+
+    ip_address public_address;
+    ip_address local_address;
+    if (error_message.empty()) {
+        try {
+            public_address = ip_address(public_ip, (port_type)public_port);
+            local_address = ip_address(local_ip, (port_type)local_port);
+        } catch (const resolve_error&) {
+            error_message = "access denied";
+        }
+    }
+
+    auto reply = start_message();
+    if (!error_message.empty()) {
+        reply << osc::BeginMessage(kAooMsgClientLogin)
+              << (int32_t)0 << error_message.c_str() << osc::EndMessage;
+        client.send_message(reply);
+        return;
+    }
+
+    client.activate_legacy(std::move(username), std::move(password),
+                           public_address, local_address, token);
+    remember_udp_protocol(public_address, wire_protocol::legacy);
+
+    reply << osc::BeginMessage(kAooMsgClientLogin)
+          << (int32_t)1 << "" << osc::EndMessage;
+    client.send_message(reply);
+
+    auto event = std::make_unique<client_login_event>(client, kAooOk);
+    send_event(std::move(event));
+}
+
+void Server::handle_legacy_group_join(client_endpoint& client,
+                                      const osc::ReceivedMessage& msg) {
+    auto it = msg.ArgumentsBegin();
+    std::string group_name = (it++)->AsString();
+    auto group_password = normalize_legacy_password((it++)->AsString());
+    bool is_public = msg.ArgumentCount() > 2 ? (it++)->AsBool() : false;
+    std::string error_message;
+
+    auto grp = find_group(group_name);
+    user *usr = nullptr;
+    if (grp) {
+        if (grp->is_public() != is_public) {
+            error_message = "permission denied";
+        } else if (!grp->check_pwd(group_password.empty() ? nullptr
+                                                          : group_password.c_str())) {
+            error_message = "wrong password";
+        } else {
+            usr = grp->find_user(client.legacy_name());
+            if (usr) {
+                if (usr->active()) {
+                    error_message = usr->client() == client.id()
+                            ? "already a group member" : "access denied";
+                } else if (!usr->check_pwd(client.legacy_password().empty() ? nullptr
+                                                  : client.legacy_password().c_str())) {
+                    error_message = "wrong password";
+                }
+            } else if (!grp->user_auto_create()) {
+                error_message = "permission denied";
+            }
+        }
+    } else if (!group_auto_create_.load()) {
+        error_message = "permission denied";
+    }
+
+    if (!error_message.empty()) {
+        auto reply = start_message();
+        reply << osc::BeginMessage(kAooMsgClientGroupJoin)
+              << group_name.c_str() << (int32_t)0 << error_message.c_str()
+              << osc::EndMessage;
+        client.send_message(reply);
+        return;
+    }
+
+    AooRequestGroupJoin request {
+        AOO_REQUEST_INIT(GroupJoin, relayAddress),
+        group_name.c_str(), group_password.empty() ? nullptr : group_password.c_str(),
+        grp ? grp->id() : kAooIdInvalid, nullptr,
+        client.legacy_name().c_str(),
+        client.legacy_password().empty() ? nullptr : client.legacy_password().c_str(),
+        usr ? usr->id() : kAooIdInvalid, nullptr, nullptr
+    };
+    AooResponseGroupJoin response;
+    do_group_join(client, 0, request, response, is_public);
+}
+
+void Server::handle_legacy_group_leave(client_endpoint& client,
+                                       const osc::ReceivedMessage& msg) {
+    auto it = msg.ArgumentsBegin();
+    std::string group_name = (it++)->AsString();
+    std::string error_message;
+
+    auto grp = find_group(group_name);
+    if (!grp) {
+        error_message = "couldn't find group";
+    } else if (auto usr = grp->find_user(client)) {
+        on_user_left_group(*grp, *usr);
+        client.on_group_leave(*this, *grp, *usr, false);
+        do_remove_user_from_group(*grp, *usr);
+    } else {
+        error_message = "not a group member";
+    }
+
+    auto reply = start_message();
+    reply << osc::BeginMessage(kAooMsgClientGroupLeave)
+          << group_name.c_str() << (int32_t)(error_message.empty() ? 1 : 0)
+          << error_message.c_str() << osc::EndMessage;
+    client.send_message(reply);
+}
+
+void Server::handle_legacy_group_public(client_endpoint& client,
+                                        const osc::ReceivedMessage& msg) {
+    auto it = msg.ArgumentsBegin();
+    bool watch = (it++)->AsBool();
+    client.set_watches_public_groups(watch);
+
+    if (watch) {
+        for (auto& [id, grp] : groups_) {
+            if (grp.is_public()) {
+                send_public_group(client, grp, false);
+            }
+        }
+    }
+
+    auto reply = start_message();
+    reply << osc::BeginMessage(legacy_client_group_public)
+          << watch << (int32_t)0 << "" << osc::EndMessage;
+    client.send_message(reply);
+}
+
 //------------------------- login ------------------------------//
 
 void Server::handle_login(client_endpoint& client, const osc::ReceivedMessage& msg)
 {
     auto it = msg.ArgumentsBegin();
     auto token = (AooId)(it++)->AsInt32();
+    if (force_legacy_protocol_) {
+        client.send_error(*this, token, kAooRequestLogin, kAooErrorVersionNotSupported);
+        return;
+    }
     auto version = (it++)->AsString();
     auto pwd = (it++)->AsString();
     auto metadata = osc_read_metadata(it); // optional
     // collect IP addresses
     auto addrcount = (it++)->AsInt32();
     for (int32_t i = 0; i < addrcount; ++i) {
-        client.add_public_address(osc_read_address(it));
+        auto address = osc_read_address(it);
+        client.add_public_address(address);
+        if (find_udp_protocol(address) == wire_protocol::current) {
+            client.set_observed_address(address);
+        }
     }
 
     AooRequestLogin request {
@@ -1157,13 +1556,15 @@ void Server::handle_group_join(client_endpoint& client, const osc::ReceivedMessa
     if (!handle_request(client, token, (AooRequest&)request)) {
         AooResponseGroupJoin response; // default constructor
 
-        do_group_join(client, token, request, response);
+        do_group_join(client, token, request, response,
+                      is_sonobus_public_group(request.groupMetadata));
     }
 }
 
 AooError Server::do_group_join(client_endpoint &client, AooId token,
                                const AooRequestGroupJoin& request,
-                               AooResponseGroupJoin& response) {
+                               AooResponseGroupJoin& response,
+                               bool is_public) {
     bool did_create_group = false;
     // find/create group
     auto grp = find_group(request.groupId);
@@ -1171,16 +1572,26 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
         auto group_pwd = request.groupPwd ? request.groupPwd : "";
         // prefer response group metadata
         auto group_md = response.groupMetadata ? response.groupMetadata : request.groupMetadata;
+        is_public = is_public || is_sonobus_public_group(group_md);
 
         grp = add_group(group(request.groupName, group_pwd, get_next_group_id(),
-                              group_md, response.relayAddress, 0));
+                              group_md, response.relayAddress, 0, is_public));
         if (grp) {
             // send event
             auto e = std::make_unique<group_add_event>(*grp);
             send_event(std::move(e));
         } else {
             // group has been added in the meantime... LATER try to deal with this
-            client.send_error(*this, token, request.type, kAooErrorCannotCreateGroup);
+            if (client.protocol() == wire_protocol::legacy) {
+                auto msg = start_message();
+                msg << osc::BeginMessage(kAooMsgClientGroupJoin)
+                    << request.groupName << (int32_t)0 << "permission denied"
+                    << osc::EndMessage;
+                client.send_message(msg);
+            } else {
+                client.send_error(*this, token, request.type,
+                                  kAooErrorCannotCreateGroup);
+            }
             return kAooErrorCannotCreateGroup;
         }
         did_create_group = true;
@@ -1199,9 +1610,20 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
                                  client.id(), user_md, request.relayAddress, flags));
         if (!usr) {
             // user has been added in the meantime... LATER try to deal with this
-            client.send_error(*this, token, request.type, kAooErrorCannotCreateUser);
+            if (client.protocol() == wire_protocol::legacy) {
+                auto msg = start_message();
+                msg << osc::BeginMessage(kAooMsgClientGroupJoin)
+                    << request.groupName << (int32_t)0 << "access denied"
+                    << osc::EndMessage;
+                client.send_message(msg);
+            } else {
+                client.send_error(*this, token, request.type,
+                                  kAooErrorCannotCreateUser);
+            }
             return kAooErrorCannotCreateUser;
         }
+    } else {
+        usr->set_client(client.id());
     }
 
     // update response, so we may inspect it after calling handlingRequest()!
@@ -1225,23 +1647,41 @@ AooError Server::do_group_join(client_endpoint &client, AooId token,
             relay_addr.port = port_;
         }
     }
-    // send reply
-    auto extra = grp->metadata().size() + usr->metadata().size() +
-            (response.privateMetadata ? response.privateMetadata->size : 0);
-    auto msg = start_message(extra);
+    if (client.protocol() == wire_protocol::legacy) {
+        // Legacy clients may receive peer notifications before the join reply.
+        on_user_joined_group(*grp, *usr, client);
 
-    msg << osc::BeginMessage(kAooMsgClientGroupJoin)
-        << token << kAooErrorNone
-        << grp->id() << (int32_t)grp->flags() << grp->metadata()
-        << usr->id() << (int32_t)usr->flags() << usr->metadata()
-        << metadata_view(response.privateMetadata)
-        << relay_addr
-        << osc::EndMessage;
+        if (grp->is_public()) {
+            notify_public_group(*grp);
+        }
 
-    client.send_message(msg);
+        auto msg = start_message();
+        msg << osc::BeginMessage(kAooMsgClientGroupJoin)
+            << grp->name().c_str() << (int32_t)1 << ""
+            << osc::EndMessage;
+        client.send_message(msg);
+    } else {
+        // send reply
+        auto extra = grp->metadata().size() + usr->metadata().size() +
+                (response.privateMetadata ? response.privateMetadata->size : 0);
+        auto msg = start_message(extra);
 
-    // after reply!
-    on_user_joined_group(*grp, *usr, client);
+        msg << osc::BeginMessage(kAooMsgClientGroupJoin)
+            << token << kAooErrorNone
+            << grp->id() << (int32_t)grp->flags() << grp->metadata()
+            << usr->id() << (int32_t)usr->flags() << usr->metadata()
+            << metadata_view(response.privateMetadata)
+            << relay_addr
+            << osc::EndMessage;
+
+        client.send_message(msg);
+
+        // after reply!
+        on_user_joined_group(*grp, *usr, client);
+        if (grp->is_public()) {
+            notify_public_group(*grp);
+        }
+    }
 
     return kAooOk; // success
 }
@@ -1482,6 +1922,21 @@ void Server::handle_custom_request(client_endpoint& client, const osc::ReceivedM
         *data, (AooFlag)flags
     };
 
+    bool watch_public_groups;
+    if (read_sonobus_public_subscription(request.data, watch_public_groups)) {
+        client.set_watches_public_groups(watch_public_groups);
+        AooResponseCustom response;
+        do_custom_request(client, token, request, response);
+        if (watch_public_groups) {
+            for (auto& [id, grp] : groups_) {
+                if (grp.is_public()) {
+                    send_public_group(client, grp, false);
+                }
+            }
+        }
+        return;
+    }
+
     if (!handle_request(client, token, (AooRequest&)request)) {
         // requests must be handled by the user!
         client.send_error(*this, token, request.type, kAooErrorUnhandledRequest);
@@ -1506,7 +1961,8 @@ AooError Server::do_custom_request(client_endpoint& client, AooId token,
 //----------------------- UDP messages --------------------------//
 
 void Server::handle_udp_packet(const AooByte *data, AooInt32 size,
-                               const aoo::ip_address& addr) {
+                               const aoo::ip_address& addr,
+                               size_t socket_index) {
     AooMsgType type;
     int32_t onset;
     auto err = parse_pattern(data, size, type, onset);
@@ -1516,16 +1972,16 @@ void Server::handle_udp_packet(const AooByte *data, AooInt32 size,
     }
 
     if (type == kAooMsgTypeServer){
-        handle_udp_message(data, size, onset, addr);
+        handle_udp_message(data, size, onset, addr, socket_index);
     } else if (type == kAooMsgTypeRelay){
-        handle_relay(data, size, addr);
+        handle_relay(data, size, addr, socket_index);
     } else {
         LOG_WARNING("AooServer: not a client message!");
     }
 }
 
 void Server::handle_udp_message(const AooByte *data, AooSize size, int onset,
-                                const ip_address& addr) {
+                                const ip_address& addr, size_t socket_index) {
     if (binmsg_check(data, size)) {
         LOG_WARNING("AooServer: unsupported binary message");
         return;
@@ -1539,9 +1995,11 @@ void Server::handle_udp_message(const AooByte *data, AooSize size, int onset,
         LOG_DEBUG("AooServer: handle client UDP message " << pattern);
 
         if (pattern == kAooMsgPing) {
-            handle_ping(msg, addr);
+            handle_ping(msg, addr, socket_index);
         } else if (pattern == kAooMsgQuery) {
-            handle_query(msg, addr);
+            handle_query(msg, addr, socket_index);
+        } else if (pattern == legacy_request) {
+            handle_legacy_request(msg, addr, socket_index);
         } else {
             LOG_ERROR("AooServer: unknown message " << pattern);
             return;
@@ -1553,7 +2011,8 @@ void Server::handle_udp_message(const AooByte *data, AooSize size, int onset,
     }
 }
 
-void Server::handle_relay(const AooByte *data, AooSize size, const ip_address& addr) {
+void Server::handle_relay(const AooByte *data, AooSize size,
+                          const ip_address& addr, size_t socket_index) {
     if (!internal_relay_.load()) {
     #if AOO_DEBUG_RELAY
         LOG_DEBUG("AooServer: ignore relay message from " << addr);
@@ -1600,14 +2059,14 @@ void Server::handle_relay(const AooByte *data, AooSize size, const ip_address& a
             if (src_addr.type() == dst_addr.type()) {
                 // simply replace the header (= rewrite address)
                 binmsg_write_relay(const_cast<AooByte *>(data), size, src_addr);
-                send_udp(dst_addr, data, size);
+                send_udp(socket_index, dst_addr, data, size);
             } else {
                 // rewrite whole message
                 AooByte buf[AOO_MAX_PACKET_SIZE];
                 auto result = write_relay_message(buf, sizeof(buf), data + onset,
                                                   size - onset, src_addr, true);
                 if (result > 0) {
-                    send_udp(dst_addr, buf, result);
+                    send_udp(socket_index, dst_addr, buf, result);
                 } else {
                     LOG_ERROR("AooServer: can't relay: buffer too small");
                 }
@@ -1641,25 +2100,33 @@ void Server::handle_relay(const AooByte *data, AooSize size, const ip_address& a
         #if AOO_DEBUG_RELAY
             LOG_DEBUG("AooServer: forward OSC relay message from " << addr << " to " << dst);
         #endif
-            send_udp(dst_addr, (const AooByte *)out.Data(), out.Size());
+            send_udp(socket_index, dst_addr, (const AooByte *)out.Data(), out.Size());
         } catch (const osc::Exception& e){
             LOG_ERROR("AooServer: exception in handle_relay: " << e.what());
         }
     }
 }
 
-void Server::handle_ping(const osc::ReceivedMessage& msg, const ip_address& addr) {
-    // reply with /pong message
+void Server::handle_ping(const osc::ReceivedMessage& msg, const ip_address& addr,
+                         size_t socket_index) {
+    auto protocol = find_udp_protocol(addr);
+    auto pattern = protocol == wire_protocol::legacy
+            || (protocol == wire_protocol::unknown && force_legacy_protocol_)
+            ? kAooMsgClientPing : kAooMsgClientPong;
+
     // NB: don't prepend size for UDP message!
     char buf[512];
     osc::OutboundPacketStream reply(buf, sizeof(buf));
-    reply << osc::BeginMessage(kAooMsgClientPong)
+    reply << osc::BeginMessage(pattern)
           << osc::EndMessage;
 
-    send_udp(addr, (const AooByte *)reply.Data(), reply.Size());
+    send_udp(socket_index, addr, (const AooByte *)reply.Data(), reply.Size());
 }
 
-void Server::handle_query(const osc::ReceivedMessage& msg, const ip_address& addr) {
+void Server::handle_query(const osc::ReceivedMessage& msg, const ip_address& addr,
+                          size_t socket_index) {
+    remember_udp_protocol(addr, wire_protocol::current);
+
     // NB: do not prepend size for UDP message!
     char buf[AOO_MAX_PACKET_SIZE];
     osc::OutboundPacketStream reply(buf, sizeof(buf));
@@ -1667,7 +2134,58 @@ void Server::handle_query(const osc::ReceivedMessage& msg, const ip_address& add
           << addr.unmapped() // return unmapped(!) public IP
           << osc::EndMessage;
 
-    send_udp(addr, (const AooByte *)reply.Data(), reply.Size());
+    send_udp(socket_index, addr, (const AooByte *)reply.Data(), reply.Size());
+}
+
+void Server::handle_legacy_request(const osc::ReceivedMessage& msg,
+                                   const ip_address& addr,
+                                   size_t socket_index) {
+    remember_udp_protocol(addr, wire_protocol::legacy);
+
+    auto public_address = addr.unmapped();
+    char buf[512];
+    osc::OutboundPacketStream reply(buf, sizeof(buf));
+    reply << osc::BeginMessage(legacy_client_reply)
+          << public_address.name_unmapped()
+          << (int32_t)public_address.port()
+          << osc::EndMessage;
+
+    send_udp(socket_index, addr, (const AooByte *)reply.Data(), reply.Size());
+}
+
+void Server::send_udp(size_t socket_index, const ip_address& addr,
+                      const AooByte *data, AooSize size) {
+    if (!external_udp_socket_ && socket_index != external_udp_socket_index) {
+        udp_server_.send(socket_index, addr, data, size);
+    } else {
+        udp_sendfn_(data, size, addr, 0);
+    }
+}
+
+void Server::remember_udp_protocol(const ip_address& addr,
+                                   wire_protocol protocol) {
+    constexpr size_t max_udp_protocols = 2048;
+    sync::scoped_lock<sync::spinlock> lock(udp_protocol_lock_);
+    for (auto& endpoint : udp_protocols_) {
+        if (endpoint.address == addr) {
+            endpoint.protocol = protocol;
+            return;
+        }
+    }
+    if (udp_protocols_.size() >= max_udp_protocols) {
+        udp_protocols_.erase(udp_protocols_.begin());
+    }
+    udp_protocols_.push_back({ addr, protocol });
+}
+
+wire_protocol Server::find_udp_protocol(const ip_address& addr) {
+    sync::scoped_lock<sync::spinlock> lock(udp_protocol_lock_);
+    for (auto it = udp_protocols_.rbegin(); it != udp_protocols_.rend(); ++it) {
+        if (it->address == addr) {
+            return it->protocol;
+        }
+    }
+    return wire_protocol::unknown;
 }
 
 AooId Server::get_next_client_id(){

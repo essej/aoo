@@ -190,6 +190,14 @@ public:
     float get_buffer_fill_ratio();
 
     void add_xrun(double nblocks);
+
+    void set_legacy(bool enabled) {
+        legacy_.store(enabled, std::memory_order_release);
+    }
+
+    bool legacy() const {
+        return legacy_.load(std::memory_order_acquire);
+    }
 private:
     using shared_lock = sync::shared_lock<sync::shared_mutex>;
     using unique_lock = sync::unique_lock<sync::shared_mutex>;
@@ -259,6 +267,7 @@ private:
     rt_metadata_ptr metadata_;
     rt_metadata_ptr invite_metadata_;
     std::atomic<int32_t> invite_token_{kAooIdInvalid};
+    std::atomic<bool> legacy_{false};
 
     // timing
     std::atomic<float> invite_start_time_{0};
@@ -445,6 +454,9 @@ private:
 
     source_desc *add_source(const ip_address& addr, AooId id);
 
+    AooError handle_legacy_format_message(const osc::ReceivedMessage& msg,
+                                          const ip_address& addr);
+
     void reset_sources();
 
     void handle_xrun(int32_t nsamples);
@@ -460,6 +472,9 @@ private:
 
     AooError handle_data_message(const osc::ReceivedMessage& msg,
                                  const ip_address& addr);
+
+    AooError handle_legacy_data_message(const osc::ReceivedMessage& msg,
+                                        const ip_address& addr);
 
     AooError handle_data_message(const AooByte *msg, int32_t n,
                                  AooId id, const ip_address& addr);

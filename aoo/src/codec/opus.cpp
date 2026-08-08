@@ -489,7 +489,14 @@ AooError deserialize(
         return kAooErrorBadArgument;
     }
     auto fmt = (AooFormatOpus *)f;
-    fmt->applicationType = aoo::from_bytes<AooInt32>(buf);
+    // Legacy AoO serialized bitrate/complexity/signal before application type.
+    if (size >= 16) {
+        fmt->applicationType = aoo::from_bytes<AooInt32>(buf + 12);
+    } else if (size >= 12) {
+        fmt->applicationType = OPUS_APPLICATION_AUDIO;
+    } else {
+        fmt->applicationType = aoo::from_bytes<AooInt32>(buf);
+    }
     *fmtsize = AOO_STRUCT_SIZE(AooFormatOpus, applicationType);
 
     return kAooOk;

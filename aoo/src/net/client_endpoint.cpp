@@ -55,7 +55,9 @@ bool group::remove_user(AooId id) {
 AooId group::get_next_user_id() {
 #if 1
     // try to reclaim ID
-    for (AooId i = 0; i < next_user_id_; ++i) {
+    // ID 0 cannot be used as a legacy peer token. Old clients treat it as
+    // "no token" and cannot recover from symmetric NAT address changes.
+    for (AooId i = 1; i < next_user_id_; ++i) {
         if (!find_user(i)) {
             return i;
         }
@@ -78,6 +80,17 @@ bool client_endpoint::match(const ip_address& addr) const {
 }
 
 void client_endpoint::send_message(const osc::OutboundPacketStream& msg) const {
+    if (protocol_ == wire_protocol::legacy) {
+        auto framed = slip_encode((const AooByte *)msg.Data(), msg.Size());
+        try {
+            replyfn_(framed.data(), (AooSize)framed.size());
+        } catch (const socket_error& e) {
+            LOG_WARNING("AooServer: send() failed for legacy client "
+                        << id_ << ": " << e.what());
+        }
+        return;
+    }
+
     // prepend message size (int32_t)
     auto data = msg.Data() - 4;
     auto size = msg.Size() + 4;
@@ -141,6 +154,23 @@ void client_endpoint::send_peer_join(Server& server, const group& grp, const use
     LOG_DEBUG("AooServer: send peer " << grp << "|" << usr << " " << client.public_addresses().front()
               << " to client " << id() << " " << public_addresses().front());
 
+    if (protocol_ == wire_protocol::legacy) {
+        auto public_address = client.legacy_public_address();
+        auto local_address = client.legacy_local_address();
+        auto msg = server.start_message();
+        msg << osc::BeginMessage(kAooMsgClientPeerJoin)
+            << grp.name().c_str() << usr.name().c_str()
+            << (public_address.valid() ? public_address.name_unmapped() : "")
+            << (int32_t)(public_address.valid() ? public_address.port() : 0)
+            << (local_address.valid() ? local_address.name_unmapped() : "")
+            << (int32_t)(local_address.valid() ? local_address.port() : 0)
+            << (int64_t)(client.protocol() == wire_protocol::legacy
+                         ? client.legacy_token() : usr.id())
+            << osc::EndMessage;
+        send_message(msg);
+        return;
+    }
+
     auto msg = server.start_message(usr.metadata().size());
 
     AooFlag flags = 0;
@@ -149,6 +179,9 @@ void client_endpoint::send_peer_join(Server& server, const group& grp, const use
     }
     if (usr.persistent()) {
         flags |= kAooPeerPersistent;
+    }
+    if (client.protocol() == wire_protocol::legacy) {
+        flags |= kAooPeerLegacyProtocol;
     }
 
     msg << osc::BeginMessage(kAooMsgClientPeerJoin)
@@ -161,6 +194,8 @@ void client_endpoint::send_peer_join(Server& server, const group& grp, const use
     for (auto& addr : client.public_addresses()){
         msg << addr;
     }
+    msg << (int64_t)(client.protocol() == wire_protocol::legacy
+                     ? client.legacy_token() : 0);
     msg << osc::EndMessage;
 
     send_message(msg);
@@ -171,6 +206,14 @@ void client_endpoint::send_peer_leave(Server& server, const group& grp, const us
 
     auto msg = server.start_message();
 
+    if (protocol_ == wire_protocol::legacy) {
+        msg << osc::BeginMessage(kAooMsgClientPeerLeave)
+            << grp.name().c_str() << usr.name().c_str()
+            << osc::EndMessage;
+        send_message(msg);
+        return;
+    }
+
     msg << osc::BeginMessage(kAooMsgClientPeerLeave)
         << grp.id() << usr.id() << osc::EndMessage;
 
@@ -178,6 +221,9 @@ void client_endpoint::send_peer_leave(Server& server, const group& grp, const us
 }
 
 void client_endpoint::send_group_update(Server& server, const group& grp, AooId usr) {
+    if (protocol_ == wire_protocol::legacy) {
+        return;
+    }
     auto msg = server.start_message();
 
     msg << osc::BeginMessage(kAooMsgClientGroupChanged)
@@ -187,6 +233,9 @@ void client_endpoint::send_group_update(Server& server, const group& grp, AooId 
 }
 
 void client_endpoint::send_user_update(Server& server, const user& usr) {
+    if (protocol_ == wire_protocol::legacy) {
+        return;
+    }
     auto msg = server.start_message();
 
     msg << osc::BeginMessage(kAooMsgClientUserChanged)
@@ -196,6 +245,9 @@ void client_endpoint::send_user_update(Server& server, const user& usr) {
 }
 
 void client_endpoint::send_peer_update(Server& server, const user& peer) {
+    if (protocol_ == wire_protocol::legacy) {
+        return;
+    }
     auto msg = server.start_message();
 
     msg << osc::BeginMessage(kAooMsgClientPeerChanged)
@@ -222,15 +274,43 @@ void client_endpoint::on_close(Server& server) {
 }
 
 void client_endpoint::handle_data(Server &server, const AooByte *data, int32_t n) {
-    receiver_.handle_message((const char *)data, n,
+    if (protocol_ == wire_protocol::unknown) {
+        protocol_probe_.insert(protocol_probe_.end(), data, data + n);
+        auto detected = detect_wire_protocol(protocol_probe_.data(),
+                                             (AooSize)protocol_probe_.size());
+        if (detected == wire_protocol::unknown) {
+            return;
+        } else if (detected == wire_protocol::invalid) {
+            protocol_probe_.clear();
+            throw osc::MalformedPacketException("unknown TCP framing");
+        }
+        protocol_ = detected;
+        data = protocol_probe_.data();
+        n = (int32_t)protocol_probe_.size();
+    }
+
+    if (protocol_ == wire_protocol::legacy) {
+        legacy_receiver_.handle_message(data, n,
+                [&](const AooByte *packet_data, AooSize packet_size) {
+            osc::ReceivedPacket packet((const char *)packet_data, packet_size);
+            osc::ReceivedMessage msg(packet);
+            server.handle_legacy_message(*this, msg, packet.Size());
+        });
+    } else {
+        receiver_.handle_message((const char *)data, n,
             [&](const osc::ReceivedPacket& packet) {
-        osc::ReceivedMessage msg(packet);
-        server.handle_message(*this, msg, packet.Size());
-    });
+            osc::ReceivedMessage msg(packet);
+            server.handle_message(*this, msg, packet.Size());
+        });
+    }
+    protocol_probe_.clear();
 }
 
 std::pair<bool, double> client_endpoint::update(Server& server, aoo::time_tag now,
                                                 const AooPingSettings &settings) {
+    if (protocol_ == wire_protocol::unknown) {
+        return { false, 1.0 };
+    }
     auto result = ping_timer_.update(now, settings);
     if (result.ping) {
         auto msg = server.start_message();
@@ -267,8 +347,14 @@ void client_endpoint::on_group_leave(Server& server, const group& grp,
         // tell client that it has been ejected from the group
         auto msg = server.start_message();
 
-        msg << osc::BeginMessage(kAooMsgClientGroupEject)
-            << grp.id() << osc::EndMessage;
+        if (protocol_ == wire_protocol::legacy) {
+            msg << osc::BeginMessage(kAooMsgClientGroupLeave)
+                << grp.name().c_str() << (int32_t)1 << ""
+                << osc::EndMessage;
+        } else {
+            msg << osc::BeginMessage(kAooMsgClientGroupEject)
+                << grp.id() << osc::EndMessage;
+        }
 
         send_message(msg);
     }

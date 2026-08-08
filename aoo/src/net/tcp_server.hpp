@@ -44,6 +44,7 @@ public:
                                                AooSize size, const ip_address& address)>;
 
     void start(int port, accept_handler accept, receive_handler receive);
+    void start(const std::vector<int>& ports, accept_handler accept, receive_handler receive);
     bool run(double timeout = -1.0);
     bool running() const { return running_.load(std::memory_order_relaxed); }
     void stop();
@@ -60,7 +61,7 @@ private:
     };
 
     bool do_run(double timeout);
-    void accept_client();
+    void accept_client(size_t listen_index);
     void handle_accept_error(const accept_error& e);
     void receive_from_clients();
     void handle_client_error(const client& c, int code) {
@@ -69,15 +70,14 @@ private:
     void close_and_remove_client(int index);
     void do_close();
 
-    tcp_socket listen_socket_;
+    std::vector<tcp_socket> listen_sockets_;
     udp_socket event_socket_;
     int last_error_ = 0;
     std::atomic<bool> running_{false};
 
     std::vector<pollfd> poll_array_;
-    static const size_t listen_index = 0;
-    static const size_t event_index = 1;
-    static const size_t client_index = 2;
+    size_t event_index() const { return listen_sockets_.size(); }
+    size_t client_index() const { return event_index() + 1; }
 
     accept_handler accept_handler_;
     receive_handler receive_handler_;

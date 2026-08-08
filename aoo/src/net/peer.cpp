@@ -20,7 +20,8 @@ namespace net {
 peer::peer(peer_args&& args)
     : group_name_(args.group_name), user_name_(args.user_name),
       group_id_(args.group_id), user_id_(args.user_id),
-      local_id_(args.local_id), flags_(args.flags), version_(args.version_string),
+      local_id_(args.local_id), flags_(args.flags), legacy_token_(args.legacy_token),
+      version_(args.version_string),
       address_family_(args.address_family), binary_(args.binary),
       use_ipv4_mapped_(args.use_ipv4_mapped), metadata_(args.metadata),
       addrlist_(std::move(args.address_list)), user_relay_(std::move(args.user_relay)),
@@ -78,7 +79,11 @@ ip_address peer::address() const {
 void peer::send(Client& client, const sendfn& fn, time_tag now,
                 const AooPingSettings& settings) {
     if (connected()) {
-        do_send(client, fn, now, settings);
+        if (legacy()) {
+            do_send_legacy(client, fn, now, settings);
+        } else {
+            do_send(client, fn, now, settings);
+        }
     } else if (!timeout_) {
         // try to establish UDP connection with peer
 
@@ -91,7 +96,7 @@ void peer::send(Client& client, const sendfn& fn, time_tag now,
 
         if (now >= handshake_deadline_) {
             // time out -> try to relay
-            if (!relay_list_.empty() && !need_relay()) {
+            if (!legacy() && !relay_list_.empty() && !need_relay()) {
                 // for now we just try the first relay address.
                 // LATER try all of them.
                 relay_address_ = relay_list_.front();
@@ -132,9 +137,13 @@ void peer::send(Client& client, const sendfn& fn, time_tag now,
             // we're behind a symmetric NAT. This trick doesn't work
             // if both parties are behind a symmetrict NAT; in that case,
             // UDP hole punching simply doesn't work.
-            msg << osc::BeginMessage(kAooMsgPeerPing)
-                << group_id_ << local_id_ << osc::Nil
-                << osc::EndMessage;
+            msg << osc::BeginMessage(kAooMsgPeerPing);
+            if (legacy()) {
+                msg << (int64_t)local_id_;
+            } else {
+                msg << group_id_ << local_id_ << osc::Nil;
+            }
+            msg << osc::EndMessage;
 
             for (auto& addr : addrlist_) {
                 if (need_relay()) {
@@ -161,6 +170,24 @@ void peer::send(Client& client, const sendfn& fn, time_tag now,
 
             LOG_DEBUG("AooClient: send handshake ping to " << *this);
         }
+    }
+}
+
+void peer::do_send_legacy(Client& client, const sendfn& fn, time_tag now,
+                          const AooPingSettings& settings) {
+    auto result = ping_timer_.update(now, settings, true);
+    if (result.ping) {
+        char buf[64];
+        osc::OutboundPacketStream msg(buf, sizeof(buf));
+        msg << osc::BeginMessage(kAooMsgPeerPing) << osc::EndMessage;
+        send(msg, fn);
+    }
+    if (active_ && result.state == ping_state::inactive) {
+        active_ = false;
+        client.send_event(std::make_unique<peer_state_event>(*this, true));
+    } else if (!active_ && result.state != ping_state::inactive) {
+        active_ = true;
+        client.send_event(std::make_unique<peer_state_event>(*this, false));
     }
 }
 
@@ -545,6 +572,13 @@ void peer::handle_first_ping(Client &client, const aoo::ip_address& addr) {
 
     LOG_INFO("AooClient: successfully established connection with "
              << *this << " " << addr << (need_relay() ? " (relayed)" : ""));
+}
+
+void peer::handle_legacy_ping(Client& client, const ip_address& addr) {
+    if (!connected()) {
+        handle_first_ping(client, addr);
+    }
+    ping_timer_.pong();
 }
 
 void peer::handle_ping(Client& client, osc::ReceivedMessageArgumentIterator it,

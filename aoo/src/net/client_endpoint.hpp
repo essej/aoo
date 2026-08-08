@@ -8,6 +8,7 @@
 #include "osc_stream_receiver.hpp"
 #include "ping_timer.hpp"
 #include "tcp_server.hpp"
+#include "wire_protocol.hpp"
 
 namespace aoo {
 namespace net {
@@ -91,9 +92,10 @@ using user_list = std::vector<user>;
 class group {
 public:
     group(std::string_view name, std::string_view pwd, AooId id,
-         const AooData *md, const AooIpEndpoint *relay, AooFlag flags)
+          const AooData *md, const AooIpEndpoint *relay, AooFlag flags,
+          bool is_public = false)
         : name_(name), pwd_(pwd), id_(id), flags_(flags), md_(md),
-          relay_(relay ? *relay : ip_host{}) {}
+          relay_(relay ? *relay : ip_host{}), public_(is_public) {}
 
     const std::string& name() const { return name_; }
 
@@ -116,6 +118,8 @@ public:
     AooFlag flags() const { return flags_; }
 
     bool persistent() const { return flags_ & kAooGroupPersistent; }
+
+    bool is_public() const { return public_; }
 
     bool user_auto_create() const { return user_auto_create_; }
 
@@ -141,9 +145,10 @@ private:
     AooFlag flags_;
     aoo::metadata md_;
     ip_host relay_;
+    bool public_ = false;
     bool user_auto_create_ = AOO_USER_AUTO_CREATE; // TODO
     user_list users_;
-    AooId next_user_id_{0};
+    AooId next_user_id_{1};
 };
 
 inline std::ostream& operator<<(std::ostream& os, const group& g) {
@@ -171,9 +176,57 @@ public:
         version_ = std::move(version);
     }
 
+    void activate_legacy(std::string name, std::string password,
+                         const ip_address& public_address,
+                         const ip_address& local_address, int64_t token) {
+        version_ = "legacy";
+        legacy_name_ = std::move(name);
+        legacy_password_ = std::move(password);
+        legacy_public_address_ = public_address;
+        legacy_local_address_ = local_address;
+        legacy_token_ = token;
+        public_addresses_.clear();
+        if (public_address.valid()) {
+            public_addresses_.push_back(public_address);
+        }
+        if (local_address.valid() && local_address != public_address) {
+            public_addresses_.push_back(local_address);
+        }
+    }
+
     bool active() const {
         return !version_.empty();
     }
+
+    wire_protocol protocol() const { return protocol_; }
+
+    const std::string& legacy_name() const { return legacy_name_; }
+    const std::string& legacy_password() const { return legacy_password_; }
+    int64_t legacy_token() const { return legacy_token_; }
+
+    void set_observed_address(const ip_address& address) {
+        observed_address_ = address;
+    }
+
+    ip_address legacy_public_address() const {
+        if (legacy_public_address_.valid()) {
+            return legacy_public_address_;
+        }
+        if (observed_address_.valid()) {
+            return observed_address_;
+        }
+        return public_addresses_.empty() ? ip_address{} : public_addresses_.back();
+    }
+
+    ip_address legacy_local_address() const {
+        if (legacy_local_address_.valid()) {
+            return legacy_local_address_;
+        }
+        return public_addresses_.empty() ? ip_address{} : public_addresses_.front();
+    }
+
+    bool watches_public_groups() const { return watches_public_groups_; }
+    void set_watches_public_groups(bool value) { watches_public_groups_ = value; }
 
     void add_public_address(const ip_address& addr) {
         public_addresses_.push_back(addr);
@@ -221,7 +274,17 @@ private:
     AooId id_;
     aoo::tcp_server::reply_func replyfn_;
     std::string version_;
+    std::string legacy_name_;
+    std::string legacy_password_;
+    ip_address legacy_public_address_;
+    ip_address legacy_local_address_;
+    ip_address observed_address_;
+    int64_t legacy_token_ = 0;
+    bool watches_public_groups_ = false;
+    wire_protocol protocol_ = wire_protocol::unknown;
+    std::vector<AooByte> protocol_probe_;
     osc_stream_receiver receiver_;
+    slip_stream_receiver legacy_receiver_;
     ip_address_list public_addresses_;
     struct group_user {
         AooId group;

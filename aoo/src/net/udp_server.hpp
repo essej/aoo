@@ -36,13 +36,14 @@ public:
     static const size_t max_udp_packet_size = 65536;
 
     using receive_handler = std::function<void(const AooByte *data, AooSize size,
-                                               const aoo::ip_address& addr)>;
+                                               const aoo::ip_address& addr,
+                                               size_t socket_index)>;
 
     udp_server() : buffer_(max_udp_packet_size) {}
     ~udp_server();
 
     int port() const { return bind_addr_.port(); }
-    const udp_socket& socket() const { return socket_; }
+    const udp_socket& socket() const { return sockets_.front(); }
     aoo::ip_address::ip_type type() const { return bind_addr_.type(); }
 
     udp_server(const udp_server&) = delete;
@@ -57,19 +58,26 @@ public:
     }
 
     void start(int port, receive_handler receive, bool threaded = false);
+    void start(const std::vector<int>& ports, receive_handler receive, bool threaded = false);
     bool run(double timeout = -1);
     bool running() const { return running_.load(std::memory_order_relaxed); }
     void stop();
     void notify();
 
     int send(const aoo::ip_address& addr, const AooByte *data, AooSize size) {
-        return socket_.send(data, size, addr);
+        return send(0, addr, data, size);
+    }
+
+    int send(size_t socket_index, const aoo::ip_address& addr,
+             const AooByte *data, AooSize size) {
+        return sockets_[socket_index].send(data, size, addr);
     }
 private:
     bool receive(double timeout);
+    bool receive_from_socket(size_t index);
     void do_close();
 
-    udp_socket socket_;
+    std::vector<udp_socket> sockets_;
     aoo::ip_address bind_addr_;
     int send_buffer_size_ = 0;
     int receive_buffer_size_ = 0;
@@ -81,6 +89,7 @@ private:
     struct udp_packet {
         std::vector<AooByte> data;
         ip_address address;
+        size_t socket_index = 0;
     };
     using packet_queue = lockfree::concurrent_queue<udp_packet, false>;
     packet_queue packet_queue_;

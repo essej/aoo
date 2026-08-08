@@ -82,7 +82,8 @@ if (AOO_NET)
         "src/net/tcp_server.cpp"
         "src/net/tcp_server.hpp"
         "src/net/udp_server.cpp"
-        "src/net/udp_server.hpp")
+        "src/net/udp_server.hpp"
+        "src/net/wire_protocol.hpp")
 
     target_sources(aoo PRIVATE $<TARGET_OBJECTS:aoo_md5>)
 endif()

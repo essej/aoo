@@ -114,6 +114,14 @@ struct sink_desc {
         return stream_id_.load(std::memory_order_acquire) != kAooIdInvalid;
     }
 
+    void set_legacy(bool enabled) {
+        legacy_.store(enabled, std::memory_order_release);
+    }
+
+    bool legacy() const {
+        return legacy_.load(std::memory_order_acquire);
+    }
+
     bool need_invite(AooId token);
 
     void handle_invite(Source& s, AooId token, bool accept);
@@ -142,6 +150,7 @@ struct sink_desc {
 private:
     std::atomic<int32_t> channel_{0};
     std::atomic<int32_t> stream_id_ {kAooIdInvalid};
+    std::atomic<bool> legacy_ {false};
     int32_t invite_token_{kAooIdInvalid};
     int32_t uninvite_token_{kAooIdInvalid};
     std::atomic<bool> needstart_{false};
@@ -150,11 +159,12 @@ private:
 
 struct cached_sink {
     cached_sink(const sink_desc& s)
-        : ep(s.ep), stream_id(s.stream_id()), channel(s.channel()) {}
+        : ep(s.ep), stream_id(s.stream_id()), channel(s.channel()), legacy(s.legacy()) {}
 
     endpoint ep;
     AooId stream_id;
     int32_t channel;
+    bool legacy;
 };
 
 template<typename Alloc>
@@ -412,6 +422,9 @@ class Source final : public AooSource, rt_memory_pool_client {
 
     void handle_start_request(const osc::ReceivedMessage& msg,
                               const ip_address& addr);
+
+    void handle_legacy_format_request(const osc::ReceivedMessage& msg,
+                                      const ip_address& addr);
 
     void handle_stop_request(const osc::ReceivedMessage& msg,
                               const ip_address& addr);

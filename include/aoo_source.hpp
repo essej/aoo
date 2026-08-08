@@ -443,6 +443,11 @@ public:
         return control(kAooCtlGetStreamTimeSendInterval, 0, AOO_ARG(s));
     }
 
+    /** \brief Enable legacy AoO wire messages for a sink endpoint. */
+    AooError setSinkLegacyProtocol(const AooEndpoint& sink, AooBool enabled) {
+        return control(kAooCtlSetLegacyProtocol, (AooIntPtr)&sink, AOO_ARG(enabled));
+    }
+
     /** \brief Set the sink channel offset
      *
      * Set the starting channel where the source signal should be received

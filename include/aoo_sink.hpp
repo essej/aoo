@@ -434,6 +434,11 @@ public:
         return control(kAooCtlGetBufferFillRatio, (AooIntPtr)&source, AOO_ARG(ratio));
     }
 
+    /** \brief Enable legacy AoO wire messages for a source endpoint. */
+    AooError setSourceLegacyProtocol(const AooEndpoint& source, AooBool enabled) {
+        return control(kAooCtlSetLegacyProtocol, (AooIntPtr)&source, AOO_ARG(enabled));
+    }
+
     /** \brief Enable/disable binary message format
      *
      * Use a more compact (and faster) binary format for certain messages

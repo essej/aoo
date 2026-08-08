@@ -15,36 +15,55 @@
 namespace aoo {
 
 void tcp_server::start(int port, accept_handler accept, receive_handler receive) {
+    start(std::vector<int>{ port }, std::move(accept), std::move(receive));
+}
+
+void tcp_server::start(const std::vector<int>& ports, accept_handler accept,
+                       receive_handler receive) {
     do_close();
+
+    if (ports.empty()) {
+        throw tcp_error(EINVAL);
+    }
 
     try {
         event_socket_ = udp_socket(port_tag{}, 0);
-        listen_socket_ = tcp_socket(port_tag{}, port, true);
-        listen_socket_.listen();
+        listen_sockets_.reserve(ports.size());
+        for (auto port : ports) {
+            tcp_socket socket(port_tag{}, port, true);
+            socket.listen();
+            listen_sockets_.push_back(std::move(socket));
+        }
     } catch (const socket_error& e) {
         event_socket_.close();
-        listen_socket_.close();
+        for (auto& socket : listen_sockets_) {
+            socket.close();
+        }
+        listen_sockets_.clear();
         throw tcp_error(e);
     }
 
     accept_handler_ = std::move(accept);
     receive_handler_ = std::move(receive);
 
-    // prepare poll array for listen and event socket
-    poll_array_.resize(2);
+    // prepare poll array for listening and event sockets
+    poll_array_.resize(listen_sockets_.size() + 1);
+    for (size_t i = 0; i < listen_sockets_.size(); ++i) {
+        poll_array_[i].events = POLLIN;
+        poll_array_[i].revents = 0;
+        poll_array_[i].fd = listen_sockets_[i].native_handle();
+    }
 
-    poll_array_[listen_index].events = POLLIN;
-    poll_array_[listen_index].revents = 0;
-    poll_array_[listen_index].fd = listen_socket_.native_handle();
-
-    poll_array_[event_index].events = POLLIN;
-    poll_array_[event_index].revents = 0;
-    poll_array_[event_index].fd = event_socket_.native_handle();
+    poll_array_[event_index()].events = POLLIN;
+    poll_array_[event_index()].revents = 0;
+    poll_array_[event_index()].fd = event_socket_.native_handle();
 
     last_error_ = 0;
     running_.store(true);
 
-    LOG_DEBUG("tcp_server: start listening on port " << port);
+    for (auto port : ports) {
+        LOG_DEBUG("tcp_server: start listening on port " << port);
+    }
 }
 
 bool tcp_server::run(double timeout) {
@@ -90,7 +109,7 @@ bool tcp_server::do_run(double timeout) {
     }
 
     // drain event socket
-    if (poll_array_[event_index].revents != 0) {
+    if (poll_array_[event_index()].revents != 0) {
         char dummy[64];
         try {
             event_socket_.receive(dummy, sizeof(dummy));
@@ -103,7 +122,9 @@ bool tcp_server::do_run(double timeout) {
     receive_from_clients();
 
     // finally accept new clients (modifies the client list!)
-    accept_client();
+    for (size_t i = 0; i < listen_sockets_.size(); ++i) {
+        accept_client(i);
+    }
 
     return true;
 }
@@ -127,7 +148,10 @@ void tcp_server::notify() {
 void tcp_server::do_close() {
     // close listening socket
     LOG_DEBUG("tcp_server: stop listening");
-    listen_socket_.close();
+    for (auto& socket : listen_sockets_) {
+        socket.close();
+    }
+    listen_sockets_.clear();
 
     event_socket_.close();
 
@@ -182,7 +206,7 @@ bool tcp_server::close(AooId client) {
 
 void tcp_server::receive_from_clients() {
     for (int i = 0; i < clients_.size(); ++i) {
-        auto& fdp = poll_array_[client_index + i];
+        auto& fdp = poll_array_[client_index() + i];
         auto revents = std::exchange(fdp.revents, 0);
         if (revents == 0) {
             continue; // no event
@@ -260,7 +284,7 @@ void tcp_server::close_and_remove_client(int index) {
     auto& c = clients_[index];
     c.socket.close();
     // mark as stale (will be ignored in poll())
-    poll_array_[client_index + index].fd = invalid_socket;
+    poll_array_[client_index() + index].fd = invalid_socket;
     stale_clients_.push_back(index);
     if (c.id != kAooIdInvalid) {
         LOG_DEBUG("tcp_server: close socket and remove client " << c.id);
@@ -270,7 +294,7 @@ void tcp_server::close_and_remove_client(int index) {
     client_count_--;
 }
 
-void tcp_server::accept_client() {
+void tcp_server::accept_client(size_t listen_index) {
     auto revents = std::exchange(poll_array_[listen_index].revents, 0);
     if (revents == 0) {
         return; // no event
@@ -290,7 +314,7 @@ void tcp_server::accept_client() {
     }
 
     try {
-        auto [sock, addr] = listen_socket_.accept();
+        auto [sock, addr] = listen_sockets_[listen_index].accept();
         auto sockfd = sock.native_handle();
         auto replyfn = [sockfd](const AooByte *data, AooSize size) {
             AooSize nbytes = 0;
@@ -316,7 +340,7 @@ void tcp_server::accept_client() {
             stale_clients_.pop_back();
 
             clients_[index] = client { addr, std::move(sock), id };
-            poll_array_[client_index + index].fd = sockfd;
+            poll_array_[client_index() + index].fd = sockfd;
         } else {
             // add new client
             clients_.push_back(client { addr, std::move(sock), id });
