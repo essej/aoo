@@ -46,6 +46,17 @@ bool peer::match(const ip_address& addr) const {
     }
 }
 
+bool peer::match_legacy_ping(const ip_address& addr, int64_t token) const {
+    if (!legacy()) {
+        return false;
+    }
+    if (token != 0) {
+        return legacy_token_ == token;
+    }
+    return match(addr) || std::find(addrlist_.begin(), addrlist_.end(),
+                                    addr.unmapped()) != addrlist_.end();
+}
+
 bool peer::match(std::string_view group) const {
     return group_name_ == group; // immutable!
 }

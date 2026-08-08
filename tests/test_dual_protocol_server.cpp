@@ -4,6 +4,7 @@
 #include "aoo/src/detail.hpp"
 #include "aoo/src/net/detail.hpp"
 #include "aoo/src/net/osc_stream_receiver.hpp"
+#include "aoo/src/net/peer.hpp"
 #include "aoo/src/net/wire_protocol.hpp"
 #include "common/net_utils.hpp"
 
@@ -194,12 +195,31 @@ void check_pattern(const std::vector<AooByte>& packet, const char *pattern) {
     check(!strcmp(message.AddressPattern(), pattern), "unexpected OSC address");
 }
 
+void test_legacy_peer_matching() {
+    ip_address candidate("127.0.0.1", 19001, ip_address::IPv4);
+    peer_args args {
+        "group", "user", 1, 2, 3, kAooPeerLegacyProtocol, 42, "legacy",
+        nullptr, ip_address::IPv6, true, false, { candidate }, {}, {}
+    };
+    peer legacy(std::move(args));
+    check(legacy.match_legacy_ping(candidate, 0),
+          "legacy regular ping did not match an unconnected candidate");
+#if AOO_USE_IPV6
+    check(legacy.match_legacy_ping(candidate.ipv4_mapped(), 0),
+          "IPv4-mapped legacy candidate did not match");
+#endif
+    check(legacy.match_legacy_ping(ip_address("127.0.0.1", 19002), 42),
+          "legacy handshake token did not match");
+    check(!legacy.match_legacy_ping(candidate, 43),
+          "wrong legacy handshake token was accepted");
+}
+
 void test_dual_protocol_server() {
     auto [primary_port, legacy_port] = unused_tcp_ports();
 
     server_runner server(primary_port, legacy_port);
-    udp_socket legacy_udp(port_tag{}, 0);
-    udp_socket current_udp(port_tag{}, 0);
+    udp_socket legacy_udp(ip_address(0, ip_address::IPv4));
+    udp_socket current_udp(ip_address(0, ip_address::IPv4));
     ip_address primary("127.0.0.1", primary_port, ip_address::IPv4);
     ip_address legacy("127.0.0.1", legacy_port, ip_address::IPv4);
 
@@ -498,6 +518,7 @@ void test_legacy_cannot_bypass_server_password() {
 
 int main() {
     check(aoo_initialize(nullptr) == kAooOk, "could not initialize AOO");
+    test_legacy_peer_matching();
     test_dual_protocol_server();
     test_force_legacy_fallback();
     test_legacy_cannot_bypass_server_password();

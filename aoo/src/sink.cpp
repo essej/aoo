@@ -805,6 +805,8 @@ AooError AOO_CALL aoo::Sink::uninviteAll() {
 
 namespace aoo {
 
+constexpr float kInviteInterval = 0.1f;
+
 void Sink::send_event(event_ptr e, AooThreadLevel level) const {
     switch (event_mode_){
     case kAooEventModePoll:
@@ -1410,11 +1412,7 @@ void source_desc::invite(const Sink& s, AooId token, AooData *metadata){
     // reset invite timeout, in case we're not running;
     // otherwise this won't do anything.
     last_packet_time_.store(elapsed);
-#if 1
-    last_invite_time_.store(0.0); // start immediately
-#else
-    last_invite_time_.store(elapsed); // wait
-#endif
+    last_invite_time_.store(elapsed - kInviteInterval); // start immediately
     invite_start_time_.store(elapsed);
 
     state_.store(source_state::invite);
@@ -3112,9 +3110,6 @@ void send_uninvitation(const Sink& s, const endpoint& ep,
     ep.send(msg, fn);
 }
 
-// only send every 100 ms! LATER we might make this settable
-#define INVITE_INTERVAL 0.1
-
 void source_desc::send_invitations(const Sink &s, const sendfn &fn){
     auto state = state_.load(std::memory_order_acquire);
     if (state != source_state::invite){
@@ -3138,7 +3133,7 @@ void source_desc::send_invitations(const Sink &s, const sendfn &fn){
         s.send_event(std::move(e), kAooThreadLevelNetwork);
     } else {
         delta = now - last_invite_time_.load(std::memory_order_relaxed);
-        if (delta >= INVITE_INTERVAL){
+        if (delta >= kInviteInterval){
             auto token = invite_token_.load();
             // NOTE: the metadata is only read/set in the send thread,
             // so we don't have to worry about race conditions!

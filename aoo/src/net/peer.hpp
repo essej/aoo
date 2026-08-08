@@ -70,6 +70,8 @@ public:
 
     bool match(const ip_address& addr) const;
 
+    bool match_legacy_ping(const ip_address& addr, int64_t token) const;
+
     bool match(std::string_view group) const;
 
     bool match(std::string_view group, std::string_view user) const;

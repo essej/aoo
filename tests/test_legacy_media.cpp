@@ -54,7 +54,7 @@ AooError AOO_CALL capture_invite(void *user, const AooByte *data, AooInt32 size,
     auto& state = *static_cast<invite_capture *>(user);
     osc::ReceivedPacket packet((const char *)data, size);
     osc::ReceivedMessage message(packet);
-    if (!std::strcmp(message.AddressPattern(), "/aoo/source/0/invite")) {
+    if (!std::strcmp(message.AddressPattern(), "/aoo/src/0/invite")) {
         auto it = message.ArgumentsBegin();
         state.saw_legacy_invite = message.ArgumentCount() == 2
                 && (it++)->AsInt32() == 42 && (it++)->AsInt32() == 0;

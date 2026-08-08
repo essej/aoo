@@ -1051,13 +1051,16 @@ bool Client::handle_peer_osc_message(const osc::ReceivedMessage& msg, int onset,
             auto token = msg.ArgumentCount() == 1
                        ? msg.ArgumentsBegin()->AsInt64() : 0;
             peer_lock lock(peers_);
+            bool handled = false;
             for (auto& p : peers_) {
-                if (p.legacy() && ((token != 0 && p.legacy_token() == token)
-                               || (p.connected() && p.match(addr)))) {
+                if (p.match_legacy_ping(addr, token)) {
                     p.handle_legacy_ping(*this, addr);
-                    notify();
-                    return true;
+                    handled = true;
                 }
+            }
+            if (handled) {
+                notify();
+                return true;
             }
             LOG_WARNING("AooClient: got legacy peer ping from unknown peer " << addr);
             return false;
